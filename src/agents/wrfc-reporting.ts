@@ -1,5 +1,6 @@
 import type { CompletionReport, ReviewerReport } from './completion-report.ts';
 import { parseCompletionReport } from './completion-report.ts';
+import type { QualityGateResult } from './wrfc-types.ts';
 import { logger } from '../utils/logger.ts';
 
 export function extractScoreFromText(text: string): number | null {
@@ -159,5 +160,29 @@ export function buildFixTask(
     `2. Fix each issue completely — partial fixes will reduce your score.`,
     `3. Re-run Gather, Plan, Apply explicitly before writing your final answer.`,
     `4. Return a structured EngineerReport JSON block including gatheredContext, plannedActions, and appliedChanges in your final response.`,
+  ].join('\n');
+}
+
+export function buildGateFailureTask(
+  chainId: string,
+  task: string,
+  failedGates: readonly QualityGateResult[],
+): string {
+  const gateFailureSummary = failedGates
+    .map((result) => `- ${result.gate}: ${result.output.slice(0, 300)}`)
+    .join('\n');
+  return [
+    `WRFC Gate Failure Fix`,
+    `Parent Chain ID: ${chainId}`,
+    ``,
+    `The following quality gates failed after review passed:`,
+    gateFailureSummary,
+    ``,
+    `Original task: ${task}`,
+    ``,
+    `Instructions:`,
+    `1. Fix all gate failures listed above.`,
+    `2. Ensure typecheck, lint, and test gates pass.`,
+    `3. Return a structured EngineerReport in your final response.`,
   ].join('\n');
 }

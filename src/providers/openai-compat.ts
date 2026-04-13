@@ -6,6 +6,7 @@ import type {
   ProviderEmbeddingRequest,
   ProviderEmbeddingResult,
   ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import type { ProviderCapability } from './capabilities.ts';
 import { ProviderError } from '../types/errors.ts';
@@ -310,7 +311,7 @@ export class OpenAICompatProvider implements LLMProvider {
     };
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: this.name,
@@ -321,7 +322,7 @@ export class OpenAICompatProvider implements LLMProvider {
       allowAnonymous: this.allowAnonymous,
       anonymousConfigured: this.anonymousConfigured,
       anonymousDetail: this.anonymousDetail,
-    });
+    }, deps);
     return {
       auth: {
         mode: this.allowAnonymous && !this.configured ? 'anonymous' : 'api-key',

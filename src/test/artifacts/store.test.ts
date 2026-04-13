@@ -104,4 +104,10 @@ describe('ArtifactStore', () => {
       uri: 'http://127.0.0.1:12345/private',
     })).rejects.toThrow('Artifact URI blocked by SSRF policy');
   });
+
+  test('requires an explicit storage root or config directory owner', () => {
+    expect(() => new ArtifactStore({})).toThrow(
+      'ArtifactStore requires an explicit rootDir or configManager.getControlPlaneConfigDir().',
+    );
+  });
 });

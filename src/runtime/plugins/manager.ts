@@ -16,6 +16,7 @@ import {
   discoverPlugins,
   loadPlugin,
   unloadPlugin,
+  type PluginPathOptions,
 } from '../../plugins/loader.ts';
 import type { PluginLifecycleState } from '../store/domains/plugins.ts';
 import {
@@ -370,8 +371,8 @@ export class PluginLifecycleManager {
    * Scan for plugins and register newly discovered ones.
    * Existing records are not modified.
    */
-  scanAndRegister(): void {
-    const discovered = discoverPlugins();
+  scanAndRegister(pathOptions: PluginPathOptions): void {
+    const discovered = discoverPlugins(pathOptions);
     for (const { manifest, pluginDir } of discovered) {
       if (!this.records.has(manifest.name)) {
         this.registerDiscovered(manifest as PluginManifestV2, pluginDir);

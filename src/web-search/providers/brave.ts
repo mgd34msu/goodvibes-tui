@@ -25,8 +25,8 @@ function mapSafeSearch(value: WebSearchRequest['safeSearch']): string | undefine
   }
 }
 
-export function createBraveSearchProvider(context: SearchProviderContext = {}): WebSearchProvider {
-  const env = context.env ?? process.env;
+export function createBraveSearchProvider(context: SearchProviderContext): WebSearchProvider {
+  const env = context.env;
   const serviceRegistry = context.serviceRegistry;
   return {
     id: 'brave',
@@ -44,7 +44,7 @@ export function createBraveSearchProvider(context: SearchProviderContext = {}): 
     },
     async search(request: WebSearchRequest): Promise<WebSearchProviderResponse> {
       const maxResults = Math.max(1, Math.min(20, request.maxResults ?? 10));
-      const baseUrl = (serviceRegistry?.get(BRAVE_SERVICE_NAME)?.baseUrl ?? BRAVE_DEFAULT_BASE_URL).replace(/\/+$/, '');
+      const baseUrl = (serviceRegistry.get(BRAVE_SERVICE_NAME)?.baseUrl ?? BRAVE_DEFAULT_BASE_URL).replace(/\/+$/, '');
       const { payload } = await executeJsonRequest<Record<string, unknown>>({
         url: `${baseUrl}/res/v1/web/search`,
         params: {
@@ -53,8 +53,8 @@ export function createBraveSearchProvider(context: SearchProviderContext = {}): 
           ...(mapSafeSearch(request.safeSearch) ? { safesearch: mapSafeSearch(request.safeSearch)! } : {}),
         },
         headers: { Accept: 'application/json' },
-        service: serviceRegistry?.get(BRAVE_SERVICE_NAME) ? BRAVE_SERVICE_NAME : undefined,
-        auth: serviceRegistry?.get(BRAVE_SERVICE_NAME) ? undefined : withInlineApiKey(env, BRAVE_ENV_KEYS, 'X-Subscription-Token'),
+        service: serviceRegistry.get(BRAVE_SERVICE_NAME) ? BRAVE_SERVICE_NAME : undefined,
+        auth: serviceRegistry.get(BRAVE_SERVICE_NAME) ? undefined : withInlineApiKey(env, BRAVE_ENV_KEYS, 'X-Subscription-Token'),
         fetcher: context.fetcher,
       });
       const web = payload.web;

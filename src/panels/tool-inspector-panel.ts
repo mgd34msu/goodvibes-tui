@@ -4,7 +4,8 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeEventBus, ToolEvent, TurnEvent } from '../runtime/events/index.ts';
+import type { ToolEvent, TurnEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -104,7 +105,10 @@ export class ToolInspectorPanel extends BasePanel {
   private autoScroll = true;
   private _flatCache: FlatRow[] | null = null;
 
-  constructor(private runtimeBus: RuntimeEventBus) {
+  constructor(
+    private readonly toolEvents: UiEventFeed<ToolEvent>,
+    private readonly turnEvents: UiEventFeed<TurnEvent>,
+  ) {
     super('tools', 'Tools', 'X', 'ai');
   }
 
@@ -356,7 +360,7 @@ export class ToolInspectorPanel extends BasePanel {
   private _attachBus(): void {
     if (this.unsubs.length > 0) return;
 
-    this.unsubs.push(this.runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_RECEIVED' }>>('TOOL_RECEIVED', ({ payload: data }) => {
+    this.unsubs.push(this.toolEvents.on('TOOL_RECEIVED', (data) => {
       if (this.records.length >= MAX_ENTRIES) {
         this.records.shift();
       }
@@ -372,13 +376,13 @@ export class ToolInspectorPanel extends BasePanel {
       this.markDirty();
     }));
 
-    this.unsubs.push(this.runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_PERMISSIONED' }>>('TOOL_PERMISSIONED', ({ payload: data }) => {
+    this.unsubs.push(this.toolEvents.on('TOOL_PERMISSIONED', (data) => {
       const rec = this.records.findLast(r => r.callId === data.callId);
       if (rec) rec.approved = data.approved;
       this.markDirty();
     }));
 
-    this.unsubs.push(this.runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_SUCCEEDED' }>>('TOOL_SUCCEEDED', ({ payload: data }) => {
+    this.unsubs.push(this.toolEvents.on('TOOL_SUCCEEDED', (data) => {
       const rec = this.records.findLast(r => r.callId === data.callId);
       if (rec) {
         rec.endMs = Date.now();
@@ -394,7 +398,7 @@ export class ToolInspectorPanel extends BasePanel {
       this.markDirty();
     }));
 
-    this.unsubs.push(this.runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_FAILED' }>>('TOOL_FAILED', ({ payload: data }) => {
+    this.unsubs.push(this.toolEvents.on('TOOL_FAILED', (data) => {
       const rec = this.records.findLast(r => r.callId === data.callId);
       if (rec) {
         rec.endMs = Date.now();
@@ -411,7 +415,7 @@ export class ToolInspectorPanel extends BasePanel {
       this.markDirty();
     }));
 
-    this.unsubs.push(this.runtimeBus.on<Extract<TurnEvent, { type: 'TURN_ERROR' }>>('TURN_ERROR', ({ payload: data }) => {
+    this.unsubs.push(this.turnEvents.on('TURN_ERROR', (data) => {
       // Mark any running calls as errored
       for (const rec of this.records) {
         if (rec.endMs === undefined) {

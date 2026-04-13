@@ -7,21 +7,22 @@ export interface WatcherStoreSnapshot {
   readonly watchers: readonly WatcherRecord[];
 }
 
-const DEFAULT_WATCHERS_STORE_PATH = join(process.cwd(), '.goodvibes', 'tui', 'watchers.json');
-
 function sortWatchers(watchers: readonly WatcherRecord[]): WatcherRecord[] {
   return [...watchers].sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
 }
 
-export function getWatcherStorePath(): string {
-  return DEFAULT_WATCHERS_STORE_PATH;
+export function getWatcherStorePath(rootPath: string): string {
+  return join(rootPath, '.goodvibes', 'tui', 'watchers.json');
 }
 
 export function resolveWatcherStorePath(storePath?: string): string {
-  return storePath ?? DEFAULT_WATCHERS_STORE_PATH;
+  if (!storePath) {
+    throw new Error('Watcher store requires an explicit storePath');
+  }
+  return storePath;
 }
 
-export function loadWatcherSnapshot(storePath = DEFAULT_WATCHERS_STORE_PATH): WatcherStoreSnapshot | null {
+export function loadWatcherSnapshot(storePath: string): WatcherStoreSnapshot | null {
   return loadWatcherSnapshotFromPath(storePath);
 }
 
@@ -40,7 +41,7 @@ export function loadWatcherSnapshotFromPath(storePath: string): WatcherStoreSnap
   }
 }
 
-export function saveWatcherSnapshot(watchers: readonly WatcherRecord[], storePath = DEFAULT_WATCHERS_STORE_PATH): void {
+export function saveWatcherSnapshot(watchers: readonly WatcherRecord[], storePath: string): void {
   saveWatcherSnapshotToPath(watchers, storePath);
 }
 

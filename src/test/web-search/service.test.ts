@@ -10,6 +10,14 @@ import {
   createSearxngSearchProvider,
   createTavilySearchProvider,
 } from '../../web-search/index.ts';
+import type { SearchProviderContext } from '../../web-search/providers/shared.ts';
+
+const TEST_SEARCH_CONTEXT: SearchProviderContext = {
+  env: {},
+  serviceRegistry: {
+    get: () => null,
+  },
+};
 
 const DUCKDUCKGO_LITE_FIXTURE = `<!DOCTYPE html>
 <html><body>
@@ -103,7 +111,7 @@ afterAll(() => {
 
 describe('WebSearchService', () => {
   test('shapes low-verbosity results and attaches evidence for evidence mode', async () => {
-    const registry = new WebSearchProviderRegistry();
+    const registry = new WebSearchProviderRegistry(TEST_SEARCH_CONTEXT);
     registry.register({
       id: 'test-search',
       label: 'Test Search',
@@ -160,7 +168,7 @@ describe('WebSearchService', () => {
   });
 
   test('preserves provider-supplied evidence without refetching it away', async () => {
-    const registry = new WebSearchProviderRegistry();
+    const registry = new WebSearchProviderRegistry(TEST_SEARCH_CONTEXT);
     registry.register({
       id: 'provider-evidence',
       label: 'Provider Evidence',
@@ -205,6 +213,7 @@ describe('WebSearchService', () => {
 describe('additional web search providers', () => {
   test('parses Brave Search web results', async () => {
     const provider = createBraveSearchProvider({
+      ...TEST_SEARCH_CONTEXT,
       fetcher: async () => ({
         success: true,
         summary: { total: 1, succeeded: 1, failed: 0 },
@@ -233,6 +242,7 @@ describe('additional web search providers', () => {
 
   test('parses Exa results with provider-supplied text evidence', async () => {
     const provider = createExaSearchProvider({
+      ...TEST_SEARCH_CONTEXT,
       fetcher: async () => ({
         success: true,
         summary: { total: 1, succeeded: 1, failed: 0 },
@@ -259,6 +269,7 @@ describe('additional web search providers', () => {
 
   test('parses Firecrawl results with markdown evidence', async () => {
     const provider = createFirecrawlSearchProvider({
+      ...TEST_SEARCH_CONTEXT,
       fetcher: async () => ({
         success: true,
         summary: { total: 1, succeeded: 1, failed: 0 },
@@ -285,6 +296,7 @@ describe('additional web search providers', () => {
 
   test('parses SearXNG JSON results', async () => {
     const provider = createSearxngSearchProvider({
+      ...TEST_SEARCH_CONTEXT,
       env: { SEARXNG_BASE_URL: 'https://searx.example.test' },
       fetcher: async () => ({
         success: true,
@@ -313,6 +325,7 @@ describe('additional web search providers', () => {
 
   test('parses Tavily results and answer metadata', async () => {
     const provider = createTavilySearchProvider({
+      ...TEST_SEARCH_CONTEXT,
       fetcher: async () => ({
         success: true,
         summary: { total: 1, succeeded: 1, failed: 0 },
@@ -341,6 +354,7 @@ describe('additional web search providers', () => {
 
   test('parses Perplexity search API results and registers the provider by default', async () => {
     const provider = createPerplexitySearchProvider({
+      ...TEST_SEARCH_CONTEXT,
       env: { PERPLEXITY_API_KEY: 'perplexity-test-key' },
       fetcher: async () => ({
         success: true,
@@ -365,7 +379,7 @@ describe('additional web search providers', () => {
     expect(response.results[0]?.title).toBe('Perplexity Result');
     expect(response.results[0]?.metadata.published).toBe('2026-02-01');
 
-    const registry = new WebSearchProviderRegistry();
+    const registry = new WebSearchProviderRegistry(TEST_SEARCH_CONTEXT);
     expect(registry.list().some((entry) => entry.id === 'perplexity')).toBe(true);
   });
 });

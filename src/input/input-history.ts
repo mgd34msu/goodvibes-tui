@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
-import { homedir } from 'os';
 import { logger } from '../utils/logger.ts';
 
 /**
@@ -100,6 +99,24 @@ export class HistorySearch {
   }
 }
 
+export interface InputHistoryOptions {
+  readonly historyPath?: string;
+  readonly userRoot?: string;
+  readonly homeDirectory?: string;
+  readonly persist?: boolean;
+}
+
+function resolveHistoryPath(options?: InputHistoryOptions): string {
+  if (options?.historyPath) {
+    return options.historyPath;
+  }
+  const userRoot = options?.userRoot ?? options?.homeDirectory;
+  if (!userRoot) {
+    throw new Error('InputHistory requires historyPath or an explicit userRoot/homeDirectory.');
+  }
+  return join(userRoot, '.goodvibes', 'tui', 'input-history.json');
+}
+
 export class InputHistory {
   private entries: string[] = [];
   private position = -1;  // -1 = not browsing
@@ -108,9 +125,9 @@ export class InputHistory {
   private historyPath: string;
   private persist: boolean;
 
-  constructor(persistPath?: string, persist = true) {
-    this.persist = persist;
-    this.historyPath = persistPath ?? join(homedir(), '.goodvibes', 'tui', 'input-history.json');
+  constructor(options: InputHistoryOptions) {
+    this.persist = options.persist ?? true;
+    this.historyPath = resolveHistoryPath(options);
     if (this.persist) {
       this.load();
     }

@@ -27,8 +27,8 @@ function mapTimeRange(value: WebSearchRequest['timeRange']): string | undefined 
   }
 }
 
-export function createFirecrawlSearchProvider(context: SearchProviderContext = {}): WebSearchProvider {
-  const env = context.env ?? process.env;
+export function createFirecrawlSearchProvider(context: SearchProviderContext): WebSearchProvider {
+  const env = context.env;
   const serviceRegistry = context.serviceRegistry;
   return {
     id: 'firecrawl',
@@ -47,7 +47,7 @@ export function createFirecrawlSearchProvider(context: SearchProviderContext = {
     async search(request: WebSearchRequest): Promise<WebSearchProviderResponse> {
       const maxResults = Math.max(1, Math.min(20, request.maxResults ?? 10));
       const evidenceRequested = request.includeEvidence || request.verbosity === 'evidence' || request.verbosity === 'full';
-      const baseUrl = (serviceRegistry?.get(FIRECRAWL_SERVICE_NAME)?.baseUrl ?? FIRECRAWL_DEFAULT_BASE_URL).replace(/\/+$/, '');
+      const baseUrl = (serviceRegistry.get(FIRECRAWL_SERVICE_NAME)?.baseUrl ?? FIRECRAWL_DEFAULT_BASE_URL).replace(/\/+$/, '');
       const { payload } = await executeJsonRequest<Record<string, unknown>>({
         url: `${baseUrl}/v1/search`,
         method: 'POST',
@@ -58,8 +58,8 @@ export function createFirecrawlSearchProvider(context: SearchProviderContext = {
           ...(mapTimeRange(request.timeRange) ? { tbs: mapTimeRange(request.timeRange)! } : {}),
           ...(evidenceRequested ? { scrapeOptions: { formats: ['markdown'] } } : {}),
         },
-        service: serviceRegistry?.get(FIRECRAWL_SERVICE_NAME) ? FIRECRAWL_SERVICE_NAME : undefined,
-        auth: serviceRegistry?.get(FIRECRAWL_SERVICE_NAME) ? undefined : withInlineBearer(env, FIRECRAWL_ENV_KEYS),
+        service: serviceRegistry.get(FIRECRAWL_SERVICE_NAME) ? FIRECRAWL_SERVICE_NAME : undefined,
+        auth: serviceRegistry.get(FIRECRAWL_SERVICE_NAME) ? undefined : withInlineBearer(env, FIRECRAWL_ENV_KEYS),
         fetcher: context.fetcher,
       });
       const data = Array.isArray(payload.data)

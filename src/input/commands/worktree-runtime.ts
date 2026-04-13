@@ -1,6 +1,6 @@
 import { getPersistedWorktreeMeta, reviewWorktreeAttachments, summarizeWorktreeOwnership } from '../../runtime/worktree/registry.ts';
 import type { CommandRegistry } from '../command-registry.ts';
-import { openCommandPanel } from './runtime-services.ts';
+import { openCommandPanel, requireShellPaths } from './runtime-services.ts';
 
 export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -10,7 +10,8 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
     usage: '[review|panel|inspect <path>|attach <path> <session|task> <id>|session <id>|task <id>|recover <session|task> <id>|pause <path>|resume <path>|keep <path>|discard <path>|cleanup <path>]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
-      const runtime = ctx.worktreeRegistry;
+      const runtime = ctx.workspace.worktreeRegistry;
+      const shellPaths = requireShellPaths(ctx);
       if (!runtime) {
         ctx.print('Worktree registry is not wired into this runtime.');
         return;
@@ -25,7 +26,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /worktree inspect <path>');
           return;
         }
-        const record = getPersistedWorktreeMeta(path);
+        const record = getPersistedWorktreeMeta(path, { workingDirectory: shellPaths.workingDirectory });
         if (!record) {
           ctx.print(`Worktree inspect: no tracked worktree metadata for ${path}.`);
           return;
@@ -71,7 +72,7 @@ export function registerWorktreeRuntimeCommands(registry: CommandRegistry): void
             : `Usage: /worktree ${sub} <id>`);
           return;
         }
-        const review = reviewWorktreeAttachments(targetKind, targetId);
+        const review = reviewWorktreeAttachments(targetKind, targetId, { workingDirectory: shellPaths.workingDirectory });
         const header = sub === 'recover' ? 'Worktree Recovery' : 'Worktree Attachment Review';
         ctx.print(review.total > 0
           ? [

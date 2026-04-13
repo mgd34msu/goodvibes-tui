@@ -5,6 +5,8 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { createFetchTool } from '../../tools/fetch/index.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -179,7 +181,10 @@ describe('fetch tool - service registry auth', () => {
       const origToken = process.env['TEST_SERVICE_TOKEN'];
       process.env['TEST_SERVICE_TOKEN'] = 'registry-bearer-token';
       try {
-        const registry = new ServiceRegistry(join(tempDir, 'services.json'));
+        const registry = new ServiceRegistry(join(tempDir, 'services.json'), {
+          secretsManager: new SecretsManager({ projectRoot: tempDir, globalHome: tempDir }),
+          subscriptionManager: new SubscriptionManager(join(tempDir, 'subscriptions.json')),
+        });
         const fetchTool = createFetchTool({ serviceRegistry: registry });
         const result = await fetchTool.execute({
           urls: [{
@@ -207,7 +212,10 @@ describe('fetch tool - service registry auth', () => {
       echo: { name: 'echo', authType: 'bearer', tokenKey: 'TEST_SERVICE_TOKEN' },
     }, null, 2), 'utf-8');
     try {
-      const registry = new ServiceRegistry(join(tempDir, 'services.json'));
+      const registry = new ServiceRegistry(join(tempDir, 'services.json'), {
+        secretsManager: new SecretsManager({ projectRoot: tempDir, globalHome: tempDir }),
+        subscriptionManager: new SubscriptionManager(join(tempDir, 'subscriptions.json')),
+      });
       const fetchTool = createFetchTool({ serviceRegistry: registry });
       const result = await fetchTool.execute({
         urls: [{

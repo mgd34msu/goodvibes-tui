@@ -1,6 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve, isAbsolute } from 'path';
-import { homedir } from 'os';
 import { logger } from '../utils/logger.ts';
 import { createPluginAPI, type PluginAPIContext } from './api.ts';
 import type { CommandRegistry } from '../input/command-registry.ts';
@@ -14,18 +13,24 @@ import type { VoiceProviderRegistry } from '../voice/index.ts';
 import type { MediaProviderRegistry } from '../media/index.ts';
 import type { WebSearchProviderRegistry } from '../web-search/index.ts';
 
-/** Directory where users place plugin folders. */
-export const PLUGINS_DIR = join(homedir(), '.goodvibes', 'tui', 'plugins');
+export interface PluginPathOptions {
+  readonly cwd: string;
+  readonly homeDir: string;
+}
 
 /**
  * Plugin search directories in precedence order.
  * Project-local plugins override global plugins with the same manifest name.
  */
-export function getPluginDirectories(cwd: string = process.cwd()): string[] {
+export function getUserPluginDirectory(options: PluginPathOptions): string {
+  return join(options.homeDir, '.goodvibes', 'tui', 'plugins');
+}
+
+export function getPluginDirectories(options: PluginPathOptions): string[] {
   return [
-    join(cwd, '.goodvibes', 'plugins'),
-    join(cwd, '.goodvibes', 'tui', 'plugins'),
-    PLUGINS_DIR,
+    join(options.cwd, '.goodvibes', 'plugins'),
+    join(options.cwd, '.goodvibes', 'tui', 'plugins'),
+    getUserPluginDirectory(options),
   ];
 }
 
@@ -80,7 +85,7 @@ export interface DiscoveredPlugin {
 }
 
 /**
- * discoverPlugins — Scan PLUGINS_DIR for valid plugin folders.
+ * discoverPlugins — Scan the configured plugin directories for valid plugin folders.
  * Each subdirectory with a readable manifest.json is a candidate.
  */
 function scanPluginDirectory(rootDir: string): DiscoveredPlugin[] {
@@ -135,9 +140,9 @@ function scanPluginDirectory(rootDir: string): DiscoveredPlugin[] {
   return results;
 }
 
-export function discoverPlugins(cwd: string = process.cwd()): DiscoveredPlugin[] {
+export function discoverPlugins(options: PluginPathOptions): DiscoveredPlugin[] {
   const discovered = new Map<string, DiscoveredPlugin>();
-  for (const dir of getPluginDirectories(cwd)) {
+  for (const dir of getPluginDirectories(options)) {
     for (const plugin of scanPluginDirectory(dir)) {
       if (!discovered.has(plugin.manifest.name)) {
         discovered.set(plugin.manifest.name, plugin);

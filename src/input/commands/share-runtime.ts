@@ -1,9 +1,9 @@
 import { writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { resolve } from 'path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { defaultExportPath, exportToHTML, exportToJSON, exportToMarkdownExtended } from '../../export/session-export.ts';
 import { logger } from '../../utils/logger.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
 export function registerShareRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -13,6 +13,7 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
     usage: '<html|json|md> [path] [--redact]',
     argsHint: '<html|json|md> [path]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const FORMATS = ['html', 'json', 'md'] as const;
       type Format = typeof FORMATS[number];
 
@@ -33,9 +34,11 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
       const remainingArgs = args.slice(1);
       const redact = remainingArgs.includes('--redact');
       const pathArgs = remainingArgs.filter(a => a !== '--redact');
-      const outputPath = pathArgs.length > 0 ? resolve(pathArgs[0].replace(/^~/, homedir())) : defaultExportPath(format);
+      const outputPath = pathArgs.length > 0
+        ? shellPaths.resolveWorkspacePath(pathArgs[0])
+        : defaultExportPath(format, shellPaths.homeDirectory);
 
-      const convData = ctx.conversationManager.toJSON() as {
+      const convData = ctx.session.conversationManager.toJSON() as {
         messages: Array<{
           role: string;
           content: unknown;
@@ -72,10 +75,10 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
         cancelled: m.cancelled,
       }));
       const metadata = {
-        model: ctx.runtime.model,
-        provider: ctx.runtime.provider,
-        sessionId: ctx.runtime.sessionId,
-        title: ctx.conversationManager.title || undefined,
+        model: ctx.session.runtime.model,
+        provider: ctx.session.runtime.provider,
+        sessionId: ctx.session.runtime.sessionId,
+        title: ctx.session.conversationManager.title || undefined,
       };
       const options = { redact };
 

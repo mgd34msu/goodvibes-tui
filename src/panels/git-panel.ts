@@ -80,6 +80,7 @@ const C = {
 // ---------------------------------------------------------------------------
 
 export class GitPanel extends BasePanel {
+  private readonly workingDirectory: string;
   private data: GitData = {
     branch: '...',
     ahead: 0,
@@ -105,8 +106,9 @@ export class GitPanel extends BasePanel {
   private loading = true;
   private error: string | null = null;
 
-  constructor() {
+  constructor(workingDirectory: string) {
     super('git', 'Git', 'G', 'development');
+    this.workingDirectory = workingDirectory;
   }
 
   // ---------------------------------------------------------------------------
@@ -138,7 +140,7 @@ export class GitPanel extends BasePanel {
 
   private async refresh(isRetry = false): Promise<void> {
     try {
-      const git = new GitService();
+      const git = new GitService(this.workingDirectory);
       const [statusResult, branchResult, logEntries] = await Promise.all([
         git.status(),
         git.branch(),
@@ -181,7 +183,7 @@ export class GitPanel extends BasePanel {
       // If the failure is because this directory isn't a git repo, auto-initialise
       // and retry once so the panel becomes functional immediately.
       if (/not a git\b/i.test(msg)) {
-        const cwd = process.cwd();
+        const cwd = this.workingDirectory;
         const initResult = GitService.initRepo(cwd);
         if (initResult.success) {
           logger.debug('GitPanel: auto-initialised git repo', { cwd });
@@ -324,7 +326,7 @@ export class GitPanel extends BasePanel {
     if (!item || item.kind !== 'file') return;
 
     try {
-      const git = new GitService();
+      const git = new GitService(this.workingDirectory);
       const raw = await git.diffFile(item.entry.path, item.entry.staged);
       this.expandedDiff = raw ? raw.split('\n') : ['(no diff available)'];
       this.scrollOffset = 0;

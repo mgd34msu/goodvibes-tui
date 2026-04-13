@@ -2,7 +2,8 @@ import type { Line } from '../types/grid.ts';
 import type { WrfcChain, WrfcState, QualityGateResult } from '../agents/wrfc-types.ts';
 import type { WrfcController } from '../agents/wrfc-controller.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeEventBus, WorkflowEvent } from '../runtime/events/index.ts';
+import type { WorkflowEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildPanelLine,
   buildPanelWorkspace,
@@ -131,7 +132,7 @@ export class WrfcPanel extends BasePanel {
   private unsubscribers: Array<() => void> = [];
 
   constructor(
-    private readonly runtimeBus: RuntimeEventBus,
+    private readonly workflowEvents: UiEventFeed<WorkflowEvent>,
     private readonly deps: WrfcPanelDeps,
   ) {
     super('wrfc', 'WRFC', 'W', 'agent');
@@ -446,15 +447,15 @@ export class WrfcPanel extends BasePanel {
     const refresh = () => { this.syncFromController(); this.markDirty(); };
 
     this.unsubscribers.push(
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_CREATED' }>>('WORKFLOW_CHAIN_CREATED', refresh),
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_STATE_CHANGED' }>>('WORKFLOW_STATE_CHANGED', refresh),
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_REVIEW_COMPLETED' }>>('WORKFLOW_REVIEW_COMPLETED', refresh),
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_FIX_ATTEMPTED' }>>('WORKFLOW_FIX_ATTEMPTED', refresh),
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_GATE_RESULT' }>>('WORKFLOW_GATE_RESULT', refresh),
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_PASSED' }>>('WORKFLOW_CHAIN_PASSED', refresh),
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CHAIN_FAILED' }>>('WORKFLOW_CHAIN_FAILED', refresh),
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_AUTO_COMMITTED' }>>('WORKFLOW_AUTO_COMMITTED', refresh),
-      this.runtimeBus.on<Extract<WorkflowEvent, { type: 'WORKFLOW_CASCADE_ABORTED' }>>('WORKFLOW_CASCADE_ABORTED', refresh),
+      this.workflowEvents.on('WORKFLOW_CHAIN_CREATED', refresh),
+      this.workflowEvents.on('WORKFLOW_STATE_CHANGED', refresh),
+      this.workflowEvents.on('WORKFLOW_REVIEW_COMPLETED', refresh),
+      this.workflowEvents.on('WORKFLOW_FIX_ATTEMPTED', refresh),
+      this.workflowEvents.on('WORKFLOW_GATE_RESULT', refresh),
+      this.workflowEvents.on('WORKFLOW_CHAIN_PASSED', refresh),
+      this.workflowEvents.on('WORKFLOW_CHAIN_FAILED', refresh),
+      this.workflowEvents.on('WORKFLOW_AUTO_COMMITTED', refresh),
+      this.workflowEvents.on('WORKFLOW_CASCADE_ABORTED', refresh),
     );
   }
 

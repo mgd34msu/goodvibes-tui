@@ -1,10 +1,10 @@
-import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
 import type { CommandRegistry } from '../command-registry.ts';
 import { fetchModelContextWindows } from '../../discovery/scanner.ts';
 import type { CustomProviderConfig } from '../../providers/custom-loader.ts';
+import { requireProviderApi, requireShellPaths } from './runtime-services.ts';
 
 function isValidProviderName(name: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(name);
@@ -18,6 +18,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
     usage: '[add <name> <baseURL> [apiKey] | remove <name> | <provider-name>]',
     argsHint: '[add|remove|name]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       if (args[0] === 'add') {
         const addArgs = args.slice(1);
         if (addArgs.length < 2) {
@@ -36,7 +37,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
           ctx.print(`Error: '${baseURL}' is not a valid URL. Example: http://192.168.0.85:8001/v1`);
           return;
         }
-        const providersDir = join(homedir(), '.goodvibes', 'tui', 'providers');
+        const providersDir = shellPaths.resolveUserTuiPath('providers');
         const providerFile = join(providersDir, `${name}.json`);
         if (existsSync(providerFile)) {
           ctx.print(`Error: Provider '${name}' already exists at ${providerFile}\nRemove it first with: /provider remove ${name}`);
@@ -118,7 +119,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
           ctx.print('Error: Provider name must contain only letters, numbers, hyphens, and underscores.');
           return;
         }
-        const providerFile = join(homedir(), '.goodvibes', 'tui', 'providers', `${name}.json`);
+        const providerFile = shellPaths.resolveUserTuiPath('providers', `${name}.json`);
         if (!existsSync(providerFile)) {
           ctx.print(`Error: No custom provider '${name}' found at ${providerFile}`);
           return;
@@ -137,24 +138,29 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
           ctx.openProviderPicker();
           return;
         }
-        const providers = ['openai', 'anthropic', 'gemini', 'inceptionlabs'];
-        ctx.print(['Available providers:', ...providers.map((provider) => `  ${provider === ctx.runtime.provider ? '▶' : ' '} ${provider}`)].join('\n'));
+        const providers = requireProviderApi(ctx).listProviderIds();
+        ctx.print(['Available providers:', ...providers.map((provider) => `  ${provider === ctx.session.runtime.provider ? '▶' : ' '} ${provider}`)].join('\n'));
         return;
       }
 
       const providerName = args[0];
-      const match = ctx.providerRegistry.getSelectableModels().find((model) => model.provider === providerName);
+      const providerApi = requireProviderApi(ctx);
+      const selectable = await providerApi.listModels({
+        providerId: providerName,
+        selectableOnly: true,
+      });
+      const match = selectable[0];
       if (!match) {
-        ctx.print(`Unknown provider: ${providerName}. Available: openai, anthropic, gemini, inceptionlabs`);
+        ctx.print(`Unknown provider: ${providerName}. Available: ${providerApi.listProviderIds().join(', ')}`);
         return;
       }
       try {
-        ctx.providerRegistry.setCurrentModel(match.id);
-        ctx.runtime.model = match.id;
-        ctx.runtime.provider = providerName;
-        ctx.configManager.set('provider.provider', providerName);
-        ctx.configManager.set('provider.model', match.id);
-        ctx.print(`Switched to provider: ${providerName} (model: ${match.id})`);
+        const selected = await providerApi.selectModel(match.registryKey);
+        ctx.session.runtime.model = selected.registryKey;
+        ctx.session.runtime.provider = selected.providerId;
+        ctx.platform.configManager.set('provider.provider', selected.providerId);
+        ctx.platform.configManager.set('provider.model', selected.registryKey);
+        ctx.print(`Switched to provider: ${selected.providerId} (model: ${selected.modelId})`);
       } catch (e) {
         ctx.print(`Error: ${(e as Error).message}`);
       }

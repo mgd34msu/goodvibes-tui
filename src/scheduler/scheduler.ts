@@ -1,6 +1,4 @@
-import { join } from 'path';
 import { PersistentStore } from '../state/persistent-store.ts';
-import { AgentManager } from '../tools/agent/index.ts';
 import { logger } from '../utils/logger.ts';
 
 // ---------------------------------------------------------------------------
@@ -63,8 +61,6 @@ interface TaskSchedulerConfig {
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const SCHEDULES_PATH = join(process.cwd(), '.goodvibes', 'tui', 'schedules.json');
 
 /** Max run history records to keep per task. */
 const MAX_HISTORY_PER_TASK = 5;
@@ -401,38 +397,29 @@ function countMissedRuns(
  * TaskScheduler — cron-like task scheduler that runs inside the daemon.
  *
  * Tasks persist to disk (`.goodvibes/tui/schedules.json`) and survive restarts.
- * Each execution spawns a fresh agent via AgentManager; no shared state between runs.
+ * Task execution requires an explicit spawnTask callback so runs stay owned by the caller.
  */
 export class TaskScheduler {
   private tasks: Map<string, ScheduledTask> = new Map();
   private timers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private history: TaskRunRecord[] = [];
   private store: PersistentStore<StoreData>;
-  private readonly spawnTask: (input: {
+  private readonly spawnTask?: (input: {
     readonly prompt: string;
     readonly model?: string;
     readonly template?: string;
   }) => string;
   private running = false;
 
-  constructor(config: string | TaskSchedulerConfig = SCHEDULES_PATH) {
+  constructor(config: string | TaskSchedulerConfig) {
     const resolvedConfig = typeof config === 'string'
       ? { storePath: config }
       : config;
-    this.store = new PersistentStore<StoreData>(resolvedConfig.storePath ?? SCHEDULES_PATH);
-    const fallbackAgentManager = resolvedConfig.spawnTask ? null : new AgentManager();
-    this.spawnTask = resolvedConfig.spawnTask ?? ((input) => {
-      const record = fallbackAgentManager?.spawn({
-        mode: 'spawn',
-        task: input.prompt,
-        ...(input.model !== undefined ? { model: input.model } : {}),
-        ...(input.template !== undefined ? { template: input.template } : {}),
-      });
-      if (!record) {
-        throw new Error('TaskScheduler spawnTask is not configured');
-      }
-      return record.id;
-    });
+    if (!resolvedConfig.storePath) {
+      throw new Error('TaskScheduler requires an explicit storePath');
+    }
+    this.store = new PersistentStore<StoreData>(resolvedConfig.storePath);
+    this.spawnTask = resolvedConfig.spawnTask;
   }
 
   // -------------------------------------------------------------------------
@@ -627,9 +614,13 @@ export class TaskScheduler {
     logger.info('TaskScheduler: executing task', { taskId: task.id, name: task.name });
 
     let agentId: string;
+    const spawnTask = this.spawnTask;
+    if (!spawnTask) {
+      throw new Error('TaskScheduler requires an explicit spawnTask callback for execution.');
+    }
 
     try {
-      agentId = this.spawnTask({
+      agentId = spawnTask({
         prompt: task.prompt,
         ...(task.model !== undefined ? { model: task.model } : {}),
         ...(task.template !== undefined ? { template: task.template } : {}),

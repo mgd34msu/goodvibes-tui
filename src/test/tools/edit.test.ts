@@ -28,8 +28,12 @@ function writeFile(dir: string, name: string, content: string): string {
 }
 
 /** Return a relative path from project root (for use as tool input path). */
+function relPathFrom(root: string, absPath: string): string {
+  return absPath.slice(root.length + 1);
+}
+
 function relPath(absPath: string): string {
-  return absPath.slice(PROJECT_ROOT.length + 1); // strip leading slash
+  return relPathFrom(PROJECT_ROOT, absPath);
 }
 
 // ---------------------------------------------------------------------------
@@ -44,7 +48,7 @@ describe('edit tool', () => {
   beforeEach(() => {
     tmpDir = makeTmpDir();
     fileCache = new FileStateCache();
-    tool = createEditTool(fileCache);
+    tool = createEditTool(fileCache, { cwd: PROJECT_ROOT });
   });
 
   afterEach(() => {
@@ -866,7 +870,7 @@ describe('edit tool', () => {
       const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
 
       const result = await localTool.execute({
-        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        edits: [{ path: relPathFrom(tmpDir, editFile), find: 'original', replace: 'changed' }],
         validate: { before: ['build'] },
       });
 
@@ -883,7 +887,7 @@ describe('edit tool', () => {
       const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
 
       const result = await localTool.execute({
-        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        edits: [{ path: relPathFrom(tmpDir, editFile), find: 'original', replace: 'changed' }],
         validate: { before: ['build'] },
       });
 
@@ -898,7 +902,7 @@ describe('edit tool', () => {
       const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
 
       const result = await localTool.execute({
-        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        edits: [{ path: relPathFrom(tmpDir, editFile), find: 'original', replace: 'changed' }],
         validate: { before: ['build'] },
         dry_run: true,
       });
@@ -923,7 +927,7 @@ describe('edit tool', () => {
       const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
 
       const result = await localTool.execute({
-        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        edits: [{ path: relPathFrom(tmpDir, editFile), find: 'original', replace: 'changed' }],
         validate: { after: ['build'] },
         transaction: { mode: 'atomic' },
       });
@@ -941,7 +945,7 @@ describe('edit tool', () => {
       const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
 
       const result = await localTool.execute({
-        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        edits: [{ path: relPathFrom(tmpDir, editFile), find: 'original', replace: 'changed' }],
         validate: { after: ['build'] },
       });
 
@@ -955,7 +959,7 @@ describe('edit tool', () => {
       const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
 
       const result = await localTool.execute({
-        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        edits: [{ path: relPathFrom(tmpDir, editFile), find: 'original', replace: 'changed' }],
         validate: { after: ['build'] },
         transaction: { mode: 'partial' },
       });
@@ -973,7 +977,7 @@ describe('edit tool', () => {
       const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
 
       const result = await localTool.execute({
-        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        edits: [{ path: relPathFrom(tmpDir, editFile), find: 'original', replace: 'changed' }],
         validate: { after: ['build'] },
         dry_run: true,
       });
@@ -992,7 +996,7 @@ describe('edit tool', () => {
       const localTool = createEditTool(new FileStateCache(), { cwd: tmpDir });
 
       const result = await localTool.execute({
-        edits: [{ path: relPath(editFile), find: 'original', replace: 'changed' }],
+        edits: [{ path: relPathFrom(tmpDir, editFile), find: 'original', replace: 'changed' }],
         validate: { after: ['build'] },
       });
 
@@ -1122,4 +1126,3 @@ describe('edit tool', () => {
     });
   });
 });
-

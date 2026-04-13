@@ -7,6 +7,7 @@ import type { AgentRecord } from '../tools/agent/index.ts';
 import { logger } from '../utils/logger.ts';
 
 type PromptContextDeps = {
+  readonly workingDirectory: string;
   readonly knowledgeService?: {
     buildPromptPacketSync(task: string, writeScope?: readonly string[]): string | null;
   };
@@ -16,8 +17,8 @@ type PromptContextDeps = {
   };
 };
 
-function buildProjectContext(): string | null {
-  const cwd = process.cwd();
+function buildProjectContext(workingDirectory: string): string | null {
+  const cwd = workingDirectory;
 
   try {
     const lines: string[] = ['## Project', `- Directory: ${cwd}`];
@@ -75,11 +76,11 @@ function buildProjectContext(): string | null {
   }
 }
 
-function loadConventions(): string | null {
+function loadConventions(workingDirectory: string): string | null {
   try {
     const candidates = [
-      join(process.cwd(), '.goodvibes', 'GOODVIBES.md'),
-      join(process.cwd(), 'GOODVIBES.md'),
+      join(workingDirectory, '.goodvibes', 'GOODVIBES.md'),
+      join(workingDirectory, 'GOODVIBES.md'),
     ];
     for (const path of candidates) {
       if (existsSync(path)) {
@@ -246,7 +247,7 @@ The report format depends on your role:
 
   // --- Layer 3: Project context ---
   if (!skipLayers?.has('project')) {
-    const projectContext = buildProjectContext();
+    const projectContext = deps ? buildProjectContext(deps.workingDirectory) : null;
     if (projectContext) {
       parts.push(projectContext);
     }
@@ -254,7 +255,7 @@ The report format depends on your role:
 
   // --- Layer 4: Conventions ---
   if (!skipLayers?.has('conventions')) {
-    const conventions = loadConventions();
+    const conventions = deps ? loadConventions(deps.workingDirectory) : null;
     if (conventions) {
       parts.push(conventions);
     }

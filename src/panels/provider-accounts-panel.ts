@@ -14,19 +14,14 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { ServiceRegistry } from '../config/service-registry.ts';
-import { SubscriptionManager } from '../config/subscriptions.ts';
-import { ProviderRegistry } from '../providers/registry.ts';
 import {
-  buildProviderAccountSnapshot,
   type ProviderAccountRecord,
   type ProviderAccountSnapshot,
+  type ProviderAccountSnapshotQuery,
 } from './provider-account-snapshot.ts';
 
 export interface ProviderAccountsPanelDeps {
-  readonly providerRegistry: ProviderRegistry;
-  readonly serviceRegistry: ServiceRegistry;
-  readonly subscriptionManager: SubscriptionManager;
+  readonly providerAccounts: ProviderAccountSnapshotQuery;
 }
 
 const C = {
@@ -39,15 +34,11 @@ export class ProviderAccountsPanel extends BasePanel {
   private loading = false;
   private selectedIndex = 0;
   private scrollOffset = 0;
-  private readonly providerRegistry: ProviderRegistry;
-  private readonly serviceRegistry: ServiceRegistry;
-  private readonly subscriptionManager: SubscriptionManager;
+  private readonly providerAccounts: ProviderAccountSnapshotQuery;
 
   public constructor(deps: ProviderAccountsPanelDeps) {
     super('accounts', 'Accounts', 'Q', 'monitoring');
-    this.providerRegistry = deps.providerRegistry;
-    this.serviceRegistry = deps.serviceRegistry;
-    this.subscriptionManager = deps.subscriptionManager;
+    this.providerAccounts = deps.providerAccounts;
     void this.refresh();
   }
 
@@ -85,11 +76,7 @@ export class ProviderAccountsPanel extends BasePanel {
   }
 
   private async buildSnapshot(): Promise<ProviderAccountSnapshot> {
-    return buildProviderAccountSnapshot({
-      providerRegistry: this.providerRegistry,
-      serviceRegistry: this.serviceRegistry,
-      subscriptionManager: this.subscriptionManager,
-    });
+    return this.providerAccounts.loadSnapshot();
   }
 
   public render(width: number, height: number): Line[] {

@@ -10,7 +10,7 @@ import type { ScheduleManager } from '../tools/workflow/index.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
 export { saveSession } from './session-persistence.ts';
-import { saveSession, type SessionSnapshot } from './session-persistence.ts';
+import { saveSession, type SessionPersistenceOptions, type SessionSnapshot } from './session-persistence.ts';
 import type { CrossSessionTaskRegistry } from '../sessions/orchestration/index.ts';
 
 // ── Startup lifecycle ────────────────────────────────────────────────────────
@@ -71,9 +71,10 @@ export async function shutdownRuntime(
   hookDispatcher?: Pick<HookDispatcher, 'fire'> | null,
   providerRegistry?: Pick<ProviderRegistry, 'stopWatching'> | null,
   sessionOrchestration?: Pick<CrossSessionTaskRegistry, 'dispose'> | null,
+  persistenceOptions?: SessionPersistenceOptions,
 ): Promise<void> {
   // Step 1: persist conversation
-  saveSession(sessionId, sessionData, model, provider, title);
+  saveSession(sessionId, sessionData, model, provider, title, persistenceOptions);
 
   // Step 2: lifecycle hooks (fire-and-forget, best-effort before process exit)
   const fireHook = (specific: string): void => {

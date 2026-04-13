@@ -2,7 +2,8 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { buildMcpAttackPathReview } from '../../runtime/mcp/index.ts';
 import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '../../state/knowledge-injection.ts';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
-import { requireSubscriptionManager, requireTokenAuditor } from './runtime-services.ts';
+import { requireReadModels, requireSubscriptionManager, requireTokenAuditor } from './runtime-services.ts';
+import { getMemoryApi } from './recall-query.ts';
 
 export function registerControlRoomRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -25,24 +26,17 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     description: 'Inspect orchestration graphs and cancel active graphs or subtrees',
     usage: '[show [graphId] | cancel graph <graphId> | cancel subtree <agentId>]',
     handler(args, ctx) {
-      const store = ctx.runtimeStore;
+      const graphs = [...requireReadModels(ctx).orchestration.getSnapshot().graphs];
       if (args.length === 0) {
         if (ctx.openOrchestrationPanel) {
           ctx.openOrchestrationPanel();
           return;
         }
-        if (!store) {
+        if (graphs.length === 0) {
           ctx.print('Orchestration panel is not available in this runtime.');
           return;
         }
       }
-
-      if (!store) {
-        ctx.print('Runtime store is not available for orchestration commands.');
-        return;
-      }
-
-      const graphs = [...store.getState().orchestration.graphs.values()].sort((a, b) => b.createdAt - a.createdAt);
       const subcommand = args[0]?.toLowerCase() ?? 'show';
 
       if (subcommand === 'show') {
@@ -74,7 +68,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
       if (subcommand === 'cancel') {
         const mode = args[1]?.toLowerCase();
         const target = args[2];
-        const manager = ctx.agentManager;
+        const manager = ctx.ops.agentManager;
         if (!manager) {
           ctx.print('Agent manager is not available in this runtime.');
           return;
@@ -136,26 +130,15 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
 
       const subcommand = args[0]?.toLowerCase() ?? 'review';
       const audit = requireTokenAuditor(ctx).auditAll(Date.now());
-      const store = ctx.runtimeStore;
-      const policySnapshot = ctx.policyRuntimeState?.getSnapshot();
+      const securitySnapshot = requireReadModels(ctx).security.getSnapshot();
+      const policySnapshot = ctx.extensions.policyRuntimeState?.getSnapshot();
       if (!policySnapshot) {
         ctx.print('Policy runtime state is not available in this runtime.');
         return;
       }
-      const mcpServers = [...(store?.getState().mcp.servers.values() ?? [])];
       const attackPaths = buildMcpAttackPathReview({
-        servers: mcpServers.map((server) => ({
-          name: server.name,
-          role: server.role,
-          trustMode: server.trustMode,
-          allowedPaths: server.allowedPaths,
-          allowedHosts: server.allowedHosts,
-          schemaFreshness: server.schemaFreshness,
-          quarantineReason: server.quarantineReason,
-          quarantineDetail: server.quarantineDetail,
-          connected: server.status === 'connected' || server.status === 'degraded',
-        })),
-        recentDecisions: ctx.mcpRegistry.listRecentSecurityDecisions(12),
+        servers: securitySnapshot.mcpServers,
+        recentDecisions: securitySnapshot.recentMcpDecisions,
       });
 
       if (subcommand === 'tokens') {
@@ -187,7 +170,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         return;
       }
 
-      const plugins = ctx.pluginManager?.list() ?? [];
+      const plugins = ctx.extensions.pluginManager?.list() ?? [];
       const subscriptions = requireSubscriptionManager(ctx);
       const builtinProviders = listBuiltinSubscriptionProviders();
       ctx.print([
@@ -202,9 +185,9 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         `  pending subscriptions: ${subscriptions.listPending().length}`,
         `  policy lint findings: ${policySnapshot.lintFindings.length}`,
         `  policy preflight: ${policySnapshot.lastPreflightReview?.status ?? 'n/a'}`,
-        `  mcp servers: ${mcpServers.length}`,
-        `  mcp quarantined: ${mcpServers.filter((server) => server.schemaFreshness === 'quarantined').length}`,
-        `  mcp elevated: ${mcpServers.filter((server) => server.trustMode === 'allow-all').length}`,
+        `  mcp servers: ${securitySnapshot.mcpServers.length}`,
+        `  mcp quarantined: ${securitySnapshot.mcpServers.filter((server) => server.schemaFreshness === 'quarantined').length}`,
+        `  mcp elevated: ${securitySnapshot.mcpServers.filter((server) => server.trustMode === 'allow-all').length}`,
         `  mcp attack-path findings: ${attackPaths.findings.length}`,
         `  quarantined plugins: ${plugins.filter((plugin) => plugin.quarantined).length}`,
         `  untrusted plugins: ${plugins.filter((plugin) => plugin.trustTier === 'untrusted').length}`,
@@ -227,13 +210,11 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         ctx.print('Knowledge panel is not available in this runtime.');
         return;
       }
-      if (!ctx.memoryRegistry) {
-        ctx.print('Knowledge controls are not available in this runtime.');
-        return;
-      }
+      const memory = getMemoryApi(ctx);
+      if (!memory) return;
       if (subcommand === 'queue') {
         const limit = Math.max(1, parseInt(args[1] ?? '10', 10) || 10);
-        const queue = ctx.memoryRegistry.reviewQueue(limit);
+        const queue = memory.reviewQueue(limit);
         if (queue.length === 0) {
           ctx.print('Knowledge review queue is empty.');
           return;
@@ -259,12 +240,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
           ctx.print('Usage: /knowledge explain <task...> [--scope <path> ...]');
           return;
         }
-        const memoryRegistry = ctx.memoryRegistry;
-        if (!memoryRegistry) {
-          ctx.print('Memory registry is not available in this runtime.');
-          return;
-        }
-        const injections = selectKnowledgeForTask(memoryRegistry, task, scopeValues);
+        const injections = selectKnowledgeForTask(memory, task, scopeValues);
         const prompt = buildKnowledgeInjectionPrompt(injections);
         ctx.print(prompt ?? 'No reviewed project knowledge matched that task.');
         return;

@@ -1,4 +1,5 @@
-import type { LLMProvider } from './interface.ts';
+import type { LLMProvider, ProviderRuntimeMetadata, ProviderRuntimeMetadataDeps } from './interface.ts';
+import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import {
   ProviderCapabilityRegistry,
@@ -10,15 +11,15 @@ import type { DiscoveredServer } from '../discovery/scanner.ts';
 import { createDiscoveredProvider, getDiscoveredReasoningFormat } from './discovered-factory.ts';
 import { getDiscoveredTraits } from './discovered-traits.ts';
 import { getConfiguredApiKeys, getConfiguredModelId, getConfiguredProviderId } from '../config/index.ts';
-import type { ConfigManager } from '../config/manager.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitProvidersChanged, emitProviderWarning } from '../runtime/emitters/index.ts';
 import { loadCustomProviders, watchCustomProviders } from './custom-loader.ts';
-import type { SubscriptionManager } from '../config/subscriptions.ts';
 import {
   buildSyntheticCanonicalModels,
   fetchCatalog,
+  getCatalogCachePath,
   getCatalogModelDefinitionsFrom,
+  getCatalogTmpPath,
   getCostFromPricingCatalog,
   getSyntheticBackendModelIds,
   getSyntheticModelDefinitions,
@@ -34,94 +35,35 @@ import {
 } from './model-catalog.ts';
 import { registerBuiltinProviders, CATALOG_PROVIDER_NAME_ALIASES } from './builtin-registry.ts';
 import type { CacheHitTracker } from './cache-strategy.ts';
+import type { ConfigManager } from '../config/manager.ts';
+import type { SubscriptionManager } from '../config/subscriptions.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { FavoritesStore } from './favorites.ts';
 import type { BenchmarkStore } from './model-benchmarks.ts';
 import type { CanonicalModel } from './synthetic.ts';
 import { LocalContextIngestionService } from './local-context-ingestion.ts';
-import { ModelLimitsService } from './model-limits.ts';
-
-/** Model capability tier — controls system prompt verbosity. */
-export type ModelTier = 'free' | 'standard' | 'premium' | 'subscription';
-
-/** Per-model token limits for output, tool results, tool calls, and reasoning. */
-export interface TokenLimits {
-  maxOutputTokens?: number;       // max generation tokens sent as max_tokens to API
-  maxToolResultTokens?: number;   // max tokens per tool result before truncation
-  maxToolCalls?: number;          // max parallel tool calls per turn
-  maxReasoningTokens?: number;    // budget for thinking/reasoning
-}
-
-/** Provenance of a resolved context window value. */
-export type ContextWindowProvenance = 'provider_api' | 'configured_cap' | 'fallback';
-
-/** Describes a selectable model and its capabilities. */
-export interface ModelDefinition {
-  id: string;
-  provider: string;
-  /** Compound unique key: `${provider}:${id}`. Safe separator since model IDs use `/` not `:`. */
-  registryKey: string;
-  displayName: string;
-  description: string;
-  capabilities: {
-    toolCalling: boolean;
-    codeEditing: boolean;
-    reasoning: boolean;
-    multimodal: boolean;
-  };
-  contextWindow: number;
-  /**
-   * How `contextWindow` was resolved. Present on custom/local provider models.
-   * - `provider_api`   — sourced from provider's /v1/models endpoint at runtime
-   * - `configured_cap` — explicit value from provider config file
-   * - `fallback`       — default constant (8192) applied when no other source available
-   * Absent for built-in catalog models (they use OpenRouter data via model-limits).
-   */
-  contextWindowProvenance?: ContextWindowProvenance;
-  /** Whether the user can select this model in the model picker. */
-  selectable: boolean;
-  /** Available reasoning effort levels for this model (controls UI effort picker). */
-  reasoningEffort?: string[];
-  /** Model capability tier — controls system prompt verbosity. */
-  tier?: ModelTier;
-  /** Per-model token limits; overrides defaults and OpenRouter data when set. */
-  tokenLimits?: TokenLimits;
-}
-
-export interface RuntimeProviderRegistration {
-  readonly provider: LLMProvider;
-  readonly models?: readonly ModelDefinition[];
-  readonly suppressCatalogModels?: readonly string[];
-  readonly replace?: boolean;
-}
-
-
-function withRegistryKey(model: ModelDefinition): ModelDefinition {
-  return model.registryKey ? model : { ...model, registryKey: `${model.provider}:${model.id}` };
-}
-
-function splitModelRegistryKey(modelId: string): { providerId: string; resolvedModelId: string } {
-  if (!modelId.includes(':')) {
-    return { providerId: modelId, resolvedModelId: modelId };
-  }
-
-  return {
-    providerId: modelId.split(':')[0] ?? 'unknown',
-    resolvedModelId: modelId.split(':').slice(1).join(':'),
-  };
-}
-
-export interface ProviderRegistryOptions {
-  readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;
-  readonly subscriptionManager: Pick<SubscriptionManager, 'get'>;
-  readonly capabilityRegistry: ProviderCapabilityRegistry;
-  readonly cacheHitTracker: CacheHitTracker;
-  readonly favoritesStore: Pick<FavoritesStore, 'load'>;
-  readonly benchmarkStore: Pick<BenchmarkStore, 'getBenchmarks' | 'getTopBenchmarkModelIds'>;
-  readonly modelLimitsService?: ModelLimitsService;
-  readonly featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null;
-  readonly runtimeBus?: RuntimeEventBus | null;
-}
+import { getModelLimitsCachePath, ModelLimitsService } from './model-limits.ts';
+import { getGitHubCopilotTokenCachePath } from './github-copilot.ts';
+import {
+  getBaseModelId,
+  splitModelRegistryKey,
+  stableStringify,
+  withRegistryKey,
+} from './registry-helpers.ts';
+import type {
+  ModelDefinition,
+  ProviderRegistryOptions,
+  RuntimeProviderRegistration,
+  TokenLimits,
+} from './registry-types.ts';
+export type {
+  ContextWindowProvenance,
+  ModelDefinition,
+  ModelTier,
+  ProviderRegistryOptions,
+  RuntimeProviderRegistration,
+  TokenLimits,
+} from './registry-types.ts';
 
 /**
  * ProviderRegistry — manages LLM provider instances and model selection.
@@ -138,14 +80,15 @@ export class ProviderRegistry {
   private readonly runtimeCatalogSuppressions = new Map<string, readonly string[]>();
   private _watcher: { close: () => void } | undefined;
   private _readyPromise: Promise<void> | null = null;
-  private readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;
-  private readonly subscriptionManager: Pick<SubscriptionManager, 'get'>;
+  private readonly configManager: Pick<ConfigManager, 'get' | 'getCategory' | 'getControlPlaneConfigDir'>;
+  private readonly subscriptionManager: Pick<SubscriptionManager, 'get' | 'getPending' | 'saveSubscription' | 'resolveAccessToken'>;
   private readonly capabilityRegistry: ProviderCapabilityRegistry;
   private readonly cacheHitTracker: CacheHitTracker;
   private readonly featureFlags: Pick<FeatureFlagManager, 'isEnabled'> | null;
   private readonly favoritesStore: Pick<FavoritesStore, 'load'>;
   private readonly benchmarkStore: Pick<BenchmarkStore, 'getBenchmarks' | 'getTopBenchmarkModelIds'>;
   private readonly modelLimitsService: ModelLimitsService;
+  private readonly runtimeMetadataDeps: ProviderRuntimeMetadataDeps;
   private readonly runtimeBus: RuntimeEventBus | null;
   private readonly localContextIngestionService = new LocalContextIngestionService();
   private catalogModels: CatalogModel[] = [];
@@ -159,7 +102,14 @@ export class ProviderRegistry {
     this.cacheHitTracker = options.cacheHitTracker;
     this.favoritesStore = options.favoritesStore;
     this.benchmarkStore = options.benchmarkStore;
-    this.modelLimitsService = options.modelLimitsService ?? new ModelLimitsService();
+    this.modelLimitsService = options.modelLimitsService ?? new ModelLimitsService({
+      cachePath: getModelLimitsCachePath(this.getPersistenceRoot()),
+    });
+    this.runtimeMetadataDeps = {
+      secretsManager: options.secretsManager,
+      serviceRegistry: options.serviceRegistry,
+      subscriptionManager: options.subscriptionManager,
+    };
     this.featureFlags = options.featureFlags ?? null;
     this.runtimeBus = options.runtimeBus ?? null;
     this.currentModelId = getConfiguredModelId(this.configManager) || 'openrouter/free';
@@ -177,9 +127,27 @@ export class ProviderRegistry {
         resolveProvider: (providerName) => this.get(providerName),
         getCatalogModels: () => this.syntheticCanonicalModels,
         getBenchmarks: (modelId) => this.benchmarkStore.getBenchmarks(modelId),
+        githubCopilotTokenCachePath: getGitHubCopilotTokenCachePath(this.getPersistenceRoot()),
+        subscriptionManager: this.subscriptionManager,
         runtimeBus: this.runtimeBus,
       },
     );
+  }
+
+  private getPersistenceRoot(): string {
+    return this.configManager.getControlPlaneConfigDir();
+  }
+
+  private getCustomProvidersDir(): string {
+    return join(this.getPersistenceRoot(), 'providers');
+  }
+
+  private getCatalogCachePaths(): { cachePath: string; tmpPath: string } {
+    const cachePath = getCatalogCachePath(this.getPersistenceRoot());
+    return {
+      cachePath,
+      tmpPath: getCatalogTmpPath(this.getPersistenceRoot()),
+    };
   }
 
   private getCatalogBuiltins(): ModelDefinition[] {
@@ -350,6 +318,12 @@ export class ProviderRegistry {
       if (pa) return pa;
     }
     throw new Error(`Provider '${name}' is not registered.`);
+  }
+
+  async describeRuntime(name: string): Promise<ProviderRuntimeMetadata | null> {
+    const provider = this.getRegistered(name);
+    if (!provider.describeRuntime) return null;
+    return await provider.describeRuntime(this.runtimeMetadataDeps);
   }
 
   /** Return the provider responsible for a given model ID.
@@ -565,6 +539,7 @@ export class ProviderRegistry {
    */
   async loadCustomProviders(): Promise<{ warnings: string[]; added: string[]; removed: string[]; updated: string[] }> {
     const result = await loadCustomProviders({
+      providersDir: this.getCustomProvidersDir(),
       ingestContextWindows: this.featureFlags?.isEnabled('local-provider-context-ingestion') ?? false,
       contextIngestion: this.localContextIngestionService,
     });
@@ -641,7 +616,7 @@ export class ProviderRegistry {
           updated: result.updated,
         });
       }
-    });
+    }, this.getCustomProvidersDir());
   }
 
   /** Stop the file watcher started by startWatching(). */
@@ -743,7 +718,7 @@ export class ProviderRegistry {
   }
 
   initCatalog(): void {
-    const cached = loadCatalogCache();
+    const cached = loadCatalogCache(this.getCatalogCachePaths().cachePath);
     if (cached) {
       this.catalogModels = [...cached.models];
       this.pricingCatalog = { fetchedAt: cached.fetchedAt, models: this.catalogModels };
@@ -763,7 +738,8 @@ export class ProviderRegistry {
       logger.warn('[model-catalog] Refresh returned 0 models — keeping existing catalog');
       return;
     }
-    saveCatalogCache(models);
+    const { cachePath, tmpPath } = this.getCatalogCachePaths();
+    saveCatalogCache(models, cachePath, tmpPath);
     this.updateCatalogState(models);
     const favorites = await this.favoritesStore.load();
     notifyCatalogChanges(
@@ -774,20 +750,4 @@ export class ProviderRegistry {
     );
     logger.debug('[model-catalog] Catalog updated', { count: models.length });
   }
-}
-
-function getBaseModelId(modelId: string): string {
-  return modelId.includes(':') ? modelId.split(':').slice(1).join(':') : modelId;
-}
-
-/**
- * Key-order-independent JSON serialisation used for model diff comparisons.
- * Recursively sorts object keys so that { a: 1, b: 2 } and { b: 2, a: 1 }
- * produce the same string.
- */
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return '[' + value.map(stableStringify).join(',') + ']';
-  const sorted = Object.keys(value as Record<string, unknown>).sort();
-  return '{' + sorted.map((k) => JSON.stringify(k) + ':' + stableStringify((value as Record<string, unknown>)[k])).join(',') + '}';
 }

@@ -15,7 +15,7 @@ function makeTmpPath(): string {
 }
 
 function makeHistory(path?: string): InputHistory {
-  return new InputHistory(path ?? makeTmpPath(), true);
+  return new InputHistory({ historyPath: path ?? makeTmpPath(), persist: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -251,12 +251,12 @@ describe('InputHistory.isBrowsing', () => {
 describe('InputHistory persistence', () => {
   test('round-trip: entries survive save+load', () => {
     const path = makeTmpPath();
-    const h1 = new InputHistory(path, true);
+    const h1 = new InputHistory({ historyPath: path, persist: true });
     h1.add('alpha');
     h1.add('beta');
     h1.add('gamma');
 
-    const h2 = new InputHistory(path, true);
+    const h2 = new InputHistory({ historyPath: path, persist: true });
     expect(h2.up('')).toBe('gamma');
     expect(h2.up('gamma')).toBe('beta');
     expect(h2.up('beta')).toBe('alpha');
@@ -264,7 +264,7 @@ describe('InputHistory persistence', () => {
 
   test('creates missing directory on save', () => {
     const nestedPath = join(tmpDir, 'a', 'b', 'c', 'history.json');
-    const h = new InputHistory(nestedPath, true);
+    const h = new InputHistory({ historyPath: nestedPath, persist: true });
     h.add('test entry');
     // Save is called automatically by add(); verify the file exists
     expect(existsSync(nestedPath)).toBe(true);
@@ -273,21 +273,21 @@ describe('InputHistory persistence', () => {
   test('handles corrupted JSON gracefully (starts empty)', () => {
     const path = makeTmpPath();
     writeFileSync(path, '{not valid json{{', 'utf-8');
-    const h = new InputHistory(path, true);
+    const h = new InputHistory({ historyPath: path, persist: true });
     expect(h.up('')).toBeNull();
   });
 
   test('handles non-array JSON gracefully (starts empty)', () => {
     const path = makeTmpPath();
     writeFileSync(path, JSON.stringify({ entries: ['a', 'b'] }), 'utf-8');
-    const h = new InputHistory(path, true);
+    const h = new InputHistory({ historyPath: path, persist: true });
     expect(h.up('')).toBeNull();
   });
 
   test('filters non-string entries on load', () => {
     const path = makeTmpPath();
     writeFileSync(path, JSON.stringify(['valid', 42, null, 'also valid', true]), 'utf-8');
-    const h = new InputHistory(path, true);
+    const h = new InputHistory({ historyPath: path, persist: true });
     expect(h.up('')).toBe('valid');
     expect(h.up('valid')).toBe('also valid');
     expect(h.up('also valid')).toBeNull();
@@ -297,7 +297,7 @@ describe('InputHistory persistence', () => {
     const path = makeTmpPath();
     const entries = Array.from({ length: 600 }, (_, i) => `entry ${i}`);
     writeFileSync(path, JSON.stringify(entries), 'utf-8');
-    const h = new InputHistory(path, true);
+    const h = new InputHistory({ historyPath: path, persist: true });
     let count = 0;
     let result: string | null = '';
     while ((result = h.up(result ?? '')) !== null) {
@@ -310,7 +310,7 @@ describe('InputHistory persistence', () => {
   test('no-persist mode: does not read or write file', () => {
     const path = makeTmpPath();
     writeFileSync(path, JSON.stringify(['should not load']), 'utf-8');
-    const h = new InputHistory(path, false);
+    const h = new InputHistory({ historyPath: path, persist: false });
     expect(h.up('')).toBeNull();
     h.add('new entry');
     // File should still have the old content

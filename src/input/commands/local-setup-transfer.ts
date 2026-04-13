@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { CommandContext } from '../command-registry.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
 export interface SetupReviewSnapshot {
   readonly sessionId: string;
@@ -65,22 +66,26 @@ export function inspectSetupTransferBundle(bundle: SetupTransferBundle): string 
 }
 
 export function buildSetupTransferBundle(ctx: CommandContext, snapshot: SetupReviewSnapshot): SetupTransferBundle {
+  const shellPaths = requireShellPaths(ctx);
   const config: Record<string, unknown> = {};
   for (const entry of CONFIG_SCHEMA) {
     try {
-      config[entry.key] = structuredClone(ctx.configManager.get(entry.key as ConfigKey));
+      config[entry.key] = structuredClone(ctx.platform.configManager.get(entry.key as ConfigKey));
     } catch {
       // Ignore unreadable config values in transfer bundles.
     }
   }
-  const services = existsSync(join(process.cwd(), '.goodvibes', 'tui', 'services.json'))
-    ? JSON.parse(readFileSync(join(process.cwd(), '.goodvibes', 'tui', 'services.json'), 'utf-8')) as Record<string, unknown>
+  const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
+  const pluginsPath = shellPaths.resolveProjectTuiPath('ecosystem', 'plugins.json');
+  const skillsPath = shellPaths.resolveProjectTuiPath('ecosystem', 'skills.json');
+  const services = existsSync(servicesPath)
+    ? JSON.parse(readFileSync(servicesPath, 'utf-8')) as Record<string, unknown>
     : undefined;
-  const plugins = existsSync(join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'plugins.json'))
-    ? JSON.parse(readFileSync(join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'plugins.json'), 'utf-8')) as Record<string, unknown>
+  const plugins = existsSync(pluginsPath)
+    ? JSON.parse(readFileSync(pluginsPath, 'utf-8')) as Record<string, unknown>
     : undefined;
-  const skills = existsSync(join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'skills.json'))
-    ? JSON.parse(readFileSync(join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'skills.json'), 'utf-8')) as Record<string, unknown>
+  const skills = existsSync(skillsPath)
+    ? JSON.parse(readFileSync(skillsPath, 'utf-8')) as Record<string, unknown>
     : undefined;
 
   return {
@@ -116,8 +121,13 @@ export function parseSetupLink(value: string): { surface: string; target?: strin
   }
 }
 
-export function exportSetupTransferBundle(pathArg: string, bundle: SetupTransferBundle): string {
-  const targetPath = resolve(process.cwd(), pathArg);
+export function exportSetupTransferBundle(
+  ctx: CommandContext,
+  pathArg: string,
+  bundle: SetupTransferBundle,
+): string {
+  const shellPaths = requireShellPaths(ctx);
+  const targetPath = shellPaths.resolveWorkspacePath(pathArg);
   mkdirSync(dirname(targetPath), { recursive: true });
   writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
   return targetPath;

@@ -9,18 +9,19 @@ import { createFirecrawlSearchProvider } from './providers/firecrawl.ts';
 import { createPerplexitySearchProvider } from './providers/perplexity.ts';
 import { createSearxngSearchProvider } from './providers/searxng.ts';
 import { createTavilySearchProvider } from './providers/tavily.ts';
+import type { SearchProviderContext } from './providers/shared.ts';
 
 export class WebSearchProviderRegistry {
   private readonly providers = new Map<string, WebSearchProvider>();
 
-  constructor() {
+  constructor(context: SearchProviderContext) {
     this.register(createDuckDuckGoProvider(), { replace: true });
-    this.register(createSearxngSearchProvider(), { replace: true });
-    this.register(createBraveSearchProvider(), { replace: true });
-    this.register(createExaSearchProvider(), { replace: true });
-    this.register(createFirecrawlSearchProvider(), { replace: true });
-    this.register(createTavilySearchProvider(), { replace: true });
-    this.register(createPerplexitySearchProvider(), { replace: true });
+    this.register(createSearxngSearchProvider(context), { replace: true });
+    this.register(createBraveSearchProvider(context), { replace: true });
+    this.register(createExaSearchProvider(context), { replace: true });
+    this.register(createFirecrawlSearchProvider(context), { replace: true });
+    this.register(createTavilySearchProvider(context), { replace: true });
+    this.register(createPerplexitySearchProvider(context), { replace: true });
   }
 
   register(provider: WebSearchProvider, options: { readonly replace?: boolean } = {}): () => void {

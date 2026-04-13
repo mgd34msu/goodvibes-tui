@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { logger } from '../utils/logger.ts';
 import type { GoodVibesConfig } from '../config/schema.ts';
 
@@ -34,8 +33,8 @@ export class ProfileManager {
   private readonly profilesDir: string;
   private lastTimestamp = 0;
 
-  constructor(baseDir?: string) {
-    this.profilesDir = baseDir ?? join(resolveGoodVibesHome(), '.goodvibes', 'tui', 'profiles');
+  constructor(baseDir: string) {
+    this.profilesDir = baseDir;
   }
 
   public get storagePath(): string {
@@ -156,8 +155,4 @@ export class ProfileManager {
       .replace(/^-+|-+$/g, '')
       || 'profile';
   }
-}
-
-function resolveGoodVibesHome(): string {
-  return process.env.HOME || homedir();
 }

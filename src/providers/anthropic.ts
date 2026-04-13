@@ -1,4 +1,4 @@
-import type { LLMProvider, ChatRequest, ChatResponse, ProviderRuntimeMetadata } from './interface.ts';
+import type { LLMProvider, ChatRequest, ChatResponse, ProviderRuntimeMetadata, ProviderRuntimeMetadataDeps } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
 import { getCacheCapability } from './cache-capability.ts';
 import { getDefaultStrategy } from './cache-strategy.ts';
@@ -402,13 +402,13 @@ export class AnthropicProvider implements LLMProvider {
     });
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: 'anthropic',
       apiKeyEnvVars: ['ANTHROPIC_API_KEY', 'CLAUDE_API_KEY'],
       serviceNames: ['anthropic'],
-    });
+    }, deps);
     return {
       auth: {
         mode: 'api-key',

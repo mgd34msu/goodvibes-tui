@@ -1,5 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { scan, persistProviders } from '../../discovery/index.ts';
+import { requireProviderApi, requireShellPaths } from './runtime-services.ts';
 
 export function registerDiscoveryRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -31,12 +32,12 @@ export function registerDiscoveryRuntimeCommands(registry: CommandRegistry): voi
       }
 
       try {
-        ctx.providerRegistry.registerDiscoveredProviders(result.servers);
+        await requireProviderApi(ctx).registerDiscoveredProviders(result.servers);
       } catch (err) {
         ctx.print(`[Scan] Warning: failed to register some providers: ${(err as Error).message}`);
       }
 
-      if (result.servers.length > 0) persistProviders(result.servers);
+      if (result.servers.length > 0) persistProviders(requireShellPaths(ctx), result.servers);
       ctx.renderRequest();
     },
   });

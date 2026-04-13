@@ -7,229 +7,176 @@ import type { ToolRegistry } from '../tools/registry.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { FileUndoManager } from '../state/file-undo.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
-import type { TaskManager } from '../runtime/tasks/types.ts';
-import type { AcpManager } from '../acp/manager.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
-import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
-import type { WorktreeRegistry } from '../runtime/worktree/registry.ts';
-import type { SandboxSessionRegistry } from '../runtime/sandbox/session-registry.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { KnowledgeApi } from '../knowledge/knowledge-api.ts';
+import type { HookApi } from '../hooks/hook-api.ts';
+import type { McpApi } from '../mcp/mcp-api.ts';
+import type { ProviderApi } from '../providers/provider-api.ts';
+import type { OpsApi } from '../runtime/ops-api.ts';
+import type { OperatorClient } from '../runtime/operator-client.ts';
+import type { PeerClient } from '../runtime/peer-client.ts';
+import type { DirectTransport } from '../runtime/transports/direct.ts';
+import type {
+  CommandExtensionShellServices,
+  CommandOpsShellServices,
+  CommandPlatformShellServices,
+  CommandWorkspaceShellServices,
+  RemoteCommandService,
+} from '../runtime/shell-command-services.ts';
+
+export type {
+  PlanRuntimeService,
+  RemoteCommandService,
+} from '../runtime/shell-command-services.ts';
+
+export interface CommandRuntimeState {
+  model: string;
+  provider: string;
+  debugMode: boolean;
+  systemPrompt: string;
+  reasoningEffort: string;
+  sessionId: string;
+}
 
 /**
- * CommandContext - Passed to every slash command handler so commands can
- * interact with the full application without circular-import issues.
+ * Top-level shell actions remain flat because commands and nearby shell routes
+ * use them constantly, and nesting them would add noise without clarifying
+ * ownership.
  */
-export interface CommandContext {
-  providerRegistry: ProviderRegistry;
-  conversationManager: ConversationManager;
-  config: DeepReadonly<GoodVibesConfig>;
-  configManager: ConfigManager;
-  /** Mutable runtime state — commands can mutate these in-place. */
-  runtime: {
-    model: string;
-    provider: string;
-    debugMode: boolean;
-    systemPrompt: string;
-    reasoningEffort: string;
-    /** Current active session ID (e.g. "user-abc123"). Commands can update this to swap sessions. */
-    sessionId: string;
-  };
-  /** Request a re-render. */
+export interface CommandUiActions {
   renderRequest: () => void;
-  /** Runtime-owned keyboard binding manager for display and lookup surfaces. */
-  keybindingsManager?: KeybindingsManager;
-  /** Submit user input directly to the shell/orchestrator path. */
+  print: (text: string) => void;
+  exit: () => void;
   submitInput?: (text: string, content?: import('../providers/interface.ts').ContentPart[]) => void;
-  /** Execute a slash command directly through the shell command path. */
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
-  /** Cancel the active generation directly through the turn controller path. */
   cancelGeneration?: () => void;
-  /** Complete model selection directly through the shell bridge. */
   completeModelSelection?: (selection: {
     model: { id: string; provider: string; displayName: string; registryKey: string };
     effort: string;
     contextCap?: number | null;
   }) => void;
-  /** Clear the terminal screen directly through the shell control path. */
   clearScreen?: () => void;
-  /** Activate a plan directly through the shell bridge. */
   activatePlan?: (planId: string, task: string) => void;
-  /** Request tool permission directly through the shell-owned permission prompt. */
   requestPermission?: PermissionRequestHandler;
-  /** Print a message to the conversation as a system note. */
-  print: (text: string) => void;
-  /** Exit the application cleanly. */
-  exit: () => void;
-  /** Reload system prompt from file (if configured). Returns new prompt string. */
+}
+
+export interface CommandShellUiOpeners {
   reloadSystemPrompt?: () => string;
-  /** Open the model picker modal. */
   openModelPicker?: () => void;
-  /** Open the provider picker modal. */
   openProviderPicker?: () => void;
-  /** Open the context inspector modal. */
   openContextInspector?: () => void;
-  /** Open the bookmark browser modal. */
   openBookmarkModal?: () => void;
-  /** Jump the viewport to a bookmarked conversation block. */
   jumpToBookmark?: (key: string) => void;
-  /** Jump the viewport to a specific absolute line. */
   scrollToLine?: (line: number) => void;
-  /** Toggle the help/shortcuts overlay. */
   openHelpOverlay?: () => void;
-  /** Open the generic selection modal and call back with the result. */
   openSelection?: (
     title: string,
     items: SelectionItem[],
     opts: { preSelectId?: string; allowSearch?: boolean; customActions?: Map<string, SelectionAction> } | undefined,
     callback: (result: SelectionResult | null) => void,
   ) => void;
-  /** Open the settings config browser modal. */
   openSettingsModal?: () => void;
-  /** Open the dedicated session picker modal. */
   openSessionPicker?: () => void;
-  /** Open the dedicated profile picker modal. */
   openProfilePicker?: () => void;
-  /** Registry of all available tools. */
-  toolRegistry: ToolRegistry;
-  /** MCP server registry — available after startup auto-connect. */
-  mcpRegistry: McpRegistry;
-  /** File-level undo/redo for write and edit tool operations. */
-  fileUndoManager?: FileUndoManager;
-  /** Toggle the shortcuts/keyboard overlay. */
   openShortcutsOverlay?: () => void;
-  /** Return the current scroll top line of the viewport. */
   getScrollTop?: () => number;
-  /** Toggle the panel sidebar (open/close). */
   openPanelPicker?: () => void;
-  /** Open a panel, show the panel workspace, and focus it for direct user interaction. */
   showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void;
-  /** Explicit panel manager owned by the runtime service graph. */
-  panelManager?: PanelManager;
-  /** Shared panel-health monitor owned by the runtime service graph. */
-  panelHealthMonitor?: PanelHealthMonitor;
-  /** Shared worktree registry owned by the runtime service graph. */
-  worktreeRegistry?: WorktreeRegistry;
-  /** Shared sandbox session registry owned by the runtime service graph. */
-  sandboxSessionRegistry?: SandboxSessionRegistry;
-  /** Move keyboard focus into the visible panel workspace. */
   focusPanels?: () => void;
-  /** Toggle the Operator Control Plane (Ops) panel. */
   openOpsPanel?: () => void;
-  /** Open the unified operator cockpit panel. */
   openCockpitPanel?: () => void;
-  /** Open the orchestration graph control-room panel. */
   openOrchestrationPanel?: () => void;
-  /** OpsControlPlane instance for operator intervention commands. */
-  opsControlPlane?: import('../runtime/ops/control-plane.ts').OpsControlPlane;
-  /** Open the Failure Forensics panel. */
   openForensicsPanel?: () => void;
-  /** Open the incident review panel. */
   openIncidentPanel?: () => void;
-  /** Open the policy/governance panel. */
   openPolicyPanel?: () => void;
-  /** Open the hooks control-room panel. */
   openHooksPanel?: () => void;
-  /** Open the structured communication control-room panel. */
   openCommunicationPanel?: () => void;
-  /** Open the MCP control-room panel. */
   openMcpPanel?: () => void;
-  /** Open the token security control-room panel. */
   openSecurityPanel?: () => void;
-  /** Open the project knowledge control-room panel. */
   openKnowledgePanel?: () => void;
-  /** Open the remote/transport control-room panel. */
   openRemotePanel?: () => void;
-  /** Open the provider subscription control-room panel. */
   openSubscriptionPanel?: () => void;
-  /** ForensicsRegistry for /forensics command subcommands. */
-  forensicsRegistry?: import('../runtime/forensics/registry.ts').ForensicsRegistry;
-  /** PolicyRegistry for /policy command subcommands. */
-  policyRegistry?: import('../runtime/permissions/policy-registry.ts').PolicyRegistry;
-  /** PolicyRuntimeState for approval, policy, and recall capture flows. */
-  policyRuntimeState?: import('../runtime/permissions/policy-runtime.ts').PolicyRuntimeState;
-  /**
-   * ProviderOptimizer for /provider command subcommands.
-   *
-   * @remarks
-   * Follows the same deferred-wiring pattern as `policyRegistry` — populated
-   * by the runtime when the `provider-optimizer` feature flag is enabled.
-   * Until then it remains `undefined` and command handlers should not assume
-   * optimizer-backed behavior is available.
-   */
-  providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
-  /** EvalRegistry for /eval command subcommands. */
-  evalRegistry?: import('../panels/eval-panel.ts').EvalRegistry;
-  /** MemoryRegistry for /memory command subcommands and the Memory panel. */
-  memoryRegistry?: import('../state/memory-store.ts').MemoryRegistry;
-  /** Integration helper service for operator/runtime review commands. */
-  integrationHelpers?: import('../runtime/integration/helpers.ts').IntegrationHelperService;
-  /** Shared automation manager owned by the bootstrap/runtime services graph. */
-  automationManager?: import('../automation/index.ts').AutomationManager;
-  /** Shared knowledge service owned by the bootstrap/runtime services graph. */
-  knowledgeService?: import('../knowledge/index.ts').KnowledgeService;
-  /** Shared plugin manager owned by the bootstrap/runtime services graph. */
-  pluginManager?: import('../plugins/manager.ts').PluginManager;
-  /** Shared hook workbench owned by the bootstrap/runtime services graph. */
-  hookWorkbench?: import('../hooks/workbench.ts').HookWorkbench;
-  /** Shared agent manager owned by the bootstrap/runtime services graph. */
-  agentManager?: import('../tools/agent/index.ts').AgentManager;
-  /** Shared interaction mode manager owned by the bootstrap/runtime services graph. */
-  modeManager?: import('../state/mode-manager.ts').ModeManager;
-  /** Shared remote runner registry owned by the bootstrap/runtime services graph. */
-  remoteRunnerRegistry?: import('../runtime/remote/index.ts').RemoteRunnerRegistry;
-  /** Shared remote supervisor owned by the bootstrap/runtime services graph. */
-  remoteSupervisor?: import('../runtime/remote/index.ts').RemoteSupervisor;
-  /** Shared session manager owned by the bootstrap/runtime services graph. */
-  sessionManager?: import('../sessions/manager.ts').SessionManager;
-  /** Shared profile manager owned by the bootstrap/runtime services graph. */
+}
+
+export interface CommandSessionServices {
+  readonly conversationManager: ConversationManager;
+  readonly runtime: CommandRuntimeState;
+  readonly sessionManager?: import('../sessions/manager.ts').SessionManager;
+  readonly sessionMemoryStore?: import('../core/session-memory.ts').SessionMemoryStore;
+  readonly sessionLineageTracker?: import('../core/session-lineage.ts').SessionLineageTracker;
+  readonly changeTracker?: import('../sessions/change-tracker.ts').SessionChangeTracker;
+}
+
+export interface CommandProviderServices {
+  readonly providerRegistry: ProviderRegistry;
+  readonly providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
+  readonly favoritesStore?: import('../providers/favorites.ts').FavoritesStore;
+  readonly benchmarkStore?: import('../providers/model-benchmarks.ts').BenchmarkStore;
+}
+
+/**
+ * Compose locally-owned command helpers with the narrower shell bridge-owned
+ * runtime surfaces exported from runtime/shell-command-services.ts.
+ */
+export interface CommandWorkspaceUiServices {
+  keybindingsManager?: KeybindingsManager;
+  fileUndoManager?: FileUndoManager;
+  panelManager?: PanelManager;
   profileManager?: import('../profiles/manager.ts').ProfileManager;
-  /** Shared bookmark manager owned by the bootstrap/runtime services graph. */
   bookmarkManager?: import('../bookmarks/manager.ts').BookmarkManager;
-  /** Shared model favorites store owned by the bootstrap/runtime services graph. */
-  favoritesStore?: import('../providers/favorites.ts').FavoritesStore;
-  /** Shared benchmark store owned by the bootstrap/runtime services graph. */
-  benchmarkStore?: import('../providers/model-benchmarks.ts').BenchmarkStore;
-  /** Shared subscription manager owned by the bootstrap/runtime services graph. */
-  subscriptionManager?: import('../config/subscriptions.ts').SubscriptionManager;
-  /** Shared secrets manager owned by the bootstrap/runtime services graph. */
-  secretsManager?: import('../config/secrets.ts').SecretsManager;
-  /** Shared service registry owned by the bootstrap/runtime services graph. */
-  serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
-  /** Shared local user auth manager owned by the bootstrap/runtime services graph. */
-  localUserAuthManager?: import('../security/user-auth.ts').UserAuthManager;
-  /** Shared token auditor owned by the bootstrap/runtime services graph. */
-  tokenAuditor?: import('../security/token-audit.ts').ApiTokenAuditor;
-  /** Shared deterministic replay engine owned by the bootstrap/runtime services graph. */
-  replayEngine?: import('../core/deterministic-replay.ts').DeterministicReplayEngine;
-  /** Shared webhook notifier owned by the bootstrap/runtime services graph. */
-  webhookNotifier?: import('../integrations/webhooks.ts').WebhookNotifier;
-  /** Shared session-memory store owned by the bootstrap/runtime services graph. */
-  sessionMemoryStore?: import('../core/session-memory.ts').SessionMemoryStore;
-  /** Shared session lineage tracker owned by the bootstrap/runtime services graph. */
-  sessionLineageTracker?: import('../core/session-lineage.ts').SessionLineageTracker;
-  /** Shared per-runtime file change tracker used by write/edit and diff surfaces. */
-  changeTracker?: import('../sessions/change-tracker.ts').SessionChangeTracker;
-  /** Shared execution-plan manager owned by the bootstrap/runtime services graph. */
-  planManager?: import('../core/execution-plan.ts').ExecutionPlanManager;
-  /** Shared adaptive planner owned by the bootstrap/runtime services graph. */
-  adaptivePlanner?: import('../core/adaptive-planner.ts').AdaptivePlanner;
-  /**
-   * CrossSessionTaskRegistry for /session orchestration subcommands.
-   *
-   * When provided (injected at the app level), the /session command handlers
-   * use this instance. Command handlers must not create their own registry.
-   */
-  sessionOrchestration?: import('../sessions/orchestration/index.ts').CrossSessionTaskRegistry;
-  /** Runtime store for live control-room commands. */
-  runtimeStore?: RuntimeStore;
-  /** Runtime event bus for commands that publish operator/runtime events. */
-  runtimeBus?: RuntimeEventBus;
-  /** Unified runtime task manager for richer task control surfaces. */
-  taskManager?: TaskManager;
-  /** ACP manager for self-hosted remote subagent dispatch and cancellation. */
-  acpManager?: AcpManager;
+}
+
+export interface CommandWorkspaceServices
+  extends CommandWorkspaceUiServices,
+    CommandWorkspaceShellServices {}
+
+export interface CommandPlatformConfigServices {
+  readonly config: DeepReadonly<GoodVibesConfig>;
+  readonly configManager: ConfigManager;
+}
+
+export interface CommandPlatformServices
+  extends CommandPlatformConfigServices,
+    CommandPlatformShellServices {}
+
+export interface CommandOpsServices
+  extends CommandOpsShellServices {}
+
+export interface CommandExtensionRegistryServices {
+  readonly toolRegistry: ToolRegistry;
+  readonly mcpRegistry: McpRegistry;
+  readonly evalRegistry?: import('../panels/eval-panel.ts').EvalRegistry;
+}
+
+export interface CommandExtensionServices
+  extends CommandExtensionRegistryServices,
+    CommandExtensionShellServices {}
+
+/**
+ * CommandContext - Passed to every slash command handler so commands can
+ * interact with the shell-facing platform surface without treating every
+ * service as one flat bag of unrelated properties.
+ */
+export interface CommandContext
+  extends CommandUiActions,
+    CommandShellUiOpeners {
+  readonly session: CommandSessionServices;
+  readonly provider: CommandProviderServices;
+  readonly workspace: CommandWorkspaceServices;
+  readonly platform: CommandPlatformServices;
+  readonly ops: CommandOpsServices;
+  readonly extensions: CommandExtensionServices;
+  readonly clients?: {
+    readonly operator?: OperatorClient;
+    readonly peer?: PeerClient;
+    readonly providerApi?: ProviderApi;
+    readonly knowledgeApi?: KnowledgeApi;
+    readonly hookApi?: HookApi;
+    readonly mcpApi?: McpApi;
+    readonly opsApi?: OpsApi;
+    readonly transport?: DirectTransport;
+  };
 }
 
 /**

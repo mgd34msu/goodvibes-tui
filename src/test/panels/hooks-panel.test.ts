@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { ConfigManager } from '../../config/manager.ts';
 import { createHookWorkbench } from '../../hooks/index.ts';
 import { HooksPanel } from '../../panels/hooks-panel.ts';
 import type { Line } from '../../types/grid.ts';
@@ -31,7 +30,10 @@ function createPanel(params: {
       clear: () => {},
       loadFromFile: () => {},
     },
-    configManager: new ConfigManager(),
+    configManager: {
+      get: () => undefined as never,
+      getWorkingDirectory: () => '/tmp',
+    },
     hooksFilePathResolver: () => params.hooksFilePath ?? '/tmp/hooks.json',
   });
   return new HooksPanel(

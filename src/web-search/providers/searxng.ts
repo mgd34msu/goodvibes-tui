@@ -23,8 +23,8 @@ function mapTimeRange(value: WebSearchRequest['timeRange']): string | undefined 
   }
 }
 
-export function createSearxngSearchProvider(context: SearchProviderContext = {}): WebSearchProvider {
-  const env = context.env ?? process.env;
+export function createSearxngSearchProvider(context: SearchProviderContext): WebSearchProvider {
+  const env = context.env;
   const serviceRegistry = context.serviceRegistry;
   return {
     id: 'searxng',
@@ -42,7 +42,7 @@ export function createSearxngSearchProvider(context: SearchProviderContext = {})
     },
     async search(request: WebSearchRequest): Promise<WebSearchProviderResponse> {
       const maxResults = Math.max(1, Math.min(25, request.maxResults ?? 10));
-      const baseUrl = (env.SEARXNG_BASE_URL ?? serviceRegistry?.get(SEARXNG_SERVICE_NAME)?.baseUrl ?? '').trim().replace(/\/+$/, '');
+      const baseUrl = (env.SEARXNG_BASE_URL ?? serviceRegistry.get(SEARXNG_SERVICE_NAME)?.baseUrl ?? '').trim().replace(/\/+$/, '');
       if (!baseUrl) {
         throw new Error('SearXNG requires SEARXNG_BASE_URL or a searxng service entry with baseUrl.');
       }
@@ -56,7 +56,7 @@ export function createSearxngSearchProvider(context: SearchProviderContext = {})
           ...(mapTimeRange(request.timeRange) ? { time_range: mapTimeRange(request.timeRange)! } : {}),
         },
         headers: { Accept: 'application/json' },
-        service: serviceRegistry?.get(SEARXNG_SERVICE_NAME) ? SEARXNG_SERVICE_NAME : undefined,
+        service: serviceRegistry.get(SEARXNG_SERVICE_NAME) ? SEARXNG_SERVICE_NAME : undefined,
         fetcher: context.fetcher,
       });
       const results = Array.isArray(payload.results)

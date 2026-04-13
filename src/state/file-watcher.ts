@@ -57,15 +57,13 @@ export class FileWatcher {
   constructor(
     fileCache: FileStateCache,
     projectIndex: ProjectIndex,
+    options: { projectRoot: string },
     hookDispatcher?: HookDispatcher,
-    options?: { projectRoot?: string },
   ) {
     this.fileCache = fileCache;
     this.projectIndex = projectIndex;
     this.hookDispatcher = hookDispatcher;
-    // Defensive fallback: options.projectRoot > projectIndex.baseDir > process.cwd()
-    // process.cwd() is a last-resort guard; projectIndex.baseDir should always be defined.
-    this.projectRoot = options?.projectRoot ?? projectIndex.baseDir ?? process.cwd();
+    this.projectRoot = options.projectRoot;
   }
 
   // ---------------------------------------------------------------------------

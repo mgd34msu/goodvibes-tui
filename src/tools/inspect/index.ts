@@ -10,6 +10,7 @@ import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
 export class InspectTool implements Tool {
   public constructor(
     private readonly featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null,
+    private readonly projectRoot: string | null = null,
   ) {}
 
   readonly definition: ToolDefinition = {
@@ -51,7 +52,13 @@ export class InspectTool implements Tool {
       return { success: false, error: `Invalid mode: ${input.mode}. Valid modes: ${VALID_MODES.join(', ')}` };
     }
 
-    const projectRoot = resolve(input.projectRoot ?? process.cwd());
+    const explicitRoot = (typeof input.projectRoot === 'string' && input.projectRoot.trim().length > 0)
+      ? input.projectRoot
+      : this.projectRoot;
+    if (!explicitRoot) {
+      return { success: false, error: 'projectRoot is required' };
+    }
+    const projectRoot = resolve(explicitRoot);
     const format = input.output?.format ?? 'detailed';
     const rawResult = await executeInspectMode(input, projectRoot, format);
     return this._fingerprintResult(rawResult, input.mode, format);

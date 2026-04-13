@@ -132,7 +132,12 @@ describe('loadSystemPrompt', () => {
   test('CLI arg --system-prompt-file is exclusive and overrides chain', () => {
     const p = write(dir, 'cli.md', 'CLI content');
     process.argv = ['bun', 'main.ts', '--system-prompt-file', p];
-    const result = loadSystemPrompt(() => undefined);
+    const result = loadSystemPrompt({
+      workingDirectory: dir,
+      homeDirectory: dir,
+      getConfigPath: () => undefined,
+      argv: process.argv,
+    });
     expect(result).toBe('CLI content');
   });
 
@@ -141,7 +146,12 @@ describe('loadSystemPrompt', () => {
     const extra = write(dir, 'extra.md', 'Extra');
     process.argv = ['bun', 'main.ts', '--system-prompt-file', cli];
     // Even if getConfigPath provides extra, it should not be included
-    const result = loadSystemPrompt(() => extra);
+    const result = loadSystemPrompt({
+      workingDirectory: dir,
+      homeDirectory: dir,
+      getConfigPath: () => extra,
+      argv: process.argv,
+    });
     expect(result).toBe('CLI only');
   });
 
@@ -149,7 +159,12 @@ describe('loadSystemPrompt', () => {
     // Avoid hitting real ~/.goodvibes files — just test getConfigPath injection
     const extra = write(dir, 'extra.md', 'Extra content');
     process.argv = ['bun', 'main.ts'];
-    const result = loadSystemPrompt(() => extra);
+    const result = loadSystemPrompt({
+      workingDirectory: dir,
+      homeDirectory: dir,
+      getConfigPath: () => extra,
+      argv: process.argv,
+    });
     // Only extra (real home files may or may not exist in CI)
     expect(result).toContain('Extra content');
   });
@@ -157,13 +172,23 @@ describe('loadSystemPrompt', () => {
   test('returns empty string when no files exist and no CLI arg', () => {
     process.argv = ['bun', 'main.ts'];
     // No config path, home files likely missing in test env — should not throw
-    expect(() => loadSystemPrompt(() => undefined)).not.toThrow();
+    expect(() => loadSystemPrompt({
+      workingDirectory: dir,
+      homeDirectory: dir,
+      getConfigPath: () => undefined,
+      argv: process.argv,
+    })).not.toThrow();
   });
 
   test('missing CLI arg target returns empty and falls through to chain', () => {
     process.argv = ['bun', 'main.ts', '--system-prompt-file', join(dir, 'nonexistent.md')];
     // Should not throw; missing file -> '' -> falls through
-    const result = loadSystemPrompt(() => undefined);
+    const result = loadSystemPrompt({
+      workingDirectory: dir,
+      homeDirectory: dir,
+      getConfigPath: () => undefined,
+      argv: process.argv,
+    });
     // No real home files expected to exist in unit test; just assert no throw
     expect(typeof result).toBe('string');
   });

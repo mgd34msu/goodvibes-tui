@@ -95,7 +95,7 @@ function handleLinkTask(args: string[], context: CommandContext): void {
     return;
   }
 
-  const sessionId = flagValue(args, '--session') ?? context.runtime.sessionId;
+  const sessionId = flagValue(args, '--session') ?? context.session.runtime.sessionId;
   const dependsOnRaw = flagValue(args, '--depends-on');
   const label = flagValue(args, '--label');
 
@@ -132,7 +132,7 @@ function handleLinkTask(args: string[], context: CommandContext): void {
 function handleHandoff(args: string[], context: CommandContext): void {
   const taskId = args[0];
   const toSessionId = flagValue(args, '--to');
-  const fromSessionId = flagValue(args, '--session') ?? context.runtime.sessionId;
+  const fromSessionId = flagValue(args, '--session') ?? context.session.runtime.sessionId;
   const reason = flagValue(args, '--reason');
 
   if (!taskId || !toSessionId) {
@@ -263,7 +263,7 @@ function handleCancel(args: string[], context: CommandContext): void {
     return;
   }
   const scope: CancellationScope = (scopeRaw as CancellationScope) ?? 'task';
-  const sessionId = flagValue(args, '--session') ?? context.runtime.sessionId;
+  const sessionId = flagValue(args, '--session') ?? context.session.runtime.sessionId;
   const reason = flagValue(args, '--reason');
 
   // For session scope, taskId is not required

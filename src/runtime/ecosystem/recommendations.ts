@@ -1,5 +1,6 @@
 import type { RuntimeStore } from '../store/index.ts';
 import {
+  type EcosystemCatalogPathOptions,
   listInstalledEcosystemEntries,
   loadEcosystemCatalog,
   type EcosystemCatalogEntry,
@@ -32,9 +33,10 @@ function pushCatalogMatches(
   terms: readonly string[],
   reason: string,
   title: string,
+  options: EcosystemCatalogPathOptions,
 ): void {
-  const installed = new Set(listInstalledEcosystemEntries(kind).map((receipt) => receipt.entry.id));
-  for (const entry of loadEcosystemCatalog(kind)) {
+  const installed = new Set(listInstalledEcosystemEntries(kind, options).map((receipt) => receipt.entry.id));
+  for (const entry of loadEcosystemCatalog(kind, options)) {
     if (installed.has(entry.id)) continue;
     if (!matchesTags(entry, terms)) continue;
     target.push({
@@ -48,12 +50,15 @@ function pushCatalogMatches(
   }
 }
 
-export function buildEcosystemRecommendations(runtimeStore?: RuntimeStore): EcosystemRecommendation[] {
+export function buildEcosystemRecommendations(
+  runtimeStore: RuntimeStore | undefined,
+  options: EcosystemCatalogPathOptions,
+): EcosystemRecommendation[] {
   const recommendations: EcosystemRecommendation[] = [];
   const state = runtimeStore?.getState();
 
-  const installedPlugins = listInstalledEcosystemEntries('plugin').length;
-  const installedSkills = listInstalledEcosystemEntries('skill').length;
+  const installedPlugins = listInstalledEcosystemEntries('plugin', options).length;
+  const installedSkills = listInstalledEcosystemEntries('skill', options).length;
   if (installedPlugins === 0) {
     pushCatalogMatches(
       recommendations,
@@ -61,6 +66,7 @@ export function buildEcosystemRecommendations(runtimeStore?: RuntimeStore): Ecos
       ['provider', 'workflow', 'remote', 'mcp'],
       'No curated plugins are installed yet. Start with a project-scoped integration or workflow plugin.',
       'Seed the plugin posture',
+      options,
     );
   }
   if (installedSkills === 0) {
@@ -70,6 +76,7 @@ export function buildEcosystemRecommendations(runtimeStore?: RuntimeStore): Ecos
       ['review', 'docs', 'refactor', 'workflow'],
       'No curated skills are installed yet. Add a skill pack that matches your project workflow.',
       'Seed the skill posture',
+      options,
     );
   }
 
@@ -80,6 +87,7 @@ export function buildEcosystemRecommendations(runtimeStore?: RuntimeStore): Ecos
       ['policy', 'approval', 'security', 'sandbox'],
       'Repeated denials suggest a reusable policy pack or trust posture adjustment may help.',
       'Review policy-pack options',
+      options,
     );
   }
 
@@ -91,6 +99,7 @@ export function buildEcosystemRecommendations(runtimeStore?: RuntimeStore): Ecos
       ['auth', 'mcp', 'oauth', 'service'],
       `${authRequiredServers.length} MCP server${authRequiredServers.length === 1 ? '' : 's'} require authentication or reconnect help.`,
       'Review MCP auth helpers',
+      options,
     );
     pushCatalogMatches(
       recommendations,
@@ -98,6 +107,7 @@ export function buildEcosystemRecommendations(runtimeStore?: RuntimeStore): Ecos
       ['mcp', 'remote', 'service'],
       `${authRequiredServers.length} MCP server${authRequiredServers.length === 1 ? '' : 's'} require authentication or reconnect help.`,
       'Review MCP-aware plugins',
+      options,
     );
   }
 

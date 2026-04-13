@@ -30,20 +30,20 @@ afterEach(() => {
 
 describe('FilePickerModal — inject mode', () => {
   test('open() with injectMode=true sets injectMode flag', () => {
-    const picker = new FilePickerModal();
+    const picker = new FilePickerModal({ workingDirectory: tmpDir });
     picker.open(0, true);
     expect(picker.injectMode).toBe(true);
     expect(picker.active).toBe(true);
   });
 
   test('open() with injectMode=false (default) does not set injectMode', () => {
-    const picker = new FilePickerModal();
+    const picker = new FilePickerModal({ workingDirectory: tmpDir });
     picker.open(5);
     expect(picker.injectMode).toBe(false);
   });
 
   test('close() resets injectMode to false', () => {
-    const picker = new FilePickerModal();
+    const picker = new FilePickerModal({ workingDirectory: tmpDir });
     picker.open(0, true);
     picker.close();
     expect(picker.injectMode).toBe(false);
@@ -68,19 +68,19 @@ describe('FilePickerModal — inject mode', () => {
   });
 
   test('insertPos is stored correctly', () => {
-    const picker = new FilePickerModal();
+    const picker = new FilePickerModal({ workingDirectory: tmpDir });
     picker.open(42, true);
     expect(picker.insertPos).toBe(42);
   });
 
   test('query is empty after open()', () => {
-    const picker = new FilePickerModal();
+    const picker = new FilePickerModal({ workingDirectory: tmpDir });
     picker.open(0, true);
     expect(picker.query).toBe('');
   });
 
   test('selectedIndex resets to 0 after open()', () => {
-    const picker = new FilePickerModal();
+    const picker = new FilePickerModal({ workingDirectory: tmpDir });
     // Mutate then re-open
     picker.open(0);
     picker.selectedIndex = 5;

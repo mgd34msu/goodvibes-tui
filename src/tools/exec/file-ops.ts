@@ -13,9 +13,9 @@ export interface FileOpResult {
   updated_imports?: string[];
 }
 
-function resolveFileOpPath(p: string, op: 'copy' | 'move' | 'delete'): string {
+function resolveFileOpPath(p: string, op: 'copy' | 'move' | 'delete', projectRoot: string): string {
   if (op === 'delete' || !isAbsolute(p)) {
-    return resolveAndValidatePath(p);
+    return resolveAndValidatePath(p, projectRoot);
   }
   return resolve(p);
 }
@@ -103,8 +103,8 @@ async function updateImportsAfterMove(oldSrc: string, newDst: string, projectRoo
   return updated;
 }
 
-export function executeFileOp(op: ExecFileOp): FileOpResult {
-  const src = resolveFileOpPath(op.source, op.op);
+export function executeFileOp(op: ExecFileOp, projectRoot: string): FileOpResult {
+  const src = resolveFileOpPath(op.source, op.op, projectRoot);
   const result: FileOpResult = { op: op.op, source: src };
 
   if (op.op === 'delete') {
@@ -124,7 +124,7 @@ export function executeFileOp(op: ExecFileOp): FileOpResult {
   if (!op.destination) {
     throw new Error(`file_ops ${op.op} requires destination`);
   }
-  const dst = resolveFileOpPath(op.destination, op.op);
+  const dst = resolveFileOpPath(op.destination, op.op, projectRoot);
   result.destination = dst;
 
   if (!op.overwrite && existsSync(dst)) {
@@ -170,7 +170,7 @@ export async function executeFileOperations(
 
   for (const op of fileOps) {
     try {
-      const opResult = executeFileOp(op);
+      const opResult = executeFileOp(op, projectRoot);
       fileOpResults.push(opResult);
       if (op.op === 'move' && op.update_imports && opResult.destination) {
         pendingImportUpdates.push({ src: opResult.source, dst: opResult.destination });

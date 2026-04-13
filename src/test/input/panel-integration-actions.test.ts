@@ -44,7 +44,7 @@ describe('panel integration actions', () => {
     const symbolsPanel = panelManager.open('symbols', 'top');
     expect(symbolsPanel).toBeInstanceOf(SymbolOutlinePanel);
 
-    const explorer = new FileExplorerPanel(root);
+    const explorer = new FileExplorerPanel(root, root);
     explorer.onActivate();
 
     expect(handlePanelIntegrationAction(panelManager, explorer, 'enter')).toBe(true);

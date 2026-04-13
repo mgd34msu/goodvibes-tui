@@ -31,13 +31,13 @@ export class ReadTool implements Tool {
   private readonly codeIntelligence: Pick<CodeIntelligence, 'getOutline' | 'getSymbols'>;
 
   constructor(
+    projectIndex: ProjectIndex,
     fileCache?: FileStateCache,
-    projectIndex?: ProjectIndex,
     codeIntelligence?: Pick<CodeIntelligence, 'getOutline' | 'getSymbols'>,
   ) {
     this.fileCache = fileCache ?? new FileStateCache();
-    this.projectIndex = projectIndex ?? new ProjectIndex();
-    this.codeIntelligence = codeIntelligence ?? new CodeIntelligence();
+    this.projectIndex = projectIndex;
+    this.codeIntelligence = codeIntelligence ?? new CodeIntelligence({});
   }
 
   async execute(args: Record<string, unknown>): Promise<{ success: boolean; output?: string; error?: string }> {
@@ -69,7 +69,7 @@ export class ReadTool implements Tool {
     let paginationInfo: ReadOutput['pagination'] | undefined;
 
     if (tokenBudget !== undefined) {
-      const pages = paginateFiles(allFiles, tokenBudget);
+      const pages = paginateFiles(allFiles, tokenBudget, this.projectIndex.baseDir);
       const totalPages = Math.max(1, pages.length);
       const pageIdx = Math.min(page - 1, totalPages - 1);
       const pageIndices = pages[pageIdx] ?? [];

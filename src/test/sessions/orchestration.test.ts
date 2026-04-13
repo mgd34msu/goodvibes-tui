@@ -328,7 +328,7 @@ describe('CrossSessionTaskRegistry lifecycle', () => {
   });
 
   test('dispose removes the process exit listener it installs', () => {
-    const registry = new CrossSessionTaskRegistry();
+    const registry = new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-')));
     expect(process.listenerCount('exit')).toBe(baseExitListeners + 1);
 
     registry.dispose();
@@ -337,8 +337,8 @@ describe('CrossSessionTaskRegistry lifecycle', () => {
   });
 
   test('separate instances each install and remove their own exit listeners', () => {
-    const first = new CrossSessionTaskRegistry();
-    const second = new CrossSessionTaskRegistry();
+    const first = new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-a-')));
+    const second = new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-b-')));
     expect(process.listenerCount('exit')).toBe(baseExitListeners + 2);
 
     first.dispose();

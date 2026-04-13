@@ -1,6 +1,3 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager, getConfiguredEmbeddingProviderId } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
 import { createBuiltinMemoryEmbeddingProviders } from './memory-embedding-http.ts';
@@ -56,26 +53,8 @@ export interface MemoryEmbeddingDoctorReport {
 }
 
 export interface MemoryEmbeddingProviderRegistryOptions {
-  readonly configManager?: ConfigManager;
+  readonly configManager: ConfigManager;
 }
-
-let fallbackConfigManager: ConfigManager | null = null;
-let fallbackConfigRoot: string | null = null;
-
-function createFallbackConfigManager(): ConfigManager {
-  if (fallbackConfigManager) return fallbackConfigManager;
-  fallbackConfigRoot = mkdtempSync(join(tmpdir(), 'gv-memory-embeddings-'));
-  const configDir = join(fallbackConfigRoot, '.goodvibes', 'tui');
-  mkdirSync(configDir, { recursive: true });
-  fallbackConfigManager = new ConfigManager({ configDir, workingDir: fallbackConfigRoot });
-  return fallbackConfigManager;
-}
-
-process.on('exit', () => {
-  if (fallbackConfigRoot) {
-    rmSync(fallbackConfigRoot, { recursive: true, force: true });
-  }
-});
 
 export function embedMemoryText(text: string, dims = DEFAULT_MEMORY_EMBEDDING_DIMS): Float32Array {
   const vector = new Float32Array(dims);
@@ -126,8 +105,8 @@ export class MemoryEmbeddingProviderRegistry {
   private activeProviderId = HASHED_MEMORY_EMBEDDING_PROVIDER.id;
   private readonly configManager: ConfigManager;
 
-  constructor(options: MemoryEmbeddingProviderRegistryOptions = {}) {
-    this.configManager = options.configManager ?? createFallbackConfigManager();
+  constructor(options: MemoryEmbeddingProviderRegistryOptions) {
+    this.configManager = options.configManager;
     this.register(HASHED_MEMORY_EMBEDDING_PROVIDER, { replace: true });
     for (const provider of createBuiltinMemoryEmbeddingProviders()) {
       this.register(provider, { replace: true });

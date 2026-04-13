@@ -15,7 +15,6 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { logger } from '../utils/logger.ts';
 
 /** Identifies a specific key press with modifiers. */
@@ -110,6 +109,23 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
 /** Resolved overrides type: each key can be a single combo or array. */
 type KeybindingsFile = Partial<Record<KeyAction, KeyCombo | KeyCombo[]>>;
 
+export interface KeybindingsManagerOptions {
+  readonly configPath?: string;
+  readonly userRoot?: string;
+  readonly homeDirectory?: string;
+}
+
+function resolveKeybindingsPath(options?: KeybindingsManagerOptions): string {
+  if (options?.configPath) {
+    return options.configPath;
+  }
+  const userRoot = options?.userRoot ?? options?.homeDirectory;
+  if (!userRoot) {
+    throw new Error('KeybindingsManager requires configPath or an explicit userRoot/homeDirectory.');
+  }
+  return join(userRoot, '.goodvibes', 'tui', 'keybindings.json');
+}
+
 /**
  * KeybindingsManager — owns the resolved keybinding table.
  *
@@ -120,8 +136,8 @@ export class KeybindingsManager {
   private bindings: Record<KeyAction, KeyCombo[]>;
   private configPath: string;
 
-  constructor(configPath?: string) {
-    this.configPath = configPath ?? join(homedir(), '.goodvibes', 'tui', 'keybindings.json');
+  constructor(options: KeybindingsManagerOptions) {
+    this.configPath = resolveKeybindingsPath(options);
     // Start with deep copy of defaults
     this.bindings = this.cloneDefaults();
   }

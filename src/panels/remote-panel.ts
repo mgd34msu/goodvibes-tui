@@ -1,10 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
-import type { DistributedRuntimeManager } from '../runtime/remote/distributed-runtime-manager.ts';
-import type { RemoteRunnerRegistry } from '../runtime/remote/runner-registry.ts';
-import type { RemoteSupervisor } from '../runtime/remote/supervisor.ts';
+import type { UiReadModel, UiRemoteSnapshot } from '../runtime/ui-read-models.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
@@ -55,26 +52,17 @@ function truncate(text: string, width: number): string {
   return truncateDisplay(text, width);
 }
 
-export interface RemotePanelDeps {
-  readonly distributedRuntime: Pick<DistributedRuntimeManager, 'getSnapshot'>;
-  readonly remoteRunnerRegistry: Pick<RemoteRunnerRegistry, 'listContracts' | 'ensureContractsFromStore' | 'listArtifacts' | 'listPools' | 'getContract'>;
-  readonly remoteSupervisor: Pick<RemoteSupervisor, 'getSnapshot'>;
-}
-
 export class RemotePanel extends BasePanel {
-  private readonly store?: RuntimeStore;
+  private readonly readModel?: UiReadModel<UiRemoteSnapshot>;
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
   private browseMode: 'connections' | 'contracts' = 'connections';
 
-  public constructor(
-    store: RuntimeStore | undefined,
-    private readonly deps: RemotePanelDeps,
-  ) {
+  public constructor(readModel?: UiReadModel<UiRemoteSnapshot>) {
     super('remote', 'Remote', 'R', 'monitoring');
-    this.store = store;
-    this.unsub = store ? store.subscribe(() => this.markDirty()) : null;
+    this.readModel = readModel;
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
 
   public override onDestroy(): void {
@@ -83,7 +71,7 @@ export class RemotePanel extends BasePanel {
 
   public handleInput(key: string): boolean {
     const activeConnections = this.getActiveConnections();
-    const contracts = this.store ? this.deps.remoteRunnerRegistry.listContracts() : [];
+    const contracts = this.readModel?.getSnapshot().contracts ?? [];
     const browseCount = this.browseMode === 'connections' && activeConnections.length > 0
       ? activeConnections.length
       : contracts.length;
@@ -118,22 +106,18 @@ export class RemotePanel extends BasePanel {
   }
 
   private getActiveConnections() {
-    if (!this.store) return [];
-    const acp = this.store.getState().acp;
-    return acp.activeConnectionIds
-      .map((id) => acp.connections.get(id))
-      .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
+    return this.readModel?.getSnapshot().acp.activeConnections ?? [];
   }
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Bridge, ACP, runner-contract, and artifact posture for self-hosted remote work.';
 
-    if (!this.store) {
+    if (!this.readModel) {
       const sectionLines = buildEmptyState(
         width,
         ' Runtime store not wired into this panel yet.',
-        'The remote control room needs the live runtime store so it can display ACP state, runner contracts, and replay artifacts.',
+        'The remote control room needs the shell read model so it can display ACP state, runner contracts, and replay artifacts.',
         [
           { command: '/remote setup', summary: 'review bootstrap, env, tunnel, and bridge guidance' },
           { command: '/remote panel', summary: 'reopen the panel from the shell-owned runtime' },
@@ -150,21 +134,27 @@ export class RemotePanel extends BasePanel {
       return lines;
     }
 
-    const state = this.store.getState();
-    const daemon = state.daemon;
-    const acp = state.acp;
+    const snapshot = this.readModel.getSnapshot();
+    const daemon = snapshot.daemon;
+    const acp = snapshot.acp;
     const activeConnections = this.getActiveConnections();
-    const remoteRegistry = this.deps.remoteRunnerRegistry;
-    const distributed = this.deps.distributedRuntime.getSnapshot() as {
-      pairRequests?: { pending?: number };
-      peers?: { total?: number; connected?: number; nodes?: number; devices?: number };
-      work?: { queued?: number; claimed?: number };
+    const artifactCount = snapshot.artifacts.length;
+    const pools = snapshot.pools;
+    const contracts = snapshot.contracts;
+    const supervisor = snapshot.supervisor;
+    const distributed = {
+      pairRequests: { pending: snapshot.distributed.pairRequests.length },
+      peers: {
+        total: snapshot.distributed.peers.length,
+        connected: snapshot.distributed.peers.filter((peer) => peer.status === 'connected').length,
+        nodes: snapshot.distributed.peers.filter((peer) => peer.kind === 'node').length,
+        devices: snapshot.distributed.peers.filter((peer) => peer.kind === 'device').length,
+      },
+      work: {
+        queued: snapshot.distributed.work.filter((item) => item.status === 'queued').length,
+        claimed: snapshot.distributed.work.filter((item) => item.status === 'claimed').length,
+      },
     };
-    const supervisor = this.deps.remoteSupervisor.getSnapshot(this.store);
-    remoteRegistry.ensureContractsFromStore(this.store);
-    const artifactCount = remoteRegistry.listArtifacts().length;
-    const pools = remoteRegistry.listPools();
-    const contracts = remoteRegistry.listContracts();
 
     const postureLines: Line[] = [
       buildPanelLine(width, [
@@ -179,9 +169,9 @@ export class RemotePanel extends BasePanel {
       ]),
       buildPanelLine(width, [
         [' ACP manager ', C.label],
-        [acp.managerTransportState.toUpperCase(), stateColor(acp.managerTransportState)],
+        [acp.transportState.toUpperCase(), stateColor(acp.transportState)],
         ['  active connections ', C.label],
-        [String(acp.activeConnectionIds.length), acp.activeConnectionIds.length > 0 ? C.info : C.dim],
+        [String(acp.activeConnections.length), acp.activeConnections.length > 0 ? C.info : C.dim],
         ['  total messages ', C.label],
         [String(acp.totalMessages), acp.totalMessages > 0 ? C.value : C.dim],
       ]),
@@ -283,7 +273,7 @@ export class RemotePanel extends BasePanel {
         ]));
       }
 
-      const contract = remoteRegistry.getContract(selected.agentId);
+      const contract = contracts.find((entry) => entry.runnerId === selected.agentId);
       if (contract) {
         detailRows.push(buildPanelLine(width, [
           ['  Contract: ', C.label],
@@ -331,7 +321,7 @@ export class RemotePanel extends BasePanel {
         detailRows.push(buildPanelLine(width, [[`  ${supervisorEntry.heartbeat.detail}`.slice(0, width), C.dim]]));
       }
 
-      const recentArtifact = remoteRegistry.listArtifacts().find((artifact) => artifact.runnerId === selected.agentId);
+      const recentArtifact = snapshot.artifacts.find((artifact) => artifact.runnerId === selected.agentId);
       if (recentArtifact) {
         detailRows.push(buildPanelLine(width, [[' Recent Review Artifact', C.label]]));
         detailRows.push(buildPanelLine(width, [
@@ -388,7 +378,7 @@ export class RemotePanel extends BasePanel {
           detailRows.push(buildGuidanceLine(width, action.command, action.reason, C));
         }
       }
-      const recentArtifact = remoteRegistry.listArtifacts().find((artifact) => artifact.runnerId === selectedContract.runnerId);
+      const recentArtifact = snapshot.artifacts.find((artifact) => artifact.runnerId === selectedContract.runnerId);
       if (recentArtifact) {
         detailRows.push(buildPanelLine(width, [
           ['  Recent artifact: ', C.label],

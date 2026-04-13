@@ -62,6 +62,8 @@ export interface SubagentTask {
   context: string;
   /** Tool names the subagent is allowed to use. */
   tools: string[];
+  /** App-owned working directory for the spawned ACP session. */
+  workingDirectory: string;
   /** Optional model override (e.g. "claude-sonnet-4-5"). */
   model?: string;
   /** Optional provider override (e.g. "anthropic"). */

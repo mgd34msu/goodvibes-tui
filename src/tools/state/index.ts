@@ -39,6 +39,13 @@ function sanitizeMemoryKey(key: string): string | null {
   return key;
 }
 
+export interface StateToolOptions {
+  readonly memoryDir: string;
+  readonly hookDispatcher?: HookDispatcher;
+  readonly modeManager?: ModeManager;
+  readonly telemetryDB?: TelemetryDB;
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -52,10 +59,15 @@ function sanitizeMemoryKey(key: string): string | null {
 export function createStateTool(
   kvState: KVState,
   projectIndex: ProjectIndex,
-  hookDispatcher?: HookDispatcher,
-  modeManager?: ModeManager,
-  telemetryDB?: TelemetryDB,
+  options: StateToolOptions,
 ): Tool {
+  if (!options.memoryDir || options.memoryDir.trim().length === 0) {
+    throw new Error('createStateTool requires an explicit memoryDir');
+  }
+  const memoryDir = options.memoryDir;
+  const hookDispatcher = options.hookDispatcher;
+  const modeManager = options.modeManager;
+  const telemetryDB = options.telemetryDB;
   // Session start time and telemetry are scoped per-instance so multiple
   // createStateTool() calls don't share state.
   const SESSION_START_MS = Date.now();
@@ -99,7 +111,7 @@ export function createStateTool(
         case 'clear': return runClear(input, kvState);
         case 'budget': return runBudget(kvState, projectIndex);
         case 'context': return runContext(kvState, projectIndex);
-        case 'memory': return runMemory(input);
+        case 'memory': return runMemory(input, memoryDir);
         case 'telemetry': return runTelemetry();
         case 'hooks': return runHooks(input, hookDispatcher);
         case 'mode': return runMode(input, modeManager);
@@ -547,9 +559,9 @@ async function runContext(
 
 async function runMemory(
   input: StateInput,
+  memoryDir: string,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
   const action = input.memoryAction ?? 'list';
-  const memoryDir = join(process.cwd(), '.goodvibes', 'memory');
   const view = action === 'get' ? (input.view ?? 'full') : (input.view ?? 'summary');
 
   if (action === 'list') {

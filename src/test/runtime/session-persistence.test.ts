@@ -64,10 +64,10 @@ describe('runtime/session-persistence', () => {
       'gpt-test',
       'openai',
       'Hello',
-      { cwd: cwdDir, sessionManager },
+      { workingDirectory: cwdDir, homeDirectory: homeDir, sessionManager },
     );
 
-    expect(readLastSessionPointer({ cwd: cwdDir })).toBe('user-test');
+    expect(readLastSessionPointer({ workingDirectory: cwdDir, homeDirectory: homeDir })).toBe('user-test');
     const pointer = JSON.parse(readFileSync(getLastSessionPointerPath(cwdDir), 'utf-8')) as { sessionId: string };
     expect(pointer.sessionId).toBe('user-test');
 
@@ -84,9 +84,9 @@ describe('runtime/session-persistence', () => {
   });
 
   test('loadLastConversation returns null when no last-session pointer exists', () => {
-    const loaded = loadLastConversation({ cwd: cwdDir, homeDir, sessionManager });
+    const loaded = loadLastConversation({ workingDirectory: cwdDir, homeDirectory: homeDir, sessionManager });
     expect(loaded).toBeNull();
-    expect(readLastSessionPointer({ cwd: cwdDir })).toBeNull();
+    expect(readLastSessionPointer({ workingDirectory: cwdDir, homeDirectory: homeDir })).toBeNull();
     expect(sessionManager.list()).toHaveLength(0);
   });
 
@@ -100,16 +100,16 @@ describe('runtime/session-persistence', () => {
       },
       'user-recovery',
       'Recovered Session',
-      { homeDir },
+      { workingDirectory: cwdDir, homeDirectory: homeDir },
     );
 
-    const info = checkRecoveryFile({ cwd: cwdDir, homeDir });
+    const info = checkRecoveryFile({ workingDirectory: cwdDir, homeDirectory: homeDir });
     expect(info).not.toBeNull();
     expect(info?.sessionId).toBe('user-recovery');
     expect(info?.title).toBe('Recovered Session');
     expect(info?.returnContext).toBeUndefined();
 
-    const loaded = loadRecoveryConversation({ homeDir });
+    const loaded = loadRecoveryConversation({ homeDirectory: homeDir });
     expect(loaded).toEqual({
       title: 'Recovered Session',
       titleSource: undefined,
@@ -120,7 +120,7 @@ describe('runtime/session-persistence', () => {
       ],
     });
 
-    deleteRecoveryFile({ homeDir });
+    deleteRecoveryFile({ homeDirectory: homeDir });
     expect(existsSync(getRecoveryFilePath(homeDir))).toBe(false);
   });
 
@@ -150,13 +150,13 @@ describe('runtime/session-persistence', () => {
       },
       'user-recovery',
       'Recovered Session',
-      { homeDir },
+      { workingDirectory: cwdDir, homeDirectory: homeDir },
     );
 
-    const info = checkRecoveryFile({ cwd: cwdDir, homeDir });
+    const info = checkRecoveryFile({ workingDirectory: cwdDir, homeDirectory: homeDir });
     expect(info?.returnContext?.activityLabel).toBe('assistant replied');
 
-    const loaded = loadRecoveryConversation({ homeDir });
+    const loaded = loadRecoveryConversation({ homeDirectory: homeDir });
     expect(loaded?.titleSource).toBe('system');
     expect(loaded?.returnContext?.statusLabel).toBe('ready for next turn');
     expect(loaded?.returnContext?.remoteContracts).toBe(1);

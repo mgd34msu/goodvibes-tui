@@ -4,10 +4,10 @@ import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { CodeIntelligence } from '../../intelligence/facade.ts';
 import type { DocumentSymbol } from '../../intelligence/lsp/protocol.ts';
 import type { SymbolInfo } from '../../intelligence/tree-sitter/queries.ts';
-import { openCommandPanel } from './runtime-services.ts';
+import { openCommandPanel, requireReadModels, requireShellPaths } from './runtime-services.ts';
 
-function resolveTargetPath(pathArg: string): string {
-  return resolve(process.cwd(), pathArg);
+function resolveTargetPath(pathArg: string, ctx: CommandContext): string {
+  return requireShellPaths(ctx).resolveWorkspacePath(pathArg);
 }
 
 function parsePosition(lineArg: string | undefined, columnArg: string | undefined): { line: number; column: number } | null {
@@ -38,7 +38,7 @@ function ensureExistingFile(pathArg: string | undefined, ctx: CommandContext): s
     ctx.print('Intelligence Review\n  Missing file path.');
     return null;
   }
-  const targetPath = resolveTargetPath(pathArg);
+  const targetPath = resolveTargetPath(pathArg, ctx);
   if (!existsSync(targetPath)) {
     ctx.print(`Intelligence Review\n  File not found: ${targetPath}`);
     return null;
@@ -60,11 +60,7 @@ export function registerIntelligenceRuntimeCommands(registry: CommandRegistry): 
       }
 
       const intelligence = new CodeIntelligence();
-      const state = ctx.runtimeStore?.getState().intelligence;
-      if (!state) {
-        ctx.print('Intelligence Review\n  runtime store unavailable');
-        return;
-      }
+      const state = requireReadModels(ctx).intelligence.getSnapshot();
 
       if (sub === 'symbols' || sub === 'outline') {
         const targetPath = ensureExistingFile(args[1], ctx);

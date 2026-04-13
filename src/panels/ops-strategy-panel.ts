@@ -9,8 +9,10 @@
 
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
-import type { RuntimeEventBus, PlannerEvent } from '../runtime/events/index.ts';
-import { AdaptivePlanner, type PlannerDecision, type ExecutionStrategy } from '../core/adaptive-planner.ts';
+import type { PlannerDecision, ExecutionStrategy } from '../core/adaptive-planner.ts';
+import type { PlannerEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { OpsStrategyQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -44,11 +46,11 @@ export class OpsStrategyPanel extends BasePanel {
   private unsubscribers: Array<() => void> = [];
   private scrollOffset = 0;
   private history: PlannerDecision[] = [];
-  private readonly adaptivePlanner: AdaptivePlanner;
+  private readonly adaptivePlanner: OpsStrategyQuery;
 
   constructor(
-    private readonly runtimeBus: RuntimeEventBus,
-    adaptivePlanner: AdaptivePlanner,
+    private readonly plannerEvents: UiEventFeed<PlannerEvent>,
+    adaptivePlanner: OpsStrategyQuery,
   ) {
     super('ops', 'Ops', 'O', 'agent');
     this.adaptivePlanner = adaptivePlanner;
@@ -58,11 +60,11 @@ export class OpsStrategyPanel extends BasePanel {
     super.onActivate();
     this._syncHistory();
     this.unsubscribers.push(
-      this.runtimeBus.on<Extract<PlannerEvent, { type: 'PLAN_STRATEGY_SELECTED' }>>('PLAN_STRATEGY_SELECTED', () => {
+      this.plannerEvents.on('PLAN_STRATEGY_SELECTED', () => {
         this._syncHistory();
         this.markDirty();
       }),
-      this.runtimeBus.on<Extract<PlannerEvent, { type: 'PLAN_STRATEGY_OVERRIDDEN' }>>('PLAN_STRATEGY_OVERRIDDEN', () => {
+      this.plannerEvents.on('PLAN_STRATEGY_OVERRIDDEN', () => {
         this._syncHistory();
         this.markDirty();
       }),

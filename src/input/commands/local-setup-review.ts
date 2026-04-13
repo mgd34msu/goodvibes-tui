@@ -7,9 +7,10 @@ import { renderQemuWrapperTemplate } from '../../runtime/sandbox/qemu-wrapper-te
 import { getPluginDirectories } from '../../plugins/loader.ts';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
 import type { SetupReviewSnapshot } from './local-setup-transfer.ts';
-import { requireServiceRegistry, requireSubscriptionManager } from './runtime-services.ts';
+import { requireProviderApi, requireReadModels, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';
 
 export async function buildSetupReviewSnapshot(ctx: CommandContext): Promise<SetupReviewSnapshot> {
+  const shellPaths = requireShellPaths(ctx);
   const serviceRegistry = requireServiceRegistry(ctx);
   const services = Object.keys(serviceRegistry.getAll()).sort((a, b) => a.localeCompare(b));
   const serviceConfigs = serviceRegistry.getAll();
@@ -21,26 +22,29 @@ export async function buildSetupReviewSnapshot(ctx: CommandContext): Promise<Set
     }
   }
 
-  const skills = discoverSkills();
-  const plugins = ctx.pluginManager?.list() ?? [];
-  const runtimeState = ctx.runtimeStore?.getState();
-  const mcpServers = [...(runtimeState?.mcp.servers.values() ?? [])];
-  const pluginDirectories = getPluginDirectories();
-  const providerCount = ctx.providerRegistry.listModels().length;
-  const remoteRunnerCount = ctx.remoteRunnerRegistry?.listContracts().length ?? 0;
+  const skills = discoverSkills(shellPaths);
+  const security = requireReadModels(ctx).security.getSnapshot();
+  const plugins = security.plugins;
+  const mcpServers = security.mcpServers;
+  const pluginDirectories = getPluginDirectories({
+    cwd: shellPaths.workingDirectory,
+    homeDir: shellPaths.homeDirectory,
+  });
+  const providerCount = (await requireProviderApi(ctx).listModels()).length;
+  const remoteRunnerCount = ctx.ops.remoteRuntime?.listContracts().length ?? 0;
   const oauthProviderCount = Object.values(serviceConfigs).filter((service) => service.authType === 'oauth' && service.oauth).length;
   const builtinSubscriptionProviderCount = listBuiltinSubscriptionProviders().length;
   const subscriptionManager = requireSubscriptionManager(ctx);
   const activeSubscriptionCount = subscriptionManager.list().length;
   const pendingSubscriptionCount = subscriptionManager.listPending().length;
-  const sandboxReplIsolation = String(ctx.configManager.get('sandbox.replIsolation'));
-  const sandboxMcpIsolation = String(ctx.configManager.get('sandbox.mcpIsolation'));
-  const sandboxReview = buildSandboxReview(ctx.configManager);
+  const sandboxReplIsolation = String(ctx.platform.configManager.get('sandbox.replIsolation'));
+  const sandboxMcpIsolation = String(ctx.platform.configManager.get('sandbox.mcpIsolation'));
+  const sandboxReview = buildSandboxReview(ctx.platform.configManager);
   const sandboxSecureModeReady = sandboxReview.host.secureSandboxReady;
   const quarantinedPluginCount = plugins.filter((plugin) => plugin.quarantined).length;
   const quarantinedMcpCount = mcpServers.filter((server) => server.schemaFreshness === 'quarantined').length;
   const elevatedMcpCount = mcpServers.filter((server) => server.trustMode === 'allow-all').length;
-  const hooksPath = join(process.cwd(), '.goodvibes', 'hooks.managed.json');
+  const hooksPath = shellPaths.resolveProjectPath('hooks.managed.json');
   let managedHookCount = 0;
   let managedHookChainCount = 0;
   if (existsSync(hooksPath)) {
@@ -93,9 +97,9 @@ export async function buildSetupReviewSnapshot(ctx: CommandContext): Promise<Set
       message: remoteRunnerCount > 0 ? `${remoteRunnerCount} remote runner contract(s)` : 'no remote runner contracts registered',
     },
     {
-      severity: sandboxSecureModeReady || `${ctx.configManager.get('sandbox.vmBackend')}` === 'local' ? 'pass' : 'warn',
+      severity: sandboxSecureModeReady || `${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'local' ? 'pass' : 'warn',
       area: 'sandbox',
-      message: `${ctx.configManager.get('sandbox.vmBackend')}` === 'local'
+      message: `${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'local'
         ? 'local mode (virtualization disabled by default)'
         : sandboxSecureModeReady
           ? `QEMU enabled: REPL=${sandboxReplIsolation}, MCP=${sandboxMcpIsolation}`
@@ -104,7 +108,7 @@ export async function buildSetupReviewSnapshot(ctx: CommandContext): Promise<Set
   ];
 
   return {
-    sessionId: ctx.runtime.sessionId,
+    sessionId: ctx.session.runtime.sessionId,
     providerCount,
     serviceCount: services.length,
     oauthProviderCount,
@@ -131,11 +135,11 @@ export async function buildSetupReviewSnapshot(ctx: CommandContext): Promise<Set
 }
 
 export function renderSetupSandboxReview(ctx: CommandContext, snapshot: SetupReviewSnapshot): string {
-  const backend = `${ctx.configManager.get('sandbox.vmBackend')}`;
-  const image = String(ctx.configManager.get('sandbox.qemuImagePath') ?? '').trim();
-  const wrapper = String(ctx.configManager.get('sandbox.qemuExecWrapper') ?? '').trim();
-  const host = String(ctx.configManager.get('sandbox.qemuGuestHost') ?? '').trim();
-  const workspace = String(ctx.configManager.get('sandbox.qemuWorkspacePath') ?? '').trim();
+  const backend = `${ctx.platform.configManager.get('sandbox.vmBackend')}`;
+  const image = String(ctx.platform.configManager.get('sandbox.qemuImagePath') ?? '').trim();
+  const wrapper = String(ctx.platform.configManager.get('sandbox.qemuExecWrapper') ?? '').trim();
+  const host = String(ctx.platform.configManager.get('sandbox.qemuGuestHost') ?? '').trim();
+  const workspace = String(ctx.platform.configManager.get('sandbox.qemuWorkspacePath') ?? '').trim();
   const lines = [
     'Setup Sandbox Review',
     `  backend: ${backend}`,
@@ -166,15 +170,20 @@ export function renderSetupSandboxReview(ctx: CommandContext, snapshot: SetupRev
   return lines.join('\n');
 }
 
-export function exportSetupSupportBundle(targetDirArg: string, snapshot: SetupReviewSnapshot): string {
-  const targetDir = resolve(process.cwd(), targetDirArg);
+export function exportSetupSupportBundle(
+  targetDirArg: string,
+  snapshot: SetupReviewSnapshot,
+  ctx: CommandContext,
+): string {
+  const shellPaths = requireShellPaths(ctx);
+  const targetDir = shellPaths.resolveWorkspacePath(targetDirArg);
   mkdirSync(targetDir, { recursive: true });
   writeFileSync(join(targetDir, 'startup-review.json'), JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
-  const servicesPath = join(process.cwd(), '.goodvibes', 'tui', 'services.json');
+  const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
   if (existsSync(servicesPath)) {
     writeFileSync(join(targetDir, 'services.json'), readFileSync(servicesPath, 'utf-8'), 'utf-8');
   }
-  const hooksPath = join(process.cwd(), '.goodvibes', 'hooks.managed.json');
+  const hooksPath = shellPaths.resolveProjectPath('hooks.managed.json');
   if (existsSync(hooksPath)) {
     writeFileSync(join(targetDir, 'hooks.managed.json'), readFileSync(hooksPath, 'utf-8'), 'utf-8');
   }

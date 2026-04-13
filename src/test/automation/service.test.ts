@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AutomationJobStore, AutomationRouteStore, AutomationRunStore, AutomationService, AutomationSourceStore } from '../../automation/index.ts';
 import { AutomationManager } from '../../automation/manager.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
 import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
 import { PersistentStore } from '../../state/persistent-store.ts';
@@ -26,20 +27,37 @@ describe('automation service', () => {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, `bindings-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)),
     });
+    const configManager = new ConfigManager({
+      workingDir: root,
+      configDir: join(root, '.goodvibes', 'tui'),
+    });
+    let spawnCount = 0;
     const sessionBroker = new SharedSessionBroker({
       store: new PersistentStore(join(root, `sessions-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)) as never,
       routeBindings,
       agentStatusProvider: { getStatus: () => null },
       messageSender: { send: () => false },
     });
+    const spawnTask = ({ prompt }: { readonly prompt: string }) => {
+      const id = `agent-${++spawnCount}-${prompt.length}`;
+      return id;
+    };
     return new AutomationManager({
+      configManager,
       routeBindings,
       sessionBroker,
+      spawnTask,
+      cancelTask: () => undefined,
+      agentStatusProvider: { getStatus: () => null },
     });
   }
 
   function createService(): AutomationService {
     return new AutomationService({
+      configManager: new ConfigManager({
+        workingDir: root,
+        configDir: join(root, '.goodvibes', 'tui'),
+      }),
       jobs: new AutomationJobStore(join(root, 'jobs.json')),
       runs: new AutomationRunStore(join(root, 'runs.json')),
       routes: new AutomationRouteStore(join(root, 'routes.json')),

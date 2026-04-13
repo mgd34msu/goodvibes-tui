@@ -22,7 +22,7 @@ interface ImageUnderstandingScope {
   readonly requireLocal?: boolean;
 }
 
-type ImageModelRegistry = Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'listModels'>;
+type ImageModelRegistry = Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'listModels' | 'describeRuntime'>;
 
 function buildAnalysisPrompt(prompt?: string): string {
   const task = prompt?.trim().length
@@ -73,11 +73,7 @@ async function modelMatchesScope(
   }
   if (!scope.requireLocal) return true;
   try {
-    const provider = providerRegistry.getForModel(
-      String(model.registryKey ?? model.id ?? ''),
-      providerId,
-    ) as LLMProvider;
-    const runtime = await provider.describeRuntime?.();
+    const runtime = await providerRegistry.describeRuntime(providerId);
     return runtime?.policy?.local === true;
   } catch {
     return false;

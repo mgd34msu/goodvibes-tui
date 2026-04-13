@@ -163,7 +163,7 @@ export class AcpConnection {
 
       // 6. Create a session (cwd is required, mcpServers is required)
       const sessionResp = await this.conn.newSession({
-        cwd: process.cwd(),
+        cwd: this.task.workingDirectory,
         mcpServers: [],
       });
       this.sessionId = sessionResp.sessionId;

@@ -1,5 +1,8 @@
 import type { ToolDefinition, ToolCall } from '../types/tools.ts';
 import type { ProviderCapability } from './capabilities.ts';
+import type { SecretsManager } from '../config/secrets.ts';
+import type { ServiceRegistry } from '../config/service-registry.ts';
+import type { SubscriptionManager } from '../config/subscriptions.ts';
 
 /** Shared budget token map for reasoning effort levels. */
 export const REASONING_BUDGET_MAP: Record<string, number> = {
@@ -76,6 +79,12 @@ export interface ProviderRuntimeMetadata {
   readonly notes?: readonly string[];
 }
 
+export interface ProviderRuntimeMetadataDeps {
+  readonly secretsManager: Pick<SecretsManager, 'listDetailed'>;
+  readonly serviceRegistry: Pick<ServiceRegistry, 'getAll' | 'inspect'>;
+  readonly subscriptionManager: Pick<SubscriptionManager, 'get' | 'getPending'>;
+}
+
 /** Shared embedding request shape used by providers and provider-backed adapters. */
 export interface ProviderEmbeddingRequest {
   readonly text: string;
@@ -109,7 +118,7 @@ export interface LLMProvider {
   readonly capabilities?: Partial<ProviderCapability>;
   chat(params: ChatRequest): Promise<ChatResponse>;
   embed?(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult>;
-  describeRuntime?(): ProviderRuntimeMetadata | Promise<ProviderRuntimeMetadata>;
+  describeRuntime?(deps: ProviderRuntimeMetadataDeps): ProviderRuntimeMetadata | Promise<ProviderRuntimeMetadata>;
 }
 
 /** Incremental tool call data received during streaming. */

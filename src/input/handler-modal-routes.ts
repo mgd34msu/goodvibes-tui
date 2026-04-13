@@ -254,7 +254,7 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
 type SessionPickerRouteState = {
   sessionPickerModal: {
     active: boolean;
-    loadSelected: (conversationManager: CommandContext['conversationManager']) => void;
+    loadSelected: (conversationManager: CommandContext['session']['conversationManager']) => void;
     moveUp: () => void;
     moveDown: () => void;
     deleteSelected: () => void;
@@ -273,8 +273,9 @@ export function handleSessionPickerToken(state: SessionPickerRouteState, token: 
       return true;
     }
     if (token.logicalName === 'enter') {
-      if (state.commandContext?.conversationManager) {
-        state.sessionPickerModal.loadSelected(state.commandContext.conversationManager);
+      const conversationManager = state.commandContext?.session.conversationManager;
+      if (conversationManager) {
+        state.sessionPickerModal.loadSelected(conversationManager);
       }
     } else if (token.logicalName === 'up') state.sessionPickerModal.moveUp();
     else if (token.logicalName === 'down') state.sessionPickerModal.moveDown();
@@ -290,11 +291,11 @@ export function handleSessionPickerToken(state: SessionPickerRouteState, token: 
 type ProfilePickerRouteState = {
   profilePickerModal: {
     active: boolean;
-    loadSelected: (configManager: NonNullable<CommandContext['configManager']>) => void;
+    loadSelected: (configManager: CommandContext['platform']['configManager']) => void;
     moveUp: () => void;
     moveDown: () => void;
     deleteSelected: () => void;
-    saveCurrentAs: (name: string, configManager: NonNullable<CommandContext['configManager']>) => void;
+    saveCurrentAs: (name: string, configManager: CommandContext['platform']['configManager']) => void;
   };
   commandContext?: CommandContext;
   requestRender: () => void;
@@ -305,9 +306,9 @@ export function handleProfilePickerToken(state: ProfilePickerRouteState, token: 
   if (!state.profilePickerModal.active) return false;
 
   const saveCurrent = (): void => {
-    if (state.commandContext?.configManager) {
+    if (state.commandContext?.platform.configManager) {
       const name = `profile-${Date.now()}`;
-      state.profilePickerModal.saveCurrentAs(name, state.commandContext.configManager);
+      state.profilePickerModal.saveCurrentAs(name, state.commandContext.platform.configManager);
     }
   };
 
@@ -317,8 +318,8 @@ export function handleProfilePickerToken(state: ProfilePickerRouteState, token: 
       return true;
     }
     if (token.logicalName === 'enter') {
-      if (state.commandContext?.configManager) {
-        state.profilePickerModal.loadSelected(state.commandContext.configManager);
+      if (state.commandContext?.platform.configManager) {
+        state.profilePickerModal.loadSelected(state.commandContext.platform.configManager);
       }
     } else if (token.logicalName === 'up') state.profilePickerModal.moveUp();
     else if (token.logicalName === 'down') state.profilePickerModal.moveDown();

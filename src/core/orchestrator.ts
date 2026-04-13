@@ -173,9 +173,6 @@ export class Orchestrator {
     services: {
       readonly agentManager: Pick<AgentManager, 'list' | 'spawn'>;
       readonly wrfcController: Pick<WrfcController, 'listChains'>;
-    } = {
-      agentManager: new AgentManager(),
-      wrfcController: { listChains: () => [] },
     },
   ) {
     this.replayQueue = new EventReplayQueue();
@@ -242,11 +239,17 @@ export class Orchestrator {
         if (!this.acpManager) {
           return { success: false, output: 'ACP manager not initialized' };
         }
+        const configManager = requireConfigManager(this.coreServices);
+        const workingDirectory = configManager.getWorkingDirectory();
+        if (!workingDirectory) {
+          return { success: false, output: 'ACP manager requires an explicit working directory.' };
+        }
 
         const task: SubagentTask = {
           description: String(args.description ?? ''),
           context: String(args.context ?? ''),
           tools: Array.isArray(args.tools) ? args.tools.map(String) : [],
+          workingDirectory,
           model: args.model ? String(args.model) : undefined,
           provider: args.provider ? String(args.provider) : undefined,
         };

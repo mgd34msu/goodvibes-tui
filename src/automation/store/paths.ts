@@ -1,21 +1,25 @@
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export interface AutomationStorePathConfig {
+  readonly controlPlaneDir?: string;
   readonly getControlPlaneConfigDir?: () => string;
 }
 
-function resolveDefaultAutomationRootDir(): string {
-  const runtime = globalThis as typeof globalThis & { __gvTestConfigDir?: string };
-  return runtime.__gvTestConfigDir ?? join(homedir(), '.goodvibes', 'tui');
+function resolveAutomationStoreRootDir(config: AutomationStorePathConfig): string {
+  const controlPlaneDir = config.controlPlaneDir ?? (
+    typeof config.getControlPlaneConfigDir === 'function'
+      ? config.getControlPlaneConfigDir()
+      : undefined
+  );
+  if (!controlPlaneDir) {
+    throw new Error('Automation stores require an explicit controlPlaneDir or configManager.getControlPlaneConfigDir().');
+  }
+  return controlPlaneDir;
 }
 
 export function resolveAutomationStorePath(
   filename: string,
-  configManager?: AutomationStorePathConfig,
+  config: AutomationStorePathConfig,
 ): string {
-  const controlPlaneDir = typeof configManager?.getControlPlaneConfigDir === 'function'
-    ? configManager.getControlPlaneConfigDir()
-    : undefined;
-  return join(controlPlaneDir ?? resolveDefaultAutomationRootDir(), filename);
+  return join(resolveAutomationStoreRootDir(config), filename);
 }

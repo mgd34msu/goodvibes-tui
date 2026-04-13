@@ -11,9 +11,13 @@ import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
 import { FindRuntimeService } from './shared.ts';
 
 export function createFindTool(
+  projectRoot: string,
   featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null,
   runtime = new FindRuntimeService(),
 ): Tool {
+  if (typeof projectRoot !== 'string' || projectRoot.trim().length === 0) {
+    throw new Error('createFindTool requires projectRoot');
+  }
   return {
     definition: findSchema,
 
@@ -31,19 +35,19 @@ export function createFindTool(
           let result: Record<string, unknown>;
           switch (query.mode) {
             case 'files':
-              result = await executeFilesQuery(query, output);
+              result = await executeFilesQuery(query, output, projectRoot);
               break;
             case 'content':
-              result = await executeContentQuery(query, output, runtime);
+              result = await executeContentQuery(query, output, runtime, projectRoot);
               break;
             case 'symbols':
-              result = await executeSymbolsQuery(query, output);
+              result = await executeSymbolsQuery(query, output, projectRoot);
               break;
             case 'references':
-              result = await executeReferencesQuery(query, output);
+              result = await executeReferencesQuery(query, output, projectRoot);
               break;
             case 'structural':
-              result = await executeStructuralQuery(query, output);
+              result = await executeStructuralQuery(query, output, projectRoot);
               break;
             default: {
               const exhaustive: never = query;

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { requireSecretsManager } from './runtime-services.ts';
+import { requireSecretsManager, requireShellPaths } from './runtime-services.ts';
 
 interface SecureStorageBundle {
   readonly version: 1;
@@ -60,6 +60,7 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
     description: 'Review secure storage posture and export portable storage metadata bundles',
     usage: '[review|list|delete <key>|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const manager = requireSecretsManager(ctx);
       const sub = args[0] ?? 'review';
       const review = await manager.inspect();
@@ -103,7 +104,7 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
           ctx.print(`Usage: /storage bundle ${mode} <path>`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg!);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
         if (mode === 'export') {
           const bundle: SecureStorageBundle = {
             version: 1,
@@ -132,8 +133,9 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
     description: 'Review local integration helper API surfaces for remote clients and future web frontends',
     usage: '[review|bundle export <path>|bundle inspect <path>]',
     handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
-      const review = ctx.integrationHelpers?.buildReview();
+      const review = ctx.extensions.integrationHelpers?.buildReview();
       if (!review) {
         ctx.print('Integration helper service unavailable in this runtime.');
         return;
@@ -160,7 +162,7 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
           ctx.print(`Usage: /helpers bundle ${mode} <path>`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg!);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
         if (mode === 'export') {
           const bundle: IntegrationHelperBundle = {
             version: 1,
@@ -189,6 +191,7 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
     description: 'Review and package deep-link entrypoints for setup and operator surfaces',
     usage: '[review|open <surface> [target]|bundle export <path>|bundle inspect <path>]',
     handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
       const links = [
         buildSetupLink('cockpit'),
@@ -219,7 +222,7 @@ export function registerPlatformServicesRuntimeCommands(registry: CommandRegistr
           ctx.print(`Usage: /deeplink bundle ${mode} <path>`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg!);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
         if (mode === 'export') {
           const bundle: DeepLinkBundle = {
             version: 1,

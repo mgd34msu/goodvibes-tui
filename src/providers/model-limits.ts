@@ -1,5 +1,4 @@
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { ModelDefinition, TokenLimits } from './registry.ts';
 import { logger } from '../utils/logger.ts';
@@ -44,13 +43,17 @@ const DEFAULT_TOKEN_LIMITS: Required<TokenLimits> = {
   maxReasoningTokens: 16384,
 };
 
-function getCachePath(): string {
-  return join(homedir(), '.goodvibes', 'tui', 'model-limits.json');
+export interface ModelLimitsServiceOptions {
+  readonly cachePath: string;
 }
 
-function loadCachedLimits(): ModelLimitsCache | null {
+export function getModelLimitsCachePath(cacheDir: string): string {
+  return join(cacheDir, 'model-limits.json');
+}
+
+function loadCachedLimits(cachePath: string): ModelLimitsCache | null {
   try {
-    const raw = readFileSync(getCachePath(), 'utf-8');
+    const raw = readFileSync(cachePath, 'utf-8');
     const parsed = JSON.parse(raw) as ModelLimitsCache;
     if (parsed.version !== 1) return null;
     return parsed;
@@ -65,11 +68,10 @@ function loadCachedLimits(): ModelLimitsCache | null {
   }
 }
 
-function saveCachedLimits(cache: ModelLimitsCache): void {
+function saveCachedLimits(cache: ModelLimitsCache, cachePath: string): void {
   try {
-    const dir = join(homedir(), '.goodvibes', 'tui');
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(getCachePath(), JSON.stringify(cache, null, 2), 'utf-8');
+    mkdirSync(dirname(cachePath), { recursive: true });
+    writeFileSync(cachePath, JSON.stringify(cache, null, 2), 'utf-8');
   } catch (error) {
     logger.debug('[model-limits] Cache write failed', { error: String(error) });
   }
@@ -159,6 +161,8 @@ function buildOrMap(cache: ModelLimitsCache): Map<string, OpenRouterModelData> {
 export class ModelLimitsService {
   private cachedData: ModelLimitsCache | null = null;
   private cachedOrMap: Map<string, OpenRouterModelData> | null = null;
+
+  constructor(private readonly options: ModelLimitsServiceOptions) {}
 
   private ensureOpenRouterMap(): Map<string, OpenRouterModelData> | null {
     if (!this.cachedData) return null;
@@ -257,14 +261,14 @@ export class ModelLimitsService {
       models,
     };
 
-    saveCachedLimits(newCache);
+    saveCachedLimits(newCache, this.options.cachePath);
     this.cachedData = newCache;
     this.cachedOrMap = buildOrMap(newCache);
     return orModels.size;
   }
 
   init(): void {
-    this.cachedData = loadCachedLimits();
+    this.cachedData = loadCachedLimits(this.options.cachePath);
     this.cachedOrMap = this.cachedData ? buildOrMap(this.cachedData) : null;
     if (!this.cachedData || isCacheStale(this.cachedData)) {
       void this.refresh().catch((error) => {

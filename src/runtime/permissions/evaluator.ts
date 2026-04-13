@@ -176,6 +176,7 @@ function dispatchPolicyRule(
   args: Record<string, unknown>,
   activeMode: PermissionMode,
   classification: CommandClassification,
+  projectRoot?: string,
 ): PolicyRuleCheckResult {
   let matched = false;
   let step: EvaluationStep;
@@ -194,7 +195,7 @@ function dispatchPolicyRule(
       break;
     }
     case 'path-scope': {
-      const result = evaluatePathScopeRule(rule, toolName, args);
+      const result = evaluatePathScopeRule(rule, toolName, args, projectRoot);
       matched = result.matched;
       step = result.step;
       break;
@@ -243,6 +244,7 @@ export class LayeredPolicyEvaluator {
   private readonly mode: PermissionMode;
   private readonly rules: PolicyRule[];
   private readonly defaultEffect: 'allow' | 'deny';
+  private readonly projectRoot?: string;
   private readonly sessionCache: Map<string, boolean> = new Map();
   private sessionCacheInsertOrder: string[] = [];
   readonly log: DecisionLog;
@@ -255,6 +257,7 @@ export class LayeredPolicyEvaluator {
     this.mode = config.mode ?? 'default';
     this.rules = config.rules ?? [];
     this.defaultEffect = config.defaultEffect ?? 'deny';
+    this.projectRoot = config.projectRoot;
     this.log = new DecisionLog();
     this.provenance = provenance;
   }
@@ -352,7 +355,7 @@ export class LayeredPolicyEvaluator {
     const orderedRules = [...userRules, ...managedRules];
 
     for (const rule of orderedRules) {
-      const result = dispatchPolicyRule(rule, toolName, args, this.mode, classification);
+      const result = dispatchPolicyRule(rule, toolName, args, this.mode, classification, this.projectRoot);
       trace.push(result.step);
       if (result.matched) {
         return this.finalize({

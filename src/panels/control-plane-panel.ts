@@ -1,9 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
-import type { ApprovalBroker, SharedSessionBroker } from '../control-plane/index.ts';
-import type { ControlPlaneRecentEvent } from '../control-plane/gateway.ts';
+import type { UiControlPlaneSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
@@ -27,15 +25,6 @@ const C = {
   selectBg: '#0f172a',
 } as const;
 
-type ControlPlaneApprovalBroker = Pick<ApprovalBroker, 'subscribe' | 'listApprovals'>;
-type ControlPlaneSessionBroker = Pick<SharedSessionBroker, 'listSessions'>;
-
-export interface ControlPlanePanelDeps {
-  readonly approvalBroker: ControlPlaneApprovalBroker;
-  readonly sessionBroker: ControlPlaneSessionBroker;
-  readonly getRecentEvents: (limit: number) => readonly ControlPlaneRecentEvent[];
-}
-
 function formatTime(value?: number): string {
   if (!value) return 'n/a';
   return new Date(value).toLocaleString();
@@ -49,28 +38,17 @@ function connectionColor(state: string): string {
 }
 
 export class ControlPlanePanel extends BasePanel {
-  private readonly store?: RuntimeStore;
-  private readonly approvalBroker: ControlPlaneApprovalBroker;
-  private readonly sessionBroker: ControlPlaneSessionBroker;
-  private readonly getRecentEvents: (limit: number) => readonly ControlPlaneRecentEvent[];
-  private readonly unsubStore: (() => void) | null;
-  private readonly unsubApprovals: (() => void) | null;
+  private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(store: RuntimeStore | undefined, deps: ControlPlanePanelDeps) {
+  public constructor(private readonly readModel?: UiReadModel<UiControlPlaneSnapshot>) {
     super('control-plane', 'Control Plane', 'C', 'monitoring');
-    this.store = store;
-    this.approvalBroker = deps.approvalBroker;
-    this.sessionBroker = deps.sessionBroker;
-    this.getRecentEvents = deps.getRecentEvents;
-    this.unsubStore = store ? store.subscribe(() => this.markDirty()) : null;
-    this.unsubApprovals = this.approvalBroker.subscribe(() => this.markDirty());
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
 
   public override onDestroy(): void {
-    this.unsubStore?.();
-    this.unsubApprovals?.();
+    this.unsub?.();
   }
 
   public handleInput(key: string): boolean {
@@ -90,27 +68,23 @@ export class ControlPlanePanel extends BasePanel {
   }
 
   private clients() {
-    if (!this.store) return [];
-    const domain = this.store.getState().controlPlane;
-    return domain.clientIds
-      .map((id) => domain.clients.get(id))
-      .filter((client): client is NonNullable<typeof client> => client !== undefined)
-      .sort((a, b) => (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0) || a.id.localeCompare(b.id));
+    if (!this.readModel) return [];
+    return [...this.readModel.getSnapshot().clients];
   }
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Shared daemon control plane state, live clients, approval pressure, and recent omnichannel session posture.';
 
-    if (!this.store) {
+    if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Control Plane',
         intro,
         sections: [{
           lines: buildEmptyState(
             width,
-            ' Runtime store not wired.',
-            'This panel needs the shared runtime store to inspect clients, requests, and approvals.',
+            ' Runtime read model not wired.',
+            'This panel needs the shared control-plane read model to inspect clients, requests, and approvals.',
             [{ command: '/cockpit', summary: 'use the cockpit while control-plane wiring is unavailable' }],
             C,
           ),
@@ -121,24 +95,23 @@ export class ControlPlanePanel extends BasePanel {
       return workspace;
     }
 
-    const state = this.store.getState();
-    const control = state.controlPlane;
-    const approvals = this.approvalBroker.listApprovals(6);
-    const sessions = this.sessionBroker.listSessions(6);
-    const recentEvents = this.getRecentEvents(6);
+    const snapshot = this.readModel.getSnapshot();
+    const approvals = snapshot.approvals;
+    const sessions = snapshot.sessions;
+    const recentEvents = snapshot.recentEvents;
     const clients = this.clients();
 
     const summarySection: PanelWorkspaceSection = {
       title: 'Posture',
       lines: [
         buildKeyValueLine(width, [
-          { label: 'state', value: control.connectionState, valueColor: connectionColor(control.connectionState) },
-          { label: 'clients', value: String(control.activeClientIds.length), valueColor: control.activeClientIds.length > 0 ? C.ok : C.dim },
-          { label: 'requests', value: String(control.requestCount), valueColor: control.requestCount > 0 ? C.info : C.dim },
-          { label: 'errors', value: String(control.errorCount), valueColor: control.errorCount > 0 ? C.error : C.dim },
+          { label: 'state', value: snapshot.connectionState, valueColor: connectionColor(snapshot.connectionState) },
+          { label: 'clients', value: String(snapshot.activeClientIds.length), valueColor: snapshot.activeClientIds.length > 0 ? C.ok : C.dim },
+          { label: 'requests', value: String(snapshot.requestCount), valueColor: snapshot.requestCount > 0 ? C.info : C.dim },
+          { label: 'errors', value: String(snapshot.errorCount), valueColor: snapshot.errorCount > 0 ? C.error : C.dim },
         ], C),
         buildKeyValueLine(width, [
-          { label: 'host', value: `${control.host}:${control.port}`, valueColor: C.value },
+          { label: 'host', value: `${snapshot.host}:${snapshot.port}`, valueColor: C.value },
           { label: 'approvals', value: String(approvals.filter((entry) => entry.status === 'pending').length), valueColor: approvals.some((entry) => entry.status === 'pending') ? C.warn : C.dim },
           { label: 'sessions', value: String(sessions.length), valueColor: sessions.length > 0 ? C.info : C.dim },
           { label: 'events', value: String(recentEvents.length), valueColor: recentEvents.length > 0 ? C.info : C.dim },
@@ -219,7 +192,7 @@ export class ControlPlanePanel extends BasePanel {
             [` ${truncateDisplay(approval.request.tool, 16).padEnd(16)}`, C.value],
             [` ${truncateDisplay(approval.sessionId ?? approval.id, Math.max(0, width - 30))}`, C.dim],
           ]))
-        : [buildPanelLine(width, [['  No approval records.', C.dim]])],
+        : [buildPanelLine(width, [['  No recent approvals.', C.dim]])],
     };
 
     const sessionsSection: PanelWorkspaceSection = {
@@ -227,29 +200,27 @@ export class ControlPlanePanel extends BasePanel {
       lines: sessions.length > 0
         ? sessions.slice(0, 6).map((session) => buildPanelLine(width, [
             [' ', C.label],
-            [session.status.padEnd(8), session.status === 'active' ? C.ok : C.warn],
-            [` ${truncateDisplay(session.title ?? session.id, 22).padEnd(22)}`, C.value],
-            [` routes=${String(session.routeIds.length).padEnd(3)}`, C.info],
-            [` msgs=${String(session.messageCount)}`, C.dim],
+            [session.status.padEnd(10), session.status === 'active' ? C.ok : C.dim],
+            [` ${truncateDisplay(session.title, 20).padEnd(20)}`, C.value],
+            [` ${truncateDisplay(session.activeAgentId ?? session.id, Math.max(0, width - 34))}`, C.dim],
           ]))
-        : [buildPanelLine(width, [['  No shared sessions.', C.dim]])],
+        : [buildPanelLine(width, [['  No shared sessions recorded.', C.dim]])],
     };
 
-    const recentEventsSection: PanelWorkspaceSection = {
+    const eventsSection: PanelWorkspaceSection = {
       title: 'Recent Events',
       lines: recentEvents.length > 0
         ? recentEvents.slice(0, 6).map((event) => buildPanelLine(width, [
             [' ', C.label],
-            [truncateDisplay(event.event, 18).padEnd(18), C.info],
-            [` ${truncateDisplay(formatTime(event.createdAt), 20).padEnd(20)}`, C.dim],
-            [` ${truncateDisplay(JSON.stringify(event.payload), Math.max(0, width - 41))}`, C.value],
+            [truncateDisplay(event.event, 16).padEnd(16), C.info],
+            [` ${truncateDisplay(typeof event.payload === 'string' ? event.payload : JSON.stringify(event.payload) ?? '', Math.max(0, width - 19))}`, C.dim],
           ]))
         : [buildPanelLine(width, [['  No recent control-plane events.', C.dim]])],
     };
 
     const resolvedClients = resolvePrimaryScrollableSection(width, height, {
       intro,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through clients', C.dim]])],
+      footerLines: [buildPanelLine(width, [['  Up/Down move through connected clients', C.dim]])],
       palette: C,
       beforeSections: [summarySection],
       section: {
@@ -258,19 +229,19 @@ export class ControlPlanePanel extends BasePanel {
           const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
           return buildPanelLine(width, [
             [' ', C.label, bg],
-            [client.kind.padEnd(9), C.info, bg],
+            [client.kind.padEnd(10), C.info, bg],
             [` ${truncateDisplay(client.label, 20).padEnd(20)}`, C.value, bg],
-            [` ${client.transport.padEnd(10)}`, C.dim, bg],
-            [` ${truncateDisplay(formatTime(client.lastSeenAt), Math.max(0, width - 43))}`, C.dim, bg],
+            [` ${client.transport.padEnd(12)}`, C.dim, bg],
+            [` ${truncateDisplay(formatTime(client.lastSeenAt), Math.max(0, width - 46))}`, C.dim, bg],
           ]);
         }),
         selectedIndex: this.selectedIndex,
         scrollOffset: this.scrollOffset,
         guardRows: 1,
-        minRows: 5,
+        minRows: 4,
         appendWindowSummary: { dimColor: C.dim },
       },
-      afterSections: [detailSection, approvalsSection, sessionsSection, recentEventsSection],
+      afterSections: [detailSection, approvalsSection, sessionsSection, eventsSection],
     });
     this.scrollOffset = resolvedClients.scrollOffset;
 
@@ -280,13 +251,13 @@ export class ControlPlanePanel extends BasePanel {
       detailSection,
       approvalsSection,
       sessionsSection,
-      recentEventsSection,
+      eventsSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'Control Plane',
       intro,
       sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through clients', C.dim]])],
+      footerLines: [buildPanelLine(width, [['  Up/Down move through connected clients', C.dim]])],
       palette: C,
     });
     while (lines.length < height) lines.push(createEmptyLine(width));

@@ -59,7 +59,7 @@ describe('OpenAI subscription-backed Codex path', () => {
   });
 
   test('OpenAICodexProvider has a distinct subscriber provider identity', () => {
-    const provider = new OpenAICodexProvider();
+    const provider = new OpenAICodexProvider(testManagers.subscriptionManager);
     expect(provider.name).toBe('openai-subscriber');
   });
 });

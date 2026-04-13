@@ -23,7 +23,7 @@ export function createPhasedReadTool(
   fileCache: FileStateCache,
   projectIndex: ProjectIndex,
 ): PhasedTool {
-  const readTool = new ReadTool(fileCache, projectIndex);
+  const readTool = new ReadTool(projectIndex, fileCache);
   return asPhasedTool(readTool, {
     category: 'read',
     cancellable: false,

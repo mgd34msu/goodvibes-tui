@@ -11,7 +11,7 @@ type RemotePoolLike = {
 };
 
 type RemoteRegistryLike = {
-  listPools(): RemotePoolLike[];
+  listPools(): readonly RemotePoolLike[];
   getPool(id: string): RemotePoolLike | null | undefined;
   createPool(input: { id: string; label: string }): RemotePoolLike;
   assignRunnerToPool(poolId: string, runnerId: string): RemotePoolLike | null | undefined;

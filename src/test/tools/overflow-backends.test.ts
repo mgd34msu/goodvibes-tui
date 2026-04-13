@@ -296,7 +296,7 @@ describe('DiagnosticsBackend', () => {
 
 describe('createSpillBackend', () => {
   it('returns FileBackend for type "file"', () => {
-    const b = createSpillBackend('file');
+    const b = createSpillBackend('file', makeTmpDir());
     expect(b.type).toBe('file');
   });
 
@@ -311,8 +311,12 @@ describe('createSpillBackend', () => {
   });
 
   it('defaults to FileBackend when type is omitted', () => {
-    const b = createSpillBackend();
+    const b = createSpillBackend('file', makeTmpDir());
     expect(b.type).toBe('file');
+  });
+
+  it('requires a baseDir for the file backend', () => {
+    expect(() => createSpillBackend('file')).toThrow('File spill backend requires an explicit baseDir');
   });
 });
 
@@ -425,7 +429,7 @@ describe('OverflowHandler — retention policy', () => {
 
 describe('overflowCleanup operator command', () => {
   it('returns beforeCount and delegates cleanup', () => {
-    const handler = new OverflowHandler();
+    const handler = new OverflowHandler({ spillBackend: 'ledger' });
     const result = overflowCleanup(handler, { maxAgeMs: 0 });
     expect(result).toHaveProperty('beforeCount');
     expect(typeof result.beforeCount).toBe('number');

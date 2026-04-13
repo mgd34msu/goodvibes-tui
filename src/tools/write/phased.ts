@@ -35,7 +35,7 @@ export interface WriteDeps {
  * @param deps - Optional dependency overrides (shared cache instances, undo manager).
  * @returns A PhasedTool that delegates execution to `createWriteTool`.
  */
-export function createPhasedWriteTool(deps: WriteDeps = {}) {
-  const inner = createWriteTool(deps);
+export function createPhasedWriteTool(projectRoot: string, deps: WriteDeps = {}) {
+  const inner = createWriteTool({ ...deps, projectRoot });
   return asPhasedTool(inner, { category: 'write', cancellable: false });
 }

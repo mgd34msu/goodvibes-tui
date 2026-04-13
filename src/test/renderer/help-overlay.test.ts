@@ -9,7 +9,7 @@ import { lineToString, linesToText } from '../setup.ts';
 
 const W = 120;
 const TALL_VIEWPORT = 80;
-const KEYBINDINGS = new KeybindingsManager('/nonexistent/path/keybindings.json');
+const KEYBINDINGS = new KeybindingsManager({ configPath: '/nonexistent/path/keybindings.json' });
 
 const SAMPLE_COMMANDS: SlashCommand[] = [
   { name: 'model', aliases: ['m'], description: 'Select LLM model', handler: () => {} },

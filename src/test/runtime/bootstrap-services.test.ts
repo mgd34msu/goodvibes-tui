@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import { startExternalServices } from '../../runtime/bootstrap-services.ts';
+import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function createConfig(overrides: {
   daemon?: boolean;
@@ -34,10 +35,12 @@ function createConfig(overrides: {
 describe('startExternalServices', () => {
   let runtimeBus: RuntimeEventBus;
   let hookDispatcher: HookDispatcher;
+  let runtimeServices: ReturnType<typeof getTestRuntimeServices>;
 
   beforeEach(() => {
     runtimeBus = new RuntimeEventBus();
     hookDispatcher = new HookDispatcher();
+    runtimeServices = getTestRuntimeServices();
   });
 
   test('starts both daemon and HTTP listener when enabled', async () => {
@@ -69,6 +72,7 @@ describe('startExternalServices', () => {
         probeDaemonPortInUse: async () => false,
         probeHttpListenerPortInUse: async () => false,
       },
+      runtimeServices,
     );
 
     expect(daemonFactory).toHaveBeenCalledTimes(1);
@@ -105,6 +109,7 @@ describe('startExternalServices', () => {
         createDaemonServer: daemonFactory,
         createHttpListener: listenerFactory,
       },
+      runtimeServices,
     );
 
     expect(daemonFactory).not.toHaveBeenCalled();
@@ -136,6 +141,7 @@ describe('startExternalServices', () => {
           stop: mock(async () => {}),
         }),
       },
+      runtimeServices,
     );
 
     expect(services.daemonServer).toBeNull();
@@ -166,6 +172,7 @@ describe('startExternalServices', () => {
           stop: mock(async () => {}),
         }),
       },
+      runtimeServices,
     );
 
     expect(services.daemonServer).not.toBeNull();
@@ -188,6 +195,7 @@ describe('startExternalServices', () => {
           listRecentControlPlaneEvents: mock(() => []),
         }),
       },
+      runtimeServices,
     );
 
     expect(services.daemonServer).toBeNull();
@@ -220,6 +228,7 @@ describe('startExternalServices', () => {
           stop: mock(async () => {}),
         }),
       },
+      runtimeServices,
     );
 
     expect(services.daemonServer).toBeNull();
@@ -257,6 +266,7 @@ describe('startExternalServices', () => {
           stop: mock(async () => {}),
         }),
       },
+      runtimeServices,
     );
 
     expect(probeDaemonPortInUse).toHaveBeenCalledTimes(1);

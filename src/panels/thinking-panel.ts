@@ -4,7 +4,8 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeEventBus, TurnEvent } from '../runtime/events/index.ts';
+import type { TurnEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -67,7 +68,7 @@ export class ThinkingPanel extends BasePanel {
   private lastWidth = 80;
   private static readonly MAX_BLOCKS = 100;
 
-  constructor(private runtimeBus: RuntimeEventBus) {
+  constructor(private readonly turnEvents: UiEventFeed<TurnEvent>) {
     super('thinking', 'Thinking', 'T', 'ai');
   }
 
@@ -253,7 +254,7 @@ export class ThinkingPanel extends BasePanel {
 
     let currentBlock: ReasoningBlock | null = null;
 
-    this.unsubs.push(this.runtimeBus.on('STREAM_START', () => {
+    this.unsubs.push(this.turnEvents.on('STREAM_START', () => {
       const block: ReasoningBlock = {
         turnId: this.nextTurnId++,
         content: '',
@@ -270,8 +271,8 @@ export class ThinkingPanel extends BasePanel {
       this.markDirty();
     }));
 
-    this.unsubs.push(this.runtimeBus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', (env) => {
-      const reasoning = env.payload.reasoning;
+    this.unsubs.push(this.turnEvents.on('STREAM_DELTA', (env) => {
+      const reasoning = env.reasoning;
       if (reasoning && currentBlock) {
         currentBlock.content += reasoning;
         this.autoScroll = true;
@@ -279,7 +280,7 @@ export class ThinkingPanel extends BasePanel {
       }
     }));
 
-    this.unsubs.push(this.runtimeBus.on('STREAM_END', () => {
+    this.unsubs.push(this.turnEvents.on('STREAM_END', () => {
       if (currentBlock) {
         currentBlock.active = false;
         currentBlock = null;
@@ -287,7 +288,7 @@ export class ThinkingPanel extends BasePanel {
       }
     }));
 
-    this.unsubs.push(this.runtimeBus.on('TURN_COMPLETED', () => {
+    this.unsubs.push(this.turnEvents.on('TURN_COMPLETED', () => {
       if (currentBlock) {
         currentBlock.active = false;
         currentBlock = null;

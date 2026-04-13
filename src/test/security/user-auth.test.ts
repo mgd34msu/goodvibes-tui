@@ -46,6 +46,8 @@ describe('UserAuthManager local admin management', () => {
 
   test('deleteUser refuses to remove the last user', () => {
     const auth = new UserAuthManager({
+      bootstrapFilePath: join(dir, 'auth-users.json'),
+      bootstrapCredentialPath: join(dir, 'auth-bootstrap.txt'),
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin-pass'), roles: ['admin'] }],
     });
 

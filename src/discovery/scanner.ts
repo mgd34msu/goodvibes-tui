@@ -1,8 +1,9 @@
-import { networkInterfaces, homedir } from 'node:os';
+import { networkInterfaces } from 'node:os';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import { discoverContextWindows } from '../providers/context-discovery.ts';
+import type { ShellPathService } from '../runtime/shell-paths.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,17 +33,22 @@ export interface ScanResult {
 // Persistence
 // ---------------------------------------------------------------------------
 
-const PERSISTED_PATH = join(homedir(), '.goodvibes', 'tui', 'discovered-providers.json');
+type DiscoveryRoots = Pick<ShellPathService, 'homeDirectory'>;
+
+function getPersistedPath(roots: DiscoveryRoots): string {
+  return join(roots.homeDirectory, '.goodvibes', 'tui', 'discovered-providers.json');
+}
 
 interface PersistedServer extends DiscoveredServer {
   lastSeen: number; // Unix ms timestamp
 }
 
 /** Load previously discovered providers from disk. Returns empty array if file doesn't exist. */
-export function loadPersistedProviders(): DiscoveredServer[] {
+export function loadPersistedProviders(roots: DiscoveryRoots): DiscoveredServer[] {
+  const persistedPath = getPersistedPath(roots);
   try {
-    if (!existsSync(PERSISTED_PATH)) return [];
-    const raw = readFileSync(PERSISTED_PATH, 'utf-8');
+    if (!existsSync(persistedPath)) return [];
+    const raw = readFileSync(persistedPath, 'utf-8');
     const parsed = JSON.parse(raw) as unknown[];
     if (!Array.isArray(parsed)) return [];
     // Filter to only valid-shaped entries before trusting persisted data
@@ -58,14 +64,15 @@ export function loadPersistedProviders(): DiscoveredServer[] {
 }
 
 /** Save discovered providers to disk. Merges with existing entries keyed by host:port. */
-export function persistProviders(servers: DiscoveredServer[]): void {
+export function persistProviders(roots: DiscoveryRoots, servers: DiscoveredServer[]): void {
+  const persistedPath = getPersistedPath(roots);
   try {
     const now = Date.now();
     // Load existing persisted servers
     let existing: PersistedServer[] = [];
-    if (existsSync(PERSISTED_PATH)) {
+    if (existsSync(persistedPath)) {
       try {
-        const raw = readFileSync(PERSISTED_PATH, 'utf-8');
+        const raw = readFileSync(persistedPath, 'utf-8');
         const parsed = JSON.parse(raw) as unknown;
         if (Array.isArray(parsed)) {
           existing = (parsed as unknown[]).filter(
@@ -83,24 +90,25 @@ export function persistProviders(servers: DiscoveredServer[]): void {
     for (const server of servers) {
       byKey.set(`${server.host}:${server.port}`, { ...server, lastSeen: now });
     }
-    mkdirSync(dirname(PERSISTED_PATH), { recursive: true });
-    writeFileSync(PERSISTED_PATH, JSON.stringify([...byKey.values()], null, 2) + '\n', 'utf-8');
+    mkdirSync(dirname(persistedPath), { recursive: true });
+    writeFileSync(persistedPath, JSON.stringify([...byKey.values()], null, 2) + '\n', 'utf-8');
   } catch {
     // Non-fatal — persistence is best-effort
   }
 }
 
 /** Remove specific servers from the persisted file (by host:port). */
-export function removePersistedProviders(toRemove: Array<{ host: string; port: number }>): void {
+export function removePersistedProviders(roots: DiscoveryRoots, toRemove: Array<{ host: string; port: number }>): void {
   if (toRemove.length === 0) return;
+  const persistedPath = getPersistedPath(roots);
   try {
-    if (!existsSync(PERSISTED_PATH)) return;
-    const raw = readFileSync(PERSISTED_PATH, 'utf-8');
+    if (!existsSync(persistedPath)) return;
+    const raw = readFileSync(persistedPath, 'utf-8');
     const current = JSON.parse(raw) as PersistedServer[];
     if (!Array.isArray(current)) return;
     const removeKeys = new Set(toRemove.map(s => `${s.host}:${s.port}`));
     const filtered = current.filter(s => !removeKeys.has(`${s.host}:${s.port}`));
-    writeFileSync(PERSISTED_PATH, JSON.stringify(filtered, null, 2) + '\n', 'utf-8');
+    writeFileSync(persistedPath, JSON.stringify(filtered, null, 2) + '\n', 'utf-8');
   } catch {
     // Non-fatal
   }

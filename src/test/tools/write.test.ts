@@ -17,21 +17,15 @@ async function makeTempDir(): Promise<{ dir: string; cleanup: () => Promise<void
 }
 
 /**
- * Runs the write tool with CWD patched to tmpDir so resolveAndValidatePath works.
+ * Runs the write tool with an explicit project root so path validation works.
  */
 async function runWrite(
   tmpDir: string,
   args: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const orig = process.cwd();
-  process.chdir(tmpDir);
-  const tool = createWriteTool();
-  try {
-    const result = await tool.execute(args);
-    return result as Record<string, unknown>;
-  } finally {
-    process.chdir(orig);
-  }
+  const tool = createWriteTool({ projectRoot: tmpDir });
+  const result = await tool.execute(args);
+  return result as Record<string, unknown>;
 }
 
 async function runWriteWithState(
@@ -40,15 +34,9 @@ async function runWriteWithState(
   fileCache: FileStateCache,
   projectIndex: ProjectIndex,
 ): Promise<Record<string, unknown>> {
-  const orig = process.cwd();
-  process.chdir(tmpDir);
-  const tool = createWriteTool({ fileCache, projectIndex });
-  try {
-    const result = await tool.execute(args);
-    return result as Record<string, unknown>;
-  } finally {
-    process.chdir(orig);
-  }
+  const tool = createWriteTool({ projectRoot: tmpDir, fileCache, projectIndex });
+  const result = await tool.execute(args);
+  return result as Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------

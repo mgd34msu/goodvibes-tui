@@ -1,13 +1,15 @@
 #!/usr/bin/env bun
 // Main shell entrypoint. Composition-heavy startup remains here, with
 // lower-level session/bootstrap/input helpers extracted into focused modules.
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator.ts';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
-import { ConfigManager, getWorkingDirectory } from './config/index.ts';
+import { ConfigManager } from './config/index.ts';
 import type { ContentPart } from './providers/interface.ts';
 import { ToolRegistry } from './tools/registry.ts';
 import { registerAllTools } from './tools/index.ts';
@@ -32,13 +34,11 @@ import {
 } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
-import { logger } from './utils/logger.ts';
+import { configureActivityLogger, logger } from './utils/logger.ts';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
-import type { ToolEvent, TurnEvent } from './runtime/events/index.ts';
-import { selectStreamToolPreview } from './runtime/store/selectors/index.ts';
 import type { HITLMode } from './state/mode-manager.ts';
 import type { HookPhase, HookCategory, HookEventPath } from './hooks/types.ts';
 import {
@@ -52,7 +52,6 @@ import { handleBlockingShellInput, type PendingPermissionState } from './shell/b
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './runtime/session-return-context.ts';
-import { listPersistedWorktreeMeta } from './runtime/worktree/registry.ts';
 import { GlobalNetworkTransportInstaller } from './runtime/network/index.ts';
 
 
@@ -67,21 +66,43 @@ const KEYBOARD_EXT_ENABLE  = '\x1b[>4;2m' + '\x1b[?1u';
 const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
 const PASTE_ENABLE     = '\x1b[?2004h';
 const PASTE_DISABLE    = '\x1b[?2004l';
+
+type ShellEntrypointOwnership = {
+  readonly workingDirectory: string;
+  readonly homeDirectory: string;
+};
+
+function resolveShellEntrypointOwnership(): ShellEntrypointOwnership {
+  return {
+    workingDirectory: process.cwd(),
+    homeDirectory: homedir(),
+  };
+}
+
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
-  const workingDir = getWorkingDirectory();
-  const configManager = new ConfigManager({ workingDir });
+  const {
+    workingDirectory: bootstrapWorkingDir,
+    homeDirectory: bootstrapHomeDirectory,
+  } = resolveShellEntrypointOwnership();
+  configureActivityLogger(join(bootstrapWorkingDir, '.goodvibes', 'logs'));
+  const configManager = new ConfigManager({
+    workingDir: bootstrapWorkingDir,
+    homeDir: bootstrapHomeDirectory,
+  });
   new GlobalNetworkTransportInstaller().install(configManager);
 
   // ── Bootstrap all runtime subsystems ─────────────────────────────────────
   // bootstrapRuntime initializes all subsystems in dependency order and returns
   // a fully-wired BootstrapContext. main.ts owns terminal setup, the render loop,
   // stdin input, and signal handlers — everything else is in bootstrap.
-  const ctx: BootstrapContext = await bootstrapRuntime(stdout, { configManager, workingDir });
+  const ctx: BootstrapContext = await bootstrapRuntime(stdout, {
+    configManager,
+    workingDir: bootstrapWorkingDir,
+    homeDirectory: bootstrapHomeDirectory,
+  });
   const {
-    runtimeBus,
-    store,
     conversation,
     orchestrator,
     runtime,
@@ -89,6 +110,7 @@ async function main() {
     compositor,
     selection,
     commandContext,
+    uiServices,
     commandRegistry,
     inputHistory,
     hookDispatcher,
@@ -99,11 +121,12 @@ async function main() {
     orchestratorRefs,
     setRenderRequest,
     permissionPromptRef,
-    loadLastConversation,
     _writeLastSessionPointer: writeLastSessionPointer,
     systemMessageRouter,
   } = ctx;
-  const { approvalBroker, agentManager, modeManager, processManager, providerRegistry, remoteRunnerRegistry } = ctx.services;
+  const workingDir = ctx.services.workingDirectory;
+  const homeDirectory = ctx.services.homeDirectory;
+  const { approvalBroker, agentManager, modeManager, processManager, providerRegistry } = ctx.services;
   conversation.setSessionMemoryStore(ctx.services.sessionMemoryStore);
   conversation.setSessionLineageTracker(ctx.services.sessionLineageTracker);
   orchestrator.setCoreServices({
@@ -119,9 +142,6 @@ async function main() {
   ctx.services.wrfcController.setPlanManager(ctx.services.planManager);
   let activeConversationWidth = stdout.columns || 80;
   conversation.setWidthProvider(() => activeConversationWidth);
-  if (!runtimeBus) {
-    throw new Error('bootstrapRuntime must provide RuntimeEventBus');
-  }
   // ── HITL UX mode — read from config and apply at startup ─────────────────
   {
     const hitlMode = configManager.get('behavior.hitlMode') as HITLMode | undefined;
@@ -133,16 +153,18 @@ async function main() {
   // Use the panel manager owned by the runtime service graph.
   const panelManager = ctx.services.panelManager;
   const buildSessionContinuityHints = () => {
-    const remoteContracts = remoteRunnerRegistry.listContracts();
-    const worktrees = listPersistedWorktreeMeta();
+    const sessionSnapshot = uiServices.readModels.session.getSnapshot();
+    const tasksSnapshot = uiServices.readModels.tasks.getSnapshot();
+    const remoteSnapshot = uiServices.readModels.remote.getSnapshot();
+    const worktreeSnapshot = uiServices.readModels.worktrees.getSnapshot();
     return {
-      pendingApprovals: store.getState().permissions.approvalCount,
-      activeTasks: store.getState().tasks.runningIds.length + store.getState().tasks.queuedIds.length,
-      blockedTasks: store.getState().tasks.blockedIds.length,
-      remoteContracts: remoteContracts.length,
-      remoteRunners: remoteContracts.slice(0, 4).map((contract) => contract.runnerId),
-      worktreeCount: worktrees.length,
-      worktreePaths: worktrees.slice(0, 3).map((record) => record.path),
+      pendingApprovals: sessionSnapshot.pendingApproval ? 1 : 0,
+      activeTasks: tasksSnapshot.tasks.filter((task) => task.status === 'running' || task.status === 'queued').length,
+      blockedTasks: tasksSnapshot.tasks.filter((task) => task.status === 'blocked').length,
+      remoteContracts: remoteSnapshot.contracts.length,
+      remoteRunners: remoteSnapshot.contracts.slice(0, 4).map((contract) => contract.runnerId),
+      worktreeCount: worktreeSnapshot.records.length,
+      worktreePaths: worktreeSnapshot.records.slice(0, 3).map((record) => record.path),
       openPanels: panelManager.getAllOpen().map((panel) => panel.id),
     };
   };
@@ -254,7 +276,7 @@ async function main() {
     });
     // Clear recovery interval
     if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
-    deleteRecoveryFile();
+    deleteRecoveryFile({ homeDirectory });
     // Terminal teardown — main.ts exclusively owns these
     stdin.removeAllListeners('data');
     stdout.removeListener('resize', resizeHandler);
@@ -380,6 +402,7 @@ async function main() {
       profileManager: ctx.services.profileManager,
       providerRegistry: ctx.services.providerRegistry,
       sessionManager: ctx.services.sessionManager,
+      shellPaths: ctx.services.shellPaths,
       wrfcController: ctx.services.wrfcController,
     },
   );
@@ -404,7 +427,7 @@ async function main() {
   // --- Splash options ---
   const toolCount = toolRegistry.list().length;
   conversation.splashOptions = {
-    workingDir: getWorkingDirectory(),
+    workingDir,
     model: runtime.model,
     provider: runtime.provider,
     toolCount,
@@ -419,6 +442,8 @@ async function main() {
 
     // Cache the current model for consistent values across the entire render frame
     const currentModel = providerRegistry.getCurrentModel();
+    const sessionSnapshot = uiServices.readModels.session.getSnapshot();
+    const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
 
     // Build header and footer FIRST so we know the exact viewport height
@@ -426,10 +451,7 @@ async function main() {
     const managerAgents = agentManager.list().filter(
       (a) => a.status === 'running' || a.status === 'pending',
     );
-    const agentDomain = store.getState().agents;
-    const runtimeAgents = agentDomain.activeAgentIds
-      .map((id) => agentDomain.agents.get(id))
-      .filter((agent): agent is NonNullable<typeof agent> => agent != null);
+    const runtimeAgents = agentSnapshot.active;
     const runningAgentIds = new Set<string>();
     let runningAgentProgress: string | undefined;
     for (const agent of managerAgents) {
@@ -485,7 +507,7 @@ async function main() {
       panelFocused: input.panelFocused,
       pendingApproval: pendingPermission !== null,
       hasAttachments: input.getImageAttachments().size > 0,
-      turnState: store.getState().conversation.turnState,
+      turnState: sessionSnapshot.turnState,
     });
     const footerLines = buildShellFooter({
       width,
@@ -501,7 +523,7 @@ async function main() {
       lastCopyTime: input.lastCopyTime,
       model: runtime.model,
       toolCount: toolRegistry.list().length,
-      workingDir: getWorkingDirectory(),
+      workingDir,
       provider: runtime.provider,
       contextWindow: currentModel.contextWindow,
       compactThreshold: configManager.get('behavior.autoCompactThreshold') as number,
@@ -572,7 +594,7 @@ async function main() {
     if (orchestrator.isThinking) {
       const showSpeed = configManager.get('display.showTokenSpeed') as boolean;
       const showPreview = configManager.get('display.showToolPreview') as boolean;
-      const partialToolPreview = showPreview ? selectStreamToolPreview(store.getState()) : undefined;
+      const partialToolPreview = showPreview ? sessionSnapshot.streamToolPreview : undefined;
       const thinking = UIFactory.createThinkingFragment(
         conversationWidth,
         orchestrator.getSpinner(),
@@ -645,6 +667,7 @@ async function main() {
     featureFlags: ctx.featureFlags,
     mcpRegistry: ctx.services.mcpRegistry,
     subscriptionManager: ctx.services.subscriptionManager,
+    serviceRegistry: ctx.services.serviceRegistry,
     getConfiguredProviderIds: ctx._getConfiguredProviderIds,
     getPinned: ctx._getPinned,
     render,
@@ -652,12 +675,19 @@ async function main() {
 
   // --- Streaming speed + tool preview wiring ---
   // Refresh git status after each turn completes or after tool results arrive
-  unsubs.push(runtimeBus.on<Extract<TurnEvent, { type: 'TURN_COMPLETED' }>>('TURN_COMPLETED', () => {
+  unsubs.push(uiServices.events.turns.on('TURN_COMPLETED', () => {
     // Auto-save after every LLM turn so kills don't lose the session
     try {
       const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
       const persisted = buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints());
-      persistConversation(runtime.sessionId, { ...snapshot, ...persisted }, runtime.model, runtime.provider, conversation.title || '');
+      persistConversation(
+        runtime.sessionId,
+        { ...snapshot, ...persisted },
+        runtime.model,
+        runtime.provider,
+        conversation.title || '',
+        { workingDirectory: workingDir, homeDirectory, sessionManager: ctx.services.sessionManager },
+      );
       hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: String(err) }));
     } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
     gitStatusProvider.refresh().then((info) => {
@@ -665,25 +695,25 @@ async function main() {
       render();
     }).catch(() => { /* non-fatal */ });
   }));
-  unsubs.push(runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_SUCCEEDED' }>>('TOOL_SUCCEEDED', () => {
+  unsubs.push(uiServices.events.tools.on('TOOL_SUCCEEDED', () => {
     gitStatusProvider.refresh().then((info) => {
       lastGitInfoRef.value = info;
       render();
     }).catch(() => { /* non-fatal */ });
   }));
-  unsubs.push(runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_FAILED' }>>('TOOL_FAILED', () => {
+  unsubs.push(uiServices.events.tools.on('TOOL_FAILED', () => {
     gitStatusProvider.refresh().then((info) => {
       lastGitInfoRef.value = info;
       render();
     }).catch(() => { /* non-fatal */ });
   }));
 
-  unsubs.push(runtimeBus.on<Extract<TurnEvent, { type: 'STREAM_START' }>>('STREAM_START', () => {
+  unsubs.push(uiServices.events.turns.on('STREAM_START', () => {
     streamStartTime = Date.now();
     streamDeltaCount = 0;
     streamTokenSpeed = 0;
   }));
-  unsubs.push(runtimeBus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload: data }) => {
+  unsubs.push(uiServices.events.turns.on('STREAM_DELTA', () => {
     streamDeltaCount++;
     const elapsed = (Date.now() - streamStartTime) / 1000;
     // Note: counts stream deltas, not actual tokens. ~1 delta per token for most providers.
@@ -705,8 +735,8 @@ async function main() {
       conversation,
       systemMessageRouter,
       render,
-      loadRecoveryConversation,
-      deleteRecoveryFile,
+      loadRecoveryConversation: () => loadRecoveryConversation({ homeDirectory }),
+      deleteRecoveryFile: () => deleteRecoveryFile({ homeDirectory }),
     });
     pendingPermission = blocking.pendingPermission;
     recoveryPending = blocking.recoveryPending;
@@ -725,7 +755,7 @@ async function main() {
   render();
 
   // --- Crash recovery check ---
-  const recoveryInfo = checkRecoveryFile();
+  const recoveryInfo = checkRecoveryFile({ workingDirectory: workingDir, homeDirectory });
   if (recoveryInfo) {
     systemMessageRouter.high(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press R to restore, any other key to discard.`);
     for (const line of formatReturnContextForDisplay(recoveryInfo.returnContext)) {
@@ -743,6 +773,7 @@ async function main() {
       { ...snapshot, ...persisted },
       runtime.sessionId,
       conversation.title ?? '',
+      { workingDirectory: workingDir, homeDirectory },
     );
   }, 60_000);
 

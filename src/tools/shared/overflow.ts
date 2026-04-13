@@ -92,8 +92,8 @@ export class FileBackend implements SpillBackend {
   readonly type: SpillBackendType = 'file';
   private readonly overflowDir: string;
 
-  constructor(baseDir?: string) {
-    this.overflowDir = join(baseDir ?? process.cwd(), OVERFLOW_DIR);
+  constructor(baseDir: string) {
+    this.overflowDir = join(baseDir, OVERFLOW_DIR);
   }
 
   private ensureDir(): boolean {
@@ -282,11 +282,14 @@ export class DiagnosticsBackend implements SpillBackend {
  */
 export function createSpillBackend(type: SpillBackendType = 'file', baseDir?: string): SpillBackend {
   switch (type) {
-    case 'file':        return new FileBackend(baseDir);
+    case 'file':
+      if (!baseDir) throw new Error('File spill backend requires an explicit baseDir');
+      return new FileBackend(baseDir);
     case 'ledger':      return new LedgerBackend();
     case 'diagnostics': return new DiagnosticsBackend();
     default: {
       logger.info(`[overflow] Unknown spill backend "${String(type)}", falling back to file`);
+      if (!baseDir) throw new Error('File spill backend requires an explicit baseDir');
       return new FileBackend(baseDir);
     }
   }
@@ -325,6 +328,9 @@ export class OverflowHandler {
   private readonly retention: RetentionPolicyConfig;
 
   constructor(config: OverflowHandlerConfig = {}) {
+    if (!config.backend && (config.spillBackend ?? 'file') === 'file' && !config.baseDir) {
+      throw new Error('OverflowHandler requires an explicit baseDir when using the file spill backend');
+    }
     this.backend = config.backend ?? createSpillBackend(config.spillBackend ?? 'file', config.baseDir);
     this.retention = { ...DEFAULT_RETENTION, ...config.retention };
   }

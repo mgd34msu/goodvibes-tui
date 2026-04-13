@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { SecretsManager } from '../../config/secrets.ts';
+import { SecretsManager, type SecretsManagerOptions } from '../../config/secrets.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,6 +23,15 @@ describe('SecretsManager', () => {
   let encPath: string;
   let projectRoot: string;
   let userHome: string;
+  const createProjectStoreManager = (
+    secureProjectFilePath = encPath,
+    overrides: Partial<SecretsManagerOptions> = {},
+  ): SecretsManager => new SecretsManager({
+    projectRoot,
+    globalHome: userHome,
+    secureProjectFilePath,
+    ...overrides,
+  });
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
@@ -101,13 +110,13 @@ describe('SecretsManager', () => {
   describe('get() — env var resolution', () => {
     test('returns value from process.env when key is present', async () => {
       process.env['TEST_SECRET_KEY'] = 'super-secret-value';
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       const result = await mgr.get('TEST_SECRET_KEY');
       expect(result).toBe('super-secret-value');
     });
 
     test('env var takes priority over encrypted file', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       // Store a value in encrypted file first
       await mgr.set('MY_API_KEY', 'file-value');
       // Then set env var
@@ -117,7 +126,7 @@ describe('SecretsManager', () => {
     });
 
     test('returns null when key not found in env or file', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       const result = await mgr.get('NONEXISTENT_KEY_XYZ');
       expect(result).toBeNull();
     });
@@ -129,14 +138,14 @@ describe('SecretsManager', () => {
 
   describe('set() + get() — round-trip', () => {
     test('stores and retrieves a secret from encrypted file', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('API_KEY', 'abc123');
       const result = await mgr.get('API_KEY');
       expect(result).toBe('abc123');
     });
 
     test('overwrites an existing key', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('API_KEY', 'first-value');
       await mgr.set('API_KEY', 'second-value');
       const result = await mgr.get('API_KEY');
@@ -144,7 +153,7 @@ describe('SecretsManager', () => {
     });
 
     test('multiple keys coexist in same encrypted file', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('KEY_A', 'value-a');
       await mgr.set('KEY_B', 'value-b');
       expect(await mgr.get('KEY_A')).toBe('value-a');
@@ -153,18 +162,32 @@ describe('SecretsManager', () => {
 
     test('auto-creates parent directories on set()', async () => {
       const deepPath = join(tmpDir, 'deep', 'nested', 'secrets.enc');
-      const mgr = new SecretsManager(deepPath);
+      const mgr = createProjectStoreManager(deepPath);
       await mgr.set('KEY', 'val');
       expect(existsSync(deepPath)).toBe(true);
     });
 
     test('secret persists across SecretsManager instances (same file path)', async () => {
-      const mgr1 = new SecretsManager(encPath);
+      const mgr1 = createProjectStoreManager();
       await mgr1.set('PERSISTENT_KEY', 'persistent-value');
 
-      const mgr2 = new SecretsManager(encPath);
+      const mgr2 = createProjectStoreManager();
       const result = await mgr2.get('PERSISTENT_KEY');
       expect(result).toBe('persistent-value');
+    });
+
+    test('rejects relative owned roots and store paths', async () => {
+      expect(() => new SecretsManager({ projectRoot: 'relative-project', globalHome: userHome })).toThrow(
+        'SecretsManager projectRoot must be an absolute path.',
+      );
+      expect(() => new SecretsManager({ projectRoot, globalHome: 'relative-home' })).toThrow(
+        'SecretsManager globalHome must be an absolute path.',
+      );
+      expect(() => new SecretsManager({
+        projectRoot,
+        globalHome: userHome,
+        secureProjectFilePath: 'relative-store.enc',
+      })).toThrow('SecretsManager secureProjectFilePath must be an absolute path.');
     });
   });
 
@@ -174,13 +197,13 @@ describe('SecretsManager', () => {
 
   describe('list()', () => {
     test('returns empty array when no secrets are stored', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       const keys = await mgr.list();
       expect(keys).toEqual([]);
     });
 
     test('returns all stored key names', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('KEY_ONE', 'v1');
       await mgr.set('KEY_TWO', 'v2');
       const keys = await mgr.list();
@@ -188,7 +211,7 @@ describe('SecretsManager', () => {
     });
 
     test('list() returns keys only — not values', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('SECRET', 'super-sensitive');
       const keys = await mgr.list();
       expect(keys).toContain('SECRET');
@@ -202,7 +225,7 @@ describe('SecretsManager', () => {
 
   describe('delete()', () => {
     test('removes a stored secret', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('DEL_KEY', 'value');
       await mgr.delete('DEL_KEY');
       const result = await mgr.get('DEL_KEY');
@@ -210,7 +233,7 @@ describe('SecretsManager', () => {
     });
 
     test('remaining keys are unaffected after delete', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('KEEP', 'stay');
       await mgr.set('REMOVE', 'gone');
       await mgr.delete('REMOVE');
@@ -219,7 +242,7 @@ describe('SecretsManager', () => {
     });
 
     test('delete on non-existent key is a no-op', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       // Should not throw
       await mgr.delete('NONEXISTENT');
       const keys = await mgr.list();
@@ -227,7 +250,7 @@ describe('SecretsManager', () => {
     });
 
     test('delete removes key from list()', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('K1', 'v1');
       await mgr.set('K2', 'v2');
       await mgr.delete('K1');
@@ -243,7 +266,7 @@ describe('SecretsManager', () => {
 
   describe('encrypted file format', () => {
     test('encrypted file is valid JSON with iv, tag, and data fields', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('FORMAT_KEY', 'format-value');
 
       const raw = readFileSync(encPath, 'utf-8');
@@ -255,7 +278,7 @@ describe('SecretsManager', () => {
     });
 
     test('iv, tag, data are hex strings', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('HEX_KEY', 'hex-value');
 
       const raw = readFileSync(encPath, 'utf-8');
@@ -267,7 +290,7 @@ describe('SecretsManager', () => {
     });
 
     test('data field is not human-readable plaintext', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('SECRET_KEY', 'my-plaintext-secret');
 
       const raw = readFileSync(encPath, 'utf-8');
@@ -276,7 +299,7 @@ describe('SecretsManager', () => {
     });
 
     test('iv differs between writes (random per write)', async () => {
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       await mgr.set('K', 'v1');
       const raw1 = readFileSync(encPath, 'utf-8');
       const iv1 = JSON.parse(raw1).iv;
@@ -294,7 +317,7 @@ describe('SecretsManager', () => {
       const { writeFileSync } = await import('fs');
       writeFileSync(encPath, 'NOT_VALID_JSON_OR_CIPHERTEXT', 'utf-8');
 
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       const result = await mgr.get('ANYTHING');
       expect(result).toBeNull();
     });
@@ -304,7 +327,7 @@ describe('SecretsManager', () => {
       const { writeFileSync } = await import('fs');
       writeFileSync(encPath, '{"iv":"badhex","tag":"badhex","data":"badhex"}', 'utf-8');
 
-      const mgr = new SecretsManager(encPath);
+      const mgr = createProjectStoreManager();
       const keys = await mgr.list();
       expect(keys).toEqual([]);
     });

@@ -1,4 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
+import { requireMcpApi } from './runtime-services.ts';
 
 export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -8,12 +9,8 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
     usage: '[review|tools [<server>]|auth-review|repair [server]]',
     argsHint: '[review|tools [server]|auth-review|repair [server]]',
     async handler(args, ctx) {
-      const listServerSecurity = (): ReturnType<typeof ctx.mcpRegistry.listServerSecurity> => {
-        const api = ctx.mcpRegistry as typeof ctx.mcpRegistry & {
-          listServerSecurity?: () => ReturnType<typeof ctx.mcpRegistry.listServerSecurity>;
-        };
-        return api.listServerSecurity?.() ?? [];
-      };
+      const mcpApi = requireMcpApi(ctx);
+      const listServerSecurity = () => mcpApi.listServerSecurity();
       const subcommand = args[0];
       if (!subcommand && ctx.openMcpPanel) {
         ctx.openMcpPanel();
@@ -37,7 +34,7 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
         ctx.print('Fetching MCP tool list...');
         let allTools;
         try {
-          allTools = await ctx.mcpRegistry.listAllTools();
+          allTools = await mcpApi.listAllTools();
         } catch (e) {
           ctx.print(`Error listing tools: ${(e as Error).message}`);
           return;
@@ -119,7 +116,7 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
             ctx.openSettingsModal?.();
             return;
           }
-          ctx.mcpRegistry.setServerTrustMode(serverName, mode);
+          mcpApi.setServerTrustMode(serverName, mode);
           ctx.print(`Updated MCP trust mode for ${serverName} to ${mode}.`);
           return;
         }
@@ -133,7 +130,7 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
         const serverName = args[1];
         const role = args[2] as 'general' | 'docs' | 'filesystem' | 'git' | 'database' | 'browser' | 'automation' | 'ops' | 'remote' | undefined;
         if (serverName && role) {
-          ctx.mcpRegistry.setServerRole(serverName, role);
+          mcpApi.setServerRole(serverName, role);
           ctx.print(`Updated MCP role for ${serverName} to ${role}.`);
           return;
         }
@@ -152,12 +149,12 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
         }
         if (action === 'approve') {
           const operatorId = args[3] || 'operator';
-          ctx.mcpRegistry.approveSchemaQuarantine(serverName, operatorId);
+          mcpApi.approveSchemaQuarantine(serverName, operatorId);
           ctx.print(`Approved MCP schema quarantine override for ${serverName} as ${operatorId}. Refresh is still recommended.`);
           return;
         }
         const detail = args.slice(2).join(' ') || 'quarantined by operator';
-        ctx.mcpRegistry.quarantineSchema(serverName, 'operator_flagged', detail);
+        mcpApi.quarantineSchema(serverName, 'operator_flagged', detail);
         ctx.print(`Quarantined MCP schema for ${serverName}.\nReason: ${detail}`);
         return;
       }

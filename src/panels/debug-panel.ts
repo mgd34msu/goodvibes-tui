@@ -1,6 +1,7 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
-import type { RuntimeEventBus, TurnEvent } from '../runtime/events/index.ts';
+import type { TurnEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
 import {
   buildEmptyState,
@@ -139,7 +140,7 @@ export class DebugPanel extends BasePanel {
   private _totalErrors = 0;
 
   constructor(
-    private readonly runtimeBus: RuntimeEventBus,
+    private readonly turnEvents: UiEventFeed<TurnEvent>,
     private readonly requestRender: () => void = () => {},
   ) {
     super('debug', 'Debug', 'B', 'monitoring');
@@ -164,20 +165,20 @@ export class DebugPanel extends BasePanel {
 
   private _subscribe(): void {
     this._unsubs.push(
-      this.runtimeBus.on('TURN_SUBMITTED', () => {
+      this.turnEvents.on('TURN_SUBMITTED', () => {
         this._turnStartMs  = Date.now();
         this._streamStartMs = null;
       }),
     );
 
     this._unsubs.push(
-      this.runtimeBus.on('STREAM_START', () => {
+      this.turnEvents.on('STREAM_START', () => {
         this._streamStartMs = Date.now();
       }),
     );
 
     this._unsubs.push(
-      this.runtimeBus.on<Extract<TurnEvent, { type: 'LLM_RESPONSE_RECEIVED' }>>('LLM_RESPONSE_RECEIVED', (env) => {
+      this.turnEvents.on('LLM_RESPONSE_RECEIVED', (env) => {
         const now = Date.now();
         const latencyMs =
           this._streamStartMs !== null
@@ -188,8 +189,8 @@ export class DebugPanel extends BasePanel {
         this._streamStartMs = null;
 
         // Compute per-call token delta if orchestrator is wired
-        let inputTokens  = env.payload.inputTokens + (env.payload.cacheReadTokens ?? 0) + (env.payload.cacheWriteTokens ?? 0);
-        let outputTokens = env.payload.outputTokens;
+        let inputTokens  = env.inputTokens + (env.cacheReadTokens ?? 0) + (env.cacheWriteTokens ?? 0);
+        let outputTokens = env.outputTokens;
         if (this._orchestrator) {
           const cu = this._orchestrator.usage;
           inputTokens  = Math.max(0, cu.input  - this._prevInput);
@@ -200,8 +201,8 @@ export class DebugPanel extends BasePanel {
 
         const entry: ApiCallEntry = {
           ts: now,
-          provider: env.payload.provider,
-          model: env.payload.model,
+          provider: env.provider,
+          model: env.model,
           inputTokens,
           outputTokens,
           latencyMs,
@@ -215,11 +216,11 @@ export class DebugPanel extends BasePanel {
     );
 
     this._unsubs.push(
-      this.runtimeBus.on<Extract<TurnEvent, { type: 'TURN_ERROR' }>>('TURN_ERROR', (env) => {
+      this.turnEvents.on('TURN_ERROR', (env) => {
         this._streamStartMs = null;
         this._turnStartMs   = null;
 
-        const msg  = env.payload.error;
+        const msg  = env.error;
         const code = statusCodeFromError(msg);
 
         const entry: ApiCallEntry = {

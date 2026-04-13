@@ -12,11 +12,11 @@
 
 import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagState } from '../config/schema.ts';
 import type { ConfigManager } from '../config/manager.ts';
-import { ServiceRegistry } from '../config/service-registry.ts';
 import type { SubscriptionManager } from '../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
 import type { ProviderAuthFreshness, ProviderAuthRoute } from '../runtime/provider-accounts/registry.ts';
 import { getResolvedSettingLookup } from '../runtime/settings/control-plane.ts';
+import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { FeatureFlag, FlagState } from '../runtime/feature-flags/types.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
@@ -137,6 +137,7 @@ export class SettingsModal {
   private featureFlagManager: FeatureFlagManager | null = null;
   private mcpRegistry: McpRegistry | null = null;
   private subscriptionManager: SubscriptionManager | null = null;
+  private serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'> | null = null;
 
   /**
    * Open the modal, loading current config values from configManager.
@@ -148,11 +149,13 @@ export class SettingsModal {
     configManager: ConfigManager,
     featureFlagManager: FeatureFlagManager,
     subscriptionManager: SubscriptionManager,
+    serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>,
     mcpRegistry?: McpRegistry,
   ): void {
     this.configManager = configManager;
     this.featureFlagManager = featureFlagManager;
     this.subscriptionManager = subscriptionManager;
+    this.serviceRegistry = serviceRegistry;
     this.mcpRegistry = mcpRegistry ?? null;
     this._loadGroups(configManager);
     this._loadFlagEntries();
@@ -173,6 +176,7 @@ export class SettingsModal {
     this.editBuffer = '';
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
+    this.serviceRegistry = null;
   }
 
   /** Cycle to the next category (Tab). */
@@ -579,7 +583,7 @@ export class SettingsModal {
       this.subscriptionEntries = [];
       return;
     }
-    const services = new ServiceRegistry().getAll();
+    const services = this.serviceRegistry?.getAll() ?? {};
     const providers = new Map<string, SubscriptionEntry>();
     const builtinProviders = new Set(listBuiltinSubscriptionProviders().map((builtin) => builtin.provider));
 

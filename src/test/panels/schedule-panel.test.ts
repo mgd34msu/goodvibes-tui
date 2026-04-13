@@ -10,6 +10,7 @@ import { AutomationRouteStore } from '../../automation/store/routes.ts';
 import { AutomationRunStore } from '../../automation/store/runs.ts';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
 import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import { PersistentStore } from '../../state/persistent-store.ts';
 import type { LegacySchedulerSnapshot } from '../../automation/migration.ts';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
@@ -30,6 +31,11 @@ describe('SchedulePanel', () => {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, 'routes.json')),
     });
+    const configManager = new ConfigManager({
+      workingDir: root,
+      configDir: join(root, '.goodvibes', 'tui'),
+    });
+    let spawnCount = 0;
     const sessionBroker = new SharedSessionBroker({
       store: new PersistentStore(join(root, 'sessions.json')) as never,
       routeBindings,
@@ -37,12 +43,18 @@ describe('SchedulePanel', () => {
       messageSender: { send: () => false },
     });
     manager = new AutomationManager({
+      configManager,
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
       routeBindings,
       sessionBroker,
-      spawnTask: () => 'agent-schedule-panel-test',
+      spawnTask: ({ prompt }) => {
+        const id = `agent-${++spawnCount}-${prompt.length}`;
+        return id;
+      },
+      cancelTask: () => undefined,
+      agentStatusProvider: { getStatus: () => null },
     });
     (AutomationManager as unknown as { instance: AutomationManager | null }).instance = manager;
   });

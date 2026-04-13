@@ -139,7 +139,7 @@ export interface ReplayEngineSnapshot {
  *
  * Usage:
  * ```ts
- * const engine = new DeterministicReplayEngine();
+ * const engine = new DeterministicReplayEngine('/path/to/project');
  * engine.load(runId, snapshot, ledgerEntries);
  * engine.step();          // advance one event
  * engine.step(5);         // advance five events
@@ -149,6 +149,7 @@ export interface ReplayEngineSnapshot {
  * ```
  */
 export class DeterministicReplayEngine {
+  private readonly _projectRoot: string;
   private _status: ReplayStatus = 'idle';
   private _runId: string | null = null;
   private _snapshot: RuntimeStateSnapshot | null = null;
@@ -165,6 +166,10 @@ export class DeterministicReplayEngine {
   private _mismatches: ReplayMismatch[] = [];
   private _turnSummaries: ReplayTurnSummary[] = [];
   private readonly _subscribers = new Set<() => void>();
+
+  constructor(projectRoot: string) {
+    this._projectRoot = resolve(projectRoot);
+  }
 
   // ── Public API ─────────────────────────────────────────────────────────
 
@@ -403,9 +408,8 @@ export class DeterministicReplayEngine {
     }
 
     // Path traversal guard — confine exports to the project directory or /tmp.
-    const resolved = resolve(normalize(filePath));
-    const cwd = process.cwd();
-    if (!resolved.startsWith(cwd) && !resolved.startsWith('/tmp')) {
+    const resolved = resolve(this._projectRoot, normalize(filePath));
+    if (!resolved.startsWith(this._projectRoot) && !resolved.startsWith('/tmp')) {
       throw new Error(`Export path must be within project directory or /tmp. Got: ${resolved}`);
     }
 

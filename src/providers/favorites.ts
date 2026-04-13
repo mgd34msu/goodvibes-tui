@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { rename } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export interface FavoriteEntry {
@@ -27,15 +26,15 @@ function emptyData(): FavoritesData {
 }
 
 export interface FavoritesStoreOptions {
-  readonly dir?: string;
+  readonly dir: string;
 }
 
 export class FavoritesStore {
   private readonly dir: string;
   private cache: FavoritesData | null = null;
 
-  constructor(options: FavoritesStoreOptions = {}) {
-    this.dir = options.dir ?? join(homedir(), '.goodvibes', 'tui');
+  constructor(options: FavoritesStoreOptions) {
+    this.dir = options.dir;
   }
 
   getDirectory(): string {

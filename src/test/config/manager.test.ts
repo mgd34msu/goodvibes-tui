@@ -30,6 +30,25 @@ describe('ConfigManager', () => {
     expect(all).toEqual(DEFAULT_CONFIG);
   });
 
+  test('derives the control-plane config dir from an explicit home root', () => {
+    const cm = new ConfigManager({ homeDir: tempDir, workingDir: tempDir });
+    expect(cm.getControlPlaneConfigDir()).toBe(join(tempDir, '.goodvibes', 'tui'));
+    expect(cm.getHomeDirectory()).toBe(tempDir);
+    expect(cm.getWorkingDirectory()).toBe(tempDir);
+  });
+
+  test('rejects relative config roots', () => {
+    expect(() => new ConfigManager({ configDir: 'relative-config-root' })).toThrow(
+      'ConfigManager configDir must be an absolute path.',
+    );
+    expect(() => new ConfigManager({ homeDir: 'relative-home-root' })).toThrow(
+      'ConfigManager homeDir must be an absolute path.',
+    );
+    expect(() => new ConfigManager({ configDir: tempDir, workingDir: 'relative-working-root' })).toThrow(
+      'ConfigManager workingDir must be an absolute path.',
+    );
+  });
+
   test('set and get a simple key', () => {
     const cm = new ConfigManager({ configDir: tempDir, workingDir: tempDir });
     cm.set('provider.model', 'gpt-4');
@@ -63,5 +82,10 @@ describe('ConfigManager', () => {
     cm.set('behavior.autoApprove', true);
     cm.set('display.lineNumbers', 'all');
     expect(DEFAULT_CONFIG).toEqual(before);
+  });
+
+  test('saveProject requires an explicit working dir', () => {
+    const cm = new ConfigManager({ configDir: tempDir });
+    expect(() => cm.saveProject()).toThrow('ConfigManager.saveProject requires an explicit workingDir.');
   });
 });

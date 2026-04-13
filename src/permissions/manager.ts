@@ -29,14 +29,16 @@ type PermissionConfigSnapshot = ReturnType<typeof getConfigSnapshot>;
 export interface PermissionConfigReader {
   isAutoApproveEnabled(): boolean;
   getSnapshot(): PermissionConfigSnapshot;
+  getWorkingDirectory(): string | null;
 }
 
 export function createPermissionConfigReader(
-  configManager: Pick<ConfigManager, 'get' | 'getRaw'>,
+  configManager: Pick<ConfigManager, 'get' | 'getRaw' | 'getWorkingDirectory'>,
 ): PermissionConfigReader {
   return {
     isAutoApproveEnabled: () => isAutoApproveEnabled(configManager),
     getSnapshot: () => getConfigSnapshot(configManager),
+    getWorkingDirectory: () => configManager.getWorkingDirectory(),
   };
 }
 
@@ -191,6 +193,7 @@ export class PermissionManager {
         args,
         category,
         analysis,
+        workingDirectory: this.configReader.getWorkingDirectory() ?? undefined,
       });
     } catch (error) {
       void this.fireHook('Fail:permission:request', 'Fail', 'permission', 'request', {
@@ -261,6 +264,7 @@ export class PermissionManager {
     const rules = this.policyRuntimeState.getRegistry().getCurrent()?.rules ?? [];
     const evaluator = new LayeredPolicyEvaluator({
       mode: mode === 'allow-all' ? 'allow-all' : mode === 'custom' ? 'custom' : 'default',
+      projectRoot: this.configReader.getWorkingDirectory() ?? undefined,
       rules,
       defaultEffect: 'deny',
     });

@@ -1,7 +1,7 @@
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
-import { ServiceRegistry } from '../config/service-registry.ts';
-import { SubscriptionManager } from '../config/subscriptions.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type {
+  ProviderAccountInspectionQuery,
+} from '../runtime/ui-service-queries.ts';
 
 export type ProviderAuthRoute = 'api-key' | 'subscription' | 'service-oauth' | 'unconfigured';
 export type ProviderAuthFreshness = 'healthy' | 'expiring' | 'expired' | 'pending' | 'unconfigured';
@@ -49,10 +49,18 @@ export interface ProviderAccountSnapshot {
   readonly issueCount: number;
 }
 
-export interface ProviderAccountSnapshotDeps {
-  readonly providerRegistry: Pick<ProviderRegistry, 'listModels'>;
-  readonly serviceRegistry: Pick<ServiceRegistry, 'getAll' | 'inspect'>;
-  readonly subscriptionManager: Pick<SubscriptionManager, 'list' | 'listPending' | 'get' | 'getPending'>;
+export interface ProviderAccountSnapshotDeps extends ProviderAccountInspectionQuery {}
+
+export interface ProviderAccountSnapshotQuery {
+  readonly loadSnapshot: () => Promise<ProviderAccountSnapshot>;
+}
+
+export function createProviderAccountSnapshotQuery(
+  deps: ProviderAccountSnapshotDeps,
+): ProviderAccountSnapshotQuery {
+  return {
+    loadSnapshot: () => buildProviderAccountSnapshot(deps),
+  };
 }
 
 function determineActiveRoute(routes: readonly ProviderAuthRoute[]): ProviderAuthRoute {
@@ -96,13 +104,13 @@ function builtinWindowsForProvider(providerId: string): readonly ProviderUsageWi
 export async function buildProviderAccountSnapshot(
   deps: ProviderAccountSnapshotDeps,
 ): Promise<ProviderAccountSnapshot> {
-  const models = deps.providerRegistry.listModels();
-  const services = deps.serviceRegistry.getAll();
-  const subscriptions = deps.subscriptionManager;
+  const models = deps.providerModels.listModels();
+  const services = deps.services.getAll();
+  const subscriptions = deps.subscriptions;
   const builtinSubscriptionProviders = new Set(listBuiltinSubscriptionProviders().map((entry) => entry.provider));
   const serviceInspections = await Promise.all(Object.keys(services).map(async (name) => ({
     name,
-    inspection: await deps.serviceRegistry.inspect(name),
+    inspection: await deps.services.inspect(name),
   })));
   const serviceOauthByProvider = new Map<string, { configured: boolean; usable: boolean }>();
   for (const { inspection } of serviceInspections) {
@@ -128,7 +136,7 @@ export async function buildProviderAccountSnapshot(
     const pending = subscriptions.getPending(providerId);
     const serviceConfig = Object.values(services).find((entry) => (entry.providerId ?? entry.name) === providerId) ?? null;
     const serviceOauth = serviceOauthByProvider.get(providerId);
-    const hasApiKey = Boolean(serviceConfig?.tokenKey && process.env[serviceConfig.tokenKey]);
+    const hasApiKey = Boolean(serviceConfig?.tokenKey && deps.environment.hasEnvironmentVariable(serviceConfig.tokenKey));
     const hasSubscription = subscription != null;
     const hasServiceOAuth = Boolean(serviceOauth?.configured);
     const routes: ProviderAuthRoute[] = [];

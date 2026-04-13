@@ -1,6 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { classifyIntent } from '../../core/intent-classifier.ts';
-import { handlePlanCommand } from '../../core/plan-command-handler.ts';
 import { requireAdaptivePlanner, requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
 
 export function registerPlanningRuntimeCommands(registry: CommandRegistry): void {
@@ -15,13 +14,15 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
       const sessionLineageTracker = requireSessionLineageTracker(ctx);
       const plannerSubs = ['mode', 'explain', 'override', 'status', 'clear'];
       if (args.length > 0 && plannerSubs.includes(args[0].toLowerCase())) {
-        const result = handlePlanCommand({ adaptivePlanner, runtimeBus: ctx.runtimeBus }, args[0], args.slice(1));
+        const result = ctx.ops.planRuntime
+          ? ctx.ops.planRuntime(args[0], args.slice(1))
+          : { ok: false, output: 'Plan runtime bridge is not available in this runtime.' };
         ctx.print(result.output);
         return;
       }
 
       if (args.length === 0) {
-        const active = planManager.getActive(ctx.runtime.sessionId);
+        const active = planManager.getActive(ctx.session.runtime.sessionId);
         if (!active) {
           ctx.print('No active plan. Use /plan <task description> to create one.');
           return;
@@ -62,7 +63,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
 
       const taskDescription = args.join(' ');
       const classification = classifyIntent(taskDescription);
-      const plan = planManager.create(taskDescription, [], ctx.runtime.sessionId);
+      const plan = planManager.create(taskDescription, [], ctx.session.runtime.sessionId);
       plan.awaitingPlan = true;
       planManager.save(plan);
       sessionLineageTracker.setOriginalTask(taskDescription.slice(0, 200));
@@ -74,7 +75,7 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         'The model will write the execution plan — agents will be spawned automatically.',
       );
 
-      ctx.conversationManager.addSystemMessage(
+      ctx.session.conversationManager.addSystemMessage(
         `You are creating an execution plan for the following task: "${taskDescription}"\n\n` +
         'Output the plan in EXACTLY this markdown format and nothing else:\n\n' +
         '## Phase 1: [Phase Name] [PENDING]\n' +

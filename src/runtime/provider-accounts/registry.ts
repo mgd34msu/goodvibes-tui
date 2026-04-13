@@ -1,11 +1,11 @@
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { resolveApiKeys } from '../../config/index.ts';
 import type { SecretsManager } from '../../config/secrets.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { ProviderRuntimeMetadata } from '../../providers/interface.ts';
 import { decodeJwtPayload } from '../auth/oauth-core.ts';
+import type { ServiceRegistry } from '../../config/service-registry.ts';
+import type { SubscriptionManager } from '../../config/subscriptions.ts';
 
 export type ProviderAuthRoute = 'api-key' | 'subscription' | 'service-oauth' | 'unconfigured';
 export type ProviderAuthFreshness = 'healthy' | 'expiring' | 'expired' | 'pending' | 'unconfigured';
@@ -54,10 +54,10 @@ export interface ProviderAccountSnapshot {
 }
 
 export interface ProviderAccountSnapshotDeps {
-  readonly providerRegistry: Pick<ProviderRegistry, 'listModels' | 'getCurrentModel' | 'getRegistered'>;
-  readonly serviceRegistry?: Pick<ServiceRegistry, 'getAll' | 'inspect'>;
-  readonly subscriptionManager?: Pick<SubscriptionManager, 'list' | 'listPending' | 'get' | 'getPending'>;
-  readonly secretsManager?: Pick<SecretsManager, 'get'>;
+  readonly providerRegistry: Pick<ProviderRegistry, 'listModels' | 'getCurrentModel' | 'getRegistered' | 'describeRuntime'>;
+  readonly serviceRegistry: Pick<ServiceRegistry, 'getAll' | 'inspect'>;
+  readonly subscriptionManager: Pick<SubscriptionManager, 'list' | 'listPending' | 'get' | 'getPending'>;
+  readonly secretsManager: Pick<SecretsManager, 'get'>;
 }
 
 function builtinWindowsForProvider(providerId: string): readonly ProviderUsageWindow[] {
@@ -105,9 +105,9 @@ export async function buildProviderAccountSnapshot(
   const allModels = providerRegistry.listModels();
   const currentModel = providerRegistry.getCurrentModel?.();
   const apiKeys = await resolveApiKeys(deps.secretsManager);
-  const subscriptions = deps.subscriptionManager ?? new SubscriptionManager();
+  const subscriptions = deps.subscriptionManager;
   const builtinSubscriptionProviders = new Set(listBuiltinSubscriptionProviders().map((entry) => entry.provider));
-  const serviceRegistry = deps.serviceRegistry ?? new ServiceRegistry();
+  const serviceRegistry = deps.serviceRegistry;
   const serviceConfigs = serviceRegistry.getAll();
   const services = Object.values(serviceConfigs);
   const serviceInspections = await Promise.all(Object.keys(serviceConfigs).map(async (name) => ({
@@ -141,8 +141,7 @@ export async function buildProviderAccountSnapshot(
       const serviceOauth = serviceOauthByProvider.get(providerId);
       let runtimeMetadata: ProviderRuntimeMetadata | undefined;
       try {
-        const provider = providerRegistry.getRegistered(providerId);
-        runtimeMetadata = provider.describeRuntime ? await provider.describeRuntime() : undefined;
+        runtimeMetadata = await providerRegistry.describeRuntime(providerId) ?? undefined;
       } catch {
         runtimeMetadata = undefined;
       }

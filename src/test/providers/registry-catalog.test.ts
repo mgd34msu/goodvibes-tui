@@ -51,7 +51,7 @@ let cacheFixture: ReturnType<typeof createProviderCacheFixture>;
 // ---------------------------------------------------------------------------
 
 function loadCatalog(models: CatalogModel[]): void {
-  writeModelCatalogCache(models, cacheFixture.homeDir, FIXTURE_CATALOG.fetchedAt);
+  writeModelCatalogCache(models, cacheFixture.cacheDir, FIXTURE_CATALOG.fetchedAt);
   providerRegistry.initCatalog();
 }
 
@@ -65,7 +65,7 @@ function getCatalogModelDefinitions() {
 
 describe('getCatalogModelDefinitions', () => {
   beforeEach(() => {
-    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    cacheFixture = createProviderCacheFixture(testManagers.configManager.getControlPlaneConfigDir());
     loadCatalog(FIXTURE_CATALOG.models);
   });
 
@@ -180,7 +180,7 @@ describe('getCatalogModelDefinitions', () => {
 
 describe('getModelRegistry — catalog-sourced models', () => {
   beforeEach(() => {
-    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    cacheFixture = createProviderCacheFixture(testManagers.configManager.getControlPlaneConfigDir());
     loadCatalog(FIXTURE_CATALOG.models);
   });
 
@@ -251,7 +251,7 @@ describe('getModelRegistry — catalog-sourced models', () => {
 
 describe('getModelRegistry — discovered servers', () => {
   beforeEach(() => {
-    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    cacheFixture = createProviderCacheFixture(testManagers.configManager.getControlPlaneConfigDir());
     loadCatalog(FIXTURE_CATALOG.models);
   });
 
@@ -283,7 +283,7 @@ describe('getModelRegistry — discovered servers', () => {
 
 describe('getModelRegistry — empty catalog fallback', () => {
   beforeEach(() => {
-    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    cacheFixture = createProviderCacheFixture(testManagers.configManager.getControlPlaneConfigDir());
     loadCatalog([]);
   });
 
@@ -314,7 +314,7 @@ describe('getModelRegistry — empty catalog fallback', () => {
 
 describe('Structural verification', () => {
   beforeEach(() => {
-    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    cacheFixture = createProviderCacheFixture(testManagers.configManager.getControlPlaneConfigDir());
     loadCatalog(FIXTURE_CATALOG.models);
   });
 
@@ -364,7 +364,7 @@ describe('Structural verification', () => {
 
 describe('ProviderRegistry.get() — alias resolution', () => {
   beforeEach(() => {
-    cacheFixture = createProviderCacheFixture('gv-registry-catalog-');
+    cacheFixture = createProviderCacheFixture(testManagers.configManager.getControlPlaneConfigDir());
     loadCatalog(FIXTURE_CATALOG.models);
   });
 

@@ -2,6 +2,16 @@ export { HookDispatcher } from './dispatcher.ts';
 export { ChainEngine } from './chain-engine.ts';
 export { HookActivityTracker } from './activity.ts';
 export { HookWorkbench, createHookWorkbench } from './workbench.ts';
+export { createHookApi } from './hook-api.ts';
+export type {
+  CreateHookApiOptions,
+  HookApi,
+  HookApiDispatcher,
+  HookApiWorkbenchRuntime,
+  HookContractRecord,
+  HookContractSource,
+  HookWorkbenchApi,
+} from './hook-api.ts';
 export type {
   HookPhase,
   HookCategory,
@@ -15,7 +25,7 @@ export type {
   HooksConfig,
 } from './types.ts';
 export type { HookActivityRecord } from './activity.ts';
-export type { HookAuthoringAction, HookSimulationResult } from './workbench.ts';
+export type { HookAuthoringAction, HookConfigInspection, HookSimulationResult } from './workbench.ts';
 export type { HookExecutionMode, HookAuthority, HookPointContract } from './contracts.ts';
 import type { AgentManager } from '../tools/agent/index.ts';
 export {

@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
+import type { ShellPathService } from '../runtime/shell-paths.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -53,8 +53,7 @@ export interface SkillRecord {
 }
 
 export interface SkillsPanelOptions {
-  cwd?: string;
-  homeDir?: string;
+  shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
   panelHealthMonitor?: PanelHealthMonitor;
 }
 
@@ -139,9 +138,9 @@ function scanSkillDirectory(root: string, origin: SkillOrigin): SkillRecord[] {
   return records;
 }
 
-export function discoverSkills(opts: SkillsPanelOptions = {}): SkillRecord[] {
-  const cwd = opts.cwd ?? process.cwd();
-  const homeDir = opts.homeDir ?? homedir();
+export function discoverSkills(shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>): SkillRecord[] {
+  const cwd = shellPaths.workingDirectory;
+  const homeDir = shellPaths.homeDirectory;
   const seen = new Set<string>();
   const records: SkillRecord[] = [];
 
@@ -208,8 +207,7 @@ function originColor(origin: SkillOrigin): string {
 }
 
 export class SkillsPanel extends BasePanel {
-  private readonly cwd: string;
-  private readonly homeDir: string;
+  private readonly shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
   private query = '';
   private filterFocused = false;
   private selectedIndex = 0;
@@ -217,10 +215,9 @@ export class SkillsPanel extends BasePanel {
   private cached: SkillRecord[] | null = null;
   private cacheDirty = true;
 
-  public constructor(options: SkillsPanelOptions = {}) {
+  public constructor(options: SkillsPanelOptions) {
     super('skills', 'Skills', 'K', 'monitoring', options.panelHealthMonitor);
-    this.cwd = options.cwd ?? process.cwd();
-    this.homeDir = options.homeDir ?? homedir();
+    this.shellPaths = options.shellPaths;
   }
 
   public override onActivate(): void {
@@ -440,7 +437,7 @@ export class SkillsPanel extends BasePanel {
 
   private _filteredSkills(): SkillRecord[] {
     if (this.cached === null || this.cacheDirty) {
-      this.cached = discoverSkills({ cwd: this.cwd, homeDir: this.homeDir });
+      this.cached = discoverSkills(this.shellPaths);
       this.cacheDirty = false;
     }
     const q = this.query.trim().toLowerCase();

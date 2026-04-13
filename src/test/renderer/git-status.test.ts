@@ -42,7 +42,7 @@ function providerWithFakeFetch(
   statusResult: StatusResult,
   branchName: string,
 ): GitStatusProvider {
-  const provider = new GitStatusProvider();
+  const provider = new GitStatusProvider(process.cwd());
   type PrivateProvider = {
     _fetch: () => Promise<void>;
     cache: { branch: string; dirty: boolean; ahead: number; behind: number };
@@ -77,7 +77,7 @@ function providerWithFakeFetch(
 describe('GitStatusProvider', () => {
   describe('getStatus — clean repo', () => {
     test('returns correct branch name', async () => {
-      const provider = new GitStatusProvider();
+      const provider = new GitStatusProvider(process.cwd());
       // Directly test _fetch by patching getInstance at the module level
       // We'll use real git since we're in a git repo
       const info = await provider.getStatus();
@@ -86,13 +86,13 @@ describe('GitStatusProvider', () => {
     });
 
     test('returns boolean for dirty', async () => {
-      const provider = new GitStatusProvider();
+      const provider = new GitStatusProvider(process.cwd());
       const info = await provider.getStatus();
       expect(typeof info.dirty).toBe('boolean');
     });
 
     test('returns numeric ahead/behind', async () => {
-      const provider = new GitStatusProvider();
+      const provider = new GitStatusProvider(process.cwd());
       const info = await provider.getStatus();
       expect(typeof info.ahead).toBe('number');
       expect(typeof info.behind).toBe('number');
@@ -101,7 +101,7 @@ describe('GitStatusProvider', () => {
 
   describe('caching behaviour', () => {
     test('second call within TTL returns cached result without refetching', async () => {
-      const provider = new GitStatusProvider();
+      const provider = new GitStatusProvider(process.cwd());
       // Prime the cache
       const first = await provider.getStatus();
       // Immediately call again — should be same object (cached)
@@ -110,7 +110,7 @@ describe('GitStatusProvider', () => {
     });
 
     test('refresh() forces a fresh fetch and returns updated info', async () => {
-      const provider = new GitStatusProvider();
+      const provider = new GitStatusProvider(process.cwd());
       // Prime cache
       await provider.getStatus();
       // refresh must resolve without error
@@ -122,7 +122,7 @@ describe('GitStatusProvider', () => {
   describe('error handling — never throws', () => {
     test('getStatus returns fallback when GitService.getInstance throws', async () => {
       // Create a provider and corrupt its internal state by patching _fetch indirectly
-      const provider = new GitStatusProvider();
+      const provider = new GitStatusProvider(process.cwd());
 
       // Override _fetch using casting to private
       (provider as unknown as { _fetch: () => Promise<void> })._fetch = async () => {
@@ -138,7 +138,7 @@ describe('GitStatusProvider', () => {
     });
 
     test('refresh returns fallback (does not throw) when git fails', async () => {
-      const provider = new GitStatusProvider();
+      const provider = new GitStatusProvider(process.cwd());
 
       (provider as unknown as { _fetch: () => Promise<void> })._fetch = async () => {
         throw new Error('git not found');

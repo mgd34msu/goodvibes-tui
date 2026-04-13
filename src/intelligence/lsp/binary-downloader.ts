@@ -1,7 +1,7 @@
 /**
  * BinaryDownloader — downloads and caches platform-specific LSP server binaries.
  *
- * Binaries are cached in .goodvibes/bin/ relative to the project root.
+ * Binaries are cached in an explicit project-owned .goodvibes/bin/ directory.
  * Downloads happen lazily on first use and are skipped if the binary already exists.
  * Never throws — returns null on any failure so callers can fall back gracefully.
  */
@@ -9,10 +9,6 @@
 import { existsSync, mkdirSync, chmodSync, unlinkSync, renameSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../utils/logger.ts';
-
-function getBinDir(): string {
-  return join(process.cwd(), '.goodvibes', 'bin');
-}
 
 /** Platform + arch key for download URL resolution. */
 type PlatformKey = 'linux-x64' | 'linux-arm64' | 'darwin-x64' | 'darwin-arm64';
@@ -67,22 +63,22 @@ const BINARY_SPECS: BinarySpec[] = [
 /**
  * Get the path where a binary would be cached.
  */
-export function getBinaryPath(name: string): string {
-  return join(getBinDir(), name);
+export function getBinaryPath(binaryDir: string, name: string): string {
+  return join(binaryDir, name);
 }
 
 /**
  * Check if a binary is already downloaded and cached.
  */
-function isBinaryCached(name: string): boolean {
-  return existsSync(getBinaryPath(name));
+function isBinaryCached(binaryDir: string, name: string): boolean {
+  return existsSync(getBinaryPath(binaryDir, name));
 }
 
 /**
  * Download a binary from GitHub releases (latest).
  * Returns the path to the downloaded binary, or null on failure.
  */
-async function downloadBinary(name: string): Promise<string | null> {
+async function downloadBinary(binaryDir: string, name: string): Promise<string | null> {
   const spec = BINARY_SPECS.find(s => s.name === name);
   if (!spec) {
     logger.debug(`BinaryDownloader: unknown binary '${name}'`);
@@ -101,7 +97,7 @@ async function downloadBinary(name: string): Promise<string | null> {
     return null;
   }
 
-  const destPath = getBinaryPath(name);
+  const destPath = getBinaryPath(binaryDir, name);
 
   // Already cached
   if (existsSync(destPath)) {
@@ -184,7 +180,7 @@ async function downloadBinary(name: string): Promise<string | null> {
     }
 
     // Ensure bin directory exists
-    mkdirSync(getBinDir(), { recursive: true });
+    mkdirSync(binaryDir, { recursive: true });
 
     const tmpPath = `${destPath}.tmp`;
 
@@ -221,8 +217,8 @@ async function downloadBinary(name: string): Promise<string | null> {
  * Installs to .goodvibes/bin/ by setting GOBIN.
  * Returns the path to gopls, or null if go is not installed or install fails.
  */
-async function ensureGopls(): Promise<string | null> {
-  const destPath = getBinaryPath('gopls');
+async function ensureGopls(binaryDir: string): Promise<string | null> {
+  const destPath = getBinaryPath(binaryDir, 'gopls');
 
   // Already cached
   if (existsSync(destPath)) {
@@ -239,10 +235,10 @@ async function ensureGopls(): Promise<string | null> {
   logger.info('BinaryDownloader: installing gopls via go install...');
 
   try {
-    mkdirSync(getBinDir(), { recursive: true });
+    mkdirSync(binaryDir, { recursive: true });
 
     const proc = Bun.spawn(['go', 'install', 'golang.org/x/tools/gopls@latest'], {
-      env: { ...process.env, GOBIN: getBinDir() },
+      env: { ...process.env, GOBIN: binaryDir },
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -271,16 +267,16 @@ async function ensureGopls(): Promise<string | null> {
  * Ensure a binary is available — download if needed.
  * Returns the path to the binary, or null if unavailable.
  */
-export async function ensureBinary(name: string): Promise<string | null> {
+export async function ensureBinary(binaryDir: string, name: string): Promise<string | null> {
   // Check cache first
-  const cached = getBinaryPath(name);
+  const cached = getBinaryPath(binaryDir, name);
   if (existsSync(cached)) return cached;
 
   // Special handling for gopls
   if (name === 'gopls') {
-    return ensureGopls();
+    return ensureGopls(binaryDir);
   }
 
   // Download from GitHub
-  return downloadBinary(name);
+  return downloadBinary(binaryDir, name);
 }

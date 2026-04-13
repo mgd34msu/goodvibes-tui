@@ -1,6 +1,7 @@
 import type { Line } from '../types/grid.ts';
-import { ExecutionPlanManager, type ExecutionPlan, type PlanItem, type PlanItemStatus } from '../core/execution-plan.ts';
+import type { ExecutionPlan, PlanItem, PlanItemStatus } from '../core/execution-plan.ts';
 import { BasePanel } from './base-panel.ts';
+import type { PlanDashboardQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -40,9 +41,9 @@ export class PlanDashboardPanel extends BasePanel {
 
   // Flat list of navigable row indices (set during render)
   private totalRows = 0;
-  private readonly planManager: ExecutionPlanManager;
+  private readonly planManager: PlanDashboardQuery;
 
-  constructor(planManager: ExecutionPlanManager) {
+  constructor(planManager: PlanDashboardQuery) {
     super('plan', 'Plan', 'P', 'agent');
     this.planManager = planManager;
   }

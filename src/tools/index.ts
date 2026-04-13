@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { ToolRegistry } from './registry.ts';
 import { FileStateCache } from '../state/file-cache.ts';
 import { ProjectIndex } from '../state/project-index.ts';
@@ -24,15 +25,15 @@ import { createTaskTool } from './task/index.ts';
 import { teamTool } from './team/index.ts';
 import { worklistTool } from './worklist/index.ts';
 import { createMcpTool } from './mcp/index.ts';
-import { packetTool } from './packet/index.ts';
-import { queryTool } from './query/index.ts';
+import { createPacketTool } from './packet/index.ts';
+import { createQueryTool } from './query/index.ts';
 import { createRemoteTool } from './remote-trigger/index.ts';
 import { createReplTool } from './repl/index.ts';
 import { controlTool } from './control/index.ts';
 import { createChannelTool } from './channel/index.ts';
 import { createWebSearchTool } from './web-search/index.ts';
 import { ProcessManager } from './shared/process-manager.ts';
-import { AgentManager } from './agent/index.ts';
+import type { AgentManager } from './agent/index.ts';
 import { AgentMessageBus } from '../agents/message-bus.ts';
 import type { WrfcController } from '../agents/wrfc-controller.ts';
 import type { WebSearchService } from '../web-search/index.ts';
@@ -44,6 +45,7 @@ import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { ServiceRegistry } from '../config/service-registry.ts';
 import { OverflowHandler } from './shared/overflow.ts';
 import type { SessionChangeTracker } from '../sessions/change-tracker.ts';
+import type { ArchetypeLoader } from '../agents/archetypes.ts';
 
 /**
  * Register all built-in tools into the given registry.
@@ -68,6 +70,8 @@ export function registerAllTools(
     mcpRegistry?: import('../mcp/registry.ts').McpRegistry;
     sessionOrchestration?: CrossSessionTaskRegistry;
     sandboxSessionRegistry?: SandboxSessionRegistry;
+    workingDirectory: string;
+    archetypeLoader?: Pick<ArchetypeLoader, 'loadArchetype'>;
     configManager?: ConfigManager;
     providerRegistry?: ProviderRegistry;
     toolLLM?: ToolLLM;
@@ -78,28 +82,43 @@ export function registerAllTools(
   },
 ): { fileCache: FileStateCache; projectIndex: ProjectIndex } {
   const fileCache = deps?.fileCache ?? new FileStateCache();
-  const projectIndex = deps?.projectIndex ?? new ProjectIndex();
   const fileUndoManager = deps?.fileUndoManager ?? new FileUndoManager();
   const modeManager = deps?.modeManager ?? new ModeManager();
   const processManager = deps?.processManager ?? new ProcessManager();
-  const agentManager = deps?.agentManager ?? new AgentManager();
+  const agentManager = deps?.agentManager
+    ?? (deps?.remoteRunnerRegistry
+      ? (deps.remoteRunnerRegistry as unknown as { agentManager?: AgentManager | null }).agentManager ?? null
+      : null);
+  if (!agentManager) {
+    throw new Error('registerAllTools requires agentManager');
+  }
   const agentMessageBus = deps?.agentMessageBus ?? new AgentMessageBus();
   const wrfcController = deps?.wrfcController;
+  const archetypeLoader = deps?.archetypeLoader;
   const webSearchService = deps?.webSearchService;
   const channelRegistry = deps?.channelRegistry ?? null;
   const remoteRunnerRegistry = deps?.remoteRunnerRegistry;
   const workflowServices = deps?.workflowServices ?? createWorkflowServices();
   const mcpRegistry = deps?.mcpRegistry;
-  const sessionOrchestration = deps?.sessionOrchestration ?? new CrossSessionTaskRegistry();
   if (!deps?.configManager || !deps?.providerRegistry || !deps?.toolLLM) {
     throw new Error('registerAllTools requires configManager, providerRegistry, and toolLLM');
   }
   if (!deps?.sandboxSessionRegistry) {
     throw new Error('registerAllTools requires sandboxSessionRegistry');
   }
+  if (!deps?.sessionOrchestration) {
+    throw new Error('registerAllTools requires sessionOrchestration');
+  }
+  const sessionOrchestration = deps.sessionOrchestration;
+  const workingDirectory = deps?.workingDirectory;
+  if (!workingDirectory) {
+    throw new Error('registerAllTools requires workingDirectory');
+  }
+  const projectIndex = deps?.projectIndex ?? new ProjectIndex(workingDirectory);
 
-  registry.register(new ReadTool(fileCache, projectIndex));
+  registry.register(new ReadTool(projectIndex, fileCache));
   registry.register(createWriteTool({
+    projectRoot: workingDirectory,
     fileCache,
     projectIndex,
     fileUndoManager,
@@ -113,22 +132,27 @@ export function registerAllTools(
     toolLLM: deps.toolLLM,
     changeTracker: deps?.changeTracker,
   }));
-  registry.register(createFindTool(deps.featureFlags));
+  registry.register(createFindTool(workingDirectory, deps.featureFlags));
   registry.register(createExecTool(processManager, {
     featureFlags: deps.featureFlags,
     overflowHandler: deps.overflowHandler,
   }));
-  registry.register(createAnalyzeTool(deps.toolLLM, deps.featureFlags));
-  registry.register(new InspectTool(deps.featureFlags));
+  registry.register(createAnalyzeTool(deps.toolLLM, deps.featureFlags, workingDirectory));
+  registry.register(new InspectTool(deps.featureFlags, workingDirectory));
   registry.register(createAgentTool({
     manager: agentManager,
     messageBus: agentMessageBus,
     configManager: deps.configManager,
+    ...(archetypeLoader ? { archetypeLoader } : {}),
     ...(wrfcController ? { wrfcController } : {}),
   }));
-  const kvState = new KVState();
+  const kvState = new KVState(undefined, workingDirectory);
   const hookDispatcher = new HookDispatcher();
-  registry.register(createStateTool(kvState, projectIndex, hookDispatcher, modeManager));
+  registry.register(createStateTool(kvState, projectIndex, {
+    memoryDir: join(workingDirectory, '.goodvibes', 'memory'),
+    hookDispatcher,
+    modeManager,
+  }));
   registry.register(createWorkflowTool(workflowServices));
   registry.register(createFetchTool({
     serviceRegistry: deps.serviceRegistry,
@@ -137,15 +161,18 @@ export function registerAllTools(
   if (webSearchService) {
     registry.register(createWebSearchTool(webSearchService));
   }
-  registry.register(createRegistryTool(registry));
+  registry.register(createRegistryTool(registry, {
+    workingDirectory,
+    homeDirectory: deps.configManager.getHomeDirectory() ?? undefined,
+  }));
   registry.register(createTaskTool(sessionOrchestration));
   registry.register(teamTool);
   registry.register(worklistTool);
   if (mcpRegistry) {
     registry.register(createMcpTool(mcpRegistry));
   }
-  registry.register(packetTool);
-  registry.register(queryTool);
+  registry.register(createPacketTool(workingDirectory));
+  registry.register(createQueryTool(workingDirectory));
   if (remoteRunnerRegistry) {
     registry.register(createRemoteTool(remoteRunnerRegistry));
   }

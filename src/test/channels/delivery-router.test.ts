@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
 import { ChannelDeliveryRouter } from '../../channels/index.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { ControlPlaneGateway } from '../../control-plane/index.ts';
 import type { ChannelDeliveryRequest } from '../../channels/index.ts';
 
@@ -19,9 +22,29 @@ function serviceRequest(): ChannelDeliveryRequest {
   };
 }
 
+function createDefaultRouter(root?: string, overrides: {
+  readonly configManager?: ConfigManager;
+  readonly artifactStore?: ArtifactStore;
+  readonly controlPlaneGateway?: ControlPlaneGateway | null;
+} = {}): ChannelDeliveryRouter {
+  const configRoot = root ?? mkdtempSync(join(tmpdir(), 'gv-delivery-router-'));
+  const configManager = overrides.configManager ?? new ConfigManager({ configDir: configRoot });
+  const serviceRegistry = new ServiceRegistry(join(configRoot, 'services.json'), {
+    secretsManager: new SecretsManager({ projectRoot: configRoot, globalHome: configRoot }),
+    subscriptionManager: new SubscriptionManager(join(configRoot, 'subscriptions.json')),
+  });
+  const artifactStore = overrides.artifactStore ?? new ArtifactStore({ rootDir: join(configRoot, 'artifacts') });
+  return new ChannelDeliveryRouter({
+    configManager,
+    serviceRegistry,
+    artifactStore,
+    ...(overrides.controlPlaneGateway ? { controlPlaneGateway: overrides.controlPlaneGateway } : {}),
+  });
+}
+
 describe('ChannelDeliveryRouter', () => {
   test('registers default concrete channel delivery strategies', () => {
-    const router = new ChannelDeliveryRouter();
+    const router = createDefaultRouter();
 
     expect(router.listStrategies().map((strategy) => strategy.id)).toEqual([
       'channel-delivery:webhook',
@@ -82,7 +105,7 @@ describe('ChannelDeliveryRouter', () => {
   });
 
   test('rejects unsafe webhook delivery targets before dispatch', async () => {
-    const router = new ChannelDeliveryRouter();
+    const router = createDefaultRouter();
 
     await expect(router.deliver({
       target: { kind: 'webhook', address: 'https://127.0.0.1/callback' },
@@ -103,7 +126,7 @@ describe('ChannelDeliveryRouter', () => {
       text: '# summary\n',
     });
     const gateway = new ControlPlaneGateway();
-    const router = new ChannelDeliveryRouter({ configManager: config, artifactStore, controlPlaneGateway: gateway });
+    const router = createDefaultRouter(root, { configManager: config, artifactStore, controlPlaneGateway: gateway });
 
     try {
       await router.deliver({
@@ -139,7 +162,7 @@ describe('ChannelDeliveryRouter', () => {
     }) as typeof fetch;
 
     try {
-      const router = new ChannelDeliveryRouter();
+      const router = createDefaultRouter();
 
       await router.deliver({
         target: { kind: 'surface', surfaceKind: 'telegram', address: '-100777' },
@@ -205,7 +228,7 @@ describe('ChannelDeliveryRouter', () => {
       config.set('surfaces.imessage.account', 'me@icloud.test');
       config.set('surfaces.whatsapp.phoneNumberId', '106540352242922');
 
-      const router = new ChannelDeliveryRouter({ configManager: config });
+      const router = createDefaultRouter(root, { configManager: config });
 
       await router.deliver({
         target: { kind: 'surface', surfaceKind: 'signal', address: '+15551212' },
@@ -307,7 +330,7 @@ describe('ChannelDeliveryRouter', () => {
       config.set('surfaces.matrix.accessToken', 'matrix-token');
       config.set('surfaces.matrix.defaultRoomId', '!room:example.test');
 
-      const router = new ChannelDeliveryRouter({ configManager: config });
+      const router = createDefaultRouter(root, { configManager: config });
 
       await router.deliver({
         target: { kind: 'surface', surfaceKind: 'msteams', address: 'a:conversation-1' },

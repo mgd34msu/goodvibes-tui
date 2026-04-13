@@ -9,6 +9,7 @@ export interface PermissionPromptRequest {
   args: Record<string, unknown>;
   category: PermissionCategory;
   analysis: PermissionRequestAnalysis;
+  workingDirectory?: string;
 }
 
 export interface PermissionPromptDecision {
@@ -116,7 +117,7 @@ export class PermissionPromptUI {
     lines.push(UIFactory.stringToLine(argLine.padEnd(width), width, { fg: TEXT }));
 
     // Working directory row
-    const cwd = process.cwd();
+    const cwd = request.workingDirectory ?? '(unknown)';
     const maxCwdLen = Math.max(10, width - 16);
     const truncatedCwd = cwd.length > maxCwdLen ? '...' + cwd.slice(-(maxCwdLen - 3)) : cwd;
     const cwdLine = `   Directory : ${truncatedCwd}`;

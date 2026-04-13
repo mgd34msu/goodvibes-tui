@@ -33,12 +33,20 @@ rl.on('line', (line) => {
 });
 `;
 
+const SANDBOX_WORKSPACE_ROOT = join(tmpdir(), `gv-mcp-registry-workspace-${process.pid}-${Date.now()}`);
+mkdirSync(SANDBOX_WORKSPACE_ROOT, { recursive: true });
+process.on('exit', () => {
+  if (existsSync(SANDBOX_WORKSPACE_ROOT)) {
+    rmSync(SANDBOX_WORKSPACE_ROOT, { recursive: true, force: true });
+  }
+});
+
 function stubServerConfig(name: string): McpServerConfig {
   return { name, command: 'bun', args: ['--eval', STUB_SCRIPT] };
 }
 
 function createRegistry(): McpRegistry {
-  return new McpRegistry({ hookDispatcher: createHookDispatcher(), sandboxSessions: new SandboxSessionRegistry() });
+  return new McpRegistry({ hookDispatcher: createHookDispatcher(), sandboxSessions: new SandboxSessionRegistry(SANDBOX_WORKSPACE_ROOT) });
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +121,7 @@ describe('McpRegistry — with stub server', () => {
 
   test('connectServer() can route MCP startup through the sandbox session backend', async () => {
     registry = createRegistry();
-    const sandboxSessions = new SandboxSessionRegistry();
+    const sandboxSessions = new SandboxSessionRegistry(SANDBOX_WORKSPACE_ROOT);
     const configManager = {
       get(key: string) {
         const values: Record<string, unknown> = {
@@ -141,7 +149,7 @@ describe('McpRegistry — with stub server', () => {
 
   test('hybrid MCP isolation uses dedicated sessions for higher-risk servers', async () => {
     registry = createRegistry();
-    const sandboxSessions = new SandboxSessionRegistry();
+    const sandboxSessions = new SandboxSessionRegistry(SANDBOX_WORKSPACE_ROOT);
     const configManager = {
       get(key: string) {
         const values: Record<string, unknown> = {
@@ -269,7 +277,7 @@ describe('McpRegistry — connectAll from file', () => {
     mkdirSync(join(tmpDir, '.goodvibes'), { recursive: true });
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify({ servers: [] }));
     registry = createRegistry();
-    await registry.connectAll(tmpDir);
+    await registry.connectAll({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(registry.serverNames).toHaveLength(0);
   });
 
@@ -277,7 +285,7 @@ describe('McpRegistry — connectAll from file', () => {
     tmpDir = join(tmpdir(), `mcp-reg-${Date.now()}`);
     mkdirSync(tmpDir, { recursive: true });
     registry = createRegistry();
-    await registry.connectAll(tmpDir);
+    await registry.connectAll({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(registry.serverNames).toHaveLength(0);
   });
 });

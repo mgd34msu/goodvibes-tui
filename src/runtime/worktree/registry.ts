@@ -51,35 +51,45 @@ export interface WorktreeAttachmentReview {
   readonly records: readonly ManagedWorktreeMeta[];
 }
 
-const STORE_PATH = join(process.cwd(), '.goodvibes', 'tui', 'worktrees.json');
+export interface WorktreeRegistryPaths {
+  readonly workingDirectory: string;
+}
+
+function getStorePath(workingDirectory: string): string {
+  return join(workingDirectory, '.goodvibes', 'tui', 'worktrees.json');
+}
 
 function defaultStore(): WorktreeStore {
   return { version: 1, records: {} };
 }
 
-function normalizePath(path: string): string {
-  return resolve(process.cwd(), path);
+function normalizePath(path: string, workingDirectory: string): string {
+  return resolve(workingDirectory, path);
 }
 
-function readStore(): WorktreeStore {
+function readStore(workingDirectory: string): WorktreeStore {
   try {
-    return JSON.parse(readFileSync(STORE_PATH, 'utf-8')) as WorktreeStore;
+    return JSON.parse(readFileSync(getStorePath(workingDirectory), 'utf-8')) as WorktreeStore;
   } catch {
     return defaultStore();
   }
 }
 
-export function listPersistedWorktreeMeta(): ManagedWorktreeMeta[] {
-  return Object.values(readStore().records).sort((a, b) => a.path.localeCompare(b.path));
+export function listPersistedWorktreeMeta(options: WorktreeRegistryPaths): ManagedWorktreeMeta[] {
+  return Object.values(readStore(options.workingDirectory).records).sort((a, b) => a.path.localeCompare(b.path));
 }
 
-export function getPersistedWorktreeMeta(path: string): ManagedWorktreeMeta | null {
-  const normalized = normalizePath(path);
-  return readStore().records[normalized] ?? null;
+export function getPersistedWorktreeMeta(path: string, options: WorktreeRegistryPaths): ManagedWorktreeMeta | null {
+  const normalized = normalizePath(path, options.workingDirectory);
+  return readStore(options.workingDirectory).records[normalized] ?? null;
 }
 
-export function reviewWorktreeAttachments(targetKind: 'session' | 'task', targetId: string): WorktreeAttachmentReview {
-  const records = listPersistedWorktreeMeta().filter((record) => (
+export function reviewWorktreeAttachments(
+  targetKind: 'session' | 'task',
+  targetId: string,
+  options: WorktreeRegistryPaths,
+): WorktreeAttachmentReview {
+  const records = listPersistedWorktreeMeta(options).filter((record) => (
     targetKind === 'session' ? record.sessionId === targetId : record.taskId === targetId
   ));
   return records.reduce<WorktreeAttachmentReview>((summary, record) => ({
@@ -132,13 +142,14 @@ export function summarizeWorktreeOwnership(records: readonly ManagedWorktreeMeta
   });
 }
 
-function writeStore(store: WorktreeStore): void {
-  mkdirSync(dirname(STORE_PATH), { recursive: true });
-  writeFileSync(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');
+function writeStore(store: WorktreeStore, workingDirectory: string): void {
+  const storePath = getStorePath(workingDirectory);
+  mkdirSync(dirname(storePath), { recursive: true });
+  writeFileSync(storePath, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');
 }
 
-function classifyWorktreePath(path: string): Pick<ManagedWorktreeMeta, 'kind' | 'ownerId'> {
-  const normalized = normalizePath(path);
+function classifyWorktreePath(path: string, workingDirectory: string): Pick<ManagedWorktreeMeta, 'kind' | 'ownerId'> {
+  const normalized = normalizePath(path, workingDirectory);
   const agentMatch = normalized.match(/[/\\]\.goodvibes[/\\]\.worktrees[/\\]agent-([^/\\]+)$/);
   if (agentMatch) {
     return { kind: 'agent', ownerId: agentMatch[1] };
@@ -151,19 +162,21 @@ function classifyWorktreePath(path: string): Pick<ManagedWorktreeMeta, 'kind' | 
 
 export class WorktreeRegistry {
   private readonly git: GitService;
+  private readonly workingDirectory: string;
 
-  public constructor(cwd?: string) {
-    this.git = new GitService(cwd);
+  public constructor(workingDirectory: string) {
+    this.workingDirectory = workingDirectory;
+    this.git = new GitService(workingDirectory);
   }
 
   public async list(): Promise<WorktreeStatusRecord[]> {
-    const store = readStore();
+    const store = readStore(this.workingDirectory);
     const listed = await this.git.worktreeList();
-    const present = new Set(listed.map((entry) => normalizePath(entry.path)));
+    const present = new Set(listed.map((entry) => normalizePath(entry.path, this.workingDirectory)));
     const records: WorktreeStatusRecord[] = listed.map((entry) => {
-      const path = normalizePath(entry.path);
+      const path = normalizePath(entry.path, this.workingDirectory);
       const meta = store.records[path];
-      const classified = classifyWorktreePath(path);
+      const classified = classifyWorktreePath(path, this.workingDirectory);
       return {
         path,
         branch: entry.branch,
@@ -191,15 +204,15 @@ export class WorktreeRegistry {
     for (const [path, meta] of Object.entries(store.records)) {
       if (!present.has(path) && meta.state === 'kept') nextRecords[path] = meta;
     }
-    writeStore({ version: 1, records: nextRecords });
+    writeStore({ version: 1, records: nextRecords }, this.workingDirectory);
     return records.sort((a, b) => a.path.localeCompare(b.path));
   }
 
   public attach(path: string, target: { sessionId?: string; taskId?: string }): void {
-    const store = readStore();
-    const normalized = normalizePath(path);
+    const store = readStore(this.workingDirectory);
+    const normalized = normalizePath(path, this.workingDirectory);
     const existing = store.records[normalized];
-    const classified = classifyWorktreePath(normalized);
+    const classified = classifyWorktreePath(normalized, this.workingDirectory);
     store.records[normalized] = {
       path: normalized,
       kind: existing?.kind ?? classified.kind,
@@ -209,14 +222,14 @@ export class WorktreeRegistry {
       ...(target.taskId ? { taskId: target.taskId } : {}),
       updatedAt: Date.now(),
     };
-    writeStore(store);
+    writeStore(store, this.workingDirectory);
   }
 
   public setState(path: string, state: ManagedWorktreeState): void {
-    const store = readStore();
-    const normalized = normalizePath(path);
+    const store = readStore(this.workingDirectory);
+    const normalized = normalizePath(path, this.workingDirectory);
     const existing = store.records[normalized];
-    const classified = classifyWorktreePath(normalized);
+    const classified = classifyWorktreePath(normalized, this.workingDirectory);
     store.records[normalized] = {
       path: normalized,
       kind: existing?.kind ?? classified.kind,
@@ -226,14 +239,14 @@ export class WorktreeRegistry {
       ...(existing?.taskId ? { taskId: existing.taskId } : {}),
       updatedAt: Date.now(),
     };
-    writeStore(store);
+    writeStore(store, this.workingDirectory);
   }
 
   public async cleanup(path: string): Promise<void> {
-    const normalized = isAbsolute(path) ? path : normalizePath(path);
+    const normalized = isAbsolute(path) ? path : normalizePath(path, this.workingDirectory);
     await this.git.worktreeRemove(normalized);
-    const store = readStore();
+    const store = readStore(this.workingDirectory);
     delete store.records[normalized];
-    writeStore(store);
+    writeStore(store, this.workingDirectory);
   }
 }

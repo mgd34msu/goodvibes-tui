@@ -4,18 +4,21 @@ import { pathToFileURL } from 'url';
 import { logger } from '../../utils/logger.ts';
 import { LspClient } from './client.ts';
 import { getBinaryPath, ensureBinary } from './binary-downloader.ts';
+import type { ShellPathService } from '../../runtime/shell-paths.ts';
+
+type LspRoots = Pick<ShellPathService, 'workingDirectory' | 'resolveProjectPath'>;
 
 /**
  * Resolve a server command: check node_modules/.bin/ first (bundled),
  * then fall back to system PATH via Bun.which().
  * Returns the resolved command path, or the original command if neither found.
  */
-function resolveCommand(command: string): string {
+function resolveCommand(command: string, workingDirectory: string): string {
   // Try node_modules/.bin in project root
-  const bundled = join(process.cwd(), 'node_modules', '.bin', command);
+  const bundled = join(workingDirectory, 'node_modules', '.bin', command);
   if (existsSync(bundled)) return bundled;
   // Try .goodvibes/bin/ (downloaded binaries)
-  const downloaded = getBinaryPath(command);
+  const downloaded = getBinaryPath(join(workingDirectory, '.goodvibes', 'bin'), command);
   if (existsSync(downloaded)) return downloaded;
   // Try system PATH
   const system = Bun.which(command);
@@ -47,8 +50,11 @@ export class LspService {
   private clients: Map<string, LspClient> = new Map();
   private configs: Map<string, LspServerConfig> = new Map();
   private initializing: Map<string, Promise<LspClient | null>> = new Map();
+  private readonly roots: LspRoots;
 
-  constructor() {}
+  constructor(roots: LspRoots) {
+    this.roots = roots;
+  }
 
   /** Register a server configuration for a language. */
   registerServer(langId: string, config: LspServerConfig): void {
@@ -90,7 +96,7 @@ export class LspService {
     const config = this.configs.get(langId);
     if (!config) return null;
 
-    const resolvedCommand = resolveCommand(config.command);
+    const resolvedCommand = resolveCommand(config.command, this.roots.workingDirectory);
     const client = new LspClient(resolvedCommand, config.args);
     try {
       await client.start();
@@ -113,10 +119,10 @@ export class LspService {
     const config = this.configs.get(langId);
     if (!config) return false;
     // Check bundled first
-    const bundled = join(process.cwd(), 'node_modules', '.bin', config.command);
+    const bundled = join(this.roots.workingDirectory, 'node_modules', '.bin', config.command);
     if (existsSync(bundled)) return true;
     // Check downloaded binaries
-    const downloaded = getBinaryPath(config.command);
+    const downloaded = getBinaryPath(this.roots.resolveProjectPath('bin'), config.command);
     if (existsSync(downloaded)) return true;
     // Then system PATH
     try {
@@ -131,7 +137,7 @@ export class LspService {
   private async _initializeServer(client: LspClient): Promise<void> {
     await client.request('initialize', {
       processId: process.pid,
-      rootUri: pathToFileURL(process.cwd()).href,
+      rootUri: pathToFileURL(this.roots.workingDirectory).href,
       capabilities: {
         textDocument: {
           documentSymbol: { hierarchicalDocumentSymbolSupport: true },
@@ -164,13 +170,13 @@ export class LspService {
     for (const { command, langIds, args } of WELL_KNOWN_SERVERS) {
       let found = false;
       // Check bundled first, then .goodvibes/bin/, then system PATH
-      const bundledPath = join(process.cwd(), 'node_modules', '.bin', command);
+      const bundledPath = join(this.roots.workingDirectory, 'node_modules', '.bin', command);
       if (existsSync(bundledPath)) {
         found = true;
       }
       // Check .goodvibes/bin/ (downloaded binaries)
       if (!found) {
-        const downloaded = getBinaryPath(command);
+        const downloaded = getBinaryPath(this.roots.resolveProjectPath('bin'), command);
         found = existsSync(downloaded);
       }
       if (!found) {
@@ -214,6 +220,6 @@ export class LspService {
     if (available) return;
 
     // Try to download/install the binary
-    await ensureBinary(config.command);
+    await ensureBinary(this.roots.resolveProjectPath('bin'), config.command);
   }
 }

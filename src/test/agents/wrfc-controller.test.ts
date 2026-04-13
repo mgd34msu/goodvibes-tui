@@ -4,6 +4,8 @@ import { WrfcController } from '../../agents/wrfc-controller.ts';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 
+const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -147,6 +149,7 @@ function initTestWrfcController(runtimeBus: RuntimeEventBus): WrfcController {
   return new WrfcController(runtimeBus, { registerAgent: mockRegisterAgent }, {
     agentManager: mockAgentManager,
     configManager: mockConfigManager as never,
+    projectRoot: REPO_ROOT,
     createWorktree: () => ({
       merge: mockMerge,
       cleanup: mockCleanup,
@@ -167,8 +170,6 @@ const mockRegisterAgent = mock((_identity: unknown) => {});
 describe('WrfcController', () => {
   let runtimeBus: RuntimeEventBus;
   let emitSpy: ReturnType<typeof spyOn>;
-  const repoRoot = join(import.meta.dir, '..', '..', '..');
-  const originalCwd = process.cwd();
   const workflowCalls = (type: string) => emitSpy.mock.calls.filter(
     (args: unknown[]) =>
       args[0] === 'workflows' &&
@@ -187,7 +188,6 @@ describe('WrfcController', () => {
   );
 
   beforeEach(() => {
-    process.chdir(repoRoot);
     mockSpawn.mockClear();
     mockGetStatus.mockClear();
     mockMerge.mockClear();
@@ -209,7 +209,6 @@ describe('WrfcController', () => {
 
   afterEach(() => {
     emitSpy?.mockRestore();
-    process.chdir(originalCwd);
   });
 
   // -------------------------------------------------------------------------

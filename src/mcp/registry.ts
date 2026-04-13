@@ -26,6 +26,7 @@ import {
   emitMcpSchemaQuarantined,
 } from '../runtime/emitters/mcp.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import type { McpConfigRoots } from './config.ts';
 import { getSandboxConfigSnapshot } from '../runtime/sandbox/manager.ts';
 import {
   type SandboxSessionRegistry,
@@ -77,8 +78,8 @@ export class McpRegistry {
    * connectAll — Load config from .goodvibes/mcp.json and connect to all servers.
    * Errors on individual servers are logged but do not abort the whole startup.
    */
-  async connectAll(baseDir = process.cwd()): Promise<void> {
-    const mcpConfig = loadMcpConfig(baseDir);
+  async connectAll(roots: McpConfigRoots): Promise<void> {
+    const mcpConfig = loadMcpConfig(roots);
     await Promise.allSettled(
       mcpConfig.servers.map((serverConfig) => this._connectServer(serverConfig)),
     );

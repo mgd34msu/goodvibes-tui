@@ -11,6 +11,7 @@ import { createPermissionConfigReader } from '../../permissions/manager.ts';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
+import { AgentManager } from '../../tools/agent/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,8 +75,12 @@ describe('Orchestrator', () => {
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
-    // hookDispatcher is the optional 8th param; omitting it exercises the default constructor path
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, renderRequest, runtimeBus);
+    const agentManager = new AgentManager({ configManager });
+    // hookDispatcher is still optional; services are injected explicitly.
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, renderRequest, runtimeBus, {
+      agentManager,
+      wrfcController: { listChains: () => [] },
+    });
     orch.setCoreServices({
       providerRegistry: testManagers.providerRegistry,
       configManager,
@@ -89,7 +94,11 @@ describe('Orchestrator', () => {
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', hookDispatcher, null, null, runtimeBus);
+    const agentManager = new AgentManager({ configManager });
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', hookDispatcher, null, null, runtimeBus, {
+      agentManager,
+      wrfcController: { listChains: () => [] },
+    });
     orch.setCoreServices({
       providerRegistry: testManagers.providerRegistry,
       configManager,

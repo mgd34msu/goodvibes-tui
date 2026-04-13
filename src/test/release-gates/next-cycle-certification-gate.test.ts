@@ -52,9 +52,9 @@ describe('next cycle certification gate', () => {
       [{ agentId: remoteRecord.id }],
       {
         print: (text: string) => { printed.push(text); },
-        acpManager: undefined,
       },
       { cancel },
+      undefined,
     );
 
     expect(cancel).toHaveBeenCalledWith(remoteRecord.id);

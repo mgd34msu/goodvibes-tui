@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { Notifier } from '../../integrations/notifier.ts';
 
 describe('Notifier.fromConfig', () => {
@@ -44,7 +47,10 @@ describe('Notifier.fromConfig', () => {
   });
 
   test('builds active channels from service registry and env-backed secrets', async () => {
-    const notifier = await Notifier.fromConfig();
+    const notifier = await Notifier.fromConfig(new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
+      secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+      subscriptionManager: new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json')),
+    }));
     const channels = notifier.getQueueStatus().map((entry) => entry.channel).sort();
     expect(channels).toEqual(['discord', 'slack']);
   });

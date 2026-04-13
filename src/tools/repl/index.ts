@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import ts from 'typescript';
@@ -21,26 +21,35 @@ interface ReplHistoryEntry {
   readonly error?: string;
 }
 
-const HISTORY_PATH = join('.goodvibes', 'tui', 'repl-history.json');
-const LOCAL_EXEC_PLAN: SandboxLaunchPlan = {
-  backend: 'local',
-  command: process.env.SHELL || 'bash',
-  args: ['-lc', 'true'],
-  workspaceRoot: process.cwd(),
-  summary: 'local process exec',
+type ReplExecutionInput = ReplToolInput & {
+  readonly workspaceRoot?: string;
 };
 
-function loadHistory(): ReplHistoryEntry[] {
+function resolveHistoryPath(workspaceRoot: string): string {
+  return join(workspaceRoot, '.goodvibes', 'tui', 'repl-history.json');
+}
+
+function createLocalExecPlan(workspaceRoot: string): SandboxLaunchPlan {
+  return {
+    backend: 'local',
+    command: process.env.SHELL || 'bash',
+    args: ['-lc', 'true'],
+    workspaceRoot,
+    summary: 'local process exec',
+  };
+}
+
+function loadHistory(historyPath: string): ReplHistoryEntry[] {
   try {
-    return JSON.parse(readFileSync(HISTORY_PATH, 'utf-8')) as ReplHistoryEntry[];
+    return JSON.parse(readFileSync(historyPath, 'utf-8')) as ReplHistoryEntry[];
   } catch {
     return [];
   }
 }
 
-function saveHistory(entries: readonly ReplHistoryEntry[]): void {
-  mkdirSync(join('.goodvibes', 'tui'), { recursive: true });
-  writeFileSync(HISTORY_PATH, `${JSON.stringify(entries, null, 2)}\n`, 'utf-8');
+function saveHistory(historyPath: string, entries: readonly ReplHistoryEntry[]): void {
+  mkdirSync(dirname(historyPath), { recursive: true });
+  writeFileSync(historyPath, `${JSON.stringify(entries, null, 2)}\n`, 'utf-8');
 }
 
 function mapRuntimeToSandboxProfile(runtime: NonNullable<ReplToolInput['runtime']>) {
@@ -97,7 +106,7 @@ async function evalTypeScript(
   bindings: Record<string, unknown>,
   configManager: ConfigManager,
   sandboxSessionRegistry: SandboxSessionRegistry,
-  launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN,
+  launchPlan: SandboxLaunchPlan,
   sessionId?: string,
 ): Promise<string> {
   const transpiled = ts.transpileModule(expression, {
@@ -113,13 +122,13 @@ function evalPython(
   expression: string,
   configManager: ConfigManager,
   sandboxSessionRegistry: SandboxSessionRegistry,
-  launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN,
+  launchPlan: SandboxLaunchPlan,
   sessionId?: string,
 ): string {
   const tempRoot = mkdtempSync(join(tmpdir(), 'gv-repl-py-'));
   const venvPath = join(tempRoot, 'venv');
   const pythonLaunchPlan = launchPlan.backend === 'local' ? {
-    ...LOCAL_EXEC_PLAN,
+    ...createLocalExecPlan(tempRoot),
     workspaceRoot: tempRoot,
   } : launchPlan;
   const create = sessionId
@@ -150,7 +159,7 @@ async function evalSql(
   expression: string,
   configManager: ConfigManager,
   sandboxSessionRegistry: SandboxSessionRegistry,
-  launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN,
+  launchPlan: SandboxLaunchPlan,
   sessionId?: string,
 ): Promise<string> {
   const payload = JSON.stringify({ expression });
@@ -188,7 +197,7 @@ function evalGraphql(
   expression: string,
   configManager: ConfigManager,
   sandboxSessionRegistry: SandboxSessionRegistry,
-  launchPlan: SandboxLaunchPlan = LOCAL_EXEC_PLAN,
+  launchPlan: SandboxLaunchPlan,
   sessionId?: string,
 ): string {
   const payload = JSON.stringify({ expression });
@@ -242,8 +251,13 @@ export function createReplTool(
     if (!args || typeof args !== 'object' || typeof args.mode !== 'string') {
       return { success: false, error: 'Invalid args: mode is required.' };
     }
-    const input = args as unknown as ReplToolInput;
-    const history = loadHistory();
+    const input = args as unknown as ReplExecutionInput;
+    if (!input.workspaceRoot || input.workspaceRoot.trim().length === 0) {
+      return { success: false, error: 'repl requires workspaceRoot.' };
+    }
+    const historyPath = resolveHistoryPath(input.workspaceRoot);
+    const history = loadHistory(historyPath);
+    const localExecPlan = createLocalExecPlan(input.workspaceRoot);
 
     if (input.mode === 'history') {
       return { success: true, output: JSON.stringify({ count: history.length, history }) };
@@ -260,22 +274,22 @@ export function createReplTool(
       let rendered = '';
       switch (runtime) {
         case 'javascript':
-          rendered = await evalJavaScriptInSandbox(input.expression, input.bindings ?? {}, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, configManager, sandboxSessionRegistry, sandboxSession.id);
+          rendered = await evalJavaScriptInSandbox(input.expression, input.bindings ?? {}, sandboxSession.launchPlan ?? localExecPlan, configManager, sandboxSessionRegistry, sandboxSession.id);
           break;
         case 'typescript':
-          rendered = await evalTypeScript(input.expression, input.bindings ?? {}, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = await evalTypeScript(input.expression, input.bindings ?? {}, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? localExecPlan, sandboxSession.id);
           break;
         case 'python':
-          rendered = evalPython(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = evalPython(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? localExecPlan, sandboxSession.id);
           break;
         case 'sql':
-          rendered = await evalSql(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = await evalSql(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? localExecPlan, sandboxSession.id);
           break;
         case 'graphql':
-          rendered = evalGraphql(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? LOCAL_EXEC_PLAN, sandboxSession.id);
+          rendered = evalGraphql(input.expression, configManager, sandboxSessionRegistry, sandboxSession.launchPlan ?? localExecPlan, sandboxSession.id);
           break;
       }
-      saveHistory([...history, {
+      saveHistory(historyPath, [...history, {
         ts: Date.now(),
         runtime,
         expression: input.expression,
@@ -286,7 +300,7 @@ export function createReplTool(
       }]);
       return { success: true, output: rendered };
     } catch (error) {
-      saveHistory([...history, {
+      saveHistory(historyPath, [...history, {
         ts: Date.now(),
         runtime,
         expression: input.expression,

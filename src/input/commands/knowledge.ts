@@ -1,5 +1,14 @@
 import type { CommandContext, SlashCommand } from '../command-registry.ts';
 
+function requireKnowledgeApi(context: CommandContext) {
+  const knowledgeApi = context.clients?.knowledgeApi;
+  if (!knowledgeApi) {
+    context.print('[knowledge] Knowledge API is not available in this runtime.');
+    return null;
+  }
+  return knowledgeApi;
+}
+
 function readFlag(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
@@ -26,9 +35,8 @@ export const knowledgeCommand: SlashCommand = {
   usage: '<subcommand> [args]',
   argsHint: 'status|ingest-url|import-bookmarks|import-urls|list|search|get|queue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
-    const service = context.knowledgeService;
-    if (!service) {
-      context.print('[knowledge] Knowledge service is not available in this runtime.');
+    const knowledge = requireKnowledgeApi(context);
+    if (!knowledge) {
       return;
     }
     if (args.length === 0 && context.openKnowledgePanel) {
@@ -40,7 +48,7 @@ export const knowledgeCommand: SlashCommand = {
 
     switch (sub) {
       case 'status': {
-        const status = await service.getStatus();
+        const status = await knowledge.status.get();
         context.print([
           '[knowledge] Structured knowledge status',
           `  ready: ${status.ready ? 'yes' : 'no'}`,
@@ -59,12 +67,12 @@ export const knowledgeCommand: SlashCommand = {
           context.print('[knowledge] Usage: /knowledge ingest-url <url> [--title <title>] [--tags <a,b>] [--folder <path>]');
           return;
         }
-        const result = await service.ingestUrl({
+        const result = await knowledge.ingest.url({
           url,
           title: readFlag(rest, '--title'),
           tags: readStringListFlag(rest, '--tags'),
           folderPath: readFlag(rest, '--folder'),
-          sessionId: context.runtime.sessionId,
+          sessionId: context.session.runtime.sessionId,
           sourceType: 'url',
           connectorId: 'url',
         });
@@ -80,7 +88,7 @@ export const knowledgeCommand: SlashCommand = {
           context.print('[knowledge] Usage: /knowledge import-bookmarks <path>');
           return;
         }
-        const result = await service.importBookmarksFromFile({ path, sessionId: context.runtime.sessionId });
+        const result = await knowledge.ingest.bookmarksFile({ path, sessionId: context.session.runtime.sessionId });
         context.print(`[knowledge] Imported bookmarks: ${result.imported} ok, ${result.failed} failed`);
         if (result.errors.length > 0) {
           for (const error of result.errors.slice(0, 10)) context.print(`  error: ${error}`);
@@ -94,7 +102,7 @@ export const knowledgeCommand: SlashCommand = {
           context.print('[knowledge] Usage: /knowledge import-urls <path>');
           return;
         }
-        const result = await service.importUrlsFromFile({ path, sessionId: context.runtime.sessionId });
+        const result = await knowledge.ingest.urlsFile({ path, sessionId: context.session.runtime.sessionId });
         context.print(`[knowledge] Imported URL list: ${result.imported} ok, ${result.failed} failed`);
         if (result.errors.length > 0) {
           for (const error of result.errors.slice(0, 10)) context.print(`  error: ${error}`);
@@ -106,7 +114,7 @@ export const knowledgeCommand: SlashCommand = {
         const limit = Math.max(1, Number.parseInt(readFlag(rest, '--limit') ?? '10', 10) || 10);
         const kind = (readFlag(rest, '--kind') ?? 'sources').toLowerCase();
         if (kind === 'nodes') {
-          const nodes = service.listNodes(limit);
+          const nodes = knowledge.graph.nodes.list(limit);
           if (nodes.length === 0) {
             context.print('[knowledge] No nodes.');
             return;
@@ -119,7 +127,7 @@ export const knowledgeCommand: SlashCommand = {
           return;
         }
         if (kind === 'issues') {
-          const issues = service.listIssues(limit);
+          const issues = knowledge.graph.issues.list(limit);
           if (issues.length === 0) {
             context.print('[knowledge] No issues.');
             return;
@@ -131,7 +139,7 @@ export const knowledgeCommand: SlashCommand = {
           }
           return;
         }
-        const sources = service.listSources(limit);
+        const sources = knowledge.sources.list(limit);
         if (sources.length === 0) {
           context.print('[knowledge] No sources.');
           return;
@@ -152,7 +160,7 @@ export const knowledgeCommand: SlashCommand = {
           return;
         }
         const limit = Math.max(1, Number.parseInt(readFlag(rest, '--limit') ?? '10', 10) || 10);
-        const results = service.search(query, limit);
+        const results = knowledge.graph.items.search(query, limit);
         if (results.length === 0) {
           context.print('[knowledge] No results.');
           return;
@@ -172,7 +180,7 @@ export const knowledgeCommand: SlashCommand = {
           context.print('[knowledge] Usage: /knowledge get <id>');
           return;
         }
-        const item = service.getItem(id);
+        const item = knowledge.graph.items.get(id);
         if (!item) {
           context.print(`[knowledge] Unknown item: ${id}`);
           return;
@@ -204,7 +212,7 @@ export const knowledgeCommand: SlashCommand = {
       }
 
       case 'lint': {
-        const issues = await service.lint();
+        const issues = await knowledge.status.lint();
         if (issues.length === 0) {
           context.print('[knowledge] No lint issues.');
           return;
@@ -220,7 +228,7 @@ export const knowledgeCommand: SlashCommand = {
       case 'queue': {
         const [limitArg] = positionalArgs(rest);
         const limit = Math.max(1, Number.parseInt(limitArg ?? '10', 10) || 10);
-        const issues = service.listIssues(limit);
+        const issues = knowledge.graph.issues.list(limit);
         if (issues.length === 0) {
           context.print('Knowledge review queue is empty.');
           return;
@@ -236,7 +244,7 @@ export const knowledgeCommand: SlashCommand = {
       case 'candidates': {
         const [limitArg] = positionalArgs(rest);
         const limit = Math.max(1, Number.parseInt(limitArg ?? '10', 10) || 10);
-        const candidates = service.listConsolidationCandidates(limit);
+        const candidates = knowledge.consolidation.candidates(limit);
         if (candidates.length === 0) {
           context.print('[knowledge] No consolidation candidates.');
           return;
@@ -252,7 +260,7 @@ export const knowledgeCommand: SlashCommand = {
       case 'reports': {
         const [limitArg] = positionalArgs(rest);
         const limit = Math.max(1, Number.parseInt(limitArg ?? '10', 10) || 10);
-        const reports = service.listConsolidationReports(limit);
+        const reports = knowledge.consolidation.reports(limit);
         if (reports.length === 0) {
           context.print('[knowledge] No consolidation reports.');
           return;
@@ -266,7 +274,7 @@ export const knowledgeCommand: SlashCommand = {
       }
 
       case 'schedules': {
-        const schedules = service.listSchedules(20);
+        const schedules = knowledge.jobs.schedules.list(20);
         if (schedules.length === 0) {
           context.print('[knowledge] No knowledge schedules.');
           return;
@@ -292,7 +300,7 @@ export const knowledgeCommand: SlashCommand = {
           context.print('[knowledge] Usage: /knowledge packet <task...> [--scope <path> ...]');
           return;
         }
-        const prompt = await service.buildPromptPacket(query, scopeValues);
+        const prompt = await knowledge.packets.buildPrompt(query, scopeValues);
         context.print(prompt ?? '[knowledge] No structured knowledge matched that task.');
         break;
       }
@@ -310,13 +318,13 @@ export const knowledgeCommand: SlashCommand = {
           context.print('[knowledge] Usage: /knowledge explain <task...> [--scope <path> ...]');
           return;
         }
-        const prompt = await service.buildPromptPacket(query, scopeValues);
+        const prompt = await knowledge.packets.buildPrompt(query, scopeValues);
         context.print(prompt ?? '[knowledge] No structured knowledge matched that task.');
         break;
       }
 
       case 'reindex': {
-        const result = await service.reindex();
+        const result = await knowledge.status.reindex();
         context.print([
           '[knowledge] Reindex complete',
           `  sources: ${result.status.sourceCount}`,
@@ -330,7 +338,7 @@ export const knowledgeCommand: SlashCommand = {
       case 'consolidate': {
         const mode = (positionalArgs(rest)[0] ?? 'light').toLowerCase();
         const jobId = mode === 'deep' ? 'knowledge-deep-consolidation' : 'knowledge-light-consolidation';
-        const run = await service.runJob(jobId, { mode: 'inline' });
+        const run = await knowledge.jobs.run(jobId, { mode: 'inline' });
         context.print(`[knowledge] Consolidation run ${run.id} finished with status ${run.status}.`);
         break;
       }

@@ -1,12 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { VERSION } from '../../version.ts';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
 import { handleLocalAuthCommand } from './local-auth-runtime.ts';
 import { buildAuthInspectionSnapshot, inspectProviderAuth } from '../../runtime/auth/inspection.ts';
-import { requireProfileManager, requireSecretsManager, requireSubscriptionManager } from './runtime-services.ts';
+import { requireProfileManager, requireSecretsManager, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';
 
 interface InstallBundle {
   readonly version: 1;
@@ -84,6 +83,7 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
     description: 'Front-door login flow for provider subscriptions and local service sessions',
     usage: '[provider <name> start|finish <code>|service <daemon|listener> <baseUrl> <username> <password> [secretKey]]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const target = (args[0] ?? '').toLowerCase();
       if (target === 'provider') {
         const provider = args[1];
@@ -134,6 +134,7 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
     description: 'Review install posture and export portable install bundles',
     usage: '[review|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
       if (sub === 'review') {
         const profiles = requireProfileManager(ctx).list();
@@ -154,7 +155,7 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
           ctx.print(`Usage: /install bundle ${mode} <path>`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg!);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
         if (mode === 'export') {
           const profiles = requireProfileManager(ctx).list();
           const secretKeys = await requireSecretsManager(ctx).list();
@@ -162,8 +163,8 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
             version: 1,
             exportedAt: Date.now(),
             appVersion: VERSION,
-            workingDirectory: process.cwd(),
-            homeDirectory: homedir(),
+            workingDirectory: shellPaths.workingDirectory,
+            homeDirectory: shellPaths.homeDirectory,
             profileCount: profiles.length,
             secretKeyCount: secretKeys.length,
             setupLinks: [
@@ -194,17 +195,20 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
     description: 'Review update posture, choose release channel guidance, and package portable update bundles',
     usage: '[review|channel <stable|preview>|bundle export <path>|bundle inspect <path>]',
     handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
       const subscriptions = requireSubscriptionManager(ctx);
+      const serviceRegistry = requireServiceRegistry(ctx);
+      const secretsManager = requireSecretsManager(ctx);
       const builtinProviders = listBuiltinSubscriptionProviders().map((entry) => entry.provider);
       const sandboxProfile = [
-        `${ctx.configManager.get('sandbox.replIsolation')}`,
-        `${ctx.configManager.get('sandbox.mcpIsolation')}`,
-        `${ctx.configManager.get('sandbox.vmBackend')}`,
+        `${ctx.platform.configManager.get('sandbox.replIsolation')}`,
+        `${ctx.platform.configManager.get('sandbox.mcpIsolation')}`,
+        `${ctx.platform.configManager.get('sandbox.vmBackend')}`,
       ].join('/');
       const activeSubscriptions = subscriptions.list().map((entry) => entry.provider);
       if (sub === 'review') {
-        const channel = ctx.configManager.get('release.channel');
+        const channel = ctx.platform.configManager.get('release.channel');
         ctx.print([
           'Update Review',
           `  version: ${VERSION}`,
@@ -222,7 +226,7 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
           ctx.print('Usage: /update channel <stable|preview>');
           return;
         }
-        ctx.configManager.setDynamic('release.channel', channel);
+        ctx.platform.configManager.setDynamic('release.channel', channel);
         ctx.print(`Update channel set to ${channel}.`);
         return;
       }
@@ -233,13 +237,13 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
           ctx.print(`Usage: /update bundle ${mode} <path>`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg!);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
         if (mode === 'export') {
           const bundle: UpdateBundle = {
             version: 1,
             exportedAt: Date.now(),
             appVersion: VERSION,
-            updateChannel: ctx.configManager.get('release.channel') as 'stable' | 'preview',
+            updateChannel: ctx.platform.configManager.get('release.channel') as 'stable' | 'preview',
             subscriptionProviders: [...new Set([...builtinProviders, ...activeSubscriptions])],
             sandboxProfile,
             notes: [
@@ -267,13 +271,21 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
     description: 'Review auth posture and exchange session login tokens with local services',
     usage: '[review|show <provider>|repair <provider>|bundle export <path>|bundle inspect <path>|login <daemon|listener> <baseUrl> <username> <password> [secretKey]|local <review|panel|add-user|delete-user|rotate-password|revoke-session|clear-bootstrap-file>]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
+      const subscriptions = requireSubscriptionManager(ctx);
+      const serviceRegistry = requireServiceRegistry(ctx);
+      const secretsManager = requireSecretsManager(ctx);
       if (sub === 'local') {
         handleLocalAuthCommand(args.slice(1), ctx);
         return;
       }
       if (sub === 'review') {
-        const snapshot = await buildAuthInspectionSnapshot();
+        const snapshot = await buildAuthInspectionSnapshot({
+          serviceRegistry,
+          subscriptionManager: subscriptions,
+          secretsManager,
+        });
         const builtinProviders = listBuiltinSubscriptionProviders().map((entry) => entry.provider);
         ctx.print([
           'Auth Review',
@@ -294,7 +306,11 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
           ctx.print('Usage: /auth show <provider>');
           return;
         }
-        const inspection = await inspectProviderAuth(provider);
+        const inspection = await inspectProviderAuth(provider, {
+          serviceRegistry,
+          subscriptionManager: subscriptions,
+          secretsManager,
+        });
         ctx.print([
           `Auth Provider ${provider}`,
           `  configured: ${inspection.configured ? 'yes' : 'no'}`,
@@ -320,7 +336,11 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
           ctx.print('Usage: /auth repair <provider>');
           return;
         }
-        const inspection = await inspectProviderAuth(provider);
+        const inspection = await inspectProviderAuth(provider, {
+          serviceRegistry,
+          subscriptionManager: subscriptions,
+          secretsManager,
+        });
         ctx.print([
           `Auth Repair ${provider}`,
           `  configured: ${inspection.configured ? 'yes' : 'no'}`,
@@ -341,10 +361,9 @@ export function registerPlatformAccessRuntimeCommands(registry: CommandRegistry)
           ctx.print(`Usage: /auth bundle ${mode} <path>`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg!);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
         if (mode === 'export') {
-          const secretKeys = await requireSecretsManager(ctx).list();
-          const subscriptions = requireSubscriptionManager(ctx);
+          const secretKeys = await secretsManager.list();
           const bundle: AuthReviewBundle = {
             version: 1,
             exportedAt: Date.now(),

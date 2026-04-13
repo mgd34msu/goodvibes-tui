@@ -47,11 +47,11 @@ export class CrossSessionTaskRegistry {
   _exitHandler: (() => void) | null = null;
 
   /**
-   * @param baseDir - Project base directory (defaults to cwd).
+   * @param baseDir - Project base directory.
    *   The graph is persisted at `<baseDir>/.goodvibes/tui/sessions/task-graph.json`.
    */
-  public constructor(baseDir?: string) {
-    this._dir = join(baseDir ?? process.cwd(), '.goodvibes', 'tui', 'sessions');
+  public constructor(baseDir: string) {
+    this._dir = join(baseDir, '.goodvibes', 'tui', 'sessions');
     this._graphPath = join(this._dir, 'task-graph.json');
     this._graph = new SessionTaskGraph();
     this._load();

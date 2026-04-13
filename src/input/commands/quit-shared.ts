@@ -120,10 +120,15 @@ export type ExecuteWriteQuitOptions = {
 };
 
 export async function executeWriteQuit(
-  ctx: Pick<CommandContext, 'print' | 'exit'>,
+  ctx: Pick<CommandContext, 'print' | 'exit'> & {
+    workspace?: CommandContext['workspace'];
+  },
   options: ExecuteWriteQuitOptions = {},
 ): Promise<void> {
-  const cwd = options.cwd ?? process.cwd();
+  const cwd = options.cwd ?? ctx.workspace?.shellPaths?.workingDirectory;
+  if (!cwd) {
+    throw new Error('commandContext.workspace.shellPaths is required when executeWriteQuit() is called without an explicit cwd');
+  }
   const isGitRepo = options.isGitRepo ?? ((dir: string) => GitService.isGitRepo(dir));
   if (!isGitRepo(cwd)) {
     ctx.exit();

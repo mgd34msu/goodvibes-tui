@@ -1,12 +1,16 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join, basename } from 'path';
-import { homedir } from 'os';
 
 export interface TemplateEntry {
   name: string;
   path: string;
   preview: string;
   scope: 'project' | 'global';
+}
+
+export interface TemplateManagerRoots {
+  projectRoot: string;
+  homeDirectory: string;
 }
 
 /**
@@ -25,10 +29,9 @@ export class TemplateManager {
   private readonly globalDir: string;
   private readonly projectDir: string;
 
-  constructor(baseDir?: string) {
-    const projectRoot = baseDir ?? process.cwd();
-    this.globalDir = join(homedir(), '.goodvibes', 'tui', 'templates');
-    this.projectDir = join(projectRoot, '.goodvibes', 'tui', 'templates');
+  constructor(roots: TemplateManagerRoots) {
+    this.globalDir = join(roots.homeDirectory, '.goodvibes', 'tui', 'templates');
+    this.projectDir = join(roots.projectRoot, '.goodvibes', 'tui', 'templates');
   }
 
   /**

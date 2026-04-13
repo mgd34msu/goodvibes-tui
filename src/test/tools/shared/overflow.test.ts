@@ -83,4 +83,8 @@ describe('OverflowHandler', () => {
     expect(result?.content).toContain('[... truncated');
     expect(result?.overflowRef).toBeUndefined();
   });
+
+  test('requires an explicit baseDir for the file backend', () => {
+    expect(() => new OverflowHandler()).toThrow('OverflowHandler requires an explicit baseDir when using the file spill backend');
+  });
 });

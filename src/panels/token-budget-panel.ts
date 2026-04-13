@@ -1,9 +1,9 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
-import { SessionMemoryStore } from '../core/session-memory.ts';
 import { evaluateSessionMaintenance } from './session-maintenance.ts';
+import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
+import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -95,10 +95,10 @@ export class TokenBudgetPanel extends BasePanel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private orchestrator: Orchestrator | null = null;
   private getContextWindow: (() => number) | null = null;
-  private runtimeStore: RuntimeStore | null = null;
-  private readonly sessionMemoryStore: SessionMemoryStore;
+  private sessionReadModel: UiReadModel<UiSessionSnapshot> | null = null;
+  private readonly sessionMemoryStore: SessionMemoryQuery;
 
-  constructor(sessionMemoryStore: SessionMemoryStore) {
+  constructor(sessionMemoryStore: SessionMemoryQuery) {
     super('tokens', 'Tokens', 'T', 'monitoring');
     this.sessionMemoryStore = sessionMemoryStore;
   }
@@ -113,10 +113,14 @@ export class TokenBudgetPanel extends BasePanel {
    * @param orchestrator  The main Orchestrator instance (for usage + lastInputTokens).
    * @param getCtxWindow  Callback returning the current model's contextWindow value.
    */
-  wire(orchestrator: Orchestrator, getCtxWindow: () => number, runtimeStore?: RuntimeStore): void {
+  wire(
+    orchestrator: Orchestrator,
+    getCtxWindow: () => number,
+    sessionReadModel?: UiReadModel<UiSessionSnapshot>,
+  ): void {
     this.orchestrator = orchestrator;
     this.getContextWindow = getCtxWindow;
-    this.runtimeStore = runtimeStore ?? null;
+    this.sessionReadModel = sessionReadModel ?? null;
   }
 
   /**
@@ -254,12 +258,13 @@ export class TokenBudgetPanel extends BasePanel {
   }
 
   private renderMaintenance(width: number): Line[] {
+    const sessionSnapshot = this.sessionReadModel?.getSnapshot();
     const status = evaluateSessionMaintenance({
       currentTokens: this.lastInputTokens,
       contextWindow: this.contextWindow,
-      messageCount: this.runtimeStore?.getState().conversation.totalTurns,
+      messageCount: sessionSnapshot?.totalTurns,
       sessionMemoryCount: this.sessionMemoryStore.list().length,
-      session: this.runtimeStore?.getState().session,
+      session: sessionSnapshot?.session,
     });
 
     const lines: Line[] = [

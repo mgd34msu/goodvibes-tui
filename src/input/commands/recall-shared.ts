@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import type { ShellPathService } from '../../runtime/shell-paths.ts';
 import type { MemoryClass, MemoryReviewState, MemoryScope } from '../../state/memory-store.ts';
 
 export const VALID_CLASSES: MemoryClass[] = ['decision', 'constraint', 'incident', 'pattern', 'fact', 'risk', 'runbook', 'architecture', 'ownership'];
@@ -17,6 +17,6 @@ export function isValidReviewState(s: string): s is MemoryReviewState {
   return VALID_REVIEW_STATES.includes(s as MemoryReviewState);
 }
 
-export function resolveBundlePath(pathArg: string): string {
-  return resolve(process.cwd(), pathArg);
+export function resolveBundlePath(pathArg: string, shellPaths: ShellPathService): string {
+  return shellPaths.resolveWorkspacePath(pathArg);
 }

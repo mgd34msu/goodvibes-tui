@@ -11,6 +11,7 @@ import type {
   ProviderEmbeddingResult,
   ProviderMessage,
   ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
 import {
@@ -92,14 +93,14 @@ export class LlamaCppProvider implements LLMProvider {
     return this.fallbackProvider.embed(request);
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: this.name,
       allowAnonymous: !this.apiKey,
       anonymousConfigured: !this.apiKey,
       anonymousDetail: 'Local llama.cpp servers are often exposed without authentication.',
-    });
+    }, deps);
     return {
       auth: {
         mode: this.apiKey ? 'api-key' : 'anonymous',

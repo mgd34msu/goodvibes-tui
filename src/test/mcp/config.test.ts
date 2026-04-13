@@ -17,7 +17,7 @@ describe('loadMcpConfig', () => {
   });
 
   test('returns empty config when mcp.json does not exist', () => {
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers).toEqual([]);
   });
 
@@ -26,7 +26,7 @@ describe('loadMcpConfig', () => {
       servers: [{ name: 'my-server', command: 'node', args: ['server.js'] }],
     };
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify(data));
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers).toHaveLength(1);
     expect(cfg.servers[0].name).toBe('my-server');
     expect(cfg.servers[0].command).toBe('node');
@@ -38,7 +38,7 @@ describe('loadMcpConfig', () => {
       servers: [{ name: 'env-server', command: 'python', args: ['-m', 'server'], env: { FOO: 'bar' } }],
     };
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify(data));
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers[0].env).toEqual({ FOO: 'bar' });
   });
 
@@ -50,7 +50,7 @@ describe('loadMcpConfig', () => {
       ],
     };
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify(data));
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers).toHaveLength(2);
     expect(cfg.servers[0].name).toBe('server-a');
     expect(cfg.servers[1].name).toBe('server-b');
@@ -58,34 +58,34 @@ describe('loadMcpConfig', () => {
 
   test('returns empty config when mcp.json is malformed JSON', () => {
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), '{invalid json}');
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers).toEqual([]);
   });
 
   test('returns empty config when servers array is missing', () => {
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify({ foo: 'bar' }));
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers).toEqual([]);
   });
 
   test('returns empty config when a server entry has no name', () => {
     const data = { servers: [{ command: 'node' }] };
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify(data));
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers).toEqual([]);
   });
 
   test('returns empty config when a server entry has no command', () => {
     const data = { servers: [{ name: 'x' }] };
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify(data));
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers).toEqual([]);
   });
 
   test('args defaults to undefined when not provided', () => {
     const data = { servers: [{ name: 'minimal', command: 'echo' }] };
     writeFileSync(join(tmpDir, '.goodvibes', 'mcp.json'), JSON.stringify(data));
-    const cfg = loadMcpConfig(tmpDir);
+    const cfg = loadMcpConfig({ workingDirectory: tmpDir, homeDirectory: tmpDir });
     expect(cfg.servers[0].args).toBeUndefined();
   });
 });

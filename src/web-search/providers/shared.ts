@@ -1,4 +1,4 @@
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import type { ServiceRegistry } from '../../config/service-registry.ts';
 import { executeFetchInput, type FetchOutput, type FetchUrlResult } from '../../tools/fetch/index.ts';
 import type { FetchAuthInput, FetchInput, FetchUrlInput } from '../../tools/fetch/schema.ts';
 import type { WebSearchEvidence, WebSearchProviderDescriptor, WebSearchResult } from '../types.ts';
@@ -8,8 +8,8 @@ type FetchExecutor = (input: FetchInput) => Promise<FetchOutput>;
 
 export interface SearchProviderContext {
   readonly fetcher?: FetchExecutor;
-  readonly env?: EnvMap;
-  readonly serviceRegistry?: ServiceRegistry;
+  readonly env: EnvMap;
+  readonly serviceRegistry: Pick<ServiceRegistry, 'get'>;
 }
 
 export interface SearchProviderConfig {
@@ -111,7 +111,7 @@ export function withInlineBearer(
 }
 
 export function hasConfiguredCredential(
-  serviceRegistry: ServiceRegistry,
+  serviceRegistry: Pick<ServiceRegistry, 'get'>,
   env: EnvMap,
   envKeys: readonly string[] | undefined,
   serviceName?: string,
@@ -122,7 +122,7 @@ export function hasConfiguredCredential(
 }
 
 export function resolveBaseUrl(
-  serviceRegistry: ServiceRegistry,
+  serviceRegistry: Pick<ServiceRegistry, 'get'>,
   env: EnvMap,
   envKeys: readonly string[] | undefined,
   serviceName: string | undefined,
@@ -142,13 +142,11 @@ export function resolveBaseUrl(
 
 export function buildDescriptor(
   config: SearchProviderConfig,
-  context: SearchProviderContext = {},
+  context: SearchProviderContext,
 ): WebSearchProviderDescriptor {
-  const env = context.env ?? process.env;
-  const serviceRegistry = context.serviceRegistry ?? new ServiceRegistry();
   const configured = config.requiresAuth === false
-    ? resolveBaseUrl(serviceRegistry, env, config.baseUrlEnvCandidates, config.serviceName, config.defaultBaseUrl) != null
-    : hasConfiguredCredential(serviceRegistry, env, config.envKeyCandidates, config.serviceName);
+    ? resolveBaseUrl(context.serviceRegistry, context.env, config.baseUrlEnvCandidates, config.serviceName, config.defaultBaseUrl) != null
+    : hasConfiguredCredential(context.serviceRegistry, context.env, config.envKeyCandidates, config.serviceName);
   return {
     id: config.id,
     label: config.label,

@@ -116,21 +116,32 @@ export class DaemonServer {
   private tlsState: ResolvedInboundTlsContext | null = null;
 
   constructor(private config: DaemonConfig = {}, _configManager?: ConfigManager) {
-    this.configManager = _configManager ?? new ConfigManager();
+    const ownedWorkingDir = config.runtimeServices?.workingDirectory ?? config.workingDir;
+    const ownedHomeDirectory = config.runtimeServices?.homeDirectory ?? config.homeDirectory;
+    const configManager = config.configManager ?? _configManager ?? config.runtimeServices?.configManager;
+    if (!config.runtimeServices && !configManager && (!ownedWorkingDir || !ownedHomeDirectory)) {
+      throw new Error('DaemonServer requires explicit runtime services or explicit configManager plus workingDir/homeDirectory ownership.');
+    }
+    if (!config.runtimeServices && !configManager) {
+      throw new Error('DaemonServer requires an explicit ConfigManager or runtimeServices.');
+    }
+    this.configManager = configManager ?? config.runtimeServices!.configManager;
     const ownedRuntimeBus = config.runtimeServices?.runtimeBus ?? config.runtimeBus ?? new RuntimeEventBus();
     this.runtimeServices = config.runtimeServices ?? createRuntimeServices({
       configManager: this.configManager,
       runtimeBus: ownedRuntimeBus,
       runtimeStore: createRuntimeStore(),
       getConversationTitle: () => 'goodvibes daemon',
+      workingDir: ownedWorkingDir!,
+      homeDirectory: ownedHomeDirectory!,
     });
     this.integrationHelpers = this.runtimeServices.integrationHelpers;
     this.port = config.port ?? Number(this.configManager.get('controlPlane.port') ?? 3421);
     this.host = config.host ?? String(this.configManager.get('controlPlane.host') ?? '127.0.0.1');
     this.agentManager = config.agentManager ?? this.runtimeServices.agentManager;
-    this.userAuth = config.userAuth ?? new UserAuthManager();
+    this.userAuth = config.userAuth ?? this.runtimeServices.localUserAuthManager;
     this.serveFactory = config.serveFactory ?? Bun.serve;
-    this.serviceRegistry = new ServiceRegistry();
+    this.serviceRegistry = this.runtimeServices.serviceRegistry;
     this.runtimeBus = this.runtimeServices.runtimeBus;
     this.runtimeStore = this.runtimeServices.runtimeStore;
     this.runtimeDispatch = this.runtimeServices.runtimeDispatch;
@@ -141,7 +152,10 @@ export class DaemonServer {
     this.webSearchService = this.runtimeServices.webSearchService;
     this.mediaProviders = this.runtimeServices.mediaProviders;
     this.multimodalService = this.runtimeServices.multimodalService;
-    this.platformServiceManager = new PlatformServiceManager(this.configManager);
+    this.platformServiceManager = new PlatformServiceManager(this.configManager, {
+      workingDirectory: this.runtimeServices.workingDirectory,
+      homeDirectory: this.runtimeServices.homeDirectory,
+    });
     // Webhook secrets follow 12-factor app conventions (https://12factor.net/config):
     // prefer explicit config object values (e.g. from a vault-injected object) and
     // fall back to environment variables so the binary works in any deployment

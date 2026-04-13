@@ -46,26 +46,26 @@ describe('FileWatcher', () => {
   // -------------------------------------------------------------------------
 
   it('starts in non-watching state', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex);
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     expect(watcher.isWatching()).toBe(false);
   });
 
   it('isWatching returns true after start()', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     watcher.start();
     expect(watcher.isWatching()).toBe(true);
     watcher.stop();
   });
 
   it('isWatching returns false after stop()', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     watcher.start();
     watcher.stop();
     expect(watcher.isWatching()).toBe(false);
   });
 
   it('start() is idempotent', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     watcher.start();
     watcher.start(); // second call is no-op
     expect(watcher.isWatching()).toBe(true);
@@ -73,7 +73,7 @@ describe('FileWatcher', () => {
   });
 
   it('stop() is idempotent', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     watcher.start();
     watcher.stop();
     watcher.stop(); // second call is no-op
@@ -85,7 +85,7 @@ describe('FileWatcher', () => {
   // -------------------------------------------------------------------------
 
   it('addPath registers path before start', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     const file = join(tmpDir, 'custom.txt');
     writeFileSync(file, 'hello');
     watcher.addPath(file);
@@ -95,7 +95,7 @@ describe('FileWatcher', () => {
   });
 
   it('addPath deduplicates paths', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     const file = join(tmpDir, 'dup.txt');
     writeFileSync(file, 'content');
     watcher.addPath(file);
@@ -109,7 +109,7 @@ describe('FileWatcher', () => {
   });
 
   it('removePath removes a path from the watch set', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     const file = join(tmpDir, 'remove-me.txt');
     writeFileSync(file, 'content');
     watcher.addPath(file);
@@ -119,7 +119,7 @@ describe('FileWatcher', () => {
   });
 
   it('removePath is safe for unknown paths', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     // Should not throw
     expect(() => watcher.removePath('/nonexistent/path/to/file.ts')).not.toThrow();
   });
@@ -136,7 +136,7 @@ describe('FileWatcher', () => {
     fileCache.update(file, 'const x = 1;');
     expect(fileCache.lookup(file).status).not.toBe('miss');
 
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     watcher.start();
     watcher.addPath(file);
 
@@ -156,7 +156,7 @@ describe('FileWatcher', () => {
     projectIndex.upsertFile(file, 5);
     expect(projectIndex.getFile(file)).not.toBeNull();
 
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     watcher.start();
     watcher.addPath(file);
 
@@ -190,7 +190,7 @@ describe('FileWatcher', () => {
     const file = join(tmpDir, 'hook-test.ts');
     writeFileSync(file, 'const a = 1;');
 
-    const watcher = new FileWatcher(fileCache, projectIndex, hookDispatcher, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir }, hookDispatcher);
     watcher.start();
     watcher.addPath(file);
 
@@ -213,7 +213,7 @@ describe('FileWatcher', () => {
     writeFileSync(file, 'export {}');
     projectIndex.upsertFile(file, 10);
 
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     watcher.start();
 
     expect(watcher.getWatchedPaths().has(file)).toBe(true);
@@ -235,7 +235,7 @@ describe('FileWatcher', () => {
       origInvalidate(p);
     };
 
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     watcher.start();
     watcher.addPath(file);
 
@@ -258,7 +258,7 @@ describe('FileWatcher', () => {
   // -------------------------------------------------------------------------
 
   it('rejects paths outside project root', () => {
-    const watcher = new FileWatcher(fileCache, projectIndex, undefined, { projectRoot: tmpDir });
+    const watcher = new FileWatcher(fileCache, projectIndex, { projectRoot: tmpDir });
     const outsidePath = join(tmpdir(), 'outside-project.ts');
     writeFileSync(outsidePath, 'const x = 1;');
     watcher.addPath(outsidePath);

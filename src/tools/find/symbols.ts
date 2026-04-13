@@ -23,8 +23,8 @@ interface SymbolResult {
 export async function executeSymbolsQuery(
   query: SymbolsQuery,
   output: OutputOptions,
+  projectRoot: string,
 ): Promise<Record<string, unknown>> {
-  const projectRoot = process.cwd();
   const validatedPath = validateSearchPath(query.path, projectRoot);
   if (typeof validatedPath === 'object') return validatedPath;
   const basePath = validatedPath;
@@ -60,7 +60,7 @@ export async function executeSymbolsQuery(
     }
   }
 
-  const ci = new CodeIntelligence();
+  const ci = new CodeIntelligence({});
 
   for (const file of files) {
     if (symbols.length >= maxResults) break;

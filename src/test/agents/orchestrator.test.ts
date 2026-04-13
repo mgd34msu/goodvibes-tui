@@ -144,7 +144,9 @@ describe('AgentOrchestrator', () => {
     orchestratorRuntime = getTestRuntimeServices();
     memoryDbPath = join(tmpdir(), `agent-orchestrator-${randomUUID()}.db`);
     projectIndexRoot = join(tmpdir(), `agent-orchestrator-project-${randomUUID()}`);
-    memoryStore = new MemoryStore(memoryDbPath);
+    memoryStore = new MemoryStore(memoryDbPath, {
+      embeddingRegistry: orchestratorRuntime.memoryEmbeddingRegistry,
+    });
     memoryRegistry = new MemoryRegistry(memoryStore);
     fileCache = new FileStateCache();
     projectIndex = new ProjectIndex(projectIndexRoot);
@@ -173,9 +175,11 @@ describe('AgentOrchestrator', () => {
       providerOptimizer: orchestratorRuntime.providerOptimizer,
       toolLLM: orchestratorRuntime.toolLLM,
       serviceRegistry: orchestratorRuntime.serviceRegistry,
+      sessionOrchestration: orchestratorRuntime.sessionOrchestration,
       featureFlags: orchestratorRuntime.featureFlags,
       overflowHandler: orchestratorRuntime.overflowHandler,
       sandboxSessionRegistry: orchestratorRuntime.sandboxSessionRegistry,
+      workingDirectory: repoRoot,
     });
   });
 

@@ -23,6 +23,7 @@ import { extractSymbols, extractOutline, findEnclosingScope } from './tree-sitte
 import { logger } from '../utils/logger.ts';
 import type { SymbolInfo, OutlineEntry } from './tree-sitter/queries.ts';
 import type { Location, DocumentSymbol, Diagnostic, Hover } from './lsp/protocol.ts';
+import type { ShellPathService } from '../runtime/shell-paths.ts';
 
 // ---------------------------------------------------------------------------
 // URI helpers
@@ -50,11 +51,17 @@ export function uriToPath(uri: string): string {
 
 export class CodeIntelligence {
   private treeSitter: TreeSitterService;
-  private lsp: LspService;
+  private lsp: LspService | null;
+  private readonly shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory' | 'resolveProjectPath'> | null;
 
-  constructor(treeSitter?: TreeSitterService, lsp?: LspService) {
-    this.treeSitter = treeSitter ?? new TreeSitterService();
-    this.lsp = lsp ?? new LspService();
+  constructor(options: {
+    shellPaths?: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory' | 'resolveProjectPath'>;
+    treeSitter?: TreeSitterService;
+    lsp?: LspService;
+  } = {}) {
+    this.shellPaths = options.shellPaths ?? null;
+    this.treeSitter = options.treeSitter ?? new TreeSitterService();
+    this.lsp = options.lsp ?? (this.shellPaths ? new LspService(this.shellPaths) : null);
   }
 
   // -------------------------------------------------------------------------
@@ -67,14 +74,28 @@ export class CodeIntelligence {
    * so that user/project overrides in .goodvibes/tui/languages/ are respected.
    */
   async initialize(): Promise<void> {
+    if (!this.shellPaths) {
+      try {
+        await this.treeSitter.initialize();
+      } catch (err) {
+        logger.debug('CodeIntelligence: TreeSitterService init error', { error: String(err) });
+      }
+      return;
+    }
+
     // Wire language configs into LspService (resolves config/facade disconnection).
     // Only register languages that have an LSP command defined — don't overwrite
     // configs that were already registered via registerServer().
     try {
-      const configs = loadLanguageConfigs();
+      const lsp = this.lsp;
+      if (!lsp) {
+        await this.treeSitter.initialize();
+        return;
+      }
+      const configs = loadLanguageConfigs(this.shellPaths);
       for (const [langId, cfg] of configs) {
         if (cfg.lsp) {
-          this.lsp.registerServer(langId, {
+          lsp.registerServer(langId, {
             command: cfg.lsp.command,
             args: cfg.lsp.args,
             initializationOptions: cfg.lsp.initializationOptions,
@@ -96,7 +117,7 @@ export class CodeIntelligence {
 
   /** Shutdown all owned services for this facade instance. */
   async dispose(): Promise<void> {
-    try { await this.lsp.shutdown(); } catch (err) { logger.debug('LSP shutdown error', { error: String(err) }); }
+    try { await this.lsp?.shutdown(); } catch (err) { logger.debug('LSP shutdown error', { error: String(err) }); }
     try { this.treeSitter.dispose(); } catch (err) { logger.debug('TreeSitter dispose error', { error: String(err) }); }
   }
 
@@ -192,6 +213,7 @@ export class CodeIntelligence {
 
   /** Check if an LSP server is available for a file's language. */
   async hasLsp(filePath: string): Promise<boolean> {
+    if (!this.lsp) return false;
     const lang = detectLanguage(filePath);
     if (!lang) return false;
     try {
@@ -213,7 +235,7 @@ export class CodeIntelligence {
     const lang = detectLanguage(filePath);
     if (!lang) return null;
     try {
-      const client = await this.lsp.getClient(lang);
+      const client = await this.lsp?.getClient(lang);
       if (!client) return null;
       const uri = pathToUri(filePath);
       const result = await client.request<Location | Location[] | null>('textDocument/definition', {
@@ -241,7 +263,7 @@ export class CodeIntelligence {
     const lang = detectLanguage(filePath);
     if (!lang) return [];
     try {
-      const client = await this.lsp.getClient(lang);
+      const client = await this.lsp?.getClient(lang);
       if (!client) return [];
       const uri = pathToUri(filePath);
       const result = await client.request<Location[]>('textDocument/references', {
@@ -268,7 +290,7 @@ export class CodeIntelligence {
     // Try LSP first
     if (lang) {
       try {
-        const client = await this.lsp.getClient(lang);
+        const client = await this.lsp?.getClient(lang);
         if (client) {
           const uri = pathToUri(filePath);
           const lspSymbols = await client.request<DocumentSymbol[]>(
@@ -297,7 +319,7 @@ export class CodeIntelligence {
     const lang = detectLanguage(filePath);
     if (!lang) return null;
     try {
-      const client = await this.lsp.getClient(lang);
+      const client = await this.lsp?.getClient(lang);
       if (!client) return null;
       const uri = pathToUri(filePath);
       return await client.request<Hover | null>('textDocument/hover', {
@@ -320,7 +342,7 @@ export class CodeIntelligence {
     const lang = detectLanguage(filePath);
     if (!lang) return [];
     try {
-      const client = await this.lsp.getClient(lang);
+      const client = await this.lsp?.getClient(lang);
       if (!client) return [];
       const uri = pathToUri(filePath);
       const result = await client.request<{ items: Diagnostic[] } | null>(

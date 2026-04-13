@@ -12,8 +12,8 @@ const EXA_DEFAULT_BASE_URL = 'https://api.exa.ai';
 const EXA_ENV_KEYS = ['EXA_API_KEY'] as const;
 const EXA_SERVICE_NAME = 'exa';
 
-export function createExaSearchProvider(context: SearchProviderContext = {}): WebSearchProvider {
-  const env = context.env ?? process.env;
+export function createExaSearchProvider(context: SearchProviderContext): WebSearchProvider {
+  const env = context.env;
   const serviceRegistry = context.serviceRegistry;
   return {
     id: 'exa',
@@ -32,7 +32,7 @@ export function createExaSearchProvider(context: SearchProviderContext = {}): We
     async search(request: WebSearchRequest): Promise<WebSearchProviderResponse> {
       const maxResults = Math.max(1, Math.min(25, request.maxResults ?? 10));
       const evidenceRequested = request.includeEvidence || request.verbosity === 'evidence' || request.verbosity === 'full';
-      const baseUrl = (serviceRegistry?.get(EXA_SERVICE_NAME)?.baseUrl ?? EXA_DEFAULT_BASE_URL).replace(/\/+$/, '');
+      const baseUrl = (serviceRegistry.get(EXA_SERVICE_NAME)?.baseUrl ?? EXA_DEFAULT_BASE_URL).replace(/\/+$/, '');
       const { payload } = await executeJsonRequest<Record<string, unknown>>({
         url: `${baseUrl}/search`,
         method: 'POST',
@@ -42,8 +42,8 @@ export function createExaSearchProvider(context: SearchProviderContext = {}): We
           numResults: maxResults,
           ...(evidenceRequested ? { text: true } : {}),
         },
-        service: serviceRegistry?.get(EXA_SERVICE_NAME) ? EXA_SERVICE_NAME : undefined,
-        auth: serviceRegistry?.get(EXA_SERVICE_NAME) ? undefined : withInlineApiKey(env, EXA_ENV_KEYS, 'x-api-key'),
+        service: serviceRegistry.get(EXA_SERVICE_NAME) ? EXA_SERVICE_NAME : undefined,
+        auth: serviceRegistry.get(EXA_SERVICE_NAME) ? undefined : withInlineApiKey(env, EXA_ENV_KEYS, 'x-api-key'),
         fetcher: context.fetcher,
       });
       const results = Array.isArray(payload.results)

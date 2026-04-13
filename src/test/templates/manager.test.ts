@@ -17,7 +17,7 @@ describe('TemplateManager', () => {
 
   beforeEach(() => {
     tmpDir = createTempDir();
-    manager = new TemplateManager(tmpDir);
+    manager = new TemplateManager({ projectRoot: tmpDir, homeDirectory: tmpDir });
   });
 
   afterEach(() => {

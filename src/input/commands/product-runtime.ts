@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { listInstalledEcosystemEntries, loadEcosystemCatalog } from '../../runtime/ecosystem/catalog.ts';
 import { BUILTIN_SUITES } from '../../runtime/eval/suites.ts';
-import { requireSecretsManager, requireServiceRegistry } from './runtime-services.ts';
+import { requireEcosystemCatalogPaths, requireReadModels, requireSecretsManager, requireServiceRegistry, requireShellPaths } from './runtime-services.ts';
 
 interface TrustReviewBundle {
   readonly version: 1;
@@ -60,12 +59,13 @@ function buildTrustReviewBundle(ctx: CommandContext): Promise<TrustReviewBundle>
   return (async () => {
     const secretKeys = await requireSecretsManager(ctx).list();
     const services = Object.keys(requireServiceRegistry(ctx).getAll()).sort((a, b) => a.localeCompare(b));
-    const plugins = ctx.pluginManager?.list() ?? [];
-    const mcpServers = [...(ctx.runtimeStore?.getState().mcp.servers.values() ?? [])];
+    const security = requireReadModels(ctx).security.getSnapshot();
+    const plugins = security.plugins;
+    const mcpServers = security.mcpServers;
     return {
       version: 1,
       capturedAt: Date.now(),
-      permissionMode: String(ctx.configManager.get('permissions.mode')),
+      permissionMode: String(ctx.platform.configManager.get('permissions.mode')),
       secretKeys,
       serviceNames: services,
       pluginSummary: {
@@ -112,28 +112,29 @@ function inspectTrustBundle(path: string): string {
 }
 
 function buildReleaseBundle(ctx: Parameters<NonNullable<CommandRegistry['register']>>[0]['handler'] extends (args: string[], context: infer C) => unknown ? C : never): ReleaseBundle {
-  const remoteRegistry = ctx.remoteRunnerRegistry;
-  const incidents = ctx.forensicsRegistry?.getAll() ?? [];
+  const remoteRuntime = ctx.ops.remoteRuntime;
+  const incidents = ctx.extensions.forensicsRegistry?.getAll() ?? [];
+  const ecosystemPaths = requireEcosystemCatalogPaths(ctx);
   return {
     version: 1,
     capturedAt: Date.now(),
     runtime: {
-      provider: ctx.runtime.provider,
-      model: ctx.runtime.model,
-      sessionId: ctx.runtime.sessionId,
+      provider: ctx.session.runtime.provider,
+      model: ctx.session.runtime.model,
+      sessionId: ctx.session.runtime.sessionId,
     },
     evalSuites: Object.keys(BUILTIN_SUITES),
     incidentCount: incidents.length,
     remote: {
-      pools: remoteRegistry?.listPools().length ?? 0,
-      contracts: remoteRegistry?.listContracts().length ?? 0,
-      artifacts: remoteRegistry?.listArtifacts().length ?? 0,
+      pools: remoteRuntime?.listPools().length ?? 0,
+      contracts: remoteRuntime?.listContracts().length ?? 0,
+      artifacts: remoteRuntime?.listArtifacts().length ?? 0,
     },
     ecosystem: {
-      pluginCatalog: loadEcosystemCatalog('plugin').length,
-      skillCatalog: loadEcosystemCatalog('skill').length,
-      installedPlugins: listInstalledEcosystemEntries('plugin').length,
-      installedSkills: listInstalledEcosystemEntries('skill').length,
+      pluginCatalog: loadEcosystemCatalog('plugin', ecosystemPaths).length,
+      skillCatalog: loadEcosystemCatalog('skill', ecosystemPaths).length,
+      installedPlugins: listInstalledEcosystemEntries('plugin', ecosystemPaths).length,
+      installedSkills: listInstalledEcosystemEntries('skill', ecosystemPaths).length,
     },
   };
 }
@@ -156,6 +157,7 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
     description: 'Review trust posture and export portable trust bundles',
     usage: '[review|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
       if (sub === 'review') {
         const bundle = await buildTrustReviewBundle(ctx);
@@ -171,14 +173,14 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
         }
         if (mode === 'export') {
           const bundle = await buildTrustReviewBundle(ctx);
-          const targetPath = resolve(process.cwd(), pathArg!);
+          const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
           mkdirSync(dirname(targetPath), { recursive: true });
           writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
           ctx.print(`Trust bundle exported to ${targetPath}`);
           return;
         }
         if (mode === 'inspect') {
-          ctx.print(inspectTrustBundle(resolve(process.cwd(), pathArg!)));
+          ctx.print(inspectTrustBundle(shellPaths.resolveWorkspacePath(pathArg!)));
           return;
         }
       }
@@ -190,19 +192,20 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
     description: 'Review and operate self-hosted bridge and remote runner flows',
     usage: '[status|pools|assign <pool> <runner>|runner <id>|review <artifactId>|export <artifactId> [path]|import <path>]',
     async handler(args, ctx) {
-      if (!ctx.remoteRunnerRegistry) {
+      const shellPaths = requireShellPaths(ctx);
+      if (!ctx.ops.remoteRuntime) {
         ctx.print('Remote runner registry is not available in this runtime.');
         return;
       }
-      const remoteRegistry = ctx.remoteRunnerRegistry;
+      const remoteRegistry = ctx.ops.remoteRuntime;
       const sub = args[0] ?? 'status';
       if (sub === 'status') {
-        remoteRegistry.ensureContractsFromStore(ctx.runtimeStore);
+        const remote = requireReadModels(ctx).remote.getSnapshot();
         ctx.print([
           'Bridge Status',
-          `  remote pools: ${remoteRegistry.listPools().length}`,
-          `  runner contracts: ${remoteRegistry.listContracts().length}`,
-          `  review artifacts: ${remoteRegistry.listArtifacts().length}`,
+          `  remote pools: ${remote.pools.length}`,
+          `  runner contracts: ${remote.contracts.length}`,
+          `  review artifacts: ${remote.artifacts.length}`,
         ].join('\n'));
         return;
       }
@@ -265,7 +268,10 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /bridge export <artifactId> [path]');
           return;
         }
-        const exported = await remoteRegistry.exportArtifact(artifactId, args[2] ? resolve(process.cwd(), args[2]) : undefined);
+        const exported = await remoteRegistry.exportArtifact(
+          artifactId,
+          args[2] ? shellPaths.resolveWorkspacePath(args[2]) : undefined,
+        );
         if (!exported) {
           ctx.print(`Unknown remote artifact: ${artifactId}`);
           return;
@@ -279,7 +285,7 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
           ctx.print('Usage: /bridge import <path>');
           return;
         }
-        const artifact = await remoteRegistry.importArtifact(resolve(process.cwd(), pathArg));
+        const artifact = await remoteRegistry.importArtifact(shellPaths.resolveWorkspacePath(pathArg));
         ctx.print(`Imported remote bridge artifact ${artifact.id} for runner ${artifact.runnerId}.`);
         return;
       }
@@ -292,6 +298,7 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
     description: 'Package certification and release-readiness operations',
     usage: '[review|checklist|bundle export <path>|bundle inspect <path>]',
     handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
       if (sub === 'review') {
         const bundle = buildReleaseBundle(ctx);
@@ -327,14 +334,14 @@ export function registerProductRuntimeCommands(registry: CommandRegistry): void 
         }
         if (mode === 'export') {
           const bundle = buildReleaseBundle(ctx);
-          const targetPath = resolve(process.cwd(), pathArg!);
+          const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
           mkdirSync(dirname(targetPath), { recursive: true });
           writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
           ctx.print(`Release bundle exported to ${targetPath}`);
           return;
         }
         if (mode === 'inspect') {
-          ctx.print(inspectReleaseBundle(resolve(process.cwd(), pathArg!)));
+          ctx.print(inspectReleaseBundle(shellPaths.resolveWorkspacePath(pathArg!)));
           return;
         }
       }

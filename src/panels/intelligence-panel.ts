@@ -1,6 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import type { UiIntelligenceSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -10,7 +11,6 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -36,13 +36,20 @@ function statusColor(status: string): string {
 }
 
 export class IntelligencePanel extends BasePanel {
-  public constructor(private readonly store?: RuntimeStore) {
+  private readonly unsub: (() => void) | null;
+
+  public constructor(private readonly readModel?: UiReadModel<UiIntelligenceSnapshot>) {
     super('intelligence', 'Intelligence', 'J', 'development');
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  public override onDestroy(): void {
+    this.unsub?.();
   }
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    if (!this.store) {
+    if (!this.readModel) {
       const lines = buildPanelWorkspace(width, height, {
         title: 'Intelligence Control Room',
         intro: 'Workspace intelligence posture across diagnostics, symbols, completions, and hover readiness.',
@@ -61,7 +68,7 @@ export class IntelligencePanel extends BasePanel {
       return lines.slice(0, height);
     }
 
-    const state = this.store.getState().intelligence;
+    const state = this.readModel.getSnapshot();
     const degraded = [
       state.diagnosticsStatus,
       state.completionsStatus,

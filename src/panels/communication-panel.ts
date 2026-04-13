@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
+import type { UiCommunicationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildBodyText,
@@ -27,15 +27,15 @@ const C = {
 } as const;
 
 export class CommunicationPanel extends BasePanel {
-  private readonly store?: RuntimeStore;
+  private readonly readModel?: UiReadModel<UiCommunicationSnapshot>;
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(store?: RuntimeStore) {
+  public constructor(readModel?: UiReadModel<UiCommunicationSnapshot>) {
     super('communication', 'Communication', 'Y', 'monitoring');
-    this.store = store;
-    this.unsub = store ? store.subscribe(() => this.markDirty()) : null;
+    this.readModel = readModel;
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
 
   public override onDestroy(): void {
@@ -59,12 +59,8 @@ export class CommunicationPanel extends BasePanel {
   }
 
   private records() {
-    if (!this.store) return [];
-    const domain = this.store.getState().communication;
-    return domain.recentRecordIds
-      .map((id) => domain.records.get(id))
-      .filter((record): record is NonNullable<typeof record> => record !== undefined)
-      .sort((a, b) => b.timestamp - a.timestamp);
+    if (!this.readModel) return [];
+    return [...this.readModel.getSnapshot().records];
   }
 
   public render(width: number, height: number): Line[] {
@@ -72,7 +68,7 @@ export class CommunicationPanel extends BasePanel {
     const intro = 'Structured agent communication, routing policy outcomes, and delivery status across orchestration trees.';
     const footerLines = [buildPanelLine(width, [['  Up/Down move through messages', C.dim]])];
 
-    if (!this.store) {
+    if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Communication Control Room',
         intro,
@@ -91,7 +87,7 @@ export class CommunicationPanel extends BasePanel {
       return workspace;
     }
 
-    const domain = this.store.getState().communication;
+    const snapshot = this.readModel.getSnapshot();
     const records = this.records();
 
     if (records.length === 0) {
@@ -102,9 +98,9 @@ export class CommunicationPanel extends BasePanel {
           title: 'Communication posture',
           lines: [
             buildKeyValueLine(width, [
-              { label: 'sent', value: String(domain.totalSent), valueColor: domain.totalSent > 0 ? C.info : C.dim },
-              { label: 'delivered', value: String(domain.totalDelivered), valueColor: domain.totalDelivered > 0 ? C.ok : C.dim },
-              { label: 'blocked', value: String(domain.totalBlocked), valueColor: domain.totalBlocked > 0 ? C.error : C.dim },
+              { label: 'sent', value: String(snapshot.totalSent), valueColor: snapshot.totalSent > 0 ? C.info : C.dim },
+              { label: 'delivered', value: String(snapshot.totalDelivered), valueColor: snapshot.totalDelivered > 0 ? C.ok : C.dim },
+              { label: 'blocked', value: String(snapshot.totalBlocked), valueColor: snapshot.totalBlocked > 0 ? C.error : C.dim },
             ], C),
             buildGuidanceLine(width, '/communication', 'review structured message flow, delivery posture, and blocked routing decisions', C),
             ...buildEmptyState(
@@ -128,9 +124,9 @@ export class CommunicationPanel extends BasePanel {
     this.selectedIndex = Math.min(this.selectedIndex, records.length - 1);
     const postureLines: Line[] = [
       buildKeyValueLine(width, [
-        { label: 'sent', value: String(domain.totalSent), valueColor: domain.totalSent > 0 ? C.info : C.dim },
-        { label: 'delivered', value: String(domain.totalDelivered), valueColor: domain.totalDelivered > 0 ? C.ok : C.dim },
-        { label: 'blocked', value: String(domain.totalBlocked), valueColor: domain.totalBlocked > 0 ? C.error : C.dim },
+        { label: 'sent', value: String(snapshot.totalSent), valueColor: snapshot.totalSent > 0 ? C.info : C.dim },
+        { label: 'delivered', value: String(snapshot.totalDelivered), valueColor: snapshot.totalDelivered > 0 ? C.ok : C.dim },
+        { label: 'blocked', value: String(snapshot.totalBlocked), valueColor: snapshot.totalBlocked > 0 ? C.error : C.dim },
         { label: 'selected', value: `${records[this.selectedIndex]?.fromId ?? 'n/a'} -> ${records[this.selectedIndex]?.toId ?? 'n/a'}`, valueColor: C.value },
       ], C),
       buildGuidanceLine(width, '/orchestration', 'inspect recursive routing, message handoff, and blocked broadcast posture', C),

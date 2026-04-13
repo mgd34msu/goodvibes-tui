@@ -10,6 +10,7 @@ import type {
   ProviderEmbeddingResult,
   ProviderMessage,
   ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import type { ToolCall, ToolDefinition } from '../types/tools.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
@@ -123,7 +124,7 @@ export class LMStudioProvider implements LLMProvider {
     return this.fallbackProvider.embed(request);
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: this.name,
@@ -132,7 +133,7 @@ export class LMStudioProvider implements LLMProvider {
       allowAnonymous: true,
       anonymousConfigured: true,
       anonymousDetail: 'LM Studio local servers can be used anonymously unless the host is configured with auth.',
-    });
+    }, deps);
     return {
       auth: {
         mode: 'anonymous',

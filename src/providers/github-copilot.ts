@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { ChatRequest, ChatResponse, LLMProvider, ProviderRuntimeMetadata } from './interface.ts';
+import type { ChatRequest, ChatResponse, LLMProvider, ProviderRuntimeMetadata, ProviderRuntimeMetadataDeps } from './interface.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import { ProviderError } from '../types/errors.ts';
@@ -20,15 +19,19 @@ interface CachedCopilotToken {
   readonly updatedAt: number;
 }
 
-function getCopilotTokenCachePath(): string {
-  const runtime = globalThis as typeof globalThis & { __gvTestConfigDir?: string };
-  const base = runtime.__gvTestConfigDir ?? join(homedir(), '.goodvibes', 'tui');
-  return join(base, 'credentials', 'github-copilot.token.json');
+export interface GitHubCopilotProviderOptions {
+  readonly tokenCachePath: string;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly fetchFn?: typeof fetch;
 }
 
-function readFirstEnv(envVars: readonly string[]): string | null {
+export function getGitHubCopilotTokenCachePath(cacheDir: string): string {
+  return join(cacheDir, 'credentials', 'github-copilot.token.json');
+}
+
+function readFirstEnv(envVars: readonly string[], env: NodeJS.ProcessEnv): string | null {
   for (const envVar of envVars) {
-    const value = process.env[envVar];
+    const value = env[envVar];
     if (typeof value === 'string' && value.trim().length > 0) return value.trim();
   }
   return null;
@@ -97,13 +100,15 @@ function deriveCopilotApiBaseUrlFromToken(token: string): string | null {
   }
 }
 
-async function resolveCopilotToken(): Promise<{ token: string; baseUrl: string; expiresAt: number }> {
-  const githubToken = readFirstEnv(COPILOT_TOKEN_ENV_VARS);
+async function resolveCopilotToken(options: GitHubCopilotProviderOptions): Promise<{ token: string; baseUrl: string; expiresAt: number }> {
+  const env = options.env ?? process.env;
+  const fetchFn = options.fetchFn ?? fetch;
+  const githubToken = readFirstEnv(COPILOT_TOKEN_ENV_VARS, env);
   if (!githubToken) {
     throw new Error('GitHub Copilot requires COPILOT_GITHUB_TOKEN, GH_TOKEN, or GITHUB_TOKEN.');
   }
 
-  const cachePath = getCopilotTokenCachePath();
+  const cachePath = options.tokenCachePath;
   if (existsSync(cachePath)) {
     try {
       const cached = JSON.parse(readFileSync(cachePath, 'utf-8')) as CachedCopilotToken;
@@ -119,7 +124,7 @@ async function resolveCopilotToken(): Promise<{ token: string; baseUrl: string; 
     }
   }
 
-  const response = await fetch(COPILOT_TOKEN_URL, {
+  const response = await fetchFn(COPILOT_TOKEN_URL, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
@@ -164,10 +169,12 @@ export class GitHubCopilotProvider implements LLMProvider {
     'o3-mini',
   ];
 
+  constructor(private readonly options: GitHubCopilotProviderOptions) {}
+
   async chat(params: ChatRequest): Promise<ChatResponse> {
     try {
       const model = params.model ?? this.models[0]!;
-      const session = await resolveCopilotToken();
+      const session = await resolveCopilotToken(this.options);
       const baseURL = `${session.baseUrl.replace(/\/+$/, '')}/v1`;
       const defaultHeaders = buildCopilotDynamicHeaders(params.messages);
       if (usesAnthropicTransport(model)) {
@@ -204,14 +211,14 @@ export class GitHubCopilotProvider implements LLMProvider {
     }
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
-    const configured = readFirstEnv(COPILOT_TOKEN_ENV_VARS) !== null;
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
+    const configured = readFirstEnv(COPILOT_TOKEN_ENV_VARS, this.options.env ?? process.env) !== null;
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: this.name,
       apiKeyEnvVars: COPILOT_TOKEN_ENV_VARS,
       secretKeys: COPILOT_TOKEN_ENV_VARS,
       serviceNames: ['github-copilot'],
-    });
+    }, deps);
     return {
       auth: {
         mode: 'api-key',

@@ -262,7 +262,7 @@ let tmpDir: string;
 
 beforeEach(() => {
   tmpDir = makeTmpDir();
-  tool = new InspectTool();
+  tool = new InspectTool(undefined, tmpDir);
 });
 
 afterEach(() => {

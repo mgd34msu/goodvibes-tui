@@ -1,9 +1,9 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { ServiceRegistry } from '../config/service-registry.ts';
-import { SubscriptionManager, type ProviderSubscription, type PendingSubscriptionLogin } from '../config/subscriptions.ts';
+import type { ProviderSubscription, PendingSubscriptionLogin } from '../config/subscriptions.ts';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
+import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
@@ -57,16 +57,16 @@ function statusColor(status: ReturnType<typeof statusOf>): string {
 }
 
 export class SubscriptionPanel extends BasePanel {
-  private readonly serviceRegistry: ServiceRegistry;
-  private readonly subscriptionManager: SubscriptionManager;
+  private readonly serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
+  private readonly subscriptionManager: SubscriptionAccessQuery;
   private rows: SubscriptionRow[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
   private logoutConfirmationTarget: string | null = null;
 
   public constructor(
-    serviceRegistry: ServiceRegistry,
-    subscriptionManager: SubscriptionManager,
+    serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>,
+    subscriptionManager: SubscriptionAccessQuery,
   ) {
     super('subscription', 'Subscriptions', 'B', 'monitoring');
     this.serviceRegistry = serviceRegistry;

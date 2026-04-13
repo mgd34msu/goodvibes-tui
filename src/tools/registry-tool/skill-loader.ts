@@ -6,31 +6,39 @@
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import {
   materializeMarkdownBody,
   parseMarkdownFrontmatter,
   normalizeFrontmatterList,
 } from '../../utils/markdown-disclosure.ts';
 
-function getSkillDirs(): string[] {
-  const cwd = process.cwd();
-  return [
-    join(cwd, '.goodvibes', 'skills'),
-    join(cwd, '.goodvibes', 'tui', 'skills'),
-    join(homedir(), '.goodvibes', 'skills'),
-    join(homedir(), '.goodvibes', 'tui', 'skills'),
+export interface SkillLoaderRoots {
+  readonly workingDirectory: string;
+  readonly homeDirectory?: string;
+}
+
+function getSkillDirs(roots: SkillLoaderRoots): string[] {
+  const dirs = [
+    join(roots.workingDirectory, '.goodvibes', 'skills'),
+    join(roots.workingDirectory, '.goodvibes', 'tui', 'skills'),
   ];
+  if (roots.homeDirectory) {
+    dirs.push(
+      join(roots.homeDirectory, '.goodvibes', 'skills'),
+      join(roots.homeDirectory, '.goodvibes', 'tui', 'skills'),
+    );
+  }
+  return dirs;
 }
 
 /**
  * Find a skill whose triggers include the given input string.
  * Returns the skill body (markdown content to inject as prompt), or null.
  */
-export function loadSkillByTrigger(input: string): string | null {
+export function loadSkillByTrigger(input: string, roots: SkillLoaderRoots): string | null {
   const normalizedInput = input.toLowerCase().trim();
 
-  for (const dir of getSkillDirs()) {
+  for (const dir of getSkillDirs(roots)) {
     if (!existsSync(dir)) continue;
 
     let entries: string[];

@@ -1,5 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { GitService } from '../../git/service.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
 export function registerGitRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -10,7 +11,7 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
     argsHint: '[status|log|diff]',
     async handler(args, ctx) {
       const sub = args[0] ?? 'status';
-      const cwd = process.cwd();
+      const cwd = requireShellPaths(ctx).workingDirectory;
       if (!GitService.isGitRepo(cwd)) {
         const initResult = GitService.initRepo(cwd);
         if (!initResult.success) {

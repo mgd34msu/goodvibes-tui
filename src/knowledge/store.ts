@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { SQLiteStore } from '../state/sqlite-store.ts';
 import type {
   KnowledgeConsolidationCandidateRecord,
@@ -29,7 +28,7 @@ import type {
 import {
   createSchema,
   nowMs,
-  resolveDefaultKnowledgeDbPath,
+  resolveKnowledgeDbPathFromControlPlaneDir,
   stableText,
   uniq,
 } from './store-schema.ts';
@@ -71,12 +70,17 @@ export interface KnowledgeStoreConfig {
   };
 }
 
-function resolveKnowledgeDbPath(config: KnowledgeStoreConfig = {}): string {
+function resolveKnowledgeDbPath(config: KnowledgeStoreConfig): string {
   const controlPlaneDir = typeof config.configManager?.getControlPlaneConfigDir === 'function'
     ? config.configManager.getControlPlaneConfigDir()
     : undefined;
-  return config.dbPath
-    ?? (controlPlaneDir ? join(controlPlaneDir, 'knowledge.sqlite') : resolveDefaultKnowledgeDbPath());
+  const dbPath = config.dbPath ?? (
+    controlPlaneDir ? resolveKnowledgeDbPathFromControlPlaneDir(controlPlaneDir) : undefined
+  );
+  if (!dbPath) {
+    throw new Error('KnowledgeStore requires an explicit dbPath or configManager.getControlPlaneConfigDir().');
+  }
+  return dbPath;
 }
 
 export class KnowledgeStore {
@@ -95,7 +99,7 @@ export class KnowledgeStore {
   private readonly consolidationReports = new Map<string, KnowledgeConsolidationReportRecord>();
   private readonly schedules = new Map<string, KnowledgeScheduleRecord>();
 
-  constructor(config: KnowledgeStoreConfig = {}) {
+  constructor(config: KnowledgeStoreConfig) {
     this.dbPath = resolveKnowledgeDbPath(config);
     this.sqlite = new SQLiteStore(this.dbPath);
     void this.init();

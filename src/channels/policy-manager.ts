@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
 import { PersistentStore } from '../state/persistent-store.ts';
 import type {
   ChannelConversationKind,
@@ -16,7 +15,6 @@ interface ChannelPolicySnapshot extends Record<string, unknown> {
   readonly audit: readonly ChannelPolicyAuditRecord[];
 }
 
-const STORE_PATH = join(process.cwd(), '.goodvibes', 'tui', 'channels', 'policies.json');
 const MAX_AUDIT_RECORDS = 500;
 
 function defaultPolicy(surface: ChannelSurface): ChannelPolicyRecord {
@@ -72,8 +70,20 @@ export class ChannelPolicyManager {
   private readonly audit: ChannelPolicyAuditRecord[] = [];
   private loaded = false;
 
-  constructor(store?: PersistentStore<ChannelPolicySnapshot>) {
-    this.store = store ?? new PersistentStore<ChannelPolicySnapshot>(STORE_PATH);
+  constructor(
+    options: {
+      readonly store?: PersistentStore<ChannelPolicySnapshot>;
+      readonly storePath?: string;
+    },
+  ) {
+    if (options.store) {
+      this.store = options.store;
+      return;
+    }
+    if (!options.storePath) {
+      throw new Error('ChannelPolicyManager requires an explicit store or storePath');
+    }
+    this.store = new PersistentStore<ChannelPolicySnapshot>(options.storePath);
   }
 
   async start(): Promise<void> {

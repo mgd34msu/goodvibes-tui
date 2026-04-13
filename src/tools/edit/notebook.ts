@@ -233,7 +233,7 @@ export function executeNotebookEdit(
 
   let resolvedPath: string;
   try {
-    resolvedPath = resolveAndValidatePath(nbOps.path);
+    resolvedPath = resolveAndValidatePath(nbOps.path, env.cwd);
   } catch (err) {
     return Promise.resolve({ success: false, error: `Path error: ${err instanceof Error ? err.message : String(err)}` });
   }

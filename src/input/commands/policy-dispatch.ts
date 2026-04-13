@@ -10,9 +10,10 @@ import type { PolicyRuntimeState } from '../../runtime/permissions/policy-runtim
 import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
 import type { PolicyRule, PermissionsConfig, DivergenceStats } from '../../runtime/permissions/types.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
 function getPolicyState(ctx?: CommandContext): PolicyRuntimeState {
-  const policyRuntimeState = ctx?.policyRuntimeState;
+  const policyRuntimeState = ctx?.extensions.policyRuntimeState;
   if (!policyRuntimeState) {
     throw new Error('Policy runtime state is not available in this runtime.');
   }
@@ -20,7 +21,7 @@ function getPolicyState(ctx?: CommandContext): PolicyRuntimeState {
 }
 
 function getRegistry(ctx?: CommandContext) {
-  return ctx?.policyRegistry ?? getPolicyState(ctx).getRegistry();
+  return ctx?.extensions.policyRegistry ?? getPolicyState(ctx).getRegistry();
 }
 
 function fmtRate(rate: number): string {
@@ -75,6 +76,7 @@ async function handleLoad(args: string[], context: CommandContext): Promise<void
 async function handleSimulate(args: string[], context: CommandContext): Promise<void> {
   const registry = getRegistry(context);
   const policyState = getPolicyState(context);
+  const projectRoot = requireShellPaths(context).workingDirectory;
   const candidate = registry.getCandidate();
   const current = registry.getCurrent();
   if (!candidate) {
@@ -87,6 +89,7 @@ async function handleSimulate(args: string[], context: CommandContext): Promise<
   }
   const currentConfig: PermissionsConfig = {
     mode: 'default',
+    projectRoot,
     rules: current?.rules ?? [],
     defaultEffect: 'allow',
   };
@@ -96,6 +99,7 @@ async function handleSimulate(args: string[], context: CommandContext): Promise<
   }
   const candidateConfig: PermissionsConfig = {
     mode: 'default',
+    projectRoot,
     rules: candidateForSim.rules,
     defaultEffect: 'allow',
   };
@@ -200,9 +204,9 @@ async function handlePreflight(_args: string[], context: CommandContext): Promis
     ...(candidate ? lintPolicyConfig({ mode: 'custom', rules: candidate.rules }) : []),
   ];
   const review = buildPolicyPreflightReview({
-    config: context.config,
+    config: context.platform.config,
     lintFindings,
-    mcpServers: context.mcpRegistry.listServerSecurity().map((server) => ({
+    mcpServers: context.extensions.mcpRegistry.listServerSecurity().map((server) => ({
       serverName: server.name,
       trustMode: server.trustMode,
       role: server.role,

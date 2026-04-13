@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ArtifactReference, ArtifactStore } from '../artifacts/index.ts';
 import { ChannelDeliveryRouter, RouteBindingManager } from '../channels/index.ts';
-import { ConfigManager } from '../config/manager.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
@@ -98,8 +97,6 @@ interface ResolvedDeliveryTarget {
 }
 
 export class AutomationDeliveryManager {
-  private readonly serviceRegistry: ServiceRegistry;
-  private readonly configManager: ConfigManager;
   private readonly routeBindings: RouteBindingManager;
   private readonly deliveryRouter: ChannelDeliveryRouter;
   private runtimeDispatch: DomainDispatch | null = null;
@@ -107,21 +104,28 @@ export class AutomationDeliveryManager {
 
   constructor(config: {
     readonly serviceRegistry?: ServiceRegistry;
-    readonly configManager?: ConfigManager;
+    readonly configManager?: import('../config/manager.ts').ConfigManager;
     readonly routeBindings: RouteBindingManager;
     readonly deliveryRouter?: ChannelDeliveryRouter;
     readonly artifactStore?: ArtifactStore;
     readonly runtimeStore?: RuntimeStore;
     readonly runtimeBus?: RuntimeEventBus;
   }) {
-    this.serviceRegistry = config.serviceRegistry ?? new ServiceRegistry();
-    this.configManager = config.configManager ?? new ConfigManager();
     this.routeBindings = config.routeBindings;
-    this.deliveryRouter = config.deliveryRouter ?? new ChannelDeliveryRouter({
-      configManager: this.configManager,
-      serviceRegistry: this.serviceRegistry,
-      ...(config.artifactStore ? { artifactStore: config.artifactStore } : {}),
-    });
+    if (config.deliveryRouter) {
+      this.deliveryRouter = config.deliveryRouter;
+    } else {
+      if (!config.serviceRegistry || !config.configManager || !config.artifactStore) {
+        throw new Error(
+          'AutomationDeliveryManager requires serviceRegistry, configManager, and artifactStore when no deliveryRouter is provided.',
+        );
+      }
+      this.deliveryRouter = new ChannelDeliveryRouter({
+        configManager: config.configManager,
+        serviceRegistry: config.serviceRegistry,
+        artifactStore: config.artifactStore,
+      });
+    }
     if (config.runtimeStore) this.runtimeDispatch = createDomainDispatch(config.runtimeStore);
     this.runtimeBus = config.runtimeBus ?? null;
   }

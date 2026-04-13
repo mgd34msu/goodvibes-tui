@@ -1,6 +1,8 @@
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
+import { join } from 'node:path';
 import { AGENT_TEMPLATES } from '../../tools/agent/manager.ts';
 import { ArchetypeLoader, type AgentArchetype } from '../../agents/archetypes.ts';
+import { requireOpsApi, requireReadModels, requireShellPaths } from './runtime-services.ts';
 
 type TeamworkModeId =
   | 'local-engineer'
@@ -124,16 +126,17 @@ function buildArchetypeMode(archetype: AgentArchetype): ResolvedArchetypeMode {
   };
 }
 
-function listArchetypeModes(): ResolvedArchetypeMode[] {
-  const loader = new ArchetypeLoader();
+function listArchetypeModes(projectRoot: string): ResolvedArchetypeMode[] {
+  const loader = new ArchetypeLoader(join(projectRoot, '.goodvibes', 'agents'));
   return loader.listArchetypes()
     .map(buildArchetypeMode)
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function buildTeamworkReviewSnapshot(ctx: CommandContext): TeamworkReviewSnapshot {
-  const archetypes = listArchetypeModes();
-  const tasks = ctx.runtimeStore ? [...ctx.runtimeStore.getState().tasks.tasks.values()] : [];
+  const projectRoot = requireShellPaths(ctx).workingDirectory;
+  const archetypes = listArchetypeModes(projectRoot);
+  const tasks = [...requireReadModels(ctx).tasks.getSnapshot().tasks];
   return {
     builtinArchetypes: archetypes.filter((entry) => entry.source === 'builtin').length,
     customArchetypes: archetypes.filter((entry) => entry.source === 'custom').length,
@@ -148,10 +151,7 @@ function buildTeamworkReviewSnapshot(ctx: CommandContext): TeamworkReviewSnapsho
 }
 
 function createModeTask(mode: TeamworkMode, title: string, ctx: CommandContext): string {
-  if (!ctx.taskManager) {
-    throw new Error('Task manager is not available for teamwork task creation in this runtime.');
-  }
-  const task = ctx.taskManager.createTask({
+  const task = requireOpsApi(ctx).tasks.create({
     kind: mode.taskKind,
     owner: mode.owner,
     title,
@@ -167,10 +167,7 @@ function createModeTask(mode: TeamworkMode, title: string, ctx: CommandContext):
 }
 
 function createResolvedModeTask(mode: ResolvedArchetypeMode, title: string, ctx: CommandContext): string {
-  if (!ctx.taskManager) {
-    throw new Error('Task manager is not available for teamwork task creation in this runtime.');
-  }
-  const task = ctx.taskManager.createTask({
+  const task = requireOpsApi(ctx).tasks.create({
     kind: mode.taskKind,
     owner: mode.owner,
     title,
@@ -284,7 +281,7 @@ export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void
       }
 
       if (sub === 'templates') {
-        const archetypes = listArchetypeModes();
+        const archetypes = listArchetypeModes(requireShellPaths(ctx).workingDirectory);
         ctx.print([
           'Teamwork Templates',
           ...Object.entries(AGENT_TEMPLATES).map(([name, template]) => (
@@ -298,7 +295,7 @@ export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void
       }
 
       if (sub === 'archetypes') {
-        const archetypes = listArchetypeModes();
+        const archetypes = listArchetypeModes(requireShellPaths(ctx).workingDirectory);
         ctx.print([
           'Teamwork Archetypes',
           ...archetypes.map((entry) => `  ${entry.id.padEnd(18)} ${entry.family.padEnd(10)} ${entry.source.padEnd(7)} ${entry.reviewMode.padEnd(4)} ${entry.executionProtocol}${entry.validationIssues.length > 0 ? '  issues' : ''}`),
@@ -307,7 +304,7 @@ export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void
       }
 
       if (sub === 'validate') {
-        const archetypes = listArchetypeModes();
+        const archetypes = listArchetypeModes(requireShellPaths(ctx).workingDirectory);
         const invalid = archetypes.filter((entry) => entry.validationIssues.length > 0);
         ctx.print(invalid.length > 0
           ? [
@@ -327,7 +324,7 @@ export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /teamwork archetype <name>');
           return;
         }
-        const mode = listArchetypeModes().find((entry) => entry.id === archetypeName);
+        const mode = listArchetypeModes(requireShellPaths(ctx).workingDirectory).find((entry) => entry.id === archetypeName);
         if (!mode) {
           ctx.print(`Unknown archetype: ${archetypeName}`);
           return;
@@ -356,7 +353,7 @@ export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /teamwork create-archetype <name> <title...>');
           return;
         }
-        const mode = listArchetypeModes().find((entry) => entry.id === archetypeName);
+        const mode = listArchetypeModes(requireShellPaths(ctx).workingDirectory).find((entry) => entry.id === archetypeName);
         if (!mode) {
           ctx.print(`Unknown archetype: ${archetypeName}`);
           return;

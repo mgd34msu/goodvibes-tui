@@ -3,8 +3,8 @@
  */
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'node:os';
 import { logger } from '../utils/logger.ts';
+import type { ShellPathService } from '../runtime/shell-paths.ts';
 
 export interface McpServerConfig {
   /** Unique server name, used as namespace prefix: mcp:<name>:<tool> */
@@ -29,13 +29,15 @@ export interface McpConfig {
   servers: McpServerConfig[];
 }
 
+export type McpConfigRoots = Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
+
 /**
  * loadMcpConfig - Scan multiple locations in precedence order (later wins).
  * Returns merged config from all found files. Returns empty config on failure.
  */
-export function loadMcpConfig(baseDir?: string): McpConfig {
-  const cwd = baseDir ?? process.cwd();
-  const home = homedir();
+export function loadMcpConfig(roots: McpConfigRoots): McpConfig {
+  const cwd = roots.workingDirectory;
+  const home = roots.homeDirectory;
 
   // Scan locations in precedence order (later wins)
   const locations = [

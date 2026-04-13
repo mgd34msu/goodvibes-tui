@@ -1,9 +1,18 @@
-import type { ChatRequest, ChatResponse, LLMProvider, PartialToolCall, ProviderMessage, ProviderRuntimeMetadata } from './interface.ts';
+import type {
+  ChatRequest,
+  ChatResponse,
+  LLMProvider,
+  PartialToolCall,
+  ProviderMessage,
+  ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
+} from './interface.ts';
 import type { ToolCall, ToolDefinition } from '../types/tools.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
 import { resolveSubscriptionAccessToken } from '../config/subscription-auth.ts';
 import { arch, platform, release } from 'node:os';
+import type { SubscriptionManager } from '../config/subscriptions.ts';
 
 const OPENAI_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
 
@@ -354,20 +363,24 @@ export class OpenAICodexProvider implements LLMProvider {
   readonly name = 'openai-subscriber';
   readonly models: string[] = [];
 
+  constructor(
+    private readonly subscriptionManager: Pick<SubscriptionManager, 'get' | 'saveSubscription' | 'resolveAccessToken'>,
+  ) {}
+
   async chat(params: ChatRequest): Promise<ChatResponse> {
-    const accessToken = await resolveSubscriptionAccessToken('openai');
+    const accessToken = await resolveSubscriptionAccessToken('openai', this.subscriptionManager);
     if (!accessToken) {
       throw new ProviderError('No active OpenAI subscription token found. Run /subscription login openai start.', 401);
     }
     return chatWithOpenAICodex(accessToken, params);
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: this.name,
       subscriptionProviderId: 'openai',
-    });
+    }, deps);
     return {
       auth: {
         mode: 'oauth',

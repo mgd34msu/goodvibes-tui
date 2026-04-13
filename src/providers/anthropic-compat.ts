@@ -3,6 +3,7 @@ import type {
   ChatRequest,
   ChatResponse,
   ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
 import { ProviderError } from '../types/errors.ts';
@@ -309,7 +310,7 @@ export class AnthropicCompatProvider implements LLMProvider {
     });
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: this.name,
@@ -320,7 +321,7 @@ export class AnthropicCompatProvider implements LLMProvider {
       allowAnonymous: this.allowAnonymous,
       anonymousConfigured: this.anonymousConfigured,
       anonymousDetail: this.anonymousDetail,
-    });
+    }, deps);
     return {
       auth: {
         mode: this.allowAnonymous && !this.apiKey ? 'anonymous' : 'api-key',

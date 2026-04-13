@@ -216,13 +216,15 @@ const SYNTHETIC_ENTRIES: BenchmarkEntry[] = [
 
 const TMP_BASE = join(import.meta.dir, '__benchmarks_tmp__');
 let tmpHomeDir: string;
+let benchmarkDir: string;
 let benchmarkStore: BenchmarkStore;
 
 beforeEach(() => {
   tmpHomeDir = join(TMP_BASE, `run-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(join(tmpHomeDir, '.goodvibes', 'tui'), { recursive: true });
-  benchmarkStore = new BenchmarkStore({ dir: join(tmpHomeDir, '.goodvibes', 'tui') });
-  writeBenchmarksCache(SYNTHETIC_ENTRIES, tmpHomeDir);
+  benchmarkDir = join(tmpHomeDir, '.goodvibes', 'tui');
+  mkdirSync(benchmarkDir, { recursive: true });
+  benchmarkStore = new BenchmarkStore({ dir: benchmarkDir });
+  writeBenchmarksCache(SYNTHETIC_ENTRIES, benchmarkDir);
   benchmarkStore.initBenchmarks();
 });
 
@@ -232,7 +234,7 @@ afterEach(() => {
 
 describe('BenchmarkStore.getBenchmarks', () => {
   it('returns undefined when cache is empty', () => {
-    writeBenchmarksCache([], tmpHomeDir);
+    writeBenchmarksCache([], benchmarkDir);
     benchmarkStore.initBenchmarks();
     expect(benchmarkStore.getBenchmarks('GPT-4')).toBeUndefined();
   });

@@ -11,6 +11,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import type { Line } from '../../types/grid.ts';
 import type { Orchestrator } from '../../core/orchestrator.ts';
+const TEST_ROOT = '/tmp/goodvibes-test';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,7 +58,7 @@ describe('DiffPanel', () => {
   let panel: DiffPanel;
 
   beforeEach(() => {
-    panel = new DiffPanel();
+    panel = new DiffPanel(TEST_ROOT);
   });
 
   describe('render() — empty state', () => {
@@ -419,7 +420,7 @@ describe('GitPanel', () => {
   let panel: GitPanel;
 
   beforeEach(() => {
-    panel = new GitPanel();
+    panel = new GitPanel(TEST_ROOT);
   });
 
   describe('render() — initial loading state', () => {

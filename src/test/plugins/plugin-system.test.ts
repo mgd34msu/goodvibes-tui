@@ -9,6 +9,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { ConfigManager } from '../../config/manager.ts';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import type { SessionEvent } from '../../runtime/events/index.ts';
 import type { CommandRegistry, SlashCommand } from '../../input/command-registry.ts';
@@ -22,6 +23,7 @@ import { MediaProviderRegistry } from '../../media/index.ts';
 import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
 import { VoiceProviderRegistry } from '../../voice/index.ts';
 import { WebSearchProviderRegistry } from '../../web-search/index.ts';
+import type { SearchProviderContext } from '../../web-search/providers/shared.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,13 @@ function makeTempDir(): string {
   const dir = join('/tmp', `gv-plugin-test-${process.pid}-${Date.now()}`);
   mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+function makePluginPathOptions(root: string) {
+  return {
+    cwd: root,
+    homeDir: join(root, 'home'),
+  };
 }
 
 function makeManifest(pluginDir: string, fields: Record<string, unknown> = {}) {
@@ -125,7 +134,16 @@ function makeFakeRuntimeBus() {
   return new RuntimeEventBus();
 }
 
+const TEST_SEARCH_CONTEXT: SearchProviderContext = {
+  env: {},
+  serviceRegistry: {
+    get: () => null,
+  },
+};
+
 function makeFakeDeps(): PluginLoaderDeps {
+  const configRoot = makeTempDir();
+  const configManager = new ConfigManager({ workingDir: configRoot, configDir: join(configRoot, '.goodvibes', 'tui') });
   return {
     runtimeBus: makeFakeRuntimeBus(),
     commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
@@ -134,10 +152,10 @@ function makeFakeDeps(): PluginLoaderDeps {
     gatewayMethods: new GatewayMethodCatalog({ includeBuiltins: false }),
     channelRegistry: new ChannelPluginRegistry(),
     channelDeliveryRouter: new ChannelDeliveryRouter({ strategies: [] }),
-    memoryEmbeddingRegistry: new MemoryEmbeddingProviderRegistry(),
+    memoryEmbeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
     voiceProviderRegistry: new VoiceProviderRegistry(),
     mediaProviderRegistry: new MediaProviderRegistry(),
-    webSearchProviderRegistry: new WebSearchProviderRegistry(),
+    webSearchProviderRegistry: new WebSearchProviderRegistry(TEST_SEARCH_CONTEXT),
     getPluginConfig: (_name: string) => ({}),
     isEnabled: (_name: string) => true,
   };
@@ -177,7 +195,11 @@ function createLoadedPlugin(overrides: Partial<LoadedPlugin> = {}): LoadedPlugin
 function getPluginManagerTestAccess(
   managerCtor: typeof import('../../plugins/manager.ts').PluginManager,
 ): PluginManagerTestAccess {
-  return new managerCtor() as unknown as PluginManagerTestAccess;
+  const tempRoot = makeTempDir();
+  return new managerCtor({
+    pathOptions: makePluginPathOptions(tempRoot),
+    stateFilePath: join(tempRoot, 'plugins.json'),
+  }) as unknown as PluginManagerTestAccess;
 }
 
 // ─── discoverPlugins ──────────────────────────────────────────────────────────
@@ -185,7 +207,8 @@ function getPluginManagerTestAccess(
 describe('discoverPlugins', () => {
   test('returns an array when no plugin directories exist', async () => {
     const { discoverPlugins } = await import('../../plugins/loader.ts');
-    const result = discoverPlugins(makeTempDir());
+    const tempRoot = makeTempDir();
+    const result = discoverPlugins(makePluginPathOptions(tempRoot));
     expect(Array.isArray(result)).toBe(true);
   });
 
@@ -196,7 +219,7 @@ describe('discoverPlugins', () => {
     mkdirSync(pluginDir, { recursive: true });
 
     try {
-      const result = discoverPlugins(tempRoot);
+      const result = discoverPlugins(makePluginPathOptions(tempRoot));
       expect(result.some((plugin) => plugin.pluginDir === pluginDir)).toBe(false);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
@@ -204,25 +227,27 @@ describe('discoverPlugins', () => {
   });
 
   test('prefers project-local plugins over global plugins with the same name', async () => {
-    const { discoverPlugins, PLUGINS_DIR } = await import('../../plugins/loader.ts');
+    const { discoverPlugins, getUserPluginDirectory } = await import('../../plugins/loader.ts');
     const tempRoot = makeTempDir();
+    const pathOptions = makePluginPathOptions(tempRoot);
     const localPluginDir = join(tempRoot, '.goodvibes', 'plugins', 'duplicate-plugin');
-    const globalPluginDir = join(PLUGINS_DIR, `duplicate-plugin-${process.pid}-${Date.now()}`);
-    const hadGlobalDir = existsSync(PLUGINS_DIR);
+    const userPluginDir = getUserPluginDirectory(pathOptions);
+    const globalPluginDir = join(userPluginDir, `duplicate-plugin-${process.pid}-${Date.now()}`);
+    const hadGlobalDir = existsSync(userPluginDir);
     mkdirSync(localPluginDir, { recursive: true });
     mkdirSync(globalPluginDir, { recursive: true });
     makeManifest(localPluginDir, { name: 'duplicate-plugin', description: 'local' });
     makeManifest(globalPluginDir, { name: 'duplicate-plugin', description: 'global' });
 
     try {
-      const result = discoverPlugins(tempRoot);
+      const result = discoverPlugins(pathOptions);
       expect(result.filter((plugin) => plugin.manifest.name === 'duplicate-plugin')).toHaveLength(1);
       expect(result.find((plugin) => plugin.manifest.name === 'duplicate-plugin')?.pluginDir).toBe(localPluginDir);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
       rmSync(globalPluginDir, { recursive: true, force: true });
       if (!hadGlobalDir) {
-        rmSync(PLUGINS_DIR, { recursive: true, force: true });
+        rmSync(userPluginDir, { recursive: true, force: true });
       }
     }
   });
@@ -623,10 +648,12 @@ describe('createPluginAPI', () => {
   test('registers extension SDK contributions for gateway, memory, voice, and media domains', async () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const gatewayMethods = new GatewayMethodCatalog({ includeBuiltins: false });
-    const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry();
+    const configRoot = makeTempDir();
+    const configManager = new ConfigManager({ workingDir: configRoot, configDir: join(configRoot, '.goodvibes', 'tui') });
+    const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
     const voiceProviderRegistry = new VoiceProviderRegistry();
     const mediaProviderRegistry = new MediaProviderRegistry();
-    const webSearchProviderRegistry = new WebSearchProviderRegistry();
+    const webSearchProviderRegistry = new WebSearchProviderRegistry(TEST_SEARCH_CONTEXT);
     const cleanup: Array<() => void> = [];
     const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,

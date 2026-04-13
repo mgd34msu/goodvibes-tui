@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { homedir } from 'node:os';
 import { logger } from '../utils/logger.ts';
 import { classifyHostTrustTier, extractHostname } from '../tools/fetch/trust-tiers.ts';
 import type {
@@ -30,22 +29,19 @@ export interface ArtifactStoreConfig {
   readonly blockedHosts?: readonly string[];
 }
 
-function resolveDefaultArtifactRootDir(): string {
-  const runtime = globalThis as typeof globalThis & { __gvTestConfigDir?: string };
-  const baseDir = runtime.__gvTestConfigDir ?? join(homedir(), '.goodvibes', 'tui');
-  return join(baseDir, 'artifacts');
-}
-
 const DEFAULT_ARTIFACT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_ARTIFACT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
-function resolveArtifactRootDir(config: ArtifactStoreConfig = {}): string {
+function resolveArtifactRootDir(config: ArtifactStoreConfig): string {
   const controlPlaneDir = typeof config.configManager?.getControlPlaneConfigDir === 'function'
     ? config.configManager.getControlPlaneConfigDir()
     : undefined;
-  return config.rootDir
-    ?? (controlPlaneDir ? join(controlPlaneDir, 'artifacts') : resolveDefaultArtifactRootDir());
+  const rootDir = config.rootDir ?? (controlPlaneDir ? join(controlPlaneDir, 'artifacts') : undefined);
+  if (!rootDir) {
+    throw new Error('ArtifactStore requires an explicit rootDir or configManager.getControlPlaneConfigDir().');
+  }
+  return rootDir;
 }
 
 function normalizeMimeType(value: string | undefined, fallbackFilename?: string): string {
@@ -86,7 +82,7 @@ export class ArtifactStore {
   private readonly trustedHosts: readonly string[];
   private readonly blockedHosts: readonly string[];
 
-  constructor(config: ArtifactStoreConfig = {}) {
+  constructor(config: ArtifactStoreConfig) {
     this.rootDir = resolveArtifactRootDir(config);
     this.maxBytes = Math.max(1, config.maxBytes ?? DEFAULT_ARTIFACT_MAX_BYTES);
     this.defaultRetentionMs = Math.max(0, config.defaultRetentionMs ?? DEFAULT_ARTIFACT_RETENTION_MS);

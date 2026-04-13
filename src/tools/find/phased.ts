@@ -22,6 +22,6 @@ import { createFindTool } from './index.ts';
  *
  * @returns A PhasedTool that delegates execution to an owned find tool instance.
  */
-export function createPhasedFindTool() {
-  return asPhasedTool(createFindTool(), { category: 'read', cancellable: true, skipPhases: ['prehook', 'posthook'] });
+export function createPhasedFindTool(projectRoot: string) {
+  return asPhasedTool(createFindTool(projectRoot), { category: 'read', cancellable: true, skipPhases: ['prehook', 'posthook'] });
 }

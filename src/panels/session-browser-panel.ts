@@ -4,8 +4,9 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { SessionManager, type SessionInfo } from '../sessions/manager.ts';
+import type { SessionInfo } from '../sessions/manager.ts';
 import { logger } from '../utils/logger.ts';
+import type { SessionBrowserQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -92,7 +93,7 @@ export class SessionBrowserPanel extends BasePanel {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
-    private readonly sessionManager: SessionManager,
+    private readonly sessionManager: SessionBrowserQuery,
     private resumeSession?: (sessionId: string) => void,
   ) {
     super('sessions', 'Sessions', 'H', 'session');

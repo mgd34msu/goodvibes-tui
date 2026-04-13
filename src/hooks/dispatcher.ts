@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'fs';
+import { dirname } from 'path';
 import type { HookDefinition, HookChain, HookEvent, HookResult } from './types.ts';
 import { matchesEventPath, matchesMatcher } from './matcher.ts';
 import { getHookPointContract } from './contracts.ts';
@@ -18,12 +19,18 @@ import type { TriggerManagerLike } from '../workflow/trigger-executor.ts';
 type HookRunnerDeps = {
   readonly agentManager?: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'>;
   readonly toolLLM?: Pick<ToolLLM, 'chat'>;
+  readonly projectRoot?: string;
 };
 
 /** Global timeout: if cumulative hook time exceeds this, skip remaining */
 const GLOBAL_TIMEOUT_MS = 120_000;
 
-function runHook(hook: HookDefinition, event: HookEvent, deps: HookRunnerDeps): Promise<HookResult> {
+function runHook(
+  hook: HookDefinition,
+  event: HookEvent,
+  deps: HookRunnerDeps,
+  hooksBaseDirectory: string | null,
+): Promise<HookResult> {
   switch (hook.type) {
     case 'command': return commandRunner.run(hook, event);
     case 'prompt': return promptRunner.run(hook, event, deps.toolLLM ?? null);
@@ -33,7 +40,13 @@ function runHook(hook: HookDefinition, event: HookEvent, deps: HookRunnerDeps): 
       }
       return agentRunner.run(hook, event, deps.agentManager);
     case 'http': return httpRunner.run(hook, event);
-    case 'ts': return tsRunner.run(hook, event);
+    case 'ts': {
+      const projectRoot = deps.projectRoot ?? hooksBaseDirectory;
+      if (!projectRoot) {
+        return Promise.resolve({ ok: false, error: 'ts hook runner requires an explicit project root' });
+      }
+      return tsRunner.run(hook, event, projectRoot);
+    }
     default:
       return Promise.resolve({ ok: false, error: `unknown hook type: ${(hook as HookDefinition).type}` });
   }
@@ -43,6 +56,7 @@ export class HookDispatcher {
   private hooks = new Map<string, HookDefinition[]>();
   private chains: HookChain[] = [];
   private triggerManager: TriggerManagerLike | null = null;
+  private hooksBaseDirectory: string | null = null;
   private readonly runnerDeps: HookRunnerDeps;
   private readonly activityTracker: HookActivityTracker;
 
@@ -58,6 +72,7 @@ export class HookDispatcher {
 
   /** Load hooks from hooks.json file */
   loadFromFile(filePath: string): void {
+    this.hooksBaseDirectory = dirname(filePath);
     try {
       // Warn if hooks.json is world-writable — it is a trust boundary.
       try {
@@ -214,7 +229,7 @@ export class HookDispatcher {
       // Async hooks fire and forget
       if (hook.async) {
         const asyncStart = Date.now();
-        runHook(hook, event, this.runnerDeps)
+        runHook(hook, event, this.runnerDeps, this.hooksBaseDirectory)
           .then((result) => {
             this.activityTracker.record(event, {
               pattern,
@@ -247,7 +262,7 @@ export class HookDispatcher {
       let result: HookResult;
       const hookStart = Date.now();
       try {
-        result = await runHook(hook, event, this.runnerDeps);
+        result = await runHook(hook, event, this.runnerDeps, this.hooksBaseDirectory);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         logger.error('HookDispatcher: hook threw unexpectedly', {

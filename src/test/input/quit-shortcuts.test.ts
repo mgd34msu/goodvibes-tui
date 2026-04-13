@@ -19,12 +19,27 @@ function wrappedPromptInfo() {
 }
 
 function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandContext {
+  const providerRegistry = {} as never;
+  const conversationManager = { log: () => {} } as never;
+  const configManager = {} as never;
   return {
-    providerRegistry: {} as never,
-    conversationManager: { log: () => {} } as never,
-    config: {} as never,
-    configManager: {} as never,
-    runtime: {} as never,
+    session: {
+      conversationManager,
+      runtime: {} as never,
+    },
+    provider: {
+      providerRegistry,
+    },
+    workspace: {},
+    platform: {
+      config: {} as never,
+      configManager,
+    },
+    ops: {},
+    extensions: {
+      toolRegistry: {} as never,
+      mcpRegistry: {} as never,
+    },
     renderRequest: () => {},
     submitInput: () => {},
     executeCommand: async () => false,

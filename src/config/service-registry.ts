@@ -14,7 +14,6 @@
  */
 
 import { readFileSync } from 'fs';
-import { join } from 'path';
 import { SecretsManager } from './secrets.ts';
 import {
   describeSecretRef,
@@ -89,16 +88,8 @@ export interface ServiceConnectionTestResult {
 }
 
 export interface ServiceRegistryOptions {
-  readonly secretsManager?: SecretsManager;
-  readonly subscriptionManager?: SubscriptionManager;
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function getServicesFilePath(): string {
-  return join(process.cwd(), '.goodvibes', 'tui', 'services.json');
+  readonly secretsManager: SecretsManager;
+  readonly subscriptionManager: SubscriptionManager;
 }
 
 function readServicesFile(filePath: string): Record<string, ServiceConfig> {
@@ -125,10 +116,10 @@ export class ServiceRegistry {
   private readonly secretsManager: SecretsManager;
   private readonly subscriptionManager: SubscriptionManager;
 
-  constructor(servicesFilePath?: string, options: ServiceRegistryOptions = {}) {
-    this.servicesFilePath = servicesFilePath ?? getServicesFilePath();
-    this.secretsManager = options.secretsManager ?? new SecretsManager();
-    this.subscriptionManager = options.subscriptionManager ?? new SubscriptionManager();
+  constructor(servicesFilePath: string, options: ServiceRegistryOptions) {
+    this.servicesFilePath = servicesFilePath;
+    this.secretsManager = options.secretsManager;
+    this.subscriptionManager = options.subscriptionManager;
   }
 
   /**
@@ -157,6 +148,7 @@ export class ServiceRegistry {
       try {
         const resolved = await resolveSecretRef(candidate, {
           resolveLocalSecret: (key) => this.secretsManager.get(key),
+          homeDirectory: this.secretsManager.getGlobalHome?.() ?? undefined,
         });
         return resolved.value;
       } catch (error) {

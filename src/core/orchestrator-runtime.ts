@@ -11,7 +11,7 @@ import type { SessionMemoryStore } from './session-memory.ts';
 import type { FavoritesStore } from '../providers/favorites.ts';
 
 export type OrchestratorCoreServices = {
-  configManager?: Pick<ConfigManager, 'get' | 'getCategory'>;
+  configManager?: Pick<ConfigManager, 'get' | 'getCategory' | 'getWorkingDirectory'>;
   providerRegistry?: ProviderRegistry;
   cacheHitTracker?: Pick<CacheHitTracker, 'getMetrics'>;
   sessionLineageTracker?: SessionLineageTracker;
@@ -95,7 +95,7 @@ export function getIdempotencyStore(
 
 export function requireConfigManager(
   services: OrchestratorCoreServices,
-): Pick<ConfigManager, 'get' | 'getCategory'> {
+): Pick<ConfigManager, 'get' | 'getCategory' | 'getWorkingDirectory'> {
   if (!services.configManager) {
     throw new Error('Orchestrator requires configManager in core services');
   }

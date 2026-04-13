@@ -16,6 +16,7 @@ import {
   normalizeEverySchedule,
   resolveStableAutomationCronOffsetMs,
 } from '../../automation/schedules.ts';
+import type { SpawnAutomationTaskInput } from '../../automation/manager-runtime.ts';
 import type { LegacySchedulerSnapshot } from '../../automation/migration.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 
@@ -40,16 +41,37 @@ describe('AutomationManager', () => {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, `routes-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)),
     });
+    const configManager = config.configManager ?? new ConfigManager({
+      workingDir: root,
+      configDir: join(root, '.goodvibes', 'tui'),
+    });
+    let spawnCount = 0;
     const sessionBroker = new SharedSessionBroker({
       store: new PersistentStore(join(root, `sessions-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)) as never,
       routeBindings,
       agentStatusProvider: { getStatus: () => null },
       messageSender: { send: () => false },
     });
+    const spawnTask = (input: SpawnAutomationTaskInput) => {
+      const id = config.spawnTask
+        ? config.spawnTask(input)
+        : `agent-${++spawnCount}-${input.prompt.length}`;
+      return id;
+    };
+    const cancelTask = (agentId: string) => {
+      config.cancelTask?.(agentId);
+    };
+    const agentStatusProvider = config.agentStatusProvider ?? { getStatus: () => null };
     return new AutomationManager({
+      configManager,
+      jobStore: config.jobStore,
+      runStore: config.runStore,
+      legacyStore: config.legacyStore,
       routeBindings,
       sessionBroker,
-      ...config,
+      spawnTask,
+      cancelTask,
+      agentStatusProvider,
     });
   }
 
@@ -177,7 +199,10 @@ describe('AutomationManager', () => {
   });
 
   test('persists local agent usage telemetry onto completed runs', async () => {
-    const agentManager = new AgentManager({ executor: testAgentExecutor });
+    const agentManager = new AgentManager({
+      executor: testAgentExecutor,
+      configManager: new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') }),
+    });
     const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),

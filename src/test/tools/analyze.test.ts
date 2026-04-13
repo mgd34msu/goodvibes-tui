@@ -9,7 +9,7 @@ import { GitService } from '../../git/service.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { getTestGitService } from '../helpers/runtime-services.ts';
 
-const analyzeTool = createAnalyzeTool(createTestManagers().toolLLM);
+let analyzeTool: ReturnType<typeof createAnalyzeTool>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -36,6 +36,7 @@ beforeEach(async () => {
   const tmp = await makeTempDir();
   dir = tmp.dir;
   cleanup = tmp.cleanup;
+  analyzeTool = createAnalyzeTool(createTestManagers().toolLLM, null, dir);
 
   await mkdir(join(dir, 'src'), { recursive: true });
 

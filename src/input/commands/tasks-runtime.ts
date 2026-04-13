@@ -1,7 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { RuntimeTask, TaskLifecycleState } from '../../runtime/store/domains/tasks.ts';
 import { reviewWorktreeAttachments } from '../../runtime/worktree/registry.ts';
-import { requirePanelManager } from './runtime-services.ts';
+import { requireOperatorClient, requireOpsApi, requirePanelManager, requireShellPaths } from './runtime-services.ts';
 
 function sortRuntimeTasks(tasks: RuntimeTask[]): RuntimeTask[] {
   const statusOrder: TaskLifecycleState[] = ['running', 'queued', 'blocked', 'failed', 'completed', 'cancelled'];
@@ -45,13 +45,8 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      const store = ctx.runtimeStore;
-      if (!store) {
-        ctx.print('Runtime store is not available for task commands.');
-        return;
-      }
-
-      const tasks = sortRuntimeTasks([...store.getState().tasks.tasks.values()]);
+      const operatorClient = requireOperatorClient(ctx);
+      const tasks = sortRuntimeTasks([...operatorClient.tasks.list(500)]);
       const subcommand = args[0]?.toLowerCase() ?? 'list';
 
       if (subcommand === 'list') {
@@ -74,7 +69,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /tasks show <taskId>');
           return;
         }
-        const task = store.getState().tasks.tasks.get(taskId);
+        const task = operatorClient.tasks.get(taskId);
         if (!task) {
           ctx.print(`Unknown task: ${taskId}`);
           return;
@@ -93,7 +88,10 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
           `  children: ${task.childTaskIds.join(', ') || '(none)'}`,
           `  correlationId: ${task.correlationId ?? 'n/a'}`,
           ...(() => {
-            const worktrees = reviewWorktreeAttachments('task', task.id);
+            const shellPaths = requireShellPaths(ctx);
+            const worktrees = reviewWorktreeAttachments('task', task.id, {
+              workingDirectory: shellPaths.workingDirectory,
+            });
             return worktrees.total > 0
               ? [
                   `  worktrees: ${worktrees.total} tracked (${worktrees.active} active / ${worktrees.paused} paused / ${worktrees.cleanupPending} cleanup)`,
@@ -112,7 +110,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /tasks output <taskId>');
           return;
         }
-        const task = store.getState().tasks.tasks.get(taskId);
+        const task = operatorClient.tasks.get(taskId);
         if (!task) {
           ctx.print(`Unknown task: ${taskId}`);
           return;
@@ -127,10 +125,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'create') {
-        if (!ctx.taskManager) {
-          ctx.print('Task manager is not available for task creation in this runtime.');
-          return;
-        }
+        const opsApi = requireOpsApi(ctx);
         const kind = args[1];
         const owner = args[2];
         const title = args.slice(3).join(' ').trim();
@@ -143,7 +138,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print(`Unknown task kind: ${kind}`);
           return;
         }
-        const task = ctx.taskManager.createTask({
+        const task = opsApi.tasks.create({
           kind: kind as import('../../runtime/store/domains/tasks.ts').TaskKind,
           owner,
           title,
@@ -154,10 +149,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'update') {
-        if (!ctx.taskManager) {
-          ctx.print('Task manager is not available for task updates in this runtime.');
-          return;
-        }
+        const opsApi = requireOpsApi(ctx);
         const taskId = args[1];
         const field = args[2];
         const value = args.slice(3).join(' ').trim();
@@ -169,39 +161,33 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print(`Unsupported task update field: ${field}`);
           return;
         }
-        ctx.taskManager.updateTask(taskId, field === 'result' ? { result: value } : { [field]: value });
+        opsApi.tasks.update(taskId, field === 'result' ? { result: value } : { [field]: value });
         ctx.print(`Updated task ${taskId} field ${field}.`);
         return;
       }
 
       if (subcommand === 'complete') {
-        if (!ctx.taskManager) {
-          ctx.print('Task manager is not available for task completion in this runtime.');
-          return;
-        }
+        const opsApi = requireOpsApi(ctx);
         const taskId = args[1];
         if (!taskId) {
           ctx.print('Usage: /tasks complete <taskId> [result]');
           return;
         }
         const result = args.slice(2).join(' ').trim() || undefined;
-        ctx.taskManager.completeTask(taskId, result);
+        opsApi.tasks.complete(taskId, result);
         ctx.print(`Completed task ${taskId}.`);
         return;
       }
 
       if (subcommand === 'fail') {
-        if (!ctx.taskManager) {
-          ctx.print('Task manager is not available for task failure transitions in this runtime.');
-          return;
-        }
+        const opsApi = requireOpsApi(ctx);
         const taskId = args[1];
         const errorText = args.slice(2).join(' ').trim();
         if (!taskId || !errorText) {
           ctx.print('Usage: /tasks fail <taskId> <error...>');
           return;
         }
-        ctx.taskManager.failTask(taskId, { error: errorText });
+        opsApi.tasks.fail(taskId, { error: errorText });
         ctx.print(`Failed task ${taskId}.`);
         return;
       }
@@ -212,26 +198,23 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
         ctx.print(`Usage: /tasks ${subcommand} <taskId> [note]`);
         return;
       }
-      if (!ctx.opsControlPlane) {
-        ctx.print('Ops control plane is not available for task interventions in this runtime.');
-        return;
-      }
+      const opsApi = requireOpsApi(ctx);
       try {
         switch (subcommand) {
           case 'cancel':
-            ctx.opsControlPlane.cancelTask(taskId, note);
+            opsApi.tasks.cancel(taskId, note);
             ctx.print(`Cancelled task ${taskId}.`);
             return;
           case 'pause':
-            ctx.opsControlPlane.pauseTask(taskId, note);
+            opsApi.tasks.pause(taskId, note);
             ctx.print(`Paused task ${taskId}.`);
             return;
           case 'resume':
-            ctx.opsControlPlane.resumeTask(taskId, note);
+            opsApi.tasks.resume(taskId, note);
             ctx.print(`Resumed task ${taskId}.`);
             return;
           case 'retry':
-            ctx.opsControlPlane.retryTask(taskId, note);
+            opsApi.tasks.retry(taskId, note);
             ctx.print(`Re-queued task ${taskId}.`);
             return;
           default:

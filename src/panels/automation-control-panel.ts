@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
+import type { UiAutomationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
@@ -38,15 +38,15 @@ function runStatusColor(status: string): string {
 }
 
 export class AutomationControlPanel extends BasePanel {
-  private readonly store?: RuntimeStore;
+  private readonly readModel?: UiReadModel<UiAutomationSnapshot>;
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(store?: RuntimeStore) {
+  public constructor(readModel?: UiReadModel<UiAutomationSnapshot>) {
     super('automation', 'Automation', 'M', 'monitoring');
-    this.store = store;
-    this.unsub = store ? store.subscribe(() => this.markDirty()) : null;
+    this.readModel = readModel;
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
 
   public override onDestroy(): void {
@@ -70,19 +70,15 @@ export class AutomationControlPanel extends BasePanel {
   }
 
   private runs() {
-    if (!this.store) return [];
-    const domain = this.store.getState().automation;
-    return domain.runIds
-      .map((id) => domain.runs.get(id))
-      .filter((run): run is NonNullable<typeof run> => run !== undefined)
-      .sort((a, b) => b.queuedAt - a.queuedAt || a.id.localeCompare(b.id));
+    if (!this.readModel) return [];
+    return [...this.readModel.getSnapshot().runs];
   }
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Automation jobs, active runs, deliveries, and failure posture across the shared control plane.';
 
-    if (!this.store) {
+    if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Automation Control',
         intro,
@@ -101,27 +97,24 @@ export class AutomationControlPanel extends BasePanel {
       return workspace;
     }
 
-    const state = this.store.getState();
-    const jobs = state.automation.jobIds
-      .map((id) => state.automation.jobs.get(id))
-      .filter((job): job is NonNullable<typeof job> => job !== undefined)
-      .sort((a, b) => (b.nextRunAt ?? 0) - (a.nextRunAt ?? 0) || a.name.localeCompare(b.name));
+    const snapshot = this.readModel.getSnapshot();
+    const jobs = [...snapshot.jobs];
     const runs = this.runs();
 
     const summarySection: PanelWorkspaceSection = {
       title: 'Posture',
       lines: [
         buildKeyValueLine(width, [
-          { label: 'jobs', value: String(state.automation.totalJobs), valueColor: state.automation.totalJobs > 0 ? C.info : C.dim },
-          { label: 'runs', value: String(state.automation.totalRuns), valueColor: state.automation.totalRuns > 0 ? C.value : C.dim },
-          { label: 'active', value: String(state.automation.activeRunIds.length), valueColor: state.automation.activeRunIds.length > 0 ? C.warn : C.dim },
-          { label: 'failed', value: String(state.automation.totalFailed), valueColor: state.automation.totalFailed > 0 ? C.error : C.dim },
+          { label: 'jobs', value: String(snapshot.totalJobs), valueColor: snapshot.totalJobs > 0 ? C.info : C.dim },
+          { label: 'runs', value: String(snapshot.totalRuns), valueColor: snapshot.totalRuns > 0 ? C.value : C.dim },
+          { label: 'active', value: String(snapshot.activeRunIds.length), valueColor: snapshot.activeRunIds.length > 0 ? C.warn : C.dim },
+          { label: 'failed', value: String(snapshot.totalFailed), valueColor: snapshot.totalFailed > 0 ? C.error : C.dim },
         ], C),
         buildKeyValueLine(width, [
-          { label: 'deliveries ok', value: String(state.deliveries.totalSucceeded), valueColor: state.deliveries.totalSucceeded > 0 ? C.ok : C.dim },
-          { label: 'delivery fail', value: String(state.deliveries.totalFailed), valueColor: state.deliveries.totalFailed > 0 ? C.error : C.dim },
-          { label: 'dead letters', value: String(state.deliveries.totalDeadLettered), valueColor: state.deliveries.totalDeadLettered > 0 ? C.warn : C.dim },
-          { label: 'sources', value: String(state.automation.sourceIds.length), valueColor: state.automation.sourceIds.length > 0 ? C.info : C.dim },
+          { label: 'deliveries ok', value: String(snapshot.deliveryTotals.succeeded), valueColor: snapshot.deliveryTotals.succeeded > 0 ? C.ok : C.dim },
+          { label: 'delivery fail', value: String(snapshot.deliveryTotals.failed), valueColor: snapshot.deliveryTotals.failed > 0 ? C.error : C.dim },
+          { label: 'dead letters', value: String(snapshot.deliveryTotals.deadLettered), valueColor: snapshot.deliveryTotals.deadLettered > 0 ? C.warn : C.dim },
+          { label: 'sources', value: String(snapshot.sourceCount), valueColor: snapshot.sourceCount > 0 ? C.info : C.dim },
         ], C),
         buildGuidanceLine(width, '/schedule list', 'manage jobs and use the web or surface controls for retries, delivery, and cross-surface sessions', C),
       ],
@@ -154,7 +147,7 @@ export class AutomationControlPanel extends BasePanel {
 
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, runs.length - 1));
     const selectedRun = runs[this.selectedIndex];
-    const jobName = selectedRun ? (state.automation.jobs.get(selectedRun.jobId)?.name ?? selectedRun.jobId) : 'n/a';
+    const jobName = selectedRun ? (jobs.find((job) => job.id === selectedRun.jobId)?.name ?? selectedRun.jobId) : 'n/a';
 
     const jobSection: PanelWorkspaceSection = {
       title: 'Jobs',
@@ -222,7 +215,7 @@ export class AutomationControlPanel extends BasePanel {
         title: 'Recent Runs',
         scrollableLines: runs.map((run, absolute) => {
           const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-          const name = state.automation.jobs.get(run.jobId)?.name ?? run.jobId;
+          const name = jobs.find((job) => job.id === run.jobId)?.name ?? run.jobId;
           return buildPanelLine(width, [
             [' ', C.label, bg],
             [run.status.padEnd(11), runStatusColor(run.status), bg],

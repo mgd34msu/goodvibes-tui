@@ -1,7 +1,12 @@
 import { getConfigSnapshot } from '../config/index.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import type { ConversationManager } from '../core/conversation.ts';
+import type { KnowledgeApi } from '../knowledge/knowledge-api.ts';
+import type { HookApi } from '../hooks/hook-api.ts';
+import type { McpApi } from '../mcp/mcp-api.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
+import type { ProviderApi } from '../providers/provider-api.ts';
+import type { OpsApi } from './ops-api.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { MutableRuntimeState } from './context.ts';
 import type { CommandContext } from '../input/command-registry.ts';
@@ -13,20 +18,32 @@ import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
 import type { FileUndoManager } from '../state/file-undo.ts';
 import { logger } from '../utils/logger.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { MemoryRegistry } from '../state/memory-store.ts';
 import type { IntegrationHelperService } from './integration/helpers.ts';
-import type { AutomationManager } from '../automation/index.ts';
 import type { KnowledgeService } from '../knowledge/index.ts';
-import type { AgentManager } from '../tools/agent/index.ts';
-import type { ModeManager } from '../state/mode-manager.ts';
-import type { RemoteRunnerRegistry, RemoteSupervisor } from './remote/index.ts';
 import type { PluginManager } from '../plugins/manager.ts';
 import type { HookWorkbench } from '../hooks/workbench.ts';
 import type { PanelHealthMonitor } from './perf/panel-health-monitor.ts';
 import type { WorktreeRegistry } from './worktree/registry.ts';
 import type { SandboxSessionRegistry } from './sandbox/session-registry.ts';
-import type { RuntimeEventBus } from './events/index.ts';
+import type { UiReadModels } from './ui-read-models.ts';
+import type { ShellPathService } from './shell-paths.ts';
+import type {
+  ShellAgentManagerService,
+  ShellAutomationManagerService,
+  ShellAutomationManagerRuntimeService,
+  ShellModeManagerService,
+  ShellPlanManagerService,
+  ShellSessionOrchestrationService,
+} from './shell-command-services.ts';
+import {
+  createBootstrapCommandShellServices,
+  type PlanRuntimeService,
+  type RemoteCommandService,
+} from './shell-command-services.ts';
+import type { OperatorClient } from './operator-client.ts';
+import type { PeerClient } from './peer-client.ts';
+import type { DirectTransport } from './transports/direct.ts';
 
 export type CreateBootstrapCommandContextOptions = {
   configManager: ConfigManager;
@@ -40,25 +57,26 @@ export type CreateBootstrapCommandContextOptions = {
   mcpRegistry: McpRegistry;
   forensicsRegistry: ForensicsRegistry;
   policyRuntimeState: PolicyRuntimeState;
-  runtimeStore: RuntimeStore;
-  runtimeBus?: RuntimeEventBus;
+  readModels: UiReadModels;
+  shellPaths: ShellPathService;
+  remoteRuntime?: RemoteCommandService;
+  planRuntime?: PlanRuntimeService;
   fileUndoManager: FileUndoManager;
   memoryRegistry?: MemoryRegistry;
   integrationHelpers?: IntegrationHelperService;
-  automationManager?: AutomationManager;
+  automationManager?: ShellAutomationManagerRuntimeService;
   knowledgeService?: KnowledgeService;
   providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
   pluginManager?: PluginManager;
   hookWorkbench?: HookWorkbench;
-  agentManager?: AgentManager;
-  modeManager?: ModeManager;
-  remoteRunnerRegistry?: RemoteRunnerRegistry;
-  remoteSupervisor?: RemoteSupervisor;
+  agentManager?: ShellAgentManagerService;
+  modeManager?: ShellModeManagerService;
   sessionManager?: import('../sessions/manager.ts').SessionManager;
   profileManager?: import('../profiles/manager.ts').ProfileManager;
   bookmarkManager?: import('../bookmarks/manager.ts').BookmarkManager;
   favoritesStore?: import('../providers/favorites.ts').FavoritesStore;
   benchmarkStore?: import('../providers/model-benchmarks.ts').BenchmarkStore;
+  providerApi?: ProviderApi;
   subscriptionManager?: import('../config/subscriptions.ts').SubscriptionManager;
   secretsManager?: import('../config/secrets.ts').SecretsManager;
   serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
@@ -68,9 +86,16 @@ export type CreateBootstrapCommandContextOptions = {
   webhookNotifier?: import('../integrations/webhooks.ts').WebhookNotifier;
   sessionMemoryStore?: import('../core/session-memory.ts').SessionMemoryStore;
   changeTracker?: import('../sessions/change-tracker.ts').SessionChangeTracker;
-  planManager?: import('../core/execution-plan.ts').ExecutionPlanManager;
-  adaptivePlanner?: import('../core/adaptive-planner.ts').AdaptivePlanner;
-  sessionOrchestration?: import('../sessions/orchestration/index.ts').CrossSessionTaskRegistry;
+  planManager?: ShellPlanManagerService;
+  adaptivePlanner?: unknown;
+  sessionOrchestration?: ShellSessionOrchestrationService;
+  operatorClient?: OperatorClient;
+  peerClient?: PeerClient;
+  knowledgeApi?: KnowledgeApi;
+  hookApi?: HookApi;
+  mcpApi?: McpApi;
+  opsApi?: OpsApi;
+  directTransport?: DirectTransport;
   panelManager: PanelManager;
   panelHealthMonitor: PanelHealthMonitor;
   worktreeRegistry: WorktreeRegistry;
@@ -102,8 +127,10 @@ export function createBootstrapCommandContext(
     mcpRegistry,
     forensicsRegistry,
     policyRuntimeState,
-    runtimeStore,
-    runtimeBus,
+    readModels,
+    shellPaths,
+    remoteRuntime,
+    planRuntime,
     fileUndoManager,
     memoryRegistry,
     integrationHelpers,
@@ -114,13 +141,12 @@ export function createBootstrapCommandContext(
     hookWorkbench,
     agentManager,
     modeManager,
-    remoteRunnerRegistry,
-    remoteSupervisor,
     sessionManager,
     profileManager,
     bookmarkManager,
     favoritesStore,
     benchmarkStore,
+    providerApi,
     subscriptionManager,
     secretsManager,
     serviceRegistry,
@@ -134,6 +160,13 @@ export function createBootstrapCommandContext(
     planManager,
     adaptivePlanner,
     sessionOrchestration,
+    operatorClient,
+    peerClient,
+    knowledgeApi,
+    hookApi,
+    mcpApi,
+    opsApi,
+    directTransport,
     panelManager,
     panelHealthMonitor,
     worktreeRegistry,
@@ -149,13 +182,85 @@ export function createBootstrapCommandContext(
     requestRender();
   };
 
-  const context: CommandContext = {
-    providerRegistry,
+  let context: CommandContext;
+  const shellServices = createBootstrapCommandShellServices({
+    agentManager,
+    automationManager,
+    modeManager,
+    planManager,
+    adaptivePlanner,
+    sessionOrchestration,
+    shellPaths,
+    panelHealthMonitor,
+    worktreeRegistry,
+    sandboxSessionRegistry,
+    readModels,
+    serviceRegistry,
+    subscriptionManager,
+    secretsManager,
+    localUserAuthManager,
+    tokenAuditor,
+    replayEngine,
+    webhookNotifier,
+    remoteRuntime,
+    planRuntime,
+    forensicsRegistry,
+    policyRuntimeState,
+    memoryRegistry,
+    integrationHelpers,
+    knowledgeService,
+    pluginManager,
+    hookWorkbench,
+  });
+  const workspace = {
+    keybindingsManager,
+    fileUndoManager,
+    panelManager,
+    profileManager,
+    bookmarkManager,
+    ...shellServices.workspace,
+  };
+  const session = {
     conversationManager: conversation,
+    runtime,
+    sessionManager,
+    sessionMemoryStore,
+    sessionLineageTracker,
+    changeTracker,
+  };
+  const provider = {
+    providerRegistry,
+    providerOptimizer,
+    favoritesStore,
+    benchmarkStore,
+  };
+  const platform = {
     config: getConfigSnapshot(configManager),
     configManager,
-    keybindingsManager,
-    runtime,
+    ...shellServices.platform,
+  };
+  const extensions = {
+    toolRegistry,
+    mcpRegistry,
+    ...shellServices.extensions,
+  };
+  context = {
+    session,
+    provider,
+    workspace,
+    platform,
+    ops: shellServices.ops,
+    extensions,
+    clients: {
+      operator: operatorClient,
+      peer: peerClient,
+      providerApi,
+      knowledgeApi,
+      hookApi,
+      mcpApi,
+      opsApi,
+      transport: directTransport,
+    },
     renderRequest: requestRender,
     submitInput: () => {
       unwiredShellAction('submitInput');
@@ -211,13 +316,6 @@ export function createBootstrapCommandContext(
     },
     reloadSystemPrompt: loadSystemPrompt,
     showPanel,
-    panelManager,
-    toolRegistry,
-    mcpRegistry,
-    fileUndoManager,
-    forensicsRegistry,
-    policyRegistry: policyRuntimeState.getRegistry(),
-    policyRuntimeState,
     openForensicsPanel: () => {
       (context.showPanel ?? showPanel)('forensics');
     },
@@ -254,40 +352,6 @@ export function createBootstrapCommandContext(
     openSubscriptionPanel: () => {
       (context.showPanel ?? showPanel)('subscription');
     },
-    runtimeStore,
-    runtimeBus,
-    memoryRegistry,
-    integrationHelpers,
-    automationManager,
-    knowledgeService,
-    providerOptimizer,
-    pluginManager,
-    hookWorkbench,
-    agentManager,
-    modeManager,
-    remoteRunnerRegistry,
-    remoteSupervisor,
-    sessionManager,
-    profileManager,
-    bookmarkManager,
-    favoritesStore,
-    benchmarkStore,
-    subscriptionManager,
-    secretsManager,
-    serviceRegistry,
-    localUserAuthManager,
-    tokenAuditor,
-    replayEngine,
-    webhookNotifier,
-    sessionMemoryStore,
-    sessionLineageTracker,
-    changeTracker,
-    planManager,
-    adaptivePlanner,
-    sessionOrchestration,
-    panelHealthMonitor,
-    worktreeRegistry,
-    sandboxSessionRegistry,
   };
 
   return context;

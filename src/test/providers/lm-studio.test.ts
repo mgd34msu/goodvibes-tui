@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { ChatResponse, LLMProvider } from '../../providers/interface.ts';
 import { LMStudioProvider } from '../../providers/lm-studio.ts';
 import { ProviderError } from '../../types/errors.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 
 function sse(events: Array<{ event: string; data: Record<string, unknown> }>): string {
   return events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('');
@@ -16,6 +21,17 @@ function jsonStream(events: Record<string, unknown>[]): AsyncIterable<Record<str
       return { type: 'response', status: 'completed' };
     },
   };
+}
+
+function makeRuntimeMetadataDeps() {
+  const root = join(tmpdir(), `gv-lmstudio-${process.pid}-${Math.random().toString(36).slice(2)}`);
+  const secretsManager = new SecretsManager({ projectRoot: root, globalHome: root });
+  const subscriptionManager = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
+  const serviceRegistry = new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
+    secretsManager,
+    subscriptionManager,
+  });
+  return { secretsManager, subscriptionManager, serviceRegistry };
 }
 
 describe('LMStudioProvider', () => {
@@ -253,7 +269,7 @@ describe('LMStudioProvider', () => {
     });
     expect(Array.from(embedding.vector as Float32Array).map((value) => Number(value.toFixed(1)))).toEqual([0.1, 0.2, 0.3]);
 
-    const runtime = await provider.describeRuntime();
+    const runtime = await provider.describeRuntime(makeRuntimeMetadataDeps());
     expect(runtime.policy?.streamProtocol).toBe('lmstudio-native-or-responses');
     expect(runtime.auth?.routes?.some((route) => route.route === 'anonymous')).toBe(true);
   });

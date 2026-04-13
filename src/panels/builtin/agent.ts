@@ -15,7 +15,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'T',
     category: 'ai',
     description: 'Stream model reasoning tokens in real-time with collapsible blocks per turn',
-    factory: () => new ThinkingPanel(deps.runtimeBus),
+    factory: () => new ThinkingPanel(requireUiServices(deps).events.turns),
   });
 
   manager.registerType({
@@ -24,7 +24,10 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'X',
     category: 'ai',
     description: 'Chronological tool call inspector with expandable args/results and filtering',
-    factory: () => new ToolInspectorPanel(deps.runtimeBus),
+    factory: () => {
+      const ui = requireUiServices(deps);
+      return new ToolInspectorPanel(ui.events.tools, ui.events.turns);
+    },
   });
 
   manager.registerType({
@@ -34,11 +37,11 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     category: 'ai',
     description: 'Context window visualizer: stacked bar showing token usage per section',
     factory: () => new ContextVisualizerPanel(
-      deps.runtimeBus,
+      requireUiServices(deps).events.turns,
       deps.sessionMemoryStore,
       deps.getOrchestratorUsage,
       deps.contextWindow,
-      deps.runtimeStore,
+      requireUiServices(deps).readModels.session,
     ),
   });
 
@@ -50,7 +53,10 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     description: 'View-only live session stream from running agents with per-agent switching',
     factory: () => {
       const ui = requireUiServices(deps);
-      return new AgentLogsPanel(deps.runtimeBus, { agentManager: ui.agentManager });
+      return new AgentLogsPanel(ui.events.agents, {
+        agentManager: ui.agentManager,
+        workingDirectory: ui.workingDirectory,
+      });
     },
   });
 
@@ -62,7 +68,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     description: 'WRFC chain view: write, review, fix, and confirm cycle status',
     factory: () => {
       const ui = requireUiServices(deps);
-      return new WrfcPanel(deps.runtimeBus, { controller: ui.wrfcController });
+      return new WrfcPanel(ui.events.workflows, { controller: ui.wrfcController });
     },
   });
 

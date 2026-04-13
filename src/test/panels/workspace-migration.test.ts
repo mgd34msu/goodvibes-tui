@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
+import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
 import type { Line } from '../../types/grid.ts';
 import { ProviderStatsPanel } from '../../panels/provider-stats-panel.ts';
 import { ToolInspectorPanel } from '../../panels/tool-inspector-panel.ts';
@@ -29,7 +32,7 @@ function createRuntimeBusStub(): RuntimeEventBus {
 }
 
 function createWrfcPanel(runtimeBus: RuntimeEventBus): WrfcPanel {
-  return new WrfcPanel(runtimeBus, {
+  return new WrfcPanel(createUiRuntimeEvents(runtimeBus).workflows, {
     controller: {
       listChains: () => [],
     },
@@ -37,10 +40,11 @@ function createWrfcPanel(runtimeBus: RuntimeEventBus): WrfcPanel {
 }
 
 function createAgentLogsPanel(runtimeBus: RuntimeEventBus): AgentLogsPanel {
-  return new AgentLogsPanel(runtimeBus, {
+  return new AgentLogsPanel(createUiRuntimeEvents(runtimeBus).agents, {
     agentManager: {
       list: () => [],
     },
+    workingDirectory: '/tmp/goodvibes-test',
   });
 }
 
@@ -53,6 +57,7 @@ function createAgentInspectorPanel(): AgentInspectorPanel {
     agentMessageBus: {
       getMessages: () => [],
     },
+    workingDirectory: '/tmp/goodvibes-test',
   });
 }
 
@@ -64,7 +69,14 @@ describe('workspace panel migrations', () => {
   });
 
   test('ProviderStatsPanel renders shared workspace empty state cleanly', () => {
-    const panel = new ProviderStatsPanel(runtimeBus, undefined, createTestProviderRegistry());
+    const events = createUiRuntimeEvents(runtimeBus);
+    const providerRegistry = createTestProviderRegistry();
+    const panel = new ProviderStatsPanel(events.turns, events.providers, undefined, {
+      getSnapshot: () => ({
+        providerIds: [...new Set(providerRegistry.listModels().map((model) => model.provider))].sort(),
+      }),
+      subscribe: () => () => {},
+    });
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -73,7 +85,8 @@ describe('workspace panel migrations', () => {
   });
 
   test('ToolInspectorPanel renders shared workspace empty state cleanly', () => {
-    const panel = new ToolInspectorPanel(runtimeBus);
+    const events = createUiRuntimeEvents(runtimeBus);
+    const panel = new ToolInspectorPanel(events.tools, events.turns);
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -82,7 +95,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('SessionBrowserPanel renders shared workspace empty state cleanly', () => {
-    const panel = new SessionBrowserPanel(new SessionManager());
+    const panel = new SessionBrowserPanel(new SessionManager(join(tmpdir(), 'gv-workspace-migration')));
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -91,7 +104,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('SessionBrowserPanel supports explicit search focus from top navigation', () => {
-    const panel = new SessionBrowserPanel(new SessionManager());
+    const panel = new SessionBrowserPanel(new SessionManager(join(tmpdir(), 'gv-workspace-migration')));
     panel.handleInput('up');
     panel.handleInput('r');
     const text = linesText(panel.render(80, 20));
@@ -100,7 +113,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('ThinkingPanel renders shared workspace empty state cleanly', () => {
-    const panel = new ThinkingPanel(runtimeBus);
+    const panel = new ThinkingPanel(createUiRuntimeEvents(runtimeBus).turns);
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -109,7 +122,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('ContextVisualizerPanel renders shared workspace empty state cleanly', () => {
-    const panel = new ContextVisualizerPanel(runtimeBus, new SessionMemoryStore());
+    const panel = new ContextVisualizerPanel(createUiRuntimeEvents(runtimeBus).turns, new SessionMemoryStore());
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -118,7 +131,8 @@ describe('workspace panel migrations', () => {
   });
 
   test('CostTrackerPanel renders shared workspace empty state cleanly', () => {
-    const panel = new CostTrackerPanel(runtimeBus, () => ({
+    const events = createUiRuntimeEvents(runtimeBus);
+    const panel = new CostTrackerPanel(events.turns, events.agents, () => ({
       input: 0,
       output: 0,
       cacheRead: 0,
@@ -133,7 +147,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('DebugPanel renders shared workspace empty state cleanly', () => {
-    const panel = new DebugPanel(runtimeBus);
+    const panel = new DebugPanel(createUiRuntimeEvents(runtimeBus).turns);
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -160,7 +174,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('FileExplorerPanel renders shared workspace surface cleanly', () => {
-    const panel = new FileExplorerPanel('/definitely/not/a/real/path');
+    const panel = new FileExplorerPanel('/definitely/not/a/real/path', '/tmp/goodvibes-test');
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -168,7 +182,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('FileExplorerPanel supports explicit search focus from top navigation', () => {
-    const panel = new FileExplorerPanel('/definitely/not/a/real/path');
+    const panel = new FileExplorerPanel('/definitely/not/a/real/path', '/tmp/goodvibes-test');
     panel.handleInput('up');
     panel.handleInput('r');
     const text = linesText(panel.render(80, 20));
@@ -185,7 +199,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('OpsStrategyPanel renders shared workspace empty state cleanly', () => {
-    const panel = new OpsStrategyPanel(runtimeBus, new AdaptivePlanner());
+    const panel = new OpsStrategyPanel(createUiRuntimeEvents(runtimeBus).planner, new AdaptivePlanner());
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -212,7 +226,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('ThinkingPanel keeps ingesting stream events while deactivated', () => {
-    const panel = new ThinkingPanel(runtimeBus);
+    const panel = new ThinkingPanel(createUiRuntimeEvents(runtimeBus).turns);
     panel.onActivate();
     panel.onDeactivate();
     runtimeBus.emit(
@@ -240,7 +254,8 @@ describe('workspace panel migrations', () => {
   });
 
   test('ToolInspectorPanel keeps ingesting tool events while deactivated', () => {
-    const panel = new ToolInspectorPanel(runtimeBus);
+    const events = createUiRuntimeEvents(runtimeBus);
+    const panel = new ToolInspectorPanel(events.tools, events.turns);
     panel.onActivate();
     panel.onDeactivate();
     runtimeBus.emit(

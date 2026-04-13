@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionPanel } from '../../panels/subscription-panel.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
@@ -24,8 +25,11 @@ describe('SubscriptionPanel', () => {
     root = mkdtempSync(join(tmpdir(), 'gv-subscription-panel-'));
     process.chdir(root);
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
-    serviceRegistry = new ServiceRegistry();
-    subscriptionManager = new SubscriptionManager();
+    subscriptionManager = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
+    serviceRegistry = new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
+      secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+      subscriptionManager,
+    });
   });
 
   afterEach(() => {

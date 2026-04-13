@@ -70,18 +70,22 @@ export class ChannelDeliveryRouter {
   private controlPlaneGateway: ControlPlaneGateway | null;
 
   constructor(config: ChannelDeliveryRouterConfig = {}) {
-    const configManager = config.configManager ?? new ConfigManager();
-    const serviceRegistry = config.serviceRegistry ?? new ServiceRegistry();
-    const artifactStore = config.artifactStore ?? new ArtifactStore({ configManager });
     this.controlPlaneGateway = config.controlPlaneGateway ?? null;
-    this.strategies = [
-      ...(config.strategies ?? createDefaultChannelDeliveryStrategies(
-        configManager,
-        serviceRegistry,
-        artifactStore,
-        () => this.controlPlaneGateway,
-      )),
-    ];
+    if (config.strategies) {
+      this.strategies = [...config.strategies];
+      return;
+    }
+    if (!config.configManager || !config.serviceRegistry || !config.artifactStore) {
+      throw new Error(
+        'ChannelDeliveryRouter requires configManager, serviceRegistry, and artifactStore when using builtin delivery strategies.',
+      );
+    }
+    this.strategies = createDefaultChannelDeliveryStrategies(
+      config.configManager,
+      config.serviceRegistry,
+      config.artifactStore,
+      () => this.controlPlaneGateway,
+    );
   }
 
   setControlPlaneGateway(gateway: ControlPlaneGateway | null): void {

@@ -14,7 +14,7 @@ export function registerPermissionsRuntimeCommands(registry: CommandRegistry): v
     usage: '[allow-all|prompt|custom] | [tool <name> allow|prompt|deny]',
     argsHint: '[allow-all|prompt|custom]',
     handler(args, ctx) {
-      const cm = ctx.configManager;
+      const cm = ctx.platform.configManager;
       if (args.length === 0) {
         if (ctx.openSelection) {
           const items: SelectionItem[] = VALID_TOOLS.map((tool) => ({

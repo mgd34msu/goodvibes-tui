@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { listHookPointContracts } from '../../hooks/index.ts';
+import { requireHookApi } from './runtime-services.ts';
 
 export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -9,11 +9,8 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
     usage: '[contracts [filter] | reload | scaffold <name> <match> <type> | chain <name> <event1,event2,...> | remove <name> | enable <name> | disable <name> | simulate <eventPath> | inspect <path> | import <path> [merge|replace] | export [path]]',
     argsHint: '[subcommand]',
     async handler(args, ctx) {
-      const workbench = ctx.hookWorkbench;
-      if (!workbench) {
-        ctx.print('Hook workbench is not available in this runtime.');
-        return;
-      }
+      const hookApi = requireHookApi(ctx);
+      const workbench = hookApi.workbench;
       if (args.length === 0 && ctx.openHooksPanel) {
         ctx.openHooksPanel();
         return;
@@ -21,8 +18,8 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
 
       const subcommand = (args[0] ?? 'contracts').toLowerCase();
       if (subcommand === 'reload') {
-        await workbench.loadAndApplyManagedHooks();
-        ctx.print(`Reloaded managed hooks from ${workbench.getHooksFilePath()}`);
+        await workbench.reload();
+        ctx.print(`Reloaded managed hooks from ${workbench.getFilePath()}`);
         return;
       }
       if (subcommand === 'scaffold') {
@@ -35,11 +32,8 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print(`Unknown hook type: ${type}`);
           return;
         }
-        workbench.loadManagedConfig();
-        const hook = workbench.scaffoldHook(name, match, type as Parameters<typeof workbench.scaffoldHook>[2]);
-        await workbench.saveManagedConfig();
-        await workbench.loadAndApplyManagedHooks();
-        ctx.print(`Scaffolded managed hook ${hook.name} at ${match} in ${workbench.getHooksFilePath()}`);
+        const hook = await workbench.scaffoldHook(name, match, type as Parameters<typeof workbench.scaffoldHook>[2]);
+        ctx.print(`Scaffolded managed hook ${hook.name} at ${match} in ${workbench.getFilePath()}`);
         return;
       }
       if (subcommand === 'chain') {
@@ -49,10 +43,7 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /hooks chain <name> <event1,event2,...>');
           return;
         }
-        workbench.loadManagedConfig();
-        const chain = workbench.scaffoldChain(name, matches);
-        await workbench.saveManagedConfig();
-        await workbench.loadAndApplyManagedHooks();
+        const chain = await workbench.scaffoldChain(name, matches);
         ctx.print(`Scaffolded managed hook chain ${chain.name} with ${chain.steps.length} step(s).`);
         return;
       }
@@ -62,14 +53,11 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /hooks remove <name>');
           return;
         }
-        workbench.loadManagedConfig();
-        const removed = workbench.removeManagedEntry(name);
+        const removed = await workbench.remove(name);
         if (!removed) {
           ctx.print(`No managed hook or chain named ${name}.`);
           return;
         }
-        await workbench.saveManagedConfig();
-        await workbench.loadAndApplyManagedHooks();
         ctx.print(`Removed managed hook workflow entry ${name}.`);
         return;
       }
@@ -79,14 +67,11 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print(`Usage: /hooks ${subcommand} <name>`);
           return;
         }
-        workbench.loadManagedConfig();
-        const changed = workbench.toggleManagedHook(name, subcommand === 'enable');
+        const changed = await workbench.toggle(name, subcommand === 'enable');
         if (!changed) {
           ctx.print(`No managed hook named ${name}.`);
           return;
         }
-        await workbench.saveManagedConfig();
-        await workbench.loadAndApplyManagedHooks();
         ctx.print(`${subcommand === 'enable' ? 'Enabled' : 'Disabled'} managed hook ${name}.`);
         return;
       }
@@ -96,7 +81,6 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /hooks simulate <eventPath>');
           return;
         }
-        workbench.loadManagedConfig();
         const result = workbench.simulate(eventPath);
         ctx.print([
           `Hook simulation for ${result.eventPath}`,
@@ -108,8 +92,7 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
       if (subcommand === 'export') {
-        workbench.loadManagedConfig();
-        const path = await workbench.exportManagedConfig(args[1] ?? workbench.getHooksFilePath());
+        const path = await workbench.export(args[1] ?? workbench.getFilePath());
         ctx.print(`Exported managed hooks to ${path}`);
         return;
       }
@@ -119,7 +102,7 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /hooks inspect <path>');
           return;
         }
-        const inspection = workbench.inspectManagedConfig(path);
+        const inspection = workbench.inspect(path);
         ctx.print([
           `Hook bundle inspection: ${inspection.path}`,
           `  hooks: ${inspection.hookCount}`,
@@ -135,20 +118,13 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /hooks import <path> [merge|replace]');
           return;
         }
-        workbench.loadManagedConfig();
-        workbench.importManagedConfig(path, strategy);
-        await workbench.saveManagedConfig();
-        await workbench.loadAndApplyManagedHooks();
+        await workbench.import(path, strategy);
         ctx.print(`Imported managed hooks from ${path} using ${strategy} strategy.`);
         return;
       }
 
       const filter = (subcommand === 'contracts' ? args.slice(1) : args).join(' ').trim().toLowerCase();
-      const contracts = listHookPointContracts().filter((contract) => (
-        filter.length === 0
-        || contract.pattern.toLowerCase().includes(filter)
-        || contract.description.toLowerCase().includes(filter)
-      ));
+      const contracts = hookApi.contracts(filter);
 
       if (contracts.length === 0) {
         ctx.print(filter.length === 0 ? 'No hook contracts registered.' : `No hook contracts matched "${filter}".`);
@@ -164,7 +140,7 @@ export function registerHooksRuntimeCommands(registry: CommandRegistry): void {
       const managedHooks = workbench.listManagedHooks();
       const managedChains = workbench.listManagedChains();
       lines.push('');
-      lines.push(`Managed hooks file: ${workbench.getHooksFilePath()}`);
+      lines.push(`Managed hooks file: ${workbench.getFilePath()}`);
       lines.push(`Managed entries: hooks=${managedHooks.length} chains=${managedChains.length}`);
       ctx.print(lines.join('\n'));
     },

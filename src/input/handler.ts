@@ -86,6 +86,8 @@ import type { Panel } from '../panels/types.ts';
 import type { UiRuntimeServices } from '../runtime/ui-services.ts';
 export { handlePanelIntegrationAction } from './panel-integration-actions.ts';
 
+type SelectionModalCallback = (result: SelectionResult | null) => void;
+
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
  * Extracted from main.ts and StateManager.
@@ -113,7 +115,6 @@ export class InputHandler {
   private commandRegistry: CommandRegistry | null = null;
   private commandContext: CommandContext | undefined = undefined;
   public autocomplete: AutocompleteEngine | null = null;
-  public filePicker = new FilePickerModal();
   public modelPicker: ModelPickerModal;
   public selectionModal = new SelectionModal();
   public searchManager = new SearchManager();
@@ -139,9 +140,11 @@ export class InputHandler {
   public shortcutsOverlayActive = false;
   public shortcutsScrollOffset = 0;
   private inputHistory: InputHistory | null = null;
+  public filePicker: FilePickerModal;
   public historySearch: HistorySearch = new HistorySearch(() => this.inputHistory?.getEntries() ?? []);
   private conversationManager: ConversationManager | null = null;
-  private selectionCallback: ((result: SelectionResult | null) => void) | null = null;
+  private selectionCallback: SelectionModalCallback | null = null;
+  private syncFeedSelectionCallback: ((callback: SelectionModalCallback | null) => void) | null = null;
   /** Time of last [COPIED] block feedback, for brief display. */
   public lastBlockCopyTime = 0;
   private mouseDownRow = -1;
@@ -186,9 +189,11 @@ export class InputHandler {
       | 'profileManager'
       | 'providerRegistry'
       | 'sessionManager'
+      | 'shellPaths'
       | 'wrfcController'
     >,
   ) {
+    this.filePicker = new FilePickerModal(uiServices.shellPaths);
     this.modelPicker = new ModelPickerModal(
       uiServices.favoritesStore,
       uiServices.benchmarkStore,
@@ -206,6 +211,7 @@ export class InputHandler {
     this.agentDetailModal = new AgentDetailModal({
       agentManager: uiServices.agentManager,
       agentMessageBus: uiServices.agentMessageBus,
+      sessionLogPathResolver: (agentId) => uiServices.shellPaths.resolveProjectTuiPath('sessions', `${agentId}.jsonl`),
     });
     this.bookmarkModal = new BookmarkModal(uiServices.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessionManager);
@@ -249,11 +255,12 @@ export class InputHandler {
       allowSearch?: boolean;
       customActions?: Map<string, SelectionAction>;
     } | undefined,
-    callback: (result: SelectionResult | null) => void,
+    callback: SelectionModalCallback,
   ): void {
     this.modalOpened('selection');
     this.selectionModal.open(title, items, opts);
     this.selectionCallback = callback;
+    this.syncFeedSelectionCallback?.(callback);
     this.requestRender();
   }
 
@@ -263,7 +270,7 @@ export class InputHandler {
       nextPasteId: this.nextPasteId,
       imageRegistry: this.imageRegistry,
       nextImageId: this.nextImageId,
-    }, content);
+    }, content, this.uiServices.shellPaths.workingDirectory);
     this.nextPasteId = result.nextPasteId;
     this.nextImageId = result.nextImageId;
     return result.marker;
@@ -275,7 +282,7 @@ export class InputHandler {
    * Otherwise returns a plain string.
    */
   private expandPrompt(text: string) {
-    return expandPrompt(this.pasteRegistry, this.imageRegistry, text);
+    return expandPrompt(this.pasteRegistry, this.imageRegistry, text, this.uiServices.shellPaths.workingDirectory);
   }
 
   /**
@@ -552,6 +559,9 @@ export class InputHandler {
         expandPrompt: (text: string) => this.expandPrompt(text),
         exitApp: this.exitApp,
       };
+      this.syncFeedSelectionCallback = (callback) => {
+        context.selectionCallback = callback;
+      };
       feedInputTokens(context, this.tokenizer.feed(data));
       this.prompt = context.prompt;
       this.cursorPos = context.cursorPos;
@@ -568,6 +578,7 @@ export class InputHandler {
       this.mouseDownRow = context.mouseDownRow;
       this.mouseDownCol = context.mouseDownCol;
     } finally {
+      this.syncFeedSelectionCallback = null;
       isFeeding = false;
       this.requestRender = immediateRequestRender;
     }
@@ -592,7 +603,7 @@ export class InputHandler {
       saveUndoState: () => this.saveUndoState(),
       ensureInputCursorVisible: () => this.ensureInputCursorVisible(),
       requestRender: this.requestRender,
-    });
+    }, this.uiServices.shellPaths.workingDirectory);
     this.prompt = result.prompt;
     this.cursorPos = result.cursorPos;
     this.nextImageId = result.nextImageId;

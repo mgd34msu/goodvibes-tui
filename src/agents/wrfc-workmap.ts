@@ -20,8 +20,8 @@ export interface WorkmapEntry {
 export class WrfcWorkmap {
   private filePath: string;
 
-  constructor(sessionId: string) {
-    this.filePath = join(process.cwd(), '.goodvibes', 'tui', 'sessions', `${sessionId}_workmap.jsonl`);
+  constructor(projectRoot: string, sessionId: string) {
+    this.filePath = join(projectRoot, '.goodvibes', 'tui', 'sessions', `${sessionId}_workmap.jsonl`);
   }
 
   private dirCreated = false;
@@ -70,8 +70,8 @@ export class WrfcWorkmap {
   }
 
   /** Static: find the most recent workmap file in sessions dir */
-  static findLatest(sessionsDir?: string): string | null {
-    const dir = sessionsDir ?? join(process.cwd(), '.goodvibes', 'tui', 'sessions');
+  static findLatest(sessionsDir: string): string | null {
+    const dir = sessionsDir;
     if (!existsSync(dir)) return null;
     try {
       const files = readdirSync(dir)

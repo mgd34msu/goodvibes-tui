@@ -1,11 +1,20 @@
 import type { CommandContext } from '../command-registry.ts';
+import type { MemoryApi } from '../../knowledge/knowledge-api.ts';
 import type { MemorySearchFilter } from '../../state/memory-store.ts';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope } from './recall-shared.ts';
 
+export function getMemoryApi(context: CommandContext): MemoryApi | null {
+  const memoryApi = context.clients?.knowledgeApi?.memory;
+  if (!memoryApi) {
+    context.print('[recall] Memory API is not available in this runtime.');
+    return null;
+  }
+  return memoryApi;
+}
+
 export function handleRecallSearch(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
 
@@ -45,8 +54,8 @@ export function handleRecallSearch(args: string[], context: CommandContext): voi
   if (queryTokens.length) filter.query = queryTokens.join(' ');
   if (semantic) filter.semantic = true;
 
-  const semanticResults = semantic ? registry.searchSemantic(filter) : [];
-  const results = semantic ? semanticResults.map((entry) => entry.record) : registry.search(filter);
+  const semanticResults = semantic ? memory.searchSemantic(filter) : [];
+  const results = semantic ? semanticResults.map((entry) => entry.record) : memory.search(filter);
   if (!results.length) {
     context.print('[recall] No records found.');
     return;
@@ -67,27 +76,26 @@ export function handleRecallSearch(args: string[], context: CommandContext): voi
 }
 
 export function handleRecallVector(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
 
   const sub = (args[0] ?? 'status').toLowerCase();
   if (sub === 'rebuild') {
-    const stats = registry.rebuildVectors();
+    const stats = memory.rebuildVectors();
     context.print(formatVectorStats(stats, 'rebuild complete'));
     return;
   }
   if (sub === 'status' || sub === 'doctor') {
-    context.print(formatVectorStats(registry.vectorStats(), sub));
+    context.print(formatVectorStats(memory.vectorStats(), sub));
     return;
   }
   context.print('[recall] Usage: /recall vector [status|doctor|rebuild]');
 }
 
 function formatVectorStats(
-  stats: ReturnType<NonNullable<CommandContext['memoryRegistry']>['vectorStats']>,
+  stats: ReturnType<MemoryApi['vectorStats']>,
   label: string,
 ): string {
   return [
@@ -103,9 +111,8 @@ function formatVectorStats(
 }
 
 export function handleRecallGet(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
   const id = args[0];
@@ -113,7 +120,7 @@ export function handleRecallGet(args: string[], context: CommandContext): void {
     context.print('[recall] Usage: /recall get <id>');
     return;
   }
-  const record = registry.get(id);
+  const record = memory.get(id);
   if (!record) {
     context.print(`[recall] Record not found: ${id}`);
     return;
@@ -135,7 +142,7 @@ export function handleRecallGet(args: string[], context: CommandContext): void {
     }
   }
 
-  const links = registry.linksFor(id);
+  const links = memory.linksFor(id);
   if (links.length) {
     context.print('  Links:');
     for (const link of links) {
@@ -147,9 +154,8 @@ export function handleRecallGet(args: string[], context: CommandContext): void {
 }
 
 export async function handleRecallLink(args: string[], context: CommandContext): Promise<void> {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
   const [fromId, toId, relation] = args;
@@ -157,7 +163,7 @@ export async function handleRecallLink(args: string[], context: CommandContext):
     context.print('[recall] Usage: /recall link <fromId> <toId> <relation>');
     return;
   }
-  const link = await registry.link(fromId, toId, relation);
+  const link = await memory.link(fromId, toId, relation);
   if (!link) {
     context.print('[recall] Link failed — check that both IDs exist.');
     return;
@@ -166,9 +172,8 @@ export async function handleRecallLink(args: string[], context: CommandContext):
 }
 
 export function handleRecallRemove(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
   const id = args[0];
@@ -176,7 +181,7 @@ export function handleRecallRemove(args: string[], context: CommandContext): voi
     context.print('[recall] Usage: /recall remove <id>');
     return;
   }
-  const removed = registry.delete(id);
+  const removed = memory.delete(id);
   if (!removed) {
     context.print(`[recall] Record not found: ${id}`);
     return;
@@ -185,9 +190,8 @@ export function handleRecallRemove(args: string[], context: CommandContext): voi
 }
 
 export function handleRecallList(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
   const cls = args.find((arg) => !arg.startsWith('--'));
@@ -203,13 +207,13 @@ export function handleRecallList(args: string[], context: CommandContext): void 
     filter.scope = scope;
   }
 
-  const records = registry.search(filter);
+  const records = memory.search(filter);
   if (!records.length) {
     context.print('[recall] No records.');
     return;
   }
 
-  const grouped: Record<string, typeof records> = {};
+  const grouped: Record<string, Array<(typeof records)[number]>> = {};
   for (const record of records) {
     if (!grouped[record.cls]) grouped[record.cls] = [];
     grouped[record.cls].push(record);

@@ -2,7 +2,7 @@ import { ArchetypeLoader } from '../../agents/archetypes.ts';
 import { AgentOrchestrator } from '../../agents/orchestrator.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { WrfcController } from '../../agents/wrfc-controller.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '../../config/manager.ts';
 import type { RuntimeEventBus } from '../../runtime/events/index.ts';
 import {
   emitAgentSpawning,
@@ -113,14 +113,14 @@ export class AgentManager {
   private readonly messageBus: Pick<AgentMessageBus, 'registerAgent'>;
   private wrfcController: Pick<WrfcController, 'createChain'> | null;
   private executor: AgentExecutor | null;
-  private readonly configManager: Pick<ConfigManager, 'get'>;
+  private readonly configManager: Pick<ConfigManager, 'get'> | null;
 
   constructor(deps: AgentManagerDependencies = {}) {
     this.archetypeLoader = deps.archetypeLoader ?? new ArchetypeLoader();
     this.messageBus = deps.messageBus ?? new AgentMessageBus();
     this.wrfcController = deps.wrfcController ?? null;
     this.executor = deps.executor ?? null;
-    this.configManager = deps.configManager ?? new ConfigManager();
+    this.configManager = deps.configManager ?? null;
   }
 
   setRuntimeBus(runtimeBus: RuntimeEventBus | null): void {
@@ -163,6 +163,9 @@ export class AgentManager {
     const task = input.task;
     if (!task || typeof task !== 'string' || task.trim() === '') {
       throw new Error('spawn() requires a non-empty task string');
+    }
+    if (!this.configManager) {
+      throw new Error('AgentManager requires configManager');
     }
     const template = input.template ?? 'general';
 

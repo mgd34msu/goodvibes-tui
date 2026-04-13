@@ -1,7 +1,8 @@
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
-import type { RuntimeEventBus, ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
-import { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { UiProvidersSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import {
   buildEmptyState,
   buildKeyValueLine,
@@ -60,9 +61,10 @@ export class ProviderStatsPanel extends BasePanel {
   private _unsubs: Array<() => void> = [];
 
   constructor(
-    private readonly runtimeBus: RuntimeEventBus,
+    private readonly turnEvents: UiEventFeed<TurnEvent>,
+    private readonly providerEvents: UiEventFeed<ProviderEvent>,
     private readonly requestRender: () => void = () => {},
-    private readonly providerRegistry: ProviderRegistry,
+    private readonly providers: UiReadModel<UiProvidersSnapshot>,
   ) {
     super('providers', 'Providers', 'R', 'monitoring');
     this._subscribe();
@@ -75,14 +77,14 @@ export class ProviderStatsPanel extends BasePanel {
   private _subscribe(): void {
     // Record when a turn starts so we can compute latency later
     this._unsubs.push(
-      this.runtimeBus.on('TURN_SUBMITTED', () => {
+      this.turnEvents.on('TURN_SUBMITTED', () => {
         this._turnStartMs = Date.now();
       }),
     );
 
     // Per-streaming-call timing (each iteration of the agentic loop)
     this._unsubs.push(
-      this.runtimeBus.on('STREAM_START', () => {
+      this.turnEvents.on('STREAM_START', () => {
         this._streamStartMs = Date.now();
       }),
     );
@@ -90,7 +92,7 @@ export class ProviderStatsPanel extends BasePanel {
     // After each LLM response (streamed or not), record metrics for the
     // current provider call inside the turn loop.
     this._unsubs.push(
-      this.runtimeBus.on<Extract<TurnEvent, { type: 'LLM_RESPONSE_RECEIVED' }>>('LLM_RESPONSE_RECEIVED', (env) => {
+      this.turnEvents.on('LLM_RESPONSE_RECEIVED', (env) => {
         const now = Date.now();
         const latencyMs = this._streamStartMs !== null
           ? now - this._streamStartMs
@@ -100,14 +102,14 @@ export class ProviderStatsPanel extends BasePanel {
         // Reset stream start — ready for next iteration in the agentic loop
         this._streamStartMs = null;
         this._recordRequest(
-          env.payload.provider,
-          env.payload.model,
+          env.provider,
+          env.model,
           latencyMs,
           false,
-          env.payload.inputTokens
-            + env.payload.outputTokens
-            + (env.payload.cacheReadTokens ?? 0)
-            + (env.payload.cacheWriteTokens ?? 0),
+          env.inputTokens
+            + env.outputTokens
+            + (env.cacheReadTokens ?? 0)
+            + (env.cacheWriteTokens ?? 0),
         );
 
         this.markDirty();
@@ -117,7 +119,7 @@ export class ProviderStatsPanel extends BasePanel {
 
     // On error, record a failed request
     this._unsubs.push(
-      this.runtimeBus.on('TURN_ERROR', () => {
+      this.turnEvents.on('TURN_ERROR', () => {
         this._turnStartMs = null;
         this._streamStartMs = null;
         this._recordRequest('unknown', 'unknown', 0, true, 0);
@@ -129,7 +131,7 @@ export class ProviderStatsPanel extends BasePanel {
 
     // Re-render when providers change (new custom providers loaded)
     this._unsubs.push(
-      this.runtimeBus.on<Extract<ProviderEvent, { type: 'PROVIDERS_CHANGED' }>>('PROVIDERS_CHANGED', () => {
+      this.providerEvents.on('PROVIDERS_CHANGED', () => {
         this.markDirty();
         this.requestRender();
       }),
@@ -188,8 +190,7 @@ export class ProviderStatsPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const allProviders = this.providerRegistry.listModels().map(m => m.provider);
-    const knownProviders = [...new Set(allProviders)];
+    const knownProviders = [...this.providers.getSnapshot().providerIds];
 
     if (knownProviders.length === 0) {
       return buildPanelWorkspace(width, height, {

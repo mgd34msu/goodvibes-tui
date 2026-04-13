@@ -87,7 +87,7 @@ describe('edit tool — notebook operations', () => {
   beforeEach(() => {
     tmpDir = makeTmpDir();
     fileCache = new FileStateCache();
-    tool = createEditTool(fileCache);
+    tool = createEditTool(fileCache, { cwd: PROJECT_ROOT });
   });
 
   afterEach(() => {
@@ -642,7 +642,7 @@ describe('edit tool — notebook operations', () => {
       // Actually the cache uses content hash - let's just prime with different content
       const freshCache = new FileStateCache();
       freshCache.update(join(tmpDir, 'nb.ipynb'), 'different content than on disk');
-      const toolWithFreshCache = createEditTool(freshCache);
+      const toolWithFreshCache = createEditTool(freshCache, { cwd: PROJECT_ROOT });
 
       const result = await toolWithFreshCache.execute({
         notebook_operations: {

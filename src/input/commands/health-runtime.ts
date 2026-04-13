@@ -11,7 +11,12 @@ import { checkRecoveryFile, readLastSessionPointer } from '../../runtime/session
 import {
   openCommandPanel,
   requireLocalUserAuthManager,
+  requireOperatorClient,
+  requireProviderApi,
+  requireReadModels,
+  requireSecretsManager,
   requireServiceRegistry,
+  requireSubscriptionManager,
   requireSessionMemoryStore,
 } from './runtime-services.ts';
 
@@ -37,6 +42,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
     usage: '[open|review|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|continuity|worktrees|maintenance|repair [domain]]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
+      const readModels = requireReadModels(ctx);
 
       if (sub === 'open' || sub === 'panel' || sub === 'provider') {
         openCommandPanel(ctx, 'provider-health');
@@ -69,18 +75,14 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       if (sub === 'sandbox') {
         ctx.print([
           'Health Review: Sandbox',
-          ...renderSandboxHealthSummary(ctx.configManager),
+          ...renderSandboxHealthSummary(ctx.platform.configManager),
         ].join('\n'));
         return;
       }
 
       if (sub === 'accounts') {
-        const accounts = await buildProviderAccountSnapshot({
-          providerRegistry: ctx.providerRegistry,
-          serviceRegistry: ctx.serviceRegistry,
-          subscriptionManager: ctx.subscriptionManager,
-          secretsManager: ctx.secretsManager,
-        });
+        const operatorClient = requireOperatorClient(ctx);
+        const accounts = await operatorClient.providers.accountSnapshot();
         ctx.print([
           'Health Review: Accounts',
           `  providers: ${accounts.providers.length}`,
@@ -98,14 +100,12 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'auth') {
-        const auth = requireLocalUserAuthManager(ctx).inspect();
+        const auth = readModels.localAuth.getSnapshot();
         ctx.print([
           'Health Review: Local Auth',
           `  users: ${auth.userCount}`,
           `  sessions: ${auth.sessionCount}`,
           `  bootstrap file: ${auth.bootstrapCredentialPresent ? 'present' : 'cleared'}`,
-          `  user store: ${auth.userStorePath}`,
-          `  bootstrap path: ${auth.bootstrapCredentialPath}`,
           ...(auth.userCount <= 1 ? ['  issue: only one local auth user configured'] : []),
           ...(auth.bootstrapCredentialPresent ? ['  issue: bootstrap credential file still present; rotate or clear it when no longer needed'] : []),
         ].join('\n'));
@@ -113,22 +113,19 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'settings') {
-        const settings = getSettingsControlPlaneSnapshot(ctx.configManager);
+        const settings = readModels.settings.getSnapshot();
         const issues: string[] = [];
-        if (settings.conflicts.length > 0) issues.push(`${settings.conflicts.length} conflicting setting import(s) need review`);
-        if (settings.recentFailures.length > 0) issues.push(`${settings.recentFailures.length} recent sync/managed failure(s) recorded`);
-        if (settings.stagedManagedBundle) issues.push(`staged managed bundle ${settings.stagedManagedBundle.profileName} is awaiting apply or rollback`);
+        if (settings.conflictCount > 0) issues.push(`${settings.conflictCount} conflicting setting import(s) need review`);
+        if (settings.recentFailureCount > 0) issues.push(`${settings.recentFailureCount} recent sync/managed failure(s) recorded`);
+        if (settings.hasStagedManagedBundle) issues.push('staged managed bundle is awaiting apply or rollback');
         if (settings.managedLockCount > 0) issues.push(`${settings.managedLockCount} managed lock(s) currently enforced`);
         ctx.print([
           'Health Review: Settings',
-          `  live keys: ${settings.liveKeyCount}`,
-          `  profiles: ${settings.profileCount}`,
+          `  available: ${settings.available ? 'yes' : 'no'}`,
           `  managed locks: ${settings.managedLockCount}`,
-          `  conflicts: ${settings.conflicts.length}`,
-          `  recent failures: ${settings.recentFailures.length}`,
-          `  staged bundle: ${settings.stagedManagedBundle ? `${settings.stagedManagedBundle.profileName} (${settings.stagedManagedBundle.risk})` : 'none'}`,
-          `  effective managed: ${settings.resolvedCounts.managed}`,
-          `  effective synced: ${settings.resolvedCounts.synced}`,
+          `  conflicts: ${settings.conflictCount}`,
+          `  recent failures: ${settings.recentFailureCount}`,
+          `  staged bundle: ${settings.hasStagedManagedBundle ? 'present' : 'none'}`,
           ...(issues.length > 0 ? issues.map((issue) => `  issue: ${issue}`) : ['  no active settings-control issues detected']),
           '  next: /settingssync panel',
           '  next: /settingssync show <key>',
@@ -138,11 +135,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'intelligence') {
-        const intelligence = ctx.runtimeStore?.getState().intelligence;
-        if (!intelligence) {
-          ctx.print('Health Review: Intelligence\n  runtime store unavailable');
-          return;
-        }
+        const intelligence = readModels.intelligence.getSnapshot();
         const issues: string[] = [];
         if (intelligence.diagnosticsStatus !== 'ready') issues.push(`diagnostics=${intelligence.diagnosticsStatus}`);
         if (intelligence.symbolSearchStatus !== 'ready') issues.push(`symbols=${intelligence.symbolSearchStatus}`);
@@ -168,11 +161,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'remote') {
-        const snapshot = ctx.runtimeStore && ctx.remoteSupervisor ? ctx.remoteSupervisor.getSnapshot(ctx.runtimeStore) : null;
-        if (!snapshot) {
-          ctx.print('Health Review: Remote\n  runtime store unavailable');
-          return;
-        }
+        const snapshot = readModels.remote.getSnapshot().supervisor;
         const issues = snapshot.sessions.flatMap((session) => {
           const lines: string[] = [];
           if (session.transportState === 'degraded' || session.transportState === 'reconnecting' || session.transportState === 'terminal_failure') {
@@ -199,12 +188,8 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'mcp') {
-        const mcp = ctx.runtimeStore?.getState().mcp;
-        if (!mcp) {
-          ctx.print('Health Review: MCP\n  runtime store unavailable');
-          return;
-        }
-        const issues = [...mcp.servers.values()].flatMap((server) => {
+        const mcp = readModels.mcp.getSnapshot();
+        const issues = mcp.servers.flatMap((server) => {
           const lines: string[] = [];
           if (server.status !== 'connected' && server.status !== 'configured') {
             lines.push(`${server.name}: status=${server.status}`);
@@ -219,7 +204,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         });
         ctx.print([
           'Health Review: MCP',
-          `  servers: ${mcp.servers.size}`,
+          `  servers: ${mcp.servers.length}`,
           `  connected: ${mcp.connectedServerNames.length}`,
           `  tools: ${mcp.availableToolCount}`,
           `  total calls: ${mcp.totalCalls}`,
@@ -233,19 +218,18 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'continuity') {
-        const recovery = checkRecoveryFile();
-        const lastPointer = readLastSessionPointer();
-        const returnMode = String(ctx.configManager.get('behavior.returnContextMode') ?? 'off');
+        const continuity = readModels.continuity.getSnapshot();
+        const returnMode = String(ctx.platform.configManager.get('behavior.returnContextMode') ?? 'off');
         const issues: string[] = [];
-        if (!lastPointer) issues.push('no last-session pointer is recorded');
-        if (recovery) issues.push(`recovery file present for ${recovery.sessionId || '(unknown session)'}`);
+        if (!continuity.lastSessionPointer) issues.push('no last-session pointer is recorded');
+        if (continuity.recoveryFilePresent) issues.push(`recovery file present for ${continuity.sessionId || '(unknown session)'}`);
         if (returnMode === 'off') issues.push('return-context summaries are disabled');
         ctx.print([
           'Health Review: Continuity',
           `  return context mode: ${returnMode}`,
-          `  last session pointer: ${lastPointer ?? 'none'}`,
-          `  recovery file: ${recovery ? 'present' : 'clear'}`,
-          ...(recovery?.returnContext ? [`  recovery activity: ${recovery.returnContext.activityLabel}`, `  recovery status: ${recovery.returnContext.statusLabel}`] : []),
+          `  last session pointer: ${continuity.lastSessionPointer ?? 'none'}`,
+          `  recovery file: ${continuity.recoveryFilePresent ? 'present' : 'clear'}`,
+          ...(continuity.returnContext ? [`  recovery activity: ${continuity.returnContext.activityLabel}`, `  recovery status: ${continuity.returnContext.statusLabel}`] : []),
           ...(issues.length > 0 ? issues.map((issue) => `  issue: ${issue}`) : ['  no active session continuity issues detected']),
           '  next: /session list',
           '  next: /session hotspots',
@@ -254,17 +238,19 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'maintenance') {
-        const currentModel = ctx.providerRegistry.getCurrentModel?.();
-        const llmMessages = typeof ctx.conversationManager.getMessagesForLLM === 'function'
-          ? ctx.conversationManager.getMessagesForLLM()
+        const session = readModels.session.getSnapshot();
+        const providerApi = requireProviderApi(ctx);
+        const currentModel = await providerApi.getCurrentModel().catch(() => null);
+        const llmMessages = typeof ctx.session.conversationManager.getMessagesForLLM === 'function'
+          ? ctx.session.conversationManager.getMessagesForLLM()
           : [];
         const maintenance = evaluateSessionMaintenance({
-          configManager: ctx.configManager,
+          configManager: ctx.platform.configManager,
           currentTokens: estimateConversationTokens(llmMessages),
-          contextWindow: currentModel ? ctx.providerRegistry.getContextWindowForModel(currentModel) : 0,
+          contextWindow: currentModel?.contextWindow ?? 0,
           messageCount: llmMessages.length,
           sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
-          session: ctx.runtimeStore?.getState().session,
+          session: session.session,
         });
         ctx.print([
           'Health Review: Maintenance',
@@ -274,18 +260,19 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'worktrees') {
-        const records = listPersistedWorktreeMeta();
-        const summary = summarizeWorktreeOwnership(records);
+        const summary = readModels.worktrees.getSnapshot().summary;
         const issues: string[] = [];
         if (summary.discard > 0) issues.push(`${summary.discard} worktree(s) marked discard still tracked`);
         if (summary.cleanupPending > 0) issues.push(`${summary.cleanupPending} worktree(s) awaiting cleanup`);
+        if ('kept' in summary && typeof (summary as { kept?: number }).kept === 'number' && (summary as { kept?: number }).kept! > 0) {
+          // read-model summary may include kept in some implementations; ignored in rendering below if absent
+        }
         if (summary.paused > 0) issues.push(`${summary.paused} paused worktree(s) may need resume or merge review`);
         ctx.print([
           'Health Review: Worktrees',
           `  total: ${summary.total}`,
           `  active: ${summary.active}`,
           `  paused: ${summary.paused}`,
-          `  kept: ${summary.kept}`,
           `  discard: ${summary.discard}`,
           `  cleanup pending: ${summary.cleanupPending}`,
           ...(issues.length > 0 ? issues.map((issue) => `  issue: ${issue}`) : ['  no active worktree lifecycle issues detected']),
@@ -299,7 +286,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         const domain = (args[1] ?? 'review').toLowerCase();
         const lines = ['Health Repair'];
         if (domain === 'settings') {
-          const settings = getSettingsControlPlaneSnapshot(ctx.configManager);
+          const settings = getSettingsControlPlaneSnapshot(ctx.platform.configManager);
           lines.push('  domain: settings');
           lines.push(...(
             settings.conflicts.length > 0
@@ -380,29 +367,26 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      const session = ctx.runtimeStore?.getState().session;
-      const currentModel = ctx.providerRegistry.getCurrentModel?.();
-      const llmMessages = typeof ctx.conversationManager.getMessagesForLLM === 'function'
-        ? ctx.conversationManager.getMessagesForLLM()
+      const session = readModels.session.getSnapshot();
+      const providerApi = requireProviderApi(ctx);
+      const currentModel = await providerApi.getCurrentModel().catch(() => null);
+      const llmMessages = typeof ctx.session.conversationManager.getMessagesForLLM === 'function'
+        ? ctx.session.conversationManager.getMessagesForLLM()
         : [];
-      const contextWindow = currentModel ? ctx.providerRegistry.getContextWindowForModel(currentModel) : 0;
+      const contextWindow = currentModel?.contextWindow ?? 0;
       const maintenance = evaluateSessionMaintenance({
-        configManager: ctx.configManager,
+        configManager: ctx.platform.configManager,
         currentTokens: estimateConversationTokens(llmMessages),
         contextWindow,
         messageCount: llmMessages.length,
         sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
-        session,
+        session: session.session,
       });
 
       const snapshot = await buildSetupReviewSnapshot(ctx);
-      const accountSnapshot = await buildProviderAccountSnapshot({
-        providerRegistry: ctx.providerRegistry,
-        serviceRegistry: ctx.serviceRegistry,
-        subscriptionManager: ctx.subscriptionManager,
-        secretsManager: ctx.secretsManager,
-      });
-      const settingsSnapshot = getSettingsControlPlaneSnapshot(ctx.configManager);
+      const operatorClient = requireOperatorClient(ctx);
+      const accountSnapshot = await operatorClient.providers.accountSnapshot();
+      const settingsSnapshot = getSettingsControlPlaneSnapshot(ctx.platform.configManager);
       if (sub === 'setup') {
         ctx.print([
           'Health Review: Setup',
@@ -423,9 +407,9 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         `  account issues: ${accountSnapshot.issueCount}`,
         `  settings conflicts: ${settingsSnapshot.conflicts.length}`,
         `  managed locks: ${settingsSnapshot.managedLockCount}`,
-        `  local auth users: ${requireLocalUserAuthManager(ctx).inspect().userCount}`,
+        `  local auth users: ${readModels.localAuth.getSnapshot().userCount}`,
         `  remote runners: ${snapshot.remoteRunnerCount}`,
-        ...renderSandboxHealthSummary(ctx.configManager),
+        ...renderSandboxHealthSummary(ctx.platform.configManager),
         '',
         ...formatSessionMaintenanceLines(maintenance, 'guided').map((line) => `  ${line}`),
         ...(snapshot.issues.length > 0 ? ['', ...snapshot.issues.map((issue) => `  [${issue.severity.toUpperCase()}] ${issue.area}: ${issue.message}`)] : []),

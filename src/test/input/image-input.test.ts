@@ -1,4 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
@@ -8,6 +11,7 @@ import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts'
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { getTestProviderRegistry } from '../helpers/runtime-services.ts';
 import type { ContentPart } from '../../providers/interface.ts';
+import { AgentManager } from '../../tools/agent/index.ts';
 
 type InputHandlerImageTestAccess = {
   pasteRegistry: Map<string, string>;
@@ -22,6 +26,15 @@ function makeInput(): InputHandler {
   const sel = new SelectionManager();
   const history = new InfiniteBuffer();
   return new InputHandler(() => {}, sel, () => 0, () => 20, () => history, () => {}, () => {}, createDefaultUiRuntimeServices());
+}
+
+function createConfigManager(): ConfigManager {
+  const root = mkdtempSync(join(tmpdir(), 'gv-image-input-'));
+  return new ConfigManager({
+    workingDir: root,
+    homeDir: root,
+    configDir: join(root, '.goodvibes', 'global-tui'),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -207,10 +220,13 @@ describe('Orchestrator capability check for non-multimodal models', () => {
     const runtimeBus = new RuntimeEventBus();
     const toolRegistry = new ToolRegistry();
     const cm = new ConversationManager(() => 80);
-    const configManager = new ConfigManager();
+    const configManager = createConfigManager();
     const policyRuntimeState = new PolicyRuntimeState();
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, null, runtimeBus);
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, null, runtimeBus, {
+      agentManager: new AgentManager({ configManager }),
+      wrfcController: { listChains: () => [] },
+    });
     orch.setCoreServices({
       providerRegistry: getTestProviderRegistry(),
       configManager,

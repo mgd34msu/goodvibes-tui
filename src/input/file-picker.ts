@@ -1,6 +1,6 @@
-import { readdir, stat } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import { getWorkingDirectory } from '../config/index.ts';
+import type { ShellPathService } from '../runtime/shell-paths.ts';
 
 /**
  * FilePickerModal - Fuzzy file finder triggered by @ in the input area.
@@ -8,6 +8,8 @@ import { getWorkingDirectory } from '../config/index.ts';
  * and lets the user select a file to insert its path.
  */
 export class FilePickerModal {
+  constructor(private readonly shellPaths: Pick<ShellPathService, 'workingDirectory'>) {}
+
   public active = false;
   public query = '';
   public searchFocused = true;
@@ -147,7 +149,7 @@ export class FilePickerModal {
   }
 
   private async loadFiles(): Promise<void> {
-    const root = getWorkingDirectory();
+    const root = this.shellPaths.workingDirectory;
     const files: string[] = [];
     await this.walkDir(root, files, 0);
     this.allFiles = files.sort();
@@ -171,7 +173,7 @@ export class FilePickerModal {
       if (entry.name === 'node_modules' || entry.name === 'dist') continue;
 
       const fullPath = join(dir, entry.name);
-      const relPath = relative(getWorkingDirectory(), fullPath);
+      const relPath = relative(this.shellPaths.workingDirectory, fullPath);
 
       if (entry.isDirectory()) {
         files.push(relPath + '/');

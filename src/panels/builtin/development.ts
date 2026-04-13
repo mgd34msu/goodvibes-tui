@@ -18,7 +18,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'G',
     category: 'development',
     description: 'Git status, staged/unstaged changes, and recent commits',
-    factory: () => new GitPanel(),
+    factory: () => new GitPanel(requireUiServices(deps).workingDirectory),
   });
 
   manager.registerType({
@@ -36,7 +36,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'D',
     category: 'development',
     description: 'Unified diff view of agent file changes',
-    factory: () => new DiffPanel(),
+    factory: () => new DiffPanel(requireUiServices(deps).workingDirectory),
   });
 
   manager.registerType({
@@ -50,19 +50,23 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
       return new AgentInspectorPanel({
         agentManager: ui.agentManager,
         agentMessageBus: ui.agentMessageBus,
+        workingDirectory: ui.workingDirectory,
       });
     },
   });
 
   if (deps.getOrchestratorUsage) {
-    const { getOrchestratorUsage, budgetThreshold, runtimeBus } = deps;
+    const { getOrchestratorUsage, budgetThreshold } = deps;
     manager.registerType({
       id: 'cost',
       name: 'Cost',
       icon: '$',
       category: 'monitoring',
       description: 'Estimated costs per session, agent, and plan with budget alerts',
-      factory: () => new CostTrackerPanel(runtimeBus, getOrchestratorUsage, { budgetThreshold }),
+      factory: () => {
+        const ui = requireUiServices(deps);
+        return new CostTrackerPanel(ui.events.turns, ui.events.agents, getOrchestratorUsage, { budgetThreshold });
+      },
     });
   }
 
@@ -72,7 +76,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'J',
     category: 'development',
     description: 'Workspace diagnostics, symbol search, hover, and completion readiness with recovery guidance',
-    factory: () => new IntelligencePanel(deps.runtimeStore),
+    factory: () => new IntelligencePanel(requireUiServices(deps).readModels.intelligence),
   });
 
   manager.registerType({
@@ -81,7 +85,10 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'E',
     category: 'development',
     description: 'File system browser with keyboard navigation',
-    factory: () => new FileExplorerPanel(),
+    factory: () => {
+      const ui = requireUiServices(deps);
+      return new FileExplorerPanel(ui.workingDirectory, ui.workingDirectory);
+    },
   });
 
   manager.registerType({

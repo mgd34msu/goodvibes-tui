@@ -99,7 +99,7 @@ export async function extractOutline(
   codeIntelligence?: Pick<CodeIntelligence, 'getOutline' | 'getSymbols'>,
 ): Promise<string> {
   try {
-    const ci = codeIntelligence ?? new CodeIntelligence();
+    const ci = codeIntelligence ?? new CodeIntelligence({});
     const entries = await ci.getOutline(filePath, rawContent);
     if (entries.length > 0) return formatOutlineEntries(entries, includeLineNumbers);
   } catch (err) {
@@ -116,7 +116,7 @@ export async function extractSymbols(
   codeIntelligence?: Pick<CodeIntelligence, 'getOutline' | 'getSymbols'>,
 ): Promise<string> {
   try {
-    const ci = codeIntelligence ?? new CodeIntelligence();
+    const ci = codeIntelligence ?? new CodeIntelligence({});
     const symbols = await ci.getSymbols(filePath, rawContent);
     const exported = symbols.filter((s) => s.exported);
     if (exported.length > 0) return formatSymbolEntries(exported, includeLineNumbers);
@@ -134,7 +134,7 @@ export async function extractAst(
   codeIntelligence?: Pick<CodeIntelligence, 'getOutline' | 'getSymbols'>,
 ): Promise<string> {
   try {
-    const ci = codeIntelligence ?? new CodeIntelligence();
+    const ci = codeIntelligence ?? new CodeIntelligence({});
     const entries = await ci.getOutline(filePath, rawContent);
     if (entries.length > 0) return formatOutlineEntries(entries, includeLineNumbers);
   } catch (err) {

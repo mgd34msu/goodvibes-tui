@@ -93,7 +93,7 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
     usage: 'add <cron|every|at> <value> <prompt...> | list | remove <id> | enable <id> | disable <id> | run <id>',
     argsHint: 'add cron <expr> | add every <interval> | add at <timestamp> | list | remove | enable | disable | run',
     async handler(args, ctx) {
-      const manager = ctx.automationManager;
+      const manager = ctx.ops.automationManager;
       if (!manager) {
         ctx.print('Automation manager is not available in this runtime.');
         return;

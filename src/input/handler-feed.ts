@@ -277,9 +277,6 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         conversationManager: context.conversationManager,
         requestRender: context.requestRender,
         handleEscape: context.handleEscape,
-        syncCommandMode: (active: boolean) => {
-          context.commandMode = active;
-        },
       };
       if (handleCommandModeToken(commandState, token)) {
         context.commandMode = commandState.commandMode;

@@ -13,6 +13,10 @@ function makeTmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'gv-kv-test-'));
 }
 
+function stateDirFor(root: string): string {
+  return join(root, '.goodvibes', 'state');
+}
+
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
@@ -21,9 +25,16 @@ describe('KVState', () => {
   let tmpDir: string;
   let kv: KVState;
 
+  function createKVState(sessionId?: string): KVState {
+    return new KVState({
+      ...(sessionId ? { sessionId } : {}),
+      stateDir: stateDirFor(tmpDir),
+    });
+  }
+
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    kv = new KVState(undefined, tmpDir);
+    kv = createKVState();
   });
 
   afterEach(() => {
@@ -35,19 +46,23 @@ describe('KVState', () => {
   // -------------------------------------------------------------------------
 
   describe('session ID', () => {
+    test('requires an explicit state directory or storage root', () => {
+      expect(() => new KVState()).toThrow('KVState requires an explicit stateDir or storageRoot');
+    });
+
     test('auto-generates an 8-char hex session ID', () => {
       const id = kv.getSessionId();
       expect(id).toMatch(/^[0-9a-f]{8}$/);
     });
 
     test('uses provided session ID', () => {
-      const custom = new KVState('abcd1234', tmpDir);
+      const custom = createKVState('abcd1234');
       expect(custom.getSessionId()).toBe('abcd1234');
     });
 
     test('different instances get different IDs', () => {
-      const a = new KVState(undefined, tmpDir);
-      const b = new KVState(undefined, tmpDir);
+      const a = createKVState();
+      const b = createKVState();
       // Very unlikely to collide
       expect(a.getSessionId()).not.toBe(b.getSessionId());
     });
@@ -200,14 +215,14 @@ describe('KVState', () => {
       await kv.persist();
 
       // Create new instance with same session ID pointing at same dir
-      const kv2 = new KVState(kv.getSessionId(), tmpDir);
+      const kv2 = createKVState(kv.getSessionId());
       const result = await kv2.get(['myKey', 'count']);
       expect(result.myKey).toBe('myValue');
       expect(result.count).toBe(42);
     });
 
     test('persist does not throw when data is not loaded', async () => {
-      const freshKv = new KVState('aabbccdd', tmpDir);
+      const freshKv = createKVState('aabbccdd');
       // Never loaded; persist should be a no-op
       await expect(freshKv.persist()).resolves.toBeUndefined();
     });
@@ -229,19 +244,19 @@ describe('KVState', () => {
     test('returns empty array when no state dir', () => {
       const emptyDir = makeTmpDir();
       try {
-        expect(KVState.listSessions(emptyDir)).toEqual([]);
+        expect(KVState.listSessions({ stateDir: stateDirFor(emptyDir) })).toEqual([]);
       } finally {
         rmSync(emptyDir, { recursive: true, force: true });
       }
     });
 
     test('lists session IDs from persisted files', async () => {
-      const kv1 = new KVState('aaaabbbb', tmpDir);
-      const kv2 = new KVState('ccccdddd', tmpDir);
+      const kv1 = createKVState('aaaabbbb');
+      const kv2 = createKVState('ccccdddd');
       await kv1.set({ x: 1 }); await kv1.persist();
       await kv2.set({ y: 2 }); await kv2.persist();
 
-      const sessions = KVState.listSessions(tmpDir);
+      const sessions = KVState.listSessions({ stateDir: stateDirFor(tmpDir) });
       expect(sessions).toContain('aaaabbbb');
       expect(sessions).toContain('ccccdddd');
     });
@@ -256,29 +271,29 @@ describe('KVState', () => {
       // Create 5 sessions
       for (let i = 0; i < 5; i++) {
         const id = `0000000${i}`;
-        const s = new KVState(id, tmpDir);
+        const s = createKVState(id);
         await s.set({ i });
         await s.persist();
         // Small delay to differentiate mtime
         await new Promise(r => setTimeout(r, 10));
       }
 
-      KVState.cleanupOldSessions(3, tmpDir);
-      const remaining = KVState.listSessions(tmpDir);
+      KVState.cleanupOldSessions(3, { stateDir: stateDirFor(tmpDir) });
+      const remaining = KVState.listSessions({ stateDir: stateDirFor(tmpDir) });
       expect(remaining.length).toBeLessThanOrEqual(3);
     });
 
     test('no-op when fewer sessions than keepCount', async () => {
-      const s = new KVState('12345678', tmpDir);
+      const s = createKVState('12345678');
       await s.set({ x: 1 }); await s.persist();
 
-      KVState.cleanupOldSessions(10, tmpDir);
-      const remaining = KVState.listSessions(tmpDir);
+      KVState.cleanupOldSessions(10, { stateDir: stateDirFor(tmpDir) });
+      const remaining = KVState.listSessions({ stateDir: stateDirFor(tmpDir) });
       expect(remaining).toContain('12345678');
     });
 
     test('no-op when no state dir', () => {
-      expect(() => KVState.cleanupOldSessions(3, '/tmp/__nonexistent_gv_test_dir__')).not.toThrow();
+      expect(() => KVState.cleanupOldSessions(3, { stateDir: '/tmp/__nonexistent_gv_test_dir__' })).not.toThrow();
     });
   });
 });
@@ -299,7 +314,7 @@ describe('KVState.dispose', () => {
   });
 
   test('dispose flushes pending data to disk', async () => {
-    const kv = new KVState(undefined, tmpDir);
+    const kv = new KVState({ stateDir: stateDirFor(tmpDir) });
     await kv.set({ disposeKey: 'disposeVal' });
     // Timer is pending — dispose should flush before it fires
     await kv.dispose();
@@ -311,7 +326,7 @@ describe('KVState.dispose', () => {
   });
 
   test('dispose is safe to call when no data has been loaded', async () => {
-    const kv = new KVState(undefined, tmpDir);
+    const kv = new KVState({ stateDir: stateDirFor(tmpDir) });
     await expect(kv.dispose()).resolves.toBeUndefined();
   });
 });
@@ -332,7 +347,7 @@ describe('KVState ensureLoaded race condition', () => {
   });
 
   test('concurrent get() calls load data exactly once without corruption', async () => {
-    const kv = new KVState(undefined, tmpDir);
+    const kv = new KVState({ stateDir: stateDirFor(tmpDir) });
     // Fire two get() calls simultaneously before any load has happened
     const [r1, r2] = await Promise.all([
       kv.get(['id']),
@@ -344,7 +359,7 @@ describe('KVState ensureLoaded race condition', () => {
   });
 
   test('concurrent set() calls do not lose data', async () => {
-    const kv = new KVState(undefined, tmpDir);
+    const kv = new KVState({ stateDir: stateDirFor(tmpDir) });
     await Promise.all([
       kv.set({ alpha: 1 }),
       kv.set({ beta: 2 }),
@@ -356,12 +371,12 @@ describe('KVState ensureLoaded race condition', () => {
 
   test('ensureLoaded falls back to defaults after corrupt file', async () => {
     // Write a corrupt JSON file so load() hits the catch branch
-    const stateDir = join(tmpDir, '.goodvibes', 'state');
+    const stateDir = stateDirFor(tmpDir);
     mkdirSync(stateDir, { recursive: true });
     const id = 'deadbeef';
     writeFileSync(join(stateDir, `session_${id}.json`), 'not valid json', 'utf-8');
 
-    const kv = new KVState(id, tmpDir);
+    const kv = new KVState({ sessionId: id, stateDir: stateDirFor(tmpDir) });
     // First get() triggers load(); load() fails to parse but falls back to defaults
     const before = await kv.get(['anything']);
     expect(before).toEqual({});

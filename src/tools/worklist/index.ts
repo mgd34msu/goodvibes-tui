@@ -24,6 +24,10 @@ interface WorklistFile {
   readonly worklists: readonly WorklistRecord[];
 }
 
+type WorklistExecutionInput = WorklistToolInput & {
+  readonly storageRoot?: string;
+};
+
 function summarizeWorklist(record: WorklistRecord) {
   const openCount = record.items.filter((item) => item.status === 'open').length;
   const doneCount = record.items.filter((item) => item.status === 'done').length;
@@ -38,12 +42,12 @@ function summarizeWorklist(record: WorklistRecord) {
   };
 }
 
-function worklistsPath(): string {
-  return join(process.cwd(), '.goodvibes', 'tui', 'worklists.json');
+function worklistsPath(storageRoot: string): string {
+  return join(storageRoot, '.goodvibes', 'tui', 'worklists.json');
 }
 
-function loadWorklists(): WorklistRecord[] {
-  const path = worklistsPath();
+function loadWorklists(storageRoot: string): WorklistRecord[] {
+  const path = worklistsPath(storageRoot);
   if (!existsSync(path)) return [];
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as WorklistFile;
@@ -53,8 +57,8 @@ function loadWorklists(): WorklistRecord[] {
   }
 }
 
-function saveWorklists(worklists: readonly WorklistRecord[]): void {
-  const path = worklistsPath();
+function saveWorklists(storageRoot: string, worklists: readonly WorklistRecord[]): void {
+  const path = worklistsPath(storageRoot);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify({ version: 1, worklists }, null, 2) + '\n', 'utf-8');
 }
@@ -72,8 +76,11 @@ export const worklistTool: Tool = {
     if (!args || typeof args !== 'object' || typeof args.mode !== 'string') {
       return { success: false, error: 'Invalid args: mode is required.' };
     }
-    const input = args as WorklistToolInput;
-    const worklists = loadWorklists();
+    const input = args as WorklistExecutionInput;
+    if (!input.storageRoot || input.storageRoot.trim().length === 0) {
+      return { success: false, error: 'worklist requires storageRoot.' };
+    }
+    const worklists = loadWorklists(input.storageRoot);
     const view = input.view ?? 'summary';
 
     if (input.mode === 'create') {
@@ -91,7 +98,7 @@ export const worklistTool: Tool = {
         createdAt: now,
         updatedAt: now,
       };
-      saveWorklists([...worklists, record]);
+      saveWorklists(input.storageRoot, [...worklists, record]);
       return { success: true, output: JSON.stringify(record) };
     }
 
@@ -139,7 +146,7 @@ export const worklistTool: Tool = {
         updatedAt: Date.now(),
       };
       worklists[index] = next;
-      saveWorklists(worklists);
+      saveWorklists(input.storageRoot, worklists);
       return { success: true, output: JSON.stringify(next) };
     }
 
@@ -158,7 +165,7 @@ export const worklistTool: Tool = {
       updatedAt: Date.now(),
     };
     worklists[index] = next;
-    saveWorklists(worklists);
+    saveWorklists(input.storageRoot, worklists);
     return { success: true, output: JSON.stringify(next) };
   },
 };

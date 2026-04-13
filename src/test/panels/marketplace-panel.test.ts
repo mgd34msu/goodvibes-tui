@@ -5,11 +5,12 @@ import { join } from 'node:path';
 import { MarketplacePanel } from '../../panels/marketplace-panel.ts';
 
 describe('MarketplacePanel', () => {
+  let root: string;
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
 
   beforeEach(() => {
-    const root = mkdtempSync(join(tmpdir(), 'gv-marketplace-panel-'));
+    root = mkdtempSync(join(tmpdir(), 'gv-marketplace-panel-'));
     process.chdir(root);
     process.env.HOME = root;
     mkdirSync(join(root, '.goodvibes', 'tui', 'ecosystem'), { recursive: true });
@@ -45,7 +46,7 @@ describe('MarketplacePanel', () => {
   });
 
   test('renders curated marketplace entries and provenance hints', () => {
-    const panel = new MarketplacePanel();
+    const panel = new MarketplacePanel(undefined, { cwd: root, homeDir: root });
     panel.onActivate();
     const text = panel.render(90, 16).flat().map((cell) => cell.char).join('');
     expect(text).toContain('Marketplace Control Room');

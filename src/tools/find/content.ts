@@ -22,8 +22,8 @@ async function executeContentQuery(
   query: ContentQuery,
   output: OutputOptions,
   runtime: FindRuntimeService,
+  projectRoot: string,
 ): Promise<Record<string, unknown>> {
-  const projectRoot = process.cwd();
   const validatedPath = validateSearchPath(query.path, projectRoot);
   if (typeof validatedPath === 'object') return validatedPath;
   const basePath = validatedPath;
@@ -184,7 +184,7 @@ async function executeContentQuery(
 
   const expandTo = output.expand_to;
   if (expandTo === 'function' || expandTo === 'class') {
-    const ci = new (await import('../../intelligence/index.ts')).CodeIntelligence();
+    const ci = new (await import('../../intelligence/index.ts')).CodeIntelligence({});
     for (const [file, { content, matches }] of matchedFiles) {
       for (const m of matches) {
         try {
@@ -258,7 +258,7 @@ async function executeContentQuery(
     }
 
     if (query.relationships) {
-      const importGraph = await runtime.getImportGraph(process.cwd());
+      const importGraph = await runtime.getImportGraph(projectRoot);
       const relMap: Record<string, { imports: string[]; importedBy: string[] }> = {};
       for (const file of matchedFiles.keys()) {
         relMap[file] = {

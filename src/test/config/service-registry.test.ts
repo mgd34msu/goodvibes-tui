@@ -23,6 +23,32 @@ function writeServicesFile(dir: string, services: Record<string, unknown>): stri
   return filePath;
 }
 
+function createRegistry(
+  dir: string,
+  filePath: string,
+  overrides: Partial<{
+    secretsManager: SecretsManager;
+    subscriptionManager: SubscriptionManager;
+  }> = {},
+): ServiceRegistry {
+  return new ServiceRegistry(filePath, {
+    secretsManager: overrides.secretsManager ?? createSecretsManager(dir),
+    subscriptionManager: overrides.subscriptionManager ?? new SubscriptionManager(join(dir, 'subscriptions.json')),
+  });
+}
+
+function createSecretsManager(dir: string, secureProjectFilePath = join(dir, 'secrets.enc')): SecretsManager {
+  const projectRoot = join(dir, 'workspace');
+  const globalHome = join(dir, 'home');
+  mkdirSync(projectRoot, { recursive: true });
+  mkdirSync(globalHome, { recursive: true });
+  return new SecretsManager({
+    projectRoot,
+    globalHome,
+    secureProjectFilePath,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -31,7 +57,7 @@ describe('ServiceRegistry - getAll / get', () => {
   test('returns empty object when services file is missing', () => {
     const dir = makeTmpDir();
     try {
-      const registry = new ServiceRegistry(join(dir, 'missing.json'));
+      const registry = createRegistry(dir, join(dir, 'missing.json'));
       expect(registry.getAll()).toEqual({});
       expect(registry.get('openai')).toBeNull();
     } finally {
@@ -46,7 +72,7 @@ describe('ServiceRegistry - getAll / get', () => {
         openai: { name: 'openai', baseUrl: 'https://api.openai.com', authType: 'bearer', tokenKey: 'OPENAI_API_KEY' },
         github: { name: 'github', baseUrl: 'https://api.github.com', authType: 'bearer', tokenKey: 'GITHUB_TOKEN' },
       });
-      const registry = new ServiceRegistry(filePath);
+      const registry = createRegistry(dir, filePath);
       const all = registry.getAll();
       expect(Object.keys(all)).toHaveLength(2);
       expect(all['openai'].authType).toBe('bearer');
@@ -62,7 +88,7 @@ describe('ServiceRegistry - getAll / get', () => {
       const filePath = writeServicesFile(dir, {
         openai: { name: 'openai', authType: 'bearer', tokenKey: 'OPENAI_API_KEY' },
       });
-      const registry = new ServiceRegistry(filePath);
+      const registry = createRegistry(dir, filePath);
       expect(registry.get('unknown-service')).toBeNull();
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -75,7 +101,7 @@ describe('ServiceRegistry - getAll / get', () => {
       const filePath = writeServicesFile(dir, {
         myservice: { name: 'myservice', baseUrl: 'https://example.com', authType: 'api-key', tokenKey: 'MY_KEY', apiKeyHeader: 'X-Custom-Key' },
       });
-      const registry = new ServiceRegistry(filePath);
+      const registry = createRegistry(dir, filePath);
       const cfg = registry.get('myservice');
       expect(cfg).not.toBeNull();
       expect(cfg!.authType).toBe('api-key');
@@ -106,7 +132,7 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
 
   test('returns Authorization Bearer header when token is available', async () => {
     // Store the token in a temp secrets file
-    const secrets = new SecretsManager(encPath);
+    const secrets = createSecretsManager(dir, encPath);
     await secrets.set('OPENAI_API_KEY', 'sk-test-token-123');
 
     writeServicesFile(dir, {
@@ -140,7 +166,7 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
       openai: { name: 'openai', authType: 'bearer', tokenKey: 'OPENAI_API_KEY_MISSING_XYZ' },
     });
     const registry = new ServiceRegistry(servicesPath, {
-      secretsManager: new SecretsManager(encPath),
+      secretsManager: createSecretsManager(dir, encPath),
       subscriptionManager,
     });
     const headers = await registry.resolveAuth('openai');
@@ -150,7 +176,7 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
   test('returns null for unknown service', async () => {
     writeServicesFile(dir, {});
     const registry = new ServiceRegistry(servicesPath, {
-      secretsManager: new SecretsManager(encPath),
+      secretsManager: createSecretsManager(dir, encPath),
       subscriptionManager,
     });
     const headers = await registry.resolveAuth('nonexistent');
@@ -176,7 +202,7 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
     })) as unknown) as typeof fetch;
     await subscriptionManager.completeOAuthLogin('openai', oauth, 'code-123');
     const registry = new ServiceRegistry(servicesPath, {
-      secretsManager: new SecretsManager(encPath),
+      secretsManager: createSecretsManager(dir, encPath),
       subscriptionManager,
     });
     const headers = await registry.resolveAuth('openai');
@@ -197,7 +223,7 @@ describe('ServiceRegistry - resolveAuth basic', () => {
           passwordKey: 'MYAPI_PASS',
         },
       });
-      const registry = new ServiceRegistry(join(dir, 'services.json'));
+      const registry = createRegistry(dir, join(dir, 'services.json'));
 
       const origUser = process.env['MYAPI_USER'];
       const origPass = process.env['MYAPI_PASS'];
@@ -230,7 +256,7 @@ describe('ServiceRegistry - resolveAuth basic', () => {
           // no passwordKey
         },
       });
-      const registry = new ServiceRegistry(join(dir, 'services.json'));
+      const registry = createRegistry(dir, join(dir, 'services.json'));
 
       const origUser = process.env['MYAPI_USER_ONLY'];
       process.env['MYAPI_USER_ONLY'] = 'admin';
@@ -256,7 +282,7 @@ describe('ServiceRegistry - resolveAuth api-key', () => {
       writeServicesFile(dir, {
         myservice: { name: 'myservice', authType: 'api-key', tokenKey: 'MY_SERVICE_KEY' },
       });
-      const registry = new ServiceRegistry(join(dir, 'services.json'));
+      const registry = createRegistry(dir, join(dir, 'services.json'));
 
       const origKey = process.env['MY_SERVICE_KEY'];
       process.env['MY_SERVICE_KEY'] = 'abc-secret-key';
@@ -279,7 +305,7 @@ describe('ServiceRegistry - resolveAuth api-key', () => {
       writeServicesFile(dir, {
         myservice: { name: 'myservice', authType: 'api-key', tokenKey: 'MY_SERVICE_KEY2', apiKeyHeader: 'X-Auth-Token' },
       });
-      const registry = new ServiceRegistry(join(dir, 'services.json'));
+      const registry = createRegistry(dir, join(dir, 'services.json'));
 
       const origKey = process.env['MY_SERVICE_KEY2'];
       process.env['MY_SERVICE_KEY2'] = 'xyz-secret';
@@ -303,7 +329,7 @@ describe('ServiceRegistry - resolveAuth api-key', () => {
       writeServicesFile(dir, {
         myservice: { name: 'myservice', authType: 'api-key', tokenKey: 'TOTALLY_MISSING_KEY_XYZ_999' },
       });
-      const registry = new ServiceRegistry(join(dir, 'services.json'));
+      const registry = createRegistry(dir, join(dir, 'services.json'));
       const headers = await registry.resolveAuth('myservice');
       expect(headers).toBeNull();
     } finally {
@@ -318,7 +344,7 @@ describe('ServiceRegistry - tolerates invalid file', () => {
     try {
       const filePath = join(dir, 'services.json');
       writeFileSync(filePath, '{ not valid json }', 'utf-8');
-      const registry = new ServiceRegistry(filePath);
+      const registry = createRegistry(dir, filePath);
       expect(registry.getAll()).toEqual({});
     } finally {
       rmSync(dir, { recursive: true, force: true });

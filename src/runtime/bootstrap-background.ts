@@ -1,5 +1,4 @@
 import type { ConfigManager } from '../config/manager.ts';
-import { getWorkingDirectory } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { autoRegisterProviders } from '../providers/auto-register.ts';
@@ -7,6 +6,7 @@ import { scan, loadPersistedProviders, persistProviders, removePersistedProvider
 import type { MutableRuntimeState } from './context.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
+import type { ShellPathService } from './shell-paths.ts';
 
 type BackgroundProviderRegistrationOptions = {
   configManager: ConfigManager;
@@ -15,16 +15,17 @@ type BackgroundProviderRegistrationOptions = {
   requestRender: () => void;
   restoreSavedModel: (providerRegistry: ProviderRegistry, savedModel: string, savedProvider: string, runtime: MutableRuntimeState) => void;
   systemMessageRouter: SystemMessageRouter;
+  shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
 };
 
 export function startBackgroundProviderRegistration(
   options: BackgroundProviderRegistrationOptions,
 ): void {
-  const { configManager, providerRegistry, runtime, requestRender, restoreSavedModel, systemMessageRouter } = options;
+  const { configManager, providerRegistry, runtime, requestRender, restoreSavedModel, systemMessageRouter, shellPaths } = options;
 
   autoRegisterProviders(providerRegistry);
 
-  const persisted = loadPersistedProviders();
+  const persisted = loadPersistedProviders(shellPaths);
   if (persisted.length > 0) {
     try {
       providerRegistry.registerDiscoveredProviders(persisted);
@@ -77,7 +78,7 @@ export function startBackgroundProviderRegistration(
     }
 
     if (result.servers.length > 0 && removedServers.length > 0) {
-      removePersistedProviders(removedServers);
+      removePersistedProviders(shellPaths, removedServers);
       for (const server of removedServers) {
         systemMessageRouter.low(
           `[Scan] ${server.name} at ${server.host}:${server.port} is no longer reachable — removed`,
@@ -103,7 +104,7 @@ export function startBackgroundProviderRegistration(
     }
 
     if (result.servers.length > 0) {
-      persistProviders(result.servers);
+      persistProviders(shellPaths, result.servers);
     }
 
     if (newServers.length > 0 || removedServers.length > 0) {
@@ -118,19 +119,19 @@ type McpAutodiscoveryOptions = {
   mcpRegistry: McpRegistry;
   systemMessageRouter: SystemMessageRouter;
   requestRender: () => void;
+  shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
 };
 
 export function scheduleMcpAutodiscovery(options: McpAutodiscoveryOptions): void {
-  const { mcpRegistry, systemMessageRouter, requestRender } = options;
+  const { mcpRegistry, systemMessageRouter, requestRender, shellPaths } = options;
 
-  mcpRegistry.connectAll(getWorkingDirectory()).catch((err) => {
+  mcpRegistry.connectAll(shellPaths).catch((err) => {
     logger.debug('MCP auto-connect failed (non-fatal)', { error: String(err) });
   });
 
   setTimeout(() => {
-    const workDir = getWorkingDirectory();
     const registeredNames = new Set(mcpRegistry.serverNames);
-    scanMcpServers(workDir, registeredNames).then((result) => {
+    scanMcpServers(shellPaths, registeredNames).then((result) => {
       if (result.suggestions.length === 0) return;
       for (const suggestion of result.suggestions) {
         systemMessageRouter.low(

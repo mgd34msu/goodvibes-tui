@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
+import type { UiOrchestrationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -43,15 +43,15 @@ function statusColor(status: string): string {
 }
 
 export class OrchestrationPanel extends BasePanel {
-  private readonly store?: RuntimeStore;
+  private readonly readModel?: UiReadModel<UiOrchestrationSnapshot>;
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(store?: RuntimeStore) {
+  public constructor(readModel?: UiReadModel<UiOrchestrationSnapshot>) {
     super('orchestration', 'Orchestration', 'Q', 'monitoring');
-    this.store = store;
-    this.unsub = store ? store.subscribe(() => this.markDirty()) : null;
+    this.readModel = readModel;
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
 
   public override onDestroy(): void {
@@ -75,15 +75,15 @@ export class OrchestrationPanel extends BasePanel {
   }
 
   private _graphs() {
-    if (!this.store) return [];
-    return [...this.store.getState().orchestration.graphs.values()].sort((a, b) => b.createdAt - a.createdAt);
+    if (!this.readModel) return [];
+    return [...this.readModel.getSnapshot().graphs].sort((a, b) => b.createdAt - a.createdAt);
   }
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Task graphs, node contracts, recursion guards, and WRFC-visible orchestration state.';
 
-    if (!this.store) {
+    if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Orchestration Control Room',
         intro,
@@ -102,15 +102,15 @@ export class OrchestrationPanel extends BasePanel {
       return workspace;
     }
 
-    const domain = this.store.getState().orchestration;
+    const snapshot = this.readModel.getSnapshot();
     const graphs = this._graphs();
     const postureLines = [
       buildKeyValueLine(width, [
-        { label: 'graphs', value: String(domain.totalGraphs), valueColor: domain.totalGraphs > 0 ? C.value : C.dim },
-        { label: 'active', value: String(domain.activeGraphIds.length), valueColor: domain.activeGraphIds.length > 0 ? C.running : C.dim },
-        { label: 'completed', value: String(domain.totalCompletedGraphs), valueColor: domain.totalCompletedGraphs > 0 ? C.completed : C.dim },
-        { label: 'failed', value: String(domain.totalFailedGraphs), valueColor: domain.totalFailedGraphs > 0 ? C.failed : C.dim },
-        { label: 'guards', value: String(domain.recursionGuardTrips), valueColor: domain.recursionGuardTrips > 0 ? C.blocked : C.dim },
+        { label: 'graphs', value: String(snapshot.totalGraphs), valueColor: snapshot.totalGraphs > 0 ? C.value : C.dim },
+        { label: 'active', value: String(snapshot.activeGraphIds.length), valueColor: snapshot.activeGraphIds.length > 0 ? C.running : C.dim },
+        { label: 'completed', value: String(snapshot.totalCompletedGraphs), valueColor: snapshot.totalCompletedGraphs > 0 ? C.completed : C.dim },
+        { label: 'failed', value: String(snapshot.totalFailedGraphs), valueColor: snapshot.totalFailedGraphs > 0 ? C.failed : C.dim },
+        { label: 'guards', value: String(snapshot.recursionGuardTrips), valueColor: snapshot.recursionGuardTrips > 0 ? C.blocked : C.dim },
       ], C),
       buildGuidanceLine(width, '/orchestration', 'inspect recursive execution posture, graph health, and node contract flow', C),
     ];

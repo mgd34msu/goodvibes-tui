@@ -14,13 +14,13 @@ describe('discovered model metadata', () => {
   let cacheFixture: ReturnType<typeof createProviderCacheFixture>;
 
   function loadCatalog(models: PricingCatalog['models']): void {
-    writeModelCatalogCache(models, cacheFixture.homeDir, MINIMAL_CATALOG.fetchedAt);
+    writeModelCatalogCache(models, cacheFixture.cacheDir, MINIMAL_CATALOG.fetchedAt);
     testManagers.providerRegistry.initCatalog();
   }
 
   beforeEach(() => {
     testManagers = createTestManagers();
-    cacheFixture = createProviderCacheFixture('gv-discovered-metadata-');
+    cacheFixture = createProviderCacheFixture(testManagers.configManager.getControlPlaneConfigDir());
     loadCatalog(MINIMAL_CATALOG.models);
     testManagers.providerRegistry.registerDiscoveredProviders([]);
   });

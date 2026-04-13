@@ -6,7 +6,11 @@ import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
+import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
+import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import type { Line } from '../../types/grid.ts';
+import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
+import { ConfigManager } from '../../config/manager.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -18,7 +22,7 @@ function linesText(lines: Line[]): string {
 describe('OrchestrationPanel', () => {
   test('renders empty guidance when no graphs exist', () => {
     const store = createRuntimeStore();
-    const panel = new OrchestrationPanel(store);
+    const panel = new OrchestrationPanel(createOrchestrationReadModel(store));
     const text = linesText(panel.render(120, 12));
     expect(text).toContain('Orchestration Control Room');
     expect(text).toContain('Orchestration posture');
@@ -91,7 +95,7 @@ describe('OrchestrationPanel', () => {
       },
     }));
 
-    const panel = new OrchestrationPanel(store);
+    const panel = new OrchestrationPanel(createOrchestrationReadModel(store));
     const text = linesText(panel.render(140, 18));
     expect(text).toContain('Orchestration posture');
     expect(text).toContain('graphs');
@@ -112,18 +116,27 @@ describe('OrchestrationPanel', () => {
 
   test('is registered as a built-in panel when a runtime store is provided', () => {
     const manager = new PanelManager();
+    const root = process.cwd();
     const services = createRuntimeServices({
+      configManager: new ConfigManager({
+        workingDir: root,
+        homeDir: root,
+        configDir: `${root}/.goodvibes/test-orchestration-panel`,
+      }),
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
+      workingDir: root,
+      homeDirectory: root,
     });
+    const uiServices = createUiRuntimeServices(services);
     registerBuiltinPanels(manager, {
-      runtimeBus: new RuntimeEventBus(),
       providerRegistry: services.providerRegistry,
-      runtimeStore: createRuntimeStore(),
+      uiServices,
       tokenAuditor: services.tokenAuditor,
       panelHealthMonitor: services.panelHealthMonitor,
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
+      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.panelHealthMonitor),
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'orchestration')).toBe(true);
   });

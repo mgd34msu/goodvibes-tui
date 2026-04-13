@@ -1,8 +1,5 @@
-import { SecretsManager } from '../config/secrets.ts';
-import { ServiceRegistry } from '../config/service-registry.ts';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
-import { SubscriptionManager } from '../config/subscriptions.ts';
-import type { ProviderAuthRouteDescriptor } from './interface.ts';
+import type { ProviderAuthRouteDescriptor, ProviderRuntimeMetadataDeps } from './interface.ts';
 
 export interface StandardProviderAuthOptions {
   readonly providerId: string;
@@ -15,12 +12,6 @@ export interface StandardProviderAuthOptions {
   readonly anonymousDetail?: string;
 }
 
-export interface StandardProviderAuthRouteDeps {
-  readonly secretsManager?: Pick<SecretsManager, 'listDetailed'>;
-  readonly serviceRegistry?: Pick<ServiceRegistry, 'getAll' | 'inspect'>;
-  readonly subscriptionManager?: Pick<SubscriptionManager, 'get' | 'getPending'>;
-}
-
 function determineFreshness(expiresAt?: number): 'healthy' | 'expiring' | 'expired' {
   if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) return 'healthy';
   if (expiresAt <= Date.now()) return 'expired';
@@ -30,13 +21,10 @@ function determineFreshness(expiresAt?: number): 'healthy' | 'expiring' | 'expir
 
 export async function buildStandardProviderAuthRoutes(
   options: StandardProviderAuthOptions,
-  deps: StandardProviderAuthRouteDeps = {},
+  deps: ProviderRuntimeMetadataDeps,
 ): Promise<readonly ProviderAuthRouteDescriptor[]> {
-  const secrets = deps.secretsManager ?? new SecretsManager();
-  const serviceRegistry = deps.serviceRegistry ?? new ServiceRegistry();
-  const subscriptionManager = deps.subscriptionManager ?? new SubscriptionManager();
   const secretKeys = [...new Set([...(options.secretKeys ?? []), ...(options.apiKeyEnvVars ?? [])])];
-  const detailedSecrets = await secrets.listDetailed();
+  const detailedSecrets = await deps.secretsManager.listDetailed();
   const matchingSecretRecords = detailedSecrets.filter((record) => secretKeys.includes(record.key) && record.source !== 'env');
   const hasSecretRef = matchingSecretRecords.some((record) => Boolean(record.refSource));
   const hasStoredDirectSecret = matchingSecretRecords.some((record) => !record.refSource);
@@ -46,8 +34,8 @@ export async function buildStandardProviderAuthRoutes(
   });
   const builtinSubscriptions = new Set(listBuiltinSubscriptionProviders().map((entry) => entry.provider));
   const subscriptionProviderId = options.subscriptionProviderId ?? options.providerId;
-  const subscription = subscriptionManager.get(subscriptionProviderId);
-  const pendingSubscription = subscriptionManager.getPending(subscriptionProviderId);
+  const subscription = deps.subscriptionManager.get(subscriptionProviderId);
+  const pendingSubscription = deps.subscriptionManager.getPending(subscriptionProviderId);
   const hasSubscriptionRoute = builtinSubscriptions.has(subscriptionProviderId) || subscription != null || pendingSubscription != null;
   const subscriptionFreshness = pendingSubscription
     ? 'pending'
@@ -56,12 +44,12 @@ export async function buildStandardProviderAuthRoutes(
       : 'unconfigured';
   const serviceNames = options.serviceNames && options.serviceNames.length > 0
     ? [...new Set(options.serviceNames)]
-    : Object.values(serviceRegistry.getAll())
+    : Object.values(deps.serviceRegistry.getAll())
       .filter((service) => service.authType === 'oauth' && (service.providerId ?? service.name) === options.providerId)
       .map((service) => service.name);
   const serviceInspections = await Promise.all(serviceNames.map(async (name) => ({
     name,
-    inspection: await serviceRegistry.inspect(name),
+    inspection: await deps.serviceRegistry.inspect(name),
   })));
   const hasServiceConfig = serviceInspections.some(({ inspection }) => inspection?.config.authType === 'oauth');
   const hasUsableServiceOauth = serviceInspections.some(({ inspection }) => Boolean(inspection?.hasPrimaryCredential));

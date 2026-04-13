@@ -222,8 +222,7 @@ export class ArchetypeLoader {
   private dir: string;
 
   constructor(dir?: string) {
-    // Default: .goodvibes/agents/ relative to process.cwd()
-    this.dir = dir ?? join(process.cwd(), '.goodvibes', 'agents');
+    this.dir = dir ?? '';
   }
 
   // -------------------------------------------------------------------------
@@ -239,6 +238,11 @@ export class ArchetypeLoader {
     // Seed with built-ins first so they act as fallbacks
     for (const builtin of BUILT_IN_ARCHETYPES) {
       this.cache.set(builtin.name, { ...builtin });
+    }
+
+    if (!this.dir) {
+      logger.debug('ArchetypeLoader: no archetype directory configured, using built-ins only');
+      return;
     }
 
     let files: string[];

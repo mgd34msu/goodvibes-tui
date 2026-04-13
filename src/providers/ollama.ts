@@ -12,6 +12,7 @@ import type {
   ProviderEmbeddingResult,
   ProviderMessage,
   ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
 import { toOpenAITools } from './tool-formats.ts';
@@ -127,7 +128,7 @@ export class OllamaProvider implements LLMProvider {
     }
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const local = !/^https?:\/\/ollama\.com\b/i.test(this.baseURL);
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
@@ -138,7 +139,7 @@ export class OllamaProvider implements LLMProvider {
       allowAnonymous: local,
       anonymousConfigured: local,
       anonymousDetail: 'Local Ollama endpoints can be used without an API key.',
-    });
+    }, deps);
     return {
       auth: {
         mode: local ? 'anonymous' : 'api-key',

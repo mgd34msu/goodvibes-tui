@@ -315,7 +315,13 @@ describe('MemoryStore', () => {
       const bundle = store.exportBundle({ scope: 'team' });
 
       const otherPath = tempDbPath();
-      const otherStore = new MemoryStore(otherPath);
+      const otherConfigRoot = mkdtempSync(join(tmpdir(), 'memory-test-config-'));
+      const otherConfigDir = join(otherConfigRoot, '.goodvibes', 'tui');
+      mkdirSync(otherConfigDir, { recursive: true });
+      const otherConfigManager = new ConfigManager({ configDir: otherConfigDir, workingDir: otherConfigRoot });
+      const otherStore = new MemoryStore(otherPath, {
+        embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager: otherConfigManager }),
+      });
       await otherStore.init();
 
       try {
@@ -328,6 +334,7 @@ describe('MemoryStore', () => {
       } finally {
         otherStore.close();
         cleanupDbPair(otherPath);
+        rmSync(otherConfigRoot, { recursive: true, force: true });
       }
     });
   });

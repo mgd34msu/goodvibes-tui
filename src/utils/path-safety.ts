@@ -1,6 +1,5 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { dirname, resolve, relative } from 'node:path';
-import { getWorkingDirectory } from '../config/index.ts';
 
 function isInsideRoot(root: string, candidate: string): boolean {
   const rel = relative(root, candidate);
@@ -18,12 +17,12 @@ function nearestExistingPath(path: string): string {
 }
 
 /**
- * Resolves an input path against the working directory and validates it is
+ * Resolves an input path against the provided project root and validates it is
  * contained within the project root. Throws if the resolved path escapes the
  * root (path traversal attempt).
  */
-export function resolveAndValidatePath(inputPath: string): string {
-  const root = realpathSync(resolve(getWorkingDirectory()));
+export function resolveAndValidatePath(inputPath: string, projectRoot: string): string {
+  const root = realpathSync(resolve(projectRoot), 'utf8');
   const resolved = resolve(root, inputPath);
   const rel = relative(root, resolved);
   // NOTE: This check targets Unix paths only. Windows backslash separators are not handled (acceptable for Linux-targeted TUI).
@@ -31,12 +30,12 @@ export function resolveAndValidatePath(inputPath: string): string {
     throw new Error(`Path '${inputPath}' is outside the project root`);
   }
   const existingPath = nearestExistingPath(resolved);
-  const realExistingPath = realpathSync(existingPath);
+  const realExistingPath = realpathSync(existingPath, 'utf8');
   if (!isInsideRoot(root, realExistingPath)) {
     throw new Error(`Path '${inputPath}' is outside the project root`);
   }
   if (existsSync(resolved)) {
-    const realTargetPath = realpathSync(resolved);
+    const realTargetPath = realpathSync(resolved, 'utf8');
     if (!isInsideRoot(root, realTargetPath)) {
       throw new Error(`Path '${inputPath}' is outside the project root`);
     }

@@ -1,21 +1,17 @@
-import type { Line, Cell } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import type { TokenAuditResult } from '../security/token-audit.ts';
+import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.ts';
 import {
-  SecurityPanel as SecurityDiagnosticsPanel,
-  type SecurityPanelSnapshot,
-} from '../runtime/diagnostics/panels/security.ts';
-import type {
-  ApiTokenAuditor,
-  TokenAuditResult,
-} from '../security/token-audit.ts';
-import type { PolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
-import { buildMcpAttackPathReview } from '../runtime/mcp/index.ts';
-import type { McpDecisionRecord, McpSecuritySnapshot } from '../runtime/mcp/types.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
-import type { ForensicsRegistry } from '../runtime/forensics/registry.ts';
-import type { PluginManagerObserver, PluginStatus } from '../plugins/manager.ts';
-import { buildEmptyState, buildGuidanceLine, buildPanelLine, buildPanelWorkspace, resolveScrollablePanelSection, DEFAULT_PANEL_PALETTE, type PanelWorkspaceSection } from './polish.ts';
+  buildEmptyState,
+  buildGuidanceLine,
+  buildPanelLine,
+  buildPanelWorkspace,
+  resolveScrollablePanelSection,
+  DEFAULT_PANEL_PALETTE,
+  type PanelWorkspaceSection,
+} from './polish.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -62,124 +58,33 @@ function severityColor(severity: 'low' | 'medium' | 'high' | 'critical'): string
   }
 }
 
-interface McpSecuritySource {
-  listRecentSecurityDecisions(limit?: number): McpDecisionRecord[];
-}
-
-const EMPTY_MCP_SECURITY_SOURCE: McpSecuritySource = {
-  listRecentSecurityDecisions() {
-    return [];
-  },
-};
-
-function isPluginManagerObserver(value: unknown): value is PluginManagerObserver {
-  return typeof value === 'object'
-    && value !== null
-    && 'subscribe' in value
-    && typeof (value as { subscribe?: unknown }).subscribe === 'function';
-}
-
 export class SecurityPanel extends BasePanel {
-  private readonly diagnostics: SecurityDiagnosticsPanel;
-  private readonly policyState?: PolicyRuntimeState;
-  private readonly store?: RuntimeStore;
-  private readonly forensicsRegistry?: ForensicsRegistry;
-  private readonly mcpSource: McpSecuritySource;
-  private readonly plugins: PluginManagerObserver;
   private selectedIndex = 0;
-  private readonly policyUnsub: (() => void) | null;
-  private readonly storeUnsub: (() => void) | null;
-  private readonly forensicsUnsub: (() => void) | null;
-  private readonly pluginUnsub: (() => void) | null;
+  private readonly unsub: (() => void) | null;
 
-  public constructor(
-    plugins: PluginManagerObserver,
-    auditor?: ApiTokenAuditor,
-    policyState?: PolicyRuntimeState,
-    store?: RuntimeStore,
-    forensicsRegistry?: ForensicsRegistry,
-    mcpSource?: McpSecuritySource,
-  );
-  public constructor(
-    auditor: ApiTokenAuditor,
-    policyState: PolicyRuntimeState | undefined,
-    store: RuntimeStore | undefined,
-    forensicsRegistry: ForensicsRegistry | undefined,
-    plugins: PluginManagerObserver,
-    mcpSource?: McpSecuritySource,
-  );
-  public constructor(
-    first: PluginManagerObserver | ApiTokenAuditor,
-    second?: ApiTokenAuditor | PolicyRuntimeState,
-    third?: PolicyRuntimeState | RuntimeStore,
-    fourth?: RuntimeStore | ForensicsRegistry,
-    fifth?: ForensicsRegistry | PluginManagerObserver,
-    sixth?: McpSecuritySource,
-  ) {
+  public constructor(private readonly readModel: UiReadModel<UiSecuritySnapshot>) {
     super('security', 'Security', 'U', 'monitoring');
-    let plugins: PluginManagerObserver;
-    let auditor: ApiTokenAuditor | undefined;
-    let policyState: PolicyRuntimeState | undefined;
-    let store: RuntimeStore | undefined;
-    let forensicsRegistry: ForensicsRegistry | undefined;
-
-    if (isPluginManagerObserver(first)) {
-      plugins = first;
-      auditor = second as ApiTokenAuditor | undefined;
-      policyState = third as PolicyRuntimeState | undefined;
-      store = fourth as RuntimeStore | undefined;
-      forensicsRegistry = fifth as ForensicsRegistry | undefined;
-    } else {
-      auditor = first;
-      policyState = second as PolicyRuntimeState | undefined;
-      store = third as RuntimeStore | undefined;
-      forensicsRegistry = fourth as ForensicsRegistry | undefined;
-      if (!fifth || !isPluginManagerObserver(fifth)) {
-        throw new Error('SecurityPanel requires a plugin manager observer');
-      }
-      plugins = fifth;
-    }
-
-    if (!plugins || !isPluginManagerObserver(plugins)) {
-      throw new Error('SecurityPanel requires a plugin manager observer');
-    }
-    if (!auditor) {
-      throw new Error('SecurityPanel requires a token auditor');
-    }
-    this.diagnostics = new SecurityDiagnosticsPanel(auditor);
-    this.policyState = policyState;
-    this.store = store;
-    this.forensicsRegistry = forensicsRegistry;
-    this.plugins = plugins;
-    this.mcpSource = sixth ?? EMPTY_MCP_SECURITY_SOURCE;
-    this.policyUnsub = this.policyState ? this.policyState.subscribe(() => this.markDirty()) : null;
-    this.storeUnsub = this.store ? this.store.subscribe(() => this.markDirty()) : null;
-    this.forensicsUnsub = this.forensicsRegistry ? this.forensicsRegistry.subscribe(() => this.markDirty()) : null;
-    this.pluginUnsub = plugins.subscribe(() => this.markDirty());
+    this.unsub = this.readModel.subscribe(() => this.markDirty());
   }
 
   public override onDestroy(): void {
-    this.diagnostics.dispose();
-    this.policyUnsub?.();
-    this.storeUnsub?.();
-    this.forensicsUnsub?.();
-    this.pluginUnsub?.();
+    this.unsub?.();
   }
 
   public handleInput(key: string): boolean {
-    const snapshot = this.diagnostics.getSnapshot();
+    const snapshot = this.readModel.getSnapshot();
     if (key === 'r') {
       this.markDirty();
       return true;
     }
-    if (snapshot.results.length === 0) return false;
+    if (snapshot.audit.results.length === 0) return false;
     if (key === 'up' || key === 'k') {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
       this.markDirty();
       return true;
     }
     if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(snapshot.results.length - 1, this.selectedIndex + 1);
+      this.selectedIndex = Math.min(snapshot.audit.results.length - 1, this.selectedIndex + 1);
       this.markDirty();
       return true;
     }
@@ -188,89 +93,76 @@ export class SecurityPanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const snapshot = this.diagnostics.runAudit(Date.now());
-    const view = this.diagnostics.getSnapshot();
-    const policySnapshot = this.policyState?.getSnapshot() ?? null;
-    const preflight = policySnapshot?.lastPreflightReview ?? null;
-    const lintFindingCount = policySnapshot?.lintFindings.length ?? 0;
-    const mcpServers = [...(this.store?.getState().mcp.servers.values() ?? [])];
-    const quarantinedMcp = mcpServers.filter((server) => server.schemaFreshness === 'quarantined');
-    const elevatedMcp = mcpServers.filter((server) => server.trustMode === 'allow-all');
-    const attackPathReview = buildMcpAttackPathReview({
-      servers: mcpServers.map((server): McpSecuritySnapshot => ({
-        name: server.name,
-        role: server.role,
-        trustMode: server.trustMode,
-        allowedPaths: server.allowedPaths,
-        allowedHosts: server.allowedHosts,
-        schemaFreshness: server.schemaFreshness,
-        quarantineReason: server.quarantineReason,
-        quarantineDetail: server.quarantineDetail,
-        connected: server.status === 'connected' || server.status === 'degraded',
-      })),
-      recentDecisions: this.mcpSource.listRecentSecurityDecisions(8),
-    });
-    const deniedPermissions = this.store?.getState().permissions.denialCount ?? 0;
-    const incidents = this.forensicsRegistry?.getAll() ?? [];
-    const latestIncident = incidents[0];
-    const plugins = this.plugins.list();
-    const quarantinedPlugins = plugins.filter((plugin) => plugin.quarantined);
-    const untrustedPlugins = plugins.filter((plugin) => plugin.trustTier === 'untrusted');
-    const governanceLines: Line[] = [
-      buildPanelLine(width, [
-      [' mode ', C.label],
-      [view.managed ? 'MANAGED' : 'ADVISORY', managedColor(view.managed)],
-      ['  tokens ', C.label],
-      [String(view.totalTokens), C.value],
-      ['  blocked ', C.label],
-      [String(view.blocked.length), view.blocked.length > 0 ? C.error : C.ok],
-      ['  scope violations ', C.label],
-      [String(view.scopeViolations.length), view.scopeViolations.length > 0 ? C.error : C.ok],
-      ['  overdue ', C.label],
-      [String(view.rotationOverdue.length), view.rotationOverdue.length > 0 ? C.error : C.ok],
-      ['  warnings ', C.label],
-      [String(view.rotationWarnings.length), view.rotationWarnings.length > 0 ? C.warn : C.ok],
-      ]),
-      buildPanelLine(width, [
-      [' preflight ', C.label],
-      [(preflight?.status ?? 'n/a').toUpperCase(), preflight?.status === 'block' ? C.error : preflight?.status === 'warn' ? C.warn : preflight?.status === 'pass' ? C.ok : C.dim],
-      ['  issues ', C.label],
-      [String(preflight?.issueCount ?? 0), (preflight?.issueCount ?? 0) > 0 ? C.warn : C.ok],
-      ['  lint ', C.label],
-      [String(lintFindingCount), lintFindingCount > 0 ? C.warn : C.ok],
-      ['  denied permissions ', C.label],
-      [String(deniedPermissions), deniedPermissions > 0 ? C.warn : C.ok],
-      ]),
-    ];
-    const threatLines: Line[] = [
-      buildPanelLine(width, [
-      [' quarantined MCP ', C.label],
-      [String(quarantinedMcp.length), quarantinedMcp.length > 0 ? C.error : C.ok],
-      ['  elevated MCP ', C.label],
-      [String(elevatedMcp.length), elevatedMcp.length > 0 ? C.warn : C.ok],
-      ['  quarantined plugins ', C.label],
-      [String(quarantinedPlugins.length), quarantinedPlugins.length > 0 ? C.error : C.ok],
-      ['  untrusted plugins ', C.label],
-      [String(untrustedPlugins.length), untrustedPlugins.length > 0 ? C.warn : C.ok],
-      ]),
-      buildPanelLine(width, [
-      ['  incidents ', C.label],
-      [String(incidents.length), incidents.length > 0 ? C.warn : C.ok],
-      ]),
-    ];
-    const attackPathLines: Line[] = [
-      buildPanelLine(width, [
-      ['  attack paths ', C.label],
-      [String(attackPathReview.criticalFindings), attackPathReview.criticalFindings > 0 ? C.error : C.ok],
-      [' critical ', C.label],
-      [String(attackPathReview.incoherentFindings), attackPathReview.incoherentFindings > 0 ? C.warn : C.ok],
-      [' review ', C.label],
-      [attackPathReview.summary.slice(0, Math.max(0, width - 36)), C.dim],
-      ]),
-    ];
+    const snapshot = this.readModel.getSnapshot();
+    const view = snapshot.audit;
+    const preflightStatus = snapshot.policy.preflightStatus;
+    const preflightIssueCount = snapshot.policy.preflightIssueCount;
+    const lintFindingCount = snapshot.policy.lintFindingCount;
+    const quarantinedMcp = snapshot.mcpServers.filter((server) => server.schemaFreshness === 'quarantined');
+    const elevatedMcp = snapshot.mcpServers.filter((server) => server.trustMode === 'allow-all');
+    const incidents = snapshot.incidents;
+    const latestIncident = snapshot.latestIncident;
+    const quarantinedPlugins = snapshot.quarantinedPlugins;
+    const untrustedPlugins = snapshot.untrustedPlugins;
+    const attackPathReview = snapshot.attackPathReview;
     const footerLines = [
       buildGuidanceLine(width, '/policy preflight', 'run a proactive policy review before risky work starts', C),
     ] as const;
+
+    const governanceLines: Line[] = [
+      buildPanelLine(width, [
+        [' mode ', C.label],
+        [view.managed ? 'MANAGED' : 'ADVISORY', managedColor(view.managed)],
+        ['  tokens ', C.label],
+        [String(view.totalTokens), C.value],
+        ['  blocked ', C.label],
+        [String(view.blocked.length), view.blocked.length > 0 ? C.error : C.ok],
+        ['  scope violations ', C.label],
+        [String(view.scopeViolations.length), view.scopeViolations.length > 0 ? C.error : C.ok],
+        ['  overdue ', C.label],
+        [String(view.rotationOverdue.length), view.rotationOverdue.length > 0 ? C.error : C.ok],
+        ['  warnings ', C.label],
+        [String(view.rotationWarnings.length), view.rotationWarnings.length > 0 ? C.warn : C.ok],
+      ]),
+      buildPanelLine(width, [
+        [' preflight ', C.label],
+        [preflightStatus.toUpperCase(), preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : preflightStatus === 'pass' ? C.ok : C.dim],
+        ['  issues ', C.label],
+        [String(preflightIssueCount), preflightIssueCount > 0 ? C.warn : C.ok],
+        ['  lint ', C.label],
+        [String(lintFindingCount), lintFindingCount > 0 ? C.warn : C.ok],
+        ['  denied permissions ', C.label],
+        [String(snapshot.deniedPermissions), snapshot.deniedPermissions > 0 ? C.warn : C.ok],
+      ]),
+    ];
+
+    const threatLines: Line[] = [
+      buildPanelLine(width, [
+        [' quarantined MCP ', C.label],
+        [String(quarantinedMcp.length), quarantinedMcp.length > 0 ? C.error : C.ok],
+        ['  elevated MCP ', C.label],
+        [String(elevatedMcp.length), elevatedMcp.length > 0 ? C.warn : C.ok],
+        ['  quarantined plugins ', C.label],
+        [String(quarantinedPlugins.length), quarantinedPlugins.length > 0 ? C.error : C.ok],
+        ['  untrusted plugins ', C.label],
+        [String(untrustedPlugins.length), untrustedPlugins.length > 0 ? C.warn : C.ok],
+      ]),
+      buildPanelLine(width, [
+        ['  incidents ', C.label],
+        [String(incidents.length), incidents.length > 0 ? C.warn : C.ok],
+      ]),
+    ];
+
+    const attackPathLines: Line[] = [
+      buildPanelLine(width, [
+        ['  attack paths ', C.label],
+        [String(attackPathReview.criticalFindings), attackPathReview.criticalFindings > 0 ? C.error : C.ok],
+        [' critical ', C.label],
+        [String(attackPathReview.incoherentFindings), attackPathReview.incoherentFindings > 0 ? C.warn : C.ok],
+        [' review ', C.label],
+        [attackPathReview.summary.slice(0, Math.max(0, width - 36)), C.dim],
+      ]),
+    ];
 
     if (view.results.length === 0) {
       const emptyLines = [
@@ -320,37 +212,39 @@ export class SecurityPanel extends BasePanel {
       ]));
     }
 
-    const detailLines: Line[] = [];
-    detailLines.push(buildPanelLine(width, [
-      ['  Token: ', C.label],
-      [selected.label, C.value],
-      ['  Policy: ', C.label],
-      [selected.scope.policyId, C.info],
-      ['  Blocked: ', C.label],
-      [selected.blocked ? 'yes' : 'no', selected.blocked ? C.error : C.ok],
-    ]));
-    detailLines.push(buildPanelLine(width, [
-      ['  Scope: ', C.label],
-      [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
-      ['  Excess: ', C.label],
-      [(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none').slice(0, Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
-    ]));
-    detailLines.push(buildPanelLine(width, [
-      ['  Rotation: ', C.label],
-      [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.ok : selected.rotation.outcome === 'warning' ? C.warn : C.error],
-      ['  Due: ', C.label],
-      [new Date(selected.rotation.dueAt).toISOString(), C.value],
-      ['  Age(d): ', C.label],
-      [String(Math.floor(selected.rotation.ageMs / (24 * 60 * 60 * 1000))), C.value],
-    ]));
-    detailLines.push(buildPanelLine(width, [[
-      `Last audit: ${view.lastAuditAt ? new Date(view.lastAuditAt).toISOString() : 'never'}  Press r to refresh.`,
-      C.dim,
-    ]]));
-    if (preflight) {
+    const detailLines: Line[] = [
+      buildPanelLine(width, [
+        ['  Token: ', C.label],
+        [selected.label, C.value],
+        ['  Policy: ', C.label],
+        [selected.scope.policyId, C.info],
+        ['  Blocked: ', C.label],
+        [selected.blocked ? 'yes' : 'no', selected.blocked ? C.error : C.ok],
+      ]),
+      buildPanelLine(width, [
+        ['  Scope: ', C.label],
+        [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
+        ['  Excess: ', C.label],
+        [(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none').slice(0, Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
+      ]),
+      buildPanelLine(width, [
+        ['  Rotation: ', C.label],
+        [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.ok : selected.rotation.outcome === 'warning' ? C.warn : C.error],
+        ['  Due: ', C.label],
+        [new Date(selected.rotation.dueAt).toISOString(), C.value],
+        ['  Age(d): ', C.label],
+        [String(Math.floor(selected.rotation.ageMs / (24 * 60 * 60 * 1000))), C.value],
+      ]),
+      buildPanelLine(width, [[
+        `Last audit: ${view.lastAuditAt ? new Date(view.lastAuditAt).toISOString() : 'never'}  Press r to refresh.`,
+        C.dim,
+      ]]),
+    ];
+
+    if (preflightStatus !== 'n/a') {
       detailLines.push(buildPanelLine(width, [[
-        `Policy preflight: ${preflight.summary}`.slice(0, width),
-        preflight.status === 'block' ? C.error : preflight.status === 'warn' ? C.warn : C.dim,
+        `Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`.slice(0, width),
+        preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : C.dim,
       ]]));
     }
     if (quarantinedMcp.length > 0) {

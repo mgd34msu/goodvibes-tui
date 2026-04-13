@@ -6,6 +6,7 @@ import { mkdirSync, rmSync } from 'fs';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerConfigCommand } from '../../input/commands/config.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { createShellPathService } from '../../runtime/shell-paths.ts';
 import type { SelectionAction, SelectionItem, SelectionResult } from '../../input/selection-modal.ts';
 
 function makeContext(dir: string): {
@@ -37,17 +38,34 @@ function makeContext(dir: string): {
     printed: [],
     renders: 0,
   };
+  const providerRegistry = {} as never;
+  const conversationManager = {} as never;
   const ctx = {
-    providerRegistry: {} as never,
-    conversationManager: {} as never,
-    config: cm.getAll(),
-    configManager: cm,
-    runtime: { model: '', provider: '', debugMode: false, systemPrompt: '', reasoningEffort: 'medium', sessionId: 's' },
+    session: {
+      conversationManager,
+      runtime: { model: '', provider: '', debugMode: false, systemPrompt: '', reasoningEffort: 'medium', sessionId: 's' },
+    },
+    provider: {
+      providerRegistry,
+    },
+    workspace: {
+      shellPaths: createShellPathService({
+        workingDirectory: dir,
+        homeDirectory: dir,
+      }),
+    },
+    platform: {
+      config: cm.getAll(),
+      configManager: cm,
+    },
+    ops: {},
+    extensions: {
+      toolRegistry: {} as never,
+      mcpRegistry: {} as never,
+    },
     renderRequest: () => { calls.renders++; },
     print: (text: string) => { calls.printed.push(text); },
     exit: () => {},
-    toolRegistry: {} as never,
-    mcpRegistry: {} as never,
     openSelection: (
       title: string,
       items: SelectionItem[],

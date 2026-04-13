@@ -12,7 +12,8 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { UserAuthManager } from '../security/user-auth.ts';
+import type { LocalAuthSnapshot } from '../security/user-auth.ts';
+import type { LocalAuthInspectionQuery } from '../runtime/ui-service-queries.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -29,9 +30,9 @@ function formatRoles(roles: readonly string[]): string {
 export class LocalAuthPanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
-  private readonly authManager: UserAuthManager;
+  private readonly authManager: LocalAuthInspectionQuery;
 
-  public constructor(authManager: UserAuthManager) {
+  public constructor(authManager: LocalAuthInspectionQuery) {
     super('local-auth', 'Local Auth', 'U', 'monitoring');
     this.authManager = authManager;
   }

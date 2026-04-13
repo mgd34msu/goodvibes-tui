@@ -2,6 +2,8 @@ import { dirname, resolve } from 'path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { CommandRegistry } from '../command-registry.ts';
 import { buildIncidentMemoryAddOptions } from '../../state/memory-ingest.ts';
+import { requireShellPaths } from './runtime-services.ts';
+import { getMemoryApi } from './recall-query.ts';
 
 export function registerIncidentRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -10,8 +12,9 @@ export function registerIncidentRuntimeCommands(registry: CommandRegistry): void
     description: 'Open, export, and capture incident review bundles',
     usage: '[open | latest | show <id|latest> | export <id|latest> <path> | capture <id|latest>]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const subcommand = (args[0] ?? 'open').toLowerCase();
-      const forensicRegistry = ctx.forensicsRegistry;
+      const forensicRegistry = ctx.extensions.forensicsRegistry;
       if (subcommand === 'open') {
         if (ctx.openIncidentPanel) {
           ctx.openIncidentPanel();
@@ -64,17 +67,15 @@ export function registerIncidentRuntimeCommands(registry: CommandRegistry): void
           ctx.print(`Failed to export incident bundle for ${report.id}.`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, `${bundleJson}\n`, 'utf-8');
         ctx.print(`Exported incident bundle ${report.id} to ${targetPath}`);
         return;
       }
       if (subcommand === 'capture') {
-        if (!ctx.memoryRegistry) {
-          ctx.print('Memory registry is not available for incident capture.');
-          return;
-        }
+        const memory = getMemoryApi(ctx);
+        if (!memory) return;
         if (!report) {
           ctx.print(`Incident not found: ${requestedId ?? 'latest'}`);
           return;
@@ -84,7 +85,7 @@ export function registerIncidentRuntimeCommands(registry: CommandRegistry): void
           ctx.print(`Failed to build incident bundle for ${report.id}.`);
           return;
         }
-        const record = await ctx.memoryRegistry.add(buildIncidentMemoryAddOptions(bundle));
+        const record = await memory.add(buildIncidentMemoryAddOptions(bundle));
         ctx.print(`Captured incident ${report.id} into durable memory as ${record.id}`);
         return;
       }

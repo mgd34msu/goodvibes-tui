@@ -70,6 +70,20 @@ export { bootstrapRuntime } from './bootstrap.ts';
 export type { RuntimeContext, BootstrapOptions } from './context.ts';
 export type { BootstrapContext } from './bootstrap.ts';
 export { shutdownRuntime } from './lifecycle.ts';
+export { createUiRuntimeServices } from './ui-services.ts';
+export type { UiRuntimeServices } from './ui-services.ts';
+export { createOperatorClient } from './operator-client.ts';
+export type { OperatorClient } from './operator-client.ts';
+export { createPeerClient } from './peer-client.ts';
+export type { PeerClient } from './peer-client.ts';
+export { createRuntimeProviderApi } from './runtime-provider-api.ts';
+export { createRuntimeKnowledgeApi } from './runtime-knowledge-api.ts';
+export { createRuntimeHookApi } from './runtime-hook-api.ts';
+export { createRuntimeMcpApi } from './runtime-mcp-api.ts';
+export { createRuntimeOpsApi } from './runtime-ops-api.ts';
+export type { OpsApi } from './ops-api.ts';
+export { createDirectTransport } from './transports/direct.ts';
+export type { DirectTransport } from './transports/direct.ts';
 
 // Network
 export * from './network/index.ts';

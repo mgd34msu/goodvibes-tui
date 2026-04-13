@@ -8,6 +8,7 @@ import type { MutableRuntimeState } from '../runtime/context.ts';
 import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
 import type { SubscriptionManager } from '../config/subscriptions.ts';
+import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
@@ -20,6 +21,7 @@ type WireShellUiOpenersOptions = {
   featureFlags: FeatureFlagManager;
   mcpRegistry: McpRegistry;
   subscriptionManager: SubscriptionManager;
+  serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
   getConfiguredProviderIds: () => string[];
   getPinned: () => Promise<string[]>;
   render: () => void;
@@ -37,6 +39,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     featureFlags,
     mcpRegistry,
     subscriptionManager,
+    serviceRegistry,
     getConfiguredProviderIds,
     getPinned,
     render,
@@ -99,7 +102,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openSettingsModal = () => {
     input.modalOpened('settings');
-    input.settingsModal.open(configManager, featureFlags, subscriptionManager, mcpRegistry);
+    input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry);
     render();
   };
 

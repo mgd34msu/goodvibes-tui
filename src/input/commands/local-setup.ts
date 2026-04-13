@@ -15,7 +15,7 @@ import {
   parseSetupLink,
 } from './local-setup-transfer.ts';
 import { buildSetupReviewSnapshot, exportSetupSupportBundle, renderSetupSandboxReview } from './local-setup-review.ts';
-import { requirePanelManager } from './runtime-services.ts';
+import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
 
 export function registerLocalSetupCommands(registry: CommandRegistry): void {
   registry.register({
@@ -24,6 +24,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
     description: 'Review startup readiness, ecosystem posture, sandbox bring-up, and service configuration',
     usage: '[review|doctor|services|hooks|remote|sandbox|onboarding|support-bundle <dir>|export <path>|transfer <export|inspect|import> <path>|link <surface> [target]|open-link <uri>]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
       const snapshot = await buildSetupReviewSnapshot(ctx);
       if (sub === 'review') {
@@ -45,9 +46,9 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           `  mcp quarantined: ${snapshot.quarantinedMcpCount}`,
           `  mcp elevated: ${snapshot.elevatedMcpCount}`,
           `  remote runners: ${snapshot.remoteRunnerCount}`,
-          `  sandbox backend: ${ctx.configManager.get('sandbox.vmBackend')}`,
-          `  qemu image: ${String(ctx.configManager.get('sandbox.qemuImagePath')) || '(not configured)'}`,
-          `  qemu wrapper: ${String(ctx.configManager.get('sandbox.qemuExecWrapper')) || '(not configured)'}`,
+          `  sandbox backend: ${ctx.platform.configManager.get('sandbox.vmBackend')}`,
+          `  qemu image: ${String(ctx.platform.configManager.get('sandbox.qemuImagePath')) || '(not configured)'}`,
+          `  qemu wrapper: ${String(ctx.platform.configManager.get('sandbox.qemuExecWrapper')) || '(not configured)'}`,
           '',
           `  service ids: ${snapshot.services.join(', ') || '(none)'}`,
           `  plugin dirs: ${snapshot.pluginDirectories.join(', ') || '(none)'}`,
@@ -59,11 +60,11 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
         ctx.print([
           'Startup Doctor',
           ...snapshot.issues.map((issue) => `  [${issue.severity.toUpperCase()}] ${issue.area}: ${issue.message}`),
-          ...(`${ctx.configManager.get('sandbox.vmBackend')}` === 'qemu' && !String(ctx.configManager.get('sandbox.qemuImagePath')).trim()
+          ...(`${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'qemu' && !String(ctx.platform.configManager.get('sandbox.qemuImagePath')).trim()
             ? ['  [WARN] sandbox: qemu backend selected without qemuImagePath'] : []),
-          ...(`${ctx.configManager.get('sandbox.vmBackend')}` === 'qemu' && !String(ctx.configManager.get('sandbox.qemuExecWrapper')).trim()
+          ...(`${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'qemu' && !String(ctx.platform.configManager.get('sandbox.qemuExecWrapper')).trim()
             ? ['  [WARN] sandbox: qemu backend selected without qemuExecWrapper', '    next: /sandbox scaffold-qemu-wrapper .goodvibes/tui/qemu-wrapper.sh'] : []),
-          ...(`${ctx.configManager.get('sandbox.vmBackend')}` === 'qemu' && String(ctx.configManager.get('sandbox.qemuExecWrapper')).trim()
+          ...(`${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'qemu' && String(ctx.platform.configManager.get('sandbox.qemuExecWrapper')).trim()
             ? ['  [INFO] sandbox: wrapper bridge can be validated with GV_SANDBOX_WRAPPER_MODE=host-exec before wiring a real guest transport'] : []),
           ...(snapshot.serviceIssues.length > 0
             ? ['', '  Service issues:', ...snapshot.serviceIssues.map((issue) => `    - ${issue}`)]
@@ -100,7 +101,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'remote') {
-        const runners = ctx.remoteRunnerRegistry?.listContracts() ?? [];
+        const runners = ctx.ops.remoteRuntime?.listContracts() ?? [];
         ctx.print([
           'Startup Remote',
           `  runner contracts: ${snapshot.remoteRunnerCount}`,
@@ -122,7 +123,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           `  subscriptions: ${snapshot.activeSubscriptionCount > 0 ? '[ready]' : (snapshot.oauthProviderCount + snapshot.builtinSubscriptionProviderCount) > 0 ? '[available]' : '[optional]'}`,
           `  hooks: ${(snapshot.managedHookCount + snapshot.managedHookChainCount) > 0 ? '[ready]' : '[optional]'}`,
           `  remote: ${snapshot.remoteRunnerCount > 0 ? '[ready]' : '[optional]'}`,
-          `  sandbox: ${`${ctx.configManager.get('sandbox.vmBackend')}` === 'local' ? '[local default]' : (snapshot.sandboxSecureModeReady ? '[qemu ready]' : '[host blocked]')}`,
+          `  sandbox: ${`${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'local' ? '[local default]' : (snapshot.sandboxSecureModeReady ? '[qemu ready]' : '[host blocked]')}`,
           `  plugins: ${snapshot.pluginCount > 0 ? '[ready]' : '[optional]'}`,
           `  skills: ${snapshot.skillCount > 0 ? '[ready]' : '[optional]'}`,
           '',
@@ -149,10 +150,10 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /setup support-bundle <dir>');
           return;
         }
-        const targetDir = exportSetupSupportBundle(dirArg, snapshot);
+        const targetDir = exportSetupSupportBundle(dirArg, snapshot, ctx);
         writeFileSync(join(targetDir, 'remote-summary.json'), JSON.stringify({
-          runners: ctx.remoteRunnerRegistry?.listContracts() ?? [],
-          artifacts: (ctx.remoteRunnerRegistry?.listArtifacts() ?? []).map((artifact) => ({
+          runners: ctx.ops.remoteRuntime?.listContracts() ?? [],
+          artifacts: (ctx.ops.remoteRuntime?.listArtifacts() ?? []).map((artifact) => ({
             id: artifact.id,
             runnerId: artifact.runnerId,
             status: artifact.task.status,
@@ -170,7 +171,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /setup export <path>');
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
         ctx.print(`Exported startup review to ${targetPath}`);
@@ -184,10 +185,10 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /setup transfer <export|inspect|import> <path>');
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         if (mode === 'export') {
           const bundle = buildSetupTransferBundle(ctx, snapshot);
-          ctx.print(`Exported setup transfer bundle to ${exportSetupTransferBundle(pathArg, bundle)}`);
+          ctx.print(`Exported setup transfer bundle to ${exportSetupTransferBundle(ctx, pathArg, bundle)}`);
           return;
         }
         if (mode === 'inspect') {
@@ -204,21 +205,21 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
             const bundle = JSON.parse(readFileSync(targetPath, 'utf-8')) as SetupTransferBundle;
             for (const entry of CONFIG_SCHEMA) {
               if (Object.prototype.hasOwnProperty.call(bundle.config, entry.key)) {
-                ctx.configManager.setDynamic(entry.key as ConfigKey, (bundle.config as Record<string, unknown>)[entry.key]);
+                ctx.platform.configManager.setDynamic(entry.key as ConfigKey, (bundle.config as Record<string, unknown>)[entry.key]);
               }
             }
             if (bundle.services) {
-              const servicesPath = join(process.cwd(), '.goodvibes', 'tui', 'services.json');
+              const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
               mkdirSync(dirname(servicesPath), { recursive: true });
               writeFileSync(servicesPath, JSON.stringify(bundle.services, null, 2) + '\n', 'utf-8');
             }
             if (bundle.ecosystem?.plugins) {
-              const pluginsPath = join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'plugins.json');
+              const pluginsPath = shellPaths.resolveProjectTuiPath('ecosystem', 'plugins.json');
               mkdirSync(dirname(pluginsPath), { recursive: true });
               writeFileSync(pluginsPath, JSON.stringify(bundle.ecosystem.plugins, null, 2) + '\n', 'utf-8');
             }
             if (bundle.ecosystem?.skills) {
-              const skillsPath = join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'skills.json');
+              const skillsPath = shellPaths.resolveProjectTuiPath('ecosystem', 'skills.json');
               mkdirSync(dirname(skillsPath), { recursive: true });
               writeFileSync(skillsPath, JSON.stringify(bundle.ecosystem.skills, null, 2) + '\n', 'utf-8');
             }

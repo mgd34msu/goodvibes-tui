@@ -15,6 +15,8 @@
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
 import type { RouteExplanation } from '../../providers/capabilities.ts';
 import type { FallbackTestResult, FallbackTransition } from '../../providers/optimizer.ts';
+import type { ProviderApiModelRecord } from '../../providers/provider-api.ts';
+import { requireProviderApi } from './runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -29,11 +31,11 @@ function fmtTs(epochMs: number): string {
 }
 
 function requireProviderOptimizer(context: CommandContext) {
-  if (!context.providerOptimizer) {
+  if (!context.provider.providerOptimizer) {
     context.print('[provider] Provider optimizer is not wired into this runtime.');
     return null;
   }
-  return context.providerOptimizer;
+  return context.provider.providerOptimizer;
 }
 
 function fmtExplanation(expl: RouteExplanation, context: CommandContext): void {
@@ -106,24 +108,24 @@ function handleRoute(
 // /provider explain-route
 // ---------------------------------------------------------------------------
 
-function handleExplainRoute(
+async function handleExplainRoute(
   _args: string[],
   context: CommandContext,
-): void {
+): Promise<void> {
   const optimizer = requireProviderOptimizer(context);
   if (!optimizer) return;
-  const provReg = context.providerRegistry;
+  const providerApi = requireProviderApi(context);
 
-  let currentModel;
+  let currentModel: ProviderApiModelRecord;
   try {
-    currentModel = provReg.getCurrentModel();
+    currentModel = await providerApi.getCurrentModel();
   } catch {
     context.print('[provider] No current model selected.');
     return;
   }
 
   context.print(
-    `[provider] Route explanation for current model: ${currentModel.provider}/${currentModel.id}`,
+    `[provider] Route explanation for current model: ${currentModel.providerId}/${currentModel.modelId}`,
   );
 
   // Always explain current route regardless of optimizer enabled state
@@ -158,10 +160,10 @@ function handleExplainRoute(
 // /provider pin <provider:model>
 // ---------------------------------------------------------------------------
 
-function handlePin(
+async function handlePin(
   args: string[],
   context: CommandContext,
-): void {
+): Promise<void> {
   const optimizer = requireProviderOptimizer(context);
   if (!optimizer) return;
   const target = args[0];
@@ -197,9 +199,16 @@ function handlePin(
   }
 
   // Validate that the model exists in registry
-  const models = context.providerRegistry.listModels();
+  const providerApi = requireProviderApi(context);
+  const models = await providerApi.listModels();
+  const currentModel = await providerApi.getCurrentModel();
   const match = models.find(
-    (m) => m.provider === providerId && (m.id === modelId || m.registryKey === target),
+    (m) => m.providerId === providerId && (m.modelId === modelId || m.registryKey === target),
+  ) ?? (
+    currentModel.providerId === providerId
+      && (currentModel.modelId === modelId || currentModel.registryKey === target)
+      ? currentModel
+      : undefined
   );
 
   if (!match) {
@@ -216,8 +225,8 @@ function handlePin(
     context.print('⚠ Optimizer was disabled — enabling it for pin to take effect.');
   }
 
-  optimizer.pin(providerId, modelId);
-  context.print(`[provider] Pinned → ${providerId}/${modelId}`);
+  optimizer.pin(match.providerId, match.modelId);
+  context.print(`[provider] Pinned → ${match.providerId}/${match.modelId}`);
   context.print('  All routed requests will target this provider/model.');
   context.print('  Unpin with: /provider route manual');
 }
@@ -310,7 +319,7 @@ export const providerCommand: SlashCommand = {
   description: 'Manage provider routing optimizer (route, pin, explain, fallback).',
   usage: '<subcommand> [args]',
   argsHint: 'route|explain-route|pin|fallback',
-  handler: (args: string[], context: CommandContext): void => {
+  handler: async (args: string[], context: CommandContext): Promise<void> => {
     const [sub, ...rest] = args;
 
     switch (sub) {
@@ -320,11 +329,11 @@ export const providerCommand: SlashCommand = {
 
       case 'explain-route':
       case 'explain':
-        handleExplainRoute(rest, context);
+        await handleExplainRoute(rest, context);
         break;
 
       case 'pin':
-        handlePin(rest, context);
+        await handlePin(rest, context);
         break;
 
       case 'fallback':

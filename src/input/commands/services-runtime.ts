@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionAction, SelectionItem } from '../selection-modal.ts';
-import { openCommandPanel, requireServiceRegistry } from './runtime-services.ts';
+import { openCommandPanel, requireServiceRegistry, requireShellPaths } from './runtime-services.ts';
 
 export function registerServicesRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -12,6 +12,7 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
     usage: '[open|list|inspect <name>|test <name>|resolve <name>|auth <name>|auth-review|doctor|export <path>|import <path>]',
     async handler(args, ctx) {
       const sub = args[0] ?? 'open';
+      const shellPaths = requireShellPaths(ctx);
       if (sub === 'open' || sub === 'panel') {
         openCommandPanel(ctx, 'services');
         return;
@@ -142,7 +143,7 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /services export <path>');
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, JSON.stringify(all, null, 2) + '\n', 'utf-8');
         ctx.print(`Exported services config to ${targetPath}`);
@@ -154,10 +155,10 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /services import <path>');
           return;
         }
-        const sourcePath = resolve(process.cwd(), pathArg);
+        const sourcePath = shellPaths.resolveWorkspacePath(pathArg);
         try {
           const parsed = JSON.parse(readFileSync(sourcePath, 'utf-8')) as Record<string, unknown>;
-          const targetPath = join(process.cwd(), '.goodvibes', 'tui', 'services.json');
+          const targetPath = shellPaths.resolveProjectTuiPath('services.json');
           mkdirSync(dirname(targetPath), { recursive: true });
           writeFileSync(targetPath, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
           ctx.print(`Imported services config from ${sourcePath}`);

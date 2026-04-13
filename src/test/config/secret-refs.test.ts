@@ -10,6 +10,7 @@ import {
 } from '../../config/secret-refs.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `gv-secret-refs-test-${process.pid}-${Math.random().toString(36).slice(2)}`);
@@ -61,6 +62,7 @@ describe('secret refs', () => {
     process.env.GV_SECRET_REF_TEST = 'env-secret';
     const filePath = join(tmpDir, 'secret.json');
     writeFileSync(filePath, JSON.stringify({ nested: { value: 'file-secret' } }), 'utf-8');
+    writeFileSync(join(tmpDir, 'tilde-secret.txt'), 'tilde-secret\n', 'utf-8');
     const runner: SecretCommandRunner = async (command, args) => ({
       exitCode: 0,
       stdout: `${command}:${args.join(',')}\n`,
@@ -74,6 +76,10 @@ describe('secret refs', () => {
     await expect(resolveSecretRef({ source: 'file', path: filePath, selector: 'nested.value' })).resolves.toEqual({
       source: 'file',
       value: 'file-secret',
+    });
+    await expect(resolveSecretRef({ source: 'file', path: '~/tilde-secret.txt' }, { homeDirectory: tmpDir })).resolves.toEqual({
+      source: 'file',
+      value: 'tilde-secret',
     });
     await expect(resolveSecretRef({ source: 'exec', command: 'print-secret', args: ['one'] }, { runCommand: runner })).resolves.toEqual({
       source: 'exec',
@@ -96,7 +102,7 @@ describe('secret refs', () => {
       field: 'password',
       sessionEnv: 'GV_BW_SESSION',
       appDataDir: '~/bitwarden-cli-goodvibes',
-    }, { runCommand: runner });
+    }, { runCommand: runner, homeDirectory: tmpDir });
 
     expect(result.value).toBe('bw-password');
     expect(calls).toHaveLength(1);
@@ -126,7 +132,7 @@ describe('secret refs', () => {
       item: 'GoodVibes Slack',
       field: 'password',
       serverEnv: 'GV_VAULTWARDEN_SERVER',
-    }, { runCommand: runner });
+    }, { runCommand: runner, homeDirectory: tmpDir });
 
     expect(result.value).toBe('vaultwarden-password');
     expect(calls.map((call) => call.args[0])).toEqual(['status', 'get']);
@@ -196,7 +202,10 @@ describe('secret refs', () => {
     }), 'utf-8');
     writeFileSync(join(tmpDir, 'slack-token.txt'), 'xoxb-from-file\n', 'utf-8');
 
-    const registry = new ServiceRegistry(serviceFile);
+    const registry = new ServiceRegistry(serviceFile, {
+      secretsManager: new SecretsManager({ projectRoot: tmpDir, globalHome: tmpDir }),
+      subscriptionManager: new SubscriptionManager(join(tmpDir, 'subscriptions.json')),
+    });
     const headers = await registry.resolveAuth('slack');
     expect(headers).toEqual({ Authorization: 'Bearer xoxb-from-file' });
   });

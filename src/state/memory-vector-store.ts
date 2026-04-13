@@ -104,7 +104,7 @@ export class SqliteVecMemoryIndex {
   constructor(
     private readonly dbPath: string,
     private readonly dimensions = MEMORY_VECTOR_DIMS,
-    private readonly embeddingRegistry: MemoryEmbeddingProviderRegistry = new MemoryEmbeddingProviderRegistry(),
+    private readonly embeddingRegistry: MemoryEmbeddingProviderRegistry,
   ) {}
 
   init(): void {

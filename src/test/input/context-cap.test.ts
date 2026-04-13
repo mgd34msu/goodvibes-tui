@@ -12,6 +12,8 @@ import {
   ProviderRegistry,
 } from '../../providers/registry.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { CacheHitTracker } from '../../providers/cache-strategy.ts';
 import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
@@ -67,9 +69,16 @@ function createPickerHarness(): PickerHarness {
   const configDir = join(rootDir, 'config');
   const dataDir = join(rootDir, 'provider-data');
   const subscriptionsPath = join(rootDir, 'subscriptions.json');
+  const servicesPath = join(rootDir, 'services.json');
   mkdirSync(configDir, { recursive: true });
   mkdirSync(dataDir, { recursive: true });
 
+  const secretsManager = new SecretsManager({ projectRoot: rootDir, globalHome: rootDir });
+  const subscriptionManager = new SubscriptionManager(subscriptionsPath);
+  const serviceRegistry = new ServiceRegistry(servicesPath, {
+    secretsManager,
+    subscriptionManager,
+  });
   const favoritesStore = new FavoritesStore({ dir: dataDir });
   const benchmarkStore = new BenchmarkStore({ dir: dataDir });
   writeFileSync(favoritesStore.getPath(), JSON.stringify({ pinned: [], history: [] }, null, 2));
@@ -80,8 +89,14 @@ function createPickerHarness(): PickerHarness {
   benchmarkStore.initBenchmarks();
 
   const providerRegistry = new ProviderRegistry({
-    configManager: new ConfigManager({ configDir }),
-    subscriptionManager: new SubscriptionManager(subscriptionsPath),
+    configManager: new ConfigManager({
+      configDir,
+      workingDir: rootDir,
+      homeDir: rootDir,
+    }),
+    subscriptionManager,
+    secretsManager,
+    serviceRegistry,
     capabilityRegistry: new ProviderCapabilityRegistry(),
     cacheHitTracker: new CacheHitTracker(),
     favoritesStore,
@@ -90,9 +105,9 @@ function createPickerHarness(): PickerHarness {
 
   return {
     rootDir,
+    providerRegistry,
     favoritesStore,
     benchmarkStore,
-    providerRegistry,
     cleanup: () => {
       rmSync(rootDir, { recursive: true, force: true });
     },

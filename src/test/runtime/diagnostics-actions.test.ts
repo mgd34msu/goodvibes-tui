@@ -138,7 +138,7 @@ describe('permission checks', () => {
 
 describe('load-replay', () => {
   test('resets the replay engine and returns success', async () => {
-    const engine = new DeterministicReplayEngine();
+    const engine = new DeterministicReplayEngine(process.cwd());
     const resetMock = mock(() => {});
     (engine as unknown as { reset: () => void }).reset = resetMock;
 

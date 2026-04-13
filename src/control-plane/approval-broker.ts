@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
 import { PersistentStore } from '../state/persistent-store.ts';
 import type { PermissionPromptDecision, PermissionPromptRequest, PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { ControlPlaneSurfaceMessage } from './types.ts';
@@ -52,8 +51,6 @@ type ApprovalPublisher = {
   publishSurfaceMessage(message: Omit<ControlPlaneSurfaceMessage, 'id' | 'createdAt'>): void;
 };
 
-const STORE_PATH = join(process.cwd(), '.goodvibes', 'tui', 'control-plane', 'approvals.json');
-
 function sortApprovals(records: Iterable<SharedApprovalRecord>): SharedApprovalRecord[] {
   return [...records].sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
 }
@@ -80,8 +77,17 @@ export class ApprovalBroker {
   private publisher: ApprovalPublisher | null = null;
   private loaded = false;
 
-  constructor(store?: PersistentStore<SharedApprovalStoreSnapshot>) {
-    this.store = store ?? new PersistentStore<SharedApprovalStoreSnapshot>(STORE_PATH);
+  constructor(
+    options: {
+      readonly store?: PersistentStore<SharedApprovalStoreSnapshot>;
+      readonly storePath?: string;
+    },
+  ) {
+    if (!options.store && !options.storePath) {
+      throw new Error('ApprovalBroker requires an explicit store or storePath.');
+    }
+    const storePath = options.storePath;
+    this.store = options.store ?? new PersistentStore<SharedApprovalStoreSnapshot>(storePath as string);
   }
 
   subscribe(listener: ApprovalListener): () => void {

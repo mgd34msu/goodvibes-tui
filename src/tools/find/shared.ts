@@ -252,7 +252,7 @@ export function validateSearchPath(
   path: string | undefined,
   projectRoot: string,
 ): string | { error: string } {
-  const resolved = path ? resolve(path) : projectRoot;
+  const resolved = path ? resolve(projectRoot, path) : projectRoot;
   if (!resolved.startsWith(projectRoot + '/') && resolved !== projectRoot) {
     return { error: `Path '${path}' resolves outside the project root.` };
   }

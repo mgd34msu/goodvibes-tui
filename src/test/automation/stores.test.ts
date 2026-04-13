@@ -95,4 +95,19 @@ describe('automation persistent stores', () => {
     await expect(routes.load()).resolves.toMatchObject({ routes: [route] });
     await expect(sources.load()).resolves.toMatchObject({ sources: [source] });
   });
+
+  test('requires explicit store ownership when no direct path is provided', () => {
+    expect(() => new AutomationJobStore({})).toThrow(
+      'Automation stores require an explicit controlPlaneDir or configManager.getControlPlaneConfigDir().',
+    );
+    expect(() => new AutomationRunStore({})).toThrow(
+      'Automation stores require an explicit controlPlaneDir or configManager.getControlPlaneConfigDir().',
+    );
+    expect(() => new AutomationRouteStore({})).toThrow(
+      'Automation stores require an explicit controlPlaneDir or configManager.getControlPlaneConfigDir().',
+    );
+    expect(() => new AutomationSourceStore({})).toThrow(
+      'Automation stores require an explicit controlPlaneDir or configManager.getControlPlaneConfigDir().',
+    );
+  });
 });

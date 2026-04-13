@@ -1,5 +1,4 @@
 import type { Tool } from '../../types/tools.ts';
-import { AgentManager } from '../agent/index.ts';
 import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import { REMOTE_TRIGGER_TOOL_SCHEMA, type RemoteTriggerToolInput } from './schema.ts';
 
@@ -129,5 +128,3 @@ export function createRemoteTool(registry: RemoteRunnerRegistry): Tool {
     },
   };
 }
-
-export const remoteTool: Tool = createRemoteTool(new RemoteRunnerRegistry(new AgentManager()));

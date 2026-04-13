@@ -1,10 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, copyFileSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, copyFileSync, unlinkSync, realpathSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { WRITE_SCHEMA, type WriteInput, type WriteFileInput, type WriteMode } from './schema.ts';
 import { runValidators, formatValidatorFailure, type ValidatorName } from '../shared/validators.ts';
-import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
 import { FileUndoManager } from '../../state/file-undo.ts';
@@ -60,6 +59,42 @@ function resolveContent(fileInput: WriteFileInput): string {
 function buildBackupPath(resolvedPath: string, projectRoot: string): string {
   const rel = relative(projectRoot, resolvedPath);
   return join(projectRoot, '.goodvibes', '.backups', `${rel}.${Date.now()}`);
+}
+
+function nearestExistingPath(path: string): string {
+  let current = path;
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current) return current;
+    current = parent;
+  }
+  return current;
+}
+
+function isInsideRoot(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate);
+  return rel === '' || (!rel.startsWith('..') && !rel.includes('/..') && !rel.startsWith('/'));
+}
+
+function resolveAndValidatePath(inputPath: string, projectRoot: string): string {
+  const root = realpathSync(resolve(projectRoot));
+  const resolved = resolve(root, inputPath);
+  const rel = relative(root, resolved);
+  if (rel.startsWith('..') || rel.includes('/..')) {
+    throw new Error(`Path '${inputPath}' is outside the project root`);
+  }
+  const existingPath = nearestExistingPath(resolved);
+  const realExistingPath = realpathSync(existingPath);
+  if (!isInsideRoot(root, realExistingPath)) {
+    throw new Error(`Path '${inputPath}' is outside the project root`);
+  }
+  if (existsSync(resolved)) {
+    const realTargetPath = realpathSync(resolved);
+    if (!isInsideRoot(root, realTargetPath)) {
+      throw new Error(`Path '${inputPath}' is outside the project root`);
+    }
+  }
+  return resolved;
 }
 
 /** Module-level constant — avoids re-allocating the Set on every validation call. */
@@ -159,7 +194,7 @@ function processSingleWrite(
   // Resolve and validate path
   let resolvedPath: string;
   try {
-    resolvedPath = resolveAndValidatePath(fileInput.path);
+    resolvedPath = resolveAndValidatePath(fileInput.path, projectRoot);
   } catch (err) {
     return { ok: false, error: `Path error for '${fileInput.path}': ${err instanceof Error ? err.message : String(err)}` };
   }
@@ -315,6 +350,7 @@ function formatOutput(
 // ---------------------------------------------------------------------------
 
 export function createWriteTool(options?: {
+  projectRoot: string;
   fileCache?: FileStateCache;
   projectIndex?: ProjectIndex;
   fileUndoManager?: FileUndoManager;
@@ -322,6 +358,10 @@ export function createWriteTool(options?: {
   toolLLM?: Pick<ToolLLM, 'chat'>;
   changeTracker?: Pick<SessionChangeTracker, 'recordChange'>;
 }): Tool {
+  if (typeof options?.projectRoot !== 'string' || options.projectRoot.trim().length === 0) {
+    throw new Error('createWriteTool requires projectRoot');
+  }
+  const projectRoot = options.projectRoot;
   const definition: ToolDefinition = {
     name: 'write',
     description:
@@ -347,7 +387,6 @@ export function createWriteTool(options?: {
       const input = args as unknown as WriteInput;
       const verbosity = input.verbosity ?? 'count_only';
       const dryRun = input.dry_run ?? false;
-      const projectRoot = resolve(process.cwd());
 
       const results: FileWriteResult[] = [];
       const errors: string[] = [];
@@ -366,7 +405,7 @@ export function createWriteTool(options?: {
         if (!dryRun && fileInput.path) {
           let resolvedForUndo: string | undefined;
           try {
-            resolvedForUndo = resolveAndValidatePath(fileInput.path);
+            resolvedForUndo = resolveAndValidatePath(fileInput.path, projectRoot);
           } catch {
             resolvedForUndo = undefined;
           }

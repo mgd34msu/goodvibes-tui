@@ -71,7 +71,7 @@ describe('command runner', () => {
 describe('agent runner', () => {
   test('returns ok:false with error when prompt field is missing', async () => {
     const hook: HookDefinition = { match: '*:*:*', type: 'agent' };
-    const result = await runAgent(hook, makeEvent());
+    const result = await runAgent(hook, makeEvent(), {} as never);
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
     expect(result.error).toContain('prompt');
