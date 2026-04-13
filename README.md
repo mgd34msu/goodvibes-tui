@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.17.0-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.17.1-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -55,7 +55,7 @@ Typical workflows:
 
 The compiled binary is the TUI entrypoint built from `src/main.ts`. When `danger.daemon` and/or `danger.httpListener` are enabled, that same binary starts the daemon and HTTP listener in-process. `bun run daemon` uses the separate headless daemon entrypoint from source.
 
-Inbound TLS can run in `off`, `proxy`, or `direct` mode. Direct mode defaults to the certificate files above unless explicit paths are configured. Outbound HTTPS trust uses Bun’s bundled roots by default and can be extended or replaced with custom CA files/directories for internal or enterprise endpoints.
+Inbound TLS can run in `off`, `proxy`, or `direct` mode. Direct mode defaults to the certificate files above unless explicit paths are configured. Outbound HTTPS trust uses Bun’s bundled roots by default and can be extended or replaced with custom CA files/directories for internal or enterprise endpoints. Operator auth now supports bearer headers and local session cookies across REST, SSE, and control-plane WebSocket flows.
 
 ---
 
@@ -154,7 +154,8 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Prompt / allow-all / custom permission modes with layered evaluation and risk analysis
 - Policy bundle loading, signing, verification, divergence simulation, and rule-suggestion flows for permission changes
 - Secure-secret hierarchy with `preferred_secure` storage policy by default
-- Local daemon/listener auth with bootstrap credentials, local user management, password rotation, session revocation, and review surfaces
+- Local daemon/listener auth with bootstrap credentials, local user management, password rotation, session revocation, bearer-or-cookie operator auth, and review surfaces
+- Config-gated private-host remote fetches for multimodal and knowledge ingest so internal-network URL access is explicit instead of ambient
 - Health, policy, security, and setup control surfaces for reviewing and repairing runtime posture
 
 ### Ecosystem, MCP, And Remote

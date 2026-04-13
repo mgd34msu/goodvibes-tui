@@ -384,13 +384,13 @@ export const KNOWLEDGE_GRAPHQL_SDL = `
   }
 
   type Mutation {
-    ingestUrl(url: String!, sourceType: String, connectorId: String, folderPath: String, tags: [String!], sessionId: String): KnowledgeSource!
-    ingestArtifact(path: String!, connectorId: String, tags: [String!], sessionId: String): KnowledgeSource!
-    importBookmarksFromFile(path: String!, sessionId: String): KnowledgeBatchIngestResult!
-    importUrlsFromFile(path: String!, sessionId: String): KnowledgeBatchIngestResult!
+    ingestUrl(url: String!, sourceType: String, connectorId: String, folderPath: String, tags: [String!], sessionId: String, allowPrivateHosts: Boolean): KnowledgeSource!
+    ingestArtifact(path: String!, connectorId: String, tags: [String!], sessionId: String, allowPrivateHosts: Boolean): KnowledgeSource!
+    importBookmarksFromFile(path: String!, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
+    importUrlsFromFile(path: String!, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
     ingestBookmarkSeeds(seeds: [String!]!, connectorId: String, sessionId: String): KnowledgeBatchIngestResult!
-    ingestWithConnector(connectorId: String!, input: String!, sessionId: String): KnowledgeBatchIngestResult!
-    ingestConnectorInput(input: String!, connectorId: String, sessionId: String): KnowledgeBatchIngestResult!
+    ingestWithConnector(connectorId: String!, input: String!, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
+    ingestConnectorInput(input: String!, connectorId: String, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
     renderProjection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeProjectionBundle!
     materializeProjection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeMaterializedProjection!
     reindex: KnowledgeStatus!

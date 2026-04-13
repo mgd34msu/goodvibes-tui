@@ -4,6 +4,28 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.17.1] — 2026-04-12
+
+### Auth, Transport, And Ingress Hardening
+
+- Added shared operator HTTP auth handling with local session cookies, explicit `Authorization` bearer support, login-set cookies, and control-plane WebSocket auth frames so REST, SSE, and WS auth now follow one model without query-token leakage
+- Removed control-plane token query-parameter auth from runtime transports and generated operator links, and fixed an async event-stream disconnect race so abandoned SSE connects do not leak background connections
+- Fixed Microsoft Teams ingress authentication to require the configured secret exactly, split WhatsApp verify-token and signing-secret handling, and added signed or token-backed POST verification plus bounded body parsing for the webhook adapters that previously accepted unbounded payloads
+
+### Private-Host Fetch Policy And Prompt Trust Boundaries
+
+- Split private-host remote fetch access from normal media and knowledge operations with the new `network.remoteFetch.allowPrivateHosts` runtime policy, explicit request flags, and elevated-route checks instead of implicitly allowing internal URL fetches through multimodal analysis or knowledge ingest
+- Extended the same private-host fetch policy to knowledge batch ingest flows, GraphQL mutations, and control-plane method schemas so bookmarks, connector imports, and artifact-backed ingest all follow the same config-gated behavior
+- Hardened orchestrator knowledge and memory prompt injection boundaries by framing injected source material as untrusted technical reference content that may inform implementation details but must not override runtime policy, permissions, or secrecy rules
+
+### Verification
+
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test` (`7025` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.17.0] — 2026-04-12
 
 ### Consumer-Shaped Foundation Surfaces

@@ -8,6 +8,7 @@ export interface MultimodalArtifactInput {
   readonly mimeType?: string;
   readonly dataBase64?: string;
   readonly uri?: string;
+  readonly allowPrivateHosts?: boolean;
   readonly filename?: string;
   readonly metadata?: Record<string, unknown>;
 }

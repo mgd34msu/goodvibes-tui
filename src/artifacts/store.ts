@@ -4,6 +4,7 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import { classifyHostTrustTier, extractHostname } from '../tools/fetch/trust-tiers.ts';
+import type { ConfigKey } from '../config/schema.ts';
 import type {
   ArtifactAttachment,
   ArtifactCreateInput,
@@ -21,12 +22,14 @@ export interface ArtifactStoreConfig {
   readonly rootDir?: string;
   readonly configManager?: {
     getControlPlaneConfigDir?: () => string;
+    get?: (key: ConfigKey) => unknown;
   };
   readonly maxBytes?: number;
   readonly defaultRetentionMs?: number;
   readonly maxRetentionMs?: number;
   readonly trustedHosts?: readonly string[];
   readonly blockedHosts?: readonly string[];
+  readonly allowPrivateHostFetches?: boolean;
 }
 
 const DEFAULT_ARTIFACT_MAX_BYTES = 10 * 1024 * 1024;
@@ -81,6 +84,7 @@ export class ArtifactStore {
   private readonly maxRetentionMs: number;
   private readonly trustedHosts: readonly string[];
   private readonly blockedHosts: readonly string[];
+  private readonly allowPrivateHostFetches: boolean;
 
   constructor(config: ArtifactStoreConfig) {
     this.rootDir = resolveArtifactRootDir(config);
@@ -89,6 +93,8 @@ export class ArtifactStore {
     this.maxRetentionMs = Math.max(this.defaultRetentionMs, config.maxRetentionMs ?? DEFAULT_MAX_RETENTION_MS);
     this.trustedHosts = [...(config.trustedHosts ?? [])];
     this.blockedHosts = [...(config.blockedHosts ?? [])];
+    this.allowPrivateHostFetches = config.allowPrivateHostFetches
+      ?? Boolean(config.configManager?.get?.('network.remoteFetch.allowPrivateHosts'));
     mkdirSync(this.rootDir, { recursive: true });
     this.loadExisting();
   }
@@ -328,9 +334,10 @@ export class ArtifactStore {
 
     let current = parsed.toString();
     for (let redirectCount = 0; redirectCount < 5; redirectCount += 1) {
-      if (!allowPrivateHosts) {
-        this.assertRemoteHostAllowed(current);
+      if (allowPrivateHosts && !this.allowPrivateHostFetches) {
+        throw new Error('Private-host remote artifact fetches are disabled by config.');
       }
+      this.assertRemoteHostAllowed(current, allowPrivateHosts);
       const response = await fetch(current, {
         method: 'GET',
         redirect: 'manual',
@@ -380,7 +387,7 @@ export class ArtifactStore {
     }
   }
 
-  private assertRemoteHostAllowed(uri: string): void {
+  private assertRemoteHostAllowed(uri: string, allowPrivateHosts = false): void {
     const hostname = extractHostname(uri);
     if (!hostname) {
       throw new Error(`Could not resolve artifact URI host: ${uri}`);
@@ -389,7 +396,7 @@ export class ArtifactStore {
       trustedHosts: [...this.trustedHosts],
       blockedHosts: [...this.blockedHosts],
     });
-    if (result.tier === 'blocked') {
+    if (result.tier === 'blocked' && (!allowPrivateHosts || !result.isSsrf)) {
       throw new Error(`Artifact URI blocked by SSRF policy: ${result.reason}`);
     }
   }

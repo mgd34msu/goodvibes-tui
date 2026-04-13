@@ -74,6 +74,7 @@ export async function ingestKnowledgeUrl(
     readonly sessionId?: string;
     readonly sourceType?: KnowledgeSourceType;
     readonly connectorId?: string;
+    readonly allowPrivateHosts?: boolean;
     readonly metadata?: Record<string, unknown>;
   },
 ): Promise<{ source: KnowledgeSourceRecord; artifactId?: string; extraction?: KnowledgeExtractionRecord; issues: readonly KnowledgeIssueRecord[] }> {
@@ -99,7 +100,7 @@ export async function ingestKnowledgeUrl(
   try {
     const artifact = await context.artifactStore.create({
       uri: input.url,
-      allowPrivateHosts: true,
+      allowPrivateHosts: input.allowPrivateHosts,
       metadata: {
         sourceConnector: pending.connectorId,
         requestedAt: Date.now(),
@@ -164,6 +165,7 @@ export async function ingestKnowledgeArtifact(
     readonly sessionId?: string;
     readonly sourceType?: KnowledgeSourceType;
     readonly connectorId?: string;
+    readonly allowPrivateHosts?: boolean;
     readonly metadata?: Record<string, unknown>;
   },
 ): Promise<{ source: KnowledgeSourceRecord; artifactId?: string; extraction?: KnowledgeExtractionRecord; issues: readonly KnowledgeIssueRecord[] }> {
@@ -184,7 +186,7 @@ export async function ingestKnowledgeArtifact(
     } else if (input.uri) {
       const artifact = await context.artifactStore.create({
         uri: input.uri,
-        allowPrivateHosts: true,
+        allowPrivateHosts: input.allowPrivateHosts,
         metadata: {
           sourceConnector: input.connectorId ?? 'artifact',
           requestedAt: Date.now(),
@@ -266,14 +268,20 @@ export async function ingestKnowledgeArtifact(
   }
 }
 
-export async function importKnowledgeBookmarksFromFile(context: KnowledgeIngestContext, input: { readonly path: string; readonly sessionId?: string }): Promise<KnowledgeBatchIngestResult> {
+export async function importKnowledgeBookmarksFromFile(
+  context: KnowledgeIngestContext,
+  input: { readonly path: string; readonly sessionId?: string; readonly allowPrivateHosts?: boolean },
+): Promise<KnowledgeBatchIngestResult> {
   const content = await readFile(input.path, 'utf-8');
-  return ingestKnowledgeWithConnector(context, 'bookmark', content, input.sessionId);
+  return ingestKnowledgeWithConnector(context, 'bookmark', content, input.sessionId, input.allowPrivateHosts);
 }
 
-export async function importKnowledgeUrlsFromFile(context: KnowledgeIngestContext, input: { readonly path: string; readonly sessionId?: string }): Promise<KnowledgeBatchIngestResult> {
+export async function importKnowledgeUrlsFromFile(
+  context: KnowledgeIngestContext,
+  input: { readonly path: string; readonly sessionId?: string; readonly allowPrivateHosts?: boolean },
+): Promise<KnowledgeBatchIngestResult> {
   const content = await readFile(input.path, 'utf-8');
-  return ingestKnowledgeWithConnector(context, 'url-list', content, input.sessionId);
+  return ingestKnowledgeWithConnector(context, 'url-list', content, input.sessionId, input.allowPrivateHosts);
 }
 
 export async function ingestKnowledgeBookmarkSeeds(
@@ -282,6 +290,7 @@ export async function ingestKnowledgeBookmarkSeeds(
   sessionId?: string,
   sourceType: KnowledgeSourceType = 'bookmark',
   connectorId = 'bookmark',
+  allowPrivateHosts?: boolean,
 ): Promise<KnowledgeBatchIngestResult> {
   const sources: KnowledgeSourceRecord[] = [];
   const errors: string[] = [];
@@ -297,6 +306,7 @@ export async function ingestKnowledgeBookmarkSeeds(
         sessionId,
         sourceType,
         connectorId,
+        allowPrivateHosts,
         metadata: seed.metadata,
       });
       sources.push(result.source);
@@ -315,6 +325,7 @@ export async function ingestKnowledgeWithConnector(
   connectorId: string,
   input: unknown,
   sessionId?: string,
+  allowPrivateHosts?: boolean,
 ): Promise<KnowledgeBatchIngestResult> {
   const resolved = await context.connectorRegistry.resolve(connectorId, input);
   return ingestKnowledgeBookmarkSeeds(
@@ -323,6 +334,7 @@ export async function ingestKnowledgeWithConnector(
     sessionId,
     resolved.sourceType ?? 'other',
     resolved.connectorId ?? connectorId,
+    allowPrivateHosts,
   );
 }
 
@@ -332,6 +344,7 @@ export async function ingestKnowledgeConnectorInput(context: KnowledgeIngestCont
   readonly content?: string;
   readonly path?: string;
   readonly sessionId?: string;
+  readonly allowPrivateHosts?: boolean;
 }): Promise<KnowledgeBatchIngestResult> {
   const connectorId = input.connectorId.trim();
   if (!connectorId) throw new Error('Missing connectorId');
@@ -345,7 +358,7 @@ export async function ingestKnowledgeConnectorInput(context: KnowledgeIngestCont
   } else {
     throw new Error('Connector ingest requires input, content, or path.');
   }
-  return ingestKnowledgeWithConnector(context, connectorId, resolvedInput, input.sessionId);
+  return ingestKnowledgeWithConnector(context, connectorId, resolvedInput, input.sessionId, input.allowPrivateHosts);
 }
 
 export async function refreshKnowledgeSources(context: KnowledgeIngestContext, sources: readonly KnowledgeSourceRecord[]): Promise<number> {

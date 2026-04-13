@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { AgentManager } from '../tools/agent/index.ts';
 import type { UserAuthManager } from '../security/user-auth.ts';
+import { extractOperatorAuthToken } from '../security/http-auth.ts';
 import type { ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
 import type { GatewayMethodCatalog, GatewayMethodDescriptor } from '../control-plane/index.ts';
 import type { RuntimeEventDomain } from '../runtime/events/index.ts';
@@ -10,11 +11,11 @@ import { missingScopes, resolveGatewayPathTemplate } from './helpers.ts';
 
 export interface ControlPlaneWebSocketData {
   readonly channel: 'control-plane';
-  readonly authToken: string;
-  readonly principalId: string;
-  readonly principalKind: 'user' | 'bot' | 'service' | 'token';
-  readonly admin: boolean;
-  readonly scopes: readonly string[];
+  authToken: string;
+  principalId: string | null;
+  principalKind: 'user' | 'bot' | 'service' | 'token' | null;
+  admin: boolean;
+  scopes: readonly string[];
   readonly domains: readonly RuntimeEventDomain[];
   readonly clientKind:
     | 'tui'
@@ -35,6 +36,7 @@ export interface ControlPlaneWebSocketData {
     | 'daemon';
   readonly remoteAddress?: string;
   clientId?: string;
+  authenticated: boolean;
 }
 
 export interface DaemonControlPlaneContext {
@@ -71,11 +73,7 @@ export class DaemonControlPlaneHelper {
   }
 
   extractAuthToken(req: Request): string {
-    const bearer = req.headers.get('authorization')?.replace('Bearer ', '').trim();
-    if (bearer) return bearer;
-    const url = new URL(req.url);
-    const queryToken = url.searchParams.get('token') ?? url.searchParams.get('access_token');
-    return queryToken?.trim() ?? '';
+    return extractOperatorAuthToken(req);
   }
 
   checkAuth(req: Request): boolean {
@@ -217,8 +215,8 @@ export class DaemonControlPlaneHelper {
       return null;
     }
     const token = this.extractAuthToken(req);
-    const principal = this.describeAuthenticatedPrincipal(token);
-    if (!principal) {
+    const principal = token ? this.describeAuthenticatedPrincipal(token) : null;
+    if (token && !principal) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const rawDomains = url.searchParams.get('domains');
@@ -237,13 +235,14 @@ export class DaemonControlPlaneHelper {
       data: {
         channel: 'control-plane',
         authToken: token,
-        principalId: principal.principalId,
-        principalKind: principal.principalKind,
-        scopes: principal.scopes,
-        admin: principal.admin,
+        principalId: principal?.principalId ?? null,
+        principalKind: principal?.principalKind ?? null,
+        scopes: principal?.scopes ?? [],
+        admin: principal?.admin ?? false,
         domains,
         clientKind,
         remoteAddress: extractForwardedClientIp(req, this.trustProxyEnabled()),
+        authenticated: Boolean(principal),
       } satisfies ControlPlaneWebSocketData,
     });
     return upgraded ? 'upgraded' : Response.json({ error: 'WebSocket upgrade failed' }, { status: 400 });
@@ -256,10 +255,10 @@ export class DaemonControlPlaneHelper {
     const connection = this.context.controlPlaneGateway.openWebSocketClient({
       clientKind: ws.data.clientKind,
       transport: 'ws',
-      domains: ws.data.domains,
-      principalId: ws.data.principalId,
-      principalKind: ws.data.principalKind,
-      scopes: ws.data.scopes,
+      domains: ws.data.authenticated ? ws.data.domains : [],
+      ...(ws.data.principalId ? { principalId: ws.data.principalId } : {}),
+      ...(ws.data.principalKind ? { principalKind: ws.data.principalKind } : {}),
+      ...(ws.data.scopes.length > 0 ? { scopes: ws.data.scopes } : {}),
       remoteAddress: ws.data.remoteAddress,
     }, (event, payload) => {
       ws.send(JSON.stringify({ type: 'event', event, payload }));
@@ -320,11 +319,21 @@ export class DaemonControlPlaneHelper {
           frame.domains.filter((value): value is RuntimeEventDomain => typeof value === 'string') as RuntimeEventDomain[],
         );
       }
+      ws.data.authToken = token;
+      ws.data.principalId = principal.principalId;
+      ws.data.principalKind = principal.principalKind;
+      ws.data.scopes = principal.scopes;
+      ws.data.admin = principal.admin;
+      ws.data.authenticated = true;
       ws.send(JSON.stringify({ type: 'auth', ok: true, clientId, principalId: principal.principalId }));
       return;
     }
 
     if (frame.type === 'subscribe') {
+      if (!ws.data.authenticated) {
+        ws.send(JSON.stringify({ type: 'error', error: 'Authenticate before subscribing' }));
+        return;
+      }
       const domains = Array.isArray(frame.domains)
         ? frame.domains.filter((value): value is RuntimeEventDomain => typeof value === 'string') as RuntimeEventDomain[]
         : [];
@@ -343,6 +352,10 @@ export class DaemonControlPlaneHelper {
     }
 
     if (frame.type === 'call') {
+      if (!ws.data.authenticated || !ws.data.principalId || !ws.data.principalKind) {
+        ws.send(JSON.stringify({ type: 'error', error: 'Authenticate before invoking methods' }));
+        return;
+      }
       const id = typeof frame.id === 'string' ? frame.id : `call-${Date.now()}`;
       const methodId = typeof frame.methodId === 'string' ? frame.methodId : undefined;
       const response = methodId

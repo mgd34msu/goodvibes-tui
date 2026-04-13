@@ -51,7 +51,11 @@ describe('KnowledgeService', () => {
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-'));
     configManager = new ConfigManager({ configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
-    artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
+    configManager.set('network.remoteFetch.allowPrivateHosts', true);
+    artifactStore = new ArtifactStore({
+      rootDir: join(root, 'artifacts'),
+      configManager,
+    });
     knowledgeStore = new KnowledgeStore({ dbPath: join(root, 'knowledge.sqlite') });
     memoryStore = new MemoryStore(join(root, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
@@ -70,6 +74,7 @@ describe('KnowledgeService', () => {
       folderPath: 'Programming / TypeScript',
       tags: ['typescript', 'docs'],
       sessionId: 'session-1',
+      allowPrivateHosts: true,
     });
 
     expect(result.source.status).toBe('indexed');
@@ -101,7 +106,11 @@ describe('KnowledgeService', () => {
   </DL><p>
 </DL><p>`);
 
-    const result = await service.importBookmarksFromFile({ path: bookmarksPath, sessionId: 'session-2' });
+    const result = await service.importBookmarksFromFile({
+      path: bookmarksPath,
+      sessionId: 'session-2',
+      allowPrivateHosts: true,
+    });
     expect(result.imported).toBe(2);
     expect(result.failed).toBe(0);
     expect(service.listSources(10).some((source) => source.folderPath === 'Reading')).toBe(true);
@@ -148,6 +157,7 @@ describe('KnowledgeService', () => {
       'bookmark-jsonl',
       `{"url":"${baseUrl}/docs/bun","title":"Saved Bun","folder":"Research"}`,
       'session-3',
+      true,
     );
     expect(result.imported).toBe(1);
     expect(service.listSources(10).some((source) => source.connectorId === 'bookmark-jsonl')).toBe(true);
@@ -183,6 +193,7 @@ describe('KnowledgeService', () => {
       url: `${baseUrl}/docs/typescript`,
       sourceType: 'bookmark',
       connectorId: 'bookmark',
+      allowPrivateHosts: true,
     });
 
     const run = await service.runJob('knowledge-lint', { mode: 'inline' });
@@ -198,6 +209,7 @@ describe('KnowledgeService', () => {
       connectorId: 'bookmark',
       folderPath: 'Projects / GoodVibes',
       tags: ['project:goodvibes-tui', 'capability:memory', 'provider:openai'],
+      allowPrivateHosts: true,
       metadata: {
         repo: 'goodvibes-tui',
         service: 'typescript-docs',

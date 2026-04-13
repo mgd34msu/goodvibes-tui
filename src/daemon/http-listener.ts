@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'crypto';
 import { logger } from '../utils/logger.ts';
 import { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookEvent } from '../hooks/types.ts';
+import { buildOperatorSessionCookie, extractOperatorAuthToken } from '../security/http-auth.ts';
 import { UserAuthManager } from '../security/user-auth.ts';
 import { ConfigManager } from '../config/manager.ts';
 import { extractForwardedClientIp, resolveInboundTlsContext, type ResolvedInboundTlsContext } from '../runtime/network/index.ts';
@@ -161,7 +162,7 @@ export class HttpListener {
   // -------------------------------------------------------------------------
 
   private checkAuth(req: Request): boolean {
-    const bearer = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
+    const bearer = extractOperatorAuthToken(req);
 
     if (this.authToken) {
       if (bearer.length !== this.authToken.length) return false;
@@ -236,6 +237,14 @@ export class HttpListener {
       token: session.token,
       username: session.username,
       expiresAt: session.expiresAt,
+    }, {
+      headers: {
+        'Set-Cookie': buildOperatorSessionCookie(session.token, {
+          req,
+          expiresAt: session.expiresAt,
+          trustProxy: this.tlsState?.trustProxy ?? Boolean(this.configManager.get('httpListener.trustProxy')),
+        }),
+      },
     });
   }
 

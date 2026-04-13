@@ -64,6 +64,7 @@ export const surfaceConfigDefaults = {
     provider: 'meta-cloud',
     accessToken: '',
     verifyToken: '',
+    signingSecret: '',
     phoneNumberId: '',
     businessAccountId: '',
     defaultRecipient: '',
@@ -364,6 +365,12 @@ export const surfaceConfigSettings: ConfigSettingDefinition[] = [
     type: 'string',
     default: '',
     description: 'WhatsApp webhook verify token or shared secret',
+  },
+  {
+    key: 'surfaces.whatsapp.signingSecret',
+    type: 'string',
+    default: '',
+    description: 'WhatsApp inbound signing secret or bridge bearer token',
   },
   {
     key: 'surfaces.whatsapp.phoneNumberId',

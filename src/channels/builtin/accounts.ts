@@ -177,7 +177,8 @@ export async function buildBuiltinAccount(
       const surfaces = context.deps.configManager.getCategory('surfaces');
       const secrets = await Promise.all([
         describeBuiltinSecret(context.deps, 'primary', 'Access token', surfaces.whatsapp.accessToken, ['WHATSAPP_ACCESS_TOKEN'], 'whatsapp', 'primary'),
-        describeBuiltinSecret(context.deps, 'verifyToken', 'Verify token', surfaces.whatsapp.verifyToken, ['WHATSAPP_VERIFY_TOKEN'], 'whatsapp', 'signingSecret'),
+        describeBuiltinSecret(context.deps, 'verifyToken', 'Verify token', surfaces.whatsapp.verifyToken, ['WHATSAPP_VERIFY_TOKEN']),
+        describeBuiltinSecret(context.deps, 'signingSecret', 'Signing secret', surfaces.whatsapp.signingSecret, ['WHATSAPP_SIGNING_SECRET', 'WHATSAPP_BRIDGE_TOKEN'], 'whatsapp', 'signingSecret'),
       ]);
       return finalizeBuiltinChannelAccount({
         surface,

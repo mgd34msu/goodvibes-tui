@@ -1,3 +1,4 @@
+import { constantTimeEquals, parseJsonRecord, readBearerOrHeaderToken, readTextBodyWithinLimit, verifySha256HmacSignature } from '../helpers.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -9,10 +10,16 @@ function readString(value: unknown): string | undefined {
 }
 
 export async function handleWhatsAppSurfaceWebhook(req: Request, context: SurfaceAdapterContext): Promise<Response> {
+  const provider = String(context.configManager.get('surfaces.whatsapp.provider') ?? 'meta-cloud').trim() || 'meta-cloud';
   const verifyToken =
     String(context.configManager.get('surfaces.whatsapp.verifyToken') ?? '')
-    || await context.serviceRegistry.resolveSecret('whatsapp', 'signingSecret')
     || process.env.WHATSAPP_VERIFY_TOKEN
+    || '';
+  const signingSecret =
+    String(context.configManager.get('surfaces.whatsapp.signingSecret') ?? '')
+    || await context.serviceRegistry.resolveSecret('whatsapp', 'signingSecret')
+    || process.env.WHATSAPP_SIGNING_SECRET
+    || process.env.WHATSAPP_BRIDGE_TOKEN
     || '';
   const url = new URL(req.url);
   if (req.method === 'GET') {
@@ -25,8 +32,26 @@ export async function handleWhatsAppSurfaceWebhook(req: Request, context: Surfac
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => null);
-  const payload = readRecord(body);
+  const rawBody = await readTextBodyWithinLimit(req);
+  if (rawBody instanceof Response) return rawBody;
+  if (!signingSecret) {
+    return Response.json({ error: 'Webhook not configured' }, { status: 503 });
+  }
+  if (provider === 'meta-cloud') {
+    const signature = req.headers.get('x-hub-signature-256') ?? '';
+    if (!verifySha256HmacSignature(rawBody, signingSecret, signature)) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  } else {
+    const providedToken = readBearerOrHeaderToken(req, 'x-goodvibes-whatsapp-token');
+    if (!constantTimeEquals(signingSecret, providedToken)) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
+  const parsed = parseJsonRecord(rawBody);
+  if (parsed instanceof Response) return parsed;
+  const payload = readRecord(parsed);
   if (!payload) return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   const entry = Array.isArray(payload.entry) ? readRecord(payload.entry[0]) : null;
   const change = entry && Array.isArray(entry.changes) ? readRecord(entry.changes[0]) : null;

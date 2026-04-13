@@ -14,10 +14,22 @@ interface DaemonMediaRouteContext {
   readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
   readonly voiceService: VoiceService;
   readonly configManager: ConfigManager;
+  readonly requireAdmin: (req: Request) => Response | null;
   readonly webSearchService: WebSearchService;
   readonly artifactStore: ArtifactStore;
   readonly mediaProviders: MediaProviderRegistry;
   readonly multimodalService: MultimodalService;
+}
+
+function allowPrivateHostFetchRequested(value: unknown): boolean {
+  return value === true;
+}
+
+function ensurePrivateHostFetchAllowed(context: DaemonMediaRouteContext, req: Request): Response | null {
+  if (!Boolean(context.configManager.get('network.remoteFetch.allowPrivateHosts'))) {
+    return Response.json({ error: 'Private-host remote fetches are disabled by config.' }, { status: 403 });
+  }
+  return context.requireAdmin(req);
 }
 
 export function createDaemonMediaRouteHandlers(
@@ -173,6 +185,11 @@ async function handleMediaAnalyze(context: DaemonMediaRouteContext, req: Request
 async function handleArtifactCreate(context: DaemonMediaRouteContext, req: Request): Promise<Response> {
   const body = await context.parseJsonBody(req);
   if (body instanceof Response) return body;
+  const allowPrivateHosts = allowPrivateHostFetchRequested(body.allowPrivateHosts);
+  if (allowPrivateHosts) {
+    const denied = ensurePrivateHostFetchAllowed(context, req);
+    if (denied) return denied;
+  }
   try {
     const artifact = await context.artifactStore.create({
       ...(typeof body.kind === 'string' ? { kind: body.kind as ArtifactKind } : {}),
@@ -182,6 +199,7 @@ async function handleArtifactCreate(context: DaemonMediaRouteContext, req: Reque
       ...(typeof body.text === 'string' ? { text: body.text } : {}),
       ...(typeof body.path === 'string' ? { path: body.path } : {}),
       ...(typeof body.uri === 'string' ? { uri: body.uri } : {}),
+      ...(allowPrivateHosts ? { allowPrivateHosts: true } : {}),
       ...(typeof body.retentionMs === 'number' ? { retentionMs: body.retentionMs } : {}),
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
     });
@@ -271,10 +289,24 @@ async function handleMediaGenerate(context: DaemonMediaRouteContext, req: Reques
 async function handleMultimodalAnalyze(context: DaemonMediaRouteContext, req: Request): Promise<Response> {
   const body = await context.parseJsonBody(req);
   if (body instanceof Response) return body;
+  const requestedArtifact = typeof body.artifact === 'object' && body.artifact !== null
+    ? body.artifact as Record<string, unknown>
+    : null;
+  const allowPrivateHosts = allowPrivateHostFetchRequested(body.allowPrivateHosts)
+    || allowPrivateHostFetchRequested(requestedArtifact?.allowPrivateHosts);
+  if (allowPrivateHosts) {
+    const denied = ensurePrivateHostFetchAllowed(context, req);
+    if (denied) return denied;
+  }
   try {
     const analysis = await context.multimodalService.analyze({
       ...(typeof body.artifactId === 'string' ? { artifactId: body.artifactId } : {}),
-      ...(typeof body.artifact === 'object' && body.artifact !== null ? { artifact: body.artifact as MultimodalAnalysisRequest['artifact'] } : {}),
+      ...(requestedArtifact ? {
+        artifact: {
+          ...(requestedArtifact as MultimodalAnalysisRequest['artifact']),
+          ...(allowPrivateHosts ? { allowPrivateHosts: true } : {}),
+        },
+      } : {}),
       ...(typeof body.prompt === 'string' ? { prompt: body.prompt } : {}),
       ...(typeof body.imageProviderId === 'string' ? { imageProviderId: body.imageProviderId } : {}),
       ...(typeof body.audioProviderId === 'string' ? { audioProviderId: body.audioProviderId } : {}),

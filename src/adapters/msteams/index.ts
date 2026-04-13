@@ -1,4 +1,5 @@
 import type { ChannelConversationKind } from '../../channels/index.ts';
+import { constantTimeEquals, readBearerOrHeaderToken, readTextBodyWithinLimit } from '../helpers.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -39,13 +40,23 @@ export async function handleMSTeamsSurfaceWebhook(req: Request, context: Surface
     || await context.serviceRegistry.resolveSecret('msteams', 'password')
     || process.env.MSTEAMS_APP_PASSWORD
     || '';
-  const providedToken = req.headers.get('x-goodvibes-msteams-token')
-    ?? req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-    ?? '';
-  if (configuredSecret && !providedToken) {
+  if (!configuredSecret) {
+    return Response.json({ error: 'Webhook not configured' }, { status: 503 });
+  }
+  const providedToken = readBearerOrHeaderToken(req, 'x-goodvibes-msteams-token');
+  if (!constantTimeEquals(configuredSecret, providedToken)) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const body = await req.json().catch(() => null);
+  const rawBody = await readTextBodyWithinLimit(req);
+  if (rawBody instanceof Response) return rawBody;
+  let body: unknown = null;
+  if (rawBody.trim().length > 0) {
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+  }
   const activity = readRecord(body);
   if (!activity) return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   const activityType = readString(activity.type)?.toLowerCase();

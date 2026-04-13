@@ -148,6 +148,7 @@ export interface WhatsAppSurfaceConfig {
   provider: 'meta-cloud' | 'bridge';
   accessToken: string;
   verifyToken: string;
+  signingSecret: string;
   phoneNumberId: string;
   businessAccountId: string;
   defaultRecipient: string;
@@ -240,6 +241,9 @@ export interface NetworkConfig {
     customCaFile: string;
     customCaDir: string;
     allowInsecureLocalhost: boolean;
+  };
+  remoteFetch: {
+    allowPrivateHosts: boolean;
   };
 }
 
@@ -508,6 +512,7 @@ export type ConfigKey =
   | 'surfaces.whatsapp.provider'
   | 'surfaces.whatsapp.accessToken'
   | 'surfaces.whatsapp.verifyToken'
+  | 'surfaces.whatsapp.signingSecret'
   | 'surfaces.whatsapp.phoneNumberId'
   | 'surfaces.whatsapp.businessAccountId'
   | 'surfaces.whatsapp.defaultRecipient'
@@ -552,7 +557,8 @@ export type ConfigKey =
   | 'network.outboundTls.mode'
   | 'network.outboundTls.customCaFile'
   | 'network.outboundTls.customCaDir'
-  | 'network.outboundTls.allowInsecureLocalhost';
+  | 'network.outboundTls.allowInsecureLocalhost'
+  | 'network.remoteFetch.allowPrivateHosts';
 
 /** Maps a ConfigKey to its value type. */
 export type ConfigValue<K extends ConfigKey> =
@@ -700,6 +706,7 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'surfaces.whatsapp.provider' ? 'meta-cloud' | 'bridge' :
   K extends 'surfaces.whatsapp.accessToken' ? string :
   K extends 'surfaces.whatsapp.verifyToken' ? string :
+  K extends 'surfaces.whatsapp.signingSecret' ? string :
   K extends 'surfaces.whatsapp.phoneNumberId' ? string :
   K extends 'surfaces.whatsapp.businessAccountId' ? string :
   K extends 'surfaces.whatsapp.defaultRecipient' ? string :
@@ -745,6 +752,7 @@ export type ConfigValue<K extends ConfigKey> =
   K extends 'network.outboundTls.customCaFile' ? string :
   K extends 'network.outboundTls.customCaDir' ? string :
   K extends 'network.outboundTls.allowInsecureLocalhost' ? boolean :
+  K extends 'network.remoteFetch.allowPrivateHosts' ? boolean :
   never;
 
 export const DEFAULT_CONFIG = {

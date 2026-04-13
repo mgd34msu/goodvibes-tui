@@ -27,6 +27,7 @@ interface AuthenticatedPrincipal {
 }
 
 interface DaemonKnowledgeRouteContext {
+  readonly configManager: { get(key: string): unknown };
   readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
   readonly parseOptionalJsonBody: (req: Request) => Promise<JsonBody | null | Response>;
   readonly parseJsonText: (raw: string) => JsonBody | Response;
@@ -35,6 +36,10 @@ interface DaemonKnowledgeRouteContext {
   readonly extractAuthToken: (req: Request) => string;
   readonly knowledgeService: KnowledgeService;
   readonly knowledgeGraphqlService: KnowledgeGraphqlService;
+}
+
+function readAllowPrivateHosts(value: unknown): boolean {
+  return value === true;
 }
 
 export function createDaemonKnowledgeRouteHandlers(
@@ -387,6 +392,17 @@ function missingScopes(grantedScopes: readonly string[] | undefined, requiredSco
   return requiredScopes.filter((required) => !granted.some((value) => value === '*' || value === required || (value.endsWith(':*') && required.startsWith(value.slice(0, -1)))));
 }
 
+function buildKnowledgePrivateHostFetchOptions(
+  context: DaemonKnowledgeRouteContext,
+  requested: unknown,
+): { allowPrivateHosts: true } | {} {
+  if (!readAllowPrivateHosts(requested)) return {};
+  if (!Boolean(context.configManager.get('network.remoteFetch.allowPrivateHosts'))) {
+    throw new Error('Private-host remote fetches are disabled by config.');
+  }
+  return { allowPrivateHosts: true };
+}
+
 async function handleKnowledgeIngestUrl(context: DaemonKnowledgeRouteContext, request: Request): Promise<Response> {
   const admin = context.requireAdmin(request);
   if (admin) return admin;
@@ -403,6 +419,7 @@ async function handleKnowledgeIngestUrl(context: DaemonKnowledgeRouteContext, re
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
       ...(typeof body.sourceType === 'string' ? { sourceType: body.sourceType as KnowledgeSourceRecord['sourceType'] } : {}),
       ...(typeof body.connectorId === 'string' ? { connectorId: body.connectorId } : {}),
+      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
     }), { status: 201 });
   } catch (error) {
@@ -426,6 +443,7 @@ async function handleKnowledgeIngestArtifact(context: DaemonKnowledgeRouteContex
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
       ...(typeof body.sourceType === 'string' ? { sourceType: body.sourceType as KnowledgeSourceRecord['sourceType'] } : {}),
       ...(typeof body.connectorId === 'string' ? { connectorId: body.connectorId } : {}),
+      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
     }), { status: 201 });
   } catch (error) {
@@ -444,6 +462,7 @@ async function handleKnowledgeImportBookmarks(context: DaemonKnowledgeRouteConte
     return Response.json(await context.knowledgeService.importBookmarksFromFile({
       path,
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
+      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
     }), { status: 201 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
@@ -461,6 +480,7 @@ async function handleKnowledgeImportUrls(context: DaemonKnowledgeRouteContext, r
     return Response.json(await context.knowledgeService.importUrlsFromFile({
       path,
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
+      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
     }), { status: 201 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
@@ -481,6 +501,7 @@ async function handleKnowledgeIngestConnector(context: DaemonKnowledgeRouteConte
       ...(typeof body.content === 'string' ? { content: body.content } : {}),
       ...(typeof body.path === 'string' ? { path: body.path } : {}),
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
+      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
     }), { status: 201 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });

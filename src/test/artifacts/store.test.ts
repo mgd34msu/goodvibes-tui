@@ -105,6 +105,63 @@ describe('ArtifactStore', () => {
     })).rejects.toThrow('Artifact URI blocked by SSRF policy');
   });
 
+  test('requires config opt-in before allowing private-host remote fetches', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
+    roots.push(root);
+    const store = new ArtifactStore({
+      rootDir: root,
+      configManager: {
+        get(key: string): unknown {
+          return key === 'network.remoteFetch.allowPrivateHosts' ? false : undefined;
+        },
+      },
+    });
+    await expect(store.create({
+      uri: 'http://127.0.0.1:12345/private',
+      allowPrivateHosts: true,
+    })).rejects.toThrow('Private-host remote artifact fetches are disabled by config.');
+  });
+
+  test('allows explicit private-host remote fetches when config enables them', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'gv-artifacts-'));
+    roots.push(root);
+    const originalFetch = globalThis.fetch;
+    const mockFetch = async (input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      expect(url).toBe('http://127.0.0.1:12345/private');
+      expect(init?.method).toBe('GET');
+      return new Response('private data', {
+        headers: {
+          'content-type': 'text/plain',
+          'content-disposition': 'attachment; filename="private.txt"',
+        },
+      });
+    };
+    globalThis.fetch = Object.assign(mockFetch, {
+      preconnect: originalFetch.preconnect.bind(originalFetch),
+    }) as typeof fetch;
+
+    try {
+      const store = new ArtifactStore({
+        rootDir: root,
+        configManager: {
+          get(key: string): unknown {
+            return key === 'network.remoteFetch.allowPrivateHosts' ? true : undefined;
+          },
+        },
+      });
+      const artifact = await store.create({
+        uri: 'http://127.0.0.1:12345/private',
+        allowPrivateHosts: true,
+      });
+      const { buffer } = await store.readContent(artifact.id);
+      expect(artifact.filename).toBe('private.txt');
+      expect(buffer.toString('utf-8')).toBe('private data');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test('requires an explicit storage root or config directory owner', () => {
     expect(() => new ArtifactStore({})).toThrow(
       'ArtifactStore requires an explicit rootDir or configManager.getControlPlaneConfigDir().',
