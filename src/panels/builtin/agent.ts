@@ -54,8 +54,8 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     factory: () => {
       const ui = requireUiServices(deps);
       return new AgentLogsPanel(ui.events.agents, {
-        agentManager: ui.agentManager,
-        workingDirectory: ui.workingDirectory,
+        agentManager: ui.agents.agentManager,
+        workingDirectory: ui.environment.workingDirectory,
       });
     },
   });
@@ -68,7 +68,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     description: 'WRFC chain view: write, review, fix, and confirm cycle status',
     factory: () => {
       const ui = requireUiServices(deps);
-      return new WrfcPanel(ui.events.workflows, { controller: ui.wrfcController });
+      return new WrfcPanel(ui.events.workflows, { controller: ui.agents.wrfcController });
     },
   });
 

@@ -1,5 +1,5 @@
-import { getConfigSnapshot } from '../config/index.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import type { AdaptivePlanner } from '../core/adaptive-planner.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { KnowledgeApi } from '../knowledge/knowledge-api.ts';
 import type { HookApi } from '../hooks/hook-api.ts';
@@ -16,7 +16,6 @@ import type { ToolRegistry } from '../tools/registry.ts';
 import type { ForensicsRegistry } from './forensics/index.ts';
 import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
 import type { FileUndoManager } from '../state/file-undo.ts';
-import { logger } from '../utils/logger.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
 import type { MemoryRegistry } from '../state/memory-store.ts';
 import type { IntegrationHelperService } from './integration/helpers.ts';
@@ -30,20 +29,25 @@ import type { UiReadModels } from './ui-read-models.ts';
 import type { ShellPathService } from './shell-paths.ts';
 import type {
   ShellAgentManagerService,
-  ShellAutomationManagerService,
   ShellAutomationManagerRuntimeService,
   ShellModeManagerService,
   ShellPlanManagerService,
   ShellSessionOrchestrationService,
-} from './shell-command-services.ts';
-import {
-  createBootstrapCommandShellServices,
-  type PlanRuntimeService,
-  type RemoteCommandService,
-} from './shell-command-services.ts';
+} from './shell-command-ops.ts';
+import { createBootstrapCommandShellServices, type PlanRuntimeService, type RemoteCommandService } from './shell-command-services.ts';
 import type { OperatorClient } from './operator-client.ts';
 import type { PeerClient } from './peer-client.ts';
 import type { DirectTransport } from './transports/direct.ts';
+import {
+  createBootstrapCommandActions,
+  createBootstrapCommandClientsSection,
+  createBootstrapCommandExtensionsSection,
+  createBootstrapCommandOpsSection,
+  createBootstrapCommandPlatformSection,
+  createBootstrapCommandProviderSection,
+  createBootstrapCommandSessionSection,
+  createBootstrapCommandWorkspaceSection,
+} from './bootstrap-command-parts.ts';
 
 export type CreateBootstrapCommandContextOptions = {
   configManager: ConfigManager;
@@ -87,7 +91,7 @@ export type CreateBootstrapCommandContextOptions = {
   sessionMemoryStore?: import('../core/session-memory.ts').SessionMemoryStore;
   changeTracker?: import('../sessions/change-tracker.ts').SessionChangeTracker;
   planManager?: ShellPlanManagerService;
-  adaptivePlanner?: unknown;
+  adaptivePlanner?: AdaptivePlanner;
   sessionOrchestration?: ShellSessionOrchestrationService;
   operatorClient?: OperatorClient;
   peerClient?: PeerClient;
@@ -105,12 +109,6 @@ export type CreateBootstrapCommandContextOptions = {
   completeModelSelectionSideEffect?: () => void;
   sessionLineageTracker?: import('../core/session-lineage.ts').SessionLineageTracker;
 };
-
-function unwiredShellAction(name: string): never {
-  const message = `commandContext.${name} was called before the shell bridge was attached in main.ts`;
-  logger.error(message);
-  throw new Error(message);
-}
 
 export function createBootstrapCommandContext(
   options: CreateBootstrapCommandContextOptions,
@@ -176,13 +174,6 @@ export function createBootstrapCommandContext(
     completeModelSelectionSideEffect,
   } = options;
 
-  const showPanel = (panelId: string, pane?: 'top' | 'bottom') => {
-    panelManager.open(panelId, pane);
-    panelManager.show();
-    requestRender();
-  };
-
-  let context: CommandContext;
   const shellServices = createBootstrapCommandShellServices({
     agentManager,
     automationManager,
@@ -212,147 +203,63 @@ export function createBootstrapCommandContext(
     pluginManager,
     hookWorkbench,
   });
-  const workspace = {
-    keybindingsManager,
-    fileUndoManager,
-    panelManager,
-    profileManager,
-    bookmarkManager,
-    ...shellServices.workspace,
-  };
-  const session = {
-    conversationManager: conversation,
+  const session = createBootstrapCommandSessionSection({
+    conversation,
     runtime,
     sessionManager,
     sessionMemoryStore,
     sessionLineageTracker,
     changeTracker,
-  };
-  const provider = {
+  });
+  const provider = createBootstrapCommandProviderSection({
     providerRegistry,
     providerOptimizer,
     favoritesStore,
     benchmarkStore,
-  };
-  const platform = {
-    config: getConfigSnapshot(configManager),
-    configManager,
-    ...shellServices.platform,
-  };
-  const extensions = {
+  });
+  const workspace = createBootstrapCommandWorkspaceSection({
+    keybindingsManager,
+    fileUndoManager,
+    panelManager,
+    profileManager,
+    bookmarkManager,
+  }, shellServices);
+  const platform = createBootstrapCommandPlatformSection({ configManager }, shellServices);
+  const extensions = createBootstrapCommandExtensionsSection({
     toolRegistry,
     mcpRegistry,
-    ...shellServices.extensions,
-  };
-  context = {
+  }, shellServices);
+  const clients = createBootstrapCommandClientsSection({
+    operatorClient,
+    peerClient,
+    providerApi,
+    knowledgeApi,
+    hookApi,
+    mcpApi,
+    opsApi,
+    directTransport,
+  });
+  const actions = createBootstrapCommandActions({
+    providerRegistry,
+    configManager,
+    conversation,
+    runtime,
+    requestRender,
+    panelManager,
+    loadSystemPrompt,
+    activatePlan,
+    requestPermission,
+    completeModelSelectionSideEffect,
+  });
+
+  return {
     session,
     provider,
     workspace,
     platform,
-    ops: shellServices.ops,
+    ops: createBootstrapCommandOpsSection(shellServices),
     extensions,
-    clients: {
-      operator: operatorClient,
-      peer: peerClient,
-      providerApi,
-      knowledgeApi,
-      hookApi,
-      mcpApi,
-      opsApi,
-      transport: directTransport,
-    },
-    renderRequest: requestRender,
-    submitInput: () => {
-      unwiredShellAction('submitInput');
-    },
-    executeCommand: async () => {
-      return unwiredShellAction('executeCommand');
-    },
-    cancelGeneration: () => {
-      unwiredShellAction('cancelGeneration');
-    },
-    clearScreen: () => {
-      unwiredShellAction('clearScreen');
-    },
-    activatePlan,
-    requestPermission: (request) => requestPermission(request),
-    completeModelSelection: ({ model, effort, contextCap }) => {
-      if (!model) return;
-      const def = model;
-      const key = def.registryKey ?? `${def.provider}:${def.id}`;
-      try {
-        if (contextCap != null && contextCap > 0) {
-          providerRegistry.setModelContextCap(key, contextCap);
-        }
-        providerRegistry.setCurrentModel(key);
-        runtime.model = key;
-        runtime.provider = def.provider;
-        runtime.reasoningEffort = effort as 'instant' | 'low' | 'medium' | 'high';
-        configManager.set('provider.model', key);
-        configManager.set('provider.provider', def.provider);
-        configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
-        const ctxNote = contextCap != null && contextCap > 0
-          ? `, context cap: ${contextCap.toLocaleString()}`
-          : '';
-        conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}${ctxNote}`, { fg: '135' });
-      } catch (e) {
-        conversation.log(`Error switching model: ${(e as Error).message}`, { fg: '#ef4444' });
-      }
-      completeModelSelectionSideEffect?.();
-      requestRender();
-    },
-    jumpToBookmark: () => {
-      unwiredShellAction('jumpToBookmark');
-    },
-    scrollToLine: () => {
-      unwiredShellAction('scrollToLine');
-    },
-    print: (text: string) => {
-      conversation.log(text, { fg: '252' });
-      requestRender();
-    },
-    exit: () => {
-      unwiredShellAction('exit');
-    },
-    reloadSystemPrompt: loadSystemPrompt,
-    showPanel,
-    openForensicsPanel: () => {
-      (context.showPanel ?? showPanel)('forensics');
-    },
-    openIncidentPanel: () => {
-      (context.showPanel ?? showPanel)('incident');
-    },
-    openPolicyPanel: () => {
-      (context.showPanel ?? showPanel)('policy');
-    },
-    openHooksPanel: () => {
-      (context.showPanel ?? showPanel)('hooks');
-    },
-    openCommunicationPanel: () => {
-      (context.showPanel ?? showPanel)('communication');
-    },
-    openOrchestrationPanel: () => {
-      (context.showPanel ?? showPanel)('orchestration');
-    },
-    openCockpitPanel: () => {
-      (context.showPanel ?? showPanel)('cockpit');
-    },
-    openMcpPanel: () => {
-      (context.showPanel ?? showPanel)('mcp');
-    },
-    openSecurityPanel: () => {
-      (context.showPanel ?? showPanel)('security');
-    },
-    openKnowledgePanel: () => {
-      (context.showPanel ?? showPanel)('knowledge');
-    },
-    openRemotePanel: () => {
-      (context.showPanel ?? showPanel)('remote');
-    },
-    openSubscriptionPanel: () => {
-      (context.showPanel ?? showPanel)('subscription');
-    },
+    clients,
+    ...actions,
   };
-
-  return context;
 }

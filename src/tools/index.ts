@@ -57,16 +57,16 @@ export function registerAllTools(
   deps?: {
     fileCache?: FileStateCache;
     projectIndex?: ProjectIndex;
-    fileUndoManager?: FileUndoManager;
-    modeManager?: ModeManager;
-    processManager?: ProcessManager;
+    fileUndoManager: FileUndoManager;
+    modeManager: ModeManager;
+    processManager: ProcessManager;
     agentManager?: AgentManager;
-    agentMessageBus?: AgentMessageBus;
+    agentMessageBus: AgentMessageBus;
     wrfcController?: WrfcController;
     webSearchService?: WebSearchService;
     channelRegistry?: ChannelPluginRegistry | null;
     remoteRunnerRegistry?: RemoteRunnerRegistry;
-    workflowServices?: ReturnType<typeof createWorkflowServices>;
+    workflowServices: ReturnType<typeof createWorkflowServices>;
     mcpRegistry?: import('../mcp/registry.ts').McpRegistry;
     sessionOrchestration?: CrossSessionTaskRegistry;
     sandboxSessionRegistry?: SandboxSessionRegistry;
@@ -82,9 +82,12 @@ export function registerAllTools(
   },
 ): { fileCache: FileStateCache; projectIndex: ProjectIndex } {
   const fileCache = deps?.fileCache ?? new FileStateCache();
-  const fileUndoManager = deps?.fileUndoManager ?? new FileUndoManager();
-  const modeManager = deps?.modeManager ?? new ModeManager();
-  const processManager = deps?.processManager ?? new ProcessManager();
+  if (!deps?.fileUndoManager || !deps?.modeManager || !deps?.processManager || !deps?.agentMessageBus || !deps?.workflowServices) {
+    throw new Error('registerAllTools requires explicit fileUndoManager, modeManager, processManager, agentMessageBus, and workflowServices ownership.');
+  }
+  const fileUndoManager = deps.fileUndoManager;
+  const modeManager = deps.modeManager;
+  const processManager = deps.processManager;
   const agentManager = deps?.agentManager
     ?? (deps?.remoteRunnerRegistry
       ? (deps.remoteRunnerRegistry as unknown as { agentManager?: AgentManager | null }).agentManager ?? null
@@ -92,13 +95,13 @@ export function registerAllTools(
   if (!agentManager) {
     throw new Error('registerAllTools requires agentManager');
   }
-  const agentMessageBus = deps?.agentMessageBus ?? new AgentMessageBus();
+  const agentMessageBus = deps.agentMessageBus;
   const wrfcController = deps?.wrfcController;
   const archetypeLoader = deps?.archetypeLoader;
   const webSearchService = deps?.webSearchService;
   const channelRegistry = deps?.channelRegistry ?? null;
   const remoteRunnerRegistry = deps?.remoteRunnerRegistry;
-  const workflowServices = deps?.workflowServices ?? createWorkflowServices();
+  const workflowServices = deps.workflowServices;
   const mcpRegistry = deps?.mcpRegistry;
   if (!deps?.configManager || !deps?.providerRegistry || !deps?.toolLLM) {
     throw new Error('registerAllTools requires configManager, providerRegistry, and toolLLM');

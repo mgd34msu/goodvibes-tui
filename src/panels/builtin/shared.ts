@@ -143,39 +143,39 @@ export function resolveBuiltinPanelDeps(deps: BuiltinPanelDeps): ResolvedBuiltin
   return {
     ...deps,
     configManager: requireBuiltinPanelDep(
-      uiServices.configManager,
+      uiServices.platform.configManager,
       'Config manager must be wired at bootstrap for builtin panels.',
     ),
     localUserAuthManager: requireBuiltinPanelDep(
-      uiServices.localUserAuthManager,
+      uiServices.platform.localUserAuthManager,
       'Local auth manager must be wired at bootstrap for builtin panels.',
     ),
     sessionManager: requireBuiltinPanelDep(
-      uiServices.sessionManager,
+      uiServices.sessions.sessionManager,
       'Session manager must be wired at bootstrap for builtin panels.',
     ),
     subscriptionManager: requireBuiltinPanelDep(
-      uiServices.subscriptionManager,
+      uiServices.platform.subscriptionManager,
       'Subscription manager must be wired at bootstrap for builtin panels.',
     ),
     serviceRegistry: requireBuiltinPanelDep(
-      uiServices.serviceRegistry,
+      uiServices.platform.serviceRegistry,
       'Service registry must be wired at bootstrap for builtin panels.',
     ),
     sessionMemoryStore: requireBuiltinPanelDep(
-      uiServices.sessionMemoryStore,
+      uiServices.sessions.sessionMemoryStore,
       'Session memory store must be wired at bootstrap for builtin panels.',
     ),
     planManager: requireBuiltinPanelDep(
-      uiServices.planManager,
+      uiServices.planning.planManager,
       'Execution plan manager must be wired at bootstrap for builtin panels.',
     ),
     adaptivePlanner: requireBuiltinPanelDep(
-      uiServices.adaptivePlanner,
+      uiServices.planning.adaptivePlanner,
       'Adaptive planner must be wired at bootstrap for builtin panels.',
     ),
     policyRuntimeState: requireBuiltinPanelDep(
-      uiServices.policyRuntimeState,
+      uiServices.platform.policyRuntimeState,
       'Policy runtime state must be wired at bootstrap for builtin panels.',
     ),
     systemMessagesPanel: requireBuiltinPanelDep(

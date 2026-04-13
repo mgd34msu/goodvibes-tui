@@ -1,5 +1,5 @@
 import type { RuntimeServices } from './services.ts';
-import type { UiReadModel } from './ui-read-models.ts';
+import type { UiReadModel } from './ui-read-models-base.ts';
 
 export function combineSubscriptions(...teardowns: Array<() => void>): () => void {
   return () => {

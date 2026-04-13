@@ -164,6 +164,7 @@ describe('AgentOrchestrator', () => {
       fileUndoManager: orchestratorRuntime.fileUndoManager,
       modeManager: orchestratorRuntime.modeManager,
       processManager: orchestratorRuntime.processManager,
+      agentMessageBus: orchestratorRuntime.agentMessageBus,
       webSearchService: orchestratorRuntime.webSearchService,
       channelRegistry: orchestratorRuntime.channelPlugins,
       remoteRunnerRegistry: orchestratorRuntime.remoteRunnerRegistry,
@@ -179,6 +180,7 @@ describe('AgentOrchestrator', () => {
       featureFlags: orchestratorRuntime.featureFlags,
       overflowHandler: orchestratorRuntime.overflowHandler,
       sandboxSessionRegistry: orchestratorRuntime.sandboxSessionRegistry,
+      workflowServices: orchestratorRuntime.workflow,
       workingDirectory: repoRoot,
     });
   });

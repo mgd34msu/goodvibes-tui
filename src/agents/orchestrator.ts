@@ -44,9 +44,10 @@ type AgentOrchestratorToolDeps = {
   readonly fileCache: FileStateCache;
   readonly projectIndex: ProjectIndex;
   readonly workingDirectory: string;
-  readonly fileUndoManager?: import('../state/file-undo.ts').FileUndoManager;
-  readonly modeManager?: import('../state/mode-manager.ts').ModeManager;
-  readonly processManager?: import('../tools/shared/process-manager.ts').ProcessManager;
+  readonly fileUndoManager: import('../state/file-undo.ts').FileUndoManager;
+  readonly modeManager: import('../state/mode-manager.ts').ModeManager;
+  readonly processManager: import('../tools/shared/process-manager.ts').ProcessManager;
+  readonly agentMessageBus: AgentMessageBus;
   readonly webSearchService?: import('../web-search/index.ts').WebSearchService;
   readonly channelRegistry?: import('../channels/index.ts').ChannelPluginRegistry | null;
   readonly remoteRunnerRegistry?: import('../runtime/remote/index.ts').RemoteRunnerRegistry;
@@ -62,6 +63,7 @@ type AgentOrchestratorToolDeps = {
   readonly featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null;
   readonly overflowHandler?: import('../tools/shared/overflow.ts').OverflowHandler;
   readonly sandboxSessionRegistry: import('../runtime/sandbox/session-registry.ts').SandboxSessionRegistry;
+  readonly workflowServices: ReturnType<typeof import('../tools/workflow/index.ts').createWorkflowServices>;
 };
 
 /**

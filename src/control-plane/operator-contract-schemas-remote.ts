@@ -6,17 +6,35 @@ import {
   objectSchema,
 } from './method-catalog-shared.ts';
 import {
-  JSON_OBJECT_SCHEMA,
+  JSON_VALUE_SCHEMA,
   STRING_LIST_SCHEMA,
   METADATA_SCHEMA,
   enumSchema,
   recordSchema,
 } from './operator-contract-schemas-shared.ts';
+import { AUTOMATION_RUN_TELEMETRY_SCHEMA } from './operator-contract-schemas-admin.ts';
 const DISTRIBUTED_PEER_KIND_SCHEMA = enumSchema(['node', 'device']);
 const DISTRIBUTED_PEER_STATUS_SCHEMA = enumSchema(['paired', 'connected', 'idle', 'disconnected', 'revoked']);
 const DISTRIBUTED_WORK_PRIORITY_SCHEMA = enumSchema(['default', 'normal', 'high']);
 const DISTRIBUTED_WORK_STATUS_SCHEMA = enumSchema(['queued', 'claimed', 'completed', 'failed', 'cancelled', 'expired']);
 const DISTRIBUTED_WORK_TYPE_SCHEMA = enumSchema(['invoke', 'status.request', 'location.request', 'session.message', 'automation.run']);
+const DISTRIBUTED_AUDIT_ACTION_SCHEMA = enumSchema([
+  'pair-requested',
+  'pair-approved',
+  'pair-rejected',
+  'pair-verified',
+  'pair-expired',
+  'token-rotated',
+  'token-revoked',
+  'peer-connected',
+  'peer-disconnected',
+  'work-queued',
+  'work-claimed',
+  'work-completed',
+  'work-failed',
+  'work-cancelled',
+  'work-expired',
+]);
 
 const DISTRIBUTED_PAIR_REQUEST_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
@@ -86,7 +104,7 @@ const DISTRIBUTED_PENDING_WORK_SCHEMA = objectSchema({
   command: STRING_SCHEMA,
   priority: DISTRIBUTED_WORK_PRIORITY_SCHEMA,
   status: DISTRIBUTED_WORK_STATUS_SCHEMA,
-  payload: JSON_OBJECT_SCHEMA,
+  payload: JSON_VALUE_SCHEMA,
   createdAt: NUMBER_SCHEMA,
   updatedAt: NUMBER_SCHEMA,
   queuedBy: STRING_SCHEMA,
@@ -100,15 +118,15 @@ const DISTRIBUTED_PENDING_WORK_SCHEMA = objectSchema({
   automationRunId: STRING_SCHEMA,
   automationJobId: STRING_SCHEMA,
   approvalId: STRING_SCHEMA,
-  result: JSON_OBJECT_SCHEMA,
+  result: JSON_VALUE_SCHEMA,
   error: STRING_SCHEMA,
-  telemetry: JSON_OBJECT_SCHEMA,
+  telemetry: AUTOMATION_RUN_TELEMETRY_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['id', 'peerId', 'peerKind', 'type', 'command', 'priority', 'status', 'createdAt', 'updatedAt', 'queuedBy', 'metadata'], { additionalProperties: true });
 
 const DISTRIBUTED_AUDIT_RECORD_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
-  action: STRING_SCHEMA,
+  action: DISTRIBUTED_AUDIT_ACTION_SCHEMA,
   actor: STRING_SCHEMA,
   peerId: STRING_SCHEMA,
   requestId: STRING_SCHEMA,
@@ -290,7 +308,7 @@ export const REMOTE_PEER_OUTPUT_SCHEMA = objectSchema({
 export const REMOTE_PEER_INVOKE_INPUT_SCHEMA = objectSchema({
   peerId: STRING_SCHEMA,
   command: STRING_SCHEMA,
-  payload: JSON_OBJECT_SCHEMA,
+  payload: JSON_VALUE_SCHEMA,
   priority: DISTRIBUTED_WORK_PRIORITY_SCHEMA,
   waitMs: NUMBER_SCHEMA,
   timeoutMs: NUMBER_SCHEMA,

@@ -14,9 +14,10 @@ import type { RuntimeEventBus, RuntimeEventDomain, RuntimeEventEnvelope, AnyRunt
 import { buildProviderAccountSnapshot } from '../provider-accounts/registry.ts';
 import type { UserAuthManager } from '../../security/user-auth.ts';
 import { getSettingsControlPlaneSnapshot } from '../settings/control-plane.ts';
-import { checkRecoveryFile, readLastSessionPointer } from '../session-persistence.ts';
-import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '../worktree/registry.ts';
+import { checkRecoveryFile, readLastSessionPointer, type RecoveryFileInfo } from '../session-persistence.ts';
+import { listPersistedWorktreeMeta, summarizeWorktreeOwnership, type ManagedWorktreeMeta, type WorktreeOwnershipSummary } from '../worktree/registry.ts';
 import { inspectInboundTls, inspectOutboundTls } from '../network/index.ts';
+import type { ManagedRollbackRecord, SettingsConflictRecord, StagedManagedBundle } from '../settings/control-plane-store.ts';
 
 export interface IntegrationHelpersContext {
   readonly workingDirectory: string;
@@ -45,6 +46,39 @@ export interface PanelSnapshot {
   readonly category: string;
   readonly description: string;
   readonly open: boolean;
+}
+
+export interface SettingsSnapshotUnavailable {
+  readonly available: false;
+  readonly reason: string;
+}
+
+export interface SettingsSnapshotAvailable {
+  readonly available: true;
+  readonly liveKeyCount: number;
+  readonly profileCount: number;
+  readonly managedLockCount: number;
+  readonly resolvedCounts: Readonly<Record<string, number>>;
+  readonly conflicts: readonly SettingsConflictRecord[];
+  readonly recentFailures: readonly { readonly surface: string; readonly message: string; readonly timestamp: number }[];
+  readonly stagedManagedBundle?: StagedManagedBundle;
+  readonly rollbackHistory: readonly ManagedRollbackRecord[];
+}
+
+export type SettingsSnapshot = SettingsSnapshotUnavailable | SettingsSnapshotAvailable;
+
+export interface ContinuitySnapshot {
+  readonly sessionId: string;
+  readonly status: string;
+  readonly recoveryState: string;
+  readonly lastSessionPointer: string | null;
+  readonly recoveryFilePresent: boolean;
+  readonly recoveryFile: RecoveryFileInfo | null;
+}
+
+export interface WorktreeSnapshot {
+  readonly summary: WorktreeOwnershipSummary;
+  readonly records: readonly ManagedWorktreeMeta[];
 }
 
 const EVENT_DOMAINS: readonly RuntimeEventDomain[] = [
@@ -457,7 +491,7 @@ export class IntegrationHelperService {
     };
   }
 
-  getSettingsSnapshot(): Record<string, unknown> {
+  getSettingsSnapshot(): SettingsSnapshot {
     if (!this.context.configManager) {
       return { available: false, reason: 'configManager unavailable' };
     }
@@ -488,7 +522,7 @@ export class IntegrationHelperService {
     };
   }
 
-  getContinuitySnapshot(): Record<string, unknown> {
+  getContinuitySnapshot(): ContinuitySnapshot {
     const state = this.context.runtimeStore.getState();
     const recovery = checkRecoveryFile({
       workingDirectory: this.context.workingDirectory,
@@ -507,7 +541,7 @@ export class IntegrationHelperService {
     };
   }
 
-  getWorktreeSnapshot(): Record<string, unknown> {
+  getWorktreeSnapshot(): WorktreeSnapshot {
     const records = listPersistedWorktreeMeta({ workingDirectory: this.context.workingDirectory });
     return {
       summary: summarizeWorktreeOwnership(records),

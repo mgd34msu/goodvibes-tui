@@ -39,8 +39,8 @@ function seedAgent(task: string): string {
 function createLiveTailModal(): LiveTailModal {
   const ui = createDefaultUiRuntimeServices();
   return new LiveTailModal({
-    agentManager: ui.agentManager,
-    processManager: ui.processManager,
+    agentManager: ui.agents.agentManager,
+    processManager: ui.shell.processManager,
   });
 }
 

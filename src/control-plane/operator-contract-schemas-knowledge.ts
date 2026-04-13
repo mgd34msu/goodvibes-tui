@@ -10,7 +10,10 @@ import {
 import {
   ARTIFACT_DESCRIPTOR_SCHEMA,
   GENERIC_LIST_SCHEMA,
-  JSON_OBJECT_SCHEMA,
+  GRAPHQL_RESPONSE_DATA_SCHEMA,
+  GRAPHQL_RESPONSE_EXTENSIONS_SCHEMA,
+  JSON_RECORD_SCHEMA,
+  JSON_SCHEMA_DOCUMENT_SCHEMA,
   JSON_VALUE_SCHEMA,
   METADATA_SCHEMA,
   STRING_LIST_SCHEMA,
@@ -23,6 +26,134 @@ export const KNOWLEDGE_INJECTION_TRUST_TIER_SCHEMA = enumSchema(['reviewed', 'fr
 export const KNOWLEDGE_INJECTION_USE_AS_SCHEMA = enumSchema(['reference-material']);
 export const KNOWLEDGE_INJECTION_RETENTION_SCHEMA = enumSchema(['task-only']);
 export const KNOWLEDGE_INJECTION_INGEST_MODE_SCHEMA = enumSchema(['keyword-ranked', 'semantic-ranked', 'hybrid-ranked']);
+export const KNOWLEDGE_SOURCE_TYPE_SCHEMA = enumSchema([
+  'url',
+  'bookmark',
+  'bookmark-list',
+  'document',
+  'repo',
+  'dataset',
+  'image',
+  'manual',
+  'other',
+]);
+export const KNOWLEDGE_PACKET_DETAIL_SCHEMA = enumSchema(['compact', 'standard', 'detailed']);
+export const KNOWLEDGE_JOB_MODE_SCHEMA = enumSchema(['inline', 'background']);
+export const KNOWLEDGE_JOB_STATUS_SCHEMA = enumSchema(['queued', 'running', 'completed', 'failed']);
+export const KNOWLEDGE_JOB_KIND_SCHEMA = enumSchema([
+  'lint',
+  'reindex',
+  'refresh-stale',
+  'refresh-bookmarks',
+  'rebuild-projections',
+  'light-consolidation',
+  'deep-consolidation',
+]);
+export const KNOWLEDGE_CONSOLIDATION_DECISION_SCHEMA = enumSchema(['accept', 'reject', 'supersede']);
+export const KNOWLEDGE_CONNECTOR_SETUP_FIELD_KIND_SCHEMA = enumSchema(['text', 'path', 'uri', 'secret', 'token', 'choice']);
+export const KNOWLEDGE_CONNECTOR_SETUP_FIELD_SOURCE_SCHEMA = enumSchema([
+  'inline',
+  'env',
+  'goodvibes',
+  'bitwarden',
+  'vaultwarden',
+  'bws',
+  'manual',
+]);
+export const KNOWLEDGE_CONNECTOR_DOCTOR_STATUS_SCHEMA = enumSchema(['pass', 'warn', 'fail']);
+
+const KNOWLEDGE_EMPTY_OBJECT_SCHEMA = objectSchema({}, [], { additionalProperties: false });
+const KNOWLEDGE_AT_SCHEDULE_SCHEMA = objectSchema({
+  kind: enumSchema(['at']),
+  at: NUMBER_SCHEMA,
+}, ['kind', 'at'], { additionalProperties: false });
+const KNOWLEDGE_EVERY_SCHEDULE_SCHEMA = objectSchema({
+  kind: enumSchema(['every']),
+  intervalMs: NUMBER_SCHEMA,
+  anchorAt: NUMBER_SCHEMA,
+}, ['kind', 'intervalMs'], { additionalProperties: false });
+const KNOWLEDGE_EVERY_SCHEDULE_INPUT_INTERVAL_MS_SCHEMA = KNOWLEDGE_EVERY_SCHEDULE_SCHEMA;
+const KNOWLEDGE_EVERY_SCHEDULE_INPUT_INTERVAL_TEXT_SCHEMA = objectSchema({
+  kind: enumSchema(['every']),
+  interval: STRING_SCHEMA,
+  anchorAt: NUMBER_SCHEMA,
+}, ['kind', 'interval'], { additionalProperties: false });
+const KNOWLEDGE_CRON_SCHEDULE_SCHEMA = objectSchema({
+  kind: enumSchema(['cron']),
+  expression: STRING_SCHEMA,
+  timezone: STRING_SCHEMA,
+  staggerMs: NUMBER_SCHEMA,
+}, ['kind', 'expression'], { additionalProperties: false });
+export const KNOWLEDGE_SCHEDULE_DEFINITION_SCHEMA = {
+  anyOf: [
+    KNOWLEDGE_AT_SCHEDULE_SCHEMA,
+    KNOWLEDGE_EVERY_SCHEDULE_SCHEMA,
+    KNOWLEDGE_CRON_SCHEDULE_SCHEMA,
+  ],
+} as const;
+export const KNOWLEDGE_SCHEDULE_INPUT_SCHEMA = {
+  anyOf: [
+    KNOWLEDGE_AT_SCHEDULE_SCHEMA,
+    KNOWLEDGE_EVERY_SCHEDULE_INPUT_INTERVAL_MS_SCHEMA,
+    KNOWLEDGE_EVERY_SCHEDULE_INPUT_INTERVAL_TEXT_SCHEMA,
+    KNOWLEDGE_CRON_SCHEDULE_SCHEMA,
+  ],
+} as const;
+
+const KNOWLEDGE_JOB_RUN_PROJECTION_SCHEMA = objectSchema({
+  targetId: STRING_SCHEMA,
+  artifactId: STRING_SCHEMA,
+}, ['targetId', 'artifactId'], { additionalProperties: false });
+const KNOWLEDGE_JOB_RUN_ISSUE_COUNT_RESULT_SCHEMA = objectSchema({
+  issueCount: NUMBER_SCHEMA,
+}, ['issueCount'], { additionalProperties: false });
+const KNOWLEDGE_JOB_RUN_REINDEX_RESULT_SCHEMA = objectSchema({
+  sourceCount: NUMBER_SCHEMA,
+  issueCount: NUMBER_SCHEMA,
+}, ['sourceCount', 'issueCount'], { additionalProperties: false });
+const KNOWLEDGE_JOB_RUN_REFRESH_RESULT_SCHEMA = objectSchema({
+  refreshed: NUMBER_SCHEMA,
+}, ['refreshed'], { additionalProperties: false });
+const KNOWLEDGE_JOB_RUN_PROJECTIONS_RESULT_SCHEMA = objectSchema({
+  projections: arraySchema(KNOWLEDGE_JOB_RUN_PROJECTION_SCHEMA),
+}, ['projections'], { additionalProperties: false });
+const KNOWLEDGE_JOB_RUN_CONSOLIDATION_RESULT_SCHEMA = objectSchema({
+  reportId: STRING_SCHEMA,
+  metrics: recordSchema(NUMBER_SCHEMA),
+}, ['reportId', 'metrics'], { additionalProperties: false });
+export const KNOWLEDGE_JOB_RUN_RESULT_SCHEMA = {
+  anyOf: [
+    KNOWLEDGE_EMPTY_OBJECT_SCHEMA,
+    KNOWLEDGE_JOB_RUN_ISSUE_COUNT_RESULT_SCHEMA,
+    KNOWLEDGE_JOB_RUN_REINDEX_RESULT_SCHEMA,
+    KNOWLEDGE_JOB_RUN_REFRESH_RESULT_SCHEMA,
+    KNOWLEDGE_JOB_RUN_PROJECTIONS_RESULT_SCHEMA,
+    KNOWLEDGE_JOB_RUN_CONSOLIDATION_RESULT_SCHEMA,
+  ],
+} as const;
+export const KNOWLEDGE_JOB_RUN_REQUEST_SCHEMA = objectSchema({
+  mode: KNOWLEDGE_JOB_MODE_SCHEMA,
+  sourceIds: STRING_LIST_SCHEMA,
+  limit: NUMBER_SCHEMA,
+}, [], { additionalProperties: false });
+export const KNOWLEDGE_CONNECTOR_INGEST_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    connectorId: STRING_SCHEMA,
+    input: JSON_VALUE_SCHEMA,
+    content: STRING_SCHEMA,
+    path: STRING_SCHEMA,
+    sessionId: STRING_SCHEMA,
+    allowPrivateHosts: BOOLEAN_SCHEMA,
+  },
+  required: ['connectorId'],
+  anyOf: [
+    { required: ['input'] },
+    { required: ['content'] },
+    { required: ['path'] },
+  ],
+  additionalProperties: false,
+} as const;
 export const KNOWLEDGE_INJECTION_PROVENANCE_SCHEMA = objectSchema({
   source: enumSchema(['project-memory']),
   links: arraySchema(objectSchema({
@@ -52,7 +183,7 @@ export const KNOWLEDGE_INJECTION_PROMPT_SCHEMA = objectSchema({
 const KNOWLEDGE_SOURCE_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
   connectorId: STRING_SCHEMA,
-  sourceType: STRING_SCHEMA,
+  sourceType: KNOWLEDGE_SOURCE_TYPE_SCHEMA,
   title: STRING_SCHEMA,
   sourceUri: STRING_SCHEMA,
   canonicalUri: STRING_SCHEMA,
@@ -124,7 +255,7 @@ const KNOWLEDGE_EXTRACTION_SCHEMA = objectSchema({
   sections: STRING_LIST_SCHEMA,
   links: STRING_LIST_SCHEMA,
   estimatedTokens: NUMBER_SCHEMA,
-  structure: JSON_OBJECT_SCHEMA,
+  structure: JSON_RECORD_SCHEMA,
   metadata: METADATA_SCHEMA,
   createdAt: NUMBER_SCHEMA,
   updatedAt: NUMBER_SCHEMA,
@@ -157,9 +288,9 @@ export const KNOWLEDGE_ITEM_VIEW_SCHEMA = objectSchema({
 const KNOWLEDGE_CONNECTOR_FIELD_SCHEMA = objectSchema({
   key: STRING_SCHEMA,
   label: STRING_SCHEMA,
-  kind: STRING_SCHEMA,
+  kind: KNOWLEDGE_CONNECTOR_SETUP_FIELD_KIND_SCHEMA,
   optional: BOOLEAN_SCHEMA,
-  source: STRING_SCHEMA,
+  source: KNOWLEDGE_CONNECTOR_SETUP_FIELD_SOURCE_SCHEMA,
   description: STRING_SCHEMA,
 }, ['key', 'label', 'kind'], { additionalProperties: true });
 
@@ -177,19 +308,27 @@ export const KNOWLEDGE_CONNECTOR_SCHEMA = objectSchema({
   displayName: STRING_SCHEMA,
   version: STRING_SCHEMA,
   description: STRING_SCHEMA,
-  sourceType: STRING_SCHEMA,
-  inputSchema: JSON_OBJECT_SCHEMA,
+  sourceType: KNOWLEDGE_SOURCE_TYPE_SCHEMA,
+  inputSchema: JSON_SCHEMA_DOCUMENT_SCHEMA,
   examples: GENERIC_LIST_SCHEMA,
   capabilities: STRING_LIST_SCHEMA,
   setup: KNOWLEDGE_CONNECTOR_SETUP_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['id', 'description', 'sourceType'], { additionalProperties: true });
 
+const KNOWLEDGE_CONNECTOR_DOCTOR_CHECK_SCHEMA = objectSchema({
+  id: STRING_SCHEMA,
+  label: STRING_SCHEMA,
+  status: KNOWLEDGE_CONNECTOR_DOCTOR_STATUS_SCHEMA,
+  detail: STRING_SCHEMA,
+  metadata: METADATA_SCHEMA,
+}, ['id', 'label', 'status', 'detail'], { additionalProperties: true });
+
 const KNOWLEDGE_CONNECTOR_DOCTOR_REPORT_SCHEMA = objectSchema({
   connectorId: STRING_SCHEMA,
   ready: BOOLEAN_SCHEMA,
   summary: STRING_SCHEMA,
-  checks: GENERIC_LIST_SCHEMA,
+  checks: arraySchema(KNOWLEDGE_CONNECTOR_DOCTOR_CHECK_SCHEMA),
   hints: STRING_LIST_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['connectorId', 'ready', 'summary', 'checks', 'hints', 'metadata'], { additionalProperties: true });
@@ -243,7 +382,7 @@ export const KNOWLEDGE_PACKET_SCHEMA = objectSchema({
   task: STRING_SCHEMA,
   writeScope: STRING_LIST_SCHEMA,
   generatedAt: NUMBER_SCHEMA,
-  detail: STRING_SCHEMA,
+  detail: KNOWLEDGE_PACKET_DETAIL_SCHEMA,
   strategy: STRING_SCHEMA,
   budgetLimit: NUMBER_SCHEMA,
   estimatedTokens: NUMBER_SCHEMA,
@@ -295,23 +434,23 @@ const KNOWLEDGE_REPORT_SCHEMA = objectSchema({
 
 const KNOWLEDGE_JOB_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
-  kind: STRING_SCHEMA,
+  kind: KNOWLEDGE_JOB_KIND_SCHEMA,
   title: STRING_SCHEMA,
   description: STRING_SCHEMA,
-  defaultMode: STRING_SCHEMA,
+  defaultMode: KNOWLEDGE_JOB_MODE_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['id', 'kind', 'title', 'description', 'defaultMode', 'metadata']);
 
 const KNOWLEDGE_JOB_RUN_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
   jobId: STRING_SCHEMA,
-  status: STRING_SCHEMA,
-  mode: STRING_SCHEMA,
+  status: KNOWLEDGE_JOB_STATUS_SCHEMA,
+  mode: KNOWLEDGE_JOB_MODE_SCHEMA,
   requestedAt: NUMBER_SCHEMA,
   startedAt: NUMBER_SCHEMA,
   completedAt: NUMBER_SCHEMA,
   error: STRING_SCHEMA,
-  result: JSON_OBJECT_SCHEMA,
+  result: KNOWLEDGE_JOB_RUN_RESULT_SCHEMA,
   metadata: METADATA_SCHEMA,
   createdAt: NUMBER_SCHEMA,
   updatedAt: NUMBER_SCHEMA,
@@ -322,7 +461,7 @@ const KNOWLEDGE_SCHEDULE_SCHEMA = objectSchema({
   jobId: STRING_SCHEMA,
   label: STRING_SCHEMA,
   enabled: BOOLEAN_SCHEMA,
-  schedule: JSON_OBJECT_SCHEMA,
+  schedule: KNOWLEDGE_SCHEDULE_DEFINITION_SCHEMA,
   lastRunAt: NUMBER_SCHEMA,
   nextRunAt: NUMBER_SCHEMA,
   metadata: METADATA_SCHEMA,
@@ -371,9 +510,9 @@ export const KNOWLEDGE_GRAPHQL_SCHEMA_OUTPUT_SCHEMA = objectSchema({
 }, ['language', 'domain', 'schema']);
 
 export const KNOWLEDGE_GRAPHQL_EXECUTE_OUTPUT_SCHEMA = objectSchema({
-  data: JSON_OBJECT_SCHEMA,
+  data: GRAPHQL_RESPONSE_DATA_SCHEMA,
   errors: GENERIC_LIST_SCHEMA,
-  extensions: JSON_OBJECT_SCHEMA,
+  extensions: GRAPHQL_RESPONSE_EXTENSIONS_SCHEMA,
 }, [], { additionalProperties: true });
 
 export const KNOWLEDGE_LINT_OUTPUT_SCHEMA = objectSchema({
@@ -420,6 +559,9 @@ export const KNOWLEDGE_JOB_OUTPUT_SCHEMA = objectSchema({
 export const KNOWLEDGE_JOB_RUNS_OUTPUT_SCHEMA = objectSchema({
   runs: arraySchema(KNOWLEDGE_JOB_RUN_SCHEMA),
 }, ['runs']);
+export const KNOWLEDGE_JOB_RUN_OUTPUT_SCHEMA = objectSchema({
+  run: KNOWLEDGE_JOB_RUN_SCHEMA,
+}, ['run']);
 
 export const KNOWLEDGE_SCHEDULES_OUTPUT_SCHEMA = objectSchema({
   schedules: arraySchema(KNOWLEDGE_SCHEDULE_SCHEMA),

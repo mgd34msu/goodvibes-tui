@@ -1,7 +1,6 @@
 import type { GatewayEventDescriptor, GatewayMethodCatalog, GatewayMethodDescriptor } from './method-catalog.ts';
 import {
   BOOLEAN_SCHEMA,
-  JSON_OBJECT_SCHEMA,
   METHOD_DESCRIPTOR_SCHEMA,
   EVENT_DESCRIPTOR_SCHEMA,
   NUMBER_SCHEMA,
@@ -9,6 +8,10 @@ import {
   arraySchema,
   objectSchema,
 } from './method-catalog-shared.ts';
+import {
+  CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
+  CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
+} from './operator-contract-schemas.ts';
 import { VERSION } from '../version.ts';
 import { OPERATOR_SESSION_COOKIE_NAME } from '../security/http-auth.ts';
 
@@ -118,8 +121,8 @@ export const OPERATOR_CONTRACT_SCHEMA = objectSchema({
     login: objectSchema({
       method: STRING_SCHEMA,
       path: STRING_SCHEMA,
-      requestSchema: JSON_OBJECT_SCHEMA,
-      responseSchema: JSON_OBJECT_SCHEMA,
+      requestSchema: CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
+      responseSchema: CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
     }, ['method', 'path', 'requestSchema', 'responseSchema']),
     sessionCookie: objectSchema({
       name: STRING_SCHEMA,

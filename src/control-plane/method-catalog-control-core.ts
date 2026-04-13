@@ -19,6 +19,8 @@ import {
   APPROVAL_ACTION_INPUT_SCHEMA,
   APPROVAL_ACTION_OUTPUT_SCHEMA,
   APPROVAL_SNAPSHOT_SCHEMA,
+  CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
+  CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
   CONTROL_PLANE_CLIENT_DESCRIPTOR_SCHEMA,
   CONTROL_PLANE_SURFACE_MESSAGE_SCHEMA,
   CONTROL_PLANE_SNAPSHOT_SCHEMA,
@@ -51,16 +53,8 @@ export const builtinGatewayControlCoreMethodDescriptors: readonly GatewayMethodD
     transport: ['http'],
     scopes: [],
     http: { method: 'POST', path: '/login' },
-    inputSchema: bodyEnvelopeSchema({
-      username: STRING_SCHEMA,
-      password: STRING_SCHEMA,
-    }, ['username', 'password']),
-    outputSchema: objectSchema({
-      authenticated: BOOLEAN_SCHEMA,
-      token: STRING_SCHEMA,
-      username: STRING_SCHEMA,
-      expiresAt: NUMBER_SCHEMA,
-    }, ['authenticated', 'token', 'username', 'expiresAt']),
+    inputSchema: CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
+    outputSchema: CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
     invokable: false,
   }),
   methodDescriptor({
