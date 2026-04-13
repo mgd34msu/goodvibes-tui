@@ -8,7 +8,8 @@ import {
 } from './method-catalog-shared.ts';
 import {
   GENERIC_LIST_SCHEMA,
-  JSON_OBJECT_SCHEMA,
+  JSON_RECORD_SCHEMA,
+  JSON_SCHEMA_DOCUMENT_SCHEMA,
   JSON_VALUE_SCHEMA,
   METADATA_SCHEMA,
   STRING_LIST_SCHEMA,
@@ -45,7 +46,7 @@ const CHANNEL_LOGIN_SCHEMA = objectSchema({
 export const TOOL_DEFINITION_SCHEMA = objectSchema({
   name: STRING_SCHEMA,
   description: STRING_SCHEMA,
-  parameters: JSON_OBJECT_SCHEMA,
+  parameters: JSON_SCHEMA_DOCUMENT_SCHEMA,
   sideEffects: STRING_LIST_SCHEMA,
   concurrency: STRING_SCHEMA,
   supportsProgress: BOOLEAN_SCHEMA,
@@ -57,7 +58,7 @@ export const CHANNEL_REPAIR_ACTION_SCHEMA = objectSchema({
   label: STRING_SCHEMA,
   description: STRING_SCHEMA,
   dangerous: BOOLEAN_SCHEMA,
-  inputSchema: JSON_OBJECT_SCHEMA,
+  inputSchema: JSON_SCHEMA_DOCUMENT_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['id', 'label', 'description', 'dangerous', 'metadata']);
 
@@ -230,7 +231,7 @@ export const CHANNEL_ALLOWLIST_RESOLUTION_SCHEMA = objectSchema({
   metadata: METADATA_SCHEMA,
 }, ['surface', 'resolved', 'unresolved', 'metadata']);
 
-const CHANNEL_GROUP_POLICY_SCHEMA = objectSchema({
+export const CHANNEL_GROUP_POLICY_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
   label: STRING_SCHEMA,
   groupId: STRING_SCHEMA,
@@ -273,7 +274,7 @@ export const CHANNEL_TOOL_SCHEMA = objectSchema({
   name: STRING_SCHEMA,
   description: STRING_SCHEMA,
   actionIds: STRING_LIST_SCHEMA,
-  inputSchema: JSON_OBJECT_SCHEMA,
+  inputSchema: JSON_SCHEMA_DOCUMENT_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['id', 'surface', 'name', 'description', 'actionIds', 'metadata']);
 
@@ -283,7 +284,7 @@ export const CHANNEL_OPERATOR_ACTION_SCHEMA = objectSchema({
   label: STRING_SCHEMA,
   description: STRING_SCHEMA,
   dangerous: BOOLEAN_SCHEMA,
-  inputSchema: JSON_OBJECT_SCHEMA,
+  inputSchema: JSON_SCHEMA_DOCUMENT_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['id', 'surface', 'label', 'description', 'dangerous', 'metadata']);
 
@@ -353,13 +354,13 @@ export const CHANNEL_ALLOWLIST_EDIT_RESULT_SCHEMA = objectSchema({
 export const CHANNEL_TOOL_ACTION_OUTPUT_SCHEMA = objectSchema({
   toolId: STRING_SCHEMA,
   surface: STRING_SCHEMA,
-  result: JSON_OBJECT_SCHEMA,
+  result: JSON_RECORD_SCHEMA,
 }, ['toolId', 'surface', 'result']);
 
 export const CHANNEL_OPERATOR_ACTION_OUTPUT_SCHEMA = objectSchema({
   actionId: STRING_SCHEMA,
   surface: STRING_SCHEMA,
-  result: JSON_OBJECT_SCHEMA,
+  result: JSON_RECORD_SCHEMA,
 }, ['actionId', 'surface', 'result']);
 
 export const CHANNEL_STATUS_LIST_OUTPUT_SCHEMA = objectSchema({

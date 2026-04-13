@@ -11,12 +11,27 @@ import {
   GENERIC_LIST_SCHEMA,
   METADATA_SCHEMA,
   STRING_LIST_SCHEMA,
-  enumSchema,
   recordSchema,
 } from './operator-contract-schemas-shared.ts';
-
-export const ARTIFACT_ACQUISITION_MODE_SCHEMA = enumSchema(['inline-data', 'local-path', 'remote-fetch', 'unknown']);
-export const ARTIFACT_FETCH_MODE_SCHEMA = enumSchema(['not-applicable', 'public-only', 'allow-private-hosts', 'unknown']);
+import {
+  ARTIFACT_ACQUISITION_MODE_SCHEMA,
+  ARTIFACT_FETCH_MODE_SCHEMA,
+} from './media-contract-schemas.ts';
+export {
+  ARTIFACT_ACQUISITION_MODE_SCHEMA,
+  ARTIFACT_FETCH_MODE_SCHEMA,
+  MEDIA_ANALYZE_REQUEST_SCHEMA,
+  MEDIA_GENERATION_REQUEST_SCHEMA,
+  MEDIA_TRANSFORM_REQUEST_SCHEMA,
+  MULTIMODAL_ANALYZE_REQUEST_SCHEMA,
+  MULTIMODAL_ARTIFACT_INPUT_SCHEMA,
+  MULTIMODAL_PACKET_REQUEST_SCHEMA,
+  MULTIMODAL_WRITEBACK_OPTIONS_SCHEMA,
+  MULTIMODAL_WRITEBACK_REQUEST_SCHEMA,
+  VOICE_REALTIME_SESSION_REQUEST_SCHEMA,
+  VOICE_SYNTHESIS_REQUEST_SCHEMA,
+  VOICE_TRANSCRIPTION_REQUEST_SCHEMA,
+} from './media-contract-schemas.ts';
 
 const VOICE_PROVIDER_DESCRIPTOR_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
@@ -160,6 +175,12 @@ export const WEB_SEARCH_PROVIDERS_OUTPUT_SCHEMA = objectSchema({
   providers: arraySchema(WEB_SEARCH_PROVIDER_DESCRIPTOR_SCHEMA),
 }, ['providers']);
 
+const MEDIA_PROVIDER_DESCRIPTOR_SCHEMA = objectSchema({
+  id: STRING_SCHEMA,
+  label: STRING_SCHEMA,
+  capabilities: STRING_LIST_SCHEMA,
+}, ['id', 'label', 'capabilities']);
+
 const MEDIA_ARTIFACT_SCHEMA = objectSchema({
   id: STRING_SCHEMA,
   artifactId: STRING_SCHEMA,
@@ -173,12 +194,6 @@ const MEDIA_ARTIFACT_SCHEMA = objectSchema({
   fetchMode: ARTIFACT_FETCH_MODE_SCHEMA,
   metadata: METADATA_SCHEMA,
 }, ['mimeType', 'metadata']);
-
-const MEDIA_PROVIDER_DESCRIPTOR_SCHEMA = objectSchema({
-  id: STRING_SCHEMA,
-  label: STRING_SCHEMA,
-  capabilities: STRING_LIST_SCHEMA,
-}, ['id', 'label', 'capabilities']);
 
 export const MEDIA_ANALYSIS_RESULT_SCHEMA = objectSchema({
   providerId: STRING_SCHEMA,
@@ -270,7 +285,7 @@ export const MULTIMODAL_WRITEBACK_OUTPUT_SCHEMA = objectSchema({
 export const ARTIFACT_ENTITY_OUTPUT_SCHEMA = entityOutputSchema('artifact', ARTIFACT_DESCRIPTOR_SCHEMA);
 
 export const ARTIFACT_LIST_OUTPUT_SCHEMA = objectSchema({
-  artifacts: GENERIC_LIST_SCHEMA,
+  artifacts: arraySchema(ARTIFACT_DESCRIPTOR_SCHEMA),
 }, ['artifacts']);
 
 export const MULTIMODAL_PROVIDERS_OUTPUT_SCHEMA = objectSchema({

@@ -158,6 +158,22 @@ const rules: readonly Rule[] = [
     message: 'future server surfaces must not depend on TUI shell modules',
   },
   {
+    name: 'no-raw-generic-object-contract-schemas',
+    files: expandTargets([
+      'src/control-plane/operator-contract-schemas-admin.ts',
+      'src/control-plane/operator-contract-schemas-channels.ts',
+      'src/control-plane/operator-contract-schemas-knowledge.ts',
+      'src/control-plane/operator-contract-schemas-media.ts',
+      'src/control-plane/operator-contract-schemas-permissions.ts',
+      'src/control-plane/operator-contract-schemas-remote.ts',
+      'src/control-plane/operator-contract-schemas.ts',
+      'src/control-plane/media-contract-schemas.ts',
+      'src/control-plane/operator-contract.ts',
+    ]),
+    pattern: /\bJSON_OBJECT_SCHEMA\b/,
+    message: 'contract schema modules must use explicit DTO schemas or named typed JSON record/document schemas instead of raw JSON_OBJECT_SCHEMA',
+  },
+  {
     name: 'no-implicit-project-root-literals',
     files: nonTestFiles,
     allow: [

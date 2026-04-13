@@ -42,7 +42,11 @@ import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPane
 
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
-  const providerRuntime = createProviderRuntimeInspectionQuery(createRuntimeProviderApi(ui));
+  const providerRuntime = createProviderRuntimeInspectionQuery(createRuntimeProviderApi({
+    benchmarkStore: ui.providers.benchmarkStore,
+    favoritesStore: ui.providers.favoritesStore,
+    providerRegistry: ui.providers.providerRegistry,
+  }));
   const providerAccounts = createProviderAccountSnapshotQuery({
     providerModels: deps.providerRegistry,
     services: deps.serviceRegistry,
@@ -94,7 +98,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     description: 'Project-local and global skill discovery with origin and dependency details',
     factory: () => new SkillsPanel({
       panelHealthMonitor: deps.panelHealthMonitor,
-      shellPaths: ui.shellPaths,
+      shellPaths: ui.environment.shellPaths,
     }),
   });
 
@@ -229,8 +233,8 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     description: 'Curated plugin and skill marketplace with provenance, compatibility, and install posture',
     factory: () => {
       return new MarketplacePanel(ui.readModels.marketplace, {
-        cwd: ui.shellPaths.workingDirectory,
-        homeDir: ui.shellPaths.homeDirectory,
+        cwd: ui.environment.shellPaths.workingDirectory,
+        homeDir: ui.environment.shellPaths.homeDirectory,
       });
     },
   });

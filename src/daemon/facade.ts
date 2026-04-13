@@ -1,16 +1,16 @@
 import { logger } from '../utils/logger.ts';
 import { AgentManager } from '../tools/agent/index.ts';
-import { ConfigManager } from '../config/manager.ts';
-import { ServiceRegistry } from '../config/service-registry.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
-import { UserAuthManager } from '../security/user-auth.ts';
-import {
+import type { ConfigManager } from '../config/manager.ts';
+import type { ServiceRegistry } from '../config/service-registry.ts';
+import type { UserAuthManager } from '../security/user-auth.ts';
+import type {
   AutomationDeliveryManager,
   AutomationManager,
 } from '../automation/index.ts';
-import { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
-import { GatewayMethodCatalog } from '../control-plane/index.ts';
-import {
+import type { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
+import type { GatewayMethodCatalog } from '../control-plane/index.ts';
+import type {
   BuiltinChannelRuntime,
   ChannelReplyPipeline,
   ChannelProviderRuntimeManager,
@@ -18,21 +18,25 @@ import {
   ChannelPolicyManager,
   RouteBindingManager,
   SurfaceRegistry,
-  type ChannelSurface,
+  ChannelSurface,
 } from '../channels/index.ts';
-import { RuntimeEventBus } from '../runtime/events/index.ts';
-import { createRuntimeStore } from '../runtime/store/index.ts';
-import { PlatformServiceManager } from './service-manager.ts';
-import { WatcherRegistry } from '../watchers/index.ts';
+import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { PlatformServiceManager } from './service-manager.ts';
+import type { WatcherRegistry } from '../watchers/index.ts';
 import { type DistributedPeerAuth } from '../runtime/remote/index.ts';
-import { KnowledgeGraphqlService, KnowledgeService } from '../knowledge/index.ts';
+import type { KnowledgeGraphqlService, KnowledgeService } from '../knowledge/index.ts';
 import type { IntegrationHelperService } from '../runtime/integration/helpers.ts';
-import { DaemonControlPlaneHelper, type ControlPlaneWebSocketData } from './control-plane.ts';
-import { DaemonSurfaceDeliveryHelper } from './surface-delivery.ts';
-import { DaemonSurfaceActionHelper } from './surface-actions.ts';
-import { DaemonTransportEventsHelper } from './transport-events.ts';
-import { DaemonHttpRouter } from './http/router.ts';
+import type { DaemonControlPlaneHelper, ControlPlaneWebSocketData } from './control-plane.ts';
+import type { DaemonSurfaceDeliveryHelper } from './surface-delivery.ts';
+import type { DaemonSurfaceActionHelper } from './surface-actions.ts';
+import type { DaemonTransportEventsHelper } from './transport-events.ts';
+import type { DaemonHttpRouter } from './http/router.ts';
 import { isSurfaceDeliveryEnabled } from './surface-policy.ts';
+import {
+  configureDaemonSessionContinuation,
+  createDaemonFacadeCollaborators,
+  resolveDaemonFacadeRuntime,
+} from './facade-composition.ts';
 import {
   GlobalNetworkTransportInstaller,
   resolveInboundTlsContext,
@@ -117,212 +121,78 @@ export class DaemonServer {
   private approvalBrokerUnsubscribe: (() => void) | null = null;
 
   constructor(private config: DaemonConfig = {}, _configManager?: ConfigManager) {
-    const ownedWorkingDir = config.runtimeServices?.workingDirectory ?? config.workingDir;
-    const ownedHomeDirectory = config.runtimeServices?.homeDirectory ?? config.homeDirectory;
-    const configManager = config.configManager ?? _configManager ?? config.runtimeServices?.configManager;
-    if (!config.runtimeServices && !configManager && (!ownedWorkingDir || !ownedHomeDirectory)) {
-      throw new Error('DaemonServer requires explicit runtime services or explicit configManager plus workingDir/homeDirectory ownership.');
-    }
-    if (!config.runtimeServices && !configManager) {
-      throw new Error('DaemonServer requires an explicit ConfigManager or runtimeServices.');
-    }
-    this.configManager = configManager ?? config.runtimeServices!.configManager;
-    const ownedRuntimeBus = config.runtimeServices?.runtimeBus ?? config.runtimeBus ?? new RuntimeEventBus();
-    this.runtimeServices = config.runtimeServices ?? createRuntimeServices({
-      configManager: this.configManager,
-      runtimeBus: ownedRuntimeBus,
-      runtimeStore: createRuntimeStore(),
-      getConversationTitle: () => 'goodvibes daemon',
-      workingDir: ownedWorkingDir!,
-      homeDirectory: ownedHomeDirectory!,
-    });
-    this.integrationHelpers = this.runtimeServices.integrationHelpers;
-    this.port = config.port ?? Number(this.configManager.get('controlPlane.port') ?? 3421);
-    this.host = config.host ?? String(this.configManager.get('controlPlane.host') ?? '127.0.0.1');
-    this.agentManager = config.agentManager ?? this.runtimeServices.agentManager;
-    this.userAuth = config.userAuth ?? this.runtimeServices.localUserAuthManager;
-    this.serveFactory = config.serveFactory ?? Bun.serve;
-    this.serviceRegistry = this.runtimeServices.serviceRegistry;
-    this.runtimeBus = this.runtimeServices.runtimeBus;
-    this.runtimeStore = this.runtimeServices.runtimeStore;
-    this.runtimeDispatch = this.runtimeServices.runtimeDispatch;
-    this.artifactStore = this.runtimeServices.artifactStore;
-    this.knowledgeService = this.runtimeServices.knowledgeService;
-    this.knowledgeGraphqlService = new KnowledgeGraphqlService(this.knowledgeService);
-    this.voiceService = this.runtimeServices.voiceService;
-    this.webSearchService = this.runtimeServices.webSearchService;
-    this.mediaProviders = this.runtimeServices.mediaProviders;
-    this.multimodalService = this.runtimeServices.multimodalService;
-    this.platformServiceManager = new PlatformServiceManager(this.configManager, {
-      workingDirectory: this.runtimeServices.workingDirectory,
-      homeDirectory: this.runtimeServices.homeDirectory,
-    });
-    // Webhook secrets follow 12-factor app conventions (https://12factor.net/config):
-    // prefer explicit config object values (e.g. from a vault-injected object) and
-    // fall back to environment variables so the binary works in any deployment
-    // without code changes. Secrets are never logged or exposed via the API.
-    this.githubWebhookSecret =
-      config.githubWebhookSecret ?? process.env.GITHUB_WEBHOOK_SECRET ?? null;
-    this.automationManager = this.runtimeServices.automationManager;
-    this.gatewayMethods = this.runtimeServices.gatewayMethods;
-    this.sessionBroker = this.runtimeServices.sessionBroker;
-    this.approvalBroker = this.runtimeServices.approvalBroker;
-    this.knowledgeService.attachRuntimeBus(this.runtimeBus);
-    this.routeBindings = this.runtimeServices.routeBindings;
-    this.routeBindings.attachRuntime({
-      runtimeBus: this.runtimeBus,
-      runtimeStore: this.runtimeStore,
-    });
-    this.surfaceRegistry = this.runtimeServices.surfaceRegistry;
-    this.channelPolicy = this.runtimeServices.channelPolicy;
-    this.channelPlugins = this.runtimeServices.channelPlugins;
-    this.channelReplyPipeline = new ChannelReplyPipeline({
-      channelPlugins: this.channelPlugins,
-      routeBindings: this.routeBindings,
-      runtimeBus: this.runtimeBus,
-    });
-    this.surfaceRegistry.attachRuntime(this.runtimeStore);
-    this.watcherRegistry = this.runtimeServices.watcherRegistry;
-    this.watcherRegistry.attachRuntime({
-      runtimeBus: this.runtimeBus,
-      runtimeStore: this.runtimeStore,
-    });
-    this.deliveryManager = this.runtimeServices.deliveryManager;
-    this.automationManager.attachRuntime({
-      runtimeBus: this.runtimeBus,
-      runtimeStore: this.runtimeStore,
-      deliveryManager: this.deliveryManager,
-    });
-    this.distributedRuntime = this.runtimeServices.distributedRuntime;
-    this.controlPlaneGateway = new ControlPlaneGateway({
-      runtimeBus: this.runtimeBus,
-      runtimeStore: this.runtimeStore,
-      server: {
-        enabled: false,
-        host: this.host,
-        port: this.port,
-        streamingMode: (this.configManager.get('controlPlane.streamMode') as import('../control-plane/index.ts').ControlPlaneStreamingMode | undefined) ?? 'sse',
-      },
-    });
-    this.deliveryManager.setControlPlaneGateway(this.controlPlaneGateway);
-    this.approvalBroker.setPublisher(this.controlPlaneGateway);
-    this.sessionBroker.setEventPublisher((event, payload) => {
-      this.controlPlaneGateway.publishEvent(event, payload);
-    });
-    this.controlPlaneHelper = new DaemonControlPlaneHelper({
+    const resolved = resolveDaemonFacadeRuntime(config, _configManager);
+    this.configManager = resolved.configManager;
+    this.runtimeServices = resolved.runtimeServices;
+    this.integrationHelpers = resolved.integrationHelpers;
+    this.port = resolved.port;
+    this.host = resolved.host;
+    this.agentManager = resolved.agentManager;
+    this.userAuth = resolved.userAuth;
+    this.automationManager = resolved.automationManager;
+    this.runtimeBus = resolved.runtimeBus;
+    this.runtimeStore = resolved.runtimeStore;
+    this.runtimeDispatch = resolved.runtimeDispatch;
+    this.controlPlaneGateway = resolved.controlPlaneGateway;
+    this.gatewayMethods = resolved.gatewayMethods;
+    this.sessionBroker = resolved.sessionBroker;
+    this.approvalBroker = resolved.approvalBroker;
+    this.routeBindings = resolved.routeBindings;
+    this.deliveryManager = resolved.deliveryManager;
+    this.surfaceRegistry = resolved.surfaceRegistry;
+    this.channelPolicy = resolved.channelPolicy;
+    this.channelPlugins = resolved.channelPlugins;
+    this.watcherRegistry = resolved.watcherRegistry;
+    this.platformServiceManager = resolved.platformServiceManager;
+    this.distributedRuntime = resolved.distributedRuntime;
+    this.voiceService = resolved.voiceService;
+    this.webSearchService = resolved.webSearchService;
+    this.knowledgeService = resolved.knowledgeService;
+    this.knowledgeGraphqlService = resolved.knowledgeGraphqlService;
+    this.mediaProviders = resolved.mediaProviders;
+    this.multimodalService = resolved.multimodalService;
+    this.artifactStore = resolved.artifactStore;
+    this.serviceRegistry = resolved.serviceRegistry;
+    this.serveFactory = resolved.serveFactory;
+    this.githubWebhookSecret = resolved.githubWebhookSecret;
+
+    const collaborators = createDaemonFacadeCollaborators({
+      runtime: resolved,
+      pendingSurfaceReplies: this.pendingSurfaceReplies,
       authToken: () => this.authToken,
-      userAuth: this.userAuth,
-      agentManager: this.agentManager,
-      controlPlaneGateway: this.controlPlaneGateway,
-      gatewayMethods: this.gatewayMethods,
-      host: this.host,
-      port: this.port,
-      distributedRuntime: this.distributedRuntime,
       trustProxyEnabled: () => this.trustProxyEnabled(),
       dispatchApiRoutes: (req) => this.dispatchApiRoutes(req),
       parseJsonBody: (req) => this.parseJsonBody(req),
       requireAuthenticatedSession: (req) => this.requireAuthenticatedSession(req),
-    });
-    this.surfaceDeliveryHelper = new DaemonSurfaceDeliveryHelper({
-      pendingSurfaceReplies: this.pendingSurfaceReplies,
-      channelReplyPipeline: this.channelReplyPipeline,
-      configManager: this.configManager,
-      serviceRegistry: this.serviceRegistry,
-      agentManager: this.agentManager,
-      sessionBroker: this.sessionBroker,
-      routeBindings: this.routeBindings,
-      channelPlugins: this.channelPlugins,
-      authToken: () => this.authToken,
-      surfaceDeliveryEnabled: (surface) => this.surfaceDeliveryEnabled(surface),
-    });
-    this.surfaceActionHelper = new DaemonSurfaceActionHelper({
-      serviceRegistry: this.serviceRegistry,
-      configManager: this.configManager,
-      routeBindings: this.routeBindings,
-      sessionBroker: this.sessionBroker,
-      channelPolicy: this.channelPolicy,
-      automationManager: this.automationManager,
-      agentManager: this.agentManager,
       trySpawnAgent: (input, logLabel, sessionId) => this.trySpawnAgent(input, logLabel, sessionId),
-      queueSurfaceReplyFromBinding: (binding, input) => this.surfaceDeliveryHelper.queueSurfaceReplyFromBinding(binding, input),
-      queueWebhookReply: (input) => this.surfaceDeliveryHelper.queueWebhookReply(input),
-      surfaceDeliveryEnabled: (surface) => this.surfaceDeliveryEnabled(surface),
-      signWebhookPayload: (body, secret) => this.surfaceDeliveryHelper.signWebhookPayload(body, secret),
-      handleApprovalAction: (approvalId, action, req) => this.handleApprovalAction(approvalId, action, req),
-    });
-    this.sessionBroker.setContinuationRunner(async ({ sessionId, input, task, routeBinding }) => {
-      const spawned = this.trySpawnAgent({
-        mode: 'spawn',
-        task,
-        ...(input.routing?.modelId ? { model: input.routing.modelId } : {}),
-        ...(input.routing?.providerId ? { provider: input.routing.providerId } : {}),
-        ...(input.routing?.tools?.length ? { tools: [...input.routing.tools] } : {}),
-        context: `shared-session:${sessionId}`,
-      }, 'DaemonServer.sharedSessionFollowUp', sessionId);
-      if (spawned instanceof Response) {
-        return null;
-      }
-      this.surfaceDeliveryHelper.queueSurfaceReplyFromBinding(routeBinding, {
-        agentId: spawned.id,
-        task: input.body,
-        sessionId,
-      });
-      return { agentId: spawned.id };
-    });
-    this.transportEventsHelper = new DaemonTransportEventsHelper({
-      runtimeBus: this.runtimeBus,
-      hookDispatcher: this.runtimeServices.hookDispatcher,
-      host: this.host,
-      port: this.port,
-      tlsState: () => this.tlsState,
-    });
-    this.httpRouter = new DaemonHttpRouter({
-      configManager: this.configManager,
-      serviceRegistry: this.serviceRegistry,
-      userAuth: this.userAuth,
-      agentManager: this.agentManager,
-      automationManager: this.automationManager,
-      approvalBroker: this.approvalBroker,
-      controlPlaneGateway: this.controlPlaneGateway,
-      gatewayMethods: this.gatewayMethods,
-      providerRegistry: this.runtimeServices.providerRegistry,
-      sessionBroker: this.sessionBroker,
-      routeBindings: this.routeBindings,
-      channelPolicy: this.channelPolicy,
-      channelPlugins: this.channelPlugins,
-      surfaceRegistry: this.surfaceRegistry,
-      distributedRuntime: this.distributedRuntime,
-      watcherRegistry: this.watcherRegistry,
-      voiceService: this.voiceService,
-      webSearchService: this.webSearchService,
-      knowledgeService: this.knowledgeService,
-      knowledgeGraphqlService: this.knowledgeGraphqlService,
-      mediaProviders: this.mediaProviders,
-      multimodalService: this.multimodalService,
-      artifactStore: this.artifactStore,
-      memoryRegistry: this.runtimeServices.memoryRegistry,
-      memoryEmbeddingRegistry: this.runtimeServices.memoryEmbeddingRegistry,
-      platformServiceManager: this.platformServiceManager,
-      integrationHelpers: this.integrationHelpers,
-      runtimeStore: this.runtimeStore,
-      runtimeDispatch: this.runtimeDispatch,
-      githubWebhookSecret: this.githubWebhookSecret,
-      authToken: () => this.authToken,
-      buildSurfaceAdapterContext: () => this.surfaceActionHelper.buildSurfaceAdapterContext(),
-      buildGenericWebhookAdapterContext: () => this.surfaceActionHelper.buildGenericWebhookAdapterContext(),
       checkAuth: (req) => this.checkAuth(req),
       extractAuthToken: (req) => this.extractAuthToken(req),
-      requireAuthenticatedSession: (req) => this.requireAuthenticatedSession(req),
       requireAdmin: (req) => this.requireAdmin(req),
       requireRemotePeer: (req, scope) => this.requireRemotePeer(req, scope),
       describeAuthenticatedPrincipal: (token) => this.describeAuthenticatedPrincipal(token),
       invokeGatewayMethodCall: (input) => this.invokeGatewayMethodCall(input),
-      queueSurfaceReplyFromBinding: (binding, input) => this.surfaceDeliveryHelper.queueSurfaceReplyFromBinding(binding, input),
-      surfaceDeliveryEnabled: (surface) => this.surfaceDeliveryEnabled(surface),
       syncSpawnedAgentTask: (record, sessionId) => this.syncSpawnedAgentTask(record, sessionId),
       syncFinishedAgentTask: (record) => this.syncFinishedAgentTask(record),
-      trySpawnAgent: (input, logLabel, sessionId) => this.trySpawnAgent(input, logLabel, sessionId),
+      surfaceDeliveryEnabled: (surface) => this.surfaceDeliveryEnabled(surface),
+      signWebhookPayload: (body, secret) => this.signWebhookPayload(body, secret),
+      handleApprovalAction: (approvalId, action, req) => this.handleApprovalAction(approvalId, action, req),
+      tlsState: () => this.tlsState,
     });
+    this.channelReplyPipeline = collaborators.channelReplyPipeline;
+    this.controlPlaneHelper = collaborators.controlPlaneHelper;
+    this.surfaceDeliveryHelper = collaborators.surfaceDeliveryHelper;
+    this.surfaceActionHelper = collaborators.surfaceActionHelper;
+    this.transportEventsHelper = collaborators.transportEventsHelper;
+    this.httpRouter = collaborators.httpRouter;
+    this.providerRuntime = collaborators.providerRuntime;
+    this.builtinChannels = collaborators.builtinChannels;
+
+    configureDaemonSessionContinuation({
+      sessionBroker: this.sessionBroker,
+      trySpawnAgent: (input, logLabel, sessionId) => this.trySpawnAgent(input, logLabel, sessionId),
+      queueSurfaceReplyFromBinding: (binding, input) => this.surfaceDeliveryHelper.queueSurfaceReplyFromBinding(binding, input),
+    });
+
     this.distributedRuntime.attachRuntime({
       sessionBridge: this.sessionBroker,
       approvalBridge: this.approvalBroker,
@@ -331,34 +201,6 @@ export class DaemonServer {
         this.controlPlaneGateway.publishEvent(event, payload);
       },
     });
-    this.providerRuntime = new ChannelProviderRuntimeManager({
-      configManager: this.configManager,
-      serviceRegistry: this.serviceRegistry,
-      buildSurfaceAdapterContext: () => this.surfaceActionHelper.buildSurfaceAdapterContext(),
-    });
-    this.builtinChannels = new BuiltinChannelRuntime({
-      configManager: this.configManager,
-      secretsManager: this.runtimeServices.secretsManager,
-      serviceRegistry: this.serviceRegistry,
-      routeBindings: this.routeBindings,
-      channelPolicy: this.channelPolicy,
-      channelPlugins: this.channelPlugins,
-      providerRuntime: this.providerRuntime,
-      deliveryRouter: this.deliveryManager.getDeliveryRouter(),
-      surfaceDeliveryEnabled: (surface) => this.surfaceDeliveryEnabled(surface),
-      buildSurfaceAdapterContext: () => this.surfaceActionHelper.buildSurfaceAdapterContext(),
-      buildGenericWebhookAdapterContext: () => this.surfaceActionHelper.buildGenericWebhookAdapterContext(),
-      deliverSurfaceProgress: (pending, progress) => this.surfaceDeliveryHelper.deliverSurfaceProgress(pending as PendingSurfaceReply, progress),
-      deliverSlackAgentReply: (pending, message) => this.surfaceDeliveryHelper.deliverSlackAgentReply(pending as PendingSurfaceReply, message),
-      deliverDiscordAgentReply: (pending, message) => this.surfaceDeliveryHelper.deliverDiscordAgentReply(pending as PendingSurfaceReply, message),
-      deliverNtfyAgentReply: (pending, message) => this.surfaceDeliveryHelper.deliverNtfyAgentReply(pending as PendingSurfaceReply, message),
-      deliverWebhookAgentReply: (pending, message) => this.surfaceDeliveryHelper.deliverWebhookAgentReply(pending as PendingSurfaceReply, message),
-      deliverSlackApprovalUpdate: (approval, binding) => this.surfaceDeliveryHelper.deliverSlackApprovalUpdate(approval, binding),
-      deliverDiscordApprovalUpdate: (approval, binding) => this.surfaceDeliveryHelper.deliverDiscordApprovalUpdate(approval, binding),
-      deliverNtfyApprovalUpdate: (approval, binding) => this.surfaceDeliveryHelper.deliverNtfyApprovalUpdate(approval, binding),
-      deliverWebhookApprovalUpdate: (approval, binding) => this.surfaceDeliveryHelper.deliverWebhookApprovalUpdate(approval, binding),
-    });
-    this.builtinChannels.registerPlugins();
   }
 
   listRecentControlPlaneEvents(limit = 100): readonly import('../control-plane/gateway.ts').ControlPlaneRecentEvent[] {

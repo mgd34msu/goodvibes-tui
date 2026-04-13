@@ -39,7 +39,15 @@ export function recordSchema(valueSchema: Record<string, unknown> = JSON_VALUE_S
 
 export const STRING_LIST_SCHEMA = arraySchema(STRING_SCHEMA);
 export const GENERIC_LIST_SCHEMA = JSON_ARRAY_SCHEMA;
-export const METADATA_SCHEMA = JSON_OBJECT_SCHEMA;
+export const JSON_RECORD_SCHEMA = recordSchema(JSON_VALUE_SCHEMA);
+export const JSON_SCHEMA_DOCUMENT_SCHEMA = recordSchema(JSON_VALUE_SCHEMA);
+export const CONFIG_CATEGORY_SNAPSHOT_SCHEMA = recordSchema(JSON_VALUE_SCHEMA);
+export const GRAPHQL_VARIABLES_SCHEMA = recordSchema(JSON_VALUE_SCHEMA);
+export const GRAPHQL_RESPONSE_DATA_SCHEMA = recordSchema(JSON_VALUE_SCHEMA);
+export const GRAPHQL_RESPONSE_EXTENSIONS_SCHEMA = recordSchema(JSON_VALUE_SCHEMA);
+export const TOOL_ARGUMENTS_SCHEMA = recordSchema(JSON_VALUE_SCHEMA);
+export const HTTP_HEADER_MAP_SCHEMA = recordSchema(STRING_SCHEMA);
+export const METADATA_SCHEMA = JSON_RECORD_SCHEMA;
 
 export const ARTIFACT_DESCRIPTOR_SCHEMA = objectSchema({
   id: STRING_SCHEMA,

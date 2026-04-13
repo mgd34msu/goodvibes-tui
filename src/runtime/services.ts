@@ -437,6 +437,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     fileUndoManager,
     modeManager,
     processManager,
+    agentMessageBus,
     webSearchService,
     channelRegistry: channelPlugins,
     remoteRunnerRegistry,
@@ -452,6 +453,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     featureFlags,
     overflowHandler,
     sandboxSessionRegistry,
+    workflowServices: workflow,
   });
 
   return {

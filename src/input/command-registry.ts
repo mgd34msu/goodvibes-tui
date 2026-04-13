@@ -18,17 +18,24 @@ import type { OperatorClient } from '../runtime/operator-client.ts';
 import type { PeerClient } from '../runtime/peer-client.ts';
 import type { DirectTransport } from '../runtime/transports/direct.ts';
 import type {
-  CommandExtensionShellServices,
-  CommandOpsShellServices,
-  CommandPlatformShellServices,
   CommandWorkspaceShellServices,
+} from '../runtime/shell-command-workspace.ts';
+import type {
+  CommandPlatformShellServices,
+} from '../runtime/shell-command-platform.ts';
+import type {
+  CommandExtensionShellServices,
+} from '../runtime/shell-command-extensions.ts';
+import type {
+  CommandOpsShellServices,
   RemoteCommandService,
-} from '../runtime/shell-command-services.ts';
+  PlanRuntimeService,
+} from '../runtime/shell-command-ops.ts';
 
 export type {
-  PlanRuntimeService,
   RemoteCommandService,
-} from '../runtime/shell-command-services.ts';
+  PlanRuntimeService,
+} from '../runtime/shell-command-ops.ts';
 
 export interface CommandRuntimeState {
   model: string;

@@ -25,9 +25,9 @@ function seedAgent(task = 'Do something', status: 'running' | 'pending' = 'runni
 function createAgentDetailModal(): AgentDetailModal {
   const ui = createDefaultUiRuntimeServices();
   return new AgentDetailModal({
-    agentManager: ui.agentManager,
-    agentMessageBus: ui.agentMessageBus,
-    sessionLogPathResolver: (agentId) => ui.shellPaths.resolveProjectTuiPath('sessions', `${agentId}.jsonl`),
+    agentManager: ui.agents.agentManager,
+    agentMessageBus: ui.agents.agentMessageBus,
+    sessionLogPathResolver: (agentId) => ui.environment.shellPaths.resolveProjectTuiPath('sessions', `${agentId}.jsonl`),
   });
 }
 

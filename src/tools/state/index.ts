@@ -381,7 +381,13 @@ function runMode(
   input: StateInput,
   manager: ModeManager | undefined,
 ): { success: boolean; output?: string; error?: string } {
-  const mm = manager ?? new ModeManager();
+  if (!manager) {
+    return {
+      success: false,
+      error: 'mode mode requires a ModeManager instance (not provided at startup)',
+    };
+  }
+  const mm = manager;
   const action = input.modeAction ?? 'get';
 
   if (action === 'get') {

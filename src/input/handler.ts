@@ -178,44 +178,36 @@ export class InputHandler {
     private scroll: (delta: number) => void,
     private exitApp: () => void,
     private readonly uiServices: Pick<UiRuntimeServices,
-      'agentManager'
-      | 'agentMessageBus'
-      | 'benchmarkStore'
-      | 'bookmarkManager'
-      | 'favoritesStore'
-      | 'keybindingsManager'
-      | 'panelManager'
-      | 'processManager'
-      | 'profileManager'
-      | 'providerRegistry'
-      | 'sessionManager'
-      | 'shellPaths'
-      | 'wrfcController'
+      'agents'
+      | 'environment'
+      | 'providers'
+      | 'sessions'
+      | 'shell'
     >,
   ) {
-    this.filePicker = new FilePickerModal(uiServices.shellPaths);
+    this.filePicker = new FilePickerModal(uiServices.environment.shellPaths);
     this.modelPicker = new ModelPickerModal(
-      uiServices.favoritesStore,
-      uiServices.benchmarkStore,
-      uiServices.providerRegistry,
+      uiServices.providers.favoritesStore,
+      uiServices.providers.benchmarkStore,
+      uiServices.providers.providerRegistry,
     );
     this.processModal = new ProcessModal({
-      agentManager: uiServices.agentManager,
-      processManager: uiServices.processManager,
-      wrfcController: uiServices.wrfcController,
+      agentManager: uiServices.agents.agentManager,
+      processManager: uiServices.shell.processManager,
+      wrfcController: uiServices.agents.wrfcController,
     });
     this.liveTailModal = new LiveTailModal({
-      agentManager: uiServices.agentManager,
-      processManager: uiServices.processManager,
+      agentManager: uiServices.agents.agentManager,
+      processManager: uiServices.shell.processManager,
     });
     this.agentDetailModal = new AgentDetailModal({
-      agentManager: uiServices.agentManager,
-      agentMessageBus: uiServices.agentMessageBus,
-      sessionLogPathResolver: (agentId) => uiServices.shellPaths.resolveProjectTuiPath('sessions', `${agentId}.jsonl`),
+      agentManager: uiServices.agents.agentManager,
+      agentMessageBus: uiServices.agents.agentMessageBus,
+      sessionLogPathResolver: (agentId) => uiServices.environment.shellPaths.resolveProjectTuiPath('sessions', `${agentId}.jsonl`),
     });
-    this.bookmarkModal = new BookmarkModal(uiServices.bookmarkManager);
-    this.sessionPickerModal = new SessionPickerModal(uiServices.sessionManager);
-    this.profilePickerModal = new ProfilePickerModal(uiServices.profileManager);
+    this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
+    this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager);
+    this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
   }
 
   /**
@@ -270,7 +262,7 @@ export class InputHandler {
       nextPasteId: this.nextPasteId,
       imageRegistry: this.imageRegistry,
       nextImageId: this.nextImageId,
-    }, content, this.uiServices.shellPaths.workingDirectory);
+    }, content, this.uiServices.environment.shellPaths.workingDirectory);
     this.nextPasteId = result.nextPasteId;
     this.nextImageId = result.nextImageId;
     return result.marker;
@@ -282,7 +274,7 @@ export class InputHandler {
    * Otherwise returns a plain string.
    */
   private expandPrompt(text: string) {
-    return expandPrompt(this.pasteRegistry, this.imageRegistry, text, this.uiServices.shellPaths.workingDirectory);
+    return expandPrompt(this.pasteRegistry, this.imageRegistry, text, this.uiServices.environment.shellPaths.workingDirectory);
   }
 
   /**
@@ -328,14 +320,14 @@ export class InputHandler {
    * handleBookmark - Ctrl+B: Toggle bookmark on the nearest block.
    */
   private handleBookmark(): void {
-    handleBookmark(this.conversationManager, this.getScrollTop, this.requestRender, this.uiServices.bookmarkManager);
+    handleBookmark(this.conversationManager, this.getScrollTop, this.requestRender, this.uiServices.shell.bookmarkManager);
   }
 
   /**
    * handleBlockSave - Ctrl+S: Save nearest block content to a file.
    */
   private handleBlockSave(): void {
-    handleBlockSave(this.conversationManager, this.getScrollTop, this.requestRender, this.uiServices.bookmarkManager);
+    handleBlockSave(this.conversationManager, this.getScrollTop, this.requestRender, this.uiServices.shell.bookmarkManager);
   }
 
   /**
@@ -548,8 +540,8 @@ export class InputHandler {
         executeBlockAction: (id: string) => this.executeBlockAction(id),
         cyclePanelTab: (direction: 'next' | 'prev') => this.cyclePanelTab(direction),
         onPanelInputConsumed: (activePanel: Panel | null, key: string) => this.handlePanelIntegrationAction(activePanel, key),
-        panelManager: this.uiServices.panelManager,
-        keybindingsManager: this.uiServices.keybindingsManager,
+        panelManager: this.uiServices.shell.panelManager,
+        keybindingsManager: this.uiServices.shell.keybindingsManager,
         getWrappedPromptInfo: (contentWidth: number) => this.getWrappedPromptInfo(contentWidth),
         moveCursorVertical: (direction: -1 | 1) => this.moveCursorVertical(direction),
         handlePathCompletion: () => this.handlePathCompletion(),
@@ -603,7 +595,7 @@ export class InputHandler {
       saveUndoState: () => this.saveUndoState(),
       ensureInputCursorVisible: () => this.ensureInputCursorVisible(),
       requestRender: this.requestRender,
-    }, this.uiServices.shellPaths.workingDirectory);
+    }, this.uiServices.environment.shellPaths.workingDirectory);
     this.prompt = result.prompt;
     this.cursorPos = result.cursorPos;
     this.nextImageId = result.nextImageId;
@@ -755,7 +747,7 @@ export class InputHandler {
    * Breaks at spaces; words wider than maxW are force-broken.
    */
   private cyclePanelTab(direction: 'next' | 'prev'): void {
-    const pm = this.uiServices.panelManager;
+    const pm = this.uiServices.shell.panelManager;
     if (pm.isVisible()) {
       if (direction === 'next') pm.nextPanel();
       else pm.prevPanel();
@@ -764,7 +756,7 @@ export class InputHandler {
   }
 
   private handlePanelIntegrationAction(activePanel: Panel | null, key: string): void {
-    runPanelIntegrationAction(this.uiServices.panelManager, activePanel, key, this.commandContext);
+    runPanelIntegrationAction(this.uiServices.shell.panelManager, activePanel, key, this.commandContext);
   }
 
   private wordWrapLine(line: string, maxW: number): string[] {

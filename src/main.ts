@@ -391,19 +391,34 @@ async function main() {
     scroll,
     exitApp,
     {
-      agentManager,
-      agentMessageBus: ctx.services.agentMessageBus,
-      benchmarkStore: ctx.services.benchmarkStore,
-      bookmarkManager: ctx.services.bookmarkManager,
-      favoritesStore: ctx.services.favoritesStore,
-      keybindingsManager: ctx.services.keybindingsManager,
-      panelManager,
-      processManager,
-      profileManager: ctx.services.profileManager,
-      providerRegistry: ctx.services.providerRegistry,
-      sessionManager: ctx.services.sessionManager,
-      shellPaths: ctx.services.shellPaths,
-      wrfcController: ctx.services.wrfcController,
+      agents: {
+        agentManager,
+        agentMessageBus: ctx.services.agentMessageBus,
+        wrfcController: ctx.services.wrfcController,
+      },
+      providers: {
+        benchmarkStore: ctx.services.benchmarkStore,
+        favoritesStore: ctx.services.favoritesStore,
+        providerRegistry: ctx.services.providerRegistry,
+      },
+      shell: {
+        bookmarkManager: ctx.services.bookmarkManager,
+        keybindingsManager: ctx.services.keybindingsManager,
+        panelManager,
+        processManager,
+        profileManager: ctx.services.profileManager,
+      },
+      sessions: {
+        sessionManager: ctx.services.sessionManager,
+        sessionBroker: ctx.services.sessionBroker,
+        sessionOrchestration: ctx.services.sessionOrchestration,
+        sessionMemoryStore: ctx.services.sessionMemoryStore,
+      },
+      environment: {
+        workingDirectory: ctx.services.workingDirectory,
+        homeDirectory: ctx.services.homeDirectory,
+        shellPaths: ctx.services.shellPaths,
+      },
     },
   );
 

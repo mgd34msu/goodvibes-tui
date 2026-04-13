@@ -30,9 +30,18 @@ describe('session, route, and execution intent gate', () => {
     const routeProperties = objectProperties(ROUTE_BINDING_SCHEMA);
     const runProperties = objectProperties(AUTOMATION_RUN_SCHEMA);
 
-    expect(routeProperties.sessionPolicy).toEqual({ type: 'string' });
-    expect(routeProperties.threadPolicy).toEqual({ type: 'string' });
-    expect(routeProperties.deliveryGuarantee).toEqual({ type: 'string' });
+    expect(routeProperties.sessionPolicy).toEqual({
+      type: 'string',
+      enum: ['create-or-bind', 'continue-existing', 'require-existing'],
+    });
+    expect(routeProperties.threadPolicy).toEqual({
+      type: 'string',
+      enum: ['preserve', 'replace', 'detached'],
+    });
+    expect(routeProperties.deliveryGuarantee).toEqual({
+      type: 'string',
+      enum: ['best-effort', 'at-least-once'],
+    });
     expect(runProperties.executionIntent).toMatchObject({ type: 'object' });
   });
 });

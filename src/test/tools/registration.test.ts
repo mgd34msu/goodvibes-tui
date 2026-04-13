@@ -11,6 +11,10 @@ import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { OverflowHandler } from '../../tools/shared/overflow.ts';
+import { FileUndoManager } from '../../state/file-undo.ts';
+import { ModeManager } from '../../state/mode-manager.ts';
+import { ProcessManager } from '../../tools/shared/process-manager.ts';
+import { createWorkflowServices } from '../../tools/workflow/index.ts';
 
 function registerTools(registry: ToolRegistry): void {
   const services = createTestManagers();
@@ -22,8 +26,13 @@ function registerTools(registry: ToolRegistry): void {
   const sessionOrchestration = new CrossSessionTaskRegistry(process.cwd());
   const sandboxSessionRegistry = new SandboxSessionRegistry(workingDirectory);
   const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
+  const agentMessageBus = new AgentMessageBus();
   registerAllTools(registry, {
+    fileUndoManager: new FileUndoManager(),
+    modeManager: new ModeManager(),
+    processManager: new ProcessManager(),
     agentManager,
+    agentMessageBus,
     configManager: services.configManager,
     providerRegistry: services.providerRegistry,
     toolLLM: services.toolLLM,
@@ -36,6 +45,7 @@ function registerTools(registry: ToolRegistry): void {
     } as never,
     channelRegistry: null,
     remoteRunnerRegistry,
+    workflowServices: createWorkflowServices(),
     mcpRegistry: {
       list: () => [],
     } as never,

@@ -18,7 +18,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'G',
     category: 'development',
     description: 'Git status, staged/unstaged changes, and recent commits',
-    factory: () => new GitPanel(requireUiServices(deps).workingDirectory),
+    factory: () => new GitPanel(requireUiServices(deps).environment.workingDirectory),
   });
 
   manager.registerType({
@@ -36,7 +36,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'D',
     category: 'development',
     description: 'Unified diff view of agent file changes',
-    factory: () => new DiffPanel(requireUiServices(deps).workingDirectory),
+    factory: () => new DiffPanel(requireUiServices(deps).environment.workingDirectory),
   });
 
   manager.registerType({
@@ -48,9 +48,9 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     factory: () => {
       const ui = requireUiServices(deps);
       return new AgentInspectorPanel({
-        agentManager: ui.agentManager,
-        agentMessageBus: ui.agentMessageBus,
-        workingDirectory: ui.workingDirectory,
+        agentManager: ui.agents.agentManager,
+        agentMessageBus: ui.agents.agentMessageBus,
+        workingDirectory: ui.environment.workingDirectory,
       });
     },
   });
@@ -86,10 +86,10 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     category: 'development',
     description: 'File system browser with keyboard navigation',
     factory: () => {
-      const ui = requireUiServices(deps);
-      return new FileExplorerPanel(ui.workingDirectory, ui.workingDirectory);
-    },
-  });
+        const ui = requireUiServices(deps);
+        return new FileExplorerPanel(ui.environment.workingDirectory, ui.environment.workingDirectory);
+      },
+    });
 
   manager.registerType({
     id: 'preview',

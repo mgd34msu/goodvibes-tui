@@ -10,41 +10,87 @@ import type { SharedSessionBroker } from '../control-plane/session-broker.ts';
 import type { ShellPathService } from './shell-paths.ts';
 import type { SecretsManager } from '../config/secrets.ts';
 
-export interface UiRuntimeServices {
+export interface UiEnvironmentServices {
   readonly workingDirectory: string;
   readonly homeDirectory: string;
   readonly shellPaths: ShellPathService;
-  readonly configManager: RuntimeServices['configManager'];
-  readonly agentManager: RuntimeServices['agentManager'];
-  readonly agentMessageBus: RuntimeServices['agentMessageBus'];
-  readonly bookmarkManager: RuntimeServices['bookmarkManager'];
+}
+
+export interface UiShellServices {
   readonly keybindingsManager: RuntimeServices['keybindingsManager'];
-  readonly localUserAuthManager: RuntimeServices['localUserAuthManager'];
-  readonly mcpRegistry: RuntimeServices['mcpRegistry'];
   readonly panelManager: RuntimeServices['panelManager'];
   readonly processManager: RuntimeServices['processManager'];
   readonly profileManager: RuntimeServices['profileManager'];
-  readonly policyRuntimeState: RuntimeServices['policyRuntimeState'];
-  readonly replayEngine: RuntimeServices['replayEngine'];
-  readonly approvalBroker: ApprovalBroker;
-  readonly sessionBroker: SharedSessionBroker;
-  readonly sessionManager: RuntimeServices['sessionManager'];
-  readonly sessionOrchestration: RuntimeServices['sessionOrchestration'];
-  readonly serviceRegistry: RuntimeServices['serviceRegistry'];
-  readonly secretsManager: SecretsManager;
-  readonly subscriptionManager: RuntimeServices['subscriptionManager'];
-  readonly tokenAuditor: RuntimeServices['tokenAuditor'];
-  readonly webhookNotifier: RuntimeServices['webhookNotifier'];
+  readonly bookmarkManager: RuntimeServices['bookmarkManager'];
+}
+
+export interface UiAgentServices {
+  readonly agentManager: RuntimeServices['agentManager'];
+  readonly agentMessageBus: RuntimeServices['agentMessageBus'];
   readonly wrfcController: RuntimeServices['wrfcController'];
-  readonly distributedRuntime: RuntimeServices['distributedRuntime'];
+}
+
+export interface UiProviderServices {
+  readonly providerRegistry: RuntimeServices['providerRegistry'];
   readonly favoritesStore: RuntimeServices['favoritesStore'];
   readonly benchmarkStore: RuntimeServices['benchmarkStore'];
+}
+
+export interface UiSessionServices {
+  readonly sessionManager: RuntimeServices['sessionManager'];
+  readonly sessionBroker: SharedSessionBroker;
+  readonly sessionOrchestration: RuntimeServices['sessionOrchestration'];
   readonly sessionMemoryStore: RuntimeServices['sessionMemoryStore'];
+}
+
+export interface UiPlatformServices {
+  readonly configManager: RuntimeServices['configManager'];
+  readonly localUserAuthManager: RuntimeServices['localUserAuthManager'];
+  readonly mcpRegistry: RuntimeServices['mcpRegistry'];
+  readonly serviceRegistry: RuntimeServices['serviceRegistry'];
+  readonly subscriptionManager: RuntimeServices['subscriptionManager'];
+  readonly secretsManager: SecretsManager;
+  readonly tokenAuditor: RuntimeServices['tokenAuditor'];
+  readonly replayEngine: RuntimeServices['replayEngine'];
+  readonly webhookNotifier: RuntimeServices['webhookNotifier'];
+  readonly policyRuntimeState: RuntimeServices['policyRuntimeState'];
+}
+
+export interface UiPlanningServices {
   readonly planManager: RuntimeServices['planManager'];
   readonly adaptivePlanner: RuntimeServices['adaptivePlanner'];
-  readonly providerRegistry: RuntimeServices['providerRegistry'];
-  readonly remoteRunnerRegistry: RuntimeServices['remoteRunnerRegistry'] & RemoteRunnerRegistry;
-  readonly remoteSupervisor: RuntimeServices['remoteSupervisor'] & RemoteSupervisor;
+}
+
+export interface UiCoordinationServices {
+  readonly approvalBroker: ApprovalBroker;
+}
+
+export interface UiRuntimeSharedServices {
+  readonly environment: UiEnvironmentServices;
+  readonly shell: UiShellServices;
+  readonly agents: UiAgentServices;
+  readonly providers: UiProviderServices;
+  readonly sessions: UiSessionServices;
+  readonly platform: UiPlatformServices;
+  readonly planning: UiPlanningServices;
+  readonly coordination: UiCoordinationServices;
+  readonly runtime: {
+    readonly distributedRuntime: RuntimeServices['distributedRuntime'];
+    readonly remoteRunnerRegistry: RuntimeServices['remoteRunnerRegistry'] & RemoteRunnerRegistry;
+    readonly remoteSupervisor: RuntimeServices['remoteSupervisor'] & RemoteSupervisor;
+  };
+}
+
+export interface UiRuntimeServices {
+  readonly environment: UiEnvironmentServices;
+  readonly shell: UiShellServices;
+  readonly agents: UiAgentServices;
+  readonly providers: UiProviderServices;
+  readonly sessions: UiSessionServices;
+  readonly platform: UiPlatformServices;
+  readonly planning: UiPlanningServices;
+  readonly coordination: UiCoordinationServices;
+  readonly runtime: UiRuntimeSharedServices['runtime'];
   readonly events: UiRuntimeEvents;
   readonly readModels: UiReadModels;
 }
@@ -59,40 +105,58 @@ export function createUiRuntimeServices(
   options: UiRuntimeServicesOptions = {},
 ): UiRuntimeServices {
   return {
-    workingDirectory: runtimeServices.workingDirectory,
-    homeDirectory: runtimeServices.homeDirectory,
-    shellPaths: runtimeServices.shellPaths,
-    configManager: runtimeServices.configManager,
-    agentManager: runtimeServices.agentManager,
-    agentMessageBus: runtimeServices.agentMessageBus,
-    bookmarkManager: runtimeServices.bookmarkManager,
-    keybindingsManager: runtimeServices.keybindingsManager,
-    localUserAuthManager: runtimeServices.localUserAuthManager,
-    mcpRegistry: runtimeServices.mcpRegistry,
-    panelManager: runtimeServices.panelManager,
-    processManager: runtimeServices.processManager,
-    profileManager: runtimeServices.profileManager,
-    policyRuntimeState: runtimeServices.policyRuntimeState,
-    replayEngine: runtimeServices.replayEngine,
-    approvalBroker: runtimeServices.approvalBroker,
-    sessionBroker: runtimeServices.sessionBroker,
-    sessionManager: runtimeServices.sessionManager,
-    sessionOrchestration: runtimeServices.sessionOrchestration,
-    serviceRegistry: runtimeServices.serviceRegistry,
-    secretsManager: runtimeServices.secretsManager,
-    subscriptionManager: runtimeServices.subscriptionManager,
-    tokenAuditor: runtimeServices.tokenAuditor,
-    webhookNotifier: runtimeServices.webhookNotifier,
-    wrfcController: runtimeServices.wrfcController,
-    distributedRuntime: runtimeServices.distributedRuntime,
-    favoritesStore: runtimeServices.favoritesStore,
-    benchmarkStore: runtimeServices.benchmarkStore,
-    sessionMemoryStore: runtimeServices.sessionMemoryStore,
-    planManager: runtimeServices.planManager,
-    adaptivePlanner: runtimeServices.adaptivePlanner,
-    providerRegistry: runtimeServices.providerRegistry,
-    remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
-    remoteSupervisor: runtimeServices.remoteSupervisor,
+    environment: {
+      workingDirectory: runtimeServices.workingDirectory,
+      homeDirectory: runtimeServices.homeDirectory,
+      shellPaths: runtimeServices.shellPaths,
+    },
+    shell: {
+      keybindingsManager: runtimeServices.keybindingsManager,
+      panelManager: runtimeServices.panelManager,
+      processManager: runtimeServices.processManager,
+      profileManager: runtimeServices.profileManager,
+      bookmarkManager: runtimeServices.bookmarkManager,
+    },
+    agents: {
+      agentManager: runtimeServices.agentManager,
+      agentMessageBus: runtimeServices.agentMessageBus,
+      wrfcController: runtimeServices.wrfcController,
+    },
+    providers: {
+      providerRegistry: runtimeServices.providerRegistry,
+      favoritesStore: runtimeServices.favoritesStore,
+      benchmarkStore: runtimeServices.benchmarkStore,
+    },
+    sessions: {
+      sessionManager: runtimeServices.sessionManager,
+      sessionBroker: runtimeServices.sessionBroker,
+      sessionOrchestration: runtimeServices.sessionOrchestration,
+      sessionMemoryStore: runtimeServices.sessionMemoryStore,
+    },
+    platform: {
+      configManager: runtimeServices.configManager,
+      localUserAuthManager: runtimeServices.localUserAuthManager,
+      mcpRegistry: runtimeServices.mcpRegistry,
+      serviceRegistry: runtimeServices.serviceRegistry,
+      subscriptionManager: runtimeServices.subscriptionManager,
+      secretsManager: runtimeServices.secretsManager,
+      tokenAuditor: runtimeServices.tokenAuditor,
+      replayEngine: runtimeServices.replayEngine,
+      webhookNotifier: runtimeServices.webhookNotifier,
+      policyRuntimeState: runtimeServices.policyRuntimeState,
+    },
+    planning: {
+      planManager: runtimeServices.planManager,
+      adaptivePlanner: runtimeServices.adaptivePlanner,
+    },
+    coordination: {
+      approvalBroker: runtimeServices.approvalBroker,
+    },
+    runtime: {
+      distributedRuntime: runtimeServices.distributedRuntime,
+      remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
+      remoteSupervisor: runtimeServices.remoteSupervisor,
+    },
     events: createUiRuntimeEvents(runtimeServices.runtimeBus),
     readModels: createUiReadModels(runtimeServices, options),
   };

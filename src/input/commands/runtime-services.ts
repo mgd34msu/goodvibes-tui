@@ -27,7 +27,7 @@ import type {
   ShellModeManagerService,
   ShellPlanManagerService,
   ShellSessionOrchestrationService,
-} from '../../runtime/shell-command-services.ts';
+} from '../../runtime/shell-command-ops.ts';
 
 function requireContextValue<T>(value: T | null | undefined, name: string): T {
   if (value == null) {
