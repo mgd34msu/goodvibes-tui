@@ -4,6 +4,39 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.17.4] — 2026-04-13
+
+### Final Domain Splits For Shell, Runtime Views, And Server Composition
+
+- Split the remaining broad shell/runtime composition seams into explicit domain modules for shell command bootstrap parts, shell command service families, runtime bootstrap composition, daemon facade composition, runtime session routes, runtime automation routes, and UI read-model families instead of keeping those responsibilities in a few broad adapter hubs
+- Broke the old UI read-model monolith into core, operations, base, and observability families with explicit subdomains for remote, security, system, maintenance, and options surfaces so the first-party shell now tracks future package seams more closely
+- Tightened panel and command wiring around those explicit read-model and service families so the TUI remains a consumer of shaped runtime surfaces rather than a privileged owner of broad runtime state
+
+### Contract Hardening And Explicit Schema Semantics
+
+- Replaced the remaining semantically important raw generic-object contract pockets with named typed JSON record or document schemas across operator, knowledge, media, channels, permissions, and admin surfaces so the control-plane contract is explicit where semantics matter instead of relying on raw `JSON_OBJECT_SCHEMA`
+- Added explicit login request and response DTO schemas to the operator contract, tightened artifact list output typing, and updated channel, knowledge, and media method catalogs to consume the new named schema surfaces consistently
+- Strengthened the route and execution intent release gate to lock in explicit enum-backed route delivery semantics instead of accepting plain strings
+
+### Final Bootstrap Ownership Cleanup
+
+- Removed the remaining silent manager construction from tool and orchestrator registration by requiring explicit file-undo, mode, process, message-bus, and workflow dependencies from the owned runtime graph
+- Updated runtime bootstrap and tests so tool registration, state tooling, and orchestrator dependencies now fail explicitly when required owned services are missing rather than reconstructing local fallback ownership
+
+### Architecture Enforcement
+
+- Added an architecture rule that blocks raw `JSON_OBJECT_SCHEMA` usage in contract schema modules so future contract evolution must go through named typed DTO or document schemas instead of generic object placeholders
+- Refreshed the checked-in operator contract artifact to match the stricter explicit schema surface and domain-split runtime view model
+
+### Verification
+
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test` (`7047` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.17.3] — 2026-04-13
 
 ### Explicit Intent Surfaces For Sessions, Routing, And Execution
