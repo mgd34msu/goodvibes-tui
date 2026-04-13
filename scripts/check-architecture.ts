@@ -131,6 +131,33 @@ const rules: readonly Rule[] = [
     message: 'shell adapters and builtin channel bridges must receive explicit app-owned dependencies',
   },
   {
+    name: 'future-foundation-surfaces-no-server-or-shell-imports',
+    files: expandTargets([
+      'src/runtime/operator-client.ts',
+      'src/runtime/peer-client.ts',
+      'src/runtime/transports',
+      'src/runtime/runtime-provider-api.ts',
+      'src/runtime/runtime-knowledge-api.ts',
+      'src/runtime/runtime-hook-api.ts',
+      'src/runtime/runtime-mcp-api.ts',
+      'src/providers/provider-api.ts',
+      'src/knowledge/knowledge-api.ts',
+      'src/hooks/hook-api.ts',
+      'src/mcp/mcp-api.ts',
+    ]),
+    pattern: /from ['"][.\/]+(?:\.\.\/)*(?:daemon|input|panels|renderer)(?:\/|\.ts['"])/,
+    message: 'future foundation/client surfaces must not depend on daemon or shell modules',
+  },
+  {
+    name: 'future-server-surfaces-no-shell-imports',
+    files: expandTargets([
+      'src/daemon',
+      'src/control-plane/routes',
+    ]),
+    pattern: /from ['"][.\/]+(?:\.\.\/)*(?:input|panels|renderer)(?:\/|\.ts['"])/,
+    message: 'future server surfaces must not depend on TUI shell modules',
+  },
+  {
     name: 'no-implicit-project-root-literals',
     files: nonTestFiles,
     allow: [

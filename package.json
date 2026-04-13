@@ -1,6 +1,6 @@
 {
   "name": "goodvibes-tui",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "type": "module",
   "main": "src/main.ts",
   "scripts": {
@@ -25,6 +25,7 @@
     "build:all": "bun run scripts/build.ts --all",
     "perf:check": "bun run scripts/perf-check.ts",
     "architecture:check": "bun run scripts/check-architecture.ts",
+    "foundation:artifacts": "bun run scripts/export-foundation-artifacts.ts",
     "eval:gate": "bun run scripts/eval-gate.ts",
     "eval:gate:verbose": "bun run scripts/eval-gate.ts --verbose",
     "eval:baseline": "bun run scripts/eval-gate.ts --save-baseline"

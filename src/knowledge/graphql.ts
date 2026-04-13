@@ -63,7 +63,7 @@ export class KnowledgeGraphqlService {
     return schema;
   })();
 
-  private static readonly schemaSdl = printSchema(KnowledgeGraphqlService.schema);
+  static readonly schemaSdl = printSchema(KnowledgeGraphqlService.schema);
 
   constructor(private readonly service: KnowledgeService) {}
 
@@ -317,4 +317,8 @@ export class KnowledgeGraphqlService {
       },
     };
   }
+}
+
+export function getKnowledgeGraphqlSchemaText(): string {
+  return KnowledgeGraphqlService.schemaSdl;
 }

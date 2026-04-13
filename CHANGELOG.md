@@ -4,6 +4,34 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.17.2] — 2026-04-13
+
+### Canonical Foundation Artifacts And Consumer Examples
+
+- Added a checked-in foundation artifact export flow with canonical operator-contract, peer-contract, knowledge GraphQL, and knowledge SQL outputs under `docs/foundation-artifacts`, plus a release gate that keeps those artifacts in sync with the runtime builders
+- Added minimal in-process and HTTP reference consumers under `examples/reference-operator-client` and `examples/reference-http-client` so future SDK and shell work can validate the intended builder-facing programming model against real code instead of repo-local knowledge
+- Exposed canonical knowledge SQL and GraphQL export helpers from the knowledge foundation surface so the current repo can lock those shapes intentionally before extraction
+
+### Transport Parity And Future Package Boundary Enforcement
+
+- Added a transport parity release gate that exercises shared operator and peer workflows plus event delivery across direct, HTTP, and realtime transports, and fixed HTTP session fetch behavior so transport consumers see the same session shape as the in-process path
+- Expanded architecture enforcement to simulate future `foundation`, `server`, and shell package boundaries by blocking shell or daemon imports from the stable in-process consumer surfaces that will carry into the SDK monorepo
+- Updated TypeScript project coverage and docs indexing so the checked-in examples and foundation artifacts are part of the normal release verification path
+
+### Server Adapter Cleanup
+
+- Unified transport-aware server auth and route policy handling behind shared HTTP auth and policy helpers so control-plane, system, knowledge, media, and listener routes now resolve principals, scope denials, and private-host fetch policy through one server-side path instead of per-route variants
+- Added regression coverage for the shared server auth and policy layer to keep cookie-or-bearer operator auth, route policy evaluation, and private-host fetch enforcement stable as the server surface moves toward extraction
+
+### Verification
+
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test` (`7036` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.17.1] — 2026-04-12
 
 ### Auth, Transport, And Ingress Hardening

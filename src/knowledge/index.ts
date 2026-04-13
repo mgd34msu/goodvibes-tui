@@ -1,13 +1,15 @@
 export { KnowledgeConnectorRegistry, createDefaultKnowledgeConnectorRegistry } from './connectors.ts';
 export { extractKnowledgeArtifact } from './extractors.ts';
-export { KnowledgeGraphqlService, inspectKnowledgeGraphqlAccess } from './graphql.ts';
+export { KnowledgeGraphqlService, getKnowledgeGraphqlSchemaText, inspectKnowledgeGraphqlAccess } from './graphql.ts';
 export type { KnowledgeGraphqlAccessProfile, KnowledgeGraphqlExecuteInput } from './graphql.ts';
 export { createKnowledgeApi } from './knowledge-api.ts';
 export {
   createKnowledgeSchema,
+  getKnowledgeSchemaStatements,
   knowledgeNowMs,
   loadKnowledgeStoreSnapshot,
   parseKnowledgeJsonValue,
+  renderKnowledgeSchemaSql,
   resolveKnowledgeDbPathFromControlPlaneDir,
   stabilizeKnowledgeText,
   uniqKnowledgeValues,

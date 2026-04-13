@@ -249,7 +249,14 @@ function createOperatorClient(
           ? readArrayResponse<SharedSessionRecord>(body, 'sessions')
           : readArrayResponse<SharedSessionRecord>(body, 'session');
       },
-      get: async (sessionId): Promise<SharedSessionRecord | null> => await requestJsonWithFallback<SharedSessionRecord>(fetchImpl, buildTransportUrl(paths.sessionsUrl, `${encodeURIComponent(sessionId)}`), createJsonRequestInit(token)),
+      get: async (sessionId): Promise<SharedSessionRecord | null> => {
+        const body = await requestJsonWithFallback<{ session?: SharedSessionRecord }>(
+          fetchImpl,
+          buildTransportUrl(paths.sessionsUrl, `${encodeURIComponent(sessionId)}`),
+          createJsonRequestInit(token),
+        );
+        return body?.session ?? null;
+      },
       messages: async (sessionId, limit = 100): Promise<readonly SharedSessionMessage[]> => {
         const url = new URL(buildTransportUrl(paths.sessionsUrl, `${encodeURIComponent(sessionId)}/messages`));
         url.searchParams.set('limit', String(Math.max(1, Math.floor(limit))));
