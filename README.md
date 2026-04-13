@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.17.3-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.17.4-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -68,6 +68,7 @@ Inbound TLS can run in `off`, `proxy`, or `direct` mode. Direct mode defaults to
 - [Knowledge, artifacts, and multimodal](docs/knowledge-artifacts-and-multimodal.md)
 - [Channels, remote runtime, and API](docs/channels-remote-and-api.md)
 - [Tools and commands](docs/tools-and-commands.md)
+- [Foundation artifacts](docs/foundation-artifacts/README.md)
 
 ---
 
