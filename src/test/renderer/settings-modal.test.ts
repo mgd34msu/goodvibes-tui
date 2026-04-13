@@ -7,6 +7,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
@@ -22,6 +24,14 @@ function makeTmpDir(): string {
   return dir;
 }
 
+function createConfigManager(root: string): ConfigManager {
+  return new ConfigManager({
+    workingDir: root,
+    homeDir: root,
+    configDir: join(root, '.goodvibes', 'global-tui'),
+  });
+}
+
 describe('renderSettingsModal', () => {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
@@ -31,15 +41,20 @@ describe('renderSettingsModal', () => {
   let modal: SettingsModal;
   let mcpRegistry: McpRegistry;
   let subscriptionManager: SubscriptionManager;
+  let serviceRegistry: ServiceRegistry;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
     process.env.HOME = tmpDir;
     process.chdir(tmpDir);
-    cm = new ConfigManager({ workingDir: tmpDir });
+    cm = createConfigManager(tmpDir);
     ffm = createFeatureFlagManager();
     modal = new SettingsModal();
     subscriptionManager = new SubscriptionManager(join(tmpDir, '.goodvibes', 'tui', 'subscriptions.json'));
+    serviceRegistry = new ServiceRegistry(join(tmpDir, '.goodvibes', 'tui', 'services.json'), {
+      secretsManager: new SecretsManager({ projectRoot: tmpDir, globalHome: tmpDir, configManager: cm }),
+      subscriptionManager,
+    });
     mcpRegistry = {
       listServerSecurity: () => [
         {
@@ -70,7 +85,7 @@ describe('renderSettingsModal', () => {
       },
       pending: {},
     }, null, 2));
-    modal.open(cm, ffm, subscriptionManager, mcpRegistry);
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
   });
 
   afterEach(() => {

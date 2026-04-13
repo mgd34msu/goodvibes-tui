@@ -11,8 +11,8 @@ describe('SandboxPanel', () => {
   let config: ConfigManager;
 
   beforeEach(() => {
-    sessions = new SandboxSessionRegistry();
     const root = mkdtempSync(join(tmpdir(), 'gv-sandbox-panel-'));
+    sessions = new SandboxSessionRegistry(root);
     config = new ConfigManager({
       configDir: join(root, '.goodvibes', 'tui'),
       workingDir: root,

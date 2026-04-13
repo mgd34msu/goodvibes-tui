@@ -7,11 +7,11 @@ import {
   buildPolicyPreflightMemoryAddOptions,
 } from '../../state/memory-ingest.ts';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope } from './recall-shared.ts';
+import { getMemoryApi } from './recall-query.ts';
 
 export async function handleRecallAdd(args: string[], context: CommandContext): Promise<void> {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
 
@@ -44,8 +44,8 @@ export async function handleRecallAdd(args: string[], context: CommandContext): 
   if (sessionIdx !== -1 && flagArgs[sessionIdx + 1]) provenance.push({ kind: 'session', ref: flagArgs[sessionIdx + 1] });
   if (taskIdx !== -1 && flagArgs[taskIdx + 1]) provenance.push({ kind: 'task', ref: flagArgs[taskIdx + 1] });
   if (fileIdx !== -1 && flagArgs[fileIdx + 1]) provenance.push({ kind: 'file', ref: flagArgs[fileIdx + 1] });
-  if (!provenance.some((entry) => entry.kind === 'session') && context.runtime.sessionId) {
-    provenance.push({ kind: 'session', ref: context.runtime.sessionId });
+  if (!provenance.some((entry) => entry.kind === 'session') && context.session.runtime.sessionId) {
+    provenance.push({ kind: 'session', ref: context.session.runtime.sessionId });
   }
 
   const summaryTokens: string[] = [];
@@ -59,7 +59,7 @@ export async function handleRecallAdd(args: string[], context: CommandContext): 
     return;
   }
 
-  const record = await registry.add({ scope, cls, summary, detail, tags, provenance });
+  const record = await memory.add({ scope, cls, summary, detail, tags, provenance });
   context.print(`[recall] Added ${cls}: ${record.id}`);
   context.print(`  Scope:   ${record.scope}`);
   context.print(`  Summary: ${record.summary}`);
@@ -70,13 +70,12 @@ export async function handleRecallAdd(args: string[], context: CommandContext): 
 }
 
 export async function handleRecallCapture(args: string[], context: CommandContext): Promise<void> {
-  const registry = context.memoryRegistry;
-  const pluginManager = context.pluginManager;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  const pluginManager = context.extensions.pluginManager;
+  if (!memory) {
     return;
   }
-  if (!context.forensicsRegistry) {
+  if (!context.extensions.forensicsRegistry) {
     context.print('[recall] Forensics registry not available.');
     return;
   }
@@ -85,29 +84,29 @@ export async function handleRecallCapture(args: string[], context: CommandContex
   if (target === 'incident') {
     const requestedId = args[1];
     const report = !requestedId || requestedId === 'latest'
-      ? context.forensicsRegistry.latest()
-      : context.forensicsRegistry.getById(requestedId);
+      ? context.extensions.forensicsRegistry.latest()
+      : context.extensions.forensicsRegistry.getById(requestedId);
     if (!report) {
       context.print(`[recall] Incident not found: ${requestedId ?? 'latest'}`);
       return;
     }
-    const bundle = context.forensicsRegistry.buildBundle(report.id);
+    const bundle = context.extensions.forensicsRegistry.buildBundle(report.id);
     if (!bundle) {
       context.print(`[recall] Failed to build incident bundle: ${report.id}`);
       return;
     }
-    const record = await registry.add(buildIncidentMemoryAddOptions(bundle));
+    const record = await memory.add(buildIncidentMemoryAddOptions(bundle));
     context.print(`[recall] Captured incident ${report.id} into memory as ${record.id}`);
     return;
   }
 
   if (target === 'policy') {
-    const review = context.policyRuntimeState?.getSnapshot().lastPreflightReview;
+    const review = context.extensions.policyRuntimeState?.getSnapshot().lastPreflightReview;
     if (!review) {
       context.print('[recall] No policy preflight review is available to capture.');
       return;
     }
-    const record = await registry.add(buildPolicyPreflightMemoryAddOptions(review));
+    const record = await memory.add(buildPolicyPreflightMemoryAddOptions(review));
     context.print(`[recall] Captured policy preflight into memory as ${record.id}`);
     return;
   }
@@ -118,12 +117,12 @@ export async function handleRecallCapture(args: string[], context: CommandContex
       context.print('[recall] Usage: /recall capture mcp <server>');
       return;
     }
-    const server = context.mcpRegistry.listServerSecurity().find((entry) => entry.name === serverName);
+    const server = context.extensions.mcpRegistry.listServerSecurity().find((entry) => entry.name === serverName);
     if (!server) {
       context.print(`[recall] MCP server not found: ${serverName}`);
       return;
     }
-    const record = await registry.add(buildMcpSecurityMemoryAddOptions(server));
+    const record = await memory.add(buildMcpSecurityMemoryAddOptions(server));
     context.print(`[recall] Captured MCP server ${server.name} into memory as ${record.id}`);
     return;
   }
@@ -144,7 +143,7 @@ export async function handleRecallCapture(args: string[], context: CommandContex
       return;
     }
     const quarantineReason = pluginManager.getQuarantineRecord(plugin.name)?.reason;
-    const record = await registry.add(buildPluginSecurityMemoryAddOptions(plugin, quarantineReason));
+    const record = await memory.add(buildPluginSecurityMemoryAddOptions(plugin, quarantineReason));
     context.print(`[recall] Captured plugin ${plugin.name} into memory as ${record.id}`);
     return;
   }

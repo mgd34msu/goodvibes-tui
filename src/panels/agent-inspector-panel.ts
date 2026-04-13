@@ -79,6 +79,7 @@ const COLOR = {
 export interface AgentInspectorPanelDeps {
   readonly agentManager: Pick<AgentManager, 'list' | 'getStatus'>;
   readonly agentMessageBus: Pick<AgentMessageBus, 'getMessages'>;
+  readonly workingDirectory: string;
 }
 
 export class AgentInspectorPanel extends BasePanel {
@@ -434,7 +435,7 @@ export class AgentInspectorPanel extends BasePanel {
     if (!this.selectedAgentId) return;
     try {
       const sessionFile = join(
-        process.cwd(),
+        this.deps.workingDirectory,
         '.goodvibes', 'tui', 'sessions',
         `${this.selectedAgentId}.jsonl`,
       );

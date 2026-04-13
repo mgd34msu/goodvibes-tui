@@ -2,7 +2,7 @@ import { estimateConversationTokens } from '../../core/context-compaction.ts';
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines, getGuidanceMode } from '../../runtime/session-maintenance.ts';
 import { dismissGuidance, evaluateContextualGuidance, formatGuidanceItems, resetGuidance } from '../../runtime/guidance.ts';
 import type { CommandRegistry } from '../command-registry.ts';
-import { openCommandPanel, requireSessionMemoryStore } from './runtime-services.ts';
+import { openCommandPanel, requireProviderApi, requireReadModels, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
 
 export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -37,20 +37,24 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
     name: 'guidance',
     description: 'Review contextual operational guidance without interrupting the main conversation flow',
     usage: '[review|dismiss <id>|reset [id]]',
-    handler(args, ctx) {
+    async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
+      const shellPaths = requireShellPaths(ctx);
+      const guidanceOptions = {
+        homeDirectory: shellPaths.homeDirectory,
+      };
       if (sub === 'dismiss') {
         const id = args[1];
         if (!id) {
           ctx.print('Usage: /guidance dismiss <id>');
           return;
         }
-        dismissGuidance(id);
+        dismissGuidance(id, guidanceOptions);
         ctx.print(`Dismissed guidance item ${id}.`);
         return;
       }
       if (sub === 'reset') {
-        resetGuidance(args[1]);
+        resetGuidance(args[1], guidanceOptions);
         ctx.print(args[1] ? `Reset guidance item ${args[1]}.` : 'Reset all dismissed guidance items.');
         return;
       }
@@ -59,20 +63,34 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      const currentModel = ctx.providerRegistry.getCurrentModel?.();
-      const llmMessages = ctx.conversationManager.getMessagesForLLM();
+      const providerApi = requireProviderApi(ctx);
+      const currentModel = await providerApi.getCurrentModel().catch(() => null);
+      const llmMessages = ctx.session.conversationManager.getMessagesForLLM();
+      const readModels = requireReadModels(ctx);
+      const session = readModels.session.getSnapshot();
+      const intelligence = readModels.intelligence.getSnapshot();
+      const mcp = readModels.mcp.getSnapshot();
+      const health = readModels.health.getSnapshot();
+      const marketplace = readModels.marketplace.getSnapshot();
       const maintenance = evaluateSessionMaintenance({
-        configManager: ctx.configManager,
+        configManager: ctx.platform.configManager,
         currentTokens: estimateConversationTokens(llmMessages),
-        contextWindow: currentModel ? ctx.providerRegistry.getContextWindowForModel(currentModel) : 0,
+        contextWindow: currentModel?.contextWindow ?? 0,
         messageCount: llmMessages.length,
         sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
-        session: ctx.runtimeStore?.getState().session,
+        session: session.session,
       });
-      const contextual = evaluateContextualGuidance(ctx.configManager, ctx.runtimeStore, maintenance);
+      const contextual = evaluateContextualGuidance(ctx.platform.configManager, {
+        pendingApproval: session.pendingApproval,
+        denialCount: session.denialCount,
+        authRequiredMcpCount: mcp.servers.filter((server) => server.status === 'auth_required').length,
+        degradedProviderCount: health.providerProblems.length,
+        intelligenceUnavailable: intelligence.diagnosticsStatus === 'unavailable' && intelligence.symbolSearchStatus === 'unavailable',
+        recommendations: marketplace.recommendations,
+      }, maintenance, guidanceOptions);
 
       ctx.print([
-        `Guidance Review (${getGuidanceMode(ctx.configManager)})`,
+        `Guidance Review (${getGuidanceMode(ctx.platform.configManager)})`,
         '',
         ...formatGuidanceItems(contextual),
         '',

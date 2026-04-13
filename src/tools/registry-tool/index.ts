@@ -1,6 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve, isAbsolute } from 'node:path';
-import { homedir } from 'node:os';
 import Fuse from 'fuse.js';
 import { logger } from '../../utils/logger.ts';
 import {
@@ -44,6 +43,11 @@ interface RegistryMatch {
   dependencies?: string[];
   includes?: string[];
   sections?: string[];
+}
+
+export interface RegistryToolRoots {
+  readonly workingDirectory: string;
+  readonly homeDirectory?: string;
 }
 
 function scanDirectory(
@@ -141,22 +145,32 @@ function fuzzyFilter(items: RegistryMatch[], query: string): RegistryMatch[] {
   return fuse.search(query).map((r) => r.item);
 }
 
-function getSkillDirs(cwd: string): string[] {
-  return [
-    join(cwd, '.goodvibes', 'skills'),
-    join(cwd, '.goodvibes', 'tui', 'skills'),
-    join(homedir(), '.goodvibes', 'skills'),
-    join(homedir(), '.goodvibes', 'tui', 'skills'),
+function getSkillDirs(roots: RegistryToolRoots): string[] {
+  const dirs = [
+    join(roots.workingDirectory, '.goodvibes', 'skills'),
+    join(roots.workingDirectory, '.goodvibes', 'tui', 'skills'),
   ];
+  if (roots.homeDirectory) {
+    dirs.push(
+      join(roots.homeDirectory, '.goodvibes', 'skills'),
+      join(roots.homeDirectory, '.goodvibes', 'tui', 'skills'),
+    );
+  }
+  return dirs;
 }
 
-function getAgentDirs(cwd: string): string[] {
-  return [
-    join(cwd, '.goodvibes', 'agents'),
-    join(cwd, '.goodvibes', 'tui', 'agents'),
-    join(homedir(), '.goodvibes', 'agents'),
-    join(homedir(), '.goodvibes', 'tui', 'agents'),
+function getAgentDirs(roots: RegistryToolRoots): string[] {
+  const dirs = [
+    join(roots.workingDirectory, '.goodvibes', 'agents'),
+    join(roots.workingDirectory, '.goodvibes', 'tui', 'agents'),
   ];
+  if (roots.homeDirectory) {
+    dirs.push(
+      join(roots.homeDirectory, '.goodvibes', 'agents'),
+      join(roots.homeDirectory, '.goodvibes', 'tui', 'agents'),
+    );
+  }
+  return dirs;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +183,7 @@ function getAgentDirs(cwd: string): string[] {
  * Returns a Tool object conforming to the Tool interface.
  * Never throws from execute().
  */
-export function createRegistryTool(toolRegistry: ToolRegistry): Tool {
+export function createRegistryTool(toolRegistry: ToolRegistry, roots: RegistryToolRoots): Tool {
   const definition: ToolDefinition = {
     name: 'registry',
     description:
@@ -192,11 +206,11 @@ export function createRegistryTool(toolRegistry: ToolRegistry): Tool {
       const { mode } = input;
 
       switch (mode) {
-        case 'search':       return runSearch(input, toolRegistry);
-        case 'recommend':    return runRecommend(input, toolRegistry);
-        case 'dependencies': return runDependencies(input);
-        case 'preview':      return runPreview(input);
-        case 'content':      return runContent(input);
+        case 'search':       return runSearch(input, toolRegistry, roots);
+        case 'recommend':    return runRecommend(input, toolRegistry, roots);
+        case 'dependencies': return runDependencies(input, roots);
+        case 'preview':      return runPreview(input, roots);
+        case 'content':      return runContent(input, roots);
         default: {
           return { success: false, error: `Unknown mode: ${String(mode)}` };
         }
@@ -218,20 +232,20 @@ export function createRegistryTool(toolRegistry: ToolRegistry): Tool {
 function runSearch(
   input: RegistryInput,
   toolRegistry: ToolRegistry,
+  roots: RegistryToolRoots,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
   const query = input.query ?? '';
   const typeFilter = input.type ?? 'all';
-  const cwd = process.cwd();
   const matches: RegistryMatch[] = [];
 
   if (typeFilter === 'skills' || typeFilter === 'all') {
-    for (const dir of getSkillDirs(cwd)) {
+    for (const dir of getSkillDirs(roots)) {
       matches.push(...scanDirectory(dir, 'skill', query));
     }
   }
 
   if (typeFilter === 'agents' || typeFilter === 'all') {
-    for (const dir of getAgentDirs(cwd)) {
+    for (const dir of getAgentDirs(roots)) {
       matches.push(...scanDirectory(dir, 'agent', query));
     }
   }
@@ -270,10 +284,10 @@ function runSearch(
 function runRecommend(
   input: RegistryInput,
   toolRegistry: ToolRegistry,
+  roots: RegistryToolRoots,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
   const task = input.task ?? '';
   const scope = input.scope ?? 'skills';
-  const cwd = process.cwd();
   const lowerTask = task.toLowerCase();
 
   let candidates: RegistryMatch[];
@@ -287,7 +301,7 @@ function runRecommend(
     }));
   } else {
     candidates = [];
-    for (const dir of getSkillDirs(cwd)) {
+    for (const dir of getSkillDirs(roots)) {
       candidates.push(...scanDirectoryAll(dir, 'skill'));
     }
     // Deduplicate: project-local entries override global (first seen wins)
@@ -342,6 +356,7 @@ function runRecommend(
 
 function runDependencies(
   input: RegistryInput,
+  roots: RegistryToolRoots,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
   const skillName = input.skillName;
   if (!skillName) {
@@ -351,10 +366,9 @@ function runDependencies(
     });
   }
 
-  const cwd = process.cwd();
   let filePath: string | null = null;
 
-  for (const dir of getSkillDirs(cwd)) {
+  for (const dir of getSkillDirs(roots)) {
     const candidate = join(dir, `${skillName}.md`);
     if (existsSync(candidate)) {
       filePath = candidate;
@@ -405,8 +419,9 @@ function runDependencies(
 
 function runPreview(
   input: RegistryInput,
+  roots: RegistryToolRoots,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
-  const resolvedPath = resolveRegistryPath(input.path);
+  const resolvedPath = resolveRegistryPath(input.path, roots);
   if (!resolvedPath.ok) return Promise.resolve({ success: false, error: resolvedPath.error });
 
   try {
@@ -433,8 +448,9 @@ function runPreview(
 
 function runContent(
   input: RegistryInput,
+  roots: RegistryToolRoots,
 ): Promise<{ success: boolean; output?: string; error?: string }> {
-  const resolvedPath = resolveRegistryPath(input.path);
+  const resolvedPath = resolveRegistryPath(input.path, roots);
   if (!resolvedPath.ok) return Promise.resolve({ success: false, error: resolvedPath.error });
 
   return Promise.resolve({
@@ -448,7 +464,7 @@ function runContent(
   });
 }
 
-function resolveRegistryPath(path: string | undefined):
+function resolveRegistryPath(path: string | undefined, roots: RegistryToolRoots):
   | { ok: true; path: string }
   | { ok: false; error: string } {
   if (!path) {
@@ -460,7 +476,7 @@ function resolveRegistryPath(path: string | undefined):
 
   const resolvedPath = isAbsolute(path)
     ? path
-    : resolve(process.cwd(), path);
+    : resolve(roots.workingDirectory, path);
 
   if (!resolvedPath.includes('.goodvibes/')) {
     return {

@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
 import { PersistentStore } from '../state/persistent-store.ts';
 import { RouteBindingManager } from '../channels/index.ts';
 import type { AutomationSurfaceKind } from '../automation/types.ts';
@@ -102,7 +101,6 @@ type SharedSessionMessageSender = {
 };
 type SharedSessionEventPublisher = (event: string, payload: unknown) => void;
 
-const STORE_PATH = join(process.cwd(), '.goodvibes', 'tui', 'control-plane', 'sessions.json');
 const MAX_PERSISTED_MESSAGES = 2_000;
 const MAX_CONTINUATION_MESSAGES = 16;
 
@@ -130,11 +128,16 @@ export class SharedSessionBroker {
 
   constructor(config: {
     readonly store?: PersistentStore<SharedSessionStoreSnapshot>;
+    readonly storePath?: string;
     readonly routeBindings: RouteBindingManager;
     readonly agentStatusProvider: SharedSessionAgentStatusProvider;
     readonly messageSender: SharedSessionMessageSender;
   }) {
-    this.store = config.store ?? new PersistentStore<SharedSessionStoreSnapshot>(STORE_PATH);
+    if (!config.store && !config.storePath) {
+      throw new Error('SharedSessionBroker requires an explicit store or storePath.');
+    }
+    const storePath = config.storePath;
+    this.store = config.store ?? new PersistentStore<SharedSessionStoreSnapshot>(storePath as string);
     this.routeBindings = config.routeBindings;
     this.agentStatusProvider = config.agentStatusProvider;
     this.messageSender = config.messageSender;

@@ -83,6 +83,7 @@ describe('UI roadmap gate', () => {
       featureFlags: {} as never,
       mcpRegistry: {} as never,
       subscriptionManager: testManagers.subscriptionManager,
+      serviceRegistry: testManagers.serviceRegistry,
       getConfiguredProviderIds: () => [],
       getPinned: async () => [],
       render: () => {},

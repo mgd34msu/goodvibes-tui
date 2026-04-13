@@ -24,6 +24,8 @@ export class GitStatusProvider {
   private readonly ttlMs = 2000;
   private fetching = false;
 
+  constructor(private readonly workingDirectory: string) {}
+
   /** Returns cached info immediately; refreshes in background if TTL expired. */
   async getStatus(): Promise<GitHeaderInfo> {
     const now = Date.now();
@@ -54,7 +56,7 @@ export class GitStatusProvider {
     if (this.fetching) return;
     this.fetching = true;
     try {
-      const git = new GitService();
+      const git = new GitService(this.workingDirectory);
       const [statusResult, branchResult] = await Promise.all([
         git.status(),
         git.branch(),

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '../../config/manager.ts';
 import { FavoritesStore } from '../../providers/favorites.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
 import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
@@ -41,11 +43,18 @@ describe('provider runtime expansion', () => {
     }
     const configManager = new ConfigManager({ configDir: join(tempHome, '.goodvibes', 'tui') });
     const subscriptionManager = new SubscriptionManager(join(tempHome, '.goodvibes', 'tui', 'subscriptions.json'));
+    const secretsManager = new SecretsManager({ projectRoot: tempHome, globalHome: tempHome });
+    const serviceRegistry = new ServiceRegistry(join(tempHome, '.goodvibes', 'tui', 'services.json'), {
+      secretsManager,
+      subscriptionManager,
+    });
     const favoritesStore = new FavoritesStore({ dir: join(tempHome, '.goodvibes', 'tui') });
     const benchmarkStore = new BenchmarkStore({ dir: join(tempHome, '.goodvibes', 'tui') });
     providerRegistry = new ProviderRegistry({
       configManager,
       subscriptionManager,
+      secretsManager,
+      serviceRegistry,
       capabilityRegistry: new ProviderCapabilityRegistry(),
       cacheHitTracker: new CacheHitTracker(),
       favoritesStore,
@@ -108,32 +117,42 @@ describe('provider runtime expansion', () => {
   test('surfaces runtime auth and policy metadata for new custom and gateway providers', async () => {
     const bedrockProvider = providerRegistry.getRegistered('amazon-bedrock');
     expect(bedrockProvider.describeRuntime).toBeDefined();
-    const bedrockRuntime = await bedrockProvider.describeRuntime!();
+    const bedrockRuntime = await providerRegistry.describeRuntime('amazon-bedrock');
+    expect(bedrockRuntime).not.toBeNull();
+    if (!bedrockRuntime) throw new Error('amazon-bedrock runtime metadata missing');
     expect(bedrockRuntime.auth?.routes?.some((route) => route.route === 'anonymous')).toBe(true);
     expect(bedrockRuntime.policy?.streamProtocol).toBe('anthropic-sdk-stream');
 
     const vertexProvider = providerRegistry.getRegistered('anthropic-vertex');
     expect(vertexProvider.describeRuntime).toBeDefined();
-    const vertexRuntime = await vertexProvider.describeRuntime!();
+    const vertexRuntime = await providerRegistry.describeRuntime('anthropic-vertex');
+    expect(vertexRuntime).not.toBeNull();
+    if (!vertexRuntime) throw new Error('anthropic-vertex runtime metadata missing');
     expect(vertexRuntime.auth?.routes?.some((route) => route.route === 'anonymous')).toBe(true);
     expect(vertexRuntime.policy?.streamProtocol).toBe('anthropic-sdk-stream');
 
     const copilotProvider = providerRegistry.getRegistered('github-copilot');
     expect(copilotProvider.describeRuntime).toBeDefined();
-    const copilotRuntime = await copilotProvider.describeRuntime!();
+    const copilotRuntime = await providerRegistry.describeRuntime('github-copilot');
+    expect(copilotRuntime).not.toBeNull();
+    if (!copilotRuntime) throw new Error('github-copilot runtime metadata missing');
     expect(copilotRuntime.auth?.envVars).toContain('GH_TOKEN');
     expect(copilotRuntime.models?.aliases).toContain('copilot');
 
     const litellmProvider = providerRegistry.getRegistered('litellm');
     expect(litellmProvider.describeRuntime).toBeDefined();
-    const litellmRuntime = await litellmProvider.describeRuntime!();
+    const litellmRuntime = await providerRegistry.describeRuntime('litellm');
+    expect(litellmRuntime).not.toBeNull();
+    if (!litellmRuntime) throw new Error('litellm runtime metadata missing');
     expect(litellmRuntime.auth?.mode).toBe('anonymous');
     expect(litellmRuntime.auth?.configured).toBe(true);
     expect(litellmRuntime.auth?.routes?.some((route) => route.route === 'anonymous')).toBe(true);
 
     const xaiProvider = providerRegistry.getRegistered('xai');
     expect(xaiProvider.describeRuntime).toBeDefined();
-    const xaiRuntime = await xaiProvider.describeRuntime!();
+    const xaiRuntime = await providerRegistry.describeRuntime('xai');
+    expect(xaiRuntime).not.toBeNull();
+    if (!xaiRuntime) throw new Error('xai runtime metadata missing');
     expect(xaiRuntime.models?.defaultModel).toBe('grok-4');
     expect(xaiRuntime.models?.aliases).toContain('x-ai');
   });

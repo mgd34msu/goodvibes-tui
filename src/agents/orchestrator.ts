@@ -31,6 +31,7 @@ export { summarizeToolArgs } from './orchestrator-utils.ts';
 type AgentOrchestratorToolDeps = {
   readonly fileCache: FileStateCache;
   readonly projectIndex: ProjectIndex;
+  readonly workingDirectory: string;
   readonly fileUndoManager?: import('../state/file-undo.ts').FileUndoManager;
   readonly modeManager?: import('../state/mode-manager.ts').ModeManager;
   readonly processManager?: import('../tools/shared/process-manager.ts').ProcessManager;
@@ -39,6 +40,7 @@ type AgentOrchestratorToolDeps = {
   readonly remoteRunnerRegistry?: import('../runtime/remote/index.ts').RemoteRunnerRegistry;
   readonly knowledgeService?: import('../knowledge/index.ts').KnowledgeService;
   readonly memoryRegistry?: import('../state/index.ts').MemoryRegistry;
+  readonly sessionOrchestration: import('../sessions/orchestration/index.ts').CrossSessionTaskRegistry;
   readonly archetypeLoader?: import('./archetypes.ts').ArchetypeLoader;
   readonly configManager?: ConfigManager;
   readonly providerRegistry?: ProviderRegistry;
@@ -318,6 +320,7 @@ export class AgentOrchestrator {
 
   private createRunContext(): AgentOrchestratorRunContext {
     return {
+      workingDirectory: this.toolDeps!.workingDirectory,
       runtimeBus: this.runtimeBus,
       featureFlagManager: this.featureFlagManager,
       emitterContext: (agentId) => this.emitterContext(agentId),

@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ConfigManager } from '../../config/manager.ts';
 import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
+import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
 import { KnowledgePanel } from '../../panels/knowledge-panel.ts';
 import type { Line } from '../../types/grid.ts';
 
@@ -17,10 +19,14 @@ describe('KnowledgePanel', () => {
   let dir: string;
   let store: MemoryStore;
   let registry: MemoryRegistry;
+  let configManager: ConfigManager;
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'gv-knowledge-panel-'));
-    store = new MemoryStore(join(dir, 'memory.sqlite'));
+    configManager = new ConfigManager({ configDir: join(dir, '.goodvibes', 'tui'), workingDir: dir });
+    store = new MemoryStore(join(dir, 'memory.sqlite'), {
+      embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
+    });
     await store.init();
     registry = new MemoryRegistry(store);
   });

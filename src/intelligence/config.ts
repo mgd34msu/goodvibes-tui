@@ -8,8 +8,8 @@
  */
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { logger } from '../utils/logger.ts';
+import type { ShellPathService } from '../runtime/shell-paths.ts';
 
 export interface LanguageConfig {
   lsp?: {
@@ -22,6 +22,8 @@ export interface LanguageConfig {
   formatter?: { command: string; args: string[] };
   linter?: { command: string; args: string[] };
 }
+
+export type IntelligenceRoots = Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
 
 // ---------------------------------------------------------------------------
 // Default configurations
@@ -112,11 +114,11 @@ function readConfigFile(filePath: string): LanguageConfig | null {
  * Load all language configs, merging defaults with user and project overrides.
  * Project-level configs override user-level, which override defaults.
  */
-export function loadLanguageConfigs(): Map<string, LanguageConfig> {
+export function loadLanguageConfigs(roots: IntelligenceRoots): Map<string, LanguageConfig> {
   const result = getDefaultConfigs();
 
-  const userDir = join(homedir(), '.goodvibes', 'tui', 'languages');
-  const projectDir = join(process.cwd(), '.goodvibes', 'tui', 'languages');
+  const userDir = join(roots.homeDirectory, '.goodvibes', 'tui', 'languages');
+  const projectDir = join(roots.workingDirectory, '.goodvibes', 'tui', 'languages');
 
   // Collect all known language IDs (from defaults + scan would go here).
   // For now we apply overrides only for IDs we already know about.
@@ -142,6 +144,6 @@ export function loadLanguageConfigs(): Map<string, LanguageConfig> {
  * Get config for a specific language ID.
  * Loads configs on demand.
  */
-export function getLanguageConfig(langId: string): LanguageConfig | null {
-  return loadLanguageConfigs().get(langId) ?? null;
+export function getLanguageConfig(langId: string, roots: IntelligenceRoots): LanguageConfig | null {
+  return loadLanguageConfigs(roots).get(langId) ?? null;
 }

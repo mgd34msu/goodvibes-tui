@@ -71,6 +71,14 @@ type StateModeListOutput = {
   modes: Array<{ name: string; verbosityDefaults: Record<string, string> }>;
 };
 
+function stateDirFor(root: string): string {
+  return join(root, '.goodvibes', 'state');
+}
+
+function memoryDirFor(root: string): string {
+  return join(root, '.goodvibes', 'memory');
+}
+
 // ---------------------------------------------------------------------------
 // Suite setup
 // ---------------------------------------------------------------------------
@@ -84,10 +92,12 @@ describe('StateTool', () => {
   beforeEach(() => {
     tmpDir = makeTmpDir();
     // Use tmpDir as the KVState base so session files land in isolation.
-    kvState = new KVState(undefined, tmpDir);
+    kvState = new KVState({ stateDir: stateDirFor(tmpDir) });
     resetTestProjectIndexes();
     projectIndex = getTestProjectIndex(PROJECT_ROOT);
-    tool = createStateTool(kvState, projectIndex);
+    tool = createStateTool(kvState, projectIndex, {
+      memoryDir: memoryDirFor(tmpDir),
+    });
   });
 
   afterEach(() => {
@@ -259,26 +269,13 @@ describe('StateTool', () => {
   // -------------------------------------------------------------------------
 
   describe('memory mode', () => {
-    // Override process.cwd for memory tests by creating a fresh tool whose
-    // memory dir lives in our tmpDir. We do this by monkey-patching cwd
-    // temporarily — the cleanest approach given the module-level cwd usage.
-    let origCwd: () => string;
-
     beforeEach(() => {
-      origCwd = process.cwd.bind(process);
-      // Create the .goodvibes/memory dir under tmpDir so the tool uses it.
-      mkdirSync(join(tmpDir, '.goodvibes', 'memory'), { recursive: true });
-      // Override process.cwd to return our tmpDir
-      (process as unknown as Record<string, unknown>).cwd = () => tmpDir;
-    });
-
-    afterEach(() => {
-      (process as unknown as Record<string, unknown>).cwd = origCwd;
+      mkdirSync(memoryDirFor(tmpDir), { recursive: true });
     });
 
     test('memory list returns empty when no files', async () => {
       // Remove the memory dir we just created to simulate empty state
-      rmSync(join(tmpDir, '.goodvibes', 'memory'), { recursive: true, force: true });
+      rmSync(memoryDirFor(tmpDir), { recursive: true, force: true });
       const res = await run<StateMemoryListOutput>(tool, { mode: 'memory', memoryAction: 'list' });
       expect(res.parsed.action).toBe('list');
       expect(res.parsed.keys).toEqual([]);
@@ -449,7 +446,10 @@ describe('StateTool', () => {
 
     beforeEach(() => {
       dispatcher = new HookDispatcher();
-      hookTool = createStateTool(kvState, projectIndex, dispatcher);
+      hookTool = createStateTool(kvState, projectIndex, {
+        memoryDir: memoryDirFor(tmpDir),
+        hookDispatcher: dispatcher,
+      });
     });
 
     test('hooks list returns empty when no hooks registered', async () => {
@@ -576,7 +576,9 @@ describe('StateTool', () => {
     });
 
     test('hooks mode returns error when no dispatcher provided', async () => {
-      const noDispatcherTool = createStateTool(kvState, projectIndex);
+      const noDispatcherTool = createStateTool(kvState, projectIndex, {
+        memoryDir: memoryDirFor(tmpDir),
+      });
       const res = await noDispatcherTool.execute({ mode: 'hooks' });
       expect(res.success).toBe(false);
       expect(res.error).toContain('HookDispatcher');
@@ -593,7 +595,10 @@ describe('StateTool', () => {
 
     beforeEach(() => {
       modeMgr = new ModeManager();
-      modeTool = createStateTool(kvState, projectIndex, undefined, modeMgr);
+      modeTool = createStateTool(kvState, projectIndex, {
+        memoryDir: memoryDirFor(tmpDir),
+        modeManager: modeMgr,
+      });
     });
 
     test('mode get returns current mode name and verbosityDefaults', async () => {

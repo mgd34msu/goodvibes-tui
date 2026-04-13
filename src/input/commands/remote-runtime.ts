@@ -1,19 +1,21 @@
 import { resolve } from 'node:path';
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import { AGENT_TEMPLATES } from '../../tools/agent/manager.ts';
-import { exportRemoteArtifactForAgent, importRemoteArtifact } from '../../runtime/remote/index.ts';
 import { handleRemoteSetupCommand } from './remote-runtime-setup.ts';
 import { handleRemotePoolCommand } from './remote-runtime-pool.ts';
+import { requireAgentManager, requireAcpManager, requirePeerClient, requireShellPaths } from './runtime-services.ts';
 
 type RemoteConnectionLike = { agentId: string };
-type RemoteCancelContext = Pick<CommandContext, 'print' | 'acpManager'>;
-type RemoteCancelAgentManager = Pick<NonNullable<CommandContext['agentManager']>, 'cancel'>;
+type RemoteCancelContext = Pick<CommandContext, 'print'>;
+type RemoteCancelAgentManager = Pick<ReturnType<typeof requireAgentManager>, 'cancel'>;
+type RemoteCancelAcpManager = Pick<ReturnType<typeof requireAcpManager>, 'cancel'>;
 
 export function handleRemoteCancelCommand(
   agentId: string | undefined,
   activeConnections: RemoteConnectionLike[],
   ctx: RemoteCancelContext,
   agentManager: RemoteCancelAgentManager,
+  acpManager?: RemoteCancelAcpManager,
 ): void {
   if (!agentId) {
     ctx.print('Usage: /remote cancel <agentId>');
@@ -29,11 +31,11 @@ export function handleRemoteCancelCommand(
     ctx.print(`Cancelled remote agent ${agentId}.`);
     return;
   }
-  if (!ctx.acpManager) {
+  if (!acpManager) {
     ctx.print(`Remote agent ${agentId} could not be cancelled in this runtime.`);
     return;
   }
-  void ctx.acpManager.cancel(agentId);
+  void acpManager.cancel(agentId);
   ctx.print(`Cancellation requested for remote runner ${agentId}.`);
 }
 
@@ -53,32 +55,31 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      const store = ctx.runtimeStore;
-      if (!store) {
-        ctx.print('Runtime store is not available for remote commands.');
-        return;
-      }
-      if (!ctx.remoteRunnerRegistry || !ctx.remoteSupervisor) {
+      let peerClient;
+      try {
+        peerClient = requirePeerClient(ctx);
+      } catch {
         ctx.print('Remote runtime services are not available in this runtime.');
         return;
       }
-
-      const activeConnections = store.getState().acp.activeConnectionIds
-        .map((id) => store.getState().acp.connections.get(id))
-        .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
-      const remoteRegistry = ctx.remoteRunnerRegistry;
-      remoteRegistry.ensureContractsFromStore(store);
+      const peerSnapshot = peerClient.getSnapshot();
+      const remoteRunners = peerClient.runners;
+      const activeConnections = [...peerSnapshot.acp.activeConnections];
       const subcommand = args[0]?.toLowerCase() ?? 'show';
 
-      if (await handleRemoteSetupCommand(args, ctx, activeConnections, remoteRegistry)) {
+      if (await handleRemoteSetupCommand(args, ctx, activeConnections, {
+        listContracts: () => remoteRunners.listContracts(),
+        exportSessionBundle: (path) => remoteRunners.exportSessionBundle(path),
+        importSessionBundle: (path) => remoteRunners.importSessionBundle(path),
+      })) {
         return;
       }
 
       if (subcommand === 'list') {
-        const supervisor = ctx.remoteSupervisor.getSnapshot(store);
-        const contracts = remoteRegistry.listContracts();
-        const pools = remoteRegistry.listPools();
-        const artifacts = remoteRegistry.listArtifacts();
+        const supervisor = peerSnapshot.supervisor;
+        const contracts = peerSnapshot.runners.contracts;
+        const pools = peerSnapshot.runners.pools;
+        const artifacts = peerSnapshot.runners.artifacts;
         const lines = [
           'Remote Control Surface',
           `  active connections: ${activeConnections.length}`,
@@ -105,7 +106,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'supervisor') {
-        const snapshot = ctx.remoteSupervisor.getSnapshot(store);
+        const snapshot = peerSnapshot.supervisor;
         const runnerId = args[1];
         const selected = runnerId
           ? snapshot.sessions.find((entry) => entry.runnerId === runnerId)
@@ -137,7 +138,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'capabilities') {
-        const snapshot = ctx.remoteSupervisor.getSnapshot(store);
+        const snapshot = peerSnapshot.supervisor;
         const runnerId = args[1];
         const selected = runnerId
           ? snapshot.sessions.find((entry) => entry.runnerId === runnerId)
@@ -163,7 +164,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'recover') {
-        const snapshot = ctx.remoteSupervisor.getSnapshot(store);
+        const snapshot = peerSnapshot.supervisor;
         const runnerId = args[1];
         const selected = runnerId
           ? snapshot.sessions.find((entry) => entry.runnerId === runnerId)
@@ -194,7 +195,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      if (handleRemotePoolCommand(args, ctx, remoteRegistry)) {
+      if (handleRemotePoolCommand(args, ctx, remoteRunners)) {
         return;
       }
 
@@ -207,7 +208,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           ctx.print(agentId ? `Unknown remote connection: ${agentId}` : 'No active remote connections.');
           return;
         }
-        const contract = remoteRegistry.upsertContractForAgent(connection.agentId, store);
+        const contract = remoteRunners.upsertContractForAgent(connection.agentId);
         ctx.print([
           `Remote connection ${connection.agentId}`,
           `  label: ${connection.label}`,
@@ -228,7 +229,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'dispatch') {
-        if (!ctx.acpManager) {
+        if (!ctx.ops.acpManager) {
           ctx.print('ACP manager is not available for remote dispatch in this runtime.');
           return;
         }
@@ -244,13 +245,15 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         const templateDef = AGENT_TEMPLATES[template] ?? AGENT_TEMPLATES.general;
-        const runnerId = await ctx.acpManager.spawn({
+        const workingDirectory = requireShellPaths(ctx).workingDirectory;
+        const runnerId = await ctx.ops.acpManager.spawn({
           description,
-          context: `Self-hosted remote runner dispatched from session ${ctx.runtime.sessionId}. Follow ${template} discipline and return concise evidence.`,
+          context: `Self-hosted remote runner dispatched from session ${ctx.session.runtime.sessionId}. Follow ${template} discipline and return concise evidence.`,
           tools: [...templateDef.defaultTools],
+          workingDirectory,
         });
         const now = Date.now();
-        remoteRegistry.registerContract({
+        remoteRunners.registerContract({
           id: `runner:${runnerId}`,
           runnerId,
           label: `${template} remote runner`,
@@ -286,7 +289,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'dispatch-pool') {
-        if (!ctx.acpManager) {
+        if (!ctx.ops.acpManager) {
           ctx.print('ACP manager is not available for remote dispatch in this runtime.');
           return;
         }
@@ -295,7 +298,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /remote dispatch-pool <pool> [template] <description>');
           return;
         }
-        const pool = remoteRegistry.getPool(poolId);
+        const pool = remoteRunners.getPool(poolId);
         if (!pool) {
           ctx.print(`Unknown remote runner pool: ${poolId}`);
           return;
@@ -312,13 +315,15 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         const templateDef = AGENT_TEMPLATES[template] ?? AGENT_TEMPLATES.general;
-        const runnerId = await ctx.acpManager.spawn({
+        const workingDirectory = requireShellPaths(ctx).workingDirectory;
+        const runnerId = await ctx.ops.acpManager.spawn({
           description,
-          context: `Self-hosted remote runner dispatched from session ${ctx.runtime.sessionId} via pool ${poolId}. Follow ${template} discipline and return concise evidence.`,
+          context: `Self-hosted remote runner dispatched from session ${ctx.session.runtime.sessionId} via pool ${poolId}. Follow ${template} discipline and return concise evidence.`,
           tools: [...templateDef.defaultTools],
+          workingDirectory,
         });
         const now = Date.now();
-        remoteRegistry.registerContract({
+        remoteRunners.registerContract({
           id: `runner:${runnerId}`,
           runnerId,
           poolId,
@@ -345,7 +350,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
             errorCount: 0,
           }),
         });
-        remoteRegistry.assignRunnerToPool(poolId, runnerId);
+        remoteRunners.assignRunnerToPool(poolId, runnerId);
         ctx.print([
           `Dispatched remote runner ${runnerId} via pool ${poolId}`,
           `  template: ${template}`,
@@ -361,7 +366,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('No remote runner contracts are available yet.');
           return;
         }
-        const contract = remoteRegistry.upsertContractForAgent(agentId, store);
+        const contract = remoteRunners.upsertContractForAgent(agentId);
         if (!contract) {
           ctx.print(`Unknown remote runner: ${agentId}`);
           return;
@@ -385,11 +390,17 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
       }
 
       if (subcommand === 'cancel') {
-        if (!ctx.agentManager) {
+        if (!ctx.ops.agentManager) {
           ctx.print('Agent manager is not available in this runtime.');
           return;
         }
-        handleRemoteCancelCommand(args[1], activeConnections, ctx, ctx.agentManager);
+        handleRemoteCancelCommand(
+          args[1],
+          activeConnections,
+          ctx,
+          requireAgentManager(ctx),
+          ctx.ops.acpManager ? requireAcpManager(ctx) : undefined,
+        );
         return;
       }
 
@@ -399,12 +410,12 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /remote export <agentId> [path]');
           return;
         }
-        const exported = await exportRemoteArtifactForAgent(remoteRegistry, agentId, store, args[2])
-          ?? await (async () => {
-            const artifact = remoteRegistry.captureArtifactForRunner(agentId, store);
-            if (!artifact) return null;
-            return remoteRegistry.exportArtifact(artifact.id, args[2]);
-          })();
+        const artifact = remoteRunners.captureArtifactForRunner(agentId);
+        if (!artifact) {
+          ctx.print(`Remote artifact export failed for ${agentId}.`);
+          return;
+        }
+        const exported = await remoteRunners.exportArtifact(artifact.id, args[2]);
         if (!exported) {
           ctx.print(`Remote artifact export failed for ${agentId}.`);
           return;
@@ -416,7 +427,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
       if (subcommand === 'artifact') {
         const mode = args[1]?.toLowerCase() ?? 'list';
         if (mode === 'list') {
-          const artifacts = remoteRegistry.listArtifacts();
+          const artifacts = remoteRunners.listArtifacts();
           if (artifacts.length === 0) {
             ctx.print('No remote review artifacts captured yet.');
             return;
@@ -435,7 +446,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
             ctx.print('Usage: /remote artifact show <artifactId>');
             return;
           }
-          const summary = remoteRegistry.buildReviewSummary(artifactId);
+          const summary = remoteRunners.buildReviewSummary(artifactId);
           ctx.print(summary ?? `Unknown remote artifact: ${artifactId}`);
           return;
         }
@@ -445,7 +456,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
             ctx.print('Usage: /remote artifact export <artifactId> [path]');
             return;
           }
-          const exported = await remoteRegistry.exportArtifact(artifactId, args[3]);
+          const exported = await remoteRunners.exportArtifact(artifactId, args[3]);
           if (!exported) {
             ctx.print(`Unknown remote artifact: ${artifactId}`);
             return;
@@ -463,7 +474,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /remote review <artifactId>');
           return;
         }
-        const summary = remoteRegistry.buildReviewSummary(artifactId);
+        const summary = remoteRunners.buildReviewSummary(artifactId);
         ctx.print(summary ?? `Unknown remote artifact: ${artifactId}`);
         return;
       }
@@ -474,7 +485,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /remote rerun-local <artifactId>');
           return;
         }
-        const artifact = remoteRegistry.getArtifact(artifactId);
+        const artifact = remoteRunners.getArtifact(artifactId);
         if (!artifact) {
           ctx.print(`Unknown remote artifact: ${artifactId}`);
           return;
@@ -482,7 +493,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
         const template = artifact.runnerContract.template in AGENT_TEMPLATES
           ? artifact.runnerContract.template
           : 'general';
-        const agentManager = ctx.agentManager;
+        const agentManager = ctx.ops.agentManager;
         if (!agentManager) {
           ctx.print('Agent manager is not available in this runtime.');
           return;
@@ -509,7 +520,7 @@ export function registerRemoteRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /remote import <path>');
           return;
         }
-        const artifact = await importRemoteArtifact(remoteRegistry, path);
+        const artifact = await remoteRunners.importArtifact(path);
         ctx.print(`Imported remote review artifact ${artifact.id} for runner ${artifact.runnerId}.`);
         return;
       }

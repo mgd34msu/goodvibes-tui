@@ -1,18 +1,19 @@
 /**
  * OpsPanel — diagnostic data provider for the Operator Control Plane.
  *
- * Subscribes to OPS_AUDIT events from the RuntimeEventBus via the 'ops'
- * domain and maintains a bounded buffer of intervention records for display
+ * Subscribes to OPS_AUDIT events from the UI-facing ops event feed and maintains a
+ * bounded buffer of intervention records for display
  * in the Ops panel.
  *
  * Controls are only shown when the OpsControlPlane reports the action is legal
  * (state machine allows it), satisfying requirement: "No illegal action appears in UI".
  */
-import type { RuntimeEventBus, RuntimeEventEnvelope } from '../../events/index.ts';
+import type { RuntimeEventEnvelope } from '../../events/index.ts';
 import type { PanelConfig } from '../types.ts';
 import { DEFAULT_PANEL_CONFIG, appendBounded, applyFilter } from '../types.ts';
 import type { DiagnosticFilter } from '../types.ts';
 import type { OpsInterventionReason, OpsEvent } from '../../events/ops.ts';
+import type { UiEventFeed } from '../../ui-events.ts';
 
 // ---------------------------------------------------------------------------
 // Audit entry
@@ -70,7 +71,7 @@ type OpsAuditEvent = Extract<OpsEvent, { type: 'OPS_AUDIT' }>;
 
 export class OpsPanel {
   private readonly _config: PanelConfig;
-  private readonly _eventBus: RuntimeEventBus;
+  private readonly _events: UiEventFeed<OpsEvent>;
 
   private readonly _audit: MutableAuditRecord[] = [];
   private _seq = 0;
@@ -79,21 +80,17 @@ export class OpsPanel {
   private _unsub: (() => void) | null = null;
 
   public constructor(
-    eventBus: RuntimeEventBus,
+    events: UiEventFeed<OpsEvent>,
     config: PanelConfig = DEFAULT_PANEL_CONFIG
   ) {
     this._config = config;
-    this._eventBus = eventBus;
+    this._events = events;
     this._start();
   }
 
   private _start(): void {
-    // Subscribe to the entire 'ops' domain; filter to OPS_AUDIT inside.
-    this._unsub = this._eventBus.onDomain('ops', (envelope) => {
-      if (envelope.payload.type === 'OPS_AUDIT') {
-        const audit = envelope as RuntimeEventEnvelope<'OPS_AUDIT', OpsAuditEvent>;
-        this._handleAudit(audit);
-      }
+    this._unsub = this._events.onEnvelope('OPS_AUDIT', (envelope) => {
+      this._handleAudit(envelope as RuntimeEventEnvelope<'OPS_AUDIT', OpsAuditEvent>);
     });
   }
 

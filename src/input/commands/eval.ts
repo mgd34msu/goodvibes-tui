@@ -16,6 +16,7 @@ import { formatScorecard } from '../../runtime/eval/scorecard.ts';
 import { loadBaseline, captureBaseline, formatBaselineComparison, writeBaseline } from '../../runtime/eval/baseline.ts';
 import type { EvalRegistry } from '../../panels/eval-panel.ts';
 import { formatSuiteResult, formatGateResult } from '../../runtime/eval/format.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
 // ── Subcommand helpers ────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ function printSuiteList(context: CommandContext): void {
 }
 
 function getRegistry(context: CommandContext): EvalRegistry | undefined {
-  return context.evalRegistry;
+  return context.extensions.evalRegistry;
 }
 
 // ── /eval list ────────────────────────────────────────────────────────────────
@@ -84,6 +85,7 @@ async function handleRun(args: string[], context: CommandContext): Promise<void>
 async function handleCompare(args: string[], context: CommandContext): Promise<void> {
   const baselineFile = args[0] ?? '.goodvibes/eval/baseline.json';
   const registry = getRegistry(context);
+  const projectRoot = requireShellPaths(context).workingDirectory;
   const suiteResults = registry?.getSuiteResults() ?? [];
 
   if (suiteResults.length === 0) {
@@ -91,7 +93,7 @@ async function handleCompare(args: string[], context: CommandContext): Promise<v
     return;
   }
 
-  const baseline = await loadBaseline(baselineFile);
+  const baseline = await loadBaseline(baselineFile, projectRoot);
   if (!baseline) {
     context.print(`[eval] Baseline file not found: ${baselineFile}`);
     context.print('[eval] Tip: run /eval gate <suite> to create a baseline.');
@@ -109,6 +111,7 @@ async function handleGate(args: string[], context: CommandContext): Promise<void
   const suiteName = args[0];
   const baselineFile = args[1] ?? '.goodvibes/eval/baseline.json';
   const saveFlag = args.includes('--save-baseline');
+  const projectRoot = requireShellPaths(context).workingDirectory;
 
   if (!suiteName) {
     context.print('[eval] Usage: /eval gate <suite> [baseline-file] [--save-baseline]');
@@ -130,7 +133,7 @@ async function handleGate(args: string[], context: CommandContext): Promise<void
   registry?.push(fresh);
   registry?.setRunning(false);
 
-  const baseline = await loadBaseline(baselineFile);
+  const baseline = await loadBaseline(baselineFile, projectRoot);
   const gate = runner.evaluateGate(fresh, baseline);
   registry?.pushGate(gate);
 
@@ -140,7 +143,7 @@ async function handleGate(args: string[], context: CommandContext): Promise<void
     const label = args[0] ?? 'latest';
     const newBaseline = captureBaseline(label, [fresh]);
     try {
-      await writeBaseline(baselineFile, newBaseline);
+      await writeBaseline(baselineFile, newBaseline, projectRoot);
       context.print(`[eval] Baseline saved to ${baselineFile}`);
     } catch (err) {
       context.print(`[eval] Warning: could not save baseline: ${err instanceof Error ? err.message : String(err)}`);

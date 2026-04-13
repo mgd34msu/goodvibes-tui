@@ -43,8 +43,8 @@ export interface SessionInfo {
 export class SessionManager {
   private sessionsDir: string;
 
-  constructor(baseDir?: string) {
-    this.sessionsDir = join(baseDir ?? process.cwd(), '.goodvibes', 'tui', 'sessions');
+  constructor(baseDir: string) {
+    this.sessionsDir = join(baseDir, '.goodvibes', 'tui', 'sessions');
   }
 
   /**

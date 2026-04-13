@@ -15,12 +15,12 @@ interface HttpListenerConfig {
   host?: string;
   allowedOrigins?: string[];
   hookDispatcher?: HookDispatcher;
-  configManager?: ConfigManager;
+  configManager: ConfigManager;
   serveFactory?: typeof Bun.serve;
   /** Max requests per 60-second window per IP. Default: 60. */
   rateLimit?: number;
-  /** Optional pre-configured UserAuthManager (for testing). */
-  userAuth?: UserAuthManager;
+  /** Pre-configured UserAuthManager owned by the runtime service graph. */
+  userAuth: UserAuthManager;
 }
 
 interface HttpDangerConfig {
@@ -76,13 +76,13 @@ export class HttpListener {
   private readonly serveFactory: typeof Bun.serve;
   private tlsState: ResolvedInboundTlsContext | null = null;
 
-  constructor(private config: HttpListenerConfig = {}) {
-    this.configManager = config.configManager ?? new ConfigManager();
+  constructor(private config: HttpListenerConfig) {
+    this.configManager = config.configManager;
     this.port = config.port ?? Number(this.configManager.get('httpListener.port') ?? 3422);
     this.host = config.host ?? String(this.configManager.get('httpListener.host') ?? '127.0.0.1');
     this.allowedOrigins = config.allowedOrigins ?? [];
     this.hookDispatcher = config.hookDispatcher ?? null;
-    this.userAuth = config.userAuth ?? new UserAuthManager();
+    this.userAuth = config.userAuth;
     this.rateLimiter = new RateLimiter(config.rateLimit ?? 60);
     this.serveFactory = config.serveFactory ?? Bun.serve;
   }

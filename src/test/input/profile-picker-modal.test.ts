@@ -19,6 +19,14 @@ function makeTmpDir(): string {
   return dir;
 }
 
+function createConfigManager(root: string): ConfigManager {
+  return new ConfigManager({
+    workingDir: root,
+    homeDir: root,
+    configDir: join(root, '.goodvibes', 'global-tui'),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
@@ -32,7 +40,7 @@ describe('ProfilePickerModal', () => {
   beforeEach(() => {
     tmpDir = makeTmpDir();
     pm = new ProfileManager(join(tmpDir, 'profiles'));
-    cm = new ConfigManager({ workingDir: tmpDir });
+    cm = createConfigManager(tmpDir);
     modal = new ProfilePickerModal(pm);
   });
 

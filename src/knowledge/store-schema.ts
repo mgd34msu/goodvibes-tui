@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import type { AutomationScheduleDefinition } from '../automation/schedules.ts';
 import type {
   KnowledgeConsolidationCandidateRecord,
@@ -24,10 +23,8 @@ import type {
   KnowledgeUsageRecord,
 } from './types.ts';
 
-export function resolveDefaultKnowledgeDbPath(): string {
-  const runtime = globalThis as typeof globalThis & { __gvTestConfigDir?: string };
-  const baseDir = runtime.__gvTestConfigDir ?? join(homedir(), '.goodvibes', 'tui');
-  return join(baseDir, 'knowledge.sqlite');
+export function resolveKnowledgeDbPathFromControlPlaneDir(controlPlaneDir: string): string {
+  return join(controlPlaneDir, 'knowledge.sqlite');
 }
 
 export function nowMs(): number {

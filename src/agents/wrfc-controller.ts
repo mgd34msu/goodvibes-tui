@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { AgentMessageBus } from './message-bus.ts';
 import { type CompletionReport, type ReviewerReport } from './completion-report.ts';
 import {
+  buildGateFailureTask,
   buildFixTask,
   buildReviewTask,
   parseEngineerCompletionReport,
@@ -72,6 +73,7 @@ export class WrfcController {
   private readonly pendingParentChainIds = new Map<string, string>();
   private readonly sessionId: string;
   private readonly workmap: WrfcWorkmap;
+  private readonly projectRoot: string;
   private runtimeBus: RuntimeEventBus;
   private readonly messageBus: Pick<AgentMessageBus, 'registerAgent'>;
   private planManager: Pick<ExecutionPlanManager, 'getActive' | 'updateItem'> | null = null;
@@ -85,6 +87,7 @@ export class WrfcController {
     deps: {
       readonly agentManager: AgentManagerLike;
       readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;
+      readonly projectRoot: string;
       readonly createWorktree?: () => WrfcWorktreeOps;
     },
   ) {
@@ -92,9 +95,10 @@ export class WrfcController {
     this.messageBus = messageBus;
     this.agentManager = deps.agentManager;
     this.configManager = deps.configManager;
-    this.createWorktree = deps.createWorktree ?? (() => new AgentWorktree());
+    this.projectRoot = deps.projectRoot;
+    this.createWorktree = deps.createWorktree ?? (() => new AgentWorktree(this.projectRoot));
     this.sessionId = crypto.randomUUID().slice(0, 8);
-    this.workmap = new WrfcWorkmap(this.sessionId);
+    this.workmap = new WrfcWorkmap(this.projectRoot, this.sessionId);
     this.setupListeners();
   }
 
@@ -402,7 +406,7 @@ export class WrfcController {
       gateCount: gates.length,
     });
 
-    const cwd = process.cwd();
+    const cwd = this.projectRoot;
     const pkgScripts = await loadPackageScripts(cwd);
     const results: QualityGateResult[] = [];
 
@@ -513,24 +517,7 @@ export class WrfcController {
       return;
     }
 
-    const gateFailureSummary = failedGates
-      .map((result) => `- ${result.gate}: ${result.output.slice(0, 300)}`)
-      .join('\n');
-    const followUpTask = [
-      `WRFC Gate Failure Fix`,
-      `Parent Chain ID: ${chain.id}`,
-      ``,
-      `The following quality gates failed after review passed:`,
-      gateFailureSummary,
-      ``,
-      `Original task: ${chain.task}`,
-      ``,
-      `Instructions:`,
-      `1. Fix all gate failures listed above.`,
-      `2. Ensure typecheck, lint, and test gates pass.`,
-      `3. Return a structured EngineerReport in your final response.`,
-    ].join('\n');
-
+    const followUpTask = buildGateFailureTask(chain.id, chain.task, failedGates);
     const followUpRecord = this.spawnWrfcAgent('engineer', followUpTask, false);
     const followUpChain = this.findChainByAgentId(followUpRecord.id);
     if (followUpChain) {
@@ -601,7 +588,7 @@ export class WrfcController {
       return;
     }
 
-    if (!existsSync(join(process.cwd(), '.git'))) {
+    if (!existsSync(join(this.projectRoot, '.git'))) {
       logger.debug('WrfcController.autoCommit: not a git repo, skipping commit', { chainId: chain.id });
       this.completeChainAsPassed(chain);
       return;

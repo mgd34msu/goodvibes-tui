@@ -1,9 +1,9 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeTask, TaskLifecycleState } from '../runtime/store/domains/tasks.ts';
-import { selectTasks } from '../runtime/store/selectors/index.ts';
+import type { ManagedWorktreeMeta } from '../runtime/worktree/registry.ts';
+import type { UiReadModel, UiTasksSnapshot, UiWorktreeSnapshot } from '../runtime/ui-read-models.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
@@ -16,7 +16,6 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { reviewWorktreeAttachments } from '../runtime/worktree/registry.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -115,16 +114,58 @@ function parseTaskDescriptor(description: string): TaskDescriptorMeta | null {
   }
 }
 
+interface TaskWorktreeAttachmentReview {
+  readonly total: number;
+  readonly active: number;
+  readonly paused: number;
+  readonly kept: number;
+  readonly discard: number;
+  readonly cleanupPending: number;
+  readonly records: readonly ManagedWorktreeMeta[];
+}
+
+function reviewTaskWorktreeAttachments(
+  taskId: string,
+  worktrees?: UiReadModel<UiWorktreeSnapshot>,
+): TaskWorktreeAttachmentReview {
+  const records = (worktrees?.getSnapshot().records ?? []).filter((record) => record.taskId === taskId);
+  return records.reduce<TaskWorktreeAttachmentReview>((summary, record) => ({
+    total: summary.total + 1,
+    active: summary.active + (record.state === 'active' ? 1 : 0),
+    paused: summary.paused + (record.state === 'paused' ? 1 : 0),
+    kept: summary.kept + (record.state === 'kept' ? 1 : 0),
+    discard: summary.discard + (record.state === 'discard' ? 1 : 0),
+    cleanupPending: summary.cleanupPending + (record.state === 'cleanup-pending' ? 1 : 0),
+    records: [...summary.records, record],
+  }), {
+    total: 0,
+    active: 0,
+    paused: 0,
+    kept: 0,
+    discard: 0,
+    cleanupPending: 0,
+    records: [],
+  });
+}
+
 export class TasksPanel extends BasePanel {
-  private readonly store?: RuntimeStore;
-  private readonly unsub: (() => void) | null;
+  private readonly readModel?: UiReadModel<UiTasksSnapshot>;
+  private readonly worktrees?: UiReadModel<UiWorktreeSnapshot>;
+  private readonly unsubscribers: readonly (() => void)[];
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(store?: RuntimeStore) {
+  public constructor(
+    readModel: UiReadModel<UiTasksSnapshot> | undefined,
+    worktrees?: UiReadModel<UiWorktreeSnapshot>,
+  ) {
     super('tasks', 'Tasks', 'J', 'monitoring');
-    this.store = store;
-    this.unsub = store ? store.subscribe(() => this.markDirty()) : null;
+    this.readModel = readModel;
+    this.worktrees = worktrees;
+    this.unsubscribers = [
+      readModel?.subscribe(() => this.markDirty()),
+      worktrees?.subscribe(() => this.markDirty()),
+    ].filter((unsubscribe): unsubscribe is () => void => Boolean(unsubscribe));
   }
 
   public override onActivate(): void {
@@ -133,7 +174,7 @@ export class TasksPanel extends BasePanel {
   }
 
   public override onDestroy(): void {
-    this.unsub?.();
+    for (const unsubscribe of this.unsubscribers) unsubscribe();
   }
 
   public handleInput(key: string): boolean {
@@ -163,9 +204,8 @@ export class TasksPanel extends BasePanel {
   }
 
   private _tasks(): RuntimeTask[] {
-    if (!this.store) return [];
-    const tasksState = selectTasks(this.store.getState());
-    return sortTasks([...tasksState.tasks.values()]);
+    if (!this.readModel) return [];
+    return sortTasks([...this.readModel.getSnapshot().tasks]);
   }
 
   public render(width: number, height: number): Line[] {
@@ -173,7 +213,7 @@ export class TasksPanel extends BasePanel {
     const intro = 'Live task lifecycle, ownership, retries, and result/error details across runtime execution domains.';
     const footerLines = [buildPanelLine(width, [['  Up/Down move  Home/End jump', C.dim]])];
 
-    if (!this.store) {
+    if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Task Control Room',
         intro,
@@ -320,7 +360,7 @@ export class TasksPanel extends BasePanel {
         [selected.childTaskIds.length > 0 ? selected.childTaskIds.join(', ') : 'none', C.dim],
       ]));
     }
-    const attachedWorktrees = reviewWorktreeAttachments('task', selected.id);
+    const attachedWorktrees = reviewTaskWorktreeAttachments(selected.id, this.worktrees);
     if (attachedWorktrees.total > 0) {
       detailRows.push(buildPanelLine(width, [
         ['  Worktrees: ', C.label],

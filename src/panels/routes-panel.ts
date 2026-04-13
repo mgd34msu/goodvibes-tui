@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
+import type { UiReadModel, UiRoutesSnapshot } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
@@ -31,15 +31,15 @@ function formatTime(value?: number): string {
 }
 
 export class RoutesPanel extends BasePanel {
-  private readonly store?: RuntimeStore;
+  private readonly readModel?: UiReadModel<UiRoutesSnapshot>;
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(store?: RuntimeStore) {
+  public constructor(readModel?: UiReadModel<UiRoutesSnapshot>) {
     super('routes', 'Routes', 'R', 'monitoring');
-    this.store = store;
-    this.unsub = store ? store.subscribe(() => this.markDirty()) : null;
+    this.readModel = readModel;
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
 
   public override onDestroy(): void {
@@ -63,19 +63,15 @@ export class RoutesPanel extends BasePanel {
   }
 
   private bindings() {
-    if (!this.store) return [];
-    const domain = this.store.getState().routes;
-    return domain.bindingIds
-      .map((id) => domain.bindings.get(id))
-      .filter((binding): binding is NonNullable<typeof binding> => binding !== undefined)
-      .sort((a, b) => b.lastSeenAt - a.lastSeenAt || a.id.localeCompare(b.id));
+    if (!this.readModel) return [];
+    return [...this.readModel.getSnapshot().bindings];
   }
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'External route bindings that preserve thread, session, and reply context across Slack, Discord, ntfy, webhook, web, and TUI surfaces.';
 
-    if (!this.store) {
+    if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Route Bindings',
         intro,
@@ -94,9 +90,9 @@ export class RoutesPanel extends BasePanel {
       return workspace;
     }
 
-    const state = this.store.getState();
+    const snapshot = this.readModel.getSnapshot();
     const bindings = this.bindings();
-    const surfaceEntries = Object.entries(state.routes.bindingIdsBySurface)
+    const surfaceEntries = Object.entries(snapshot.bindingIdsBySurface)
       .filter(([, ids]) => ids.length > 0)
       .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
 
@@ -104,10 +100,10 @@ export class RoutesPanel extends BasePanel {
       title: 'Posture',
       lines: [
         buildKeyValueLine(width, [
-          { label: 'bindings', value: String(state.routes.totalBindings), valueColor: state.routes.totalBindings > 0 ? C.info : C.dim },
-          { label: 'active', value: String(state.routes.activeBindingIds.length), valueColor: state.routes.activeBindingIds.length > 0 ? C.ok : C.dim },
-          { label: 'resolved', value: String(state.routes.totalResolved), valueColor: state.routes.totalResolved > 0 ? C.ok : C.dim },
-          { label: 'failures', value: String(state.routes.totalFailures), valueColor: state.routes.totalFailures > 0 ? C.error : C.dim },
+          { label: 'bindings', value: String(snapshot.totalBindings), valueColor: snapshot.totalBindings > 0 ? C.info : C.dim },
+          { label: 'active', value: String(snapshot.activeBindingIds.length), valueColor: snapshot.activeBindingIds.length > 0 ? C.ok : C.dim },
+          { label: 'resolved', value: String(snapshot.totalResolved), valueColor: snapshot.totalResolved > 0 ? C.ok : C.dim },
+          { label: 'failures', value: String(snapshot.totalFailures), valueColor: snapshot.totalFailures > 0 ? C.error : C.dim },
         ], C),
         buildGuidanceLine(width, '/communication', 'inspect routed message flow and delivery behavior across bound surfaces', C),
       ],

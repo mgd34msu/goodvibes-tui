@@ -11,8 +11,9 @@ import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/int
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createDomainDispatch, createRuntimeStore } from '../../runtime/store/index.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
+import { AgentManager } from '../../tools/agent/index.ts';
 import { createPermissionConfigReader } from '../../permissions/manager.ts';
-import { getTestProviderRegistry } from '../helpers/runtime-services.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
 
 const configManager = new ConfigManager({
   configDir: join(tmpdir(), `gv-turn-runtime-${Date.now()}-${Math.random().toString(36).slice(2)}`),
@@ -57,7 +58,7 @@ describe('runtime turn substrate', () => {
   });
 
   test('orchestrator emits typed turn events and drives the runtime store', async () => {
-    const providerRegistry = getTestProviderRegistry();
+    const { providerRegistry } = createTestManagers();
     configManager.set('display.stream', true);
 
     const runtimeBus = new RuntimeEventBus();
@@ -95,6 +96,10 @@ describe('runtime turn substrate', () => {
       null,
       () => {},
       runtimeBus,
+      {
+        agentManager: new AgentManager({ configManager }),
+        wrfcController: { listChains: () => [] },
+      },
     );
     orchestrator.setCoreServices({
       providerRegistry,

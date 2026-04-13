@@ -3,9 +3,12 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
+import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { listHookPointContracts } from '../../hooks/index.ts';
 import { HookWorkbench } from '../../hooks/workbench.ts';
+import { createRuntimeHookApi } from '../../runtime/runtime-hook-api.ts';
 import {
   getTestHookDispatcher,
 } from '../helpers/runtime-services.ts';
@@ -13,6 +16,55 @@ import {
 const configManager = new ConfigManager({
   configDir: join(tmpdir(), `gv-hooks-config-${Date.now()}-${Math.random().toString(36).slice(2)}`),
 });
+
+function makeHookCommandContext(
+  out: string[],
+  hookWorkbench: HookWorkbench,
+): CommandContext {
+  const providerRegistry = {} as never;
+  const conversationManager = {} as never;
+  const hookApi = createRuntimeHookApi({
+    dispatcher: {
+      listHooks: () => getTestHookDispatcher().listHooks(),
+      listChains: () => getTestHookDispatcher().getChains(),
+    },
+    workbench: hookWorkbench,
+    listContracts: () => listHookPointContracts(),
+  });
+  return {
+    session: {
+      conversationManager,
+      runtime: {
+        model: '',
+        provider: '',
+        debugMode: false,
+        systemPrompt: '',
+        reasoningEffort: '',
+        sessionId: 'sess-hooks-command',
+      },
+    },
+    provider: {
+      providerRegistry,
+    },
+    workspace: {},
+    platform: {
+      config: {} as never,
+      configManager,
+    },
+    ops: {},
+    extensions: {
+      toolRegistry: {} as never,
+      mcpRegistry: {} as never,
+      hookWorkbench,
+    },
+    clients: {
+      hookApi,
+    },
+    renderRequest: () => {},
+    print: (text: string) => { out.push(text); },
+    exit: () => {},
+  };
+}
 
 describe('hooks command', () => {
   let originalHooksFile: string;
@@ -42,26 +94,7 @@ describe('hooks command', () => {
     expect(hooks).toBeDefined();
 
     const out: string[] = [];
-    const ctx = {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-hooks-command',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { out.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
-      hookWorkbench,
-    };
+    const ctx = makeHookCommandContext(out, hookWorkbench);
 
     await hooks!.handler(['scaffold', 'guard-edit', 'Pre:tool:*', 'command'], ctx);
     expect(existsSync(configManager.get('tools.hooksFile') as string)).toBe(true);
@@ -103,26 +136,8 @@ describe('hooks command', () => {
     }, null, 2));
 
     const out: string[] = [];
-    const ctx = {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-hooks-import',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { out.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
-      hookWorkbench,
-    };
+    const ctx = makeHookCommandContext(out, hookWorkbench);
+    ctx.session.runtime.sessionId = 'sess-hooks-import';
 
     await hooks!.handler(['inspect', bundlePath], ctx);
     expect(out.join('\n')).toContain('Hook bundle inspection');

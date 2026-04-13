@@ -1,6 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
 import { ConfigManager } from '../../config/manager.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
@@ -137,17 +136,12 @@ export interface SettingsSyncBundle {
   readonly settings: Record<string, unknown>;
 }
 
-export function getConfigControlPlaneDir(configManager?: ConfigManager): string | undefined {
-  const candidate = configManager as ConfigManager & { getControlPlaneConfigDir?: () => string } | undefined;
-  return typeof candidate?.getControlPlaneConfigDir === 'function'
-    ? candidate.getControlPlaneConfigDir()
-    : undefined;
+export function getConfigControlPlaneDir(configManager: ConfigManager): string {
+  return configManager.getControlPlaneConfigDir();
 }
 
-function getSettingsControlPath(configDir?: string): string {
-  const explicitDir = configDir?.trim();
-  if (explicitDir) return join(explicitDir, 'settings-sync.json');
-  return join(homedir(), '.goodvibes', 'tui', 'settings-sync.json');
+function getSettingsControlPath(configDir: string): string {
+  return join(configDir, 'settings-sync.json');
 }
 
 export function defaultStore(): SettingsControlPlaneStore {
@@ -187,7 +181,7 @@ function migrateStore(raw: unknown): SettingsControlPlaneStore {
   };
 }
 
-export function readStore(configDir?: string): SettingsControlPlaneStore {
+export function readStore(configDir: string): SettingsControlPlaneStore {
   try {
     return migrateStore(JSON.parse(readFileSync(getSettingsControlPath(configDir), 'utf-8')));
   } catch {
@@ -195,7 +189,7 @@ export function readStore(configDir?: string): SettingsControlPlaneStore {
   }
 }
 
-export function writeStore(store: SettingsControlPlaneStore, configDir?: string): void {
+export function writeStore(store: SettingsControlPlaneStore, configDir: string): void {
   const path = getSettingsControlPath(configDir);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');

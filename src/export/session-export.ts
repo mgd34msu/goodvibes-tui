@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import type { ContentPart } from '../providers/interface.ts';
 import { exportToMarkdown, extractText, type ExportMessage, type ExportMetadata } from './markdown.ts';
 
@@ -628,7 +627,7 @@ em { color: #a5d6ff; font-style: italic; }
  *
  * Format: ~/goodvibes-exports/session-<timestamp>.<ext>
  */
-export function defaultExportPath(format: 'html' | 'json' | 'md'): string {
+export function defaultExportPath(format: 'html' | 'json' | 'md', homeDirectory: string): string {
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  return join(homedir(), 'goodvibes-exports', `session-${ts}.${format}`);
+  return join(homeDirectory, 'goodvibes-exports', `session-${ts}.${format}`);
 }

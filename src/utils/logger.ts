@@ -15,16 +15,18 @@ const LOG_FLUSH_INTERVAL_MS = 100;
  * or after LOG_FLUSH_INTERVAL_MS, whichever comes first.
  */
 class ActivityLogger {
-  private logPath: string;
+  private logPath: string | null = null;
   private buffer: string[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor() {
-    const logDir = join(process.cwd(), '.goodvibes/logs');
+  configure(logDir: string): void {
     if (!existsSync(logDir)) {
       mkdirSync(logDir, { recursive: true });
     }
     this.logPath = join(logDir, 'activity.md');
+    if (this.buffer.length > 0) {
+      this.flush();
+    }
   }
 
   private scheduleFlush(): void {
@@ -35,6 +37,7 @@ class ActivityLogger {
   private flush(): void {
     this.flushTimer = null;
     if (this.buffer.length === 0) return;
+    if (!this.logPath) return;
     const chunk = this.buffer.splice(0).join('');
     appendFile(this.logPath, chunk, (err) => {
       if (err) {
@@ -70,3 +73,7 @@ class ActivityLogger {
 }
 
 export const logger = new ActivityLogger();
+
+export function configureActivityLogger(logDir: string): void {
+  logger.configure(logDir);
+}

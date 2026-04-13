@@ -27,7 +27,7 @@ describe('typescript runner', () => {
   describe('missing path field', () => {
     test('returns error when path not provided', async () => {
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts' };
-      const result = await run(hook, makeEvent());
+      const result = await run(hook, makeEvent(), repoRoot);
       expect(result.ok).toBe(false);
       expect(result.error).toContain('path');
     });
@@ -37,7 +37,7 @@ describe('typescript runner', () => {
     test('calls default export function with event', async () => {
       const filePath = resolve(fixturesDir, 'allow-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
-      const result = await run(hook, makeEvent());
+      const result = await run(hook, makeEvent(), repoRoot);
       if (!result.ok) throw new Error(`ts hook runner failed: ${result.error ?? 'unknown error'}`);
       expect(result.ok).toBe(true);
       expect(result.decision).toBe('allow');
@@ -46,14 +46,14 @@ describe('typescript runner', () => {
     test('passes event data correctly to handler', async () => {
       const filePath = resolve(fixturesDir, 'echo-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
-      const result = await run(hook, makeEvent({ sessionId: 'my-session' }));
+      const result = await run(hook, makeEvent({ sessionId: 'my-session' }), repoRoot);
       expect(result.additionalContext).toBe('session:my-session');
     });
 
     test('handler that returns deny passes through', async () => {
       const filePath = resolve(fixturesDir, 'deny-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
-      const result = await run(hook, makeEvent());
+      const result = await run(hook, makeEvent(), repoRoot);
       expect(result.decision).toBe('deny');
       expect(result.reason).toBe('blocked by ts hook');
     });
@@ -61,7 +61,7 @@ describe('typescript runner', () => {
     test('non-function default export returns error', async () => {
       const filePath = resolve(fixturesDir, 'not-fn-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
-      const result = await run(hook, makeEvent());
+      const result = await run(hook, makeEvent(), repoRoot);
       expect(result.ok).toBe(false);
       expect(result.error).toContain('default function');
     });
@@ -71,7 +71,7 @@ describe('typescript runner', () => {
     test('handler that throws returns error gracefully', async () => {
       const filePath = resolve(fixturesDir, 'throw-hook.ts');
       const hook: HookDefinition = { match: 'Pre:tool:*', type: 'ts', path: filePath };
-      const result = await run(hook, makeEvent());
+      const result = await run(hook, makeEvent(), repoRoot);
       expect(result.ok).toBe(false);
       expect(result.error).toContain('handler exploded');
     });
@@ -82,7 +82,7 @@ describe('typescript runner', () => {
         type: 'ts',
         path: '/nonexistent/path/to/hook-xyz.ts',
       };
-      const result = await run(hook, makeEvent());
+      const result = await run(hook, makeEvent(), repoRoot);
       expect(result.ok).toBe(false);
       expect(result.error).toBeDefined();
     });

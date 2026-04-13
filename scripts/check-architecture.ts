@@ -130,6 +130,28 @@ const rules: readonly Rule[] = [
     pattern: /\b(AutomationManager|SharedSessionBroker|ApprovalBroker|AgentManager|ModeManager|ChannelPolicyManager|FileUndoManager)\.getInstance\(|\bChannelDeliveryRouter\.getActive\(/,
     message: 'shell adapters and builtin channel bridges must receive explicit app-owned dependencies',
   },
+  {
+    name: 'no-implicit-project-root-literals',
+    files: nonTestFiles,
+    allow: [
+      'src/main.ts',
+      'src/daemon/cli.ts',
+      'src/runtime/shell-paths.ts',
+      'src/runtime/worktree/registry.ts',
+    ],
+    pattern: /join\(\s*['"]\.goodvibes['"]|join\(\s*['"]\.['"]\s*,\s*['"]\.goodvibes['"]|workspaceRoot:\s*['"]\.['"]/,
+    message: 'reusable code must not hide project-root ownership behind relative .goodvibes paths or "." workspace roots; inject explicit owned roots instead',
+  },
+  {
+    name: 'no-ambient-root-discovery-in-reusable-code',
+    files: nonTestFiles,
+    allow: [
+      'src/main.ts',
+      'src/daemon/cli.ts',
+    ],
+    pattern: /\bprocess\.cwd\(\)|\bhomedir\(\)/,
+    message: 'reusable code must not discover cwd/home implicitly; composition roots must pass owned roots explicitly',
+  },
 ];
 
 for (const rule of rules) {

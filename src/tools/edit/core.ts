@@ -94,7 +94,7 @@ interface EditExecutionContext {
   fileCache: FileStateCache;
   cwd: string;
   fileUndoManager?: FileUndoManager;
-  configManager?: Pick<ConfigManager, 'get'>;
+  configManager?: Pick<ConfigManager, 'get' | 'getWorkingDirectory'>;
   toolLLM?: Pick<ToolLLM, 'chat'>;
   changeTracker?: Pick<SessionChangeTracker, 'recordChange'>;
 }
@@ -119,7 +119,7 @@ function prepareTextEditInput(
   for (const item of input.edits!) {
     if (resolvedPaths.has(item.path)) continue;
     try {
-      resolvedPaths.set(item.path, resolveAndValidatePath(item.path));
+      resolvedPaths.set(item.path, resolveAndValidatePath(item.path, env.cwd));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (transactionMode === 'atomic') {
@@ -555,12 +555,24 @@ async function executeTextEdits(
 export interface EditToolOptions {
   cwd?: string;
   fileUndoManager?: FileUndoManager;
-  configManager?: Pick<ConfigManager, 'get'>;
+  configManager?: Pick<ConfigManager, 'get' | 'getWorkingDirectory'>;
   toolLLM?: Pick<ToolLLM, 'chat'>;
   changeTracker?: Pick<SessionChangeTracker, 'recordChange'>;
 }
 
+function resolveEditCwd(options?: EditToolOptions): string {
+  if (options?.cwd && options.cwd.trim().length > 0) {
+    return options.cwd;
+  }
+  const workingDirectory = options?.configManager?.getWorkingDirectory();
+  if (workingDirectory && workingDirectory.trim().length > 0) {
+    return workingDirectory;
+  }
+  throw new Error('createEditTool requires an explicit cwd or configManager.getWorkingDirectory()');
+}
+
 export function createEditTool(fileCache: FileStateCache, options?: EditToolOptions): Tool {
+  const cwd = resolveEditCwd(options);
   const definition: ToolDefinition = {
     name: 'edit',
     description:
@@ -586,7 +598,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
 
       const env: EditExecutionContext = {
         fileCache,
-        cwd: options?.cwd ?? process.cwd(),
+        cwd,
         fileUndoManager: options?.fileUndoManager,
         configManager: options?.configManager,
         toolLLM: options?.toolLLM,

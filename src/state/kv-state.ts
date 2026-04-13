@@ -9,10 +9,39 @@ import { JsonFileStore } from './json-file-store.ts';
  */
 const RESERVED_KEYS = new Set(['id', 'started_at', '__proto__', 'constructor', 'prototype']);
 
+export interface KVStateOptions {
+  readonly sessionId?: string;
+  readonly stateDir: string;
+}
+
+function resolveLegacyStateDir(storageRoot?: string): string {
+  if (!storageRoot) {
+    throw new Error('KVState requires an explicit stateDir or storageRoot');
+  }
+  return join(storageRoot, '.goodvibes', 'state');
+}
+
+function resolveKVStateOptions(
+  sessionIdOrOptions?: string | KVStateOptions,
+  storageRoot?: string,
+): KVStateOptions {
+  if (typeof sessionIdOrOptions === 'object' && sessionIdOrOptions !== null) {
+    if (!sessionIdOrOptions.stateDir || sessionIdOrOptions.stateDir.trim().length === 0) {
+      throw new Error('KVState requires a non-empty stateDir');
+    }
+    return sessionIdOrOptions;
+  }
+
+  return {
+    sessionId: sessionIdOrOptions,
+    stateDir: resolveLegacyStateDir(storageRoot),
+  };
+}
+
 /**
  * KVState — Session-scoped persistent key-value store.
  *
- * Storage: <cwd>/.goodvibes/state/session_{id}.json
+ * Storage: <stateDir>/session_{id}.json
  * Session ID: 8-char hex string, auto-generated if not provided.
  *
  * Features:
@@ -29,10 +58,12 @@ export class KVState {
   private loadPromise: Promise<void> | null = null;
   private readonly store: JsonFileStore<Record<string, unknown>>;
 
-  constructor(sessionId?: string, baseDir?: string) {
-    this.sessionId = sessionId ?? KVState.generateId();
-    const root = baseDir ?? process.cwd();
-    this.stateDir = join(root, '.goodvibes', 'state');
+  constructor(options: KVStateOptions);
+  constructor(sessionId?: string, storageRoot?: string);
+  constructor(sessionIdOrOptions?: string | KVStateOptions, storageRoot?: string) {
+    const options = resolveKVStateOptions(sessionIdOrOptions, storageRoot);
+    this.sessionId = options.sessionId ?? KVState.generateId();
+    this.stateDir = options.stateDir;
     this.filePath = join(this.stateDir, `session_${this.sessionId}.json`);
     this.store = new JsonFileStore(this.filePath);
   }
@@ -112,8 +143,12 @@ export class KVState {
     return this.sessionId;
   }
 
-  static listSessions(baseDir?: string): string[] {
-    const stateDir = join(baseDir ?? process.cwd(), '.goodvibes', 'state');
+  static listSessions(options: Pick<KVStateOptions, 'stateDir'>): string[];
+  static listSessions(storageRoot?: string): string[];
+  static listSessions(optionsOrStorageRoot?: string | Pick<KVStateOptions, 'stateDir'>): string[] {
+    const stateDir = typeof optionsOrStorageRoot === 'object' && optionsOrStorageRoot !== null
+      ? resolveKVStateOptions(optionsOrStorageRoot).stateDir
+      : resolveLegacyStateDir(optionsOrStorageRoot);
     if (!existsSync(stateDir)) return [];
     try {
       return readdirSync(stateDir)
@@ -125,8 +160,12 @@ export class KVState {
     }
   }
 
-  static cleanupOldSessions(keepCount: number, baseDir?: string): void {
-    const stateDir = join(baseDir ?? process.cwd(), '.goodvibes', 'state');
+  static cleanupOldSessions(keepCount: number, options: Pick<KVStateOptions, 'stateDir'>): void;
+  static cleanupOldSessions(keepCount: number, storageRoot?: string): void;
+  static cleanupOldSessions(keepCount: number, optionsOrStorageRoot?: string | Pick<KVStateOptions, 'stateDir'>): void {
+    const stateDir = typeof optionsOrStorageRoot === 'object' && optionsOrStorageRoot !== null
+      ? resolveKVStateOptions(optionsOrStorageRoot).stateDir
+      : resolveLegacyStateDir(optionsOrStorageRoot);
     if (!existsSync(stateDir)) return;
     try {
       const files = readdirSync(stateDir)

@@ -7,7 +7,7 @@ import type { OAuthProviderConfig, ProviderSubscription } from '../../config/sub
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '../../config/subscription-providers.ts';
 import { inspectProviderAuth } from '../../runtime/auth/inspection.ts';
 import { openExternalUrl } from '../../utils/open-external.ts';
-import { requireServiceRegistry, requireSubscriptionManager } from './runtime-services.ts';
+import { requireSecretsManager, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';
 
 interface SubscriptionBundle {
   readonly version: 1;
@@ -77,6 +77,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
     description: 'Manage provider subscription sessions and, when supported, let them override ambient API keys for matching providers',
     usage: '[review|list|providers|inspect <provider>|login <provider> start [--no-browser] [--manual]|finish <code-or-url>|logout <provider>|bundle export <path>|bundle inspect <path>]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       if (args.length === 0 && ctx.openSubscriptionPanel) {
         ctx.openSubscriptionPanel();
         return;
@@ -116,7 +117,11 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
           ctx.print(`No stored or available subscription provider named ${provider}.`);
           return;
         }
-        const inspection = await inspectProviderAuth(provider);
+        const inspection = await inspectProviderAuth(provider, {
+          serviceRegistry: services,
+          subscriptionManager: manager,
+          secretsManager: requireSecretsManager(ctx),
+        });
         ctx.print([
           `Subscription ${provider}`,
           `  configured: ${inspection.configured ? 'yes' : 'no'}`,
@@ -402,7 +407,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
           ctx.print('Usage: /subscription bundle <export|inspect> <path>');
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         if (mode === 'export') {
           const bundle: SubscriptionBundle = {
             version: 1,

@@ -3,7 +3,8 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { AgentManager, AgentRecord } from '../tools/agent/index.ts';
-import type { RuntimeEventBus, AgentEvent } from '../runtime/events/index.ts';
+import type { AgentEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -29,6 +30,7 @@ const POLL_INTERVAL_MS = 500;
 
 export interface AgentLogsPanelDeps {
   readonly agentManager: Pick<AgentManager, 'list'>;
+  readonly workingDirectory: string;
 }
 
 
@@ -56,11 +58,11 @@ export class AgentLogsPanel extends BasePanel {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private fsWatcher: FSWatcher | null = null;
   private unsubs: Array<() => void> = [];
-  private runtimeBus: RuntimeEventBus;
+  private readonly agentEvents: UiEventFeed<AgentEvent>;
 
-  constructor(runtimeBus: RuntimeEventBus, private readonly deps: AgentLogsPanelDeps) {
+  constructor(agentEvents: UiEventFeed<AgentEvent>, private readonly deps: AgentLogsPanelDeps) {
     super('agent-logs', 'Agents', 'A', 'agent');
-    this.runtimeBus = runtimeBus;
+    this.agentEvents = agentEvents;
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -328,9 +330,9 @@ export class AgentLogsPanel extends BasePanel {
     };
 
     this.unsubs.push(
-      this.runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_SPAWNING' }>>('AGENT_SPAWNING', ({ payload }) => onSpawned({ id: payload.agentId, task: payload.task })),
-      this.runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => onComplete({ id: payload.agentId })),
-      this.runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => onError({ id: payload.agentId, error: new Error(payload.error) })),
+      this.agentEvents.on('AGENT_SPAWNING', (payload) => onSpawned({ id: payload.agentId, task: payload.task })),
+      this.agentEvents.on('AGENT_COMPLETED', (payload) => onComplete({ id: payload.agentId })),
+      this.agentEvents.on('AGENT_FAILED', (payload) => onError({ id: payload.agentId, error: new Error(payload.error) })),
     );
   }
 
@@ -410,7 +412,7 @@ export class AgentLogsPanel extends BasePanel {
   }
 
   private _sessionFilePath(agentId: string): string {
-    return `${process.cwd()}/.goodvibes/tui/sessions/${agentId}.jsonl`;
+    return `${this.deps.workingDirectory}/.goodvibes/tui/sessions/${agentId}.jsonl`;
   }
 
   // ── Private: filter ───────────────────────────────────────────────────────

@@ -13,9 +13,9 @@
  */
 import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'node:os';
 import { logger } from '../utils/logger.ts';
 import type { McpServerConfig } from '../mcp/config.ts';
+import type { ShellPathService } from '../runtime/shell-paths.ts';
 
 export interface McpDiscoveryResult {
   /** Suggested server configs not currently registered */
@@ -23,6 +23,8 @@ export interface McpDiscoveryResult {
   /** Number of locations scanned */
   locationsScanned: number;
 }
+
+export type McpDiscoveryRoots = Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
 
 /**
  * Well-known npx-installable MCP server package names.
@@ -79,8 +81,8 @@ function findLocalNpxBin(cwd: string, packageName: string): string | null {
  *   - .mcp/mcp.json (already handled by loadMcpConfig, skip)
  *   - .mcp/<name>/index.js or .mcp/<name>/index.ts or .mcp/<name>/server.js
  */
-function scanProjectMcpDir(cwd: string, knownNames: Set<string>): McpServerConfig[] {
-  const mcpDir = join(cwd, '.mcp');
+function scanProjectMcpDir(roots: McpDiscoveryRoots, knownNames: Set<string>): McpServerConfig[] {
+  const mcpDir = join(roots.workingDirectory, '.mcp');
   if (!existsSync(mcpDir)) return [];
 
   const suggestions: McpServerConfig[] = [];
@@ -128,8 +130,8 @@ function scanProjectMcpDir(cwd: string, knownNames: Set<string>): McpServerConfi
  *   - <name>/index.js, <name>/server.js, etc.
  *   - <name>.js, <name>.ts standalone scripts
  */
-function scanGoodvibesMcpDir(knownNames: Set<string>): McpServerConfig[] {
-  const mcpDir = join(homedir(), '.goodvibes', 'tui', 'mcp');
+function scanGoodvibesMcpDir(roots: McpDiscoveryRoots, knownNames: Set<string>): McpServerConfig[] {
+  const mcpDir = join(roots.homeDirectory, '.goodvibes', 'tui', 'mcp');
   if (!existsSync(mcpDir)) return [];
 
   const suggestions: McpServerConfig[] = [];
@@ -174,11 +176,11 @@ function scanGoodvibesMcpDir(knownNames: Set<string>): McpServerConfig[] {
 /**
  * Check for locally-installed npx MCP packages not already registered.
  */
-function scanNpxMcpPackages(cwd: string, knownNames: Set<string>): McpServerConfig[] {
+function scanNpxMcpPackages(roots: McpDiscoveryRoots, knownNames: Set<string>): McpServerConfig[] {
   const suggestions: McpServerConfig[] = [];
 
   for (const pkg of KNOWN_NPX_MCP_PACKAGES) {
-    const binPath = findLocalNpxBin(cwd, pkg);
+    const binPath = findLocalNpxBin(roots.workingDirectory, pkg);
     if (!binPath) continue;
 
     const serverName = deriveServerName(pkg);
@@ -198,11 +200,11 @@ function scanNpxMcpPackages(cwd: string, knownNames: Set<string>): McpServerConf
  * Scan all common MCP server locations and return suggestions for
  * servers not already registered in the given set of known server names.
  *
- * @param cwd - Project working directory (defaults to process.cwd())
+ * @param roots - Explicit working/home roots for project and user MCP discovery
  * @param registeredNames - Set of already-registered server names to skip
  */
 export async function scanMcpServers(
-  cwd = process.cwd(),
+  roots: McpDiscoveryRoots,
   registeredNames: Set<string> = new Set(),
 ): Promise<McpDiscoveryResult> {
   let locationsScanned = 0;
@@ -221,15 +223,15 @@ export async function scanMcpServers(
 
   // 1. Project .mcp/ directory
   locationsScanned++;
-  addSuggestions(scanProjectMcpDir(cwd, registeredNames));
+  addSuggestions(scanProjectMcpDir(roots, registeredNames));
 
   // 2. ~/.goodvibes/tui/mcp/ user-global directory
   locationsScanned++;
-  addSuggestions(scanGoodvibesMcpDir(registeredNames));
+  addSuggestions(scanGoodvibesMcpDir(roots, registeredNames));
 
   // 3. Locally installed npx MCP packages
   locationsScanned++;
-  addSuggestions(scanNpxMcpPackages(cwd, registeredNames));
+  addSuggestions(scanNpxMcpPackages(roots, registeredNames));
 
   logger.debug('[mcp-scanner] Scan complete', {
     locationsScanned,

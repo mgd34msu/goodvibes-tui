@@ -5,10 +5,32 @@ import type { MutableRuntimeState } from './context.ts';
 import type { IntegrationRecord } from './store/domains/integrations.ts';
 import { logger } from '../utils/logger.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from '../utils/prompt-loader.ts';
+import { isAbsolute, resolve } from 'node:path';
+
+function requireOwnedPromptRoot(path: string | null, name: 'workingDirectory' | 'homeDirectory'): string {
+  const trimmed = path?.trim();
+  if (!trimmed) {
+    throw new Error(`loadBootstrapSystemPrompt requires ConfigManager with explicit ${name}.`);
+  }
+  return trimmed;
+}
 
 export function loadBootstrapSystemPrompt(configManager: ConfigManager): string {
+  const workingDirectory = requireOwnedPromptRoot(configManager.getWorkingDirectory(), 'workingDirectory');
+  const homeDirectory = requireOwnedPromptRoot(configManager.getHomeDirectory(), 'homeDirectory');
   return _loadSystemPrompt(
-    () => configManager.get('provider.systemPromptFile') as string | undefined,
+    {
+      workingDirectory,
+      homeDirectory,
+      getConfigPath: () => {
+        const configuredPath = configManager.get('provider.systemPromptFile') as string | undefined;
+        if (typeof configuredPath !== 'string' || !configuredPath.trim()) return undefined;
+        return isAbsolute(configuredPath)
+          ? resolve(configuredPath)
+          : resolve(workingDirectory, configuredPath);
+      },
+      argv: process.argv,
+    },
   );
 }
 

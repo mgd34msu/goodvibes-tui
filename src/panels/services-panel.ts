@@ -2,12 +2,11 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import {
-  ServiceRegistry,
   type ServiceConfig,
   type ServiceInspection,
   type ServiceConnectionTestResult,
 } from '../config/service-registry.ts';
-import { SubscriptionManager } from '../config/subscriptions.ts';
+import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -53,7 +52,7 @@ function statusColor(entry: ServicePanelEntry): string {
   return C.dim;
 }
 
-function authSummary(config: ServiceConfig, manager: SubscriptionManager): string {
+function authSummary(config: ServiceConfig, manager: SubscriptionAccessQuery): string {
   const provider = config.providerId ?? config.name;
   const hasActiveSubscription = manager.get(provider) != null;
   const hasOverride = manager.getAccessToken(provider) != null;
@@ -72,16 +71,16 @@ function authSummary(config: ServiceConfig, manager: SubscriptionManager): strin
 }
 
 export class ServicesPanel extends BasePanel {
-  private readonly registry: ServiceRegistry;
-  private readonly subscriptionManager: SubscriptionManager;
+  private readonly registry: ServiceInspectionQuery;
+  private readonly subscriptionManager: SubscriptionAccessQuery;
   private entries: ServicePanelEntry[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
   private loading = false;
 
   public constructor(
-    registry: ServiceRegistry,
-    subscriptionManager: SubscriptionManager,
+    registry: ServiceInspectionQuery,
+    subscriptionManager: SubscriptionAccessQuery,
   ) {
     super('services', 'Services', 'V', 'monitoring');
     this.registry = registry;

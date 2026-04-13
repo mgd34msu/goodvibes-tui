@@ -12,6 +12,8 @@ import {
   LocalContextIngestionService,
 } from '../../providers/local-context-ingestion.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { enrichModelEntries } from '../../runtime/ui/model-picker/health-enrichment.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
@@ -68,9 +70,16 @@ function createEnrichmentHarness(): EnrichmentHarness {
   const configDir = join(rootDir, 'config');
   const dataDir = join(rootDir, 'provider-data');
   const subscriptionsPath = join(rootDir, 'subscriptions.json');
+  const servicesPath = join(rootDir, 'services.json');
   mkdirSync(configDir, { recursive: true });
   mkdirSync(dataDir, { recursive: true });
 
+  const secretsManager = new SecretsManager({ projectRoot: rootDir, globalHome: rootDir });
+  const subscriptionManager = new SubscriptionManager(subscriptionsPath);
+  const serviceRegistry = new ServiceRegistry(servicesPath, {
+    secretsManager,
+    subscriptionManager,
+  });
   const favoritesStore = new FavoritesStore({ dir: dataDir });
   const benchmarkStore = new BenchmarkStore({ dir: dataDir });
   const contextIngestionService = new LocalContextIngestionService();
@@ -83,7 +92,9 @@ function createEnrichmentHarness(): EnrichmentHarness {
 
   const providerRegistry = new ProviderRegistry({
     configManager: new ConfigManager({ configDir }),
-    subscriptionManager: new SubscriptionManager(subscriptionsPath),
+    subscriptionManager,
+    secretsManager,
+    serviceRegistry,
     capabilityRegistry: new ProviderCapabilityRegistry(),
     cacheHitTracker: new CacheHitTracker(),
     favoritesStore,

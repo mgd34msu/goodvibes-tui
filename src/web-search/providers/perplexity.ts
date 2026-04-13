@@ -26,8 +26,8 @@ function mapTimeRange(value: WebSearchRequest['timeRange']): string | undefined 
   }
 }
 
-export function createPerplexitySearchProvider(context: SearchProviderContext = {}): WebSearchProvider {
-  const env = context.env ?? process.env;
+export function createPerplexitySearchProvider(context: SearchProviderContext): WebSearchProvider {
+  const env = context.env;
   const serviceRegistry = context.serviceRegistry;
   return {
     id: 'perplexity',
@@ -45,13 +45,13 @@ export function createPerplexitySearchProvider(context: SearchProviderContext = 
     },
     async search(request: WebSearchRequest): Promise<WebSearchProviderResponse> {
       const maxResults = Math.max(1, Math.min(10, request.maxResults ?? 10));
-      const baseUrl = (serviceRegistry?.get(PERPLEXITY_SERVICE_NAME)?.baseUrl ?? PERPLEXITY_BASE_URL).replace(/\/+$/, '');
+      const baseUrl = (serviceRegistry.get(PERPLEXITY_SERVICE_NAME)?.baseUrl ?? PERPLEXITY_BASE_URL).replace(/\/+$/, '');
       const { payload } = await executeJsonRequest<Record<string, unknown>>({
         url: `${baseUrl}/search`,
         method: 'POST',
         headers: { Accept: 'application/json' },
-        service: serviceRegistry?.get(PERPLEXITY_SERVICE_NAME) ? PERPLEXITY_SERVICE_NAME : undefined,
-        auth: serviceRegistry?.get(PERPLEXITY_SERVICE_NAME) ? undefined : withInlineBearer(env, PERPLEXITY_ENV_KEYS),
+        service: serviceRegistry.get(PERPLEXITY_SERVICE_NAME) ? PERPLEXITY_SERVICE_NAME : undefined,
+        auth: serviceRegistry.get(PERPLEXITY_SERVICE_NAME) ? undefined : withInlineBearer(env, PERPLEXITY_ENV_KEYS),
         body: {
           query: request.query,
           max_results: maxResults,

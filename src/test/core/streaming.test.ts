@@ -3,6 +3,7 @@ import { ConversationManager } from '../../core/conversation.ts';
 import { RuntimeEventBus, createEventEnvelope, type TurnEvent } from '../../runtime/events/index.ts';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
+import { AgentManager } from '../../tools/agent/index.ts';
 
 // ---------------------------------------------------------------------------
 // ConversationManager streaming block lifecycle
@@ -184,7 +185,10 @@ describe('Orchestrator: abort during streaming cleanup', () => {
     const policyRuntimeState = new PolicyRuntimeState();
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const tr = new ToolRegistry();
-    const orch = new Orchestrator(cm, () => 24, () => {}, tr, pm);
+    const orch = new Orchestrator(cm, () => 24, () => {}, tr, pm, () => '', null, null, null, null, {
+      agentManager: new AgentManager({ configManager }),
+      wrfcController: { listChains: () => [] },
+    });
     return { orch, cm };
   }
 

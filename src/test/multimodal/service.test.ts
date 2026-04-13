@@ -3,9 +3,11 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
 import { MultimodalService } from '../../multimodal/index.ts';
 import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
+import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
 
 describe('MultimodalService', () => {
   let root: string;
@@ -14,12 +16,16 @@ describe('MultimodalService', () => {
   let memoryStore: MemoryStore;
   let memoryRegistry: MemoryRegistry;
   let knowledgeService: KnowledgeService;
+  let configManager: ConfigManager;
 
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-multimodal-'));
+    configManager = new ConfigManager({ configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
     knowledgeStore = new KnowledgeStore({ dbPath: join(root, 'knowledge.sqlite') });
-    memoryStore = new MemoryStore(join(root, 'memory.sqlite'));
+    memoryStore = new MemoryStore(join(root, 'memory.sqlite'), {
+      embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
+    });
     memoryRegistry = new MemoryRegistry(memoryStore);
     await memoryStore.init();
     knowledgeService = new KnowledgeService(knowledgeStore, artifactStore, undefined, { memoryRegistry });

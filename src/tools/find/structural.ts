@@ -24,8 +24,8 @@ function getAstGrepLang(
 export async function executeStructuralQuery(
   query: StructuralQuery,
   output: OutputOptions,
+  projectRoot: string,
 ): Promise<Record<string, unknown>> {
-  const projectRoot = process.cwd();
   const validatedPath = validateSearchPath(query.path, projectRoot);
   if (typeof validatedPath === 'object') return validatedPath;
   const basePath = validatedPath;

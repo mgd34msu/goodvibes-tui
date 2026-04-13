@@ -20,7 +20,14 @@ import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts'
 // Helpers
 // ---------------------------------------------------------------------------
 
-function buildStack(configManager = new ConfigManager()) {
+function buildStack(configManager?: ConfigManager) {
+  const root = join(tmpdir(), `gv-tool-exec-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  mkdirSync(root, { recursive: true });
+  configManager = configManager ?? new ConfigManager({
+    workingDir: root,
+    homeDir: root,
+    configDir: join(root, '.goodvibes', 'tui'),
+  });
   const bus = new RuntimeEventBus();
   const registry = new ToolRegistry();
   const policyRuntimeState = new PolicyRuntimeState();

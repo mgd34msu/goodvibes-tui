@@ -2,30 +2,55 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ConfigManager } from '../../config/manager.ts';
+import type { CommandContext } from '../../input/command-registry.ts';
 import { recallCommand } from '../../input/commands/memory.ts';
+import { createMemoryApi } from '../../knowledge/knowledge-api.ts';
 import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
+import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { createShellPathService } from '../../runtime/shell-paths.ts';
 
-function makeBaseContext(registry: MemoryRegistry, printed: string[]) {
+function makeBaseContext(registry: MemoryRegistry, printed: string[]): CommandContext {
+  const providerRegistry = {} as never;
+  const conversationManager = {} as never;
+  const configManager = {} as never;
+  const shellPaths = createShellPathService({ workingDirectory: process.cwd(), homeDirectory: process.cwd() });
   return {
-    providerRegistry: {} as never,
-    conversationManager: {} as never,
-    config: {} as never,
-    configManager: {} as never,
-    runtime: {
-      model: '',
-      provider: '',
-      debugMode: false,
-      systemPrompt: '',
-      reasoningEffort: '',
-      sessionId: 'session-1',
+    session: {
+      conversationManager,
+      runtime: {
+        model: '',
+        provider: '',
+        debugMode: false,
+        systemPrompt: '',
+        reasoningEffort: '',
+        sessionId: 'session-1',
+      },
+    },
+    provider: {
+      providerRegistry,
+    },
+    workspace: {
+      shellPaths,
+    },
+    platform: {
+      config: {} as never,
+      configManager,
+    },
+    ops: {},
+    extensions: {
+      toolRegistry: {} as never,
+      mcpRegistry: { listServerSecurity: () => [] } as never,
+      memoryRegistry: registry,
+    },
+    clients: {
+      knowledgeApi: {
+        memory: createMemoryApi(registry),
+      } as never,
     },
     renderRequest: () => {},
     print: (text: string) => { printed.push(text); },
     exit: () => {},
-    toolRegistry: {} as never,
-    mcpRegistry: { listServerSecurity: () => [] } as never,
-    memoryRegistry: registry,
-    forensicsRegistry: undefined,
   };
 }
 
@@ -34,10 +59,14 @@ describe('recall command breadth', () => {
   let store: MemoryStore;
   let registry: MemoryRegistry;
   let printed: string[];
+  let configManager: ConfigManager;
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'gv-recall-'));
-    store = new MemoryStore(join(dir, 'memory.sqlite'));
+    configManager = new ConfigManager({ configDir: join(dir, '.goodvibes', 'tui'), workingDir: dir });
+    store = new MemoryStore(join(dir, 'memory.sqlite'), {
+      embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
+    });
     await store.init();
     registry = new MemoryRegistry(store);
     printed = [];
@@ -109,7 +138,10 @@ describe('recall command breadth', () => {
     expect(bundleText).toContain('"recordCount": 1');
 
     const importDir = mkdtempSync(join(tmpdir(), 'gv-recall-import-'));
-    const importStore = new MemoryStore(join(importDir, 'memory.sqlite'));
+    const importConfig = new ConfigManager({ configDir: join(importDir, '.goodvibes', 'tui'), workingDir: importDir });
+    const importStore = new MemoryStore(join(importDir, 'memory.sqlite'), {
+      embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager: importConfig }),
+    });
     await importStore.init();
     const importRegistry = new MemoryRegistry(importStore);
     const importPrinted: string[] = [];
@@ -139,7 +171,10 @@ describe('recall command breadth', () => {
     expect(printed.some((line) => line.includes('Memory Handoff Review'))).toBe(true);
 
     const importDir = mkdtempSync(join(tmpdir(), 'gv-recall-handoff-import-'));
-    const importStore = new MemoryStore(join(importDir, 'memory.sqlite'));
+    const importConfig = new ConfigManager({ configDir: join(importDir, '.goodvibes', 'tui'), workingDir: importDir });
+    const importStore = new MemoryStore(join(importDir, 'memory.sqlite'), {
+      embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager: importConfig }),
+    });
     await importStore.init();
     const importRegistry = new MemoryRegistry(importStore);
     const importPrinted: string[] = [];

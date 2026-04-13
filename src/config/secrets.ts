@@ -18,10 +18,10 @@
  */
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
-import { dirname, join, resolve } from 'path';
-import { hostname, homedir, userInfo } from 'os';
+import { dirname, isAbsolute, join, resolve } from 'path';
+import { hostname, userInfo } from 'os';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { ConfigManager } from './manager.ts';
+import type { ConfigManager } from './manager.ts';
 import { getSecretRefSource, isSecretRefInput, resolveSecretRef } from './secret-refs.ts';
 import { logger } from '../utils/logger.ts';
 
@@ -90,13 +90,29 @@ interface SecretStorePath {
 }
 
 export interface SecretsManagerOptions {
-  readonly projectRoot?: string;
-  readonly globalHome?: string;
+  readonly projectRoot: string;
+  readonly globalHome: string;
+  readonly configManager?: Pick<ConfigManager, 'get'>;
   readonly policy?: SecretStorageMode;
   readonly secureProjectFilePath?: string;
   readonly secureUserFilePath?: string;
   readonly plaintextProjectFilePath?: string;
   readonly plaintextUserFilePath?: string;
+}
+
+function requireAbsoluteOwnedPath(path: string, name: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) {
+    throw new Error(`SecretsManager ${name} must be a non-empty absolute path.`);
+  }
+  if (!isAbsolute(trimmed)) {
+    throw new Error(`SecretsManager ${name} must be an absolute path.`);
+  }
+  return resolve(trimmed);
+}
+
+function normalizeOptionalOwnedPath(path: string | undefined, name: string): string | undefined {
+  return path === undefined ? undefined : requireAbsoluteOwnedPath(path, name);
 }
 
 function deriveEncryptionKey(): Buffer {
@@ -122,10 +138,9 @@ function decrypt(store: EncryptedStore, key: Buffer): string {
   return decrypted.toString('utf8');
 }
 
-function loadConfiguredSecretPolicy(): SecretStorageMode {
+function loadConfiguredSecretPolicy(configManager?: Pick<ConfigManager, 'get'>): SecretStorageMode {
   try {
-    const manager = new ConfigManager();
-    return (manager.get('storage.secretPolicy') as SecretStorageMode | undefined) ?? 'preferred_secure';
+    return (configManager?.get('storage.secretPolicy') as SecretStorageMode | undefined) ?? 'preferred_secure';
   } catch {
     return 'preferred_secure';
   }
@@ -157,23 +172,23 @@ function collectAncestorRoots(start: string): string[] {
 
 export class SecretsManager {
   private readonly encKey: Buffer;
-  private readonly legacySecureProjectFilePath?: string;
   private readonly options: SecretsManagerOptions;
 
-  constructor(pathOrOptions?: string | SecretsManagerOptions) {
+  constructor(options: SecretsManagerOptions) {
     this.encKey = deriveEncryptionKey();
-    if (typeof pathOrOptions === 'string') {
-      this.legacySecureProjectFilePath = pathOrOptions;
-      this.options = {
-        projectRoot: process.cwd(),
-        globalHome: homedir(),
-      };
-      return;
-    }
-    this.options = pathOrOptions ?? {
-      projectRoot: process.cwd(),
-      globalHome: homedir(),
+    this.options = {
+      ...options,
+      projectRoot: requireAbsoluteOwnedPath(options.projectRoot, 'projectRoot'),
+      globalHome: requireAbsoluteOwnedPath(options.globalHome, 'globalHome'),
+      secureProjectFilePath: normalizeOptionalOwnedPath(options.secureProjectFilePath, 'secureProjectFilePath'),
+      secureUserFilePath: normalizeOptionalOwnedPath(options.secureUserFilePath, 'secureUserFilePath'),
+      plaintextProjectFilePath: normalizeOptionalOwnedPath(options.plaintextProjectFilePath, 'plaintextProjectFilePath'),
+      plaintextUserFilePath: normalizeOptionalOwnedPath(options.plaintextUserFilePath, 'plaintextUserFilePath'),
     };
+  }
+
+  getGlobalHome(): string {
+    return this.options.globalHome;
   }
 
   async get(key: string): Promise<string | null> {
@@ -214,6 +229,7 @@ export class SecretsManager {
           nextSeen.add(nextKey);
           return this.getInternal(nextKey, nextSeen);
         },
+        homeDirectory: this.options.globalHome,
       });
       logger.debug('SecretsManager: resolved secret reference', { key, refSource: resolved.source });
       return resolved.value;
@@ -365,40 +381,27 @@ export class SecretsManager {
   }
 
   private getPolicy(): SecretStorageMode {
-    return this.options.policy ?? loadConfiguredSecretPolicy();
-  }
-
-  private getDefaultWriteMedium(policy: SecretStorageMode): SecretStorageMedium {
-    return policy === 'plaintext_allowed' ? 'plaintext' : 'secure';
+    return this.options.policy ?? loadConfiguredSecretPolicy(this.options.configManager);
   }
 
   private getReadOrder(): SecretStorePath[] {
-    if (this.legacySecureProjectFilePath) {
-      return [{
-        source: 'project-secure',
-        path: this.legacySecureProjectFilePath,
-        secure: true,
-        scope: 'project',
-      }];
-    }
-
     const policy = this.getPolicy();
     const includePlaintext = policy !== 'require_secure';
     const ordered: SecretStorePath[] = [];
-    const projectRoot = this.options.projectRoot ?? process.cwd();
-    const userHome = this.options.globalHome ?? homedir();
+    const projectRoot = this.options.projectRoot;
+    const userHome = this.options.globalHome;
 
     for (const root of collectAncestorRoots(projectRoot)) {
       ordered.push({
         source: 'project-secure',
-        path: join(root, '.goodvibes', 'tui', 'secrets.enc'),
+        path: this.options.secureProjectFilePath ?? join(root, '.goodvibes', 'tui', 'secrets.enc'),
         secure: true,
         scope: 'project',
       });
       if (includePlaintext) {
         ordered.push({
           source: 'project-plaintext',
-          path: join(root, '.goodvibes', 'goodvibes.secrets.json'),
+          path: this.options.plaintextProjectFilePath ?? join(root, '.goodvibes', 'goodvibes.secrets.json'),
           secure: false,
           scope: 'project',
         });
@@ -425,17 +428,8 @@ export class SecretsManager {
   }
 
   private getAllCandidateStores(): SecretStorePath[] {
-    if (this.legacySecureProjectFilePath) {
-      return [{
-        source: 'project-secure',
-        path: this.legacySecureProjectFilePath,
-        secure: true,
-        scope: 'project',
-      }];
-    }
-
-    const projectRoot = this.options.projectRoot ?? process.cwd();
-    const userHome = this.options.globalHome ?? homedir();
+    const projectRoot = this.options.projectRoot;
+    const userHome = this.options.globalHome;
     const ordered: SecretStorePath[] = [];
     for (const root of collectAncestorRoots(projectRoot)) {
       ordered.push({
@@ -467,17 +461,8 @@ export class SecretsManager {
   }
 
   private resolveWriteTarget(scope: SecretScope, medium: SecretStorageMedium): SecretStorePath {
-    if (this.legacySecureProjectFilePath) {
-      return {
-        source: 'project-secure',
-        path: this.legacySecureProjectFilePath,
-        secure: true,
-        scope: 'project',
-      };
-    }
-
     if (scope === 'project') {
-      const root = this.options.projectRoot ?? process.cwd();
+      const root = this.options.projectRoot;
       return medium === 'secure'
         ? {
           source: 'project-secure',
@@ -493,7 +478,7 @@ export class SecretsManager {
         };
     }
 
-    const userHome = this.options.globalHome ?? homedir();
+    const userHome = this.options.globalHome;
     return medium === 'secure'
       ? {
         source: 'user-secure',
@@ -507,6 +492,10 @@ export class SecretsManager {
         secure: false,
         scope,
       };
+  }
+
+  private getDefaultWriteMedium(policy: SecretStorageMode): SecretStorageMedium {
+    return policy === 'plaintext_allowed' ? 'plaintext' : 'secure';
   }
 
   private readEncryptedFile(filePath: string): Record<string, string> | null {

@@ -27,14 +27,11 @@ function queryResult<T = Record<string, unknown>>(results: Record<string, unknow
 let dir: string;
 let cleanup: () => Promise<void>;
 
-beforeEach(() => {
-  findTool = createFindTool();
-});
-
 beforeEach(async () => {
   const tmp = await makeTempDir();
   dir = tmp.dir;
   cleanup = tmp.cleanup;
+  findTool = createFindTool(dir);
 
   // Create a realistic project structure
   await mkdir(join(dir, 'src'), { recursive: true });

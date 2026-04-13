@@ -11,14 +11,13 @@ type TsHookHandler = (event: HookEvent) => Promise<HookResult> | HookResult;
  * TypeScript hook runner.
  * Dynamically imports the module at hook.path and calls its default export with the event.
  */
-export async function run(hook: HookDefinition, event: HookEvent): Promise<HookResult> {
+export async function run(hook: HookDefinition, event: HookEvent, projectRoot: string): Promise<HookResult> {
   const path = hook.path;
   if (!path) {
     return { ok: false, error: 'ts hook missing "path" field' };
   }
 
   // Validate path is within the project directory to prevent arbitrary module loading
-  const projectRoot = process.cwd();
   const resolvedPath = resolve(projectRoot, path);
   if (!resolvedPath.startsWith(projectRoot + '/')) {
     return { ok: false, error: `ts hook path '${path}' is outside the project directory` };

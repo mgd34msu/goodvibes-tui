@@ -118,6 +118,7 @@ export class FileExplorerPanel extends BasePanel {
   private root: TreeNode | null = null;
   private flat: TreeNode[] = []; // visible flattened list
   private rootPath: string;
+  private readonly workingDirectory: string;
   private cacheValid: boolean = false;
 
   // --- navigation ---
@@ -128,9 +129,10 @@ export class FileExplorerPanel extends BasePanel {
   private searchMode: boolean = false;
   private searchQuery: string = '';
 
-  constructor(rootPath?: string) {
+  constructor(rootPath: string | undefined, workingDirectory: string) {
     super('explorer', 'Explorer', 'E', 'development');
-    this.rootPath = rootPath ?? process.cwd();
+    this.workingDirectory = workingDirectory;
+    this.rootPath = rootPath ?? workingDirectory;
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -201,7 +203,7 @@ export class FileExplorerPanel extends BasePanel {
       ? `/ ${this.searchQuery}_`
       : this.searchQuery
         ? `Filter: ${this.searchQuery}  (/ or up at top to edit)`
-        : `Root: ${relative(process.cwd(), this.rootPath) || '.'}  (/ or up at top to search)`;
+        : `Root: ${relative(this.workingDirectory, this.rootPath) || '.'}  (/ or up at top to search)`;
 
     if (this.flat.length === 0) {
       return buildPanelWorkspace(width, height, {

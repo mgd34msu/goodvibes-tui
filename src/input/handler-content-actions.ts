@@ -58,6 +58,7 @@ export type PasteRegistryState = {
 export function registerPaste(
   state: PasteRegistryState,
   content: string,
+  projectRoot: string,
 ): { marker: string; nextPasteId: number; nextImageId: number } {
   const bytes = Buffer.from(content, 'binary');
   if (bytes.length > 100) {
@@ -86,7 +87,7 @@ export function registerPaste(
 
   if (IMAGE_EXTENSIONS.some(ext => trimmed.toLowerCase().endsWith(ext))) {
     try {
-      const resolvedPath = resolveAndValidatePath(trimmed);
+      const resolvedPath = resolveAndValidatePath(trimmed, projectRoot);
       if (existsSync(resolvedPath)) {
         const data = readFileSync(resolvedPath);
         const base64 = data.toString('base64');
@@ -113,6 +114,7 @@ export function expandPrompt(
   pasteRegistry: Map<string, string>,
   imageRegistry: Map<string, { data: string; mediaType: string }>,
   text: string,
+  projectRoot: string,
 ): string | ContentPart[] {
   const foundPasteIds = new Set<string>();
   const markerRegex = /\[TEXT: (p\d+), (\d+) lines\]/g;
@@ -145,7 +147,7 @@ export function expandPrompt(
   while ((injectMatch = injectRegex.exec(expanded)) !== null) {
     const filePath = injectMatch[1];
     try {
-      const resolvedPath = resolveAndValidatePath(filePath);
+      const resolvedPath = resolveAndValidatePath(filePath, projectRoot);
       const content = readFileSync(resolvedPath, 'utf-8');
       expanded = expanded.slice(0, injectMatch.index) + content + expanded.slice(injectMatch.index + injectMatch[0].length);
       injectRegex.lastIndex = injectMatch.index + content.length;
@@ -339,6 +341,8 @@ export function handleDiffApply(
   const lineIndex = getScrollTop();
   const diff = conversationManager.getDiffAtLine(lineIndex);
   if (!diff || !diff.filePath) return false;
+  const projectRoot = commandContext?.workspace.shellPaths?.workingDirectory
+    ?? commandContext?.platform.configManager.getWorkingDirectory();
 
   commandContext?.requestPermission?.({
     callId: getCallId(),
@@ -352,9 +356,13 @@ export function handleDiffApply(
     ),
   }).then(({ approved }) => {
     if (!approved) return;
+    if (!projectRoot) {
+      conversationManager.log('[Diff apply failed: missing working directory]', { fg: '#ef4444' });
+      return;
+    }
     let resolvedPath: string;
     try {
-      resolvedPath = resolveAndValidatePath(diff.filePath!);
+      resolvedPath = resolveAndValidatePath(diff.filePath!, projectRoot);
     } catch (err) {
       conversationManager.log(`[Diff apply failed: ${err instanceof Error ? err.message : err}]`, { fg: '#ef4444' });
       return;
@@ -426,6 +434,7 @@ export function handleClipboardPaste(
     ensureInputCursorVisible: () => void;
     requestRender: () => void;
   },
+  projectRoot: string,
 ): { prompt: string; cursorPos: number; nextImageId: number; nextPasteId: number } {
   state.saveUndoState();
   const img = pasteImageFromClipboard();
@@ -439,7 +448,7 @@ export function handleClipboardPaste(
   } else {
     const raw = pasteFromClipboard();
     if (raw) {
-      const { marker } = registerPaste(state, raw);
+      const { marker } = registerPaste(state, raw, projectRoot);
       state.prompt = state.prompt.slice(0, state.cursorPos) + marker + state.prompt.slice(state.cursorPos);
       state.cursorPos += marker.length;
     }

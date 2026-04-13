@@ -65,11 +65,31 @@ afterEach(() => {
 async function resolveWithEmptySecrets(): Promise<Record<string, string>> {
   const dir = makeTmpDir();
   try {
-    const secrets = new SecretsManager(join(dir, 'secrets.enc'));
+    const projectRoot = join(dir, 'workspace');
+    const userHome = join(dir, 'home');
+    mkdirSync(projectRoot, { recursive: true });
+    mkdirSync(userHome, { recursive: true });
+    const secrets = new SecretsManager({
+      projectRoot,
+      globalHome: userHome,
+      secureProjectFilePath: join(dir, 'secrets.enc'),
+    });
     return await resolveApiKeys(secrets);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+function createSecretsManager(root: string, secureProjectFilePath: string): SecretsManager {
+  const projectRoot = join(root, 'workspace');
+  const userHome = join(root, 'home');
+  mkdirSync(projectRoot, { recursive: true });
+  mkdirSync(userHome, { recursive: true });
+  return new SecretsManager({
+    projectRoot,
+    globalHome: userHome,
+    secureProjectFilePath,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +182,7 @@ describe('resolveApiKeys', () => {
       const encPath = join(tmpDir, '.goodvibes', 'tui', 'secrets.enc');
       try {
         // Pre-store a key directly
-        const mgr = new SecretsManager(encPath);
+        const mgr = createSecretsManager(tmpDir, encPath);
         await mgr.set('OPENAI_API_KEY', 'stored-openai-key');
         const keys = await resolveApiKeys(mgr);
         expect(keys['openai']).toBe('stored-openai-key');
@@ -175,7 +195,7 @@ describe('resolveApiKeys', () => {
       const tmpDir = makeTmpDir();
       const encPath = join(tmpDir, '.goodvibes', 'tui', 'secrets.enc');
       try {
-        const mgr = new SecretsManager(encPath);
+        const mgr = createSecretsManager(tmpDir, encPath);
         await mgr.set('OPENAI_API_KEY', 'stored-value');
 
         // Now env var is set
@@ -213,7 +233,7 @@ describe('resolveApiKeys', () => {
       const tmpDir = makeTmpDir();
       const encPath = join(tmpDir, '.goodvibes', 'tui', 'secrets.enc');
       try {
-        const mgr = new SecretsManager(encPath);
+        const mgr = createSecretsManager(tmpDir, encPath);
 
         // set
         await mgr.set('OPENAI_API_KEY', 'my-key');
@@ -233,7 +253,7 @@ describe('resolveApiKeys', () => {
       const tmpDir = makeTmpDir();
       const encPath = join(tmpDir, '.goodvibes', 'tui', 'secrets.enc');
       try {
-        const mgr = new SecretsManager(encPath);
+        const mgr = createSecretsManager(tmpDir, encPath);
         const result = await mgr.get('NONEXISTENT_KEY');
         expect(result).toBeNull();
       } finally {
@@ -246,7 +266,7 @@ describe('resolveApiKeys', () => {
       const tmpDir = makeTmpDir();
       const encPath = join(tmpDir, '.goodvibes', 'tui', 'secrets.enc');
       try {
-        const mgr = new SecretsManager(encPath);
+        const mgr = createSecretsManager(tmpDir, encPath);
         await mgr.set('MY_SECRET', 'plaintext-value-should-not-appear');
         const raw = readFileSync(encPath, 'utf-8');
         expect(raw).not.toContain('plaintext-value-should-not-appear');

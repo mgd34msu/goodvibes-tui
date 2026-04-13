@@ -7,8 +7,12 @@ import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { SkillsPanel, discoverSkills } from '../../panels/skills-panel.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
+import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import type { Line } from '../../types/grid.ts';
+import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
+import type { ShellPathService } from '../../runtime/shell-paths.ts';
+import { ConfigManager } from '../../config/manager.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -22,6 +26,10 @@ function writeSkill(root: string, relPath: string, content: string): string {
   mkdirSync(join(filePath, '..'), { recursive: true });
   writeFileSync(filePath, content, 'utf-8');
   return filePath;
+}
+
+function makeShellPaths(workingDirectory: string, homeDirectory: string): Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'> {
+  return { workingDirectory, homeDirectory };
 }
 
 describe('SkillsPanel', () => {
@@ -39,7 +47,8 @@ describe('SkillsPanel', () => {
   });
 
   test('shows guidance when no skills are discovered', () => {
-    const panel = new SkillsPanel({ cwd, homeDir });
+    const shellPaths = makeShellPaths(cwd, homeDir);
+    const panel = new SkillsPanel({ shellPaths });
     const text = linesText(panel.render(120, 12));
     expect(text).toContain('No skills discovered');
     expect(text).toContain('.goodvibes/skills');
@@ -49,16 +58,25 @@ describe('SkillsPanel', () => {
   test('is registered as a built-in panel', () => {
     const manager = new PanelManager();
     const services = createRuntimeServices({
+      configManager: new ConfigManager({
+        workingDir: cwd,
+        homeDir,
+        configDir: join(homeDir, '.goodvibes', 'test-skills-panel'),
+      }),
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
+      workingDir: cwd,
+      homeDirectory: homeDir,
     });
+    const uiServices = createUiRuntimeServices(services);
     registerBuiltinPanels(manager, {
-      runtimeBus: new RuntimeEventBus(),
       providerRegistry: services.providerRegistry,
+      uiServices,
       tokenAuditor: services.tokenAuditor,
       panelHealthMonitor: services.panelHealthMonitor,
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
+      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.panelHealthMonitor),
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(true);
   });
@@ -101,7 +119,8 @@ describe('SkillsPanel', () => {
       ].join('\n'),
     );
 
-    const skills = discoverSkills({ cwd, homeDir });
+    const shellPaths = makeShellPaths(cwd, homeDir);
+    const skills = discoverSkills(shellPaths);
     expect(skills).toHaveLength(2);
     expect(skills[0]?.name).toBe('alpha');
     expect(skills[0]?.path).toBe(projectPath);
@@ -109,7 +128,7 @@ describe('SkillsPanel', () => {
     expect(skills[1]?.name).toBe('beta');
     expect(skills.map((skill) => skill.path)).not.toContain(globalPath);
 
-    const panel = new SkillsPanel({ cwd, homeDir });
+    const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
     const text = linesText(panel.render(120, 16));
     expect(text).toContain('Skills - discover project-local and global skill packs');
     expect(text).toContain('alpha');
@@ -136,7 +155,7 @@ describe('SkillsPanel', () => {
       ['---', 'name: gamma', 'description: Gamma skill', '---', ''].join('\n'),
     );
 
-    const panel = new SkillsPanel({ cwd, homeDir });
+    const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
     panel.handleInput('/');
     for (const ch of 'needle-42') {
       expect(panel.handleInput(ch)).toBe(true);
@@ -166,7 +185,7 @@ describe('SkillsPanel', () => {
       ['---', 'name: beta', 'description: Beta skill', '---', ''].join('\n'),
     );
 
-    const panel = new SkillsPanel({ cwd, homeDir });
+    const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
     panel.handleInput('up');
     panel.handleInput('b');
     let text = linesText(panel.render(120, 16));

@@ -4,9 +4,8 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { ToolRegistry } from '../tools/registry.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
 import { buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, DEFAULT_PANEL_PALETTE } from './polish.ts';
+import type { ProviderModelCatalogQuery, ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -77,8 +76,8 @@ function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
 }
 
 export class DocsPanel extends BasePanel {
-  private toolRegistry: ToolRegistry | null = null;
-  private providerRegistry: ProviderRegistry | null = null;
+  private toolRegistry: ToolCatalogQuery | null = null;
+  private providerRegistry: ProviderModelCatalogQuery | null = null;
   private section: DocSection = 'tools';
   private searchQuery = '';
   private searching = false;
@@ -86,7 +85,7 @@ export class DocsPanel extends BasePanel {
   private cursorIndex = 0;
   private scrollOffset = 0;
 
-  constructor(toolRegistry?: ToolRegistry, providerRegistry?: ProviderRegistry) {
+  constructor(toolRegistry?: ToolCatalogQuery, providerRegistry?: ProviderModelCatalogQuery) {
     super('docs', 'Docs', '?', 'session');
     this.toolRegistry = toolRegistry ?? null;
     this.providerRegistry = providerRegistry ?? null;

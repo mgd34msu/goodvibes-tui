@@ -8,6 +8,7 @@ import { ConfigManager } from '../../config/manager.ts';
 import { registerConfigCommand } from '../../input/commands/config.ts';
 import { registerPermissionsRuntimeCommands } from '../../input/commands/permissions-runtime.ts';
 import { registerLocalRuntimeCommands } from '../../input/commands/local-runtime.ts';
+import { createShellPathService } from '../../runtime/shell-paths.ts';
 import type { SelectionAction, SelectionItem, SelectionResult } from '../../input/selection-modal.ts';
 
 function makeContext(dir: string): {
@@ -41,20 +42,37 @@ function makeContext(dir: string): {
     printed: [],
     renders: 0,
   };
+  const providerRegistry = {
+    getCurrentModel: () => ({ displayName: 'test', reasoningEffort: [], capabilities: { multimodal: false } }),
+    getSelectableModels: () => [],
+  } as never;
+  const conversationManager = {} as never;
   const ctx = ({
-    providerRegistry: {
-      getCurrentModel: () => ({ displayName: 'test', reasoningEffort: [], capabilities: { multimodal: false } }),
-      getSelectableModels: () => [],
+    session: {
+      conversationManager,
+      runtime: { model: '', provider: '', debugMode: false, systemPrompt: '', reasoningEffort: 'medium', sessionId: 's' },
     },
-    conversationManager: {} as never,
-    config: cm.getAll(),
-    configManager: cm,
-    runtime: { model: '', provider: '', debugMode: false, systemPrompt: '', reasoningEffort: 'medium', sessionId: 's' },
+    provider: {
+      providerRegistry,
+    },
+    workspace: {
+      shellPaths: createShellPathService({
+        workingDirectory: dir,
+        homeDirectory: dir,
+      }),
+    },
+    platform: {
+      config: cm.getAll(),
+      configManager: cm,
+    },
+    ops: {},
+    extensions: {
+      toolRegistry: { list: () => [] },
+      mcpRegistry: {} as never,
+    },
     renderRequest: () => { calls.renders++; },
     print: (text: string) => { calls.printed.push(text); },
     exit: () => {},
-    toolRegistry: { list: () => [] },
-    mcpRegistry: {} as never,
     openSelection: (
       title: string,
       items: SelectionItem[],

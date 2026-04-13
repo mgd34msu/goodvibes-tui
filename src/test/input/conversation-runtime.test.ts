@@ -3,6 +3,7 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { ConversationManager } from '../../core/conversation.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 
 describe('conversation runtime command', () => {
   function makeContext(out: string[]) {
@@ -29,11 +30,13 @@ describe('conversation runtime command', () => {
     }));
 
     return {
-      providerRegistry: { getCurrentModel: () => ({ id: 'gpt-5.4' }) } as never,
-      conversationManager,
-      config: {} as never,
-      configManager: { get: () => undefined } as never,
-      runtime: { model: 'gpt-5.4', provider: 'openai', debugMode: false, systemPrompt: '', reasoningEffort: '', sessionId: 'sess-1' },
+      session: {
+        conversationManager,
+        runtime: { model: 'gpt-5.4', provider: 'openai', debugMode: false, systemPrompt: '', reasoningEffort: '', sessionId: 'sess-1' },
+      },
+      provider: {
+        providerRegistry: { getCurrentModel: () => ({ id: 'gpt-5.4' }) } as never,
+      },
       renderRequest: () => {},
       print: (text: string) => { out.push(text); },
       getScrollTop: () => 0,
@@ -41,7 +44,23 @@ describe('conversation runtime command', () => {
       exit: () => {},
       toolRegistry: {} as never,
       mcpRegistry: {} as never,
-      runtimeStore,
+      platform: {
+        config: {} as never,
+        configManager: { get: () => undefined } as never,
+        readModels: {
+          session: createStaticUiReadModel({
+            session: runtimeStore.getState().session,
+            totalTurns: 0,
+            messageCount: 4,
+            estimatedContextTokens: 321,
+            contextWindow: runtimeStore.getState().model.tokenLimits.contextWindow,
+            turnState: 'preflight',
+            contextWarningActive: true,
+            pendingApproval: false,
+            denialCount: 0,
+          }),
+        } as never,
+      },
     };
   }
 

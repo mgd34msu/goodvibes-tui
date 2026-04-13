@@ -135,7 +135,7 @@ export function buildSandboxLaunchPlan(
   profile: SandboxProfile,
   label: string,
   manager: ConfigManager,
-  workspaceRoot: string = process.cwd(),
+  workspaceRoot: string,
 ): SandboxLaunchPlan {
   const backendProbe = probeSandboxBackends(manager);
   const safeWorkspaceRoot = resolve(workspaceRoot);

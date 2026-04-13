@@ -3,7 +3,7 @@ import { ToolContractVerifier } from '../../runtime/tools/contract-verifier.ts';
 import type { ReplaySnapshotInput } from '../../runtime/forensics/registry.ts';
 import { logger } from '../../utils/logger.ts';
 import { registerOperatorPanelCommand } from './operator-panel-runtime.ts';
-import { requireProfileManager, requireReplayEngine } from './runtime-services.ts';
+import { requireOpsApi, requireProfileManager, requireReplayEngine } from './runtime-services.ts';
 
 export function registerOperatorRuntimeCommands(registry: CommandRegistry): void {
   registerOperatorPanelCommand(registry);
@@ -26,7 +26,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
       if (ctx.openContextInspector) {
         ctx.openContextInspector();
       } else {
-        const msgs = ctx.conversationManager.getMessagesForLLM();
+        const msgs = ctx.session.conversationManager.getMessagesForLLM();
         if (msgs.length === 0) {
           ctx.print('[context] No messages in conversation.');
           return;
@@ -56,7 +56,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
     aliases: ['ne'],
     description: 'Jump to the next error message in the conversation',
     handler(_args, ctx) {
-      const nextLine = ctx.conversationManager.nextErrorLine(ctx.getScrollTop?.() ?? 0);
+      const nextLine = ctx.session.conversationManager.nextErrorLine(ctx.getScrollTop?.() ?? 0);
       if (nextLine < 0) ctx.print('[No error messages found in conversation]');
       else ctx.scrollToLine?.(nextLine);
     },
@@ -82,7 +82,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
     aliases: ['pe'],
     description: 'Jump to the previous error message in the conversation',
     handler(_args, ctx) {
-      const prevLine = ctx.conversationManager.prevErrorLine(ctx.getScrollTop?.() ?? 0);
+      const prevLine = ctx.session.conversationManager.prevErrorLine(ctx.getScrollTop?.() ?? 0);
       if (prevLine < 0) ctx.print('[No error messages found in conversation]');
       else ctx.scrollToLine?.(prevLine);
     },
@@ -95,7 +95,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
     usage: '[quiet|balanced|operator|show|set-domain <domain> <verbosity>]',
     argsHint: '[preset|show|set-domain]',
     handler(args, ctx) {
-      const mgr = ctx.modeManager;
+      const mgr = ctx.ops.modeManager;
       if (!mgr) {
         ctx.print('Interaction mode manager is not available in this runtime.');
         return;
@@ -106,7 +106,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
         const newMode = sub as 'quiet' | 'balanced' | 'operator';
         mgr.setHITLMode(newMode);
         try {
-          ctx.configManager.setDynamic('behavior.hitlMode' as import('../../config/schema.ts').ConfigKey, newMode);
+          ctx.platform.configManager.setDynamic('behavior.hitlMode' as import('../../config/schema.ts').ConfigKey, newMode);
         } catch (e) {
           logger.warn('[/mode] Failed to persist mode', { error: String(e) });
         }
@@ -194,16 +194,13 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /ops task <cancel|pause|resume|retry> <task-id> [note]');
           return;
         }
-        if (!ctx.opsControlPlane) {
-          ctx.print('Operator Control Plane not active. Enable the operator-control-plane feature flag.');
-          return;
-        }
+        const opsApi = requireOpsApi(ctx);
         try {
           switch (action) {
-            case 'cancel': ctx.opsControlPlane.cancelTask(taskId, note); break;
-            case 'pause': ctx.opsControlPlane.pauseTask(taskId, note); break;
-            case 'resume': ctx.opsControlPlane.resumeTask(taskId, note); break;
-            case 'retry': ctx.opsControlPlane.retryTask(taskId, note); break;
+            case 'cancel': opsApi.tasks.cancel(taskId, note); break;
+            case 'pause': opsApi.tasks.pause(taskId, note); break;
+            case 'resume': opsApi.tasks.resume(taskId, note); break;
+            case 'retry': opsApi.tasks.retry(taskId, note); break;
             default:
               ctx.print(`Unknown task action "${action}". Use: cancel, pause, resume, retry`);
               return;
@@ -223,12 +220,9 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /ops agent cancel <agent-id> [note]');
           return;
         }
-        if (!ctx.opsControlPlane) {
-          ctx.print('Operator Control Plane not active. Enable the operator-control-plane feature flag.');
-          return;
-        }
+        const opsApi = requireOpsApi(ctx);
         try {
-          ctx.opsControlPlane.cancelAgent(agentId, note);
+          opsApi.agents.cancel(agentId, note);
           ctx.print(`[Ops] Agent ${agentId}: cancel dispatched.`);
         } catch (e) {
           ctx.print(`[Ops] Error: ${(e as Error).message}`);
@@ -256,7 +250,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
     handler(args, ctx) {
       const sub = args[0];
       if (sub === 'verify' && args[1]) {
-        const result = ctx.toolRegistry.verifyContract(args[1]);
+        const result = ctx.extensions.toolRegistry.verifyContract(args[1]);
         if (!result) {
           ctx.print(`[tool verify] Tool '${args[1]}' is not registered.`);
           return;
@@ -265,18 +259,18 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
         return;
       }
       if (sub === 'verify-all') {
-        ctx.print(ToolContractVerifier.formatAllResults(ctx.toolRegistry.verifyAllContracts()));
+        ctx.print(ToolContractVerifier.formatAllResults(ctx.extensions.toolRegistry.verifyAllContracts()));
         return;
       }
       if (sub === 'contract' && args[1] === 'show' && args[2]) {
         const toolName = args[2];
-        const result = ctx.toolRegistry.verifyContract(toolName);
+        const result = ctx.extensions.toolRegistry.verifyContract(toolName);
         if (!result) {
           ctx.print(`[tool contract show] Tool '${toolName}' is not registered.`);
           return;
         }
         const lines: string[] = [ToolContractVerifier.formatResult(result)];
-        const tool = ctx.toolRegistry.list().find((t) => t.definition.name === toolName);
+        const tool = ctx.extensions.toolRegistry.list().find((t) => t.definition.name === toolName);
         if (tool) {
           lines.push('');
           lines.push('Tool Definition:');
@@ -311,11 +305,11 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
         return;
       }
       if (sub === 'latest') {
-        if (!ctx.forensicsRegistry) {
+        if (!ctx.extensions.forensicsRegistry) {
           ctx.print('[Forensics] Registry not active.');
           return;
         }
-        const report = ctx.forensicsRegistry.latest();
+        const report = ctx.extensions.forensicsRegistry.latest();
         if (!report) {
           ctx.print('[Forensics] No failure reports recorded this session.');
           return;
@@ -353,11 +347,11 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /forensics show <id>');
           return;
         }
-        if (!ctx.forensicsRegistry) {
+        if (!ctx.extensions.forensicsRegistry) {
           ctx.print('[Forensics] Registry not active.');
           return;
         }
-        const json = ctx.forensicsRegistry.exportAsJson(id);
+        const json = ctx.extensions.forensicsRegistry.exportAsJson(id);
         if (!json) {
           ctx.print(`[Forensics] No report found with id "${id}". Use /forensics latest to see the most recent.`);
           return;
@@ -371,11 +365,11 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
           ctx.print('Usage: /forensics export <id>');
           return;
         }
-        if (!ctx.forensicsRegistry) {
+        if (!ctx.extensions.forensicsRegistry) {
           ctx.print('[Forensics] Registry not active.');
           return;
         }
-        const json = ctx.forensicsRegistry.exportBundleAsJson(id, {
+        const json = ctx.extensions.forensicsRegistry.exportBundleAsJson(id, {
           replaySnapshot: requireReplayEngine(ctx).getSnapshot() as ReplaySnapshotInput,
         });
         if (!json) {

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { CommunicationPanel } from '../../panels/communication-panel.ts';
 import { createRuntimeStore, createDomainDispatch } from '../../runtime/store/index.ts';
 import type { Line } from '../../types/grid.ts';
+import { createCommunicationReadModel } from '../helpers/ui-read-models.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -13,7 +14,7 @@ function linesText(lines: Line[]): string {
 describe('CommunicationPanel', () => {
   test('renders empty guidance when no communication has been recorded', () => {
     const store = createRuntimeStore();
-    const panel = new CommunicationPanel(store);
+    const panel = new CommunicationPanel(createCommunicationReadModel(store));
     const text = linesText(panel.render(100, 12));
 
     expect(text).toContain('Communication Control Room');
@@ -56,7 +57,7 @@ describe('CommunicationPanel', () => {
       fromRole: 'reviewer',
     });
 
-    const panel = new CommunicationPanel(store);
+    const panel = new CommunicationPanel(createCommunicationReadModel(store));
     const text = linesText(panel.render(120, 16));
 
     expect(text).toContain('Communication posture');

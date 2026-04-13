@@ -172,12 +172,14 @@ function renderText(width: number, text: string, fg: string, bg: string, bold = 
 export class DiffPanel extends BasePanel {
   public override isTransient = true;
 
+  private readonly workingDirectory: string;
   private entries: DiffEntry[] = [];
   private selectedFile = 0;
   private scrollOffset = 0;
 
-  constructor() {
+  constructor(workingDirectory: string) {
     super('diff', 'Diff', 'D', 'development');
+    this.workingDirectory = workingDirectory;
   }
 
   // -------------------------------------------------------------------------
@@ -214,7 +216,7 @@ export class DiffPanel extends BasePanel {
   /** Run `git diff` against specific files and populate entries. */
   async showFileDiffs(files: string[], ref?: string): Promise<void> {
     const args = ['diff', ...(ref ? [ref] : []), '--', ...files];
-    const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', cwd: process.cwd() });
+    const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', cwd: this.workingDirectory });
     const raw = await new Response(proc.stdout).text();
     await proc.exited;
     this.loadRawDiff(raw);
@@ -223,7 +225,7 @@ export class DiffPanel extends BasePanel {
   /** Run `git diff` and populate all changed files. */
   async showGitDiff(ref?: string): Promise<void> {
     const args = ['diff', ...(ref ? [ref] : [])];
-    const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', stderr: 'pipe', cwd: process.cwd() });
+    const proc = Bun.spawn(['git', ...args], { stdout: 'pipe', stderr: 'pipe', cwd: this.workingDirectory });
     const [raw, errText] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),

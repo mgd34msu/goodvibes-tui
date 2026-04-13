@@ -102,14 +102,15 @@ function phaseStatus(items: PlanItem[]): string {
 // ---------------------------------------------------------------------------
 
 export class ExecutionPlanManager {
+  private readonly projectRoot: string;
   private readonly plansDir: string;
   private readonly activeFile: string;
   private lastCreatedAtMs = 0;
 
-  constructor(baseDir?: string) {
-    const root = baseDir ?? join(process.cwd(), '.goodvibes', 'plans');
-    this.plansDir = root;
-    this.activeFile = join(root, 'active.json');
+  constructor(projectRoot: string) {
+    this.projectRoot = projectRoot;
+    this.plansDir = join(this.projectRoot, '.goodvibes', 'plans');
+    this.activeFile = join(this.plansDir, 'active.json');
   }
 
   // --------------------------------------------------------------------------

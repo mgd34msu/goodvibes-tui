@@ -11,7 +11,6 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'fs';
-import { homedir } from 'os';
 import { dirname, join } from 'path';
 
 import { SessionManager, type SessionMeta } from '../sessions/manager.ts';
@@ -35,25 +34,56 @@ export type RecoveryFileInfo = {
 };
 
 export type SessionPersistenceOptions = {
-  cwd?: string;
-  homeDir?: string;
+  workingDirectory?: string;
+  homeDirectory?: string;
   sessionManager?: SessionManager;
 };
 
+export type SessionPersistencePaths = {
+  readonly workingDirectory: string;
+  readonly homeDirectory: string;
+};
+
+function requireWorkingDirectory(options?: Pick<SessionPersistenceOptions, 'workingDirectory'>): string {
+  const workingDirectory = options?.workingDirectory;
+  if (!workingDirectory) {
+    throw new Error('Session persistence requires an explicit workingDirectory.');
+  }
+  return workingDirectory;
+}
+
+function requireHomeDirectory(options?: Pick<SessionPersistenceOptions, 'homeDirectory'>): string {
+  const homeDirectory = options?.homeDirectory;
+  if (!homeDirectory) {
+    throw new Error('Session persistence requires an explicit homeDirectory.');
+  }
+  return homeDirectory;
+}
+
+function resolveSessionPersistencePaths(options: SessionPersistenceOptions): SessionPersistencePaths {
+  return {
+    workingDirectory: requireWorkingDirectory(options),
+    homeDirectory: requireHomeDirectory(options),
+  };
+}
+
 function resolveSessionManager(options?: SessionPersistenceOptions): SessionManager {
-  return options?.sessionManager ?? new SessionManager(options?.cwd);
+  if (options?.sessionManager) {
+    return options.sessionManager;
+  }
+  return new SessionManager(requireWorkingDirectory(options));
 }
 
-export function getUserSessionsDir(cwd = process.cwd()): string {
-  return join(cwd, '.goodvibes', 'tui', 'sessions');
+export function getUserSessionsDir(workingDirectory: string): string {
+  return join(workingDirectory, '.goodvibes', 'tui', 'sessions');
 }
 
-export function getLastSessionPointerPath(cwd = process.cwd()): string {
-  return join(getUserSessionsDir(cwd), 'last-session.json');
+export function getLastSessionPointerPath(workingDirectory: string): string {
+  return join(getUserSessionsDir(workingDirectory), 'last-session.json');
 }
 
-export function getRecoveryFilePath(homeDir = homedir()): string {
-  return join(homeDir, '.goodvibes', 'tui', 'recovery.jsonl');
+export function getRecoveryFilePath(homeDirectory: string): string {
+  return join(homeDirectory, '.goodvibes', 'tui', 'recovery.jsonl');
 }
 
 export function generateUserSessionId(): string {
@@ -98,7 +128,8 @@ export function persistConversation(
 
 export function writeLastSessionPointer(sessionId: string, options?: SessionPersistenceOptions): void {
   try {
-    const pointerPath = getLastSessionPointerPath(options?.cwd);
+    const workingDirectory = requireWorkingDirectory(options);
+    const pointerPath = getLastSessionPointerPath(workingDirectory);
     mkdirSync(dirname(pointerPath), { recursive: true });
     writeFileSync(
       pointerPath,
@@ -112,7 +143,8 @@ export function writeLastSessionPointer(sessionId: string, options?: SessionPers
 
 export function readLastSessionPointer(options?: SessionPersistenceOptions): string | null {
   try {
-    const pointerPath = getLastSessionPointerPath(options?.cwd);
+    const workingDirectory = requireWorkingDirectory(options);
+    const pointerPath = getLastSessionPointerPath(workingDirectory);
     if (!existsSync(pointerPath)) return null;
     const data = JSON.parse(readFileSync(pointerPath, 'utf-8')) as { sessionId?: unknown };
     if (typeof data.sessionId === 'string' && data.sessionId.trim()) return data.sessionId;
@@ -144,7 +176,8 @@ export function writeRecoveryFile(
 ): void {
   try {
     if (!snapshot.messages.length) return;
-    const recoveryFile = getRecoveryFilePath(options?.homeDir);
+    const homeDirectory = requireHomeDirectory(options);
+    const recoveryFile = getRecoveryFilePath(homeDirectory);
     const lines: string[] = [];
     lines.push(JSON.stringify({ type: 'meta', sessionId, title, timestamp: Date.now() }));
     if (snapshot.titleSource || snapshot.returnContext) {
@@ -171,7 +204,8 @@ export function writeRecoveryFile(
 
 export function deleteRecoveryFile(options?: SessionPersistenceOptions): void {
   try {
-    unlinkSync(getRecoveryFilePath(options?.homeDir));
+    const homeDirectory = requireHomeDirectory(options);
+    unlinkSync(getRecoveryFilePath(homeDirectory));
   } catch {
     // missing file is fine
   }
@@ -179,10 +213,14 @@ export function deleteRecoveryFile(options?: SessionPersistenceOptions): void {
 
 export function checkRecoveryFile(options?: SessionPersistenceOptions): RecoveryFileInfo | null {
   try {
-    const recoveryFile = getRecoveryFilePath(options?.homeDir);
+    const { workingDirectory, homeDirectory } = resolveSessionPersistencePaths({
+      workingDirectory: requireWorkingDirectory(options),
+      homeDirectory: requireHomeDirectory(options),
+    });
+    const recoveryFile = getRecoveryFilePath(homeDirectory);
     if (!existsSync(recoveryFile)) return null;
     const recoveryMtime = statSync(recoveryFile).mtimeMs;
-    const pointerPath = getLastSessionPointerPath(options?.cwd);
+    const pointerPath = getLastSessionPointerPath(workingDirectory);
     if (existsSync(pointerPath)) {
       const lastCleanMtime = statSync(pointerPath).mtimeMs;
       if (recoveryMtime <= lastCleanMtime) return null;
@@ -207,7 +245,8 @@ export function checkRecoveryFile(options?: SessionPersistenceOptions): Recovery
 
 export function loadRecoveryConversation(options?: SessionPersistenceOptions): SessionSnapshot | null {
   try {
-    const recoveryFile = getRecoveryFilePath(options?.homeDir);
+    const homeDirectory = requireHomeDirectory(options);
+    const recoveryFile = getRecoveryFilePath(homeDirectory);
     const raw = readFileSync(recoveryFile, 'utf-8');
     const lines = raw.split('\n').filter(Boolean);
     if (lines.length < 2) return { messages: [] };

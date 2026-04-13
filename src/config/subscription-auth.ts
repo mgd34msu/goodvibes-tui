@@ -1,9 +1,11 @@
 import { getBuiltinSubscriptionProvider } from './subscription-providers.ts';
-import { SubscriptionManager } from './subscriptions.ts';
+import type { SubscriptionManager } from './subscriptions.ts';
 import { refreshOpenAICodexToken } from './openai-codex-auth.ts';
 
-export async function resolveSubscriptionAccessToken(provider: string): Promise<string | null> {
-  const manager = new SubscriptionManager();
+export async function resolveSubscriptionAccessToken(
+  provider: string,
+  manager: Pick<SubscriptionManager, 'get' | 'saveSubscription' | 'resolveAccessToken'>,
+): Promise<string | null> {
   if (provider === 'openai') {
     const existing = manager.get('openai');
     if (!existing) return null;

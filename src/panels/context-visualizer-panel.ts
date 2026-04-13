@@ -4,10 +4,11 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
-import { SessionMemoryStore } from '../core/session-memory.ts';
 import { evaluateSessionMaintenance } from './session-maintenance.ts';
+import type { TurnEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
+import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -40,14 +41,14 @@ function formatK(n: number): string {
 export class ContextVisualizerPanel extends BasePanel {
   private snapshot: ContextSnapshot = { input: 0, limit: 0 };
   private unsubs: Array<() => void> = [];
-  private readonly sessionMemoryStore: SessionMemoryStore;
+  private readonly sessionMemoryStore: SessionMemoryQuery;
 
   constructor(
-    private runtimeBus: RuntimeEventBus,
-    sessionMemoryStore: SessionMemoryStore,
+    private readonly turnEvents: UiEventFeed<TurnEvent>,
+    sessionMemoryStore: SessionMemoryQuery,
     private getUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
     private contextLimit?: number,
-    private runtimeStore?: RuntimeStore,
+    private sessionReadModel?: UiReadModel<UiSessionSnapshot>,
   ) {
     super('context', 'Context', 'C', 'ai');
     this.sessionMemoryStore = sessionMemoryStore;
@@ -166,7 +167,7 @@ export class ContextVisualizerPanel extends BasePanel {
       currentTokens: this.snapshot.input,
       contextWindow: this.snapshot.limit,
       sessionMemoryCount: this.sessionMemoryStore.list().length,
-      session: this.runtimeStore?.getState().session,
+      session: this.sessionReadModel?.getSnapshot().session,
     });
     const lines: Line[] = [
       buildPanelLine(width, [[` ${status.summary}`, DEFAULT_PANEL_PALETTE.label]]),
@@ -182,10 +183,10 @@ export class ContextVisualizerPanel extends BasePanel {
 
   private _attachBus(): void {
     if (this.unsubs.length > 0) return;
-    this.unsubs.push(this.runtimeBus.on('TURN_COMPLETED', () => {
+    this.unsubs.push(this.turnEvents.on('TURN_COMPLETED', () => {
       this._refresh();
     }));
-    this.unsubs.push(this.runtimeBus.on('TURN_SUBMITTED', () => {
+    this.unsubs.push(this.turnEvents.on('TURN_SUBMITTED', () => {
       this._refresh();
     }));
   }

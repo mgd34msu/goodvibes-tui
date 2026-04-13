@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { CommandContext } from '../command-registry.ts';
 import { inspectSandboxSessionArtifact, listSandboxProfiles, renderSandboxSessions } from '../../runtime/sandbox/manager.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
 const SANDBOX_PROFILE_IDS = [
   'eval-js',
@@ -12,12 +13,13 @@ const SANDBOX_PROFILE_IDS = [
   'mcp-per-server',
 ] as const;
 
-function findSandboxProfile(configManager: CommandContext['configManager'], profileId: string) {
+function findSandboxProfile(configManager: CommandContext['platform']['configManager'], profileId: string) {
   return listSandboxProfiles(configManager).find((entry) => entry.id === profileId);
 }
 
 export async function handleSandboxSessionCommand(args: string[], ctx: CommandContext): Promise<boolean> {
-  const sessions = ctx.sandboxSessionRegistry;
+  const shellPaths = requireShellPaths(ctx);
+  const sessions = ctx.workspace.sandboxSessionRegistry;
   if (!sessions) {
     ctx.print('Sandbox session registry is not wired into this runtime.');
     return true;
@@ -29,11 +31,11 @@ export async function handleSandboxSessionCommand(args: string[], ctx: CommandCo
   }
   if (mode === 'start') {
     const profileId = args[2];
-    if (!profileId || !findSandboxProfile(ctx.configManager, profileId)) {
+    if (!profileId || !findSandboxProfile(ctx.platform.configManager, profileId)) {
       ctx.print(`Usage: /sandbox session start <${SANDBOX_PROFILE_IDS.join('|')}> [label...]`);
       return true;
     }
-    const session = await sessions.start(profileId as (typeof SANDBOX_PROFILE_IDS)[number], args.slice(3).join(' '), ctx.configManager);
+    const session = await sessions.start(profileId as (typeof SANDBOX_PROFILE_IDS)[number], args.slice(3).join(' '), ctx.platform.configManager);
     ctx.print(`Started sandbox session ${session.id} for ${session.profileId} (${session.shared ? 'shared' : 'dedicated'}, backend=${session.resolvedBackend ?? session.backend}, state=${session.state}, startup=${session.startupStatus ?? 'n/a'}).`);
     if (session.startupDetail) ctx.print(`  ${session.startupDetail}`);
     return true;
@@ -83,7 +85,7 @@ export async function handleSandboxSessionCommand(args: string[], ctx: CommandCo
       return true;
     }
     try {
-      const result = sessions.execute(sessionId, command, commandArgs, ctx.configManager, { timeoutMs: 10000 });
+      const result = sessions.execute(sessionId, command, commandArgs, ctx.platform.configManager, { timeoutMs: 10000 });
       const lines = [`Sandbox session run ${sessionId}`, `  status: ${result.status ?? 'n/a'}`];
       const stdout = result.stdout.trim();
       const stderr = result.stderr.trim();
@@ -104,8 +106,8 @@ export async function handleSandboxSessionCommand(args: string[], ctx: CommandCo
         ctx.print('Usage: /sandbox session artifact export <session-id> <path>');
         return true;
       }
-      const targetPath = resolve(process.cwd(), pathArg);
-      sessions.exportArtifact(sessionId, targetPath, ctx.configManager);
+      const targetPath = shellPaths.resolveWorkspacePath(pathArg);
+      sessions.exportArtifact(sessionId, targetPath, ctx.platform.configManager);
       ctx.print(`Sandbox session artifact exported to ${targetPath}`);
       return true;
     }
@@ -115,7 +117,7 @@ export async function handleSandboxSessionCommand(args: string[], ctx: CommandCo
         ctx.print('Usage: /sandbox session artifact inspect <path>');
         return true;
       }
-      const targetPath = resolve(process.cwd(), pathArg);
+      const targetPath = shellPaths.resolveWorkspacePath(pathArg);
       ctx.print(inspectSandboxSessionArtifact(sessions.inspectArtifact(targetPath)));
       return true;
     }

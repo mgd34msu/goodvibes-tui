@@ -35,12 +35,10 @@ function makeManager(overrides: Partial<Record<string, unknown>> = {}) {
 describe('sandbox provisioning', () => {
   test('scaffolded setup bundle includes an inspectable/applyable manifest', () => {
     const cwd = mkdtempSync(join(tmpdir(), 'gv-sandbox-provision-'));
-    const previous = process.cwd();
-    process.chdir(cwd);
     try {
       const manager = makeManager();
-      const bundle = scaffoldSandboxQemuSetupBundle(manager as never, '.goodvibes/tui/sandbox');
-      const manifest = loadSandboxQemuSetupManifest(bundle.manifestPath);
+      const bundle = scaffoldSandboxQemuSetupBundle(manager as never, cwd, '.goodvibes/tui/sandbox');
+      const manifest = loadSandboxQemuSetupManifest(cwd, bundle.manifestPath);
       expect(manifest.recommendedSettings.backend).toBe('qemu');
       expect(inspectSandboxQemuSetupManifest(manifest)).toContain('Sandbox QEMU Setup Manifest');
 
@@ -53,7 +51,6 @@ describe('sandbox provisioning', () => {
       expect(target.get('sandbox.qemuGuestWorkspacePath')).toBeUndefined();
       expect(target.get('sandbox.qemuWorkspacePath')).toBe('/workspace');
     } finally {
-      process.chdir(previous);
       rmSync(cwd, { recursive: true, force: true });
     }
   });

@@ -43,10 +43,12 @@ export interface MutableRuntimeState {
  * Options accepted by bootstrapRuntime().
  */
 export interface BootstrapOptions {
-  /** Override working directory (default: process.cwd()) */
-  workingDir?: string;
+  /** App-owned working directory for this runtime instance. */
+  workingDir: string;
+  /** App-owned home directory for this runtime instance. */
+  homeDirectory: string;
   /** Explicit app-owned config manager for this runtime instance. */
-  configManager?: import('../config/manager.ts').ConfigManager;
+  configManager: import('../config/manager.ts').ConfigManager;
   /**
    * Callback invoked when the app should exit.
    * If provided, commandContext.exit is wired during bootstrap.

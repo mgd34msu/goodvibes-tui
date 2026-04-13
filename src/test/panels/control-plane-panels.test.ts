@@ -19,6 +19,12 @@ import type { WatcherRecord } from '../../runtime/store/domains/watchers.ts';
 import type { ControlPlaneClientRecord } from '../../runtime/store/domains/control-plane.ts';
 import { PersistentStore } from '../../state/persistent-store.ts';
 import { getTestApprovalBroker, getTestSessionBroker, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import {
+  createAutomationReadModel,
+  createControlPlaneReadModel,
+  createRoutesReadModel,
+  createWatchersReadModel,
+} from '../helpers/ui-read-models.ts';
 
 function linesText(lines: ReturnType<AutomationControlPanel['render']>): string {
   return lines.map((line) => line.map((cell) => cell.char ?? ' ').join('').trimEnd()).join('\n');
@@ -153,9 +159,9 @@ describe('control-plane operator panels', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-control-plane-panels-'));
-    (ApprovalBroker as unknown as { instance: ApprovalBroker | null }).instance = new ApprovalBroker(
-      new PersistentStore(join(root, 'approvals.json')) as never,
-    );
+    (ApprovalBroker as unknown as { instance: ApprovalBroker | null }).instance = new ApprovalBroker({
+      store: new PersistentStore(join(root, 'approvals.json')),
+    });
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, 'routes.json')),
     });
@@ -180,7 +186,7 @@ describe('control-plane operator panels', () => {
     dispatch.syncAutomationRun(baseRun(), 'test');
     dispatch.syncDeliveryAttempt(baseDelivery(), 'test');
 
-    const panel = new AutomationControlPanel(store);
+    const panel = new AutomationControlPanel(createAutomationReadModel(store));
     const text = linesText(panel.render(100, 28));
     expect(text).toContain('Automation Control');
     expect(text).toContain('Nightly Sweep');
@@ -193,7 +199,7 @@ describe('control-plane operator panels', () => {
     const dispatch = createDomainDispatch(store);
     dispatch.syncRouteBinding(baseRoute(), 'test');
 
-    const panel = new RoutesPanel(store);
+    const panel = new RoutesPanel(createRoutesReadModel(store));
     const text = linesText(panel.render(100, 26));
     expect(text).toContain('Route Bindings');
     expect(text).toContain('slack');
@@ -206,7 +212,7 @@ describe('control-plane operator panels', () => {
     const dispatch = createDomainDispatch(store);
     dispatch.syncWatcher(baseWatcher(), 'test');
 
-    const panel = new WatchersPanel(store);
+    const panel = new WatchersPanel(createWatchersReadModel(store));
     const text = linesText(panel.render(100, 26));
     expect(text).toContain('Watchers');
     expect(text).toContain('Filesystem Watcher');
@@ -268,11 +274,11 @@ describe('control-plane operator panels', () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 5));
 
-    const panel = new ControlPlanePanel(store, {
-      approvalBroker: broker,
-      sessionBroker,
-      getRecentEvents: (limit) => gateway.listRecentEvents(limit),
-    });
+    const panel = new ControlPlanePanel(createControlPlaneReadModel(store, {
+      approvals: broker.listApprovals(6),
+      sessions: sessionBroker.listSessions(6),
+      recentEvents: gateway.listRecentEvents(6),
+    }));
     const text = linesText(panel.render(110, 30));
     expect(text).toContain('Control Plane');
     expect(text).toContain('Web Console');

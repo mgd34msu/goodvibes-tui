@@ -14,7 +14,7 @@ export class SurfaceRegistry {
   private runtimeDispatch: DomainDispatch | null = null;
   private pluginRegistry: ChannelPluginRegistry | null = null;
 
-  constructor(configManager: ConfigManager = new ConfigManager(), runtimeStore?: RuntimeStore) {
+  constructor(configManager: ConfigManager, runtimeStore?: RuntimeStore) {
     this.configManager = configManager;
     if (runtimeStore) this.runtimeDispatch = createDomainDispatch(runtimeStore);
   }

@@ -1,4 +1,5 @@
 import type { ConfigManager } from '../../config/manager.ts';
+import { join } from 'node:path';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { ProfileManager } from '../../profiles/manager.ts';
@@ -47,12 +48,12 @@ export type {
   StagedManagedBundle,
 };
 
-export function recordSettingsSyncEvent(event: SettingsSyncEvent, configDir?: string): void {
+export function recordSettingsSyncEvent(event: SettingsSyncEvent, configDir: string): void {
   const store = readStore(configDir);
   writeStore(trimStore({ ...store, events: [...store.events, event] }), configDir);
 }
 
-export function recordSettingsSyncFailure(surface: SyncSurface, message: string, configDir?: string): void {
+export function recordSettingsSyncFailure(surface: SyncSurface, message: string, configDir: string): void {
   const store = readStore(configDir);
   writeStore(trimStore({
     ...store,
@@ -60,15 +61,15 @@ export function recordSettingsSyncFailure(surface: SyncSurface, message: string,
   }), configDir);
 }
 
-export function isManagedSettingLocked(key: ConfigKey, configDir?: string): boolean {
+export function isManagedSettingLocked(key: ConfigKey, configDir: string): boolean {
   return readStore(configDir).managedLocks.some((entry) => entry.key === key);
 }
 
-export function getManagedSettingLock(key: ConfigKey, configDir?: string): ManagedSettingLock | null {
+export function getManagedSettingLock(key: ConfigKey, configDir: string): ManagedSettingLock | null {
   return readStore(configDir).managedLocks.find((entry) => entry.key === key) ?? null;
 }
 
-export function setManagedSettingLock(key: ConfigKey, source: string, reason: string, configDir?: string): void {
+export function setManagedSettingLock(key: ConfigKey, source: string, reason: string, configDir: string): void {
   const store = readStore(configDir);
   const nextLocks = store.managedLocks.filter((entry) => entry.key !== key);
   nextLocks.push({ key, source, reason, updatedAt: Date.now() });
@@ -82,7 +83,7 @@ export function setManagedSettingLock(key: ConfigKey, source: string, reason: st
   }), configDir);
 }
 
-export function clearManagedSettingLock(key: ConfigKey, configDir?: string): boolean {
+export function clearManagedSettingLock(key: ConfigKey, configDir: string): boolean {
   const store = readStore(configDir);
   const nextLocks = store.managedLocks.filter((entry) => entry.key !== key);
   if (nextLocks.length === store.managedLocks.length) return false;
@@ -408,6 +409,7 @@ function buildResolvedEntries(configManager: ConfigManager, store: SettingsContr
 export function getSettingsControlPlaneSnapshot(configManager: ConfigManager): SettingsControlPlaneSnapshot {
   const store = readStore(getConfigControlPlaneDir(configManager));
   const resolvedEntries = buildResolvedEntries(configManager, store);
+  const profileManager = new ProfileManager(join(configManager.getControlPlaneConfigDir(), 'profiles'));
   const resolvedCounts: Record<SettingsSource, number> = {
     default: 0,
     local: 0,
@@ -417,7 +419,7 @@ export function getSettingsControlPlaneSnapshot(configManager: ConfigManager): S
   for (const entry of resolvedEntries) resolvedCounts[entry.effectiveSource]++;
   return {
     liveKeyCount: CONFIG_SCHEMA.length,
-    profileCount: new ProfileManager().list().length,
+    profileCount: profileManager.list().length,
     managedLockCount: store.managedLocks.length,
     resolvedCounts,
     lastSync: store.events[store.events.length - 1],

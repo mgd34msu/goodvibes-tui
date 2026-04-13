@@ -3,7 +3,6 @@ import type { RuntimeEventBus } from './events/index.ts';
 import type { RuntimeServices } from './services.ts';
 import { DaemonServer } from '../daemon/server.ts';
 import { HttpListener } from '../daemon/http-listener.ts';
-import { UserAuthManager } from '../security/user-auth.ts';
 import { logger } from '../utils/logger.ts';
 import net from 'node:net';
 
@@ -21,8 +20,16 @@ interface HttpListenerService {
 }
 
 interface ServiceFactories {
-  createDaemonServer?: (runtimeBus: RuntimeEventBus, userAuth: UserAuthManager, runtimeServices?: RuntimeServices) => DaemonService;
-  createHttpListener?: (hookDispatcher: HookDispatcher, userAuth: UserAuthManager) => HttpListenerService;
+  createDaemonServer?: (
+    runtimeBus: RuntimeEventBus,
+    userAuth: RuntimeServices['localUserAuthManager'],
+    runtimeServices: RuntimeServices,
+  ) => DaemonService;
+  createHttpListener?: (
+    hookDispatcher: HookDispatcher,
+    userAuth: RuntimeServices['localUserAuthManager'],
+    configManager: RuntimeServices['configManager'],
+  ) => HttpListenerService;
   startupTimeoutMs?: number;
   probeDaemonPortInUse?: (host: string, port: number) => Promise<boolean>;
   probeHttpListenerPortInUse?: (host: string, port: number) => Promise<boolean>;
@@ -101,13 +108,13 @@ export async function startExternalServices(
   runtimeBus: RuntimeEventBus,
   hookDispatcher: HookDispatcher,
   factories: ServiceFactories = {},
-  runtimeServices?: RuntimeServices,
+  runtimeServices: RuntimeServices,
 ): Promise<ExternalServicesHandle> {
-  const sharedUserAuth = runtimeServices?.localUserAuthManager ?? new UserAuthManager();
-  const createDaemonServer = factories.createDaemonServer ?? ((bus: RuntimeEventBus, userAuth: UserAuthManager, services?: RuntimeServices): DaemonService =>
-    new DaemonServer({ runtimeBus: bus, userAuth, ...(services ? { runtimeServices: services } : {}) }));
-  const createHttpListener = factories.createHttpListener ?? ((dispatcher: HookDispatcher, userAuth: UserAuthManager): HttpListenerService =>
-    new HttpListener({ hookDispatcher: dispatcher, userAuth }));
+  const sharedUserAuth = runtimeServices.localUserAuthManager;
+  const createDaemonServer = factories.createDaemonServer ?? ((bus, userAuth, services): DaemonService =>
+    new DaemonServer({ runtimeBus: bus, userAuth, runtimeServices: services }));
+  const createHttpListener = factories.createHttpListener ?? ((dispatcher, userAuth, configManager): HttpListenerService =>
+    new HttpListener({ hookDispatcher: dispatcher, userAuth, configManager }));
   const startupTimeoutMs = factories.startupTimeoutMs ?? DEFAULT_SERVICE_START_TIMEOUT_MS;
   const daemonHost = String(config.get('controlPlane.host') ?? '127.0.0.1');
   const daemonPort = Number(config.get('controlPlane.port') ?? 3421);
@@ -153,7 +160,7 @@ export async function startExternalServices(
         port: httpListenerPort,
       });
     } else {
-      httpListener = createHttpListener(hookDispatcher, sharedUserAuth);
+      httpListener = createHttpListener(hookDispatcher, sharedUserAuth, runtimeServices.configManager);
       httpListener.enable({ httpListener: true });
       try {
         const service = httpListener;

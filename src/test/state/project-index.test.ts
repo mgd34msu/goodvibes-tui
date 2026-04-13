@@ -331,12 +331,6 @@ describe('ProjectIndex baseDir ownership', () => {
     resetTestProjectIndexes();
   });
 
-  afterEach(async () => {
-    const inst = getTestProjectIndex();
-    await inst.forceFlush().catch(() => {});
-    resetTestProjectIndexes();
-  });
-
   test('returns separate instances for different baseDir values', () => {
     const dir1 = mkdtempSync(join(tmpdir(), 'gv-pi-dir1-'));
     const dir2 = mkdtempSync(join(tmpdir(), 'gv-pi-dir2-'));

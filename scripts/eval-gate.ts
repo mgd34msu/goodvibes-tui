@@ -33,6 +33,7 @@ const suiteArg = getArg('--suite');
 const baselineFile = getArg('--baseline') ?? '.goodvibes/eval/baseline.json';
 const saveBaseline = argv.includes('--save-baseline');
 const verbose = argv.includes('--verbose') || argv.includes('-v');
+const projectRoot = process.cwd();
 
 // ── Suite selection ───────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ console.log(`Baseline: ${baselineFile}`);
 console.log('='.repeat(72));
 
 const runner = new EvalRunner({ regressionThreshold: 5 });
-const baseline = await loadBaseline(baselineFile);
+const baseline = await loadBaseline(baselineFile, projectRoot);
 const freshResults = [];
 let anyGateFailed = false;
 
@@ -85,7 +86,7 @@ if (saveBaseline || !baseline) {
   const label = `run-${new Date().toISOString().slice(0, 10)}`;
   const newBaseline = captureBaseline(label, freshResults);
   try {
-    await writeBaseline(baselineFile, newBaseline);
+    await writeBaseline(baselineFile, newBaseline, projectRoot);
     console.log(`\nBaseline saved to ${baselineFile} (label: ${label})`);
   } catch (err) {
     console.error(`Warning: could not save baseline: ${err instanceof Error ? err.message : String(err)}`);

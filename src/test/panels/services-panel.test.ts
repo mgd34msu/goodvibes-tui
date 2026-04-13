@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { ServicesPanel } from '../../panels/services-panel.ts';
@@ -41,8 +42,11 @@ describe('ServicesPanel', () => {
     process.env.SLACK_BOT_TOKEN = 'xoxb-test-token';
     process.env.SLACK_WEBHOOK_URL = 'https://hooks.slack.test/example';
     process.env.SLACK_SIGNING_SECRET = 'secret';
-    registry = new ServiceRegistry(filePath);
-    subscriptionManager = new SubscriptionManager();
+    subscriptionManager = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
+    registry = new ServiceRegistry(filePath, {
+      secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+      subscriptionManager,
+    });
   });
 
   afterEach(() => {
@@ -101,7 +105,7 @@ describe('ServicesPanel', () => {
         },
       },
     }), 'utf-8');
-    subscriptionManager = new SubscriptionManager();
+    subscriptionManager = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
     subscriptionManager.saveSubscription({
       provider: 'openai',
       accessToken: 'oauth-openai-token',
@@ -111,7 +115,10 @@ describe('ServicesPanel', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
-    registry = new ServiceRegistry(filePath);
+    registry = new ServiceRegistry(filePath, {
+      secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+      subscriptionManager,
+    });
     const panel = new ServicesPanel(registry, subscriptionManager);
     await new Promise((resolve) => setTimeout(resolve, 0));
     const text = linesText(panel.render(120, 14));

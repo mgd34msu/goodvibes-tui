@@ -31,7 +31,11 @@ export type { AnalyzeInput } from './types.ts';
 export function createAnalyzeTool(
   toolLLM: Pick<ToolLLM, 'chat'>,
   featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null,
+  projectRoot?: string,
 ): Tool {
+  if (typeof projectRoot !== 'string' || projectRoot.trim().length === 0) {
+    throw new Error('createAnalyzeTool requires projectRoot');
+  }
   return {
     definition: analyzeSchema,
 
@@ -44,57 +48,60 @@ export function createAnalyzeTool(
         const input = args as unknown as AnalyzeInput;
         const outputFormat = input.output?.format ?? 'json';
 
-        const projectRoot = input.projectRoot
-          ? resolve(input.projectRoot)
-          : process.cwd();
+        const resolvedProjectRoot = resolve(
+          typeof input.projectRoot === 'string' && input.projectRoot.trim().length > 0
+            ? input.projectRoot
+            : projectRoot,
+        );
 
         let result: Record<string, unknown>;
 
         switch (input.mode) {
           case 'impact':
-            result = await runImpact(input, projectRoot);
+            result = await runImpact(input, resolvedProjectRoot);
             break;
+
           case 'dependencies':
-            result = await runDependencies(input, projectRoot);
+            result = await runDependencies(input, resolvedProjectRoot);
             break;
           case 'dead_code':
-            result = await runDeadCode(input, projectRoot);
+            result = await runDeadCode(input, resolvedProjectRoot);
             break;
           case 'security':
-            result = await runSecurity(input, projectRoot);
+            result = await runSecurity(input, resolvedProjectRoot);
             break;
           case 'coverage':
-            result = await runCoverage(input, projectRoot);
+            result = await runCoverage(input, resolvedProjectRoot);
             break;
           case 'bundle':
-            result = await runBundle(input, projectRoot);
+            result = await runBundle(input, resolvedProjectRoot);
             break;
           case 'surface':
-            result = await runSurface(input, projectRoot);
+            result = await runSurface(input, resolvedProjectRoot);
             break;
           case 'preview':
-            result = await runPreview(input, projectRoot);
+            result = await runPreview(input, resolvedProjectRoot);
             break;
           case 'diff':
-            result = await runDiff(input, projectRoot);
+            result = await runDiff(input, resolvedProjectRoot);
             break;
           case 'breaking':
-            result = await runBreaking(input, projectRoot);
+            result = await runBreaking(input, resolvedProjectRoot);
             break;
           case 'semantic_diff':
-            result = await runSemanticDiff(input, projectRoot, toolLLM);
+            result = await runSemanticDiff(input, resolvedProjectRoot, toolLLM);
             break;
           case 'upgrade':
-            result = await runUpgrade(input, projectRoot);
+            result = await runUpgrade(input, resolvedProjectRoot);
             break;
           case 'permissions':
-            result = await runPermissions(input, projectRoot);
+            result = await runPermissions(input, resolvedProjectRoot);
             break;
           case 'env_audit':
-            result = await runEnvAudit(input, projectRoot);
+            result = await runEnvAudit(input, resolvedProjectRoot);
             break;
           case 'test_find':
-            result = await runTestFind(input, projectRoot);
+            result = await runTestFind(input, resolvedProjectRoot);
             break;
           default: {
             const exhaustive: never = input.mode;

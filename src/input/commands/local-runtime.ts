@@ -8,8 +8,7 @@ import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '../../config/secret-refs.ts';
-import { getPluginDirectories } from '../../plugins/loader.ts';
-import { openCommandPanel, requireBookmarkManager, requireSecretsManager } from './runtime-services.ts';
+import { openCommandPanel, requireBookmarkManager, requireProviderApi, requireSecretsManager } from './runtime-services.ts';
 
 function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContext): void {
   const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
@@ -17,7 +16,7 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
     ctx.print(`Unknown type: ${typeFilter}\nValid types: ${VALID_TYPES.join(', ')}`);
     return;
   }
-  const blockRegistry = ctx.conversationManager.getBlockRegistry();
+  const blockRegistry = ctx.session.conversationManager.getBlockRegistry();
   if (!blockRegistry || blockRegistry.length === 0) {
     ctx.print('No blocks found.');
     return;
@@ -30,9 +29,9 @@ function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContex
       || (typeFilter === 'code' && block.type === 'code')
       || (typeFilter === 'thinking' && block.type === 'thinking');
     if (!matchesType) continue;
-    const isCurrentlyCollapsed = ctx.conversationManager.isCollapsed(i);
+    const isCurrentlyCollapsed = ctx.session.conversationManager.isCollapsed(i);
     if (collapsed ? !isCurrentlyCollapsed : isCurrentlyCollapsed) {
-      ctx.conversationManager.toggleCollapseAtLine(block.startLine);
+      ctx.session.conversationManager.toggleCollapseAtLine(block.startLine);
       count++;
     }
   }
@@ -80,7 +79,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         }
         return;
       }
-      const tools = ctx.toolRegistry.list();
+      const tools = ctx.extensions.toolRegistry.list();
       if (ctx.openSelection) {
         const items: SelectionItem[] = tools.map(t => ({
           id: t.definition.name,
@@ -240,7 +239,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     handler(args, ctx) {
       if (args.length === 0) {
         if (ctx.openSelection) {
-          const cm = ctx.configManager;
+          const cm = ctx.platform.configManager;
           const dangerObj = cm.getAll().danger as Record<string, unknown>;
           const items: SelectionItem[] = Object.entries(dangerObj).map(([field, val]) => {
             const key = `danger.${field}`;
@@ -280,7 +279,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
             }
           });
         } else {
-          const dangerObj = ctx.configManager.getAll().danger as Record<string, unknown>;
+          const dangerObj = ctx.platform.configManager.getAll().danger as Record<string, unknown>;
           ctx.print(['⚠ Danger Zone Settings:', '', ...Object.entries(dangerObj).map(([field, val]) => `  ${`danger.${field}`.padEnd(36)} ${String(val)}`)].join('\n'));
         }
         return;
@@ -288,7 +287,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       const key = args[0].startsWith('danger.') ? args[0] : `danger.${args[0]}`;
       if (args.length === 1) {
         try {
-          ctx.print(`${key} = ${String(ctx.configManager.get(key as Parameters<typeof ctx.configManager.get>[0]))}`);
+          ctx.print(`${key} = ${String(ctx.platform.configManager.get(key as Parameters<typeof ctx.platform.configManager.get>[0]))}`);
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
         }
@@ -302,7 +301,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         }
         const rawValue = args.slice(1).join(' ');
         const coerced: unknown = schema.type === 'boolean' ? (rawValue === 'true' || rawValue === '1' || rawValue === 'yes') : schema.type === 'number' ? Number(rawValue) : rawValue;
-        ctx.configManager.setDynamic(key as Parameters<typeof ctx.configManager.get>[0], coerced);
+        ctx.platform.configManager.setDynamic(key as Parameters<typeof ctx.platform.configManager.get>[0], coerced);
         ctx.print(`⚠ Set ${key} = ${String(coerced)}`);
       } catch (e) {
         ctx.print(`Error: ${(e as Error).message}`);
@@ -323,9 +322,14 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       }
       const rawPath = args[0];
       const promptText = args.slice(1).join(' ') || `Attached image: ${rawPath.split('/').pop() ?? rawPath}`;
+      const projectRoot = ctx.workspace.shellPaths?.workingDirectory ?? ctx.platform.configManager.getWorkingDirectory();
+      if (!projectRoot) {
+        ctx.print('Error: working directory is unavailable.');
+        return;
+      }
       let resolvedPath: string;
       try {
-        resolvedPath = resolveAndValidatePath(rawPath);
+        resolvedPath = resolveAndValidatePath(rawPath, projectRoot);
       } catch (err) {
         ctx.print(`Error: ${err instanceof Error ? err.message : String(err)}`);
         return;
@@ -352,7 +356,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         ctx.print(`Failed to read image: ${err instanceof Error ? err.message : String(err)}`);
         return;
       }
-      const currentModel = ctx.providerRegistry.getCurrentModel();
+      const currentModel = await requireProviderApi(ctx).getCurrentModel();
       if (!currentModel.capabilities.multimodal) {
         ctx.print(`Warning: ${currentModel.displayName} does not support image input. The image will be stripped when sending.`);
       }
@@ -365,32 +369,29 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     name: 'refresh-models',
     description: 'Refresh model catalog, benchmarks, and token limits',
     async handler(_args, ctx) {
+      const providerApi = requireProviderApi(ctx);
       let catalogOk = false;
       let benchmarksOk = false;
       let limitsOk = false;
       ctx.print('Refreshing model catalog...');
       try {
-        await ctx.providerRegistry.refreshCatalog();
+        const catalog = await providerApi.refreshCatalog();
         catalogOk = true;
-        const models = ctx.providerRegistry.getCatalogModelDefinitions();
-        ctx.print(`Model catalog refreshed: ${models.length} models from ${new Set(models.map((m) => m.provider)).size} providers`);
+        ctx.print(`Model catalog refreshed: ${catalog.modelCount} models from ${catalog.providerCount} providers`);
       } catch (e) {
         ctx.print(`Catalog refresh failed: ${(e as Error).message}`);
       }
       ctx.print('Refreshing benchmarks...');
       try {
-        if (!ctx.benchmarkStore) {
-          throw new Error('Benchmark store unavailable');
-        }
-        await ctx.benchmarkStore.refreshBenchmarks();
+        const benchmarkCount = await providerApi.refreshBenchmarks();
         benchmarksOk = true;
-        ctx.print('Benchmarks refreshed.');
+        ctx.print(`Benchmarks refreshed${benchmarkCount > 0 ? `: ${benchmarkCount} model records available.` : '.'}`);
       } catch (e) {
         ctx.print(`Benchmarks refresh failed: ${(e as Error).message}`);
       }
       ctx.print('Refreshing token limits...');
       try {
-        const count = await ctx.providerRegistry.refreshModelLimits();
+        const count = await providerApi.refreshModelLimits();
         limitsOk = true;
         ctx.print(`Token limits refreshed: ${count} models updated.`);
       } catch (e) {
@@ -406,23 +407,28 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     usage: '<model-id>',
     argsHint: '<model-id>',
     async handler(args, ctx) {
+      const providerApi = requireProviderApi(ctx);
       const modelId = args[0];
-      const favoritesStore = ctx.favoritesStore;
-      if (!favoritesStore) {
-        ctx.print('Favorites store unavailable.');
-        return;
-      }
       if (!modelId) {
-        const pinned = await favoritesStore.getPinned();
-        ctx.print(pinned.length === 0 ? 'No pinned models. Use /pin <model-id> to pin one.' : `Pinned models:\n${pinned.map(id => `  ★ ${id}`).join('\n')}`);
+        const favorites = await providerApi.getFavorites();
+        ctx.print(
+          favorites.pinned.length === 0
+            ? 'No pinned models. Use /pin <model-id> to pin one.'
+            : `Pinned models:\n${favorites.pinned.map((entry) => `  ★ ${entry.registryKey ?? entry.modelId}`).join('\n')}`,
+        );
         return;
       }
-      if (await favoritesStore.isModelPinned(modelId)) {
+      const favorites = await providerApi.getFavorites();
+      if (favorites.pinned.some((entry) => entry.modelId === modelId || entry.registryKey === modelId)) {
         ctx.print(`Model already pinned: ${modelId}`);
         return;
       }
-      await favoritesStore.pinModel(modelId);
-      ctx.print(`Pinned: ${modelId}`);
+      try {
+        await providerApi.pinModel(modelId);
+        ctx.print(`Pinned: ${modelId}`);
+      } catch (e) {
+        ctx.print(`Error: ${(e as Error).message}`);
+      }
     },
   });
 
@@ -432,21 +438,19 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     usage: '<model-id>',
     argsHint: '<model-id>',
     async handler(args, ctx) {
+      const providerApi = requireProviderApi(ctx);
       const modelId = args[0];
-      const favoritesStore = ctx.favoritesStore;
-      if (!favoritesStore) {
-        ctx.print('Favorites store unavailable.');
-        return;
-      }
       if (!modelId) {
         ctx.print('Usage: /unpin <model-id>');
         return;
       }
-      if (!await favoritesStore.isModelPinned(modelId)) {
+      const favorites = await providerApi.getFavorites();
+      const pinned = favorites.pinned.find((entry) => entry.modelId === modelId || entry.registryKey === modelId);
+      if (!pinned) {
         ctx.print(`Model is not pinned: ${modelId}`);
         return;
       }
-      await favoritesStore.unpinModel(modelId);
+      await providerApi.unpinModel(pinned.modelId);
       ctx.print(`Unpinned: ${modelId}`);
     },
   });

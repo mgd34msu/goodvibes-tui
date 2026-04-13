@@ -39,6 +39,7 @@ describe('PermissionManager hook coverage', () => {
       getSnapshot: () => ({
         permissions: { mode: 'prompt', tools: {} },
       }) as never,
+      getWorkingDirectory: () => '/tmp/goodvibes-hooks-test',
     }, policyRuntimeState, dispatcher);
 
     const result = await manager.checkDetailed('edit', { path: 'src/file.ts' });

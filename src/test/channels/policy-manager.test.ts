@@ -1,12 +1,28 @@
-import { describe, test, expect } from 'bun:test';
-import { rmSync } from 'node:fs';
+import { afterEach, beforeEach, describe, test, expect } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { ChannelPolicyManager } from '../../channels/policy-manager.ts';
 
 describe('ChannelPolicyManager', () => {
+  let root = '';
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'goodvibes-channel-policy-'));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function createManager(): ChannelPolicyManager {
+    return new ChannelPolicyManager({
+      storePath: join(root, '.goodvibes', 'tui', 'channels', 'policies.json'),
+    });
+  }
+
   test('applies group-specific overrides on top of the surface policy', async () => {
-    rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
-    const manager = new ChannelPolicyManager();
+    const manager = createManager();
 
     await manager.upsertPolicy('webhook', {
       requireMention: false,
@@ -42,8 +58,7 @@ describe('ChannelPolicyManager', () => {
   });
 
   test('enforces conversation kind toggles and group allowlists', async () => {
-    rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
-    const manager = new ChannelPolicyManager();
+    const manager = createManager();
 
     await manager.upsertPolicy('slack', {
       allowDirectMessages: false,
@@ -94,8 +109,7 @@ describe('ChannelPolicyManager', () => {
   });
 
   test('allows authorized control commands to bypass mention gating when configured', async () => {
-    rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
-    const manager = new ChannelPolicyManager();
+    const manager = createManager();
 
     await manager.upsertPolicy('discord', {
       requireMention: true,
@@ -127,5 +141,9 @@ describe('ChannelPolicyManager', () => {
     });
     expect(blocked.allowed).toBe(false);
     expect(blocked.reason).toBe('mention-required');
+  });
+
+  test('requires an explicit store owner', () => {
+    expect(() => new ChannelPolicyManager({})).toThrow('ChannelPolicyManager requires an explicit store or storePath');
   });
 });

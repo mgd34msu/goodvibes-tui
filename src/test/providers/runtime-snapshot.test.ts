@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { ConfigManager } from '../../config/manager.ts';
 import { FavoritesStore } from '../../providers/favorites.ts';
 import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
 import { CacheHitTracker } from '../../providers/cache-strategy.ts';
@@ -31,11 +32,17 @@ describe('provider runtime snapshots', () => {
     process.chdir(root);
     secrets = new SecretsManager({ projectRoot: root, globalHome: root });
     subscriptions = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
+    const serviceRegistry = new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
+      secretsManager: secrets,
+      subscriptionManager: subscriptions,
+    });
     const favoritesStore = new FavoritesStore({ dir: join(root, '.goodvibes', 'tui') });
     const benchmarkStore = new BenchmarkStore({ dir: join(root, '.goodvibes', 'tui') });
     providerRegistry = new ProviderRegistry({
       configManager: new ConfigManager({ configDir: join(root, '.goodvibes', 'tui') }),
       subscriptionManager: subscriptions,
+      secretsManager: secrets,
+      serviceRegistry,
       capabilityRegistry: new ProviderCapabilityRegistry(),
       cacheHitTracker: new CacheHitTracker(),
       favoritesStore,

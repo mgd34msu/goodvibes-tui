@@ -1,11 +1,9 @@
-import { ConfigManager } from '../../config/manager.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
-import type { RuntimeEventBus } from '../../runtime/events/index.ts';
+import type { ConfigManager } from '../../config/manager.ts';
+import type { ServiceRegistry } from '../../config/service-registry.ts';
 import type { ToolRegistry } from '../../tools/registry.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { Orchestrator } from '../../core/orchestrator.ts';
 import type { MemoryRegistry } from '../../state/memory-store.ts';
-import type { RuntimeStore } from '../../runtime/store/index.ts';
 import type { ApprovalBroker, SharedSessionBroker } from '../../control-plane/index.ts';
 import type { AutomationManager } from '../../automation/index.ts';
 import type { ControlPlaneRecentEvent } from '../../control-plane/gateway.ts';
@@ -15,13 +13,13 @@ import type { HookWorkbench } from '../../hooks/workbench.ts';
 import type { HookDispatcher } from '../../hooks/dispatcher.ts';
 import type { HookActivityTracker } from '../../hooks/activity.ts';
 import type { McpRegistry } from '../../mcp/registry.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
-import { SessionManager } from '../../sessions/manager.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
-import { UserAuthManager } from '../../security/user-auth.ts';
-import { SessionMemoryStore } from '../../core/session-memory.ts';
-import { ExecutionPlanManager } from '../../core/execution-plan.ts';
-import { AdaptivePlanner } from '../../core/adaptive-planner.ts';
+import type { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import type { SessionManager } from '../../sessions/manager.ts';
+import type { SubscriptionManager } from '../../config/subscriptions.ts';
+import type { UserAuthManager } from '../../security/user-auth.ts';
+import type { SessionMemoryStore } from '../../core/session-memory.ts';
+import type { ExecutionPlanManager } from '../../core/execution-plan.ts';
+import type { AdaptivePlanner } from '../../core/adaptive-planner.ts';
 import type { ApiTokenAuditor } from '../../security/token-audit.ts';
 import type { PanelHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
 import type { WorktreeRegistry } from '../../runtime/worktree/registry.ts';
@@ -56,8 +54,6 @@ export interface BuiltinPanelDeps {
   resumeSession?: (sessionId: string) => void;
   /** Request a shell repaint directly rather than routing through a retired event path. */
   requestRender?: () => void;
-  /** RuntimeEventBus for typed panel subscriptions and operator surfaces. */
-  runtimeBus: RuntimeEventBus;
   /** ForensicsRegistry for the Forensics panel. */
   forensicsRegistry?: import('../../runtime/forensics/registry.ts').ForensicsRegistry;
   /** EvalRegistry for the Eval panel. */
@@ -66,8 +62,6 @@ export interface BuiltinPanelDeps {
   memoryRegistry?: MemoryRegistry;
   /** Shared policy runtime state for governance/policy diagnostics. */
   policyRuntimeState?: import('../../runtime/permissions/policy-runtime.ts').PolicyRuntimeState;
-  /** Runtime store for store-backed control-room panels. */
-  runtimeStore?: RuntimeStore;
   /** Approval broker for control-plane/operator panels. */
   approvalBroker?: ApprovalBroker;
   /** Shared session broker for control-plane/operator panels. */
@@ -117,6 +111,7 @@ export type ResolvedBuiltinPanelDeps = Omit<
   | 'planManager'
   | 'adaptivePlanner'
   | 'policyRuntimeState'
+  | 'systemMessagesPanel'
 > & {
   readonly configManager: ConfigManager;
   readonly localUserAuthManager: UserAuthManager;
@@ -127,6 +122,7 @@ export type ResolvedBuiltinPanelDeps = Omit<
   readonly planManager: ExecutionPlanManager;
   readonly adaptivePlanner: AdaptivePlanner;
   readonly policyRuntimeState: PolicyRuntimeState;
+  readonly systemMessagesPanel: import('../system-messages-panel.ts').SystemMessagesPanel;
 };
 
 export interface ControlPlanePanelFactoryDeps {
@@ -135,18 +131,57 @@ export interface ControlPlanePanelFactoryDeps {
   readonly getControlPlaneRecentEvents: (limit: number) => readonly ControlPlaneRecentEvent[];
 }
 
+function requireBuiltinPanelDep<TValue>(value: TValue | undefined, message: string): TValue {
+  if (value === undefined) {
+    throw new Error(message);
+  }
+  return value;
+}
+
 export function resolveBuiltinPanelDeps(deps: BuiltinPanelDeps): ResolvedBuiltinPanelDeps {
+  const uiServices = requireUiServices(deps);
   return {
     ...deps,
-    configManager: deps.configManager ?? new ConfigManager(),
-    localUserAuthManager: deps.uiServices?.localUserAuthManager ?? deps.localUserAuthManager ?? new UserAuthManager(),
-    sessionManager: deps.uiServices?.sessionManager ?? deps.sessionManager ?? new SessionManager(),
-    subscriptionManager: deps.uiServices?.subscriptionManager ?? deps.subscriptionManager ?? new SubscriptionManager(),
-    serviceRegistry: deps.uiServices?.serviceRegistry ?? deps.serviceRegistry ?? new ServiceRegistry(),
-    sessionMemoryStore: deps.sessionMemoryStore ?? new SessionMemoryStore(),
-    planManager: deps.planManager ?? new ExecutionPlanManager(),
-    adaptivePlanner: deps.adaptivePlanner ?? new AdaptivePlanner(),
-    policyRuntimeState: deps.policyRuntimeState ?? new PolicyRuntimeState(),
+    configManager: requireBuiltinPanelDep(
+      uiServices.configManager,
+      'Config manager must be wired at bootstrap for builtin panels.',
+    ),
+    localUserAuthManager: requireBuiltinPanelDep(
+      uiServices.localUserAuthManager,
+      'Local auth manager must be wired at bootstrap for builtin panels.',
+    ),
+    sessionManager: requireBuiltinPanelDep(
+      uiServices.sessionManager,
+      'Session manager must be wired at bootstrap for builtin panels.',
+    ),
+    subscriptionManager: requireBuiltinPanelDep(
+      uiServices.subscriptionManager,
+      'Subscription manager must be wired at bootstrap for builtin panels.',
+    ),
+    serviceRegistry: requireBuiltinPanelDep(
+      uiServices.serviceRegistry,
+      'Service registry must be wired at bootstrap for builtin panels.',
+    ),
+    sessionMemoryStore: requireBuiltinPanelDep(
+      uiServices.sessionMemoryStore,
+      'Session memory store must be wired at bootstrap for builtin panels.',
+    ),
+    planManager: requireBuiltinPanelDep(
+      uiServices.planManager,
+      'Execution plan manager must be wired at bootstrap for builtin panels.',
+    ),
+    adaptivePlanner: requireBuiltinPanelDep(
+      uiServices.adaptivePlanner,
+      'Adaptive planner must be wired at bootstrap for builtin panels.',
+    ),
+    policyRuntimeState: requireBuiltinPanelDep(
+      uiServices.policyRuntimeState,
+      'Policy runtime state must be wired at bootstrap for builtin panels.',
+    ),
+    systemMessagesPanel: requireBuiltinPanelDep(
+      deps.systemMessagesPanel,
+      'System messages panel must be wired at bootstrap for builtin panels.',
+    ),
   };
 }
 

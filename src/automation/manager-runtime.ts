@@ -3,7 +3,7 @@ import { ConfigManager } from '../config/manager.ts';
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { AgentManager } from '../tools/agent/index.ts';
+import type { AgentManager } from '../tools/agent/index.ts';
 import { AgentMessageBus } from '../agents/message-bus.ts';
 import { migrateLegacySchedules, type LegacySchedulerSnapshot } from './migration.ts';
 import { AutomationJobStore } from './store/jobs.ts';
@@ -91,7 +91,7 @@ interface AutomationManagerConfig {
   readonly runtimeStore?: RuntimeStore;
   readonly runtimeBus?: RuntimeEventBus;
   readonly deliveryManager?: AutomationDeliveryManager;
-  readonly configManager?: ConfigManager;
+  readonly configManager: ConfigManager;
   readonly routeBindings: RouteBindingManager;
   readonly sessionBroker: SharedSessionBroker;
 }
@@ -110,9 +110,9 @@ export class AutomationManager {
   private readonly jobStore: AutomationJobStore;
   private readonly runStore: AutomationRunStore;
   private readonly legacyStore: PersistentStore<LegacySchedulerSnapshot>;
-  private readonly spawnTask: (input: SpawnAutomationTaskInput) => string;
-  private readonly cancelTask: (agentId: string) => void;
-  private readonly agentStatusProvider: Pick<AgentManager, 'getStatus'>;
+  private readonly spawnTask?: (input: SpawnAutomationTaskInput) => string;
+  private readonly cancelTask?: (agentId: string) => void;
+  private readonly agentStatusProvider?: Pick<AgentManager, 'getStatus'>;
   private readonly configManager: ConfigManager;
   private readonly routeBindings: RouteBindingManager;
   private readonly sessionBroker: SharedSessionBroker;
@@ -131,7 +131,7 @@ export class AutomationManager {
   private reconcileTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: AutomationManagerConfig) {
-    this.configManager = config.configManager ?? new ConfigManager();
+    this.configManager = config.configManager;
     this.jobStore = config.jobStore ?? new AutomationJobStore({ configManager: this.configManager });
     this.runStore = config.runStore ?? new AutomationRunStore({ configManager: this.configManager });
     this.legacyStore = config.legacyStore ?? new PersistentStore<LegacySchedulerSnapshot>(
@@ -139,28 +139,9 @@ export class AutomationManager {
     );
     this.routeBindings = config.routeBindings;
     this.sessionBroker = config.sessionBroker;
-    const fallbackAgentManager = (
-      config.agentStatusProvider && config.spawnTask && config.cancelTask
-    ) ? null : new AgentManager();
-    const localAgentManager = fallbackAgentManager ?? new AgentManager();
-    this.agentStatusProvider = config.agentStatusProvider ?? localAgentManager;
-    this.spawnTask = config.spawnTask ?? ((input) => {
-      const record = localAgentManager.spawn({
-        mode: 'spawn',
-        task: input.prompt,
-        ...(input.modelId ? { model: input.modelId } : {}),
-        ...(input.modelProvider ? { provider: input.modelProvider } : {}),
-        ...(input.fallbackModels !== undefined ? { fallbackModels: [...input.fallbackModels] } : {}),
-        ...(input.template ? { template: input.template } : {}),
-        ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
-        ...(input.toolAllowlist?.length ? { tools: [...input.toolAllowlist], restrictTools: true } : {}),
-        ...(input.context ? { context: input.context } : {}),
-      });
-      return record.id;
-    });
-    this.cancelTask = config.cancelTask ?? ((agentId) => {
-      localAgentManager.cancel(agentId);
-    });
+    this.agentStatusProvider = config.agentStatusProvider;
+    this.spawnTask = config.spawnTask;
+    this.cancelTask = config.cancelTask;
     if (config.runtimeStore) {
       this.runtimeDispatch = createDomainDispatch(config.runtimeStore);
     }
@@ -168,12 +149,26 @@ export class AutomationManager {
     this.deliveryManager = config.deliveryManager ?? null;
   }
 
+  private requireSpawnTask(): (input: SpawnAutomationTaskInput) => string {
+    if (!this.spawnTask) {
+      throw new Error('AutomationManager requires an explicit spawnTask callback.');
+    }
+    return this.spawnTask;
+  }
+
+  private requireCancelTask(): (agentId: string) => void {
+    if (!this.cancelTask) {
+      throw new Error('AutomationManager requires an explicit cancelTask callback.');
+    }
+    return this.cancelTask;
+  }
+
   private runtimeExecutionContext() {
     return {
       configManager: this.configManager,
       routeBindings: this.routeBindings,
       sessionBroker: this.sessionBroker,
-      spawnTask: this.spawnTask,
+      spawnTask: (input: SpawnAutomationTaskInput) => this.requireSpawnTask()(input),
       saveJobs: () => this.saveJobs(),
       saveRuns: () => this.saveRuns(),
       pruneRunHistory: (jobId?: string) => this.pruneRunHistory(jobId),
@@ -376,7 +371,7 @@ export class AutomationManager {
     if (run.status !== 'running') return run;
 
     if (run.agentId) {
-      this.cancelTask(run.agentId);
+      this.requireCancelTask()(run.agentId);
     }
 
     const endedAt = Date.now();
@@ -585,6 +580,9 @@ export class AutomationManager {
   }
 
   private reconcileActiveRuns(): void {
+    if (!this.agentStatusProvider) {
+      return;
+    }
     reconcileAutomationActiveRuns({
       configManager: this.configManager,
       sessionBroker: this.sessionBroker,

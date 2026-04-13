@@ -53,12 +53,13 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
       if (mode === 'model') {
         const selected = state.modelPicker.getSelected();
         if (selected) {
+          const currentEffort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
           if (selected.reasoningEffort && selected.reasoningEffort.length > 0) {
-            state.modelPicker.showEffortPicker(selected, state.commandContext?.runtime.reasoningEffort ?? 'medium');
+            state.modelPicker.showEffortPicker(selected, currentEffort);
           } else {
             state.commandContext?.completeModelSelection?.({
               model: selected,
-              effort: state.commandContext?.runtime.reasoningEffort ?? 'medium',
+              effort: currentEffort,
             });
             state.modelPicker.close();
             if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
@@ -68,7 +69,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         const selectedProvider = state.modelPicker.getFilteredProviders()[idx];
         if (selectedProvider) {
           const models = state.commandContext
-            ? state.commandContext.providerRegistry.getSelectableModels().filter(m => m.provider === selectedProvider)
+            ? state.commandContext.provider.providerRegistry.getSelectableModels().filter(m => m.provider === selectedProvider)
             : [];
           state.modelPicker.showModelsForProvider(models, selectedProvider);
         }
@@ -84,7 +85,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
           const rawInput = state.modelPicker.contextCapQuery.trim();
           const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
           const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
-          const effort = state.commandContext?.runtime.reasoningEffort ?? 'medium';
+          const effort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
           state.commandContext?.completeModelSelection?.({ model: capModel, effort, contextCap: validCap });
         }
         state.modelPicker.close();
@@ -267,6 +268,7 @@ type FilePickerRouteState = {
   };
   prompt: string;
   cursorPos: number;
+  commandContext?: CommandContext;
   imageRegistry: Map<string, { data: string; mediaType: string }>;
   nextImageId: number;
   requestRender: () => void;
@@ -309,7 +311,12 @@ export function handleFilePickerToken(state: FilePickerRouteState, token: InputT
         const ext = selected.slice(selected.lastIndexOf('.'));
         if (!injectMode && state.imageExtensions.some(e => e === ext.toLowerCase())) {
           try {
-            const resolvedPath = resolveAndValidatePath(selected);
+            const projectRoot = state.commandContext?.workspace.shellPaths?.workingDirectory
+              ?? state.commandContext?.platform.configManager.getWorkingDirectory();
+            if (!projectRoot) {
+              throw new Error('working directory is unavailable');
+            }
+            const resolvedPath = resolveAndValidatePath(selected, projectRoot);
             const data = readFileSync(resolvedPath);
             const base64 = data.toString('base64');
             const mediaType = state.mediaTypeFromExt(ext);

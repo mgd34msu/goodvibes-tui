@@ -19,8 +19,8 @@ import { logger } from '../utils/logger.ts';
 export class AgentWorktree {
   private readonly git: GitService;
 
-  constructor(cwd?: string) {
-    this.git = new GitService(cwd ?? process.cwd());
+  constructor(cwd: string) {
+    this.git = new GitService(cwd);
   }
 
   /**

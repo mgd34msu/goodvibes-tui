@@ -9,10 +9,12 @@ import {
   loadSandboxQemuSetupManifest,
   scaffoldSandboxQemuSetupBundle,
 } from '../../runtime/sandbox/provisioning.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
 export async function handleSandboxQemuCommand(args: string[], ctx: CommandContext): Promise<boolean> {
+  const shellPaths = requireShellPaths(ctx);
   const sub = (args[1] ?? '').toLowerCase();
-  const sessions = ctx.sandboxSessionRegistry;
+  const sessions = ctx.workspace.sandboxSessionRegistry;
   if (!sessions) {
     ctx.print('Sandbox session registry is not wired into this runtime.');
     return true;
@@ -23,18 +25,18 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       ctx.print('Usage: /sandbox qemu setup <directory>');
       return true;
     }
-    const bundle = scaffoldSandboxQemuSetupBundle(ctx.configManager, dirArg);
-    ctx.configManager.setDynamic('sandbox.vmBackend', 'qemu');
-    ctx.configManager.setDynamic('sandbox.qemuExecWrapper', bundle.wrapperPath);
-    ctx.configManager.setDynamic('sandbox.qemuImagePath', bundle.imagePath);
-    if (!`${ctx.configManager.get('sandbox.qemuGuestHost') ?? ''}`.trim()) {
-      ctx.configManager.setDynamic('sandbox.qemuGuestHost', '127.0.0.1');
+    const bundle = scaffoldSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg);
+    ctx.platform.configManager.setDynamic('sandbox.vmBackend', 'qemu');
+    ctx.platform.configManager.setDynamic('sandbox.qemuExecWrapper', bundle.wrapperPath);
+    ctx.platform.configManager.setDynamic('sandbox.qemuImagePath', bundle.imagePath);
+    if (!`${ctx.platform.configManager.get('sandbox.qemuGuestHost') ?? ''}`.trim()) {
+      ctx.platform.configManager.setDynamic('sandbox.qemuGuestHost', '127.0.0.1');
     }
-    if (!`${ctx.configManager.get('sandbox.qemuGuestUser') ?? ''}`.trim()) {
-      ctx.configManager.setDynamic('sandbox.qemuGuestUser', 'goodvibes');
+    if (!`${ctx.platform.configManager.get('sandbox.qemuGuestUser') ?? ''}`.trim()) {
+      ctx.platform.configManager.setDynamic('sandbox.qemuGuestUser', 'goodvibes');
     }
-    if (!`${ctx.configManager.get('sandbox.qemuWorkspacePath') ?? ''}`.trim()) {
-      ctx.configManager.setDynamic('sandbox.qemuWorkspacePath', '/workspace');
+    if (!`${ctx.platform.configManager.get('sandbox.qemuWorkspacePath') ?? ''}`.trim()) {
+      ctx.platform.configManager.setDynamic('sandbox.qemuWorkspacePath', '/workspace');
     }
     ctx.print([
       `Initialized QEMU sandbox setup bundle in ${bundle.directory}`,
@@ -58,7 +60,7 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       return true;
     }
     try {
-      const bundle = bootstrapSandboxQemuSetupBundle(ctx.configManager, dirArg, sizeGb);
+      const bundle = bootstrapSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg, sizeGb);
       ctx.print([
         `Bootstrapped QEMU sandbox in ${bundle.directory}`,
         `  wrapper: ${bundle.wrapperPath}`,
@@ -82,9 +84,9 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       return true;
     }
     try {
-      const created = createSandboxQemuImage(imagePath, sizeGb);
-      ctx.configManager.setDynamic('sandbox.qemuImagePath', created.path);
-      ctx.configManager.setDynamic('sandbox.vmBackend', 'qemu');
+      const created = createSandboxQemuImage(shellPaths.workingDirectory, imagePath, sizeGb);
+      ctx.platform.configManager.setDynamic('sandbox.qemuImagePath', created.path);
+      ctx.platform.configManager.setDynamic('sandbox.vmBackend', 'qemu');
       ctx.print(`Created QEMU image ${created.path} (${created.sizeGb}G).`);
     } catch (error) {
       ctx.print(error instanceof Error ? error.message : String(error));
@@ -103,7 +105,7 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       return true;
     }
     sessions.stop(sessionId);
-    const restarted = await sessions.start(existing.profileId, existing.label, ctx.configManager);
+    const restarted = await sessions.start(existing.profileId, existing.label, ctx.platform.configManager);
     ctx.print(`Recovered sandbox session ${sessionId} -> ${restarted.id} (${restarted.state}, startup=${restarted.startupStatus ?? 'n/a'}).`);
     if (restarted.startupDetail) ctx.print(`  ${restarted.startupDetail}`);
     return true;
@@ -114,7 +116,7 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       ctx.print('Usage: /sandbox qemu inspect-setup <setup-manifest.json>');
       return true;
     }
-    const manifest = JSON.parse(readFileSync(resolve(process.cwd(), pathArg), 'utf-8'));
+    const manifest = JSON.parse(readFileSync(shellPaths.resolveWorkspacePath(pathArg), 'utf-8'));
     ctx.print(inspectSandboxQemuSetupManifest(manifest));
     return true;
   }
@@ -124,9 +126,9 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       ctx.print('Usage: /sandbox qemu apply-setup <setup-manifest.json>');
       return true;
     }
-    const manifest = loadSandboxQemuSetupManifest(pathArg);
-    applySandboxQemuSetupManifest(ctx.configManager, manifest);
-    ctx.print(`Applied QEMU sandbox setup from ${resolve(process.cwd(), pathArg)}.`);
+    const manifest = loadSandboxQemuSetupManifest(shellPaths.workingDirectory, pathArg);
+    applySandboxQemuSetupManifest(ctx.platform.configManager, manifest);
+    ctx.print(`Applied QEMU sandbox setup from ${shellPaths.resolveWorkspacePath(pathArg)}.`);
     return true;
   }
   ctx.print('Usage: /sandbox qemu <setup <directory>|bootstrap <directory> [size-gb]|create-image <path> [size-gb]|recover <session-id>|inspect-setup <setup-manifest.json>|apply-setup <setup-manifest.json>>');

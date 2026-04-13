@@ -10,12 +10,14 @@ import type { ExecutionPlan, PlanItem } from '../../core/execution-plan.ts';
 
 let tempDir: string;
 let manager: ExecutionPlanManager;
+let plansDir: string;
 
 beforeEach(async () => {
   const tmpBase = join(process.cwd(), 'tmp');
   await mkdir(tmpBase, { recursive: true });
   tempDir = await mkdtemp(join(tmpBase, 'gv-plan-test-'));
   manager = new ExecutionPlanManager(tempDir);
+  plansDir = join(tempDir, '.goodvibes', 'plans');
 });
 
 afterEach(async () => {
@@ -110,10 +112,11 @@ describe('ExecutionPlanManager.load / save', () => {
     expect(loaded!.items[0].status).toBe('complete');
   });
 
-  test('load returns null for corrupt JSON', () => {
+  test('load returns null for corrupt JSON', async () => {
     const { writeFileSync } = require('node:fs');
     const { join: pathJoin } = require('node:path');
-    writeFileSync(pathJoin(tempDir, 'bad-id.json'), 'not json {{{{', 'utf-8');
+    await mkdir(plansDir, { recursive: true });
+    writeFileSync(pathJoin(plansDir, 'bad-id.json'), 'not json {{{{', 'utf-8');
     expect(manager.load('bad-id')).toBeNull();
   });
 });
@@ -148,7 +151,7 @@ describe('ExecutionPlanManager.getActive', () => {
     const { writeFileSync } = require('node:fs');
     const { join: pathJoin } = require('node:path');
     writeFileSync(
-      pathJoin(tempDir, 'active.json'),
+      pathJoin(plansDir, 'active.json'),
       JSON.stringify({ planId: null }, null, 2) + '\n',
       'utf-8',
     );

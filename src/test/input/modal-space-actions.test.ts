@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { handleSelectionModalToken, handleSettingsModalToken } from '../../input/handler-modal-routes.ts';
 import { SettingsModal } from '../../input/settings-modal.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
 import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { join } from 'path';
@@ -233,11 +235,16 @@ describe('modal space actions', () => {
     try {
       const cm = new ConfigManager({ workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
       const subscriptionManager = new SubscriptionManager(join(dir, '.goodvibes', 'tui', 'subscriptions.json'));
+      const serviceRegistry = new ServiceRegistry(join(dir, '.goodvibes', 'tui', 'services.json'), {
+        secretsManager: new SecretsManager({ projectRoot: dir, globalHome: dir, configManager: cm }),
+        subscriptionManager,
+      });
       const modal = new SettingsModal();
       modal.open(
         cm,
         createFeatureFlagManager(),
         subscriptionManager,
+        serviceRegistry,
         { listServerSecurity: () => [], setServerTrustMode: () => {} } as never,
       );
       const idx = modal.currentItems.findIndex((entry) => entry.setting.key === 'display.stream');
@@ -285,11 +292,16 @@ describe('modal space actions', () => {
     try {
       const cm = new ConfigManager({ workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
       const subscriptionManager = new SubscriptionManager(join(dir, '.goodvibes', 'tui', 'subscriptions.json'));
+      const serviceRegistry = new ServiceRegistry(join(dir, '.goodvibes', 'tui', 'services.json'), {
+        secretsManager: new SecretsManager({ projectRoot: dir, globalHome: dir, configManager: cm }),
+        subscriptionManager,
+      });
       const modal = new SettingsModal();
       modal.open(
         cm,
         createFeatureFlagManager(),
         subscriptionManager,
+        serviceRegistry,
         { listServerSecurity: () => [], setServerTrustMode: () => {} } as never,
       );
 

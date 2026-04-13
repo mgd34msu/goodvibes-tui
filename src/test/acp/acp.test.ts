@@ -35,6 +35,7 @@ function makeTask(overrides: Partial<SubagentTask> = {}): SubagentTask {
     description: 'Test task',
     context: 'some context',
     tools: ['read', 'write'],
+    workingDirectory: '/tmp',
     ...overrides,
   };
 }

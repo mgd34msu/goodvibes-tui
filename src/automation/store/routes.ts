@@ -25,7 +25,7 @@ export class AutomationRouteStore {
   constructor(config: string | AutomationRouteStoreConfig = {}) {
     const path = typeof config === 'string'
       ? config
-      : config.path ?? resolveAutomationStorePath('automation-routes.json', config.configManager);
+      : config.path ?? resolveAutomationStorePath('automation-routes.json', config.configManager ?? {});
     this.store = new PersistentStore<AutomationRoutesSnapshot>(path);
   }
 

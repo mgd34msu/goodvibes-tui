@@ -1,10 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import type { ConfigManager } from '../config/manager.ts';
-import type { RuntimeStore } from './store/index.ts';
 import type { SessionMaintenanceStatus } from './session-maintenance.ts';
-import { buildEcosystemRecommendations } from './ecosystem/recommendations.ts';
+import type { EcosystemRecommendation } from './ecosystem/recommendations.ts';
 
 export type GuidanceMode = 'off' | 'minimal' | 'guided';
 export type GuidanceCategory = 'onboarding' | 'operational' | 'recovery' | 'optimization';
@@ -17,53 +15,79 @@ export interface GuidanceItem {
   readonly commands: readonly string[];
 }
 
+export interface ContextualGuidanceSnapshot {
+  readonly pendingApproval: boolean;
+  readonly denialCount: number;
+  readonly authRequiredMcpCount: number;
+  readonly degradedProviderCount: number;
+  readonly intelligenceUnavailable: boolean;
+  readonly recommendations: readonly EcosystemRecommendation[];
+}
+
 interface GuidanceDismissalStore {
   readonly version: 1;
   readonly dismissed: Record<string, number>;
 }
 
-const GUIDANCE_FILE = join(homedir(), '.goodvibes', 'tui', 'guidance.json');
+export interface GuidancePersistenceOptions {
+  readonly guidancePath?: string;
+  readonly userRoot?: string;
+  readonly homeDirectory?: string;
+}
 
-function readDismissals(): GuidanceDismissalStore {
+function resolveGuidancePath(options?: GuidancePersistenceOptions): string {
+  if (options?.guidancePath) {
+    return options.guidancePath;
+  }
+  const userRoot = options?.userRoot ?? options?.homeDirectory;
+  if (!userRoot) {
+    throw new Error('Guidance persistence requires guidancePath or an explicit userRoot/homeDirectory.');
+  }
+  return join(userRoot, '.goodvibes', 'tui', 'guidance.json');
+}
+
+function readDismissals(options?: GuidancePersistenceOptions): GuidanceDismissalStore {
   try {
-    if (!existsSync(GUIDANCE_FILE)) return { version: 1, dismissed: {} };
-    return JSON.parse(readFileSync(GUIDANCE_FILE, 'utf-8')) as GuidanceDismissalStore;
+    const guidanceFile = resolveGuidancePath(options);
+    if (!existsSync(guidanceFile)) return { version: 1, dismissed: {} };
+    return JSON.parse(readFileSync(guidanceFile, 'utf-8')) as GuidanceDismissalStore;
   } catch {
     return { version: 1, dismissed: {} };
   }
 }
 
-function writeDismissals(store: GuidanceDismissalStore): void {
-  mkdirSync(join(homedir(), '.goodvibes', 'tui'), { recursive: true });
-  writeFileSync(GUIDANCE_FILE, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');
+function writeDismissals(store: GuidanceDismissalStore, options?: GuidancePersistenceOptions): void {
+  const guidanceFile = resolveGuidancePath(options);
+  mkdirSync(dirname(guidanceFile), { recursive: true });
+  writeFileSync(guidanceFile, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');
 }
 
-export function dismissGuidance(id: string): void {
-  const store = readDismissals();
+export function dismissGuidance(id: string, options?: GuidancePersistenceOptions): void {
+  const store = readDismissals(options);
   store.dismissed[id] = Date.now();
-  writeDismissals(store);
+  writeDismissals(store, options);
 }
 
-export function resetGuidance(id?: string): void {
+export function resetGuidance(id?: string, options?: GuidancePersistenceOptions): void {
   if (!id) {
-    writeDismissals({ version: 1, dismissed: {} });
+    writeDismissals({ version: 1, dismissed: {} }, options);
     return;
   }
-  const store = readDismissals();
+  const store = readDismissals(options);
   delete store.dismissed[id];
-  writeDismissals(store);
+  writeDismissals(store, options);
 }
 
 export function evaluateContextualGuidance(
   configManager: ConfigManager,
-  runtimeStore: RuntimeStore | undefined,
+  snapshot: ContextualGuidanceSnapshot,
   maintenance: SessionMaintenanceStatus,
+  options?: GuidancePersistenceOptions,
 ): GuidanceItem[] {
   const mode = (configManager.get('behavior.guidanceMode') as GuidanceMode | undefined) ?? 'minimal';
   if (mode === 'off') return [];
 
-  const state = runtimeStore?.getState();
-  const dismissed = readDismissals().dismissed;
+  const dismissed = readDismissals(options).dismissed;
   const items: GuidanceItem[] = [];
 
   if (maintenance.level === 'suggest-compact' || maintenance.level === 'needs-repair') {
@@ -84,7 +108,7 @@ export function evaluateContextualGuidance(
     });
   }
 
-  if (state?.permissions.awaitingDecision) {
+  if (snapshot.pendingApproval) {
     items.push({
       id: 'pending-approval',
       category: 'recovery',
@@ -94,7 +118,7 @@ export function evaluateContextualGuidance(
     });
   }
 
-  if ((state?.permissions.denialCount ?? 0) >= 3 && mode === 'guided') {
+  if (snapshot.denialCount >= 3 && mode === 'guided') {
     items.push({
       id: 'repeated-denials',
       category: 'operational',
@@ -104,18 +128,17 @@ export function evaluateContextualGuidance(
     });
   }
 
-  const authRequiredMcp = [...(state?.mcp.servers.values() ?? [])].filter((server) => server.status === 'auth_required');
-  if (authRequiredMcp.length > 0) {
+  if (snapshot.authRequiredMcpCount > 0) {
     items.push({
       id: 'mcp-auth-required',
       category: 'recovery',
       title: 'One or more MCP servers require authentication',
-      summary: `${authRequiredMcp.length} MCP server${authRequiredMcp.length === 1 ? '' : 's'} cannot operate until auth is completed.`,
+      summary: `${snapshot.authRequiredMcpCount} MCP server${snapshot.authRequiredMcpCount === 1 ? '' : 's'} cannot operate until auth is completed.`,
       commands: ['/mcp', '/services auth-review'],
     });
   }
 
-  if ((state?.providerHealth.degradedCount ?? 0) > 0 || (state?.providerHealth.unavailableCount ?? 0) > 0) {
+  if (snapshot.degradedProviderCount > 0) {
     items.push({
       id: 'provider-health',
       category: 'recovery',
@@ -125,7 +148,7 @@ export function evaluateContextualGuidance(
     });
   }
 
-  if (mode === 'guided' && state && state.intelligence.diagnosticsStatus === 'unavailable' && state.intelligence.symbolSearchStatus === 'unavailable') {
+  if (mode === 'guided' && snapshot.intelligenceUnavailable) {
     items.push({
       id: 'intelligence-setup',
       category: 'onboarding',
@@ -135,9 +158,8 @@ export function evaluateContextualGuidance(
     });
   }
 
-  const ecosystemRecommendations = buildEcosystemRecommendations(runtimeStore);
-  if (ecosystemRecommendations.length > 0) {
-    const top = ecosystemRecommendations[0]!;
+  if (snapshot.recommendations.length > 0) {
+    const top = snapshot.recommendations[0]!;
     items.push({
       id: 'ecosystem-recommendation',
       category: 'operational',

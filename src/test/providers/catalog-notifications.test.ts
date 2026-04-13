@@ -48,13 +48,15 @@ function makeBenchmarkEntry(
 
 const TMP_BASE = join(import.meta.dir, '__catalog_notifications_tmp__');
 let tmpHomeDir: string;
+let benchmarkDir: string;
 let benchmarkStore: BenchmarkStore;
 
 beforeEach(() => {
   tmpHomeDir = join(TMP_BASE, `run-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(join(tmpHomeDir, '.goodvibes', 'tui'), { recursive: true });
-  benchmarkStore = new BenchmarkStore({ dir: join(tmpHomeDir, '.goodvibes', 'tui') });
-  writeBenchmarksCache([], tmpHomeDir);
+  benchmarkDir = join(tmpHomeDir, '.goodvibes', 'tui');
+  mkdirSync(benchmarkDir, { recursive: true });
+  benchmarkStore = new BenchmarkStore({ dir: benchmarkDir });
+  writeBenchmarksCache([], benchmarkDir);
   benchmarkStore.initBenchmarks();
 });
 
@@ -214,7 +216,7 @@ describe('filterRelevantChanges', () => {
     const entries: BenchmarkEntry[] = Array.from({ length: 12 }, (_, i) => (
       makeBenchmarkEntry(`bench-model-${i}`, { swe: (12 - i) / 12, gpqa: (12 - i) / 12 })
     ));
-    writeBenchmarksCache(entries, tmpHomeDir);
+    writeBenchmarksCache(entries, benchmarkDir);
     benchmarkStore.initBenchmarks();
 
     // Only the top-10 should be included; bench-model-10 and bench-model-11 are lowest

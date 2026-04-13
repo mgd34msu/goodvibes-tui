@@ -45,6 +45,8 @@ function makeManager(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
+const WORKSPACE_ROOT = process.cwd();
+
 describe('sandbox manager', () => {
   test('builds config snapshot and review output', () => {
     const manager = makeManager();
@@ -102,7 +104,7 @@ describe('sandbox manager', () => {
 
     const profile = listSandboxProfiles(manager as never).find((entry) => entry.id === 'eval-py');
     expect(profile).toBeDefined();
-    const plan = buildSandboxLaunchPlan(profile!, 'Python eval', manager as never);
+    const plan = buildSandboxLaunchPlan(profile!, 'Python eval', manager as never, WORKSPACE_ROOT);
     expect(plan.summary.length).toBeGreaterThan(0);
     expect(plan.workspaceRoot.length).toBeGreaterThan(0);
   });
@@ -115,7 +117,7 @@ describe('sandbox manager', () => {
     });
     const profile = listSandboxProfiles(manager as never).find((entry) => entry.id === 'eval-py');
     expect(profile).toBeDefined();
-    const plan = buildSandboxLaunchPlan(profile!, 'Python eval', manager as never);
+    const plan = buildSandboxLaunchPlan(profile!, 'Python eval', manager as never, WORKSPACE_ROOT);
     expect(plan.command).toBe('bash');
     expect(plan.imagePath).toBe('/tmp/gv-sandbox.qcow2');
     expect(plan.summary).toContain('/tmp/gv-sandbox.qcow2');
@@ -144,7 +146,7 @@ describe('sandbox manager', () => {
   });
 
   test('sandbox sessions record verified startup state for local backends', async () => {
-    const sessions = new SandboxSessionRegistry();
+    const sessions = new SandboxSessionRegistry(WORKSPACE_ROOT);
     const session = await sessions.start('eval-js', 'JavaScript eval', makeManager() as never);
     expect(['running', 'planned', 'failed']).toContain(session.state);
     expect(session.startupStatus).toBeDefined();
@@ -152,7 +154,7 @@ describe('sandbox manager', () => {
   });
 
   test('sandbox sessions execute commands and retain last-run metadata', async () => {
-    const sessions = new SandboxSessionRegistry();
+    const sessions = new SandboxSessionRegistry(WORKSPACE_ROOT);
     const session = await sessions.start('eval-js', 'JavaScript eval', makeManager() as never);
     const result = sessions.execute(session.id, 'bash', ['-lc', 'printf session-ok'], makeManager() as never);
     expect(result.status).toBe(0);
@@ -164,7 +166,7 @@ describe('sandbox manager', () => {
   });
 
   test('sandbox sessions expose planned qemu image startup detail when image is configured', async () => {
-    const sessions = new SandboxSessionRegistry();
+    const sessions = new SandboxSessionRegistry(WORKSPACE_ROOT);
     const session = await sessions.start('eval-js', 'JavaScript eval', makeManager({
       'sandbox.vmBackend': 'qemu',
       'sandbox.qemuBinary': 'bash',
@@ -179,7 +181,7 @@ describe('sandbox manager', () => {
     const wrapperPath = join(tmpdir(), `gv-qemu-wrapper-${Date.now()}.sh`);
     writeFileSync(wrapperPath, '#!/usr/bin/env bash\nprintf sandbox-ready\n', 'utf-8');
     chmodSync(wrapperPath, 0o755);
-    const sessions = new SandboxSessionRegistry();
+    const sessions = new SandboxSessionRegistry(WORKSPACE_ROOT);
     const session = await sessions.start('eval-js', 'JavaScript eval', makeManager({
       'sandbox.vmBackend': 'qemu',
       'sandbox.qemuBinary': 'bash',
@@ -203,7 +205,7 @@ describe('sandbox manager', () => {
     });
     const profile = listSandboxProfiles(manager as never).find((entry) => entry.id === 'eval-js');
     expect(profile).toBeDefined();
-    const plan = buildSandboxLaunchPlan(profile!, 'JavaScript eval', manager as never);
+    const plan = buildSandboxLaunchPlan(profile!, 'JavaScript eval', manager as never, WORKSPACE_ROOT);
     const result = executeSandboxManagedCommand(plan, 'bash', ['-lc', 'printf wrapper-ok'], manager as never, {
       env: {
         GV_SANDBOX_WRAPPER_MODE: 'host-exec',
@@ -229,7 +231,7 @@ describe('sandbox manager', () => {
     });
     const profile = listSandboxProfiles(manager as never).find((entry) => entry.id === 'eval-js');
     expect(profile).toBeDefined();
-    const plan = buildSandboxLaunchPlan(profile!, 'JavaScript eval', manager as never);
+    const plan = buildSandboxLaunchPlan(profile!, 'JavaScript eval', manager as never, WORKSPACE_ROOT);
     const resolved = resolveSandboxCommandPlan(plan, 'bash', ['-lc', 'printf guest-ok'], manager as never);
     expect(resolved.command).toBe(wrapperPath);
     expect(resolved.env?.GV_SANDBOX_WRAPPER_MODE).toBe('ssh-guest');
@@ -250,7 +252,7 @@ describe('sandbox manager', () => {
     });
     const profile = listSandboxProfiles(manager as never).find((entry) => entry.id === 'eval-js');
     expect(profile).toBeDefined();
-    const plan = buildSandboxLaunchPlan(profile!, 'JavaScript eval', manager as never);
+    const plan = buildSandboxLaunchPlan(profile!, 'JavaScript eval', manager as never, WORKSPACE_ROOT);
     const resolved = resolveSandboxCommandPlan(plan, 'bash', ['-lc', 'printf guest-ok'], manager as never);
     expect(resolved.env?.GV_SANDBOX_WRAPPER_MODE).toBe('launch-qemu-ssh');
   });

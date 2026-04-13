@@ -8,7 +8,8 @@
  * Open via Ctrl+O keybind or `/ops view` command.
  */
 import type { Line } from '../types/grid.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { OpsEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsAuditEntry } from '../runtime/diagnostics/panels/ops.ts';
 import { OpsPanel } from '../runtime/diagnostics/panels/ops.ts';
 import { BasePanel } from './base-panel.ts';
@@ -78,9 +79,9 @@ export class OpsControlPanel extends BasePanel {
   private _unsub: (() => void) | null = null;
   private _scrollOffset = 0;
 
-  public constructor(eventBus: RuntimeEventBus) {
+  public constructor(eventFeed: UiEventFeed<OpsEvent>) {
     super('ops-control', 'Ops Control', 'Q', 'agent');
-    this._opsPanel = new OpsPanel(eventBus);
+    this._opsPanel = new OpsPanel(eventFeed);
     this._unsub = this._opsPanel.subscribe(() => this.markDirty());
   }
 

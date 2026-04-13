@@ -12,7 +12,7 @@
 import { ConversationManager } from '../core/conversation.ts';
 import { Orchestrator } from '../core/orchestrator.ts';
 import { SelectionManager } from '../input/selection.ts';
-import { ConfigManager, getConfiguredSystemPrompt, getWorkingDirectory } from '../config/index.ts';
+import { ConfigManager, getConfiguredSystemPrompt } from '../config/index.ts';
 import { ToolRegistry } from '../tools/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { PermissionManager, createPermissionConfigReader } from '../permissions/manager.ts';
@@ -41,8 +41,6 @@ import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import { emitSessionReady, emitSessionStarted } from './emitters/index.ts';
 import {
   generateUserSessionId,
-  getLastSessionPointerPath,
-  getRecoveryFilePath,
   loadLastConversation,
   writeLastSessionPointer,
 } from './session-persistence.ts';
@@ -52,7 +50,7 @@ import { registerBootstrapHookBridge } from './bootstrap-hook-bridge.ts';
 import { registerBootstrapRuntimeEvents } from './bootstrap-runtime-events.ts';
 import { startExternalServices, type ExternalServicesHandle } from './bootstrap-services.ts';
 import { createRuntimeServices } from './services.ts';
-import { createUiRuntimeServices } from './ui-services.ts';
+import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
 import { createDeferredStartupCoordinator } from './deferred-startup.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
 
@@ -72,6 +70,8 @@ export type BootstrapContext = RuntimeContext & {
   selection: SelectionManager;
   /** Context object passed to slash-command handlers. */
   commandContext: CommandContext;
+  /** Shell-facing read models, events, and narrow runtime services. */
+  uiServices: UiRuntimeServices;
   /** Persists and navigates input history across sessions. */
   inputHistory: InputHistory;
   /** Provides git branch/dirty state for the header. */
@@ -136,10 +136,11 @@ export type BootstrapContext = RuntimeContext & {
  */
 export async function bootstrapRuntime(
   stdout: NodeJS.WriteStream,
-  options?: BootstrapOptions,
+  options: BootstrapOptions,
 ): Promise<BootstrapContext> {
-  const workingDir = options?.workingDir ?? getWorkingDirectory();
-  const configManager = options?.configManager ?? new ConfigManager({ workingDir });
+  const workingDir = options.workingDir;
+  const homeDirectory = options.homeDirectory;
+  const configManager = options.configManager;
 
   // ── Phase 0: Feature flags ──────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ export async function bootstrapRuntime(
     runtimeStore: store,
     getConversationTitle: () => getConversationTitle(),
     workingDir,
+    homeDirectory,
   });
   const providerRegistry = services.providerRegistry;
   providerRegistry.initModelLimits();
@@ -204,7 +206,6 @@ export async function bootstrapRuntime(
     surfaceRegistry,
     watcherRegistry,
   } = services;
-  const uiServices = createUiRuntimeServices(services);
   let getControlPlaneRecentEvents = (_limit: number): readonly import('../control-plane/gateway.ts').ControlPlaneRecentEvent[] => [];
   routeBindings.attachRuntime({ runtimeBus, runtimeStore: store });
   surfaceRegistry.attachRuntime(store);
@@ -234,6 +235,10 @@ export async function bootstrapRuntime(
   const forensicsCollector = new ForensicsCollector(runtimeBus, forensicsRegistry);
   const policyRuntimeState = services.policyRuntimeState;
   const tokenAuditor = services.tokenAuditor;
+  const uiServices = createUiRuntimeServices(services, {
+    forensicsRegistry,
+    getControlPlaneRecentEvents: (limit) => getControlPlaneRecentEvents(limit),
+  });
 
   const conversation = new ConversationManager(() => {
     const w = stdout.columns || 80;
@@ -257,6 +262,7 @@ export async function bootstrapRuntime(
     processManager: services.processManager,
     agentManager: services.agentManager,
     agentMessageBus: services.agentMessageBus,
+    archetypeLoader: services.archetypeLoader,
     wrfcController: services.wrfcController,
     webSearchService: services.webSearchService,
     channelRegistry: services.channelPlugins,
@@ -265,6 +271,7 @@ export async function bootstrapRuntime(
     mcpRegistry: services.mcpRegistry,
     sessionOrchestration: services.sessionOrchestration,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
+    workingDirectory: services.workingDirectory,
     configManager,
     providerRegistry: services.providerRegistry,
     toolLLM: services.toolLLM,
@@ -276,6 +283,7 @@ export async function bootstrapRuntime(
   services.agentOrchestrator.setDependencies({
     fileCache,
     projectIndex,
+    workingDirectory: services.workingDirectory,
     fileUndoManager: services.fileUndoManager,
     modeManager: services.modeManager,
     processManager: services.processManager,
@@ -289,6 +297,7 @@ export async function bootstrapRuntime(
     providerOptimizer: services.providerOptimizer,
     toolLLM: services.toolLLM,
     serviceRegistry: services.serviceRegistry,
+    sessionOrchestration: services.sessionOrchestration,
     featureFlags: services.featureFlags,
     overflowHandler: services.overflowHandler,
     memoryRegistry: services.memoryRegistry,
@@ -348,7 +357,7 @@ export async function bootstrapRuntime(
     }, 'bootstrap.webhooks');
   }
 
-  const notifier = await Notifier.fromConfig();
+  const notifier = await Notifier.fromConfig(services.serviceRegistry);
   const queueStatuses = notifier.getQueueStatus();
   if (queueStatuses.length > 0) {
     notifier.attachToRuntimeBus(runtimeBus);
@@ -413,7 +422,7 @@ export async function bootstrapRuntime(
 
   domainDispatch.syncSessionState({
     id: userSessionId,
-    projectRoot: getWorkingDirectory(),
+    projectRoot: workingDir,
     status: 'active',
     startedAt: Date.now(),
     recoveryState: 'ready',
@@ -489,6 +498,10 @@ export async function bootstrapRuntime(
   }, ACP_TASK_SYNC_INTERVAL_MS);
   bootstrapUnsubs.push(() => clearInterval(acpTaskSyncInterval));
   orchestrator.registerDelegateTool(acpManager);
+  const opsTaskManager = createTaskManager(store, runtimeBus, userSessionId);
+  const opsControlPlane = featureFlags.isEnabled('operator-control-plane')
+    ? new OpsControlPlane(opsTaskManager, runtimeBus, store, userSessionId)
+    : undefined;
 
   const shell = createBootstrapShell({
     configManager,
@@ -509,6 +522,8 @@ export async function bootstrapRuntime(
     forensicsRegistry,
     policyRuntimeState,
     uiServices,
+    taskManager: opsTaskManager,
+    opsControlPlane,
     completeModelSelectionSideEffect: () => {
       compositor.resetDiff();
     },
@@ -599,6 +614,7 @@ export async function bootstrapRuntime(
     requestRender,
     restoreSavedModel,
     systemMessageRouter,
+    shellPaths: services.shellPaths,
   });
   if (configManager.get('automation.enabled')) {
     deferredStartup.schedule({
@@ -626,7 +642,7 @@ export async function bootstrapRuntime(
   }, {
     sessionId: runtime.sessionId,
     profileId: 'default',
-    workingDir: getWorkingDirectory(),
+    workingDir,
   });
   emitSessionReady(runtimeBus, {
     sessionId: runtime.sessionId,
@@ -660,6 +676,7 @@ export async function bootstrapRuntime(
     compositor,
     selection,
     commandContext,
+    uiServices,
     inputHistory,
     gitStatusProvider,
     lastGitInfoRef,
@@ -670,8 +687,15 @@ export async function bootstrapRuntime(
       renderRequestRef.value = fn;
     },
     permissionPromptRef,
-    loadLastConversation: loadLastConversation,
-    _writeLastSessionPointer: writeLastSessionPointer,
+    loadLastConversation: () => loadLastConversation({
+      workingDirectory: services.workingDirectory,
+      homeDirectory: services.homeDirectory,
+      sessionManager: services.sessionManager,
+    }),
+    _writeLastSessionPointer: (sessionId) => writeLastSessionPointer(sessionId, {
+      workingDirectory: services.workingDirectory,
+      homeDirectory: services.homeDirectory,
+    }),
     _saveSession: saveSession,
     _getPinned: () => services.favoritesStore.getPinned(),
     _getConfiguredProviderIds: () => services.providerRegistry.getConfiguredProviderIds(),
@@ -708,6 +732,11 @@ export async function bootstrapRuntime(
         services.hookDispatcher,
         services.providerRegistry,
         services.sessionOrchestration,
+        {
+          workingDirectory: services.workingDirectory,
+          homeDirectory: services.homeDirectory,
+          sessionManager: services.sessionManager,
+        },
       );
     },
   };
@@ -716,12 +745,8 @@ export async function bootstrapRuntime(
   // Wire the OpsControlPlane into CommandContext when the feature flag is enabled.
   // The store and task manager are created unconditionally so they reflect the
   // real runtime state (tasks registered before the flag check are visible).
-  const opsTaskManager = createTaskManager(store, runtimeBus, userSessionId);
-  ctx.commandContext.taskManager = opsTaskManager;
-  ctx.commandContext.acpManager = acpManager;
-  if (featureFlags.isEnabled('operator-control-plane')) {
-    const opsControlPlane = new OpsControlPlane(opsTaskManager, runtimeBus, store, userSessionId);
-    ctx.commandContext.opsControlPlane = opsControlPlane;
+  ctx.commandContext.ops.acpManager = acpManager;
+  if (opsControlPlane) {
     ctx.commandContext.openOpsPanel = () => {
       if (ctx.commandContext.showPanel) ctx.commandContext.showPanel('ops-control');
       else {

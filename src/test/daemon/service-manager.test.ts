@@ -6,16 +6,13 @@ import { ConfigManager } from '../../config/manager.ts';
 import { PlatformServiceManager } from '../../daemon/service-manager.ts';
 
 describe('PlatformServiceManager', () => {
-  const originalCwd = process.cwd();
   let root = '';
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-service-manager-'));
-    process.chdir(root);
   });
 
   afterEach(() => {
-    process.chdir(originalCwd);
     rmSync(root, { recursive: true, force: true });
   });
 
@@ -25,9 +22,12 @@ describe('PlatformServiceManager', () => {
     config.set('service.autostart', true);
     config.set('service.restartOnFailure', true);
     config.set('service.serviceName', 'goodvibes-test');
-    config.set('service.logPath', join(root, '.goodvibes', 'tui', 'service', 'manual-custom.log'));
+    config.set('service.logPath', '.goodvibes/tui/service/manual-custom.log');
 
-    const manager = new PlatformServiceManager(config);
+    const manager = new PlatformServiceManager(config, {
+      workingDirectory: root,
+      homeDirectory: root,
+    });
     const initial = manager.status();
     expect(initial.platform).toBe('manual');
     expect(initial.installed).toBe(false);
@@ -35,7 +35,7 @@ describe('PlatformServiceManager', () => {
 
     const installed = manager.install();
     expect(installed.installed).toBe(true);
-    expect(installed.path).toContain('.goodvibes');
+    expect(installed.path).toBe(join(root, '.goodvibes', 'tui', 'service', 'manual-service.txt'));
     expect(installed.contents).toContain('src/daemon/cli.ts');
     expect(installed.commandPreview).toContain('manual-service.txt');
 
@@ -49,6 +49,8 @@ describe('PlatformServiceManager', () => {
     config.set('service.logPath', join(root, '.goodvibes', 'tui', 'service', 'manual.log'));
 
     const manager = new PlatformServiceManager(config, {
+      workingDirectory: root,
+      homeDirectory: root,
       definitionOverride: {
         name: 'test-daemon',
         description: 'test daemon',
@@ -85,6 +87,8 @@ describe('PlatformServiceManager', () => {
     config.set('service.logPath', join(root, '.goodvibes', 'tui', 'service', 'systemd.log'));
 
     const manager = new PlatformServiceManager(config, {
+      workingDirectory: root,
+      homeDirectory: root,
       actionRunner: (command, args) => {
         calls.push({ command, args });
         return { status: 0, stdout: '', stderr: '' };
@@ -114,6 +118,8 @@ describe('PlatformServiceManager', () => {
     launchdConfig.set('service.platform', 'launchd');
     launchdConfig.set('service.serviceName', 'dev.goodvibes.launchd');
     const launchdManager = new PlatformServiceManager(launchdConfig, {
+      workingDirectory: root,
+      homeDirectory: root,
       actionRunner: (command, args) => {
         launchdCalls.push({ command, args });
         return { status: 0, stdout: '', stderr: '' };
@@ -137,6 +143,8 @@ describe('PlatformServiceManager', () => {
     windowsConfig.set('service.platform', 'windows');
     windowsConfig.set('service.serviceName', 'GoodVibesTask');
     const windowsManager = new PlatformServiceManager(windowsConfig, {
+      workingDirectory: root,
+      homeDirectory: root,
       actionRunner: (command, args) => {
         windowsCalls.push({ command, args });
         return { status: 0, stdout: '', stderr: '' };

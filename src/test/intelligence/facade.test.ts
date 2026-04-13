@@ -7,11 +7,18 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
+import { createShellPathService } from '../../runtime/shell-paths.ts';
 
 import { CodeIntelligence, pathToUri, uriToPath } from '../../intelligence/facade.ts';
 import { TreeSitterService } from '../../intelligence/tree-sitter/service.ts';
 import { LspService } from '../../intelligence/lsp/service.ts';
-import { getTestCodeIntelligence, getTestLspService, getTestTreeSitterService, resetTestLspService } from '../helpers/runtime-services.ts';
+import {
+  getTestCodeIntelligence,
+  getTestLspService,
+  getTestTreeSitterService,
+  getTestIntelligenceShellPaths,
+  resetTestLspService,
+} from '../helpers/runtime-services.ts';
 import {
   loadLanguageConfigs,
   getLanguageConfig,
@@ -31,7 +38,11 @@ function makeFreshIntelligence(): CodeIntelligence {
 
   const ts = getTestTreeSitterService();
   const lsp = getTestLspService();
-  return new CodeIntelligence(ts, lsp);
+  return new CodeIntelligence({
+    shellPaths: getTestIntelligenceShellPaths(),
+    treeSitter: ts,
+    lsp,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -351,19 +362,20 @@ describe('getDefaultConfigs', () => {
 
 describe('getLanguageConfig', () => {
   it('returns config for known language', () => {
-    const cfg = getLanguageConfig('typescript');
+    const cfg = getLanguageConfig('typescript', getTestIntelligenceShellPaths());
     expect(cfg).not.toBeNull();
     expect(cfg?.lsp?.command).toBe('typescript-language-server');
   });
 
   it('returns null for unknown language', () => {
-    const cfg = getLanguageConfig('cobol');
+    const cfg = getLanguageConfig('cobol', getTestIntelligenceShellPaths());
     expect(cfg).toBeNull();
   });
 
   it('returns consistent results on repeated calls', () => {
-    const a = getLanguageConfig('python');
-    const b = getLanguageConfig('python');
+    const roots = getTestIntelligenceShellPaths();
+    const a = getLanguageConfig('python', roots);
+    const b = getLanguageConfig('python', roots);
     expect(a).toEqual(b);
   });
 });
@@ -374,21 +386,25 @@ describe('getLanguageConfig', () => {
 
 describe('loadLanguageConfigs with project override', () => {
   let tempDir: string;
+  let homeDir: string;
   let langDir: string;
-  let origCwd: string;
+  let roots: ReturnType<typeof createShellPathService>;
 
   beforeEach(() => {
-    origCwd = process.cwd();
     tempDir = join(tmpdir(), `gv-facade-test-${Date.now()}`);
+    homeDir = join(tmpdir(), `gv-facade-home-${Date.now()}`);
     langDir = join(tempDir, '.goodvibes', 'tui', 'languages');
+    mkdirSync(join(homeDir, '.goodvibes', 'tui', 'languages'), { recursive: true });
     mkdirSync(langDir, { recursive: true });
-    process.chdir(tempDir);
+    roots = createShellPathService({ workingDirectory: tempDir, homeDirectory: homeDir });
   });
 
   afterEach(() => {
-    process.chdir(origCwd);
     if (existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
+    }
+    if (existsSync(homeDir)) {
+      rmSync(homeDir, { recursive: true, force: true });
     }
   });
 
@@ -397,7 +413,7 @@ describe('loadLanguageConfigs with project override', () => {
       join(langDir, 'typescript.json'),
       JSON.stringify({ lsp: { command: 'my-custom-lsp', args: ['--stdio'] } }),
     );
-    const configs = loadLanguageConfigs();
+    const configs = loadLanguageConfigs(roots);
     const ts = configs.get('typescript');
     expect(ts?.lsp?.command).toBe('my-custom-lsp');
   });
@@ -406,7 +422,7 @@ describe('loadLanguageConfigs with project override', () => {
     writeFileSync(join(langDir, 'python.json'), 'not json {{');
     let configs: Map<string, { lsp?: { command?: string } }> | null = null;
     expect(() => {
-      configs = loadLanguageConfigs() as Map<string, { lsp?: { command?: string } }>;
+      configs = loadLanguageConfigs(roots) as Map<string, { lsp?: { command?: string } }>;
     }).not.toThrow();
     // Python config falls back to default
     const py = (configs as Map<string, { lsp?: { command?: string } }> | null)?.get('python');
@@ -418,7 +434,7 @@ describe('loadLanguageConfigs with project override', () => {
       join(langDir, 'rust.json'),
       JSON.stringify({ lsp: { command: 'my-rust-analyzer', args: [] } }),
     );
-    const configs = loadLanguageConfigs();
+    const configs = loadLanguageConfigs(roots);
     // Rust is overridden
     expect(configs.get('rust')?.lsp?.command).toBe('my-rust-analyzer');
     // Python is untouched
@@ -506,7 +522,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
   it('getSymbols delegates to extractSymbols when tree-sitter is available', async () => {
     const ts = makeMockTreeSitter();
     const lsp = makeMockLspService();
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     // With no grammar loaded, extractSymbols returns [] since the fake lang has no queries.
     // The key thing: no exception thrown and the delegation path is exercised.
     const result = await ci.getSymbols('src/index.ts', 'export function main() {}');
@@ -516,7 +532,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
   it('getOutline delegates to extractOutline when tree-sitter is available', async () => {
     const ts = makeMockTreeSitter();
     const lsp = makeMockLspService();
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     const result = await ci.getOutline('src/index.ts', 'function foo() {}');
     expect(Array.isArray(result)).toBe(true);
   });
@@ -524,7 +540,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
   it('getEnclosingScope delegates to findEnclosingScope when tree-sitter is available', async () => {
     const ts = makeMockTreeSitter();
     const lsp = makeMockLspService();
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     // findEnclosingScope returns null when no matching scope is found in fake tree
     const result = await ci.getEnclosingScope('src/index.ts', 'function foo() {}', 0);
     // Result is null or a scope object — either is acceptable; it must not throw
@@ -534,7 +550,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
   it('hasLsp returns true when mock service reports available', async () => {
     const ts = makeMockTreeSitter();
     const lsp = makeMockLspService();
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     const result = await ci.hasLsp('file.ts');
     expect(result).toBe(true);
   });
@@ -543,7 +559,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
     const ts = makeMockTreeSitter();
     const fakeLocation = { uri: 'file:///src/foo.ts', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } } };
     const lsp = makeMockLspService({ 'textDocument/definition': fakeLocation });
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     const result = await ci.getDefinition('file.ts', 0, 0);
     expect(result).toEqual(fakeLocation);
   });
@@ -552,7 +568,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
     const ts = makeMockTreeSitter();
     const fakeLocation = { uri: 'file:///src/foo.ts', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } } };
     const lsp = makeMockLspService({ 'textDocument/definition': [fakeLocation] });
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     const result = await ci.getDefinition('file.ts', 0, 0);
     expect(result).toEqual(fakeLocation);
   });
@@ -564,7 +580,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
       { uri: 'file:///src/b.ts', range: { start: { line: 3, character: 2 }, end: { line: 3, character: 7 } } },
     ];
     const lsp = makeMockLspService({ 'textDocument/references': fakeRefs });
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     const result = await ci.getReferences('file.ts', 0, 0);
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual(fakeRefs[0]);
@@ -574,7 +590,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
     const ts = makeMockTreeSitter();
     const fakeHover = { contents: { kind: 'markdown', value: '**function** foo(): void' } };
     const lsp = makeMockLspService({ 'textDocument/hover': fakeHover });
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     const result = await ci.getHover('file.ts', 0, 0);
     expect(result).toEqual(fakeHover);
   });
@@ -583,7 +599,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
     const ts = makeMockTreeSitter();
     const fakeDiag = { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }, severity: 1 as const, message: 'error here' };
     const lsp = makeMockLspService({ 'textDocument/diagnostic': { items: [fakeDiag] } });
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     const result = await ci.getDiagnostics('file.ts');
     expect(result).toHaveLength(1);
     expect(result[0].message).toBe('error here');
@@ -593,7 +609,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
     const ts = makeMockTreeSitter();
     const fakeSymbol = { name: 'MyClass', kind: 5, range: { start: { line: 0, character: 0 }, end: { line: 10, character: 1 } }, selectionRange: { start: { line: 0, character: 6 }, end: { line: 0, character: 13 } } };
     const lsp = makeMockLspService({ 'textDocument/documentSymbol': [fakeSymbol] });
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     const result = await ci.getDocumentSymbols('file.ts', 'class MyClass {}');
     expect(result).toHaveLength(1);
     expect((result[0] as typeof fakeSymbol).name).toBe('MyClass');
@@ -603,7 +619,7 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
     const ts = makeMockTreeSitter();
     // LSP returns empty array — should fall back to tree-sitter
     const lsp = makeMockLspService({ 'textDocument/documentSymbol': [] });
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     // Fake tree-sitter returns [] too (no real grammar), but execution reaches tree-sitter path
     const result = await ci.getDocumentSymbols('file.ts', 'const x = 1;');
     expect(Array.isArray(result)).toBe(true);
@@ -618,9 +634,9 @@ describe('CodeIntelligence happy-path delegation (mocked services)', () => {
       isAvailable: async () => false,
       shutdown: async () => {},
     } as unknown as LspService;
-    const ci = new CodeIntelligence(ts, lsp);
+    const ci = new CodeIntelligence({ shellPaths: getTestIntelligenceShellPaths(), treeSitter: ts, lsp });
     await ci.initialize();
-    // initialize() calls loadLanguageConfigs() and registers each lang with an LSP config
+    // initialize() calls loadLanguageConfigs(shellPaths) and registers each lang with an LSP config
     expect('typescript' in registered).toBe(true);
     expect('python' in registered).toBe(true);
     expect('rust' in registered).toBe(true);

@@ -172,9 +172,9 @@ export interface MemorySemanticSearchResult {
 }
 
 export interface MemoryStoreOptions {
+  embeddingRegistry: MemoryEmbeddingProviderRegistry;
   enableVectorIndex?: boolean;
   vectorDbPath?: string;
-  embeddingRegistry?: MemoryEmbeddingProviderRegistry;
 }
 
 export interface MemoryDoctorReport {
@@ -194,9 +194,9 @@ export class MemoryStore {
   private rebuildVectorIndexPromise: Promise<MemoryVectorStats> | null = null;
   private readonly embeddingRegistry: MemoryEmbeddingProviderRegistry;
 
-  constructor(dbPath?: string, options: MemoryStoreOptions = {}) {
+  constructor(dbPath: string | undefined, options: MemoryStoreOptions) {
     this.sqlite = new SQLiteStore(dbPath);
-    this.embeddingRegistry = options.embeddingRegistry ?? new MemoryEmbeddingProviderRegistry();
+    this.embeddingRegistry = options.embeddingRegistry;
     this.vectorIndex = options.enableVectorIndex === false
       ? null
       : new SqliteVecMemoryIndex(

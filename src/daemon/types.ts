@@ -34,6 +34,9 @@ import type { MemoryEmbeddingProviderRegistry, MemoryRegistry } from '../state/i
 export interface DaemonConfig {
   port?: number;
   host?: string;
+  workingDir?: string;
+  homeDirectory?: string;
+  configManager?: ConfigManager;
   githubWebhookSecret?: string;
   agentManager?: AgentManager;
   serveFactory?: typeof Bun.serve;

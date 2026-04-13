@@ -1,6 +1,7 @@
 import { deriveComposerState } from '../../core/composer-state.ts';
 import type { TranscriptEventKind } from '../../core/transcript-events/index.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
+import { requireReadModels } from './runtime-services.ts';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
   const normalized = (raw ?? 'all').toLowerCase().replace(/-/g, '_');
@@ -31,7 +32,7 @@ function buildTranscriptLines(
   kind: TranscriptEventKind | 'all',
   mode: 'events' | 'groups' | 'hotspots',
 ): string[] {
-  const index = ctx.conversationManager.getTranscriptEventIndex();
+  const index = ctx.session.conversationManager.getTranscriptEventIndex();
   const events = kind === 'all' ? index.events : index.events.filter((event) => event.kind === kind);
   const groups = kind === 'all' ? index.groups : index.groups.filter((group) => group.kind === kind);
 
@@ -74,31 +75,30 @@ function buildTranscriptLines(
 }
 
 function buildComposerReview(ctx: CommandContext): string[] {
-  const state = ctx.runtimeStore?.getState();
+  const session = requireReadModels(ctx).session.getSnapshot();
   const composer = deriveComposerState({
     text: '',
     commandMode: false,
     panelFocused: false,
-    pendingApproval: state?.permissions.awaitingDecision ?? false,
+    pendingApproval: session.pendingApproval,
     hasAttachments: false,
-    turnState: state?.conversation.turnState,
+    turnState: session.turnState,
   });
-  const conversation = state?.conversation;
   return [
     'Composer Review',
     `  mode: ${composer.modeLabel}`,
     `  status: ${composer.statusLabel}`,
     `  risk: ${composer.pendingRisk}`,
     `  flags: ${composer.flags.length > 0 ? composer.flags.join(', ') : 'none'}`,
-    `  turn state: ${conversation?.turnState ?? 'idle'}`,
-    `  messages: ${conversation?.messageCount ?? ctx.conversationManager.getMessageCount()}`,
-    `  context tokens: ${conversation?.estimatedContextTokens ?? 0}`,
-    `  context warning: ${conversation?.contextWarningActive ? 'yes' : 'no'}`,
+    `  turn state: ${session.turnState}`,
+    `  messages: ${session.messageCount || ctx.session.conversationManager.getMessageCount()}`,
+    `  context tokens: ${session.estimatedContextTokens}`,
+    `  context warning: ${session.contextWarningActive ? 'yes' : 'no'}`,
   ];
 }
 
 function buildConversationSearch(ctx: CommandContext, query: string, kind: TranscriptEventKind | 'all'): string[] {
-  const index = ctx.conversationManager.getTranscriptEventIndex();
+  const index = ctx.session.conversationManager.getTranscriptEventIndex();
   const q = query.trim().toLowerCase();
   const events = (kind === 'all' ? index.events : index.events.filter((event) => event.kind === kind))
     .filter((event) => q.length === 0 || event.title.toLowerCase().includes(q) || event.detail.toLowerCase().includes(q));
@@ -112,7 +112,7 @@ function buildConversationSearch(ctx: CommandContext, query: string, kind: Trans
 }
 
 function buildConversationRestoreReview(ctx: CommandContext): string[] {
-  const index = ctx.conversationManager.getTranscriptEventIndex();
+  const index = ctx.session.conversationManager.getTranscriptEventIndex();
   const restoreKinds = new Set<TranscriptEventKind>([
     'session_restore',
     'approval_request',
@@ -162,8 +162,8 @@ export function registerConversationRuntimeCommands(registry: CommandRegistry): 
         const kind = parseTranscriptKind(args[1]);
         const currentLine = ctx.getScrollTop?.() ?? 0;
         const targetLine = sub === 'next'
-          ? ctx.conversationManager.nextTranscriptEventLine(currentLine, kind)
-          : ctx.conversationManager.prevTranscriptEventLine(currentLine, kind);
+          ? ctx.session.conversationManager.nextTranscriptEventLine(currentLine, kind)
+          : ctx.session.conversationManager.prevTranscriptEventLine(currentLine, kind);
         if (targetLine < 0) {
           ctx.print(`No ${kind === 'all' ? 'transcript' : kind} events found.`);
           return;
@@ -182,19 +182,19 @@ export function registerConversationRuntimeCommands(registry: CommandRegistry): 
         return;
       }
 
-      const index = ctx.conversationManager.getTranscriptEventIndex();
-      const conversation = ctx.runtimeStore?.getState().conversation;
+      const index = ctx.session.conversationManager.getTranscriptEventIndex();
+      const session = requireReadModels(ctx).session.getSnapshot();
       const byKind = new Map<TranscriptEventKind, number>();
       for (const event of index.events) {
         byKind.set(event.kind, (byKind.get(event.kind) ?? 0) + 1);
       }
       ctx.print([
         'Conversation Review',
-        `  messages: ${conversation?.messageCount ?? ctx.conversationManager.getMessageCount()}`,
+        `  messages: ${session.messageCount || ctx.session.conversationManager.getMessageCount()}`,
         `  events: ${index.events.length}`,
         `  groups: ${index.groups.length}`,
-        `  turn state: ${conversation?.turnState ?? 'idle'}`,
-        `  context tokens: ${conversation?.estimatedContextTokens ?? 0}`,
+        `  turn state: ${session.turnState}`,
+        `  context tokens: ${session.estimatedContextTokens}`,
         `  families: ${[...byKind.entries()].sort((a, b) => b[1] - a[1]).map(([kind, count]) => `${kind}=${count}`).join(', ') || 'none'}`,
         '  next: /conversation hotspots',
         '  next: /conversation composer',

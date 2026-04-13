@@ -12,7 +12,7 @@ import { DEFAULT_ALLOWED_CLASSES } from '../../runtime/permissions/normalization
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const PROGRESS_AUTO_THRESHOLD_MS = 30_000;
-const OVERFLOW_DIR = join(process.cwd(), '.goodvibes', '.overflow');
+const OVERFLOW_SUBDIR = ['.goodvibes', '.overflow'] as const;
 
 const DANGEROUS_PATTERNS = [
   /rm\s+-[a-zA-Z]*r[a-zA-Z]*f?\s+[\/~]/,
@@ -29,6 +29,13 @@ function decodeCmd(cmdInput: ExecCommandInput): string {
   }
   if (cmdInput.cmd) return cmdInput.cmd;
   throw new Error('Each command must have either cmd or cmd_base64');
+}
+
+function requireWorkingDirectory(input: ExecInput): string {
+  if (!input.working_dir || input.working_dir.trim().length === 0) {
+    throw new Error('exec requires an explicit working_dir');
+  }
+  return input.working_dir;
 }
 
 function truncate(
@@ -50,11 +57,10 @@ function checkDangerous(cmd: string): void {
   }
 }
 
-function resolveCwd(cwd?: string, globalCwd?: string): string | undefined {
-  const effective = cwd ?? globalCwd;
-  if (!effective) return undefined;
+function resolveCwd(cwd: string | undefined, workingDirectory: string): string {
+  const effective = cwd ?? workingDirectory;
   if (isAbsolute(effective)) return effective;
-  return resolve(process.cwd(), effective);
+  return resolve(workingDirectory, effective);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -95,18 +101,23 @@ function buildTimedOutResult(cmdStr: string, cwd: string | undefined, durationMs
   return { cmd: cmdStr, exit_code: null, stdout: '', stderr: '', success: false, timed_out: true, duration_ms: durationMs, cwd, ...(progressFile ? { progress_file: progressFile } : {}) };
 }
 
-function getProgressFilePath(id: string): string {
-  return join(OVERFLOW_DIR, `${id}-progress.txt`);
+function getProgressDirectory(workingDirectory: string): string {
+  return join(workingDirectory, ...OVERFLOW_SUBDIR);
 }
 
-function initProgressFile(cmdStr: string): { path: string; append: (line: string) => void } {
+function getProgressFilePath(workingDirectory: string, id: string): string {
+  return join(getProgressDirectory(workingDirectory), `${id}-progress.txt`);
+}
+
+function initProgressFile(cmdStr: string, workingDirectory: string): { path: string; append: (line: string) => void } {
+  const progressDirectory = getProgressDirectory(workingDirectory);
   try {
-    mkdirSync(OVERFLOW_DIR, { recursive: true });
+    mkdirSync(progressDirectory, { recursive: true });
   } catch (err) {
     logger.debug('initProgressFile: mkdirSync failed (dir may already exist)', { error: err instanceof Error ? err.message : String(err) });
   }
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const filePath = getProgressFilePath(id);
+  const filePath = getProgressFilePath(workingDirectory, id);
   writeFileSync(filePath, `# Progress: ${cmdStr}\n# Started: ${new Date().toISOString()}\n`);
   return {
     path: filePath,
@@ -137,7 +148,7 @@ async function runCommand(
   featureFlags: Pick<FeatureFlagManager, 'isEnabled'> | null,
   cmdStr: string,
   cmdInput: ExecCommandInput,
-  globalCwd: string | undefined,
+  workingDirectory: string,
   globalTimeout: number,
 ): Promise<ExecCommandResult> {
   const guardResult = await guardExecCommand(cmdStr, DEFAULT_ALLOWED_CLASSES, featureFlags);
@@ -155,7 +166,7 @@ async function runCommand(
   }
 
   checkDangerous(cmdStr);
-  const cwd = resolveCwd(cmdInput.cwd, globalCwd);
+  const cwd = resolveCwd(cmdInput.cwd, workingDirectory);
   const timeoutMs = cmdInput.timeout_ms ?? globalTimeout;
   const mergedEnv = { ...buildCleanEnv(), ...cmdInput.env };
   const startTime = Date.now();
@@ -166,7 +177,7 @@ async function runCommand(
 
   const useProgress = cmdInput.progress === true || timeoutMs > PROGRESS_AUTO_THRESHOLD_MS;
   if (useProgress) {
-    return runCommandWithProgress(processManager, overflowHandler, cmdStr, cmdInput, cwd, mergedEnv, timeoutMs, startTime);
+    return runCommandWithProgress(processManager, overflowHandler, cmdStr, cmdInput, workingDirectory, cwd, mergedEnv, timeoutMs, startTime);
   }
 
   const proc = Bun.spawn(['/bin/sh', '-c', cmdStr], { cwd, env: mergedEnv, stdout: 'pipe', stderr: 'pipe' });
@@ -235,12 +246,13 @@ async function runCommandWithProgress(
   overflowHandler: OverflowHandler,
   cmdStr: string,
   cmdInput: ExecCommandInput,
+  workingDirectory: string,
   cwd: string | undefined,
   mergedEnv: Record<string, string>,
   timeoutMs: number,
   startTime: number,
 ): Promise<ExecCommandResult> {
-  const progressFile = initProgressFile(cmdStr);
+  const progressFile = initProgressFile(cmdStr, workingDirectory);
   const proc = Bun.spawn(['/bin/sh', '-c', cmdStr], { cwd, env: mergedEnv, stdout: 'pipe', stderr: 'pipe' });
   let timedOut = false;
   let killTimer: ReturnType<typeof setTimeout> | undefined;
@@ -401,11 +413,11 @@ async function runWithRetry(
   featureFlags: Pick<FeatureFlagManager, 'isEnabled'> | null,
   cmdStr: string,
   cmdInput: ExecCommandInput,
-  globalCwd: string | undefined,
+  workingDirectory: string,
   globalTimeout: number,
 ): Promise<ExecCommandResult> {
   if (!cmdInput.retry) {
-    return runCommand(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, globalCwd, globalTimeout);
+    return runCommand(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, workingDirectory, globalTimeout);
   }
 
   const maxRetries = Math.min(cmdInput.retry.max ?? 3, 10);
@@ -414,7 +426,7 @@ async function runWithRetry(
   let lastResult: ExecCommandResult | undefined;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    lastResult = await runCommand(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, globalCwd, globalTimeout);
+    lastResult = await runCommand(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, workingDirectory, globalTimeout);
     if (lastResult.success) {
       return { ...lastResult, retries: attempt };
     }
@@ -433,15 +445,15 @@ async function executeResolvedCommand(
   featureFlags: Pick<FeatureFlagManager, 'isEnabled'> | null,
   cmdStr: string,
   cmdInput: ExecCommandInput,
-  globalCwd: string | undefined,
+  workingDirectory: string,
   globalTimeout: number,
 ): Promise<ExecCommandResult> {
   const bgSpecial = handleBgSpecialCommand(processManager, cmdStr);
   if (bgSpecial) return bgSpecial;
   if (cmdInput.background) {
-    return spawnBackground(processManager, cmdStr, resolveCwd(cmdInput.cwd, globalCwd), cmdInput.env);
+    return spawnBackground(processManager, cmdStr, resolveCwd(cmdInput.cwd, workingDirectory), cmdInput.env);
   }
-  return runWithRetry(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, globalCwd, globalTimeout);
+  return runWithRetry(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, workingDirectory, globalTimeout);
 }
 
 async function executeResolvedCommands(
@@ -450,14 +462,14 @@ async function executeResolvedCommands(
   featureFlags: Pick<FeatureFlagManager, 'isEnabled'> | null,
   resolvedCmds: Array<{ cmdStr: string; cmdInput: ExecCommandInput }>,
   parallel: boolean,
-  globalCwd: string | undefined,
+  workingDirectory: string,
   globalTimeout: number,
   failFast: boolean,
 ): Promise<ExecCommandResult[]> {
   if (parallel) {
     return Promise.all(
       resolvedCmds.map(({ cmdStr, cmdInput }) =>
-        executeResolvedCommand(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, globalCwd, globalTimeout),
+        executeResolvedCommand(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, workingDirectory, globalTimeout),
       ),
     );
   }
@@ -470,7 +482,7 @@ async function executeResolvedCommands(
       continue;
     }
 
-    const result = await executeResolvedCommand(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, globalCwd, globalTimeout);
+    const result = await executeResolvedCommand(processManager, overflowHandler, featureFlags, cmdStr, cmdInput, workingDirectory, globalTimeout);
     results.push(result);
     if (failFast && !result.success) {
       stopped = true;
@@ -531,7 +543,10 @@ export function createExecTool(
     readonly overflowHandler?: OverflowHandler;
   } = {},
 ): Tool {
-  const overflowHandler = options.overflowHandler ?? new OverflowHandler();
+  if (!options.overflowHandler) {
+    throw new Error('createExecTool requires an explicit overflowHandler');
+  }
+  const overflowHandler = options.overflowHandler;
   const featureFlags = options.featureFlags ?? null;
 
   return {
@@ -553,11 +568,11 @@ export function createExecTool(
           return { success: false, error: 'commands must be a non-empty array' };
         }
         const input = args as unknown as ExecInput;
+        const workingDirectory = requireWorkingDirectory(input);
         const verbosity: ExecVerbosity = (input.verbosity as ExecVerbosity) ?? 'standard';
         const globalTimeout = input.timeout_ms ?? DEFAULT_TIMEOUT_MS;
-        const globalCwd = input.working_dir;
         const failFast = input.fail_fast === true || input.stop_on_error === true;
-        const projectRoot = resolve(process.cwd());
+        const projectRoot = resolve(workingDirectory);
 
         const { fileOpResults, fileOpError } = await executeFileOperations(input.file_ops, projectRoot);
         if (fileOpError) return { success: false, error: fileOpError };
@@ -580,7 +595,7 @@ export function createExecTool(
           featureFlags,
           resolvedCmds,
           input.parallel === true,
-          globalCwd,
+          workingDirectory,
           globalTimeout,
           failFast,
         );

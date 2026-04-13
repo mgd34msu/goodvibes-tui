@@ -3,9 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '../../artifacts/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
+import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -44,12 +46,16 @@ describe('KnowledgeService', () => {
   let memoryStore: MemoryStore;
   let memoryRegistry: MemoryRegistry;
   let service: KnowledgeService;
+  let configManager: ConfigManager;
 
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-'));
+    configManager = new ConfigManager({ configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
     knowledgeStore = new KnowledgeStore({ dbPath: join(root, 'knowledge.sqlite') });
-    memoryStore = new MemoryStore(join(root, 'memory.sqlite'));
+    memoryStore = new MemoryStore(join(root, 'memory.sqlite'), {
+      embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
+    });
     memoryRegistry = new MemoryRegistry(memoryStore);
     await memoryStore.init();
     service = new KnowledgeService(knowledgeStore, artifactStore, undefined, { memoryRegistry });

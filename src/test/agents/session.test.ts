@@ -1,14 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
+import { existsSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-
-// ---------------------------------------------------------------------------
-// We test AgentSession in isolation by overriding process.cwd() behaviour.
-// AgentSession uses process.cwd() for its file paths, so we exercise the
-// class directly and verify side effects on disk.
-// ---------------------------------------------------------------------------
 
 import { AgentSession } from '../../agents/session.ts';
 import { ConversationManager } from '../../core/conversation.ts';
@@ -16,19 +10,27 @@ import { KVState } from '../../state/kv-state.ts';
 
 describe('AgentSession', () => {
   let session: AgentSession;
+  let rootDir: string;
   const agentId = 'test-agent-01';
   const model = 'gpt-4';
   const provider = 'openai';
 
+  function sessionPaths(root: string) {
+    return {
+      sessionsDir: join(root, '.goodvibes', 'tui', 'sessions'),
+      stateDir: join(root, '.goodvibes', 'state'),
+    };
+  }
+
   beforeEach(() => {
-    session = new AgentSession(agentId, model, provider);
+    rootDir = mkdtempSync(join(tmpdir(), 'gv-agent-session-'));
+    session = new AgentSession(agentId, model, provider, sessionPaths(rootDir));
   });
 
   afterEach(async () => {
     await session.dispose();
-    // Clean up the JSONL file written to cwd-relative path
-    if (existsSync(session.sessionFile)) {
-      rmSync(session.sessionFile, { force: true });
+    if (existsSync(rootDir)) {
+      rmSync(rootDir, { recursive: true, force: true });
     }
   });
 
@@ -115,12 +117,10 @@ describe('AgentSession', () => {
       expect(sessionId).toBe(agentId);
     });
 
-    test('two AgentSessions have different kvState instances', () => {
-      const other = new AgentSession('other-agent', model, provider);
+    test('two AgentSessions have different kvState instances', async () => {
+      const other = new AgentSession('other-agent', model, provider, sessionPaths(rootDir));
       expect(session.kvState).not.toBe(other.kvState);
-      // Clean up
-      other.dispose();
-      if (existsSync(other.sessionFile)) rmSync(other.sessionFile, { force: true });
+      await other.dispose();
     });
   });
 
@@ -129,19 +129,17 @@ describe('AgentSession', () => {
   // -------------------------------------------------------------------------
 
   describe('conversation isolation', () => {
-    test('each AgentSession has its own ConversationManager', () => {
-      const other = new AgentSession('other-agent-2', model, provider);
+    test('each AgentSession has its own ConversationManager', async () => {
+      const other = new AgentSession('other-agent-2', model, provider, sessionPaths(rootDir));
       expect(session.conversation).not.toBe(other.conversation);
-      other.dispose();
-      if (existsSync(other.sessionFile)) rmSync(other.sessionFile, { force: true });
+      await other.dispose();
     });
 
-    test('messages in one session do not appear in another', () => {
+    test('messages in one session do not appear in another', async () => {
       session.conversation.addUserMessage('hello from agent 1');
-      const other = new AgentSession('other-agent-3', model, provider);
+      const other = new AgentSession('other-agent-3', model, provider, sessionPaths(rootDir));
       expect(other.conversation.getMessageCount()).toBe(0);
-      other.dispose();
-      if (existsSync(other.sessionFile)) rmSync(other.sessionFile, { force: true });
+      await other.dispose();
     });
   });
 
@@ -151,9 +149,8 @@ describe('AgentSession', () => {
 
   describe('dispose', () => {
     test('dispose resolves without error', async () => {
-      const s = new AgentSession('dispose-test', model, provider);
+      const s = new AgentSession('dispose-test', model, provider, sessionPaths(rootDir));
       await expect(s.dispose()).resolves.toBeUndefined();
-      if (existsSync(s.sessionFile)) rmSync(s.sessionFile, { force: true });
     });
   });
 });

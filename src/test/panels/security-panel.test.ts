@@ -9,6 +9,9 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
 import type { PluginManagerObserver, PluginStatus } from '../../plugins/manager.ts';
 import type { McpDecisionRecord } from '../../runtime/mcp/types.ts';
+import type { UiSecuritySnapshot } from '../../runtime/ui-read-models.ts';
+import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
+import { buildMcpAttackPathReview } from '../../runtime/mcp/index.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -39,9 +42,61 @@ function makePlugins(entries: PluginStatus[] = []): PluginManagerObserver {
   };
 }
 
+function createSecurityPanel(snapshot: UiSecuritySnapshot): SecurityPanel {
+  return new SecurityPanel(createStaticUiReadModel(snapshot));
+}
+
+function createSecuritySnapshot(input: {
+  auditor: ApiTokenAuditor;
+  policyStatus?: UiSecuritySnapshot['policy']['preflightStatus'];
+  policyIssueCount?: number;
+  lintFindingCount?: number;
+  deniedPermissions?: number;
+  incidents?: UiSecuritySnapshot['incidents'];
+  latestIncident?: UiSecuritySnapshot['latestIncident'];
+  mcpServers?: UiSecuritySnapshot['mcpServers'];
+  recentMcpDecisions?: UiSecuritySnapshot['recentMcpDecisions'];
+  plugins?: PluginStatus[];
+}): UiSecuritySnapshot {
+  const report = input.auditor.auditAll(Date.now());
+  const mcpServers = input.mcpServers ?? [];
+  const recentMcpDecisions = input.recentMcpDecisions ?? [];
+  const plugins = input.plugins ?? [];
+  return {
+    audit: {
+      managed: input.auditor.isManaged,
+      totalTokens: input.auditor.tokenCount,
+      results: report.results,
+      blocked: report.blocked,
+      scopeViolations: report.scopeViolations,
+      rotationWarnings: report.rotationWarnings,
+      rotationOverdue: report.rotationOverdue,
+      lastAuditAt: report.capturedAt,
+      capturedAt: new Date(report.capturedAt).toISOString(),
+    },
+    policy: {
+      preflightStatus: input.policyStatus ?? 'n/a',
+      preflightIssueCount: input.policyIssueCount ?? 0,
+      lintFindingCount: input.lintFindingCount ?? 0,
+    },
+    deniedPermissions: input.deniedPermissions ?? 0,
+    incidents: input.incidents ?? [],
+    latestIncident: input.latestIncident,
+    mcpServers,
+    recentMcpDecisions,
+    attackPathReview: buildMcpAttackPathReview({
+      servers: mcpServers,
+      recentDecisions: recentMcpDecisions,
+    }),
+    plugins,
+    quarantinedPlugins: plugins.filter((plugin) => plugin.quarantined),
+    untrustedPlugins: plugins.filter((plugin) => plugin.trustTier === 'untrusted'),
+  };
+}
+
 describe('SecurityPanel', () => {
   test('renders empty guidance when no tokens are registered', () => {
-    const panel = new SecurityPanel(makePlugins(), makeAuditor());
+    const panel = createSecurityPanel(createSecuritySnapshot({ auditor: makeAuditor() }));
     const text = linesText(panel.render(120, 16));
     expect(text).toContain('Security Control Room');
     expect(text).toContain('Token audit');
@@ -59,7 +114,10 @@ describe('SecurityPanel', () => {
       grantedScopes: ['models:read', 'responses:write', 'admin:full'],
       policyId: 'openai',
     });
-    const panel = new SecurityPanel(makePlugins(), auditor);
+    const panel = createSecurityPanel(createSecuritySnapshot({
+      auditor,
+      plugins: makePlugins().list(),
+    }));
     const text = linesText(panel.render(140, 14));
     expect(text).toContain('MANAGED');
     expect(text).toContain('scope violations');
@@ -98,30 +156,6 @@ describe('SecurityPanel', () => {
       permissions: {
         ...state.permissions,
         denialCount: 2,
-      },
-      mcp: {
-        ...state.mcp,
-        servers: new Map([
-          ['ops', {
-            name: 'ops',
-            displayName: 'Ops',
-            status: 'degraded',
-            transport: 'stdio',
-            toolCount: 1,
-            toolNames: ['ops__deploy'],
-            callCount: 0,
-            errorCount: 1,
-            reconnectAttempts: 1,
-            trustMode: 'allow-all',
-            role: 'ops',
-            allowedPaths: ['/srv'],
-            allowedHosts: ['deploy.example.com'],
-            schemaFreshness: 'quarantined',
-            quarantineReason: 'operator_flagged',
-            quarantineDetail: 'unexpected deploy surface',
-          }],
-        ]),
-        connectedServerNames: [],
       },
     }));
 
@@ -170,7 +204,27 @@ describe('SecurityPanel', () => {
       ],
     };
 
-    const panel = new SecurityPanel(auditor, policyState, store, registry, plugins, mcpSource);
+    const panel = createSecurityPanel(createSecuritySnapshot({
+      auditor,
+      policyStatus: 'warn',
+      policyIssueCount: 1,
+      deniedPermissions: 2,
+      incidents: registry.getAll(),
+      latestIncident: registry.latest(),
+      mcpServers: [{
+        name: 'ops',
+        role: 'ops',
+        trustMode: 'allow-all',
+        allowedPaths: ['/srv'],
+        allowedHosts: ['deploy.example.com'],
+        schemaFreshness: 'quarantined',
+        quarantineReason: 'operator_flagged',
+        quarantineDetail: 'unexpected deploy surface',
+        connected: true,
+      }],
+      recentMcpDecisions: mcpSource.listRecentSecurityDecisions(),
+      plugins: plugins.list(),
+    }));
     const text = linesText(panel.render(160, 28));
     expect(text).toContain('preflight');
     expect(text).toContain('quarantined MCP');

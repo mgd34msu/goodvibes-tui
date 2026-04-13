@@ -84,7 +84,7 @@ export async function runImpact(
   }
 
   const deadline = Date.now() + MAX_SCAN_MS;
-  const intelligence = new CodeIntelligence();
+  const intelligence = new CodeIntelligence({});
   const exportedNames = await collectExportedSymbols(
     targetFiles
       .map((rawFile) => validatePath(rawFile, projectRoot))
@@ -263,7 +263,7 @@ export async function runDeadCode(
   projectRoot: string,
 ): Promise<Record<string, unknown>> {
   const deadline = Date.now() + MAX_SCAN_MS;
-  const intelligence = new CodeIntelligence();
+  const intelligence = new CodeIntelligence({});
   const scanRoot =
     input.files && input.files.length > 0
       ? resolve(projectRoot, input.files[0])
@@ -461,7 +461,7 @@ export async function runSurface(
   input: AnalyzeInput,
   projectRoot: string,
 ): Promise<Record<string, unknown>> {
-  const intelligence = new CodeIntelligence();
+  const intelligence = new CodeIntelligence({});
   const targetFiles: string[] = [];
 
   if (input.files && input.files.length > 0) {

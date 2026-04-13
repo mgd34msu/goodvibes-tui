@@ -1,7 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
 
 export interface AuthUser {
   username: string;
@@ -18,8 +17,8 @@ export interface AuthSession {
 interface UserAuthConfig {
   sessionTtlMs?: number;
   users?: AuthUser[];
-  bootstrapFilePath?: string;
-  bootstrapCredentialPath?: string;
+  bootstrapFilePath: string;
+  bootstrapCredentialPath: string;
 }
 
 const DEFAULT_SESSION_TTL_MS = 3_600_000;
@@ -79,14 +78,6 @@ function verifyPassword(password: string, passwordHash: string): boolean {
   const actual = scryptSync(password, salt, SCRYPT_KEY_LENGTH);
   if (actual.length !== expected.length) return false;
   return timingSafeEqual(actual, expected);
-}
-
-function defaultBootstrapFilePath(): string {
-  return join(homedir(), '.goodvibes', 'tui', 'auth-users.json');
-}
-
-function defaultBootstrapCredentialPath(): string {
-  return join(homedir(), '.goodvibes', 'tui', 'auth-bootstrap.txt');
 }
 
 function readBootstrapUsers(filePath: string): AuthUser[] | null {
@@ -159,10 +150,12 @@ export class UserAuthManager {
   private readonly bootstrapCredentialPath: string;
   private readonly persistUsers: boolean;
 
-  constructor(config: UserAuthConfig = {}) {
+  constructor(config: UserAuthConfig) {
+    if (!config.bootstrapFilePath) throw new Error('UserAuthManager requires an explicit bootstrapFilePath.');
+    if (!config.bootstrapCredentialPath) throw new Error('UserAuthManager requires an explicit bootstrapCredentialPath.');
     this.sessionTtlMs = config.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS;
-    this.userStorePath = config.bootstrapFilePath ?? defaultBootstrapFilePath();
-    this.bootstrapCredentialPath = config.bootstrapCredentialPath ?? defaultBootstrapCredentialPath();
+    this.userStorePath = config.bootstrapFilePath;
+    this.bootstrapCredentialPath = config.bootstrapCredentialPath;
     this.persistUsers = config.users === undefined;
     const seedUsers = config.users ?? loadOrBootstrapUsers(this.userStorePath, this.bootstrapCredentialPath);
 

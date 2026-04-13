@@ -39,18 +39,17 @@ export class Notifier {
   /**
    * Create a Notifier pre-wired from configured services and environment variables.
    */
-  static async fromConfig(): Promise<Notifier> {
-    const registry = new ServiceRegistry();
+  static async fromConfig(serviceRegistry: Pick<ServiceRegistry, 'resolveSecret'>): Promise<Notifier> {
     const [
       slackWebhookFromService,
       slackTokenFromService,
       discordWebhookFromService,
       discordTokenFromService,
     ] = await Promise.all([
-      registry.resolveSecret('slack', 'webhookUrl'),
-      registry.resolveSecret('slack', 'primary'),
-      registry.resolveSecret('discord', 'webhookUrl'),
-      registry.resolveSecret('discord', 'primary'),
+      serviceRegistry.resolveSecret('slack', 'webhookUrl'),
+      serviceRegistry.resolveSecret('slack', 'primary'),
+      serviceRegistry.resolveSecret('discord', 'webhookUrl'),
+      serviceRegistry.resolveSecret('discord', 'primary'),
     ]);
 
     const slackWebhook = slackWebhookFromService ?? process.env.SLACK_WEBHOOK_URL;

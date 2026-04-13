@@ -6,6 +6,7 @@ import type {
   ProviderEmbeddingRequest,
   ProviderEmbeddingResult,
   ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
@@ -178,7 +179,7 @@ export class OpenAIProvider implements LLMProvider {
     };
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const configured = Boolean(process.env.OPENAI_API_KEY || process.env.OPENAI_KEY);
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
@@ -186,7 +187,7 @@ export class OpenAIProvider implements LLMProvider {
       apiKeyEnvVars: ['OPENAI_API_KEY', 'OPENAI_KEY'],
       serviceNames: ['openai'],
       subscriptionProviderId: 'openai',
-    });
+    }, deps);
     return {
       auth: {
         mode: 'api-key',

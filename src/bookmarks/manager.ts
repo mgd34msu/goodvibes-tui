@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
-import { homedir } from 'os';
 import { logger } from '../utils/logger.ts';
 
 /**
@@ -25,8 +24,8 @@ export class BookmarkManager {
   private bookmarks = new Map<string, BookmarkEntry>();
   private saveDir: string;
 
-  constructor(baseDir?: string) {
-    this.saveDir = baseDir ?? join(homedir(), '.goodvibes', 'tui', 'bookmarks');
+  constructor(baseDir: string) {
+    this.saveDir = baseDir;
   }
 
   /**

@@ -7,6 +7,7 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
@@ -42,8 +43,12 @@ function makeManager(
   return { requests, mgr };
 }
 
+const PROJECT_ROOT = process.cwd();
+
 function makeUserAuth(): UserAuthManager {
   return new UserAuthManager({
+    bootstrapFilePath: join(tempRoot, 'auth-users.json'),
+    bootstrapCredentialPath: join(tempRoot, 'auth-bootstrap.txt'),
     users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
   });
 }
@@ -53,9 +58,37 @@ function makeUserAuth(): UserAuthManager {
 // ---------------------------------------------------------------------------
 
 let configManager: ConfigManager;
+let tempRoot: string;
+let workingDir: string;
+let homeDir: string;
+let configDir: string;
+
+function createTestDaemon(): DaemonServer {
+  return new DaemonServer({
+    port: 0,
+    userAuth: makeUserAuth(),
+    configManager,
+    workingDir,
+    homeDirectory: homeDir,
+  });
+}
+
+function createTestListener(): HttpListener {
+  return new HttpListener({
+    configManager,
+    port: 0,
+    userAuth: makeUserAuth(),
+  });
+}
 
 beforeEach(() => {
-  configManager = new ConfigManager({ configDir: join(tmpdir(), `gv-permission-audit-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
+  tempRoot = mkdtempSync(join(tmpdir(), 'gv-permission-audit-'));
+  workingDir = join(tempRoot, 'workspace');
+  homeDir = join(tempRoot, 'home');
+  configDir = join(homeDir, '.goodvibes', 'tui');
+  mkdirSync(workingDir, { recursive: true });
+  mkdirSync(configDir, { recursive: true });
+  configManager = new ConfigManager({ configDir, workingDir, homeDir });
   resetSettingsControlPlaneStore(configManager);
   configManager.set('behavior.autoApprove', false);
   configManager.set('permissions.mode', 'prompt');
@@ -63,6 +96,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetSettingsControlPlaneStore(configManager);
+  rmSync(tempRoot, { recursive: true, force: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -155,26 +189,26 @@ describe('Unknown tools default to delegate category', () => {
 describe('Danger-gated features check config before enabling', () => {
   describe('DaemonServer', () => {
     test('refuses to enable when danger.daemon = false', () => {
-      const server = new DaemonServer({ userAuth: makeUserAuth() });
+      const server = createTestDaemon();
       const result = server.enable({ daemon: false });
       expect(result).toBe(false);
     });
 
     test('enables when danger.daemon = true', () => {
-      const server = new DaemonServer({ userAuth: makeUserAuth() });
+      const server = createTestDaemon();
       const result = server.enable({ daemon: true });
       expect(result).toBe(true);
     });
 
     test('refuses to start when not enabled (enable not called)', async () => {
-      const server = new DaemonServer({ port: 0, userAuth: makeUserAuth() });
+      const server = createTestDaemon();
       // Should not throw, just no-op
       await expect(server.start()).resolves.toBeUndefined();
       expect(server.isRunning).toBe(false);
     });
 
     test('refuses to start after enable({ daemon: false })', async () => {
-      const server = new DaemonServer({ port: 0, userAuth: makeUserAuth() });
+      const server = createTestDaemon();
       server.enable({ daemon: false });
       await server.start();
       expect(server.isRunning).toBe(false);
@@ -183,19 +217,19 @@ describe('Danger-gated features check config before enabling', () => {
 
   describe('HttpListener', () => {
     test('refuses to enable when danger.httpListener = false', () => {
-      const listener = new HttpListener({ userAuth: makeUserAuth() });
+      const listener = createTestListener();
       const result = listener.enable({ httpListener: false });
       expect(result).toBe(false);
     });
 
     test('enables when danger.httpListener = true', () => {
-      const listener = new HttpListener({ userAuth: makeUserAuth() });
+      const listener = createTestListener();
       const result = listener.enable({ httpListener: true });
       expect(result).toBe(true);
     });
 
     test('refuses to start when not enabled', async () => {
-      const listener = new HttpListener({ port: 0, userAuth: makeUserAuth() });
+      const listener = createTestListener();
       await expect(listener.start()).resolves.toBeUndefined();
       expect(listener.isRunning).toBe(false);
     });
@@ -263,27 +297,27 @@ describe('Danger-gated features check config before enabling', () => {
 
 describe('Path traversal protection via resolveAndValidatePath', () => {
   test('allows path within project root', () => {
-    expect(() => resolveAndValidatePath('src/index.ts')).not.toThrow();
+    expect(() => resolveAndValidatePath('src/index.ts', PROJECT_ROOT)).not.toThrow();
   });
 
   test('allows nested path within project root', () => {
-    expect(() => resolveAndValidatePath('src/tools/registry.ts')).not.toThrow();
+    expect(() => resolveAndValidatePath('src/tools/registry.ts', PROJECT_ROOT)).not.toThrow();
   });
 
   test('throws for ../ path traversal attempt', () => {
-    expect(() => resolveAndValidatePath('../../../etc/passwd')).toThrow(/outside the project root/);
+    expect(() => resolveAndValidatePath('../../../etc/passwd', PROJECT_ROOT)).toThrow(/outside the project root/);
   });
 
   test('throws for absolute /etc path', () => {
-    expect(() => resolveAndValidatePath('/etc/shadow')).toThrow(/outside the project root/);
+    expect(() => resolveAndValidatePath('/etc/shadow', PROJECT_ROOT)).toThrow(/outside the project root/);
   });
 
   test('throws for /tmp path', () => {
-    expect(() => resolveAndValidatePath('/tmp/evil')).toThrow(/outside the project root/);
+    expect(() => resolveAndValidatePath('/tmp/evil', PROJECT_ROOT)).toThrow(/outside the project root/);
   });
 
   test('throws for embedded .. traversal', () => {
-    expect(() => resolveAndValidatePath('src/../../../../../../etc/hosts')).toThrow(
+    expect(() => resolveAndValidatePath('src/../../../../../../etc/hosts', PROJECT_ROOT)).toThrow(
       /outside the project root/
     );
   });
@@ -307,7 +341,10 @@ describe('Path traversal protection via resolveAndValidatePath', () => {
   test('resolveAndValidatePath is used by exec tool (import exists)', async () => {
     const { createExecTool } = await import('../../tools/exec/index.ts');
     const { ProcessManager } = await import('../../tools/shared/process-manager.ts');
-    const execTool = createExecTool(new ProcessManager());
+    const { OverflowHandler } = await import('../../tools/shared/overflow.ts');
+    const execTool = createExecTool(new ProcessManager(), {
+      overflowHandler: new OverflowHandler({ baseDir: PROJECT_ROOT }),
+    });
     expect(typeof execTool.execute).toBe('function');
   });
 });

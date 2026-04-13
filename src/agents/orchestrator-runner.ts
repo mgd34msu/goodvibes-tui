@@ -1,5 +1,6 @@
 import { ConversationManager } from '../core/conversation.ts';
 import { ToolRegistry } from '../tools/registry.ts';
+import { join } from 'node:path';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
 import { ConsecutiveErrorBreaker } from '../core/circuit-breaker.ts';
@@ -33,6 +34,7 @@ const MIN_WINDOW_FOR_LLM_COMPACT = 12_000;
 type EmitterContext = import('../runtime/emitters/index.ts').EmitterContext;
 
 export interface AgentOrchestratorRunContext {
+  readonly workingDirectory: string;
   readonly runtimeBus: RuntimeEventBus | null;
   readonly featureFlagManager: FeatureFlagManager | null;
   readonly emitterContext: (agentId: string) => EmitterContext;
@@ -369,7 +371,10 @@ export async function runAgentTask(
     const fallbackRoutes = context.resolveFallbackModelRoutes(providerRegistry, record, primaryRoute.requestedModelId);
     const modelId = primaryRoute.modelId;
 
-    session = new AgentSession(record.id, modelId, record.provider ?? currentModel.provider ?? 'unknown');
+    session = new AgentSession(record.id, modelId, record.provider ?? currentModel.provider ?? 'unknown', {
+      sessionsDir: join(context.workingDirectory, '.goodvibes', 'tui', 'sessions'),
+      stateDir: join(context.workingDirectory, '.goodvibes', 'state'),
+    });
     session.appendMessage({ type: 'session_config', template: record.template, task: record.task, tools: record.tools, model: modelId, provider: record.provider ?? 'unknown', timestamp: new Date().toISOString() });
 
     const toolRegistry = context.buildScopedRegistry(record.tools, context.getFullRegistry());

@@ -1,6 +1,6 @@
 import { resolve } from 'path';
 import type { PluginStatus } from '../../plugins/manager.ts';
-import { PLUGINS_DIR, getPluginDirectories } from '../../plugins/loader.ts';
+import { getPluginDirectories, getUserPluginDirectory } from '../../plugins/loader.ts';
 import type { CommandRegistry } from '../command-registry.ts';
 import {
   installEcosystemCatalogEntry,
@@ -13,6 +13,7 @@ import {
   upsertEcosystemCatalogEntry,
   uninstallEcosystemCatalogEntry,
 } from '../../runtime/ecosystem/catalog.ts';
+import { requireEcosystemCatalogPaths, requirePluginPathOptions } from './runtime-services.ts';
 
 export function registerIntegrationRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -22,7 +23,9 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
     usage: 'list | dirs | inspect <name> | review | installed | catalog-review <id> | publish-local <id> <path> <summary...> | unpublish <id> | install <id> [project|user] | update <id> [project|user] | uninstall <id> [project|user] | enable <name> | disable <name> | reload',
     argsHint: 'list | dirs | inspect | review | installed | catalog-review | publish-local | unpublish | install | update | uninstall | enable | disable | reload',
     async handler(args, ctx) {
-      const pluginManager = ctx.pluginManager;
+      const pluginManager = ctx.extensions.pluginManager;
+      const ecosystemPaths = requireEcosystemCatalogPaths(ctx);
+      const pluginPaths = requirePluginPathOptions(ctx);
       if (!pluginManager) {
         ctx.print('Plugin manager is not available in this runtime.');
         return;
@@ -37,7 +40,7 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
       if (sub === 'list') {
         const plugins = pluginManager.list() as PluginStatus[];
         if (plugins.length === 0) {
-          const directories = getPluginDirectories()
+          const directories = getPluginDirectories(pluginPaths)
             .map((dir) => `  ${dir}`)
             .join('\n');
           ctx.print(
@@ -57,10 +60,12 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
         return;
       }
       if (sub === 'dirs') {
-        const directories = getPluginDirectories();
+        const directories = getPluginDirectories(pluginPaths);
         ctx.print([
           'Plugin Search Directories',
           ...directories.map((dir) => `  ${dir}`),
+          '',
+          `User plugin directory: ${getUserPluginDirectory(pluginPaths)}`,
         ].join('\n'));
         return;
       }
@@ -108,8 +113,8 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
       if (sub === 'browse' || sub === 'catalog') {
         const query = args.slice(1).join(' ');
         const entries = query
-          ? searchEcosystemCatalog('plugin', query)
-          : loadEcosystemCatalog('plugin');
+          ? searchEcosystemCatalog('plugin', query, ecosystemPaths)
+          : loadEcosystemCatalog('plugin', ecosystemPaths);
         if (entries.length === 0) {
           ctx.print(query
             ? `No curated plugin catalog entries matched "${query}".`
@@ -123,7 +128,7 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
         return;
       }
       if (sub === 'installed') {
-        const receipts = listInstalledEcosystemEntries('plugin');
+        const receipts = listInstalledEcosystemEntries('plugin', ecosystemPaths);
         if (receipts.length === 0) {
           ctx.print('No curated plugins installed from local catalogs yet.');
           return;
@@ -140,12 +145,12 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
           ctx.print('Usage: /plugin catalog-review <catalog-id>');
           return;
         }
-        const entry = loadEcosystemCatalog('plugin').find((candidate) => candidate.id === entryId);
+        const entry = loadEcosystemCatalog('plugin', ecosystemPaths).find((candidate) => candidate.id === entryId);
         if (!entry) {
           ctx.print(`Unknown curated plugin entry: ${entryId}`);
           return;
         }
-        const review = reviewEcosystemCatalogEntry(entry);
+        const review = reviewEcosystemCatalogEntry(entry, ecosystemPaths);
         ctx.print([
           `Plugin Catalog Review: ${entry.name}`,
           `  id: ${entry.id}`,
@@ -166,7 +171,7 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
           ctx.print('Usage: /plugin install-hint <catalog-id>');
           return;
         }
-        const entry = loadEcosystemCatalog('plugin').find((candidate) => candidate.id === entryId);
+        const entry = loadEcosystemCatalog('plugin', ecosystemPaths).find((candidate) => candidate.id === entryId);
         if (!entry) {
           ctx.print(`Unknown curated plugin entry: ${entryId}`);
           return;
@@ -198,7 +203,7 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
           tags: ['local-first', 'published'],
           provenance: 'operator-published',
           updateHint: 'Use /plugin publish-local again to refresh catalog metadata after edits.',
-        });
+        }, ecosystemPaths);
         ctx.print(result.ok
           ? `Published curated plugin ${entryId} into ${result.path}`
           : `Error: ${result.error}`);
@@ -210,7 +215,7 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
           ctx.print('Usage: /plugin unpublish <catalog-id>');
           return;
         }
-        const result = removeEcosystemCatalogEntry('plugin', entryId);
+        const result = removeEcosystemCatalogEntry('plugin', entryId, ecosystemPaths);
         ctx.print(result.ok
           ? `Removed curated plugin ${entryId} from ${result.path}`
           : `Error: ${result.error}`);
@@ -224,7 +229,7 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
           return;
         }
         const scope = scopeArg === 'user' ? 'user' : 'project';
-        const result = installEcosystemCatalogEntry('plugin', entryId, { scope });
+        const result = installEcosystemCatalogEntry('plugin', entryId, { ...ecosystemPaths, scope });
         ctx.print(result.ok
           ? `Installed curated plugin ${entryId} into ${result.receipt.targetPath}`
           : `Error: ${result.error}`);
@@ -238,7 +243,7 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
           return;
         }
         const scope = scopeArg === 'user' ? 'user' : 'project';
-        const result = updateInstalledEcosystemEntry('plugin', entryId, { scope });
+        const result = updateInstalledEcosystemEntry('plugin', entryId, { ...ecosystemPaths, scope });
         ctx.print(result.ok
           ? `Updated curated plugin ${entryId} in ${result.receipt.targetPath}`
           : `Error: ${result.error}`);
@@ -252,7 +257,7 @@ export function registerIntegrationRuntimeCommands(registry: CommandRegistry): v
           return;
         }
         const scope = scopeArg === 'user' ? 'user' : 'project';
-        const result = uninstallEcosystemCatalogEntry('plugin', entryId, { scope });
+        const result = uninstallEcosystemCatalogEntry('plugin', entryId, { ...ecosystemPaths, scope });
         ctx.print(result.ok
           ? `Uninstalled curated plugin ${entryId} from ${result.removedPath}`
           : `Error: ${result.error}`);

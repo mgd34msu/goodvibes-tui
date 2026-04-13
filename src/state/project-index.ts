@@ -52,8 +52,8 @@ export class ProjectIndex {
   private createdAt: string = new Date().toISOString();
   private loaded = false;
 
-  constructor(baseDir?: string) {
-    this.projectRoot = baseDir ?? process.cwd();
+  constructor(baseDir: string) {
+    this.projectRoot = baseDir;
     this.baseDir = this.projectRoot;
     this.indexPath = join(this.projectRoot, '.goodvibes', 'project-index.json');
   }
@@ -293,4 +293,3 @@ function buildTree(files: Map<string, number>): TreeDir {
   }
   return root;
 }
-

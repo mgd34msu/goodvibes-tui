@@ -1,0 +1,71 @@
+import type { SharedApprovalRecord, SharedSessionRecord } from '../../control-plane/index.ts';
+import { createOperatorClient, type OperatorClient, type OperatorControlPlaneSnapshot, type OperatorProvidersSnapshot } from '../operator-client.ts';
+import { createPeerClient, type PeerClient, type PeerClientSnapshot } from '../peer-client.ts';
+import type { RuntimeServices } from '../services.ts';
+import { createUiRuntimeServices } from '../ui-services.ts';
+import type { UiSessionSnapshot, UiTasksSnapshot } from '../ui-read-models.ts';
+import type { ShellPathService } from '../shell-paths.ts';
+
+export interface DirectTransportSnapshot {
+  readonly kind: 'direct';
+  readonly operator: {
+    readonly currentSession: UiSessionSnapshot;
+    readonly tasks: UiTasksSnapshot;
+    readonly approvals: readonly SharedApprovalRecord[];
+    readonly sessions: readonly SharedSessionRecord[];
+    readonly controlPlane: OperatorControlPlaneSnapshot;
+    readonly providers: OperatorProvidersSnapshot;
+    readonly shellPaths: ShellPathService;
+  };
+  readonly peer: PeerClientSnapshot;
+}
+
+export interface DirectTransport {
+  readonly kind: 'direct';
+  readonly operator: OperatorClient;
+  readonly peer: PeerClient;
+  getOperatorClient(): OperatorClient;
+  getPeerClient(): PeerClient;
+  snapshot(): Promise<DirectTransportSnapshot>;
+}
+
+export function createDirectTransport(runtimeServices: RuntimeServices): DirectTransport {
+  const services = createUiRuntimeServices(runtimeServices);
+  const operator = createOperatorClient(services);
+  const peer = createPeerClient({
+    runtimeStore: runtimeServices.runtimeStore,
+    distributedRuntime: runtimeServices.distributedRuntime,
+    remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
+    remoteSupervisor: runtimeServices.remoteSupervisor,
+  });
+
+  return Object.freeze({
+    kind: 'direct' as const,
+    operator,
+    peer,
+    getOperatorClient(): OperatorClient {
+      return operator;
+    },
+    getPeerClient(): PeerClient {
+      return peer;
+    },
+    async snapshot(): Promise<DirectTransportSnapshot> {
+      const [providers] = await Promise.all([
+        operator.providers.snapshot(),
+      ]);
+      return {
+        kind: 'direct',
+        operator: {
+          currentSession: operator.sessions.current(),
+          tasks: operator.tasks.snapshot(),
+          approvals: operator.approvals.list(),
+          sessions: operator.sessions.list(),
+          controlPlane: operator.controlPlane.snapshot(),
+          providers,
+          shellPaths: operator.shellPaths,
+        },
+        peer: peer.getSnapshot(),
+      };
+    },
+  });
+}

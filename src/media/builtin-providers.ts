@@ -13,7 +13,7 @@ import type { ProviderRegistry } from '../providers/registry.ts';
 export function ensureBuiltinMediaProviders(
   registry: MediaProviderRegistry,
   artifactStore: Pick<ArtifactStore, 'readContent'>,
-  providerRegistry: Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'listModels'>,
+  providerRegistry: Pick<ProviderRegistry, 'describeRuntime' | 'getCurrentModel' | 'getForModel' | 'listModels'>,
 ): void {
   registry.register(createOpenAIImageUnderstandingProvider(providerRegistry, artifactStore), { replace: true });
   registry.register(createGeminiImageUnderstandingProvider(providerRegistry, artifactStore), { replace: true });

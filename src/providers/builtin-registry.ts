@@ -15,6 +15,7 @@ import { SyntheticProvider } from './synthetic.ts';
 import type { BenchmarkEntry } from './model-benchmarks.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { CanonicalModel } from './synthetic.ts';
+import type { SubscriptionManager } from '../config/subscriptions.ts';
 
 export interface ProviderRegistrar {
   register(provider: LLMProvider): void;
@@ -116,6 +117,8 @@ export function registerBuiltinProviders(
     readonly cacheHitTracker?: import('./cache-strategy.ts').CacheHitTracker;
     readonly getCatalogModels: () => readonly CanonicalModel[];
     readonly getBenchmarks: (modelId: string) => BenchmarkEntry | undefined;
+    readonly githubCopilotTokenCachePath: string;
+    readonly subscriptionManager: Pick<SubscriptionManager, 'get' | 'getPending' | 'saveSubscription' | 'resolveAccessToken'>;
     readonly runtimeBus?: RuntimeEventBus | null;
   },
 ): void {
@@ -259,7 +262,7 @@ export function registerBuiltinProviders(
 
   registry.register(new OpenAIProvider(apiKey('openai'), options.cacheHitTracker));
   registry.register(new AnthropicProvider(apiKey('anthropic'), options.cacheHitTracker));
-  registry.register(new OpenAICodexProvider());
+  registry.register(new OpenAICodexProvider(options.subscriptionManager));
   registry.register(new GeminiProvider(apiKey('gemini'), options.cacheHitTracker));
 
   registry.register(
@@ -557,7 +560,9 @@ export function registerBuiltinProviders(
   registry.register(new AmazonBedrockProvider());
   registry.register(new AmazonBedrockMantleProvider());
   registry.register(new AnthropicVertexProvider());
-  registry.register(new GitHubCopilotProvider());
+  registry.register(new GitHubCopilotProvider({
+    tokenCachePath: options.githubCopilotTokenCachePath,
+  }));
 
   // Synthetic failover provider — must be after all backends.
   // Stage 3: catalog-driven SyntheticProvider manages its own backend lists.

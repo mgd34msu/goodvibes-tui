@@ -4,6 +4,7 @@ import type {
   ChatResponse,
   LLMProvider,
   ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
 import type { AnthropicContentBlock } from './tool-formats.ts';
@@ -184,7 +185,7 @@ export class AnthropicSdkProvider implements LLMProvider {
     });
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: this.options.name,
       apiKeyEnvVars: this.options.auth.envVars,
@@ -193,7 +194,7 @@ export class AnthropicSdkProvider implements LLMProvider {
       allowAnonymous: this.options.auth.allowAnonymous,
       anonymousConfigured: this.options.auth.anonymousConfigured,
       anonymousDetail: this.options.auth.anonymousDetail,
-    });
+    }, deps);
     return {
       auth: {
         mode: this.options.auth.mode,

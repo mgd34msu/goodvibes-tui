@@ -23,6 +23,10 @@ interface TeamFile {
   readonly teams: readonly TeamRecord[];
 }
 
+type TeamExecutionInput = TeamToolInput & {
+  readonly storageRoot?: string;
+};
+
 function summarizeTeam(team: TeamRecord) {
   return {
     id: team.id,
@@ -35,12 +39,12 @@ function summarizeTeam(team: TeamRecord) {
   };
 }
 
-function teamsPath(): string {
-  return join(process.cwd(), '.goodvibes', 'tui', 'teams.json');
+function teamsPath(storageRoot: string): string {
+  return join(storageRoot, '.goodvibes', 'tui', 'teams.json');
 }
 
-function loadTeams(): TeamRecord[] {
-  const path = teamsPath();
+function loadTeams(storageRoot: string): TeamRecord[] {
+  const path = teamsPath(storageRoot);
   if (!existsSync(path)) return [];
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as TeamFile;
@@ -50,8 +54,8 @@ function loadTeams(): TeamRecord[] {
   }
 }
 
-function saveTeams(teams: readonly TeamRecord[]): void {
-  const path = teamsPath();
+function saveTeams(storageRoot: string, teams: readonly TeamRecord[]): void {
+  const path = teamsPath(storageRoot);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify({ version: 1, teams }, null, 2) + '\n', 'utf-8');
 }
@@ -69,8 +73,11 @@ export const teamTool: Tool = {
     if (!args || typeof args !== 'object' || typeof args.mode !== 'string') {
       return { success: false, error: 'Invalid args: mode is required.' };
     }
-    const input = args as TeamToolInput;
-    const teams = loadTeams();
+    const input = args as TeamExecutionInput;
+    if (!input.storageRoot || input.storageRoot.trim().length === 0) {
+      return { success: false, error: 'team requires storageRoot.' };
+    }
+    const teams = loadTeams(input.storageRoot);
     const view = input.view ?? 'summary';
 
     if (input.mode === 'create') {
@@ -89,7 +96,7 @@ export const teamTool: Tool = {
         createdAt: now,
         updatedAt: now,
       };
-      saveTeams([...teams, team]);
+      saveTeams(input.storageRoot, [...teams, team]);
       return { success: true, output: JSON.stringify(team) };
     }
 
@@ -125,7 +132,7 @@ export const teamTool: Tool = {
     }
 
     if (input.mode === 'delete') {
-      saveTeams(teams.filter((team) => team.id !== input.teamId));
+      saveTeams(input.storageRoot, teams.filter((team) => team.id !== input.teamId));
       return { success: true, output: JSON.stringify({ removed: input.teamId }) };
     }
 
@@ -142,7 +149,7 @@ export const teamTool: Tool = {
         updatedAt: Date.now(),
       };
       teams[index] = next;
-      saveTeams(teams);
+      saveTeams(input.storageRoot, teams);
       return { success: true, output: JSON.stringify(next) };
     }
 
@@ -154,7 +161,7 @@ export const teamTool: Tool = {
         updatedAt: Date.now(),
       };
       teams[index] = next;
-      saveTeams(teams);
+      saveTeams(input.storageRoot, teams);
       return { success: true, output: JSON.stringify(next) };
     }
 
@@ -171,7 +178,7 @@ export const teamTool: Tool = {
         updatedAt: Date.now(),
       };
       teams[index] = next;
-      saveTeams(teams);
+      saveTeams(input.storageRoot, teams);
       return { success: true, output: JSON.stringify(next) };
     }
 

@@ -25,6 +25,7 @@ import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import { RemoteSupervisor } from '../../runtime/remote/supervisor.ts';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
+import { createShellPathService } from '../../runtime/shell-paths.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { TaskScheduler } from '../../scheduler/scheduler.ts';
 import { SpawnTokenManager } from '../../security/spawn-tokens.ts';
@@ -41,6 +42,14 @@ import { WebSearchProviderRegistry } from '../../web-search/provider-registry.ts
 import { ConfigManager } from '../../config/manager.ts';
 
 const TEST_ROOT = mkdtempSync(join(tmpdir(), 'gv-test-runtime-'));
+const TEST_INTELLIGENCE_WORKING_DIR = join(TEST_ROOT, 'intelligence-workspace');
+const TEST_INTELLIGENCE_HOME_DIR = join(TEST_ROOT, 'intelligence-home');
+mkdirSync(TEST_INTELLIGENCE_WORKING_DIR, { recursive: true });
+mkdirSync(TEST_INTELLIGENCE_HOME_DIR, { recursive: true });
+const TEST_INTELLIGENCE_SHELL_PATHS = createShellPathService({
+  workingDirectory: TEST_INTELLIGENCE_WORKING_DIR,
+  homeDirectory: TEST_INTELLIGENCE_HOME_DIR,
+});
 process.on('exit', () => {
   try {
     rmSync(TEST_ROOT, { recursive: true, force: true });
@@ -91,10 +100,15 @@ export function getTestRuntimeServices(): RuntimeServices {
   if (!runtimeServices) {
     const { workingDir, configDir } = nextRuntimeRoots();
     runtimeServices = createRuntimeServices({
-      configManager: new ConfigManager({ configDir }),
+      configManager: new ConfigManager({
+        configDir,
+        workingDir,
+        homeDir: workingDir,
+      }),
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
       workingDir,
+      homeDirectory: workingDir,
       getConversationTitle: () => 'test-runtime',
     });
     applyExecutorIfPresent(runtimeServices);
@@ -238,9 +252,11 @@ export function initTestWrfcController(
   runtimeBus: RuntimeEventBus,
   messageBus: AgentMessageBus = getTestAgentMessageBus(),
 ): WrfcController {
+  const services = getTestRuntimeServices();
   wrfcController = new WrfcController(runtimeBus, messageBus, {
     agentManager: getTestAgentManager(),
     configManager: getTestConfigManager(),
+    projectRoot: services.shellPaths.workingDirectory,
   });
   return wrfcController;
 }
@@ -283,7 +299,7 @@ export function resetTestAutoHealer(): void {
 }
 
 export function getTestLspService(): LspService {
-  lspService ??= new LspService();
+  lspService ??= new LspService(TEST_INTELLIGENCE_SHELL_PATHS);
   return lspService;
 }
 
@@ -297,8 +313,16 @@ export function getTestTreeSitterService(): TreeSitterService {
 }
 
 export function getTestCodeIntelligence(): CodeIntelligence {
-  codeIntelligence ??= new CodeIntelligence(getTestTreeSitterService(), getTestLspService());
+  codeIntelligence ??= new CodeIntelligence({
+    shellPaths: TEST_INTELLIGENCE_SHELL_PATHS,
+    treeSitter: getTestTreeSitterService(),
+    lsp: getTestLspService(),
+  });
   return codeIntelligence;
+}
+
+export function getTestIntelligenceShellPaths() {
+  return TEST_INTELLIGENCE_SHELL_PATHS;
 }
 
 export function resetTestCodeIntelligence(): void {
@@ -318,7 +342,10 @@ export function resetTestProcessManager(): void {
 export function getTestTaskScheduler(
   config?: string | ConstructorParameters<typeof TaskScheduler>[0],
 ): TaskScheduler {
-  taskScheduler ??= new TaskScheduler(config);
+  taskScheduler ??= new TaskScheduler(config ?? {
+    storePath: join(TEST_ROOT, 'scheduler.json'),
+    spawnTask: () => 'test-agent',
+  });
   return taskScheduler;
 }
 
@@ -352,7 +379,7 @@ export function resetTestFeatureFlagManager(): void {
   featureFlags = null;
 }
 
-export function getTestProjectIndex(cwd = process.cwd()): ProjectIndex {
+export function getTestProjectIndex(cwd: string): ProjectIndex {
   const existing = projectIndexes.get(cwd);
   if (existing) return existing;
   const created = new ProjectIndex(cwd);

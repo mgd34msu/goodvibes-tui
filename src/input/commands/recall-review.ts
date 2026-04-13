@@ -1,15 +1,14 @@
 import type { CommandContext } from '../command-registry.ts';
-import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '../../state/knowledge-injection.ts';
 import { VALID_REVIEW_STATES, VALID_SCOPES, isValidReviewState, isValidScope } from './recall-shared.ts';
+import { getMemoryApi } from './recall-query.ts';
 
 export function handleRecallQueue(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
   const limit = Math.max(1, parseInt(args[0] ?? '10', 10) || 10);
-  const queue = registry.reviewQueue(limit);
+  const queue = memory.reviewQueue(limit);
   if (!queue.length) {
     context.print('[recall] Review queue is empty.');
     return;
@@ -22,9 +21,8 @@ export function handleRecallQueue(args: string[], context: CommandContext): void
 }
 
 export function handleRecallReview(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
 
@@ -41,7 +39,7 @@ export function handleRecallReview(args: string[], context: CommandContext): voi
   const reviewedBy = byIdx !== -1 ? rest[byIdx + 1] : 'operator';
   const staleReason = reasonIdx !== -1 ? rest.slice(reasonIdx + 1).join(' ') : undefined;
 
-  const record = registry.review(id, {
+  const record = memory.review(id, {
     state: stateRaw,
     confidence: Number.isFinite(confidence) ? confidence : undefined,
     reviewedBy,
@@ -56,9 +54,8 @@ export function handleRecallReview(args: string[], context: CommandContext): voi
 }
 
 export function handleRecallExplain(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
   const scopeIdx = args.indexOf('--scope');
@@ -73,19 +70,17 @@ export function handleRecallExplain(args: string[], context: CommandContext): vo
     context.print('[recall] Usage: /recall explain <task description...> [--scope <write-scope> ...]');
     return;
   }
-  const injections = selectKnowledgeForTask(registry, task, scopeValues);
-  if (injections.length === 0) {
+  const explanation = memory.explain(task, scopeValues);
+  if (explanation.injections.length === 0) {
     context.print('[recall] No reviewed project knowledge was selected for that task.');
     return;
   }
-  const prompt = buildKnowledgeInjectionPrompt(injections);
-  context.print(prompt ?? '[recall] No explainable project knowledge was selected.');
+  context.print(explanation.prompt ?? '[recall] No explainable project knowledge was selected.');
 }
 
 export function handleRecallPromote(args: string[], context: CommandContext): void {
-  const registry = context.memoryRegistry;
-  if (!registry) {
-    context.print('[recall] Memory registry not available.');
+  const memory = getMemoryApi(context);
+  if (!memory) {
     return;
   }
   const id = args[0];
@@ -94,7 +89,7 @@ export function handleRecallPromote(args: string[], context: CommandContext): vo
     context.print(`[recall] Usage: /recall promote <id> <${VALID_SCOPES.join('|')}>`);
     return;
   }
-  const record = registry.update(id, { scope });
+  const record = memory.update(id, { scope });
   if (!record) {
     context.print(`[recall] Record not found: ${id}`);
     return;

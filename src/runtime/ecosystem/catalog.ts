@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { homedir } from 'node:os';
 import { VERSION } from '../../version.ts';
 
 export type EcosystemEntryKind = 'plugin' | 'skill' | 'hook-pack' | 'policy-pack';
+export interface EcosystemCatalogPathOptions {
+  readonly cwd: string;
+  readonly homeDir: string;
+}
 
 export interface EcosystemCatalogEntry {
   readonly id: string;
@@ -253,10 +256,9 @@ function readCatalogDocument(path: string): EcosystemCatalogFile {
 
 export function loadEcosystemCatalog(
   kind: EcosystemEntryKind,
-  options: { cwd?: string; homeDir?: string } = {},
+  options: EcosystemCatalogPathOptions,
 ): EcosystemCatalogEntry[] {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const seen = new Set<string>();
   const entries: EcosystemCatalogEntry[] = [];
 
@@ -275,7 +277,7 @@ export function loadEcosystemCatalog(
 export function searchEcosystemCatalog(
   kind: EcosystemEntryKind,
   query: string,
-  options: { cwd?: string; homeDir?: string } = {},
+  options: EcosystemCatalogPathOptions,
 ): EcosystemCatalogEntry[] {
   const normalized = query.trim().toLowerCase();
   const entries = loadEcosystemCatalog(kind, options);
@@ -296,7 +298,7 @@ export function searchEcosystemCatalog(
 
 export function reviewEcosystemCatalogEntry(
   entry: EcosystemCatalogEntry,
-  options: { cwd?: string; homeDir?: string } = {},
+  options: EcosystemCatalogPathOptions,
 ): {
   entry: EcosystemCatalogEntry;
   sourcePath: string;
@@ -309,8 +311,7 @@ export function reviewEcosystemCatalogEntry(
     reasons: readonly string[];
   };
 } {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const sourcePath = entry.source.startsWith('/') || entry.source.startsWith('.')
     ? resolve(cwd, entry.source)
     : resolve(homeDir, entry.source);
@@ -351,10 +352,9 @@ export function reviewEcosystemCatalogEntry(
 export function installEcosystemCatalogEntry(
   kind: EcosystemEntryKind,
   entryId: string,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user'; skipBackup?: boolean } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user'; skipBackup?: boolean },
 ): { ok: true; receipt: EcosystemInstallReceipt } | { ok: false; error: string } {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const scope = options.scope ?? 'project';
   const entry = loadEcosystemCatalog(kind, { cwd, homeDir }).find((candidate) => candidate.id === entryId);
   if (!entry) return { ok: false, error: `Unknown curated ${kind} entry: ${entryId}` };
@@ -401,10 +401,9 @@ export function installEcosystemCatalogEntry(
 export function inspectInstalledEcosystemEntry(
   kind: EcosystemEntryKind,
   entryId: string,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user' } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user' },
 ): { ok: true; receipt: EcosystemInstallReceipt } | { ok: false; error: string } {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const scope = options.scope ?? 'project';
   const receipt = loadReceipt(receiptPath(kind, entryId, cwd, homeDir, scope));
   if (!receipt) {
@@ -416,10 +415,9 @@ export function inspectInstalledEcosystemEntry(
 export function uninstallEcosystemCatalogEntry(
   kind: EcosystemEntryKind,
   entryId: string,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user' } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user' },
 ): { ok: true; removedPath: string } | { ok: false; error: string } {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const scope = options.scope ?? 'project';
   const receipt = loadReceipt(receiptPath(kind, entryId, cwd, homeDir, scope));
   if (!receipt) return { ok: false, error: `No installed ${kind} receipt found for ${entryId} in ${scope} scope.` };
@@ -432,10 +430,9 @@ export function uninstallEcosystemCatalogEntry(
 export function updateInstalledEcosystemEntry(
   kind: EcosystemEntryKind,
   entryId: string,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user' } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user' },
 ): { ok: true; receipt: EcosystemInstallReceipt; previousReceipt: EcosystemInstallReceipt } | { ok: false; error: string } {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const scope = options.scope ?? 'project';
   const previousReceipt = loadReceipt(receiptPath(kind, entryId, cwd, homeDir, scope));
   if (!previousReceipt) {
@@ -451,10 +448,9 @@ export function updateInstalledEcosystemEntry(
 export function listEcosystemInstallBackups(
   kind: EcosystemEntryKind,
   entryId: string,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user' } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user' },
 ): EcosystemInstallBackup[] {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const scope = options.scope ?? 'project';
   const dir = backupRoot(cwd, homeDir, scope);
   if (!existsSync(dir)) return [];
@@ -469,10 +465,9 @@ export function listEcosystemInstallBackups(
 export function rollbackInstalledEcosystemEntry(
   kind: EcosystemEntryKind,
   entryId: string,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user'; backupId?: string } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user'; backupId?: string },
 ): { ok: true; receipt: EcosystemInstallReceipt; restoredFrom: EcosystemInstallBackup } | { ok: false; error: string } {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const scope = options.scope ?? 'project';
   const backups = listEcosystemInstallBackups(kind, entryId, { cwd, homeDir, scope });
   const backup = options.backupId
@@ -494,10 +489,9 @@ export function rollbackInstalledEcosystemEntry(
 
 export function listInstalledEcosystemEntries(
   kind: EcosystemEntryKind,
-  options: { cwd?: string; homeDir?: string } = {},
+  options: EcosystemCatalogPathOptions,
 ): EcosystemInstallReceipt[] {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const receipts = [
     installedReceiptsRoot(cwd, homeDir, 'project'),
     installedReceiptsRoot(cwd, homeDir, 'user'),
@@ -516,10 +510,9 @@ export function listInstalledEcosystemEntries(
 
 export function exportEcosystemCatalogBundle(
   scope: 'project' | 'user',
-  options: { cwd?: string; homeDir?: string } = {},
+  options: EcosystemCatalogPathOptions,
 ): EcosystemCatalogBundle {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const paths = {
     plugin: catalogPath('plugin', cwd, homeDir, scope),
     skill: catalogPath('skill', cwd, homeDir, scope),
@@ -553,7 +546,7 @@ export function inspectEcosystemCatalogBundle(bundle: EcosystemCatalogBundle): E
 
 export function importEcosystemCatalogBundle(
   bundle: EcosystemCatalogBundle,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user' } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user' },
 ): { imported: number; pathByKind: Partial<Record<EcosystemEntryKind, string>> } {
   const scope = options.scope ?? bundle.scope;
   const byKind: Record<EcosystemEntryKind, EcosystemCatalogEntry[]> = {
@@ -569,7 +562,7 @@ export function importEcosystemCatalogBundle(
   let imported = 0;
   for (const kind of ['plugin', 'skill', 'hook-pack', 'policy-pack'] as const) {
     if (byKind[kind].length === 0) continue;
-    const path = catalogPath(kind, options.cwd ?? process.cwd(), options.homeDir ?? homedir(), scope);
+    const path = catalogPath(kind, options.cwd, options.homeDir, scope);
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, `${JSON.stringify({ version: 1, entries: byKind[kind].sort((a, b) => a.name.localeCompare(b.name)) }, null, 2)}\n`, 'utf-8');
     pathByKind[kind] = path;
@@ -580,10 +573,9 @@ export function importEcosystemCatalogBundle(
 
 export function upsertEcosystemCatalogEntry(
   entry: EcosystemCatalogEntry,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user' } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user' },
 ): { ok: true; path: string; entry: EcosystemCatalogEntry } | { ok: false; error: string } {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const scope = options.scope ?? 'project';
   const path = catalogPath(entry.kind, cwd, homeDir, scope);
   const document = readCatalogDocument(path);
@@ -598,10 +590,9 @@ export function upsertEcosystemCatalogEntry(
 export function removeEcosystemCatalogEntry(
   kind: EcosystemEntryKind,
   entryId: string,
-  options: { cwd?: string; homeDir?: string; scope?: 'project' | 'user' } = {},
+  options: EcosystemCatalogPathOptions & { scope?: 'project' | 'user' },
 ): { ok: true; path: string } | { ok: false; error: string } {
-  const cwd = options.cwd ?? process.cwd();
-  const homeDir = options.homeDir ?? homedir();
+  const { cwd, homeDir } = options;
   const scope = options.scope ?? 'project';
   const path = catalogPath(kind, cwd, homeDir, scope);
   const document = readCatalogDocument(path);

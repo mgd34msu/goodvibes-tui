@@ -2,13 +2,15 @@
  * Tests for renderSessionPickerModal renderer.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { SessionPickerModal } from '../../input/session-picker-modal.ts';
 import { SessionManager } from '../../sessions/manager.ts';
 import { renderSessionPickerModal } from '../../renderer/session-picker-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 
 const W = 120;
-const sessionManager = new SessionManager();
+const sessionManager = new SessionManager(join(tmpdir(), 'gv-renderer-session-picker'));
 
 function makeModal(overrides: Partial<SessionPickerModal> = {}): SessionPickerModal {
   const modal = new SessionPickerModal(sessionManager);

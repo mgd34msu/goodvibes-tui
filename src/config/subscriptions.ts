@@ -1,6 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { homedir } from 'node:os';
+import { dirname } from 'node:path';
 import {
   buildOAuthAuthorizationStart,
   createOAuthState,
@@ -62,14 +61,6 @@ interface SubscriptionStore {
   readonly pending: Record<string, PendingSubscriptionLogin>;
 }
 
-function defaultPath(): string {
-  return join(homedir(), '.goodvibes', 'tui', 'subscriptions.json');
-}
-
-function legacyProjectPath(): string {
-  return join(process.cwd(), '.goodvibes', 'tui', 'subscriptions.json');
-}
-
 function isSubscriptionExpired(expiresAt?: number, bufferMs = 60_000): boolean {
   if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) return false;
   return Date.now() + bufferMs >= expiresAt;
@@ -78,8 +69,8 @@ function isSubscriptionExpired(expiresAt?: number, bufferMs = 60_000): boolean {
 export class SubscriptionManager {
   private readonly path: string;
 
-  public constructor(path?: string) {
-    this.path = path ?? defaultPath();
+  public constructor(path: string) {
+    this.path = path;
   }
 
   private read(): SubscriptionStore {
@@ -87,16 +78,6 @@ export class SubscriptionManager {
       const raw = readFileSync(this.path, 'utf-8');
       return JSON.parse(raw) as SubscriptionStore;
     } catch {
-      if (this.path === defaultPath()) {
-        try {
-          const legacyRaw = readFileSync(legacyProjectPath(), 'utf-8');
-          const parsed = JSON.parse(legacyRaw) as SubscriptionStore;
-          this.write(parsed);
-          return parsed;
-        } catch {
-          // fall through to empty store
-        }
-      }
       return {
         version: 1,
         subscriptions: {},

@@ -1,5 +1,5 @@
 import type { Tool } from '../../types/tools.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '../../config/manager.ts';
 import { AGENT_TOOL_SCHEMA } from './schema.ts';
 import type { AgentInput } from './schema.ts';
 import { ArchetypeLoader } from '../../agents/archetypes.ts';
@@ -602,9 +602,3 @@ export function createAgentTool(config: {
     },
   };
 }
-
-export const agentTool = createAgentTool({
-  manager: new AgentManager(),
-  messageBus: new AgentMessageBus(),
-  configManager: new ConfigManager(),
-});

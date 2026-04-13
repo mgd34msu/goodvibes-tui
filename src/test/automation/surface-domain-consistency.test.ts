@@ -8,6 +8,11 @@ import type { AutomationRun } from '../../automation/runs.ts';
 import { AutomationRouteStore } from '../../automation/store/routes.ts';
 import type { AutomationSourceRecord } from '../../automation/sources.ts';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
+import { ArtifactStore } from '../../artifacts/index.ts';
+import { ConfigManager } from '../../config/manager.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SecretsManager } from '../../config/secrets.ts';
+import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import type { DeliveryEvent } from '../../runtime/events/deliveries.ts';
 import type { RouteEvent } from '../../runtime/events/routes.ts';
@@ -63,6 +68,12 @@ describe('surface domain consistency', () => {
       store: new AutomationRouteStore(join(root, 'delivery-routes.json')),
     });
     const manager = new AutomationDeliveryManager({
+      configManager: new ConfigManager({ configDir: root }),
+      serviceRegistry: new ServiceRegistry(join(root, 'services.json'), {
+        secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
+        subscriptionManager: new SubscriptionManager(join(root, 'subscriptions.json')),
+      }),
+      artifactStore: new ArtifactStore({ rootDir: join(root, 'artifacts') }),
       routeBindings,
       runtimeBus: bus,
     });

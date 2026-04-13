@@ -9,6 +9,7 @@ import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/int
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createDomainDispatch, createRuntimeStore } from '../../runtime/store/index.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
+import { AgentManager } from '../../tools/agent/index.ts';
 import { ForensicsCollector } from '../../runtime/forensics/collector.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
@@ -87,10 +88,14 @@ function buildHarness(options: { hookResult?: HookResult } = {}) {
     null,
     () => {},
     runtimeBus,
+    {
+      agentManager: new AgentManager({ configManager }),
+      wrfcController: { listChains: () => [] },
+    },
   );
   orchestrator.setCoreServices({
-    providerRegistry: testManagers.providerRegistry,
     configManager,
+    providerRegistry: testManagers.providerRegistry,
   });
 
   return { runtimeBus, store, registry, collector, orchestrator };

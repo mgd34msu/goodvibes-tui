@@ -1,6 +1,24 @@
-import type { CommandRegistry } from '../command-registry.ts';
-import { buildProviderAccountSnapshot } from '../../runtime/provider-accounts/registry.ts';
-import { openCommandPanel } from './runtime-services.ts';
+import type { CommandContext, CommandRegistry } from '../command-registry.ts';
+import type {
+  ProviderAccountRecord,
+  ProviderAccountSnapshot,
+} from '../../runtime/provider-accounts/registry.ts';
+import {
+  openCommandPanel,
+  requireOperatorClient,
+} from './runtime-services.ts';
+
+async function loadProviderAccountSnapshot(context: CommandContext): Promise<ProviderAccountSnapshot> {
+  return await requireOperatorClient(context).providers.accountSnapshot();
+}
+
+function findProviderAccountRecord(
+  snapshot: ProviderAccountSnapshot,
+  providerId: string | undefined,
+): ProviderAccountRecord | undefined {
+  if (!providerId) return undefined;
+  return snapshot.providers.find((entry) => entry.providerId === providerId);
+}
 
 export function registerProviderAccountsRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -14,15 +32,10 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
         openCommandPanel(ctx, 'accounts');
         return;
       }
-      const snapshot = await buildProviderAccountSnapshot({
-        providerRegistry: ctx.providerRegistry,
-        serviceRegistry: ctx.serviceRegistry,
-        subscriptionManager: ctx.subscriptionManager,
-        secretsManager: ctx.secretsManager,
-      });
+      const snapshot = await loadProviderAccountSnapshot(ctx);
       if (sub === 'routes') {
         const providerId = args[1];
-        const record = snapshot.providers.find((entry) => entry.providerId === providerId);
+        const record = findProviderAccountRecord(snapshot, providerId);
         if (!record) {
           ctx.print(providerId ? `Unknown provider account: ${providerId}` : 'Usage: /accounts routes <provider>');
           return;
@@ -39,7 +52,7 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
       }
       if (sub === 'repair') {
         const providerId = args[1];
-        const record = snapshot.providers.find((entry) => entry.providerId === providerId);
+        const record = findProviderAccountRecord(snapshot, providerId);
         if (!record) {
           ctx.print(providerId ? `Unknown provider account: ${providerId}` : 'Usage: /accounts repair <provider>');
           return;
@@ -58,7 +71,7 @@ export function registerProviderAccountsRuntimeCommands(registry: CommandRegistr
       }
       if (sub === 'show') {
         const providerId = args[1];
-        const record = snapshot.providers.find((entry) => entry.providerId === providerId);
+        const record = findProviderAccountRecord(snapshot, providerId);
         if (!record) {
           ctx.print(providerId ? `Unknown provider account: ${providerId}` : 'Usage: /accounts show <provider>');
           return;

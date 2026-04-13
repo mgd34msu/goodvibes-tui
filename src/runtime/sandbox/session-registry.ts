@@ -100,6 +100,11 @@ async function launchManagedQemuGuest(
 
 export class SandboxSessionRegistry {
   private readonly sessions = new Map<string, SandboxSession>();
+  private readonly workspaceRoot: string;
+
+  constructor(workspaceRoot: string) {
+    this.workspaceRoot = workspaceRoot;
+  }
 
   private updateSession(sessionId: string, updater: (session: SandboxSession) => SandboxSession): SandboxSession {
     const existing = this.sessions.get(sessionId);
@@ -125,7 +130,7 @@ export class SandboxSessionRegistry {
       if (existing) return existing;
     }
     const config = getSandboxConfigSnapshot(configManager);
-    const launchPlan = buildSandboxLaunchPlan(profile, label?.trim() || profile.label, configManager);
+    const launchPlan = buildSandboxLaunchPlan(profile, label?.trim() || profile.label, configManager, this.workspaceRoot);
     let state: SandboxSession['state'] = 'running';
     let startupStatus: SandboxSession['startupStatus'] = 'verified';
     let startupDetail = launchPlan.summary;

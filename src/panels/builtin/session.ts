@@ -2,9 +2,9 @@ import type { PanelManager } from '../panel-manager.ts';
 import { SessionBrowserPanel } from '../session-browser-panel.ts';
 import { DocsPanel } from '../docs-panel.ts';
 import { PanelListPanel } from '../panel-list-panel.ts';
-import { SystemMessagesPanel } from '../system-messages-panel.ts';
 import { TokenBudgetPanel } from '../token-budget-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
+import { requireUiServices } from './shared.ts';
 
 export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   manager.registerType({
@@ -34,15 +34,13 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     factory: () => new PanelListPanel(manager, deps.panelHealthMonitor),
   });
 
-  const systemMessagesPanel = deps.systemMessagesPanel ?? new SystemMessagesPanel(deps.configManager, deps.panelHealthMonitor);
-
   manager.registerType({
     id: 'system-messages',
     name: 'System Messages',
     icon: 'J',
     category: 'monitoring',
     description: 'Operational system messages routed away from the main conversation (scans, discovery, plugin events, tool status)',
-    factory: () => systemMessagesPanel,
+    factory: () => deps.systemMessagesPanel,
   });
 
   manager.registerType({
@@ -54,7 +52,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     factory: () => {
       const panel = new TokenBudgetPanel(deps.sessionMemoryStore);
       if (deps.orchestrator && deps.getCtxWindow) {
-        panel.wire(deps.orchestrator, deps.getCtxWindow, deps.runtimeStore);
+        panel.wire(deps.orchestrator, deps.getCtxWindow, requireUiServices(deps).readModels.session);
       }
       return panel;
     },

@@ -1,6 +1,9 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { run } from '../../../hooks/runners/agent.ts';
 import { AgentManager } from '../../../tools/agent/index.ts';
+import { ConfigManager } from '../../../config/manager.ts';
 import type { HookDefinition, HookEvent } from '../../../hooks/types.ts';
 
 const testAgentExecutor = {
@@ -40,7 +43,11 @@ function makeHook(overrides: Partial<HookDefinition> = {}): HookDefinition {
 }
 
 beforeEach(() => {
-  agentManager = new AgentManager({ executor: testAgentExecutor });
+  const configDir = join(tmpdir(), `gv-agent-runner-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  agentManager = new AgentManager({
+    executor: testAgentExecutor,
+    configManager: new ConfigManager({ configDir }),
+  });
 });
 
 // ---------------------------------------------------------------------------

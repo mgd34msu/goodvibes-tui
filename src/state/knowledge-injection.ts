@@ -9,9 +9,10 @@ export interface KnowledgeInjection {
   readonly reviewState: 'fresh' | 'reviewed' | 'stale' | 'contradicted';
 }
 
-type KnowledgeRegistrySource =
-  Pick<MemoryRegistry, 'getAll'> &
-  Partial<Pick<MemoryRegistry, 'searchSemantic'>>;
+type KnowledgeRegistrySource = {
+  getAll(): readonly MemoryRecord[];
+  searchSemantic?(input: Parameters<MemoryRegistry['searchSemantic']>[0]): readonly MemorySemanticSearchResult[];
+};
 
 function tokenize(value: string): string[] {
   return value

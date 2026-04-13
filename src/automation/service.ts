@@ -14,6 +14,7 @@ import { AutomationRunStore } from './store/runs.ts';
 import { AutomationSourceStore } from './store/sources.ts';
 
 export interface AutomationServiceConfig {
+  readonly configManager: ConfigManager;
   readonly jobs?: AutomationJobStore;
   readonly runs?: AutomationRunStore;
   readonly routes?: AutomationRouteStore;
@@ -51,8 +52,8 @@ export class AutomationService {
   private readonly sources = new Map<string, AutomationSourceRecord>();
   private loaded = false;
 
-  constructor(config: AutomationServiceConfig = {}) {
-    const configManager = new ConfigManager();
+  constructor(config: AutomationServiceConfig) {
+    const configManager = config.configManager;
     this.jobStore = config.jobs ?? new AutomationJobStore({ configManager });
     this.runStore = config.runs ?? new AutomationRunStore({ configManager });
     this.routeStore = config.routes ?? new AutomationRouteStore({ configManager });

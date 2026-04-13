@@ -38,8 +38,8 @@ export function isAutoApproveEnabled(configManager: Pick<ConfigManager, 'get'>):
   return configManager.get('behavior.autoApprove');
 }
 
-export function getWorkingDirectory(): string {
-  return process.cwd();
+export function getWorkingDirectory(configManager: Pick<ConfigManager, 'getWorkingDirectory'>): string | null {
+  return configManager.getWorkingDirectory();
 }
 
 export function getConfiguredSystemPrompt(configManager: Pick<ConfigManager, 'get'>): string | undefined {
@@ -122,7 +122,7 @@ function loadEnvApiKeys(): Record<string, string> {
  * Returns a map of provider → apiKey for all providers where a key is found.
  */
 export async function resolveApiKeys(
-  secrets: Pick<SecretsManager, 'get'> = new SecretsManager(),
+  secrets: Pick<SecretsManager, 'get'>,
 ): Promise<Record<string, string>> {
   const mapping: Array<{ prov: string; envVars: string[] }> = [
     { prov: 'openai',       envVars: ['OPENAI_API_KEY', 'OPENAI_KEY'] },

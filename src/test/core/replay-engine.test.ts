@@ -5,6 +5,7 @@
  * diff (match/mismatch), export path validation, engine state transitions.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -28,6 +29,8 @@ const SNAPSHOT_WITH_DOMAINS: RuntimeStateSnapshot = {
     { domain: 'session', revision: 1, lastUpdatedAt: 1_700_000_000_000, state: { id: 'sess-1' } },
   ],
 };
+
+const REPLAY_COMMAND_PROJECT_ROOT = process.cwd();
 
 function makeEntry(rev: number, eventName: string, payload: unknown = {}): LedgerEntry {
   return {
@@ -53,9 +56,11 @@ function loadEngine(
 
 describe('DeterministicReplayEngine', () => {
   let engine: DeterministicReplayEngine;
+  let projectRoot: string;
 
   beforeEach(() => {
-    engine = new DeterministicReplayEngine();
+    projectRoot = mkdtempSync(join(tmpdir(), 'gv-replay-root-'));
+    engine = new DeterministicReplayEngine(projectRoot);
   });
 
   // ── load ──────────────────────────────────────────────────────────────────
@@ -401,7 +406,7 @@ describe('DeterministicReplayEngine', () => {
 
 describe('handleReplayCommand', () => {
   test('loads a run and reports available entries', () => {
-    const engine = new DeterministicReplayEngine();
+    const engine = new DeterministicReplayEngine(REPLAY_COMMAND_PROJECT_ROOT);
     const ledger = {
       listRunIds: () => ['run-test-1'],
       readRunEntries: () => [makeEntry(1, 'turn:start'), makeEntry(2, 'turn:complete')],
@@ -414,7 +419,7 @@ describe('handleReplayCommand', () => {
   });
 
   test('returns usage when no replay engine ledger is available', () => {
-    const engine = new DeterministicReplayEngine();
+    const engine = new DeterministicReplayEngine(REPLAY_COMMAND_PROJECT_ROOT);
     const result = handleReplayCommand({ replayEngine: engine }, 'load', [], undefined);
     expect(result.ok).toBe(false);
     expect(result.output).toContain('No ledger configured');

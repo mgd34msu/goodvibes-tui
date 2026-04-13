@@ -438,7 +438,7 @@ export async function readOneFile(
 
   let resolvedPath: string;
   try {
-    resolvedPath = resolveAndValidatePath(fileInput.path);
+    resolvedPath = resolveAndValidatePath(fileInput.path, projectIndex.baseDir);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.debug('read tool: path validation failed', { path: fileInput.path, error: message });
@@ -467,7 +467,7 @@ export async function readOneFile(
   return readTextFile(target, context, fileInput);
 }
 
-export function paginateFiles(files: ReadFileInput[], tokenBudget: number): Array<number[]> {
+export function paginateFiles(files: ReadFileInput[], tokenBudget: number, projectRoot: string): Array<number[]> {
   const pages: Array<number[]> = [];
   let currentPage: number[] = [];
   let currentTokens = 0;
@@ -475,7 +475,7 @@ export function paginateFiles(files: ReadFileInput[], tokenBudget: number): Arra
   for (let i = 0; i < files.length; i++) {
     let est = 0;
     try {
-      const resolved = resolveAndValidatePath(files[i].path);
+      const resolved = resolveAndValidatePath(files[i].path, projectRoot);
       est = Math.ceil(statSync(resolved).size / 4);
     } catch {
       est = 0;

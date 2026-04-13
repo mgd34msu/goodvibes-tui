@@ -39,7 +39,7 @@ export interface HookConfigInspection {
 
 export interface HookWorkbenchOptions {
   readonly hookDispatcher: Pick<HookDispatcher, 'clear' | 'loadFromFile'>;
-  readonly configManager: Pick<ConfigManager, 'get'>;
+  readonly configManager: Pick<ConfigManager, 'get' | 'getWorkingDirectory'>;
   readonly hooksFilePathResolver?: () => string;
 }
 
@@ -345,8 +345,15 @@ export class HookWorkbench {
 }
 
 export function createHookWorkbench(options: HookWorkbenchOptions): HookWorkbench {
+  const hooksFilePathResolver = options.hooksFilePathResolver ?? (() => {
+    const workingDirectory = options.configManager.getWorkingDirectory();
+    if (!workingDirectory) {
+      throw new Error('createHookWorkbench requires configManager.getWorkingDirectory() when no hooksFilePathResolver is provided');
+    }
+    return resolve(workingDirectory, options.configManager.get('tools.hooksFile') as string);
+  });
   return new HookWorkbench(
     options.hookDispatcher,
-    options.hooksFilePathResolver ?? (() => resolve(process.cwd(), options.configManager.get('tools.hooksFile') as string)),
+    hooksFilePathResolver,
   );
 }

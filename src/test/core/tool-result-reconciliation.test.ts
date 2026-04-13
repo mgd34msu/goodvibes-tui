@@ -27,6 +27,7 @@ import { createEventEnvelope } from '../../runtime/events/envelope.ts';
 import { RuntimeEventBus, type ToolEvent } from '../../runtime/events/index.ts';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
+import { AgentManager } from '../../tools/agent/index.ts';
 
 // ---------------------------------------------------------------------------
 // Unit tests for reconciliation helpers
@@ -164,7 +165,10 @@ describe('Orchestrator tool result reconciliation', () => {
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, null, runtimeBus);
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, null, runtimeBus, {
+      agentManager: new AgentManager({ configManager }),
+      wrfcController: { listChains: () => [] },
+    });
     return { orch, cm, pm, runtimeBus };
   }
 
@@ -350,7 +354,10 @@ describe('Orchestrator tool result reconciliation', () => {
     const flagManager = createFeatureFlagManager();
     flagManager.disable('tool-result-reconciliation');
 
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, flagManager);
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, flagManager, null, null, {
+      agentManager: new AgentManager({ configManager }),
+      wrfcController: { listChains: () => [] },
+    });
     const enabled = (orch as unknown as { isReconciliationEnabled: () => boolean }).isReconciliationEnabled();
     expect(enabled).toBe(false);
   });
@@ -371,7 +378,10 @@ describe('Orchestrator tool result reconciliation', () => {
     const flagManager = createFeatureFlagManager();
     flagManager.disable('tool-result-reconciliation');
 
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, flagManager);
+    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, flagManager, null, null, {
+      agentManager: new AgentManager({ configManager }),
+      wrfcController: { listChains: () => [] },
+    });
 
     const danglingCall: ToolCall = { id: 'pending-1', name: 'read', arguments: {} };
     (orch as unknown as { _pendingToolCalls: ToolCall[] })._pendingToolCalls = [danglingCall];

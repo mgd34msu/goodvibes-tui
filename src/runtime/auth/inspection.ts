@@ -30,6 +30,12 @@ export interface AuthInspectionSnapshot {
   readonly providers: readonly ProviderAuthInspection[];
 }
 
+export interface AuthInspectionDeps {
+  readonly serviceRegistry: Pick<ServiceRegistry, 'get' | 'getAll'>;
+  readonly subscriptionManager: Pick<SubscriptionManager, 'get' | 'getPending' | 'list' | 'listPending'>;
+  readonly secretsManager: Pick<SecretsManager, 'list'>;
+}
+
 function determineFreshness(subscription: ProviderSubscription | null, pending: boolean, configured: boolean): AuthInspectionFreshness {
   if (pending) return 'pending';
   if (!subscription) return configured ? 'available' : 'unconfigured';
@@ -39,13 +45,14 @@ function determineFreshness(subscription: ProviderSubscription | null, pending: 
   return 'healthy';
 }
 
-export async function inspectProviderAuth(provider: string): Promise<ProviderAuthInspection> {
-  const services = new ServiceRegistry();
-  const manager = new SubscriptionManager();
-  const service = services.get(provider);
+export async function inspectProviderAuth(
+  provider: string,
+  deps: AuthInspectionDeps,
+): Promise<ProviderAuthInspection> {
+  const service = deps.serviceRegistry.get(provider);
   const resolved = getSubscriptionProviderConfig(provider, service);
-  const subscription = manager.get(provider);
-  const pending = manager.getPending(provider);
+  const subscription = deps.subscriptionManager.get(provider);
+  const pending = deps.subscriptionManager.getPending(provider);
   const configured = resolved != null;
   const freshness = determineFreshness(subscription, pending != null, configured);
   const issues: string[] = [];
@@ -91,23 +98,28 @@ export async function inspectProviderAuth(provider: string): Promise<ProviderAut
   });
 }
 
-export async function buildAuthInspectionSnapshot(): Promise<AuthInspectionSnapshot> {
-  const secrets = await new SecretsManager().list();
-  const subscriptions = new SubscriptionManager();
-  const services = new ServiceRegistry().getAll();
+export async function buildAuthInspectionSnapshot(
+  deps: AuthInspectionDeps,
+): Promise<AuthInspectionSnapshot> {
+  const secrets = await deps.secretsManager.list();
+  const services = deps.serviceRegistry.getAll();
   const providerIds = new Set<string>([
     ...Object.values(services)
       .filter((service) => service.authType === 'oauth' && service.oauth)
       .map((service) => service.providerId ?? service.name),
-    ...subscriptions.list().map((entry) => entry.provider),
-    ...subscriptions.listPending().map((entry) => entry.provider),
+    ...deps.subscriptionManager.list().map((entry) => entry.provider),
+    ...deps.subscriptionManager.listPending().map((entry) => entry.provider),
   ]);
-  const providers = await Promise.all([...providerIds].sort((a, b) => a.localeCompare(b)).map((provider) => inspectProviderAuth(provider)));
+  const providers = await Promise.all(
+    [...providerIds]
+      .sort((a, b) => a.localeCompare(b))
+      .map((provider) => inspectProviderAuth(provider, deps)),
+  );
   return Object.freeze({
     generatedAt: Date.now(),
     secretKeyCount: secrets.length,
-    activeSubscriptions: subscriptions.list().length,
-    pendingSubscriptions: subscriptions.listPending().length,
+    activeSubscriptions: deps.subscriptionManager.list().length,
+    pendingSubscriptions: deps.subscriptionManager.listPending().length,
     providers,
   });
 }

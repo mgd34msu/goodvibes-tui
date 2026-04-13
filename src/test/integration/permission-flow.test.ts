@@ -44,6 +44,7 @@ function createConfigState(overrides: Partial<GoodVibesConfig['permissions']> = 
   return {
     getSnapshot: () => config,
     isAutoApproveEnabled: () => config.behavior.autoApprove,
+    getWorkingDirectory: () => '/tmp/goodvibes-permission-flow',
     setAutoApprove(value: boolean) {
       config.behavior.autoApprove = value;
     },

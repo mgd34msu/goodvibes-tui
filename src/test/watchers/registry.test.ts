@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { WatcherRegistry } from '../../watchers/index.ts';
-import { loadWatcherSnapshotFromPath, saveWatcherSnapshotToPath } from '../../watchers/store.ts';
+import { loadWatcherSnapshotFromPath, resolveWatcherStorePath, saveWatcherSnapshotToPath } from '../../watchers/store.ts';
 
 function createTempWatcherStore(): { readonly root: string; readonly storePath: string } {
   const root = mkdtempSync(join(tmpdir(), 'goodvibes-watchers-'));
@@ -16,6 +16,10 @@ function createTempWatcherStore(): { readonly root: string; readonly storePath: 
 }
 
 describe('WatcherRegistry', () => {
+  test('requires an explicit watcher store path', () => {
+    expect(() => resolveWatcherStorePath()).toThrow('Watcher store requires an explicit storePath');
+  });
+
   test('persists filesystem watchers across restart', async () => {
     const { root, storePath } = createTempWatcherStore();
     const filePath = join(root, 'source.txt');

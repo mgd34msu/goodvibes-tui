@@ -1,14 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
+import { dirname, join } from 'path';
 import { logger } from '../utils/logger.ts';
 import {
   discoverPlugins,
+  getPluginDirectories,
   loadPlugin,
   unloadPlugin,
-  PLUGINS_DIR,
   type LoadedPlugin,
   type PluginLoaderDeps,
+  type PluginPathOptions,
 } from './loader.ts';
 import {
   PluginTrustStore,
@@ -19,9 +19,6 @@ import {
 import { PluginQuarantineEngine, type QuarantineRecord } from '../runtime/plugins/quarantine.ts';
 import { isHighRiskCapability, resolveCapabilityManifest } from '../runtime/plugins/manifest.ts';
 import type { PluginCapability, PluginManifestV2 } from '../runtime/plugins/types.ts';
-
-/** Path to the plugin state persistence file. */
-const PLUGINS_STATE_FILE = join(homedir(), '.goodvibes', 'tui', 'plugins.json');
 
 /**
  * PluginState — Persisted state for all plugins.
@@ -71,6 +68,11 @@ export interface PluginManagerObserver {
 
 const DEFAULT_STATE: PluginState = { enabled: {}, config: {}, trust: {}, quarantine: {} };
 
+export interface PluginManagerOptions {
+  readonly pathOptions: PluginPathOptions;
+  readonly stateFilePath?: string;
+}
+
 /**
  * PluginManager — orchestrates plugin discovery, loading, and persistence.
  */
@@ -84,8 +86,14 @@ export class PluginManager {
   /** Quarantine engine — manages plugin quarantine state. */
   private readonly quarantineEngine = new PluginQuarantineEngine();
   private readonly subscribers = new Set<() => void>();
+  private readonly pathOptions: PluginPathOptions;
+  private readonly stateFilePath: string;
 
-  constructor() {}
+  constructor(options: PluginManagerOptions) {
+    this.pathOptions = options.pathOptions;
+    this.stateFilePath = options.stateFilePath
+      ?? join(options.pathOptions.homeDir, '.goodvibes', 'tui', 'plugins.json');
+  }
 
   /**
    * init — Must be called once at startup with application dependencies.
@@ -99,7 +107,7 @@ export class PluginManager {
 
   /** Returns status for all discovered plugins (enabled or not). */
   list(): PluginStatus[] {
-    const discovered = discoverPlugins();
+    const discovered = this.discoverPlugins();
     return discovered.map((d) => {
       const loaded = this.plugins.get(d.manifest.name);
       return {
@@ -139,9 +147,9 @@ export class PluginManager {
     tier: PluginTrustTier,
     note?: string,
   ): { ok: boolean; error?: string } {
-    const discovered = discoverPlugins().find((d) => d.manifest.name === name);
+    const discovered = this.findDiscoveredPlugin(name);
     if (!discovered) {
-      return { ok: false, error: `Plugin '${name}' not found in ${PLUGINS_DIR}` };
+      return { ok: false, error: this.notFoundError(name) };
     }
 
     // Warn if trying to manually set 'trusted' without a signed manifest.
@@ -170,9 +178,9 @@ export class PluginManager {
     name: string,
     publicKey?: string,
   ): { ok: boolean; fingerprint?: string; error?: string } {
-    const discovered = discoverPlugins().find((d) => d.manifest.name === name);
+    const discovered = this.findDiscoveredPlugin(name);
     if (!discovered) {
-      return { ok: false, error: `Plugin '${name}' not found in ${PLUGINS_DIR}` };
+      return { ok: false, error: this.notFoundError(name) };
     }
 
     const manifest = discovered.manifest as {
@@ -197,9 +205,9 @@ export class PluginManager {
    * verify — Inspect a plugin's manifest signature without changing its tier.
    */
   verify(name: string, publicKey?: string): { ok: boolean } & SignatureValidationResult {
-    const discovered = discoverPlugins().find((d) => d.manifest.name === name);
+    const discovered = this.findDiscoveredPlugin(name);
     if (!discovered) {
-      return { ok: false, valid: false, reason: `Plugin '${name}' not found in ${PLUGINS_DIR}` };
+      return { ok: false, valid: false, reason: this.notFoundError(name) };
     }
 
     const manifest = discovered.manifest as {
@@ -228,7 +236,7 @@ export class PluginManager {
     tier: PluginTrustTier;
     blocked: string[];
   } | null {
-    const discovered = discoverPlugins().find((d) => d.manifest.name === name);
+    const discovered = this.findDiscoveredPlugin(name);
     if (!discovered) {
       return null;
     }
@@ -255,9 +263,9 @@ export class PluginManager {
     name: string,
     reason: string,
   ): { ok: boolean; error?: string } {
-    const discovered = discoverPlugins().find((d) => d.manifest.name === name);
+    const discovered = this.findDiscoveredPlugin(name);
     if (!discovered) {
-      return { ok: false, error: `Plugin '${name}' not found in ${PLUGINS_DIR}` };
+      return { ok: false, error: this.notFoundError(name) };
     }
 
     if (this.quarantineEngine.isQuarantined(name)) {
@@ -308,9 +316,9 @@ export class PluginManager {
       return { ok: false, error: `Plugin '${name}' is already enabled` };
     }
 
-    const discovered = discoverPlugins().find((d) => d.manifest.name === name);
+    const discovered = this.findDiscoveredPlugin(name);
     if (!discovered) {
-      return { ok: false, error: `Plugin '${name}' not found in ${PLUGINS_DIR}` };
+      return { ok: false, error: this.notFoundError(name) };
     }
 
     this.state.enabled[name] = true;
@@ -367,7 +375,7 @@ export class PluginManager {
 
     // Reactivate with cache busting — append timestamp to force fresh import
     if (this.deps) {
-      const discovered = discoverPlugins();
+      const discovered = this.discoverPlugins();
       const cacheBust = Date.now();
       for (const d of discovered) {
         if (!this.isEnabled(d.manifest.name)) continue;
@@ -400,7 +408,7 @@ export class PluginManager {
 
   private async loadEnabledPlugins(): Promise<void> {
     if (!this.deps) return;
-    const discovered = discoverPlugins();
+    const discovered = this.discoverPlugins();
     for (const d of discovered) {
       if (!this.isEnabled(d.manifest.name)) continue;
       const loaded = await loadPlugin(d, this.deps);
@@ -413,8 +421,8 @@ export class PluginManager {
 
   private loadState(): void {
     try {
-      if (existsSync(PLUGINS_STATE_FILE)) {
-        const raw = readFileSync(PLUGINS_STATE_FILE, 'utf-8');
+      if (existsSync(this.stateFilePath)) {
+        const raw = readFileSync(this.stateFilePath, 'utf-8');
         const parsed = JSON.parse(raw) as Partial<PluginState>;
         this.state.enabled = parsed.enabled ?? {};
         this.state.config = parsed.config ?? {};
@@ -434,11 +442,27 @@ export class PluginManager {
 
   private saveState(): void {
     try {
-      mkdirSync(join(homedir(), '.goodvibes', 'tui'), { recursive: true });
-      writeFileSync(PLUGINS_STATE_FILE, JSON.stringify(this.state, null, 2), 'utf-8');
+      mkdirSync(dirname(this.stateFilePath), { recursive: true });
+      writeFileSync(this.stateFilePath, JSON.stringify(this.state, null, 2), 'utf-8');
     } catch (err) {
       logger.warn(`[plugins] Could not save state: ${String(err)}`);
     }
+  }
+
+  private discoverPlugins() {
+    return discoverPlugins(this.pathOptions);
+  }
+
+  private findDiscoveredPlugin(name: string) {
+    return this.discoverPlugins().find((plugin) => plugin.manifest.name === name);
+  }
+
+  private notFoundError(name: string): string {
+    return `Plugin '${name}' not found in configured plugin search directories (${this.describeSearchDirectories()})`;
+  }
+
+  private describeSearchDirectories(): string {
+    return getPluginDirectories(this.pathOptions).join(', ');
   }
 
   private notifySubscribers(): void {

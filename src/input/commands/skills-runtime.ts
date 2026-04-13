@@ -11,7 +11,7 @@ import {
   updateInstalledEcosystemEntry,
   upsertEcosystemCatalogEntry,
 } from '../../runtime/ecosystem/catalog.ts';
-import { requirePanelManager } from './runtime-services.ts';
+import { requireEcosystemCatalogPaths, requirePanelManager, requireShellPaths } from './runtime-services.ts';
 
 export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -31,7 +31,8 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
         }
         return;
       }
-      const skills = discoverSkills();
+      const skills = discoverSkills(requireShellPaths(ctx));
+      const ecosystemPaths = requireEcosystemCatalogPaths(ctx);
       if (sub === 'list') {
         if (skills.length === 0) {
           ctx.print('No skills discovered.');
@@ -75,7 +76,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
       }
       if (sub === 'browse' || sub === 'catalog') {
         const query = args.slice(1).join(' ');
-        const entries = query ? searchEcosystemCatalog('skill', query) : loadEcosystemCatalog('skill');
+        const entries = query ? searchEcosystemCatalog('skill', query, ecosystemPaths) : loadEcosystemCatalog('skill', ecosystemPaths);
         if (entries.length === 0) {
           ctx.print(query
             ? `No curated skill catalog entries matched "${query}".`
@@ -89,7 +90,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
       if (sub === 'installed') {
-        const receipts = listInstalledEcosystemEntries('skill');
+        const receipts = listInstalledEcosystemEntries('skill', ecosystemPaths);
         if (receipts.length === 0) {
           ctx.print('No curated skills installed from local catalogs yet.');
           return;
@@ -106,12 +107,12 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /skills catalog-review <catalog-id>');
           return;
         }
-        const entry = loadEcosystemCatalog('skill').find((candidate) => candidate.id === entryId);
+        const entry = loadEcosystemCatalog('skill', ecosystemPaths).find((candidate) => candidate.id === entryId);
         if (!entry) {
           ctx.print(`Unknown curated skill entry: ${entryId}`);
           return;
         }
-        const review = reviewEcosystemCatalogEntry(entry);
+        const review = reviewEcosystemCatalogEntry(entry, ecosystemPaths);
         ctx.print([
           `Skill Catalog Review: ${entry.name}`,
           `  id: ${entry.id}`,
@@ -143,7 +144,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
           tags: ['local-first', 'published'],
           provenance: 'operator-published',
           updateHint: 'Use /skills publish-local again to refresh catalog metadata after edits.',
-        });
+        }, ecosystemPaths);
         ctx.print(result.ok ? `Published curated skill ${entryId} into ${result.path}` : `Error: ${result.error}`);
         return;
       }
@@ -153,7 +154,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /skills unpublish <catalog-id>');
           return;
         }
-        const result = removeEcosystemCatalogEntry('skill', entryId);
+        const result = removeEcosystemCatalogEntry('skill', entryId, ecosystemPaths);
         ctx.print(result.ok ? `Removed curated skill ${entryId} from ${result.path}` : `Error: ${result.error}`);
         return;
       }
@@ -163,7 +164,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /skills install-hint <catalog-id>');
           return;
         }
-        const entry = loadEcosystemCatalog('skill').find((candidate) => candidate.id === entryId);
+        const entry = loadEcosystemCatalog('skill', ecosystemPaths).find((candidate) => candidate.id === entryId);
         if (!entry) {
           ctx.print(`Unknown curated skill entry: ${entryId}`);
           return;
@@ -186,7 +187,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         const scope = scopeArg === 'project' ? 'project' : 'user';
-        const result = installEcosystemCatalogEntry('skill', entryId, { scope });
+        const result = installEcosystemCatalogEntry('skill', entryId, { ...ecosystemPaths, scope });
         ctx.print(result.ok ? `Installed curated skill ${entryId} into ${result.receipt.targetPath}` : `Error: ${result.error}`);
         return;
       }
@@ -198,7 +199,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         const scope = scopeArg === 'project' ? 'project' : 'user';
-        const result = updateInstalledEcosystemEntry('skill', entryId, { scope });
+        const result = updateInstalledEcosystemEntry('skill', entryId, { ...ecosystemPaths, scope });
         ctx.print(result.ok ? `Updated curated skill ${entryId} in ${result.receipt.targetPath}` : `Error: ${result.error}`);
         return;
       }
@@ -210,7 +211,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         const scope = scopeArg === 'project' ? 'project' : 'user';
-        const result = uninstallEcosystemCatalogEntry('skill', entryId, { scope });
+        const result = uninstallEcosystemCatalogEntry('skill', entryId, { ...ecosystemPaths, scope });
         ctx.print(result.ok ? `Uninstalled curated skill ${entryId} from ${result.removedPath}` : `Error: ${result.error}`);
         return;
       }

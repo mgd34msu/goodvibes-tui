@@ -1,5 +1,5 @@
+import { homedir } from 'node:os';
 import { ConfigManager } from '../config/manager.ts';
-import { UserAuthManager } from '../security/user-auth.ts';
 import { RuntimeEventBus } from '../runtime/events/index.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
@@ -8,8 +8,34 @@ import { HttpListener } from './http-listener.ts';
 import { logger } from '../utils/logger.ts';
 import { GlobalNetworkTransportInstaller } from '../runtime/network/index.ts';
 
+type DaemonCliOwnership = {
+  readonly workingDirectory: string;
+  readonly homeDirectory: string;
+};
+
+type DaemonCliTokens = {
+  readonly daemonToken: string | undefined;
+  readonly httpToken: string | undefined;
+};
+
+function resolveDaemonCliOwnership(): DaemonCliOwnership {
+  return {
+    workingDirectory: process.cwd(),
+    homeDirectory: homedir(),
+  };
+}
+
+function readDaemonCliTokens(env: NodeJS.ProcessEnv): DaemonCliTokens {
+  const daemonToken = env.GOODVIBES_DAEMON_TOKEN;
+  return {
+    daemonToken,
+    httpToken: env.GOODVIBES_HTTP_TOKEN ?? daemonToken,
+  };
+}
+
 async function main(): Promise<void> {
-  const config = new ConfigManager();
+  const { workingDirectory: workingDir, homeDirectory } = resolveDaemonCliOwnership();
+  const config = new ConfigManager({ workingDir, homeDir: homeDirectory });
   new GlobalNetworkTransportInstaller().install(config);
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
@@ -18,19 +44,20 @@ async function main(): Promise<void> {
     runtimeBus,
     runtimeStore,
     getConversationTitle: () => 'goodvibes daemon',
+    workingDir,
+    homeDirectory,
   });
 
-  const userAuth = new UserAuthManager();
+  const userAuth = runtimeServices.localUserAuthManager;
   const daemon = new DaemonServer({ runtimeBus, userAuth, runtimeServices });
   const listener = new HttpListener({
     hookDispatcher: runtimeServices.hookDispatcher,
     userAuth,
     configManager: config,
   });
-  const token = process.env.GOODVIBES_DAEMON_TOKEN;
-  const httpToken = process.env.GOODVIBES_HTTP_TOKEN ?? token;
+  const { daemonToken, httpToken } = readDaemonCliTokens(process.env);
 
-  daemon.enable({ daemon: true }, token);
+  daemon.enable({ daemon: true }, daemonToken);
   listener.enable({ httpListener: true }, httpToken);
 
   await Promise.all([

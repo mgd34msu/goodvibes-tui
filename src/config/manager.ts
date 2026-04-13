@@ -1,6 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { homedir } from 'os';
+import { dirname, isAbsolute, join, resolve } from 'path';
 import type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting } from './schema.ts';
 import { DEFAULT_CONFIG, CONFIG_SCHEMA } from './schema.ts';
 import { ConfigError } from '../types/errors.ts';
@@ -15,13 +14,31 @@ export type DeepReadonly<T> = {
 };
 
 /** Constructor overrides for CLI args and programmatic instantiation. */
-export interface ConfigOverrides {
+interface ConfigCliOverrides {
   model?: string;
   provider?: string;
   autoApprove?: boolean;
   systemPromptFile?: string;
   workingDir?: string;
+}
+
+export type ConfigOverrides = ConfigCliOverrides & (
+  | {
+    configDir: string;
+    homeDir?: string;
+    sharedConfigPath?: string;
+  }
+  | {
+    homeDir: string;
+    configDir?: string;
+    sharedConfigPath?: string;
+  }
+);
+
+interface ConfigRoots {
   configDir?: string;
+  homeDir?: string;
+  sharedConfigPath?: string;
 }
 
 export interface ConfigSetOptions {
@@ -49,12 +66,23 @@ function sanitizeConfigShape(config: GoodVibesConfig): GoodVibesConfig {
   return sanitized;
 }
 
+function requireAbsoluteOwnedPath(path: string | undefined, name: string): string | undefined {
+  if (path === undefined) return undefined;
+  const trimmed = path.trim();
+  if (!trimmed) {
+    throw new Error(`ConfigManager ${name} must be a non-empty absolute path.`);
+  }
+  if (!isAbsolute(trimmed)) {
+    throw new Error(`ConfigManager ${name} must be an absolute path.`);
+  }
+  return resolve(trimmed);
+}
+
 /**
  * Ensure the shared ~/.goodvibes/goodvibes.json exists (empty object if not).
  * This is reserved for future cross-app use — no TUI settings go here.
  */
-function ensureSharedConfig(): void {
-  const sharedPath = join(homedir(), '.goodvibes', 'goodvibes.json');
+function ensureSharedConfig(sharedPath: string): void {
   if (!existsSync(sharedPath)) {
     mkdirSync(dirname(sharedPath), { recursive: true });
     try {
@@ -75,44 +103,61 @@ export class ConfigManager {
   private config: GoodVibesConfig;
   private readonly configDir: string;
   private readonly configPath: string;
-  private readonly projectConfigPath: string;
+  private readonly projectConfigPath: string | null;
+  private readonly workingDirectory: string | null;
+  private readonly homeDirectory: string | null;
   private hookDispatcher: Pick<HookDispatcher, 'fire'> | null = null;
 
-  constructor(overrides?: ConfigOverrides) {
-    const configDirOverride = overrides?.configDir;
-    const base = configDirOverride ?? join(homedir(), '.goodvibes', 'tui');
+  constructor(overrides: ConfigOverrides) {
+    const roots = overrides as ConfigRoots;
+    const configDir = requireAbsoluteOwnedPath(roots.configDir, 'configDir');
+    const homeDirectory = requireAbsoluteOwnedPath(roots.homeDir, 'homeDir') ?? null;
+    const workingDirectory = requireAbsoluteOwnedPath(overrides.workingDir, 'workingDir') ?? null;
+    const sharedConfigPath = requireAbsoluteOwnedPath(roots.sharedConfigPath, 'sharedConfigPath');
+    const base = configDir ?? join(homeDirectory!, '.goodvibes', 'tui');
     this.configDir = base;
     this.configPath = join(base, 'settings.json');
-    const projectRoot = overrides?.workingDir ?? process.cwd();
-    this.projectConfigPath = join(projectRoot, '.goodvibes', 'tui', 'settings.json');
+    this.workingDirectory = workingDirectory;
+    this.homeDirectory = homeDirectory;
+    this.projectConfigPath = this.workingDirectory
+      ? join(this.workingDirectory, '.goodvibes', 'tui', 'settings.json')
+      : null;
     this.config = cloneDefaultConfig();
 
-    // Ensure shared config exists
-    if (!configDirOverride) {
-      ensureSharedConfig();
+    const ownedSharedConfigPath = sharedConfigPath ?? (
+      this.homeDirectory ? join(this.homeDirectory, '.goodvibes', 'goodvibes.json') : null
+    );
+    if (ownedSharedConfigPath) {
+      ensureSharedConfig(ownedSharedConfigPath);
     }
 
     this.load();
 
     // Apply constructor overrides (CLI args, etc.) after load
-    if (overrides) {
-      if (overrides.model !== undefined) {
-        this.config.provider.model = overrides.model;
-      }
-      if (overrides.provider !== undefined) {
-        this.config.provider.provider = overrides.provider;
-      }
-      if (overrides.autoApprove !== undefined) {
-        this.config.behavior.autoApprove = overrides.autoApprove;
-      }
-      if (overrides.systemPromptFile !== undefined) {
-        this.config.provider.systemPromptFile = overrides.systemPromptFile;
-      }
+    if (overrides.model !== undefined) {
+      this.config.provider.model = overrides.model;
+    }
+    if (overrides.provider !== undefined) {
+      this.config.provider.provider = overrides.provider;
+    }
+    if (overrides.autoApprove !== undefined) {
+      this.config.behavior.autoApprove = overrides.autoApprove;
+    }
+    if (overrides.systemPromptFile !== undefined) {
+      this.config.provider.systemPromptFile = overrides.systemPromptFile;
     }
   }
 
   getControlPlaneConfigDir(): string {
     return this.configDir;
+  }
+
+  getWorkingDirectory(): string | null {
+    return this.workingDirectory;
+  }
+
+  getHomeDirectory(): string | null {
+    return this.homeDirectory;
   }
 
   attachHookDispatcher(hookDispatcher: Pick<HookDispatcher, 'fire'> | null): void {
@@ -237,6 +282,9 @@ export class ConfigManager {
 
   /** Persist current config to project-level TUI settings file (.goodvibes/tui/settings.json). */
   saveProject(): void {
+    if (!this.projectConfigPath) {
+      throw new Error('ConfigManager.saveProject requires an explicit workingDir.');
+    }
     try {
       mkdirSync(dirname(this.projectConfigPath), { recursive: true });
       writeFileSync(this.projectConfigPath, JSON.stringify(this.config, null, 2) + '\n', 'utf-8');
@@ -260,7 +308,7 @@ export class ConfigManager {
     }
 
     // Load project settings and deep-merge on top (project wins)
-    if (existsSync(this.projectConfigPath)) {
+    if (this.projectConfigPath && existsSync(this.projectConfigPath)) {
       try {
         const raw = readFileSync(this.projectConfigPath, 'utf-8');
         const parsed = JSON.parse(raw) as Record<string, unknown>;

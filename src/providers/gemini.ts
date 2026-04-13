@@ -5,6 +5,7 @@ import type {
   ProviderEmbeddingRequest,
   ProviderEmbeddingResult,
   ProviderRuntimeMetadata,
+  ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
 import { ProviderError } from '../types/errors.ts';
@@ -394,13 +395,13 @@ export class GeminiProvider implements LLMProvider {
     };
   }
 
-  async describeRuntime(): Promise<ProviderRuntimeMetadata> {
+  async describeRuntime(deps: ProviderRuntimeMetadataDeps): Promise<ProviderRuntimeMetadata> {
     const { buildStandardProviderAuthRoutes } = await import('./runtime-metadata.ts');
     const authRoutes = await buildStandardProviderAuthRoutes({
       providerId: 'gemini',
       apiKeyEnvVars: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GEMINI_API_KEY'],
       serviceNames: ['gemini'],
-    });
+    }, deps);
     return {
       auth: {
         mode: 'api-key',

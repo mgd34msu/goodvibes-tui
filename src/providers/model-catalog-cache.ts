@@ -1,6 +1,5 @@
 import fs from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import type { CatalogModel } from './model-catalog.ts';
 
@@ -52,12 +51,12 @@ const MODELS_DEV_URL = 'https://models.dev/api.json';
 const CATALOG_FETCH_TIMEOUT_MS = 30_000;
 const CATALOG_TTL_MS = 86_400_000; // 24 hours
 
-function getCatalogCachePath(): string {
-  return join(homedir(), '.goodvibes', 'tui', 'model-catalog.json');
+export function getCatalogCachePath(cacheDir: string): string {
+  return join(cacheDir, 'model-catalog.json');
 }
 
-function getCatalogTmpPath(): string {
-  return getCatalogCachePath() + '.tmp';
+export function getCatalogTmpPath(cacheDir: string): string {
+  return `${getCatalogCachePath(cacheDir)}.tmp`;
 }
 
 function categorizeProvider(providerId: string): 'subscription' | 'shutdown' | 'normal' {
@@ -150,9 +149,9 @@ function transformModelsDevResponse(json: ModelsDevResponse): CatalogModel[] {
   return models;
 }
 
-function loadCatalogCache(): CatalogCacheFile | null {
+function loadCatalogCache(cachePath: string): CatalogCacheFile | null {
   try {
-    const raw = fs.readFileSync(getCatalogCachePath(), 'utf-8');
+    const raw = fs.readFileSync(cachePath, 'utf-8');
     const parsed = JSON.parse(raw) as CatalogCacheFile;
     if (parsed.version !== 1 || !Array.isArray(parsed.models)) return null;
     return parsed;
@@ -167,19 +166,17 @@ function loadCatalogCache(): CatalogCacheFile | null {
   }
 }
 
-function saveCatalogCache(models: CatalogModel[]): void {
+function saveCatalogCache(models: CatalogModel[], cachePath: string, tmpPath: string): void {
   try {
-    const dir = join(homedir(), '.goodvibes', 'tui');
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dirname(cachePath), { recursive: true });
     const payload: CatalogCacheFile = {
       version: 1,
       fetchedAt: Date.now(),
       ttlMs: CATALOG_TTL_MS,
       models,
     };
-    const tmp = getCatalogTmpPath();
-    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2), 'utf-8');
-    fs.renameSync(tmp, getCatalogCachePath());
+    fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), 'utf-8');
+    fs.renameSync(tmpPath, cachePath);
   } catch (err) {
     logger.warn('[model-catalog] Cache write failed', { error: String(err) });
   }
@@ -217,8 +214,6 @@ export async function fetchCatalog(): Promise<CatalogModel[]> {
 }
 
 export {
-  getCatalogCachePath,
-  getCatalogTmpPath,
   loadCatalogCache,
   saveCatalogCache,
   isCatalogCacheStale,

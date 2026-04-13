@@ -5,7 +5,8 @@
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeEventBus, AgentEvent, TurnEvent } from '../runtime/events/index.ts';
+import type { AgentEvent, TurnEvent } from '../runtime/events/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -176,29 +177,30 @@ export class CostTrackerPanel extends BasePanel {
   private readonly getOrchestratorUsage: () => UsageSnapshot & { model?: string };
 
   constructor(
-    runtimeBus: RuntimeEventBus,
+    turnEvents: UiEventFeed<TurnEvent>,
+    agentEvents: UiEventFeed<AgentEvent>,
     getOrchestratorUsage: () => UsageSnapshot & { model?: string },
     opts: { budgetThreshold?: number } = {},
   ) {
     super('cost', 'Cost', '$', 'monitoring');
     this.getOrchestratorUsage = getOrchestratorUsage;
     this.budgetThreshold = opts.budgetThreshold ?? 0;
-    this.attachBus(runtimeBus);
+    this.attachEvents(turnEvents, agentEvents);
   }
 
   // -------------------------------------------------------------------------
   // Bus wiring
   // -------------------------------------------------------------------------
 
-  private attachBus(runtimeBus: RuntimeEventBus): void {
+  private attachEvents(turnEvents: UiEventFeed<TurnEvent>, agentEvents: UiEventFeed<AgentEvent>): void {
     // Refresh after every completed turn
     this.unsubs.push(
-      runtimeBus.on<Extract<TurnEvent, { type: 'TURN_COMPLETED' }>>('TURN_COMPLETED', () => this.onTurnComplete()),
+      turnEvents.on('TURN_COMPLETED', () => this.onTurnComplete()),
     );
 
     // Track agent spawns
     this.unsubs.push(
-      runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_SPAWNING' }>>('AGENT_SPAWNING', ({ payload }) => {
+      agentEvents.on('AGENT_SPAWNING', (payload) => {
         this.agents.set(payload.agentId, {
           id: payload.agentId.slice(0, 8),
           task: payload.task.length > 40 ? payload.task.slice(0, 37) + '...' : payload.task,
@@ -214,7 +216,7 @@ export class CostTrackerPanel extends BasePanel {
 
     // Agent completed — capture token data from result if available
     this.unsubs.push(
-      runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_COMPLETED' }>>('AGENT_COMPLETED', ({ payload }) => {
+      agentEvents.on('AGENT_COMPLETED', (payload) => {
         const entry = this.agents.get(payload.agentId);
         if (entry) {
           entry.status = 'done';
@@ -225,7 +227,7 @@ export class CostTrackerPanel extends BasePanel {
 
     // Agent error
     this.unsubs.push(
-      runtimeBus.on<Extract<AgentEvent, { type: 'AGENT_FAILED' }>>('AGENT_FAILED', ({ payload }) => {
+      agentEvents.on('AGENT_FAILED', (payload) => {
         const entry = this.agents.get(payload.agentId);
         if (entry) {
           entry.status = 'failed';

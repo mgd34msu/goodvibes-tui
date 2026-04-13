@@ -4,7 +4,10 @@
  * Proves that getContextWindowForModel uses the resolved context window
  * with correct priority: provider_api > OpenRouter cache > static registry.
  */
-import { describe, test, expect } from 'bun:test';
+import { afterEach, describe, test, expect } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { ModelDefinition } from '../../providers/registry.ts';
 import { ModelLimitsService } from '../../providers/model-limits.ts';
 import { resolveContextWindow } from '../../providers/local-context-ingestion.ts';
@@ -12,6 +15,8 @@ import { resolveContextWindow } from '../../providers/local-context-ingestion.ts
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const tempRoots: string[] = [];
 
 function makeModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
   return {
@@ -33,8 +38,20 @@ function makeModel(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
 }
 
 function makeModelLimitsService(): ModelLimitsService {
-  return new ModelLimitsService();
+  const root = mkdtempSync(join(tmpdir(), 'gv-model-limits-'));
+  tempRoots.push(root);
+  return new ModelLimitsService({
+    cachePath: join(root, 'model-limits.json'),
+  });
 }
+
+afterEach(() => {
+  while (tempRoots.length > 0) {
+    const root = tempRoots.pop();
+    if (!root) continue;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // provider_api provenance is highest priority in getContextWindowForModel

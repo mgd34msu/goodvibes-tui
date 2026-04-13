@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
+import type { UiReadModel, UiWatchersSnapshot } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
@@ -52,15 +52,15 @@ function formatTime(value?: number): string {
 }
 
 export class WatchersPanel extends BasePanel {
-  private readonly store?: RuntimeStore;
+  private readonly readModel?: UiReadModel<UiWatchersSnapshot>;
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
 
-  public constructor(store?: RuntimeStore) {
+  public constructor(readModel?: UiReadModel<UiWatchersSnapshot>) {
     super('watchers', 'Watchers', 'W', 'monitoring');
-    this.store = store;
-    this.unsub = store ? store.subscribe(() => this.markDirty()) : null;
+    this.readModel = readModel;
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
 
   public override onDestroy(): void {
@@ -84,19 +84,15 @@ export class WatchersPanel extends BasePanel {
   }
 
   private watchers() {
-    if (!this.store) return [];
-    const domain = this.store.getState().watchers;
-    return domain.watcherIds
-      .map((id) => domain.watchers.get(id))
-      .filter((watcher): watcher is NonNullable<typeof watcher> => watcher !== undefined)
-      .sort((a, b) => (b.lastHeartbeatAt ?? 0) - (a.lastHeartbeatAt ?? 0) || a.id.localeCompare(b.id));
+    if (!this.readModel) return [];
+    return [...this.readModel.getSnapshot().watchers];
   }
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Managed watchers and source health used to trigger automation, refresh routes, and surface degraded upstream conditions.';
 
-    if (!this.store) {
+    if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Watchers',
         intro,
@@ -115,16 +111,16 @@ export class WatchersPanel extends BasePanel {
       return workspace;
     }
 
-    const state = this.store.getState();
+    const snapshot = this.readModel.getSnapshot();
     const watchers = this.watchers();
     const summarySection: PanelWorkspaceSection = {
       title: 'Posture',
       lines: [
         buildKeyValueLine(width, [
-          { label: 'watchers', value: String(state.watchers.watcherIds.length), valueColor: state.watchers.watcherIds.length > 0 ? C.info : C.dim },
-          { label: 'active', value: String(state.watchers.activeWatcherIds.length), valueColor: state.watchers.activeWatcherIds.length > 0 ? C.ok : C.dim },
-          { label: 'degraded', value: String(state.watchers.totalDegraded), valueColor: state.watchers.totalDegraded > 0 ? C.warn : C.dim },
-          { label: 'lagged', value: String(state.watchers.totalLagged), valueColor: state.watchers.totalLagged > 0 ? C.warn : C.dim },
+          { label: 'watchers', value: String(snapshot.totalWatchers), valueColor: snapshot.totalWatchers > 0 ? C.info : C.dim },
+          { label: 'active', value: String(snapshot.activeWatcherIds.length), valueColor: snapshot.activeWatcherIds.length > 0 ? C.ok : C.dim },
+          { label: 'degraded', value: String(snapshot.totalDegraded), valueColor: snapshot.totalDegraded > 0 ? C.warn : C.dim },
+          { label: 'lagged', value: String(snapshot.totalLagged), valueColor: snapshot.totalLagged > 0 ? C.warn : C.dim },
         ], C),
         buildGuidanceLine(width, '/schedule list', 'verify jobs consuming these sources and use daemon APIs for watcher lifecycle control', C),
       ],

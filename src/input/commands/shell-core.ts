@@ -3,7 +3,7 @@ import type { SelectionItem } from '../selection-modal.ts';
 import { EFFORT_DESCRIPTIONS } from '../../providers/effort-levels.ts';
 import { REASONING_BUDGET_MAP } from '../../providers/interface.ts';
 import { executeWriteQuit } from './quit-shared.ts';
-import { requireKeybindingsManager } from './runtime-services.ts';
+import { compactConversation, requireKeybindingsManager, requireProviderApi } from './runtime-services.ts';
 
 export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
@@ -12,29 +12,28 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     description: 'Select or display the current LLM model',
     usage: '[model-id]',
     argsHint: '[name]',
-    handler(args, ctx) {
+    async handler(args, ctx) {
+      const providerApi = requireProviderApi(ctx);
       if (args.length === 0) {
         if (ctx.openModelPicker) {
           ctx.openModelPicker();
         } else {
-          const models = ctx.providerRegistry.getSelectableModels();
-          const current = ctx.runtime.model;
+          const models = await providerApi.listModels({ selectableOnly: true });
           const lines = ['Available models:', ...models.map((model) =>
-            `  ${model.id === current ? '▶' : ' '} ${model.id.padEnd(36)} ${model.displayName} (${model.provider})`,
+            `  ${model.current ? '▶' : ' '} ${model.registryKey.padEnd(36)} ${model.displayName} (${model.providerId})`,
           )];
           ctx.print(lines.join('\n'));
         }
       } else {
         const modelId = args[0];
         try {
-          ctx.providerRegistry.setCurrentModel(modelId);
-          const def = ctx.providerRegistry.getCurrentModel();
-          ctx.runtime.model = def.id;
-          ctx.runtime.provider = def.provider;
-          ctx.configManager.set('provider.model', def.id);
-          ctx.configManager.set('provider.provider', def.provider);
-          ctx.print(`Switched to model: ${def.displayName} (${def.provider})`);
-          void ctx.favoritesStore?.recordUsage(def.id);
+          const selected = await providerApi.selectModel(modelId);
+          ctx.session.runtime.model = selected.registryKey;
+          ctx.session.runtime.provider = selected.providerId;
+          ctx.platform.configManager.set('provider.model', selected.registryKey);
+          ctx.platform.configManager.set('provider.provider', selected.providerId);
+          ctx.print(`Switched to model: ${selected.displayName} (${selected.providerId})`);
+          void providerApi.recordModelUsage(selected.registryKey).catch(() => undefined);
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
         }
@@ -169,7 +168,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: ['cls'],
     description: 'Clear the conversation display (keeps LLM context)',
     handler(_args, ctx) {
-      ctx.conversationManager.clearDisplay();
+      ctx.session.conversationManager.clearDisplay();
       ctx.renderRequest();
     },
   });
@@ -179,11 +178,11 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Full reset: clear display and conversation context',
     handler(_args, ctx) {
-      ctx.conversationManager.resetAll();
+      ctx.session.conversationManager.resetAll();
       if (ctx.reloadSystemPrompt) {
-        ctx.runtime.systemPrompt = ctx.reloadSystemPrompt();
+        ctx.session.runtime.systemPrompt = ctx.reloadSystemPrompt();
       }
-      ctx.conversationManager.rebuildHistory();
+      ctx.session.conversationManager.rebuildHistory();
       ctx.renderRequest();
     },
   });
@@ -194,12 +193,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     description: 'Summarize conversation to free context window',
     async handler(_args, ctx) {
       ctx.print('Compacting conversation...');
-      await ctx.conversationManager.compact(
-        ctx.providerRegistry,
-        ctx.runtime.model,
-        'manual',
-        ctx.runtime.provider,
-      );
+      await compactConversation(ctx);
       ctx.print('Conversation compacted.');
       ctx.renderRequest();
     },
@@ -228,8 +222,8 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Toggle debug mode',
     handler(_args, ctx) {
-      ctx.runtime.debugMode = !ctx.runtime.debugMode;
-      ctx.print(`Debug mode: ${ctx.runtime.debugMode ? 'ON' : 'OFF'}`);
+      ctx.session.runtime.debugMode = !ctx.session.runtime.debugMode;
+      ctx.print(`Debug mode: ${ctx.session.runtime.debugMode ? 'ON' : 'OFF'}`);
     },
   });
 
@@ -239,8 +233,8 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     description: 'Show or set reasoning effort level',
     usage: '[level]',
     argsHint: '<instant|low|medium|high>',
-    handler(args, ctx) {
-      const currentModel = ctx.providerRegistry.getCurrentModel();
+    async handler(args, ctx) {
+      const currentModel = await requireProviderApi(ctx).getCurrentModel();
       const validLevels = currentModel.reasoningEffort ?? [];
 
       if (validLevels.length === 0) {
@@ -249,7 +243,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
       }
 
       if (args.length === 0) {
-        const current = (ctx.runtime.reasoningEffort || ctx.configManager.get('provider.reasoningEffort') || 'medium') as string;
+        const current = (ctx.session.runtime.reasoningEffort || ctx.platform.configManager.get('provider.reasoningEffort') || 'medium') as string;
         if (ctx.openSelection) {
           const descriptions: Record<string, string> = {
             ...EFFORT_DESCRIPTIONS,
@@ -263,8 +257,8 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           ctx.openSelection('Reasoning Effort', items, { preSelectId: current, allowSearch: false }, (result) => {
             if (!result) return;
             const level = result.item.id as 'instant' | 'low' | 'medium' | 'high';
-            ctx.runtime.reasoningEffort = level;
-            ctx.configManager.set('provider.reasoningEffort', level);
+            ctx.session.runtime.reasoningEffort = level;
+            ctx.platform.configManager.set('provider.reasoningEffort', level);
             ctx.print(`Reasoning effort set to: ${level}`);
             ctx.renderRequest();
           });
@@ -290,8 +284,8 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         return;
       }
 
-      ctx.runtime.reasoningEffort = level;
-      ctx.configManager.set('provider.reasoningEffort', level);
+      ctx.session.runtime.reasoningEffort = level;
+      ctx.platform.configManager.set('provider.reasoningEffort', level);
       ctx.print(`Reasoning effort set to: ${level}`);
     },
   });
@@ -301,7 +295,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Set line-number display: all, code, or off',
     handler(args, ctx) {
-      const current = ctx.configManager.get('display.lineNumbers');
+      const current = ctx.platform.configManager.get('display.lineNumbers');
       const aliases: Record<string, 'all' | 'code' | 'off'> = {
         on: 'all',
         all: 'all',
@@ -316,7 +310,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         ctx.print('Usage: /lines [all|code|off]');
         return;
       }
-      ctx.configManager.set('display.lineNumbers', next);
+      ctx.platform.configManager.set('display.lineNumbers', next);
       const label = next === 'all' ? 'ON (all lines)' : next === 'code' ? 'CODE BLOCKS ONLY' : 'OFF';
       ctx.print(`Line numbers: ${label}`);
       ctx.renderRequest();

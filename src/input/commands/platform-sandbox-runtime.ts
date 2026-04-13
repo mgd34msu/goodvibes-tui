@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { requirePanelManager } from './runtime-services.ts';
+import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
 import {
   getSandboxPreset,
   inspectSandboxBundle,
@@ -93,6 +93,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
     description: 'Review and configure VM isolation policy for MCP and evaluation runtimes',
     usage: '[open|review|recommend|profiles|presets|preset <id>|apply-preset <id>|probe|doctor|wrapper-test <profile>|guest-test <profile>|init-qemu <dir>|qemu <setup|bootstrap|create-image|recover|inspect-setup|apply-setup> ...|session ...|bundle ...|guest-bundle <export|inspect> <path>|scaffold-qemu-wrapper <path>|set-mcp <mode>|set-repl <mode>|set-windows <mode>|set-backend <mode>|set-qemu-binary <path>|set-qemu-image <path>|set-qemu-wrapper <path>|set-qemu-guest-host <host>|set-qemu-guest-port <port>|set-qemu-guest-user <user>|set-qemu-workspace <path>|set-qemu-session-mode <attach|launch-per-command>]',
     async handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
         if (ctx.showPanel) ctx.showPanel('sandbox');
@@ -104,15 +105,15 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
         return;
       }
       if (sub === 'review') {
-        ctx.print(renderSandboxReview(ctx.configManager));
+        ctx.print(renderSandboxReview(ctx.platform.configManager));
         return;
       }
       if (sub === 'recommend') {
-        ctx.print(renderSandboxRecommendation(ctx.configManager));
+        ctx.print(renderSandboxRecommendation(ctx.platform.configManager));
         return;
       }
       if (sub === 'profiles') {
-        ctx.print(renderSandboxProfiles(ctx.configManager));
+        ctx.print(renderSandboxProfiles(ctx.platform.configManager));
         return;
       }
       if (sub === 'presets') {
@@ -125,22 +126,22 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
         return;
       }
       if (sub === 'apply-preset') {
-        const ok = args[1] ? applySandboxPreset(ctx.configManager, args[1]) : false;
+        const ok = args[1] ? applySandboxPreset(ctx.platform.configManager, args[1]) : false;
         ctx.print(ok ? `Applied sandbox preset ${args[1]}.` : 'Usage: /sandbox apply-preset <secure-balanced|secure-isolated|shared-performance|windows-basic>');
         return;
       }
       if (sub === 'probe') {
-        const backendProbe = probeSandboxBackends(ctx.configManager);
+        const backendProbe = probeSandboxBackends(ctx.platform.configManager);
         const probe: SandboxProbe = {
           version: 1,
           checkedAt: Date.now(),
           host: process.platform,
           currentBackend: backendProbe.resolvedBackend,
-          replIsolation: `${ctx.configManager.get('sandbox.replIsolation')}`,
-          mcpIsolation: `${ctx.configManager.get('sandbox.mcpIsolation')}`,
-          windowsMode: `${ctx.configManager.get('sandbox.windowsMode')}`,
-          secureSandboxReady: renderSandboxReview(ctx.configManager).includes('available'),
-          recommendedCommand: `${ctx.configManager.get('sandbox.vmBackend')}` === 'local'
+          replIsolation: `${ctx.platform.configManager.get('sandbox.replIsolation')}`,
+          mcpIsolation: `${ctx.platform.configManager.get('sandbox.mcpIsolation')}`,
+          windowsMode: `${ctx.platform.configManager.get('sandbox.windowsMode')}`,
+          secureSandboxReady: renderSandboxReview(ctx.platform.configManager).includes('available'),
+          recommendedCommand: `${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'local'
             ? '/sandbox qemu bootstrap .goodvibes/tui/sandbox 20'
             : '/sandbox doctor',
         };
@@ -148,17 +149,17 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
         return;
       }
       if (sub === 'doctor') {
-        ctx.print(renderSandboxDoctor(ctx.configManager));
+        ctx.print(renderSandboxDoctor(ctx.platform.configManager));
         return;
       }
       if (sub === 'wrapper-test') {
-        const profile = findSandboxProfile(ctx.configManager, args[1] ?? 'eval-js');
+        const profile = findSandboxProfile(ctx.platform.configManager, args[1] ?? 'eval-js');
         if (!profile) {
           ctx.print(`Usage: /sandbox wrapper-test <${SANDBOX_PROFILE_IDS.join('|')}>`);
           return;
         }
-        const plan = buildSandboxLaunchPlan(profile, `${profile.label} wrapper test`, ctx.configManager);
-        const result = executeSandboxManagedCommand(plan, 'bash', ['-lc', 'printf sandbox-ready'], ctx.configManager, {
+        const plan = buildSandboxLaunchPlan(profile, `${profile.label} wrapper test`, ctx.platform.configManager, shellPaths.workingDirectory);
+        const result = executeSandboxManagedCommand(plan, 'bash', ['-lc', 'printf sandbox-ready'], ctx.platform.configManager, {
           timeoutMs: 3000,
           env: { GV_SANDBOX_WRAPPER_MODE: 'host-exec' },
         });
@@ -168,22 +169,22 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
         return;
       }
       if (sub === 'guest-test') {
-        const profile = findSandboxProfile(ctx.configManager, args[1] ?? 'eval-js');
+        const profile = findSandboxProfile(ctx.platform.configManager, args[1] ?? 'eval-js');
         if (!profile) {
           ctx.print(`Usage: /sandbox guest-test <${SANDBOX_PROFILE_IDS.join('|')}>`);
           return;
         }
-        const guestHost = `${ctx.configManager.get('sandbox.qemuGuestHost') ?? ''}`.trim();
+        const guestHost = `${ctx.platform.configManager.get('sandbox.qemuGuestHost') ?? ''}`.trim();
         if (!guestHost) {
           ctx.print('Sandbox guest test requires sandbox.qemuGuestHost. Configure /sandbox set-qemu-guest-host <host> first.');
           return;
         }
-        const plan = buildSandboxLaunchPlan(profile, `${profile.label} guest test`, ctx.configManager);
+        const plan = buildSandboxLaunchPlan(profile, `${profile.label} guest test`, ctx.platform.configManager, shellPaths.workingDirectory);
         const markerName = `.goodvibes-sandbox-guest-test-${Date.now().toString(36)}.txt`;
-        const markerPath = resolve(process.cwd(), markerName);
+        const markerPath = shellPaths.resolveWorkspacePath(markerName);
         writeFileSync(markerPath, `guest-test:${Date.now()}\n`, 'utf-8');
         try {
-          const result = executeSandboxManagedCommand(plan, 'bash', ['-lc', `test -f ${JSON.stringify(`./${markerName}`)} && printf sandbox-guest-ready`], ctx.configManager, { timeoutMs: 8000 });
+          const result = executeSandboxManagedCommand(plan, 'bash', ['-lc', `test -f ${JSON.stringify(`./${markerName}`)} && printf sandbox-guest-ready`], ctx.platform.configManager, { timeoutMs: 8000 });
           ctx.print(result.status === 0 && result.stdout.includes('sandbox-guest-ready')
             ? `Sandbox guest transport test passed for ${profile.id}.`
             : [`Sandbox guest transport test failed for ${profile.id}.`, result.stderr.trim() || result.stdout.trim() || '(no output)'].join('\n'));
@@ -198,7 +199,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox init-qemu <directory>');
           return;
         }
-        const bundle = scaffoldSandboxQemuInitBundle(ctx.configManager, dirArg);
+        const bundle = scaffoldSandboxQemuInitBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg);
         ctx.print([
           `Initialized QEMU sandbox bundle in ${bundle.directory}`,
           `  wrapper: ${bundle.wrapperPath}`,
@@ -219,15 +220,15 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print(`Usage: /sandbox bundle ${mode} <path>`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg!);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
         if (mode === 'export') {
           const bundle: SandboxBundle = {
             version: 1,
             exportedAt: Date.now(),
             review: {
-              reviewText: renderSandboxReview(ctx.configManager),
-              recommendationText: renderSandboxRecommendation(ctx.configManager),
-              profilesText: renderSandboxProfiles(ctx.configManager),
+              reviewText: renderSandboxReview(ctx.platform.configManager),
+              recommendationText: renderSandboxRecommendation(ctx.platform.configManager),
+              profilesText: renderSandboxProfiles(ctx.platform.configManager),
             },
           };
           mkdirSync(dirname(targetPath), { recursive: true });
@@ -248,9 +249,9 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox guest-bundle <export|inspect> <path>');
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         if (mode === 'export') {
-          const exported = exportSandboxGuestBundle(ctx.configManager, targetPath);
+          const exported = exportSandboxGuestBundle(ctx.platform.configManager, shellPaths.workingDirectory, targetPath);
           ctx.print(`Sandbox guest bundle exported to ${exported.path}`);
           return;
         }
@@ -272,7 +273,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-mcp <disabled|shared-vm|hybrid|per-server-vm>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.mcpIsolation', mode);
+        ctx.platform.configManager.setDynamic('sandbox.mcpIsolation', mode);
         ctx.print(`Sandbox MCP isolation set to ${mode}.`);
         return;
       }
@@ -282,7 +283,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-repl <shared-vm|per-runtime-vm>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.replIsolation', mode);
+        ctx.platform.configManager.setDynamic('sandbox.replIsolation', mode);
         ctx.print(`Sandbox REPL isolation set to ${mode}.`);
         return;
       }
@@ -292,7 +293,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-windows <native-basic|require-wsl>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.windowsMode', mode);
+        ctx.platform.configManager.setDynamic('sandbox.windowsMode', mode);
         ctx.print(`Sandbox Windows mode set to ${mode}.`);
         return;
       }
@@ -302,7 +303,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-backend <local|qemu>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.vmBackend', mode as 'local' | 'qemu');
+        ctx.platform.configManager.setDynamic('sandbox.vmBackend', mode as 'local' | 'qemu');
         ctx.print(`Sandbox VM backend set to ${mode}.`);
         return;
       }
@@ -312,7 +313,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-qemu-binary <path-or-command>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.qemuBinary', pathArg);
+        ctx.platform.configManager.setDynamic('sandbox.qemuBinary', pathArg);
         ctx.print(`Sandbox QEMU binary set to ${pathArg}.`);
         return;
       }
@@ -322,7 +323,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-qemu-image <path>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.qemuImagePath', pathArg);
+        ctx.platform.configManager.setDynamic('sandbox.qemuImagePath', pathArg);
         ctx.print(`Sandbox QEMU image set to ${pathArg}.`);
         return;
       }
@@ -332,7 +333,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-qemu-wrapper <path>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.qemuExecWrapper', pathArg);
+        ctx.platform.configManager.setDynamic('sandbox.qemuExecWrapper', pathArg);
         ctx.print(`Sandbox QEMU wrapper set to ${pathArg}.`);
         return;
       }
@@ -342,7 +343,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-qemu-guest-host <host>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.qemuGuestHost', host);
+        ctx.platform.configManager.setDynamic('sandbox.qemuGuestHost', host);
         ctx.print(`Sandbox QEMU guest host set to ${host}.`);
         return;
       }
@@ -353,7 +354,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-qemu-guest-port <1-65535>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.qemuGuestPort', port);
+        ctx.platform.configManager.setDynamic('sandbox.qemuGuestPort', port);
         ctx.print(`Sandbox QEMU guest port set to ${port}.`);
         return;
       }
@@ -363,7 +364,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-qemu-guest-user <user>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.qemuGuestUser', user);
+        ctx.platform.configManager.setDynamic('sandbox.qemuGuestUser', user);
         ctx.print(`Sandbox QEMU guest user set to ${user}.`);
         return;
       }
@@ -373,7 +374,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-qemu-workspace <path>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.qemuWorkspacePath', workspace);
+        ctx.platform.configManager.setDynamic('sandbox.qemuWorkspacePath', workspace);
         ctx.print(`Sandbox QEMU guest workspace set to ${workspace}.`);
         return;
       }
@@ -383,7 +384,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox set-qemu-session-mode <attach|launch-per-command>');
           return;
         }
-        ctx.configManager.setDynamic('sandbox.qemuSessionMode', mode as 'attach' | 'launch-per-command');
+        ctx.platform.configManager.setDynamic('sandbox.qemuSessionMode', mode as 'attach' | 'launch-per-command');
         ctx.print(`Sandbox QEMU session mode set to ${mode}.`);
         return;
       }
@@ -393,7 +394,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox scaffold-qemu-wrapper <path>');
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, renderQemuWrapperTemplate(), { encoding: 'utf-8', mode: 0o755 });
         ctx.print([`Scaffolded QEMU wrapper to ${targetPath}`, '  bridge test mode: GV_SANDBOX_WRAPPER_MODE=host-exec', '  next: /sandbox set-qemu-wrapper ' + targetPath].join('\n'));

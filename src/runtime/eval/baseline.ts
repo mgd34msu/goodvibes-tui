@@ -10,6 +10,15 @@
 import type { EvalBaseline, EvalSuiteResult, BaselineSuiteSummary } from './types.ts';
 import { resolve, normalize } from 'node:path';
 
+function resolveBaselinePath(filePath: string, projectRoot: string): string {
+  const resolved = resolve(normalize(filePath));
+  const resolvedRoot = resolve(normalize(projectRoot));
+  if (!resolved.startsWith(resolvedRoot)) {
+    throw new Error('Baseline path must be within project directory');
+  }
+  return resolved;
+}
+
 // ── Serialisation ─────────────────────────────────────────────────────────────
 
 /**
@@ -74,11 +83,8 @@ export function deserialiseBaseline(json: string): EvalBaseline {
  * Write a baseline to a file path.
  * Uses Bun.write for efficient file I/O.
  */
-export async function writeBaseline(filePath: string, baseline: EvalBaseline): Promise<void> {
-  const resolved = resolve(normalize(filePath));
-  if (!resolved.startsWith(process.cwd())) {
-    throw new Error('Baseline path must be within project directory');
-  }
+export async function writeBaseline(filePath: string, baseline: EvalBaseline, projectRoot: string): Promise<void> {
+  const resolved = resolveBaselinePath(filePath, projectRoot);
   const json = serialiseBaseline(baseline);
   await Bun.write(resolved, json);
 }
@@ -87,8 +93,8 @@ export async function writeBaseline(filePath: string, baseline: EvalBaseline): P
  * Load a baseline from a file path.
  * Returns undefined if the file does not exist.
  */
-export async function loadBaseline(filePath: string): Promise<EvalBaseline | undefined> {
-  const file = Bun.file(filePath);
+export async function loadBaseline(filePath: string, projectRoot: string): Promise<EvalBaseline | undefined> {
+  const file = Bun.file(resolveBaselinePath(filePath, projectRoot));
   const exists = await file.exists();
   if (!exists) return undefined;
   const json = await file.text();

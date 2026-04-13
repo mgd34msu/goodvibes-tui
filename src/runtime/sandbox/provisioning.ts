@@ -130,10 +130,11 @@ export function renderSandboxDoctor(manager: ConfigManager): string {
 
 export function exportSandboxGuestBundle(
   manager: ConfigManager,
+  workspaceRoot: string,
   pathArg: string,
 ): { path: string; bundle: SandboxGuestBundle } {
   const config = getSandboxConfigSnapshot(manager);
-  const targetPath = resolve(process.cwd(), pathArg);
+  const targetPath = resolve(workspaceRoot, pathArg);
   const bundle: SandboxGuestBundle = {
     version: 1,
     exportedAt: Date.now(),
@@ -175,15 +176,16 @@ export function inspectSandboxGuestBundle(bundle: SandboxGuestBundle): string {
 
 export function scaffoldSandboxQemuInitBundle(
   manager: ConfigManager,
+  workspaceRoot: string,
   pathArg: string,
 ): SandboxQemuInitBundle {
-  const targetDir = resolve(process.cwd(), pathArg);
+  const targetDir = resolve(workspaceRoot, pathArg);
   mkdirSync(targetDir, { recursive: true });
   const wrapperPath = join(targetDir, 'qemu-wrapper.sh');
   const guestBundlePath = join(targetDir, 'guest-bundle.json');
   const readmePath = join(targetDir, 'README.txt');
   writeFileSync(wrapperPath, renderQemuWrapperTemplate(), { encoding: 'utf-8', mode: 0o755 });
-  exportSandboxGuestBundle(manager, guestBundlePath);
+  exportSandboxGuestBundle(manager, workspaceRoot, guestBundlePath);
   const config = getSandboxConfigSnapshot(manager);
   const readme = [
     'GoodVibes QEMU Sandbox Init Bundle',
@@ -210,9 +212,10 @@ export function scaffoldSandboxQemuInitBundle(
 
 export function scaffoldSandboxQemuSetupBundle(
   manager: ConfigManager,
+  workspaceRoot: string,
   pathArg: string,
 ): SandboxQemuSetupBundle {
-  const base = scaffoldSandboxQemuInitBundle(manager, pathArg);
+  const base = scaffoldSandboxQemuInitBundle(manager, workspaceRoot, pathArg);
   const targetDir = base.directory;
   const config = getSandboxConfigSnapshot(manager);
   const imageDir = join(targetDir, 'images');
@@ -263,7 +266,7 @@ export function scaffoldSandboxQemuSetupBundle(
 
   const projectionPolicy = {
     version: 1,
-    workspaceRoot: process.cwd(),
+    workspaceRoot,
     guestWorkspace: config.qemuWorkspacePath || '/workspace',
     excludes: ['.git', 'node_modules', '.venv', '.goodvibes/cache', '.env*', '*.pem', '*.key', '*credentials*', '*secret*'],
     notes: [
@@ -349,11 +352,12 @@ export function scaffoldSandboxQemuSetupBundle(
 }
 
 export function createSandboxQemuImage(
+  workspaceRoot: string,
   imagePathArg: string,
   sizeGb: number,
   qemuImgBinary = process.env.QEMU_IMG_BIN || 'qemu-img',
 ): { path: string; sizeGb: number } {
-  const targetPath = resolve(process.cwd(), imagePathArg);
+  const targetPath = resolve(workspaceRoot, imagePathArg);
   mkdirSync(dirname(targetPath), { recursive: true });
   const result = spawnSync(qemuImgBinary, ['create', '-f', 'qcow2', targetPath, `${sizeGb}G`], {
     encoding: 'utf-8',
@@ -368,12 +372,13 @@ export function createSandboxQemuImage(
 
 export function bootstrapSandboxQemuSetupBundle(
   manager: ConfigManager,
+  workspaceRoot: string,
   pathArg: string,
   sizeGb: number,
 ): SandboxQemuSetupBundle {
-  const bundle = scaffoldSandboxQemuSetupBundle(manager, pathArg);
-  createSandboxQemuImage(bundle.imagePath, sizeGb);
-  applySandboxQemuSetupManifest(manager, loadSandboxQemuSetupManifest(bundle.manifestPath));
+  const bundle = scaffoldSandboxQemuSetupBundle(manager, workspaceRoot, pathArg);
+  createSandboxQemuImage(workspaceRoot, bundle.imagePath, sizeGb);
+  applySandboxQemuSetupManifest(manager, loadSandboxQemuSetupManifest(workspaceRoot, bundle.manifestPath));
   return bundle;
 }
 
@@ -397,8 +402,8 @@ export function inspectSandboxQemuSetupManifest(manifest: SandboxQemuSetupManife
   ].join('\n');
 }
 
-export function loadSandboxQemuSetupManifest(pathArg: string): SandboxQemuSetupManifest {
-  const targetPath = resolve(process.cwd(), pathArg);
+export function loadSandboxQemuSetupManifest(workspaceRoot: string, pathArg: string): SandboxQemuSetupManifest {
+  const targetPath = resolve(workspaceRoot, pathArg);
   return JSON.parse(readFileSync(targetPath, 'utf-8')) as SandboxQemuSetupManifest;
 }
 

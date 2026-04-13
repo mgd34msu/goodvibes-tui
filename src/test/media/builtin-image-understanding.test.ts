@@ -8,10 +8,24 @@ import {
   createLocalImageUnderstandingProvider,
   createOpenAIImageUnderstandingProvider,
 } from '../../media/builtin-image-understanding.ts';
-import type { LLMProvider, ProviderMessage } from '../../providers/interface.ts';
+import type { LLMProvider, ProviderMessage, ProviderRuntimeMetadataDeps } from '../../providers/interface.ts';
 import type { ModelDefinition, ProviderRegistry } from '../../providers/registry.ts';
 
-type ImageModelRegistry = Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'listModels'>;
+type ImageModelRegistry = Pick<ProviderRegistry, 'describeRuntime' | 'getCurrentModel' | 'getForModel' | 'listModels'>;
+
+const TEST_RUNTIME_METADATA_DEPS: ProviderRuntimeMetadataDeps = {
+  secretsManager: {
+    listDetailed: async () => [],
+  },
+  serviceRegistry: {
+    getAll: () => ({}),
+    inspect: async () => null,
+  },
+  subscriptionManager: {
+    get: () => null,
+    getPending: () => null,
+  },
+};
 
 function makeImageModelRegistry(
   models: ModelDefinition[],
@@ -19,6 +33,11 @@ function makeImageModelRegistry(
 ): ImageModelRegistry {
   return {
     listModels: () => models,
+    describeRuntime: async (providerId: string) => {
+      const provider = providerLookup.get(providerId);
+      if (!provider?.describeRuntime) return null;
+      return await provider.describeRuntime(TEST_RUNTIME_METADATA_DEPS);
+    },
     getCurrentModel: () => {
       if (models.length === 0) {
         throw new Error('No multimodal models configured');

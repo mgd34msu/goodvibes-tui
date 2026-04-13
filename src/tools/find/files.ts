@@ -6,8 +6,8 @@ import { buildGitignoreMatcher, collectGlobFiles, makeCountResult, makeFilesResu
 export async function executeFilesQuery(
   query: FilesQuery,
   output: OutputOptions,
+  projectRoot: string,
 ): Promise<Record<string, unknown>> {
-  const projectRoot = process.cwd();
   const validatedPath = validateSearchPath(query.path, projectRoot);
   if (typeof validatedPath === 'object') return validatedPath;
   const basePath = validatedPath;
@@ -150,4 +150,3 @@ export async function executeFilesQuery(
 
   return makeFilesResult(entries.map((e) => e.path), entries.length);
 }
-

@@ -4,6 +4,21 @@ import { ConversationManager } from '../core/conversation.ts';
 import { KVState } from '../state/kv-state.ts';
 import { logger } from '../utils/logger.ts';
 
+export interface AgentSessionPaths {
+  readonly sessionsDir: string;
+  readonly stateDir: string;
+}
+
+function resolveAgentSessionPaths(paths: AgentSessionPaths): AgentSessionPaths {
+  if (!paths.sessionsDir || paths.sessionsDir.trim().length === 0) {
+    throw new Error('AgentSession requires a non-empty sessionsDir');
+  }
+  if (!paths.stateDir || paths.stateDir.trim().length === 0) {
+    throw new Error('AgentSession requires a non-empty stateDir');
+  }
+  return paths;
+}
+
 /**
  * AgentSession — Isolated session context for a spawned agent.
  *
@@ -26,23 +41,18 @@ export class AgentSession {
   /** Path to the agent's JSONL message log. */
   readonly sessionFile: string;
 
-  constructor(agentId: string, model: string, provider: string) {
+  constructor(agentId: string, model: string, provider: string, paths: AgentSessionPaths) {
     this.agentId = agentId;
+    const resolvedPaths = resolveAgentSessionPaths(paths);
 
     // Own ConversationManager — not shared with main session
     this.conversation = new ConversationManager();
 
     // KV state namespaced to this agent
-    this.kvState = new KVState(agentId);
+    this.kvState = new KVState({ sessionId: agentId, stateDir: resolvedPaths.stateDir });
 
     // JSONL log path
-    this.sessionFile = join(
-      process.cwd(),
-      '.goodvibes',
-      'tui',
-      'sessions',
-      `${agentId}.jsonl`,
-    );
+    this.sessionFile = join(resolvedPaths.sessionsDir, `${agentId}.jsonl`);
 
     // Write a session-start entry
     this._ensureSessionDir();

@@ -422,6 +422,8 @@ export type PolicyRule =
 export interface PermissionsConfig {
   /** Active permission mode. Defaults to `'default'`. */
   mode?: PermissionMode;
+  /** Explicit project root used to resolve relative path-scope rules and tool args. */
+  projectRoot?: string;
   /**
    * Ordered list of policy rules applied in Layer 4.
    * User rules are evaluated before managed rules within this layer.

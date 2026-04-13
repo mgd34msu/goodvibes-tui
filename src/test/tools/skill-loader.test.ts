@@ -13,7 +13,6 @@ function makeTmpDir(): string {
 
 describe('skill loader', () => {
   let tmpDir = '';
-  let origCwd: () => string;
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
@@ -33,17 +32,14 @@ describe('skill loader', () => {
       ].join('\n'),
       'utf-8',
     );
-    origCwd = process.cwd.bind(process);
-    (process as unknown as Record<string, unknown>).cwd = () => tmpDir;
   });
 
   afterEach(() => {
-    (process as unknown as Record<string, unknown>).cwd = origCwd;
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
   test('materializes linked markdown when a matching trigger is loaded', () => {
-    const content = loadSkillByTrigger('/demo');
+    const content = loadSkillByTrigger('/demo', { workingDirectory: tmpDir });
     expect(content).toContain('Primary instructions.');
     expect(content).toContain('Expanded helper content.');
   });

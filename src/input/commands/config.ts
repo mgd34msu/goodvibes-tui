@@ -3,7 +3,7 @@ import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
 import { configSnapshotToProfileData, profileDataToConfigSnapshot } from '../../profiles/shape.ts';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { requireProfileManager } from './runtime-services.ts';
+import { requireProfileManager, requireProviderApi, requireShellPaths } from './runtime-services.ts';
 
 interface ConfigBundle {
   readonly schemaVersion: 'v1';
@@ -110,8 +110,8 @@ export function registerConfigCommand(registry: CommandRegistry): void {
     description: 'Show or set config values',
     usage: '[category|key] [value] | reset [key]',
     argsHint: '<key> [value]',
-    handler(args, ctx) {
-      const cm = ctx.configManager;
+    async handler(args, ctx) {
+      const cm = ctx.platform.configManager;
       const all = cm.getAll();
       const categories = ['display', 'provider', 'behavior', 'permissions', 'danger', 'tools'] as const;
 
@@ -162,9 +162,9 @@ export function registerConfigCommand(registry: CommandRegistry): void {
               const schema = CONFIG_SCHEMA.find((entry) => entry.key === key as ConfigKey);
               if (!schema) continue;
               cm.setDynamic(key as ConfigKey, value);
-              if (key === 'provider.model') ctx.runtime.model = value as string;
-              if (key === 'provider.provider') ctx.runtime.provider = value as string;
-              if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = value as string;
+              if (key === 'provider.model') ctx.session.runtime.model = value as string;
+              if (key === 'provider.provider') ctx.session.runtime.provider = value as string;
+              if (key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = value as string;
             }
             ctx.print(`Profile loaded: ${profileName}`);
             ctx.renderRequest();
@@ -211,15 +211,16 @@ export function registerConfigCommand(registry: CommandRegistry): void {
       if (args[0] === 'bundle') {
         const sub = args[1];
         const bundlePath = args[2];
+        const shellPaths = requireShellPaths(ctx);
         if (sub === 'export') {
           if (!bundlePath) {
             ctx.print('Usage: /config bundle export <path>');
             return;
           }
-          const targetPath = resolve(process.cwd(), bundlePath);
-          const servicesPath = join(process.cwd(), '.goodvibes', 'tui', 'services.json');
-          const pluginCatalogPath = join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'plugins.json');
-          const skillCatalogPath = join(process.cwd(), '.goodvibes', 'tui', 'ecosystem', 'skills.json');
+          const targetPath = shellPaths.resolveWorkspacePath(bundlePath);
+          const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
+          const pluginCatalogPath = shellPaths.resolveProjectTuiPath('ecosystem', 'plugins.json');
+          const skillCatalogPath = shellPaths.resolveProjectTuiPath('ecosystem', 'skills.json');
           const bundle: ConfigBundle = {
             schemaVersion: 'v1',
             exportedAt: Date.now(),
@@ -241,7 +242,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             ctx.print('Usage: /config bundle inspect <path>');
             return;
           }
-          const sourcePath = resolve(process.cwd(), bundlePath);
+          const sourcePath = shellPaths.resolveWorkspacePath(bundlePath);
           try {
             const bundle = JSON.parse(readFileSync(sourcePath, 'utf-8')) as ConfigBundle;
             ctx.print(`${inspectConfigBundle(bundle)}\n  path: ${sourcePath}`);
@@ -256,7 +257,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             ctx.print('Usage: /config bundle import <path>');
             return;
           }
-          const sourcePath = resolve(process.cwd(), bundlePath);
+          const sourcePath = shellPaths.resolveWorkspacePath(bundlePath);
           let bundle: ConfigBundle;
           try {
             bundle = JSON.parse(readFileSync(sourcePath, 'utf-8')) as ConfigBundle;
@@ -268,15 +269,16 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             const value = (bundle.config as Record<string, unknown>)[entry.key];
             if (value === undefined) continue;
             cm.setDynamic(entry.key, value);
-            if (entry.key === 'provider.model') ctx.runtime.model = value as string;
-            if (entry.key === 'provider.provider') ctx.runtime.provider = value as string;
-            if (entry.key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = value as string;
+            if (entry.key === 'provider.model') ctx.session.runtime.model = value as string;
+            if (entry.key === 'provider.provider') ctx.session.runtime.provider = value as string;
+            if (entry.key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = value as string;
           }
 
-          const ecosystemDir = join(process.cwd(), '.goodvibes', 'tui', 'ecosystem');
+          const ecosystemDir = shellPaths.resolveProjectTuiPath('ecosystem');
           if (bundle.services) {
-            mkdirSync(dirname(join(process.cwd(), '.goodvibes', 'tui', 'services.json')), { recursive: true });
-            writeFileSync(join(process.cwd(), '.goodvibes', 'tui', 'services.json'), JSON.stringify(bundle.services, null, 2) + '\n', 'utf-8');
+            const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
+            mkdirSync(dirname(servicesPath), { recursive: true });
+            writeFileSync(servicesPath, JSON.stringify(bundle.services, null, 2) + '\n', 'utf-8');
           }
           if (bundle.ecosystem?.plugins) {
             mkdirSync(ecosystemDir, { recursive: true });
@@ -307,9 +309,9 @@ export function registerConfigCommand(registry: CommandRegistry): void {
         }
         try {
           cm.setDynamic(resetKey as ConfigKey, schema.default);
-          if (resetKey === 'provider.model') ctx.runtime.model = schema.default as string;
-          if (resetKey === 'provider.provider') ctx.runtime.provider = schema.default as string;
-          if (resetKey === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = schema.default as string;
+          if (resetKey === 'provider.model') ctx.session.runtime.model = schema.default as string;
+          if (resetKey === 'provider.provider') ctx.session.runtime.provider = schema.default as string;
+          if (resetKey === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = schema.default as string;
           ctx.print(`Reset ${resetKey} to default: ${String(schema.default)}`);
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
@@ -378,9 +380,9 @@ export function registerConfigCommand(registry: CommandRegistry): void {
                 nextValue = clamped;
               }
               cm.setDynamic(key, nextValue);
-              if (key === 'provider.model') ctx.runtime.model = nextValue as string;
-              if (key === 'provider.provider') ctx.runtime.provider = nextValue as string;
-              if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = nextValue as string;
+              if (key === 'provider.model') ctx.session.runtime.model = nextValue as string;
+              if (key === 'provider.provider') ctx.session.runtime.provider = nextValue as string;
+              if (key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = nextValue as string;
               result.item.detail = `${String(nextValue)} — ${schema.description}`;
               ctx.renderRequest();
               return;
@@ -470,9 +472,9 @@ export function registerConfigCommand(registry: CommandRegistry): void {
         try {
           cm.setDynamic(key, coerced);
           ctx.print(`Set ${key} = ${String(coerced)}`);
-          if (key === 'provider.model') ctx.runtime.model = coerced as string;
-          if (key === 'provider.provider') ctx.runtime.provider = coerced as string;
-          if (key === 'provider.reasoningEffort') ctx.runtime.reasoningEffort = coerced as string;
+          if (key === 'provider.model') ctx.session.runtime.model = coerced as string;
+          if (key === 'provider.provider') ctx.session.runtime.provider = coerced as string;
+          if (key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = coerced as string;
         } catch (e) {
           ctx.print(`Error: ${(e as Error).message}`);
         }
@@ -485,17 +487,17 @@ export function registerConfigCommand(registry: CommandRegistry): void {
         switch (key) {
           case 'system':
           case 'systemPrompt':
-            ctx.runtime.systemPrompt = value;
+            ctx.session.runtime.systemPrompt = value;
             ctx.print('System prompt updated (runtime only; use provider.systemPromptFile for persistence).');
             break;
           case 'model':
             try {
-              ctx.providerRegistry.setCurrentModel(value);
-              const def = ctx.providerRegistry.getCurrentModel();
-              ctx.runtime.model = def.id;
-              ctx.runtime.provider = def.provider;
-              cm.set('provider.model', value);
-              ctx.print(`Model set to: ${def.displayName}`);
+              const selected = await requireProviderApi(ctx).selectModel(value);
+              ctx.session.runtime.model = selected.registryKey;
+              ctx.session.runtime.provider = selected.providerId;
+              cm.set('provider.model', selected.registryKey);
+              cm.set('provider.provider', selected.providerId);
+              ctx.print(`Model set to: ${selected.displayName}`);
             } catch (e) {
               ctx.print(`Error: ${(e as Error).message}`);
             }

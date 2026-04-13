@@ -1,24 +1,44 @@
 import { describe, test, expect } from 'bun:test';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ToolRegistry } from '../../tools/registry.ts';
 import { registerAllTools } from '../../tools/index.ts';
-import { createRuntimeServices } from '../../runtime/services.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+import { CrossSessionTaskRegistry } from '../../sessions/orchestration/index.ts';
+import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
+import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
+import { AgentMessageBus } from '../../agents/message-bus.ts';
+import { AgentManager } from '../../tools/agent/index.ts';
+import { OverflowHandler } from '../../tools/shared/overflow.ts';
 
 function registerTools(registry: ToolRegistry): void {
-  const services = createRuntimeServices({
-    runtimeBus: new RuntimeEventBus(),
-    runtimeStore: createRuntimeStore(),
+  const services = createTestManagers();
+  const workingDirectory = mkdtempSync(join(tmpdir(), 'gv-tool-registry-'));
+  const agentManager = new AgentManager({
+    messageBus: new AgentMessageBus(),
+    configManager: services.configManager,
   });
+  const sessionOrchestration = new CrossSessionTaskRegistry(process.cwd());
+  const sandboxSessionRegistry = new SandboxSessionRegistry(workingDirectory);
+  const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
   registerAllTools(registry, {
+    agentManager,
     configManager: services.configManager,
     providerRegistry: services.providerRegistry,
     toolLLM: services.toolLLM,
-    sandboxSessionRegistry: services.sandboxSessionRegistry,
-    webSearchService: services.webSearchService,
-    channelRegistry: services.channelPlugins,
-    remoteRunnerRegistry: services.remoteRunnerRegistry,
-    mcpRegistry: services.mcpRegistry,
+    sessionOrchestration,
+    sandboxSessionRegistry,
+    workingDirectory,
+    overflowHandler: new OverflowHandler({ baseDir: workingDirectory }),
+    webSearchService: {
+      search: async () => [],
+    } as never,
+    channelRegistry: null,
+    remoteRunnerRegistry,
+    mcpRegistry: {
+      list: () => [],
+    } as never,
   });
 }
 

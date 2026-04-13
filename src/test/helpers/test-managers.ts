@@ -2,6 +2,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { BookmarkManager } from '../../bookmarks/manager.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { ServiceRegistry } from '../../config/service-registry.ts';
+import { SecretsManager } from '../../config/secrets.ts';
 import { FavoritesStore } from '../../providers/favorites.ts';
 import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
@@ -13,7 +15,9 @@ import { ProviderRegistry } from '../../providers/registry.ts';
 
 export interface TestManagers {
   readonly configManager: ConfigManager;
+  readonly secretsManager: SecretsManager;
   readonly subscriptionManager: SubscriptionManager;
+  readonly serviceRegistry: ServiceRegistry;
   readonly favoritesStore: FavoritesStore;
   readonly benchmarkStore: BenchmarkStore;
   readonly providerRegistry: ProviderRegistry;
@@ -24,18 +28,29 @@ export interface TestManagers {
 
 export function createTestManagers(): TestManagers {
   const suffix = `${process.pid}-${Math.random().toString(36).slice(2)}`;
-  const configDir = join(tmpdir(), `gv-config-${suffix}`);
-  const subscriptionsPath = join(tmpdir(), `gv-subscriptions-${suffix}.json`);
-  const bookmarksDir = join(tmpdir(), `gv-bookmarks-${suffix}`);
-  const providerDataDir = join(tmpdir(), `gv-provider-data-${suffix}`);
+  const rootDir = join(tmpdir(), `gv-test-managers-${suffix}`);
+  const workingDir = join(rootDir, 'workspace');
+  const homeDir = join(rootDir, 'home');
+  const configDir = join(homeDir, '.goodvibes', 'tui');
+  const subscriptionsPath = join(rootDir, 'subscriptions.json');
+  const servicesPath = join(rootDir, 'services.json');
+  const bookmarksDir = join(rootDir, 'bookmarks');
+  const providerDataDir = join(rootDir, 'provider-data');
 
-  const configManager = new ConfigManager({ configDir });
+  const configManager = new ConfigManager({ configDir, workingDir, homeDir });
   const subscriptionManager = new SubscriptionManager(subscriptionsPath);
+  const secretsManager = new SecretsManager({ projectRoot: workingDir, globalHome: homeDir });
+  const serviceRegistry = new ServiceRegistry(servicesPath, {
+    secretsManager,
+    subscriptionManager,
+  });
   const favoritesStore = new FavoritesStore({ dir: providerDataDir });
   const benchmarkStore = new BenchmarkStore({ dir: providerDataDir });
   const providerRegistry = new ProviderRegistry({
     configManager,
     subscriptionManager,
+    secretsManager,
+    serviceRegistry,
     capabilityRegistry: new ProviderCapabilityRegistry(),
     cacheHitTracker: new CacheHitTracker(),
     favoritesStore,
@@ -47,7 +62,9 @@ export function createTestManagers(): TestManagers {
 
   return {
     configManager,
+    secretsManager,
     subscriptionManager,
+    serviceRegistry,
     favoritesStore,
     benchmarkStore,
     providerRegistry,

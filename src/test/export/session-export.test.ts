@@ -29,6 +29,8 @@ const basicMeta: ExportMetadata = {
   sessionId: 'sess-abc123',
 };
 
+const HOME_ROOT = '/tmp';
+
 // ── redactSensitiveData ───────────────────────────────────────────────────────
 
 describe('redactSensitiveData', () => {
@@ -479,38 +481,38 @@ describe('renderMarkdownToHtml (via exportToHTML)', () => {
 
 describe('defaultExportPath', () => {
   test('returns a string path', () => {
-    const p = defaultExportPath('html');
+    const p = defaultExportPath('html', HOME_ROOT);
     expect(typeof p).toBe('string');
     expect(p.length).toBeGreaterThan(0);
   });
 
   test('uses correct extension for html', () => {
-    expect(defaultExportPath('html')).toMatch(/\.html$/);
+    expect(defaultExportPath('html', HOME_ROOT)).toMatch(/\.html$/);
   });
 
   test('uses correct extension for json', () => {
-    expect(defaultExportPath('json')).toMatch(/\.json$/);
+    expect(defaultExportPath('json', HOME_ROOT)).toMatch(/\.json$/);
   });
 
   test('uses correct extension for md', () => {
-    expect(defaultExportPath('md')).toMatch(/\.md$/);
+    expect(defaultExportPath('md', HOME_ROOT)).toMatch(/\.md$/);
   });
 
   test('includes session- prefix in filename', () => {
-    expect(defaultExportPath('html')).toContain('session-');
+    expect(defaultExportPath('html', HOME_ROOT)).toContain('session-');
   });
 
   test('path contains timestamp in ISO-ish format', () => {
     // Format: session-YYYY-MM-DDTHH-MM-SS.html (colons replaced with dashes)
-    const p = defaultExportPath('html');
+    const p = defaultExportPath('html', HOME_ROOT);
     expect(p).toMatch(/session-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.html/);
   });
 
   test('is under goodvibes-exports directory', () => {
-    expect(defaultExportPath('json')).toContain('goodvibes-exports');
+    expect(defaultExportPath('json', HOME_ROOT)).toContain('goodvibes-exports');
   });
 
   test('is an absolute path', () => {
-    expect(defaultExportPath('md')).toMatch(/^\//);
+    expect(defaultExportPath('md', HOME_ROOT)).toMatch(/^\//);
   });
 });

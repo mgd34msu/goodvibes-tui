@@ -17,7 +17,7 @@ import {
   setManagedSettingLock,
   stageManagedSettingsBundle,
 } from '../../runtime/settings/control-plane.ts';
-import { requireProfileManager } from './runtime-services.ts';
+import { requireProfileManager, requireShellPaths } from './runtime-services.ts';
 
 function buildConfigSnapshot(
   manager: { get: (key: ConfigKey) => unknown },
@@ -39,16 +39,17 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
     description: 'Export, inspect, and apply managed settings bundles',
     usage: '[review|staged|rollback-history|export <profile> <path>|inspect <path>|stage <path>|apply <path> [key ...]|apply-staged [key ...]|rollback <token>|lock <key> <source> <reason...>|unlock <key>]',
     handler(args, ctx) {
-      const controlPlaneConfigDir = ctx.configManager.getControlPlaneConfigDir();
+      const shellPaths = requireShellPaths(ctx);
+      const controlPlaneConfigDir = ctx.platform.configManager.getControlPlaneConfigDir();
       const sub = args[0] ?? 'review';
       const pm = requireProfileManager(ctx);
       if (sub === 'review') {
         const profiles = pm.list();
-        const snapshot = getSettingsControlPlaneSnapshot(ctx.configManager);
+        const snapshot = getSettingsControlPlaneSnapshot(ctx.platform.configManager);
         ctx.print([
           'Managed Settings Review',
           `  saved profiles: ${profiles.length}`,
-          `  live config keys: ${Object.keys(buildConfigSnapshot(ctx.configManager)).length}`,
+          `  live config keys: ${Object.keys(buildConfigSnapshot(ctx.platform.configManager)).length}`,
           `  staged bundle: ${snapshot.stagedManagedBundle ? snapshot.stagedManagedBundle.profileName : 'none'}`,
           `  active locks: ${snapshot.managedLockCount}`,
           `  rollback records: ${snapshot.rollbackHistory.length}`,
@@ -57,12 +58,12 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
       }
 
       if (sub === 'staged') {
-        ctx.print(formatStagedManagedBundleReview(ctx.configManager));
+        ctx.print(formatStagedManagedBundleReview(ctx.platform.configManager));
         return;
       }
 
       if (sub === 'rollback-history') {
-        const snapshot = getSettingsControlPlaneSnapshot(ctx.configManager);
+        const snapshot = getSettingsControlPlaneSnapshot(ctx.platform.configManager);
         ctx.print(snapshot.rollbackHistory.length > 0
           ? [
               'Managed Rollback History',
@@ -111,7 +112,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           profileName,
           settings: profileDataToConfigSnapshot(loaded.data),
         };
-        const targetPath = resolve(process.cwd(), pathArg);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
         recordSettingsSyncEvent({
@@ -133,10 +134,10 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           return;
         }
         try {
-          const result = applyStagedManagedBundle(ctx.configManager, requestedKeys);
-          ctx.runtime.model = String(ctx.configManager.get('provider.model'));
-          ctx.runtime.provider = String(ctx.configManager.get('provider.provider'));
-          ctx.runtime.reasoningEffort = ctx.configManager.get('provider.reasoningEffort') as string;
+          const result = applyStagedManagedBundle(ctx.platform.configManager, requestedKeys);
+          ctx.session.runtime.model = String(ctx.platform.configManager.get('provider.model'));
+          ctx.session.runtime.provider = String(ctx.platform.configManager.get('provider.provider'));
+          ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
           ctx.print(`Staged managed settings applied (${result.appliedCount} changes, rollback ${result.rollbackToken}${result.remainingCount > 0 ? `, ${result.remainingCount} still staged` : ''}).`);
         } catch (error) {
           recordSettingsSyncFailure('managed', (error as Error).message, controlPlaneConfigDir);
@@ -152,10 +153,10 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           return;
         }
         try {
-          const restored = rollbackManagedApply(ctx.configManager, token);
-          ctx.runtime.model = String(ctx.configManager.get('provider.model'));
-          ctx.runtime.provider = String(ctx.configManager.get('provider.provider'));
-          ctx.runtime.reasoningEffort = ctx.configManager.get('provider.reasoningEffort') as string;
+          const restored = rollbackManagedApply(ctx.platform.configManager, token);
+          ctx.session.runtime.model = String(ctx.platform.configManager.get('provider.model'));
+          ctx.session.runtime.provider = String(ctx.platform.configManager.get('provider.provider'));
+          ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
           ctx.print(`Managed rollback ${token} restored ${restored} setting(s).`);
         } catch (error) {
           recordSettingsSyncFailure('managed', (error as Error).message, controlPlaneConfigDir);
@@ -169,16 +170,16 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
         ctx.print(`Usage: /managed ${sub} <path>`);
         return;
       }
-      const sourcePath = resolve(process.cwd(), pathArg);
+      const sourcePath = shellPaths.resolveWorkspacePath(pathArg);
       const bundle = JSON.parse(readFileSync(sourcePath, 'utf-8')) as ManagedSettingsBundle;
 
       if (sub === 'inspect') {
-        ctx.print(inspectManagedSettingsBundle(ctx.configManager, bundle, sourcePath));
+        ctx.print(inspectManagedSettingsBundle(ctx.platform.configManager, bundle, sourcePath));
         return;
       }
 
       if (sub === 'stage') {
-        const stage = stageManagedSettingsBundle(ctx.configManager, bundle, sourcePath);
+        const stage = stageManagedSettingsBundle(ctx.platform.configManager, bundle, sourcePath);
         ctx.print(`Managed settings bundle staged from ${sourcePath} (${stage.changeCount} changes, risk=${stage.risk}).`);
         return;
       }
@@ -190,11 +191,11 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           ctx.print(`Unknown config key(s): ${invalidKeys.join(', ')}`);
           return;
         }
-        stageManagedSettingsBundle(ctx.configManager, bundle, sourcePath);
-        const result = applyStagedManagedBundle(ctx.configManager, requestedKeys);
-        ctx.runtime.model = String(ctx.configManager.get('provider.model'));
-        ctx.runtime.provider = String(ctx.configManager.get('provider.provider'));
-        ctx.runtime.reasoningEffort = ctx.configManager.get('provider.reasoningEffort') as string;
+        stageManagedSettingsBundle(ctx.platform.configManager, bundle, sourcePath);
+        const result = applyStagedManagedBundle(ctx.platform.configManager, requestedKeys);
+        ctx.session.runtime.model = String(ctx.platform.configManager.get('provider.model'));
+        ctx.session.runtime.provider = String(ctx.platform.configManager.get('provider.provider'));
+        ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
         ctx.print(`Managed settings bundle applied from ${sourcePath} (${result.appliedCount} changes, rollback ${result.rollbackToken}${result.remainingCount > 0 ? `, ${result.remainingCount} still staged` : ''}).`);
         return;
       }

@@ -65,28 +65,59 @@ function waitForSocketFrame(
 
 describe('DaemonServer', () => {
   let daemon: DaemonServer;
-  let tempConfigDir: string;
+  let tempRoot: string;
+  let workingDir: string;
+  let homeDir: string;
   let configDir: string;
   let runtimeServices: ReturnType<typeof createRuntimeServices>;
-  const makeConfig = () => new ConfigManager({ configDir, workingDir: tempConfigDir });
+  const makeConfig = () => new ConfigManager({ configDir, workingDir, homeDir });
+  const makeUserAuth = () => new UserAuthManager({
+    bootstrapFilePath: join(homeDir, 'auth-users.json'),
+    bootstrapCredentialPath: join(homeDir, 'auth-bootstrap.txt'),
+    users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
+  });
+  const createTestDaemon = (options: {
+    readonly configManager?: ConfigManager;
+    readonly runtimeServices?: ReturnType<typeof createRuntimeServices>;
+    readonly userAuth?: UserAuthManager;
+    readonly serveFactory?: typeof Bun.serve;
+    readonly runtimeBus?: RuntimeEventBus | null;
+    readonly port?: number;
+    readonly host?: string;
+  } = {}): DaemonServer => new DaemonServer({
+    port: options.port ?? 39421,
+    host: options.host ?? '127.0.0.1',
+    userAuth: options.userAuth ?? makeUserAuth(),
+    ...(options.runtimeServices
+      ? { runtimeServices: options.runtimeServices }
+      : {
+          configManager: options.configManager ?? makeConfig(),
+          workingDir,
+          homeDirectory: homeDir,
+        }),
+    ...(options.serveFactory ? { serveFactory: options.serveFactory } : {}),
+    ...(options.runtimeBus !== undefined ? { runtimeBus: options.runtimeBus } : {}),
+  });
 
   beforeEach(() => {
     resetTestRuntimeServices();
-    tempConfigDir = mkdtempSync(join(tmpdir(), 'gv-daemon-config-'));
-    configDir = join(tempConfigDir, '.goodvibes', 'tui');
-    rmSync(join(process.cwd(), '.goodvibes', 'tui', 'remote'), { recursive: true, force: true });
-    rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
+    tempRoot = mkdtempSync(join(tmpdir(), 'gv-daemon-config-'));
+    workingDir = join(tempRoot, 'workspace');
+    homeDir = join(tempRoot, 'home');
+    configDir = join(homeDir, '.goodvibes', 'tui');
+    mkdirSync(workingDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true });
     // Use a high port to avoid conflicts with system services
-    const userAuth = new UserAuthManager({
-      users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-    });
+    const userAuth = makeUserAuth();
     runtimeServices = createRuntimeServices({
       runtimeStore: createRuntimeStore(),
       runtimeBus: new RuntimeEventBus(),
       configManager: makeConfig(),
+      workingDir,
+      homeDirectory: homeDir,
       getConversationTitle: () => 'Daemon Test',
     });
-    daemon = new DaemonServer({ port: 39421, host: '127.0.0.1', userAuth, runtimeServices });
+    daemon = createTestDaemon({ userAuth, runtimeServices });
     runtimeServices.panelManager.registerType({
       id: 'test-helper-panel',
       name: 'Test Helper Panel',
@@ -110,11 +141,9 @@ describe('DaemonServer', () => {
   });
 
   afterEach(async () => {
-    await daemon.stop();
+    await daemon?.stop();
     resetTestRuntimeServices();
-    rmSync(join(process.cwd(), '.goodvibes', 'tui', 'remote'), { recursive: true, force: true });
-    rmSync(join(process.cwd(), '.goodvibes', 'tui', 'channels'), { recursive: true, force: true });
-    rmSync(tempConfigDir, { recursive: true, force: true });
+    rmSync(tempRoot, { recursive: true, force: true });
   });
 
   test('isRunning is false before start', () => {
@@ -143,7 +172,7 @@ describe('DaemonServer', () => {
   });
 
   test('passes TLS options to Bun.serve when direct daemon TLS is enabled', async () => {
-    const certDir = join(tempConfigDir, '.goodvibes', 'certs');
+    const certDir = join(homeDir, '.goodvibes', 'certs');
     mkdirSync(certDir, { recursive: true });
     const certFile = join(certDir, 'fullchain.pem');
     const keyFile = join(certDir, 'privkey.pem');
@@ -160,14 +189,11 @@ describe('DaemonServer', () => {
       hostname: (capturedOptions as Record<string, unknown>).hostname,
     };
     });
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
+    daemon = createTestDaemon({
+      configManager: config,
+      userAuth: makeUserAuth(),
       serveFactory: serveFactory as unknown as typeof Bun.serve,
-    }, config);
+    });
 
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
@@ -187,9 +213,10 @@ describe('DaemonServer', () => {
     const runtimeBus = new RuntimeEventBus();
     const transportEvents: TransportEvent[] = [];
     runtimeBus.onDomain('transport', ({ payload }) => transportEvents.push(payload));
-    daemon = new DaemonServer({ port: 39421, host: '127.0.0.1', userAuth: new UserAuthManager({
-      users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-    }), runtimeBus });
+    daemon = createTestDaemon({
+      userAuth: makeUserAuth(),
+      runtimeBus,
+    });
 
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
@@ -330,7 +357,7 @@ describe('DaemonServer', () => {
     const connectorIngestJson = await connectorIngest.json() as { imported: number };
     expect(connectorIngestJson.imported).toBeGreaterThan(0);
 
-    const csvPath = join(tempConfigDir, 'knowledge.csv');
+    const csvPath = join(workingDir, 'knowledge.csv');
     writeFileSync(csvPath, 'project,owner\nGoodVibes,buzzkill\n');
     const ingestArtifact = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/artifact', {
       method: 'POST',
@@ -1493,13 +1520,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-test-secret');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -1624,13 +1645,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-test-secret');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -1697,13 +1712,7 @@ describe('DaemonServer', () => {
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.defaultTarget', 'https://example.com/hook');
     config.setDynamic('surfaces.webhook.secret', 'shared-secret');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -1941,13 +1950,7 @@ describe('DaemonServer', () => {
     config.setDynamic('surfaces.signal.enabled', true);
     config.setDynamic('surfaces.signal.bridgeUrl', 'https://signal-bridge.example.test');
     config.setDynamic('surfaces.signal.account', '+15551234567');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2089,13 +2092,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-test-secret');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     await fetch('http://127.0.0.1:39421/api/channels/policies/webhook', {
@@ -2139,13 +2136,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', false);
     config.setDynamic('surfaces.webhook.secret', '');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2165,13 +2156,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-test-secret');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2195,13 +2180,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-hmac-secret');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
     await fetch('http://127.0.0.1:39421/api/channels/policies/webhook', {
@@ -2244,13 +2223,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.webhook.enabled', true);
     config.setDynamic('surfaces.webhook.secret', 'webhook-hmac-secret');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2319,13 +2292,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.ntfy.enabled', true);
     config.setDynamic('surfaces.ntfy.token', 'ntfy-test-token');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2358,13 +2325,7 @@ describe('DaemonServer', () => {
     const config = makeConfig();
     config.setDynamic('surfaces.ntfy.enabled', true);
     config.setDynamic('surfaces.ntfy.token', 'ntfy-test-token');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2389,13 +2350,7 @@ describe('DaemonServer', () => {
     config.setDynamic('surfaces.telegram.botUsername', 'goodvibes_bot');
     config.setDynamic('surfaces.googleChat.enabled', true);
     config.setDynamic('surfaces.googleChat.verificationToken', 'google-chat-token');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2457,13 +2412,7 @@ describe('DaemonServer', () => {
     config.setDynamic('surfaces.imessage.enabled', true);
     config.setDynamic('surfaces.imessage.token', 'imessage-bridge-token');
     config.setDynamic('surfaces.imessage.account', 'me@icloud.test');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2549,13 +2498,7 @@ describe('DaemonServer', () => {
     config.setDynamic('surfaces.matrix.enabled', true);
     config.setDynamic('surfaces.matrix.accessToken', 'matrix-access-token');
     config.setDynamic('surfaces.matrix.homeserverUrl', 'https://matrix.example.test');
-    daemon = new DaemonServer({
-      port: 39421,
-      host: '127.0.0.1',
-      userAuth: new UserAuthManager({
-        users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
-      }),
-    }, config);
+    daemon = createTestDaemon({ configManager: config, userAuth: makeUserAuth() });
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
@@ -2780,21 +2723,43 @@ describe('DaemonServer', () => {
 describe('HttpListener', () => {
   let listener: HttpListener;
   let userAuth: UserAuthManager;
-  let tempConfigDir: string;
+  let tempRoot: string;
+  let workingDir: string;
+  let homeDir: string;
   let configDir: string;
+  const makeConfig = () => new ConfigManager({ configDir, workingDir, homeDir });
+  const createTestListener = (options: {
+    readonly configManager?: ConfigManager;
+    readonly userAuth?: UserAuthManager;
+    readonly serveFactory?: typeof Bun.serve;
+    readonly port?: number;
+    readonly host?: string;
+  } = {}): HttpListener => new HttpListener({
+    port: options.port ?? 39422,
+    host: options.host ?? '127.0.0.1',
+    configManager: options.configManager ?? makeConfig(),
+    userAuth: options.userAuth ?? userAuth,
+    ...(options.serveFactory ? { serveFactory: options.serveFactory } : {}),
+  });
 
   beforeEach(() => {
-    tempConfigDir = mkdtempSync(join(tmpdir(), 'gv-listener-config-'));
-    configDir = join(tempConfigDir, '.goodvibes', 'tui');
+    tempRoot = mkdtempSync(join(tmpdir(), 'gv-listener-config-'));
+    workingDir = join(tempRoot, 'workspace');
+    homeDir = join(tempRoot, 'home');
+    configDir = join(homeDir, '.goodvibes', 'tui');
+    mkdirSync(workingDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true });
     userAuth = new UserAuthManager({
+      bootstrapFilePath: join(configDir, 'auth-users.json'),
+      bootstrapCredentialPath: join(configDir, 'auth-bootstrap.txt'),
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
     });
-    listener = new HttpListener({ port: 39422, host: '127.0.0.1', userAuth });
+    listener = createTestListener();
   });
 
   afterEach(async () => {
     await listener.stop();
-    rmSync(tempConfigDir, { recursive: true, force: true });
+    rmSync(tempRoot, { recursive: true, force: true });
   });
 
   test('isRunning is false before start', () => {
@@ -2823,13 +2788,13 @@ describe('HttpListener', () => {
   });
 
   test('passes TLS options to Bun.serve when direct listener TLS is enabled', async () => {
-    const certDir = join(tempConfigDir, '.goodvibes', 'certs');
+    const certDir = join(homeDir, '.goodvibes', 'certs');
     mkdirSync(certDir, { recursive: true });
     const certFile = join(certDir, 'fullchain.pem');
     const keyFile = join(certDir, 'privkey.pem');
     writeFileSync(certFile, 'CERT\n', 'utf-8');
     writeFileSync(keyFile, 'KEY\n', 'utf-8');
-    const config = new ConfigManager({ configDir, workingDir: tempConfigDir });
+    const config = makeConfig();
     config.set('httpListener.tls.mode', 'direct');
     let capturedOptions: Record<string, unknown> | null = null;
     const serveFactory = mock((options: unknown) => {
@@ -2840,10 +2805,7 @@ describe('HttpListener', () => {
       hostname: (capturedOptions as Record<string, unknown>).hostname,
     };
     });
-    listener = new HttpListener({
-      port: 39422,
-      host: '127.0.0.1',
-      userAuth,
+    listener = createTestListener({
       configManager: config,
       serveFactory: serveFactory as unknown as typeof Bun.serve,
     });
@@ -2961,7 +2923,10 @@ describe('HttpListener', () => {
     const rl = new HttpListener({
       port: 39423,
       host: '127.0.0.1',
+      configManager: makeConfig(),
       userAuth: new UserAuthManager({
+        bootstrapFilePath: join(configDir, 'auth-users.json'),
+        bootstrapCredentialPath: join(configDir, 'auth-bootstrap.txt'),
         users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
       }),
     });

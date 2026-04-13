@@ -3,8 +3,9 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { RemotePanel } from '../../panels/remote-panel.ts';
 import type { Line } from '../../types/grid.ts';
 import { RemoteRunnerRegistry, RemoteSupervisor } from '../../runtime/remote/index.ts';
-import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import type { UiRemoteSnapshot } from '../../runtime/ui-read-models.ts';
 import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { createStoreBackedUiReadModel } from '../helpers/ui-read-models.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -13,16 +14,43 @@ function linesText(lines: Line[]): string {
     .join('\n');
 }
 
+function createRemoteReadModel(
+  store: ReturnType<typeof createRuntimeStore>,
+  remoteRunnerRegistry = new RemoteRunnerRegistry(getTestAgentManager()),
+) {
+  const remoteSupervisor = new RemoteSupervisor(remoteRunnerRegistry);
+  return createStoreBackedUiReadModel<UiRemoteSnapshot>(store, () => ({
+    daemon: {
+      transportState: store.getState().daemon.transportState,
+      isRunning: store.getState().daemon.isRunning,
+      reconnectAttempts: store.getState().daemon.reconnectAttempts,
+      runningJobCount: store.getState().daemon.runningJobCount,
+      lastError: store.getState().daemon.lastError,
+    },
+    acp: {
+      transportState: store.getState().acp.managerTransportState,
+      totalMessages: store.getState().acp.totalMessages,
+      activeConnections: store.getState().acp.activeConnectionIds
+        .map((id) => store.getState().acp.connections.get(id))
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined),
+    },
+    pools: remoteRunnerRegistry.listPools(),
+    contracts: remoteRunnerRegistry.listContracts(),
+    artifacts: remoteRunnerRegistry.listArtifacts(),
+    supervisor: remoteSupervisor.getSnapshot(store),
+    distributed: {
+      pairRequests: [],
+      peers: [],
+      work: [],
+    },
+  }));
+}
+
 function createRemotePanel(
   store?: ReturnType<typeof createRuntimeStore>,
   remoteRunnerRegistry = new RemoteRunnerRegistry(getTestAgentManager()),
 ): RemotePanel {
-  const ui = createDefaultUiRuntimeServices();
-  return new RemotePanel(store, {
-    distributedRuntime: ui.distributedRuntime,
-    remoteRunnerRegistry,
-    remoteSupervisor: new RemoteSupervisor(remoteRunnerRegistry),
-  });
+  return new RemotePanel(store ? createRemoteReadModel(store, remoteRunnerRegistry) : undefined);
 }
 
 describe('RemotePanel', () => {

@@ -5,14 +5,14 @@ import { collectTextFiles, makeCountResult, makeFilesResult, makeLocationsResult
 export async function executeReferencesQuery(
   query: ReferencesQuery,
   output: OutputOptions,
+  projectRoot: string,
 ): Promise<Record<string, unknown>> {
-  const projectRoot = process.cwd();
   const maxResults = output.max_results ?? 100;
 
   interface ReferenceLocation { file: string; line: number; }
   let locations: ReferenceLocation[] = [];
 
-  const ci = new CodeIntelligence();
+  const ci = new CodeIntelligence({});
   try {
     const lspLocations = await ci.getReferences(query.file, query.line, query.column);
     if (lspLocations.length > 0) {

@@ -1,14 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { getDefaultAcpAgentCommand } from '../../acp/manager.ts';
-import type { CommandContext } from '../command-registry.ts';
+import type { CommandContext, RemoteCommandService } from '../command-registry.ts';
 import type { RemoteSessionBundle } from '../../runtime/remote/types.ts';
+import { requireShellPaths } from './runtime-services.ts';
 
-type RemoteRegistryLike = {
-  listContracts(): Array<{ runnerId: string }>;
-  exportSessionBundle(store: NonNullable<CommandContext['runtimeStore']>, path: string): Promise<{ path: string; bundle: RemoteSessionBundle }>;
-  importSessionBundle(path: string): Promise<RemoteSessionBundle>;
-};
+type RemoteRegistryLike = Pick<RemoteCommandService, 'listContracts' | 'exportSessionBundle' | 'importSessionBundle'>;
 
 type ActiveConnectionLike = {
   agentId: string;
@@ -39,7 +36,7 @@ export async function handleRemoteSetupCommand(
   const subcommand = args[0]?.toLowerCase() ?? 'show';
   if (subcommand === 'setup') {
     const command = getDefaultAcpAgentCommand();
-    const danger = ctx.configManager.getCategory('danger');
+    const danger = ctx.platform.configManager.getCategory('danger');
     const lines = [
       'Remote Setup Review',
       `  acp agent command: ${command.join(' ')}`,
@@ -59,7 +56,8 @@ export async function handleRemoteSetupCommand(
         ctx.print('Usage: /remote setup export <path>');
         return true;
       }
-      const targetPath = resolve(process.cwd(), pathArg);
+      const shellPaths = requireShellPaths(ctx);
+      const targetPath = shellPaths.resolveWorkspacePath(pathArg);
       mkdirSync(dirname(targetPath), { recursive: true });
       writeFileSync(targetPath, `${JSON.stringify({
         exportedAt: Date.now(),
@@ -79,7 +77,7 @@ export async function handleRemoteSetupCommand(
     const command = getDefaultAcpAgentCommand();
     const shellSnippet = [
       `export ACP_AGENT_CMD='${command.join(' ')}'`,
-      `export GOODVIBES_REMOTE_SESSION='${ctx.runtime.sessionId}'`,
+      `export GOODVIBES_REMOTE_SESSION='${ctx.session.runtime.sessionId}'`,
     ].join('\n');
     if (args[1]?.toLowerCase() === 'export') {
       const pathArg = args[2];
@@ -87,7 +85,8 @@ export async function handleRemoteSetupCommand(
         ctx.print('Usage: /remote env export <path>');
         return true;
       }
-      const targetPath = resolve(process.cwd(), pathArg);
+      const shellPaths = requireShellPaths(ctx);
+      const targetPath = shellPaths.resolveWorkspacePath(pathArg);
       mkdirSync(dirname(targetPath), { recursive: true });
       writeFileSync(targetPath, `${shellSnippet}\n`, 'utf-8');
       ctx.print(`Exported remote environment snippet to ${targetPath}`);
@@ -102,7 +101,7 @@ export async function handleRemoteSetupCommand(
     const lines = [
       'Remote Tunnel Review',
       '  transport: self-hosted ACP / daemon relay',
-      `  session: ${ctx.runtime.sessionId}`,
+      `  session: ${ctx.session.runtime.sessionId}`,
       `  active remote connections: ${activeConnections.length}`,
       '  guidance: forward ACP agent traffic through your chosen self-hosted tunnel or SSH transport',
     ];
@@ -112,7 +111,8 @@ export async function handleRemoteSetupCommand(
         ctx.print('Usage: /remote tunnel export <path>');
         return true;
       }
-      const targetPath = resolve(process.cwd(), pathArg);
+      const shellPaths = requireShellPaths(ctx);
+      const targetPath = shellPaths.resolveWorkspacePath(pathArg);
       mkdirSync(dirname(targetPath), { recursive: true });
       writeFileSync(targetPath, `${lines.join('\n')}\n`, 'utf-8');
       ctx.print(`Exported remote tunnel review to ${targetPath}`);
@@ -126,11 +126,11 @@ export async function handleRemoteSetupCommand(
     const mode = args[1]?.toLowerCase() ?? 'export';
     const payload = {
       exportedAt: Date.now(),
-      sessionId: ctx.runtime.sessionId,
+      sessionId: ctx.session.runtime.sessionId,
       acpAgentCommand: getDefaultAcpAgentCommand(),
       env: {
         ACP_AGENT_CMD: getDefaultAcpAgentCommand().join(' '),
-        GOODVIBES_REMOTE_SESSION: ctx.runtime.sessionId,
+        GOODVIBES_REMOTE_SESSION: ctx.session.runtime.sessionId,
       },
       links: [
         'goodvibes://open/remote',
@@ -143,7 +143,8 @@ export async function handleRemoteSetupCommand(
         ctx.print('Usage: /remote bootstrap inspect <path>');
         return true;
       }
-      const targetPath = resolve(process.cwd(), pathArg);
+      const shellPaths = requireShellPaths(ctx);
+      const targetPath = shellPaths.resolveWorkspacePath(pathArg);
       const parsed = JSON.parse(readFileSync(targetPath, 'utf-8')) as typeof payload;
       ctx.print([
         'Remote Bootstrap Bundle Review',
@@ -158,7 +159,8 @@ export async function handleRemoteSetupCommand(
       ctx.print('Usage: /remote bootstrap export <path> | /remote bootstrap inspect <path>');
       return true;
     }
-    const targetPath = resolve(process.cwd(), pathArg);
+    const shellPaths = requireShellPaths(ctx);
+    const targetPath = shellPaths.resolveWorkspacePath(pathArg);
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
     ctx.print(`Exported remote bootstrap bundle to ${targetPath}`);
@@ -166,20 +168,16 @@ export async function handleRemoteSetupCommand(
   }
 
   if (subcommand === 'session') {
-    const store = ctx.runtimeStore;
-    if (!store) {
-      ctx.print('Runtime store is not available for remote session commands.');
-      return true;
-    }
     const mode = args[1]?.toLowerCase();
     const pathArg = args[2];
     if (!mode || !pathArg) {
       ctx.print('Usage: /remote session <export|inspect|import> <path>');
       return true;
     }
-    const targetPath = resolve(process.cwd(), pathArg);
+    const shellPaths = requireShellPaths(ctx);
+    const targetPath = shellPaths.resolveWorkspacePath(pathArg);
     if (mode === 'export') {
-      const exported = await remoteRegistry.exportSessionBundle(store, targetPath);
+      const exported = await remoteRegistry.exportSessionBundle(targetPath);
       ctx.print(`Exported remote session bundle ${exported.bundle.sessionId} to ${exported.path}`);
       return true;
     }

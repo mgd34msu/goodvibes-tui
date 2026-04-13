@@ -8,9 +8,27 @@
  * - The plan manager is exercised as an owned runtime service, not a hidden global
  */
 
-import { describe, test, expect } from 'bun:test';
+import { afterEach, describe, test, expect } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { ExecutionPlanManager } from '../../core/execution-plan.ts';
 import type { ExecutionPlan, PlanItem } from '../../core/execution-plan.ts';
+
+const planRoots = new Set<string>();
+
+function createPlanManager(): ExecutionPlanManager {
+  const projectRoot = mkdtempSync(join(tmpdir(), 'gv-plan-integration-'));
+  planRoots.add(projectRoot);
+  return new ExecutionPlanManager(projectRoot);
+}
+
+afterEach(() => {
+  for (const root of planRoots) {
+    rmSync(root, { recursive: true, force: true });
+  }
+  planRoots.clear();
+});
 
 // ---------------------------------------------------------------------------
 // ExecutionPlanManager unit tests
@@ -19,7 +37,7 @@ import type { ExecutionPlan, PlanItem } from '../../core/execution-plan.ts';
 describe('ExecutionPlanManager behavior', () => {
   test('getActive returns null when no active plan file exists', () => {
     // A fresh instance with no active file returns null
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     // Reset active file pointer so there's no active plan on disk for this test
     // (In CI there may be no .goodvibes/plans directory at all)
     const active = manager.getActive();
@@ -28,7 +46,7 @@ describe('ExecutionPlanManager behavior', () => {
   });
 
   test('create returns a plan with active status and correct items', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Test plan', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -42,7 +60,7 @@ describe('ExecutionPlanManager behavior', () => {
   });
 
   test('getSummary returns phase-level progress description', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Summary test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -53,7 +71,7 @@ describe('ExecutionPlanManager behavior', () => {
   });
 
   test('getNextItems returns pending items with no incomplete dependencies', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Next items test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -68,7 +86,7 @@ describe('ExecutionPlanManager behavior', () => {
   });
 
   test('getNextItems excludes items with unresolved dependencies', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Deps test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -82,7 +100,7 @@ describe('ExecutionPlanManager behavior', () => {
   });
 
   test('toMarkdown includes plan title and item checkboxes', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Markdown test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -100,7 +118,7 @@ describe('ExecutionPlanManager behavior', () => {
   });
 
   test('updateItem changes item status and persists plan', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Update test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
     ]);
@@ -113,7 +131,7 @@ describe('ExecutionPlanManager behavior', () => {
   });
 
   test('plan transitions to complete when all items are done', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Completion test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
     ]);
@@ -130,7 +148,7 @@ describe('ExecutionPlanManager behavior', () => {
 
 describe('Plan injection message content', () => {
   test('pre-turn plan message includes current plan state', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Inject test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
     ]);
@@ -142,7 +160,7 @@ describe('Plan injection message content', () => {
   });
 
   test('continuation nudge with active plan and next items contains summary and next items', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Nudge test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -169,7 +187,7 @@ describe('Plan injection message content', () => {
   });
 
   test('all-done nudge message when plan has no next items', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('All done test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
     ]);
@@ -230,7 +248,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
   }
 
   test('returns empty array when recursive orchestration is disabled', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Recursion disabled test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
     ]);
@@ -248,7 +266,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
   });
 
   test('marks items in_progress when recursive orchestration is enabled', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Recursion enabled test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -267,7 +285,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
   });
 
   test('stops spawning when running agent count reaches maxActiveAgents', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Max agents test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -288,7 +306,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
   });
 
   test('spawns up to the remaining capacity when partially at limit', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Partial capacity test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },
@@ -311,7 +329,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
   });
 
   test('updateItem records agentId on spawned item', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('AgentId test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
     ]);
@@ -333,7 +351,7 @@ describe('autoSpawnPendingItems helper behavior', () => {
 
 describe('ExecutionPlanManager.parseFromMarkdown', () => {
   test('round-trips a plan through toMarkdown and parseFromMarkdown', () => {
-    const manager = new ExecutionPlanManager();
+    const manager = createPlanManager();
     const plan = manager.create('Round-trip test', [
       { phase: 'Phase 1', description: 'Task A', dependencies: [] },
       { phase: 'Phase 1', description: 'Task B', dependencies: [] },

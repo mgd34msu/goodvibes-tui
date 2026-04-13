@@ -11,14 +11,14 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 import {
+  type EcosystemCatalogPathOptions,
   listInstalledEcosystemEntries,
   loadEcosystemCatalog,
   reviewEcosystemCatalogEntry,
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
 } from '../runtime/ecosystem/catalog.ts';
-import { buildEcosystemRecommendations } from '../runtime/ecosystem/recommendations.ts';
-import type { RuntimeStore } from '../runtime/store/index.ts';
+import type { UiMarketplaceSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -40,9 +40,18 @@ export class MarketplacePanel extends BasePanel {
   private rows: MarketplaceRow[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
+  private readonly unsub: (() => void) | null;
 
-  public constructor(private readonly runtimeStore?: RuntimeStore) {
+  public constructor(
+    private readonly readModel?: UiReadModel<UiMarketplaceSnapshot>,
+    private readonly ecosystemPaths?: EcosystemCatalogPathOptions,
+  ) {
     super('marketplace', 'Marketplace', 'M', 'monitoring');
+    this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  public override onDestroy(): void {
+    this.unsub?.();
   }
 
   public override onActivate(): void {
@@ -66,15 +75,21 @@ export class MarketplacePanel extends BasePanel {
   }
 
   private refresh(): void {
-    const installedPlugins = new Set(listInstalledEcosystemEntries('plugin').map((receipt) => receipt.entry.id));
-    const installedSkills = new Set(listInstalledEcosystemEntries('skill').map((receipt) => receipt.entry.id));
-    const installedHookPacks = new Set(listInstalledEcosystemEntries('hook-pack').map((receipt) => receipt.entry.id));
-    const installedPolicyPacks = new Set(listInstalledEcosystemEntries('policy-pack').map((receipt) => receipt.entry.id));
+    if (!this.ecosystemPaths) {
+      this.rows = [];
+      this.selectedIndex = 0;
+      this.scrollOffset = 0;
+      return;
+    }
+    const installedPlugins = new Set(listInstalledEcosystemEntries('plugin', this.ecosystemPaths).map((receipt) => receipt.entry.id));
+    const installedSkills = new Set(listInstalledEcosystemEntries('skill', this.ecosystemPaths).map((receipt) => receipt.entry.id));
+    const installedHookPacks = new Set(listInstalledEcosystemEntries('hook-pack', this.ecosystemPaths).map((receipt) => receipt.entry.id));
+    const installedPolicyPacks = new Set(listInstalledEcosystemEntries('policy-pack', this.ecosystemPaths).map((receipt) => receipt.entry.id));
     const rows: MarketplaceRow[] = [
-      ...loadEcosystemCatalog('plugin').map((entry) => ({ kind: 'plugin' as const, entry, installed: installedPlugins.has(entry.id) })),
-      ...loadEcosystemCatalog('skill').map((entry) => ({ kind: 'skill' as const, entry, installed: installedSkills.has(entry.id) })),
-      ...loadEcosystemCatalog('hook-pack').map((entry) => ({ kind: 'hook-pack' as const, entry, installed: installedHookPacks.has(entry.id) })),
-      ...loadEcosystemCatalog('policy-pack').map((entry) => ({ kind: 'policy-pack' as const, entry, installed: installedPolicyPacks.has(entry.id) })),
+      ...loadEcosystemCatalog('plugin', this.ecosystemPaths).map((entry) => ({ kind: 'plugin' as const, entry, installed: installedPlugins.has(entry.id) })),
+      ...loadEcosystemCatalog('skill', this.ecosystemPaths).map((entry) => ({ kind: 'skill' as const, entry, installed: installedSkills.has(entry.id) })),
+      ...loadEcosystemCatalog('hook-pack', this.ecosystemPaths).map((entry) => ({ kind: 'hook-pack' as const, entry, installed: installedHookPacks.has(entry.id) })),
+      ...loadEcosystemCatalog('policy-pack', this.ecosystemPaths).map((entry) => ({ kind: 'policy-pack' as const, entry, installed: installedPolicyPacks.has(entry.id) })),
     ];
     this.rows = rows.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
@@ -86,20 +101,9 @@ export class MarketplacePanel extends BasePanel {
 
     const intro = 'Curated local-first ecosystem with provenance, compatibility, rollback history, and receipt-aware lifecycle review.';
     const installedCount = this.rows.filter((row) => row.installed).length;
-    const recommendations = buildEcosystemRecommendations(this.runtimeStore);
-    const runtimeState = this.runtimeStore?.getState();
-    const startupIssues: string[] = [];
-    if ((runtimeState?.permissions.denialCount ?? 0) >= 3) {
-      startupIssues.push(`${runtimeState?.permissions.denialCount} permission denials suggest a policy-pack or trust posture review.`);
-    }
-    const authRequiredServers = [...(runtimeState?.mcp.servers.values() ?? [])].filter((server) => server.status === 'auth_required');
-    if (authRequiredServers.length > 0) {
-      startupIssues.push(`${authRequiredServers.length} MCP server${authRequiredServers.length === 1 ? '' : 's'} need auth or reconnect repair.`);
-    }
-    const staleSchemas = [...(runtimeState?.mcp.servers.values() ?? [])].filter((server) => server.schemaFreshness !== 'fresh');
-    if (staleSchemas.length > 0) {
-      startupIssues.push(`${staleSchemas.length} MCP server schema${staleSchemas.length === 1 ? ' is' : 's are'} stale or quarantined.`);
-    }
+    const snapshot = this.readModel?.getSnapshot();
+    const recommendations = snapshot?.recommendations ?? [];
+    const startupIssues = snapshot?.startupIssues ?? [];
 
     if (this.rows.length === 0) {
       return buildPanelWorkspace(width, height, {
@@ -108,8 +112,10 @@ export class MarketplacePanel extends BasePanel {
         sections: [{
           lines: buildEmptyState(
             width,
-            ' No curated marketplace entries found yet.',
-            'The marketplace is ready, but no plugin, skill, hook-pack, or policy-pack catalogs are available in this workspace.',
+            this.ecosystemPaths ? ' No curated marketplace entries found yet.' : ' Marketplace catalog paths are not wired into this panel yet.',
+            this.ecosystemPaths
+              ? 'The marketplace is ready, but no plugin, skill, hook-pack, or policy-pack catalogs are available in this workspace.'
+              : 'The shell needs explicit marketplace catalog roots before this panel can inspect curated plugin, skill, hook-pack, or policy-pack entries.',
             [
               { command: '/marketplace bundle import <path>', summary: 'import a curated marketplace bundle' },
               { command: '/marketplace catalog review', summary: 'inspect the current local catalog posture' },
@@ -149,7 +155,7 @@ export class MarketplacePanel extends BasePanel {
     const selected = this.rows[this.selectedIndex];
     const selectedLines: Line[] = [];
     if (selected) {
-      const review = reviewEcosystemCatalogEntry(selected.entry);
+      const review = reviewEcosystemCatalogEntry(selected.entry, this.ecosystemPaths!);
       selectedLines.push(buildPanelLine(width, [
         ['  Provenance: ', C.label],
         [(selected.entry.provenance ?? '(none)').slice(0, Math.max(0, width - 15)), selected.entry.provenance ? C.info : C.dim],

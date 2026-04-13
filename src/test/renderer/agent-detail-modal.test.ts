@@ -1,7 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { AgentDetailModal, renderAgentDetailModal } from '../../renderer/agent-detail-modal.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
-import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { linesToText } from '../setup.ts';
 import { getTestAgentManager, getTestAgentMessageBus, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
@@ -29,6 +27,7 @@ function createAgentDetailModal(): AgentDetailModal {
   return new AgentDetailModal({
     agentManager: ui.agentManager,
     agentMessageBus: ui.agentMessageBus,
+    sessionLogPathResolver: (agentId) => ui.shellPaths.resolveProjectTuiPath('sessions', `${agentId}.jsonl`),
   });
 }
 

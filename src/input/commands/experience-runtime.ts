@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { requirePanelManager } from './runtime-services.ts';
+import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
 
 interface VoiceBundle {
   readonly version: 1;
@@ -225,9 +225,10 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
     description: 'Review voice posture and package portable voice-surface metadata',
     usage: '[review|enable|disable|bundle export <path>|bundle inspect <path>]',
     handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
       const sub = (args[0] ?? 'review').toLowerCase();
       if (sub === 'review') {
-        const enabled = Boolean(ctx.configManager.get('ui.voiceEnabled') ?? false);
+        const enabled = Boolean(ctx.platform.configManager.get('ui.voiceEnabled') ?? false);
         ctx.print([
           'Voice Review',
           `  enabled: ${enabled ? 'yes' : 'no'}`,
@@ -238,7 +239,7 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
       }
       if (sub === 'enable' || sub === 'disable') {
         const next = sub === 'enable';
-        ctx.configManager.setDynamic('ui.voiceEnabled', next);
+        ctx.platform.configManager.setDynamic('ui.voiceEnabled', next);
         ctx.print(`Voice surface ${next ? 'enabled' : 'disabled'} for this runtime.`);
         return;
       }
@@ -249,12 +250,12 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
           ctx.print(`Usage: /voice bundle ${mode} <path>`);
           return;
         }
-        const targetPath = resolve(process.cwd(), pathArg!);
+        const targetPath = shellPaths.resolveWorkspacePath(pathArg!);
         if (mode === 'export') {
           const bundle: VoiceBundle = {
             version: 1,
             exportedAt: Date.now(),
-            enabled: Boolean(ctx.configManager.get('ui.voiceEnabled')),
+            enabled: Boolean(ctx.platform.configManager.get('ui.voiceEnabled')),
             notes: [
               'Voice is optional and local-first.',
               'Secure sandbox mode and operator review remain the primary control surfaces.',

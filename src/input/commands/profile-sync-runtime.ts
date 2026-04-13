@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { ProfileBundleEntry, ProfileSyncBundle } from '../../runtime/sandbox/types.ts';
 import { recordSettingsSyncEvent, recordSettingsSyncFailure } from '../../runtime/settings/control-plane.ts';
-import { requireProfileManager } from './runtime-services.ts';
+import { requireProfileManager, requireShellPaths } from './runtime-services.ts';
 
 function inspectProfileSyncBundle(bundle: ProfileSyncBundle): string {
   return [
@@ -20,7 +20,8 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
     description: 'Export, import, and inspect profile sync bundles',
     usage: '[list|export <path>|inspect <path>|import <path> [prefix]]',
     handler(args, ctx) {
-      const controlPlaneConfigDir = ctx.configManager.getControlPlaneConfigDir();
+      const shellPaths = requireShellPaths(ctx);
+      const controlPlaneConfigDir = ctx.platform.configManager.getControlPlaneConfigDir();
       const sub = args[0] ?? 'list';
       const pm = requireProfileManager(ctx);
       if (sub === 'list') {
@@ -38,7 +39,7 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
         ctx.print(`Usage: /profilesync ${sub} <path>${sub === 'import' ? ' [prefix]' : ''}`);
         return;
       }
-      const targetPath = resolve(process.cwd(), pathArg);
+      const targetPath = shellPaths.resolveWorkspacePath(pathArg);
 
       if (sub === 'export') {
         const profiles = pm.list().map((profile) => {

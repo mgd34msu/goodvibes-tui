@@ -9,7 +9,7 @@ export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
     usage: 'add <url> | remove <url> | list | clear | test',
     argsHint: 'add|remove|list|clear|test',
     async handler(args, ctx) {
-      const notifications = ctx.configManager.getCategory('notifications');
+      const notifications = ctx.platform.configManager.getCategory('notifications');
       const urls: string[] = Array.isArray(notifications.webhookUrls) ? [...notifications.webhookUrls] : [];
       const notifier = requireWebhookNotifier(ctx);
       const sub = args[0];
@@ -35,7 +35,7 @@ export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         urls.push(url);
-        ctx.configManager.mergeCategory('notifications', { webhookUrls: urls });
+        ctx.platform.configManager.mergeCategory('notifications', { webhookUrls: urls });
         notifier.setUrls(urls);
         ctx.print(`Webhook added: ${url}`);
         return;
@@ -52,14 +52,14 @@ export function registerNotifyRuntimeCommands(registry: CommandRegistry): void {
           ctx.print(`Not found: ${url}`);
           return;
         }
-        ctx.configManager.mergeCategory('notifications', { webhookUrls: next });
+        ctx.platform.configManager.mergeCategory('notifications', { webhookUrls: next });
         notifier.setUrls(next);
         ctx.print(`Webhook removed: ${url}`);
         return;
       }
 
       if (sub === 'clear') {
-        ctx.configManager.mergeCategory('notifications', { webhookUrls: [] });
+        ctx.platform.configManager.mergeCategory('notifications', { webhookUrls: [] });
         notifier.setUrls([]);
         ctx.print('All webhook URLs cleared.');
         return;

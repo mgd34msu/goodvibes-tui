@@ -4,10 +4,9 @@ import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { type SessionMeta } from '../../sessions/manager.ts';
 import type { TranscriptEventKind } from '../../core/transcript-events/index.ts';
 import type { ConversationTitleSource } from '../../core/conversation.ts';
-import { HelperModel } from '../../config/helper-model.ts';
 import type { SessionReturnContextSummary } from '../../runtime/session-return-context.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '../../runtime/session-return-context.ts';
-import { requirePanelManager, requireSessionManager } from './runtime-services.ts';
+import { requirePanelManager, requireProviderApi, requireSessionManager } from './runtime-services.ts';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
   const normalized = (raw ?? 'all').toLowerCase().replace(/-/g, '_');
@@ -36,7 +35,7 @@ function buildTranscriptReviewLines(
   kind: TranscriptEventKind | 'all',
   mode: 'events' | 'groups' | 'hotspots',
 ): string[] {
-  const index = ctx.conversationManager.getTranscriptEventIndex();
+  const index = ctx.session.conversationManager.getTranscriptEventIndex();
   const events = kind === 'all' ? index.events : index.events.filter((event) => event.kind === kind);
   const groups = kind === 'all' ? index.groups : index.groups.filter((group) => group.kind === kind);
 
@@ -147,9 +146,9 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
   const sub = args[0];
 
   if (!sub) {
-    const id = ctx.runtime.sessionId;
-    const msgCount = ctx.conversationManager.getMessageCount();
-    const title = ctx.conversationManager.title || '(untitled)';
+    const id = ctx.session.runtime.sessionId;
+    const msgCount = ctx.session.conversationManager.getMessageCount();
+    const title = ctx.session.conversationManager.title || '(untitled)';
     const meta = sm.getMeta(id);
     const started = meta ? new Date(meta.timestamp).toLocaleString() : 'this session';
     ctx.print([
@@ -158,7 +157,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       `  Name:     ${title}`,
       `  Started:  ${started}`,
       `  Messages: ${msgCount}`,
-      `  Model:    ${ctx.runtime.model} (${ctx.runtime.provider})`,
+      `  Model:    ${ctx.session.runtime.model} (${ctx.session.runtime.provider})`,
     ].join('\n'));
     return true;
   }
@@ -174,7 +173,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       const date = new Date(session.timestamp).toLocaleString();
       const name = session.title || session.name;
       const model = session.model ? ` [${session.model}]` : '';
-      const active = session.name === ctx.runtime.sessionId ? ' ●' : '  ';
+      const active = session.name === ctx.session.runtime.sessionId ? ' ●' : '  ';
       lines.push(`${active} ${session.name.padEnd(28)} ${name.slice(0, 22).padEnd(22)} ${date}  ${session.messageCount} msgs${model}`);
       if (session.returnContext?.activeTasks || session.returnContext?.blockedTasks || session.returnContext?.pendingApprovals || session.returnContext?.openPanels?.length) {
         const posture = [
@@ -197,18 +196,18 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       return true;
     }
     try {
-      const existingMeta = sm.getMeta(ctx.runtime.sessionId);
+      const existingMeta = sm.getMeta(ctx.session.runtime.sessionId);
       if (!existingMeta) {
-        const exportData = ctx.conversationManager.toJSON() as { messages: object[]; timestamp?: number };
-        sm.save(ctx.runtime.sessionId, exportData.messages ?? [], {
-          title: ctx.conversationManager.title || '',
-          model: ctx.runtime.model,
-          provider: ctx.runtime.provider,
+        const exportData = ctx.session.conversationManager.toJSON() as { messages: object[]; timestamp?: number };
+        sm.save(ctx.session.runtime.sessionId, exportData.messages ?? [], {
+          title: ctx.session.conversationManager.title || '',
+          model: ctx.session.runtime.model,
+          provider: ctx.session.runtime.provider,
           timestamp: Date.now(),
         });
       }
-      sm.rename(ctx.runtime.sessionId, newName);
-      ctx.conversationManager.title = newName;
+      sm.rename(ctx.session.runtime.sessionId, newName);
+      ctx.session.conversationManager.title = newName;
       ctx.print(`Session renamed to: ${newName}`);
       ctx.renderRequest();
     } catch (e) {
@@ -235,23 +234,26 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
     }
     try {
       const { meta, messages } = sm.load(found.name);
-      ctx.conversationManager.resetAll();
-      ctx.conversationManager.fromJSON({ messages: messages as never[], title: meta.title, titleSource: meta.titleSource });
-      ctx.conversationManager.rebuildHistory();
-      ctx.runtime.sessionId = found.name;
+      const providerApi = requireProviderApi(ctx);
+      ctx.session.conversationManager.resetAll();
+      ctx.session.conversationManager.fromJSON({ messages: messages as never[], title: meta.title, titleSource: meta.titleSource });
+      ctx.session.conversationManager.rebuildHistory();
+      ctx.session.runtime.sessionId = found.name;
       if (meta.model) {
-        ctx.runtime.model = meta.model;
         try {
-          ctx.providerRegistry.setCurrentModel(meta.model);
+          const selected = await providerApi.selectModel(meta.model);
+          ctx.session.runtime.model = selected.registryKey;
+          ctx.session.runtime.provider = selected.providerId;
         } catch {
+          ctx.session.runtime.model = meta.model;
           // model may not exist locally
         }
       }
-      if (meta.provider) ctx.runtime.provider = meta.provider;
+      if (meta.provider) ctx.session.runtime.provider = meta.provider;
       ctx.renderRequest();
-      ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${messages.length}\n  Model: ${meta.model || ctx.runtime.model}`);
+      ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${messages.length}\n  Model: ${meta.model || ctx.session.runtime.model}`);
       const reopenedPanels = reopenPanelsFromReturnContext(ctx, meta.returnContext);
-      const returnContextMode = getReturnContextMode(ctx.configManager);
+      const returnContextMode = getReturnContextMode(ctx.platform.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {
         for (const line of formatReturnContextForDisplay(meta.returnContext)) {
           ctx.print(`  ${line}`);
@@ -266,11 +268,8 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
           ctx.print(`  Worktree re-entry: /worktree review`);
         }
         if (returnContextMode === 'assisted') {
-          const helperModel = new HelperModel({
-            configManager: ctx.configManager,
-            providerRegistry: ctx.providerRegistry,
-          });
-          void maybeAssistReturnContextSummary(ctx.configManager, helperModel, meta.returnContext).then((assisted) => {
+          const helperModel = providerApi.createHelperModel(ctx.platform.configManager);
+          void maybeAssistReturnContextSummary(ctx.platform.configManager, helperModel, meta.returnContext).then((assisted) => {
             if (!assisted.assistedNarrative) return;
             ctx.print(`  Assist: ${assisted.assistedNarrative}`);
             ctx.renderRequest();
@@ -285,24 +284,24 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
 
   if (sub === 'fork') {
     const newId = `user-${randomBytes(4).toString('hex')}`;
-        const exportData = ctx.conversationManager.toJSON() as SessionExportData;
+        const exportData = ctx.session.conversationManager.toJSON() as SessionExportData;
         const messages = exportData.messages ?? [];
-        const currentTitle = ctx.conversationManager.title;
-        const forkName = args[1] ? args.slice(1).join(' ').trim() : `fork-of-${ctx.runtime.sessionId.slice(0, 8)}`;
+        const currentTitle = ctx.session.conversationManager.title;
+        const forkName = args[1] ? args.slice(1).join(' ').trim() : `fork-of-${ctx.session.runtime.sessionId.slice(0, 8)}`;
         const meta: SessionMeta = {
           title: forkName,
-          model: ctx.runtime.model,
-          provider: ctx.runtime.provider,
+          model: ctx.session.runtime.model,
+          provider: ctx.session.runtime.provider,
       timestamp: Date.now(),
       titleSource: exportData.titleSource,
       returnContext: exportData.returnContext,
     };
     try {
       sm.save(newId, messages, meta);
-      ctx.runtime.sessionId = newId;
-      ctx.conversationManager.title = forkName;
+      ctx.session.runtime.sessionId = newId;
+      ctx.session.conversationManager.title = forkName;
       ctx.renderRequest();
-      ctx.print(`Session forked:\n  New ID: ${newId}\n  Name:   ${forkName}\n  From:   ${currentTitle || ctx.runtime.sessionId}\n  Messages: ${messages.length}`);
+      ctx.print(`Session forked:\n  New ID: ${newId}\n  Name:   ${forkName}\n  From:   ${currentTitle || ctx.session.runtime.sessionId}\n  Messages: ${messages.length}`);
     } catch (e) {
       ctx.print(`Failed to fork session: ${(e as Error).message}`);
     }
@@ -310,20 +309,20 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
   }
 
   if (sub === 'save') {
-        const exportData = ctx.conversationManager.toJSON() as SessionExportData;
+        const exportData = ctx.session.conversationManager.toJSON() as SessionExportData;
         const messages = exportData.messages ?? [];
-        const rawName = args[1] ? args.slice(1).join(' ').trim() : (ctx.conversationManager.title || ctx.runtime.sessionId);
+        const rawName = args[1] ? args.slice(1).join(' ').trim() : (ctx.session.conversationManager.title || ctx.session.runtime.sessionId);
         const meta: SessionMeta = {
-          title: ctx.conversationManager.title,
-          model: ctx.runtime.model,
-          provider: ctx.runtime.provider,
+          title: ctx.session.conversationManager.title,
+          model: ctx.session.runtime.model,
+          provider: ctx.session.runtime.provider,
       timestamp: Date.now(),
       titleSource: exportData.titleSource,
       returnContext: exportData.returnContext,
     };
     try {
       const { filePath, sanitizedName } = sm.save(rawName, messages, meta);
-      ctx.runtime.sessionId = sanitizedName;
+      ctx.session.runtime.sessionId = sanitizedName;
       const nameNote = sanitizedName !== rawName ? ` (saved as "${sanitizedName}")` : '';
       ctx.print(`Session saved: ${rawName}${nameNote}\n  → ${filePath}`);
     } catch (e) {
@@ -333,7 +332,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
   }
 
   if (sub === 'info') {
-    const target = args[1] || ctx.runtime.sessionId;
+    const target = args[1] || ctx.session.runtime.sessionId;
     const sessions = sm.list();
     const found = sessions.find((session) => session.name === target || session.name.startsWith(target));
     if (!found) {
@@ -361,7 +360,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       return true;
     }
     const format = (args[2] || 'markdown').toLowerCase();
-    const sessionId = target === '.' ? ctx.runtime.sessionId : target;
+    const sessionId = target === '.' ? ctx.session.runtime.sessionId : target;
     const sessions = sm.list();
     const found = sessions.find((session) => session.name === sessionId || session.name.startsWith(sessionId));
     if (!found && target !== '.') {
@@ -425,7 +424,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       ctx.print(`Session not found: ${target}`);
       return true;
     }
-    if (found.name === ctx.runtime.sessionId) {
+    if (found.name === ctx.session.runtime.sessionId) {
       ctx.print(`Cannot delete the active session (${found.name}).\nSwitch to another session first with /session resume <id>.`);
       return true;
     }

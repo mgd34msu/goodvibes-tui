@@ -12,17 +12,27 @@ import { ConfigManager } from '../../config/manager.ts';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
 import type { MemoryAddOptions } from '../../state/memory-store.ts';
-import type { TaskManager } from '../../runtime/tasks/types.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
 import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import { RemoteSupervisor } from '../../runtime/remote/supervisor.ts';
+import { createUiReadModels } from '../../runtime/ui-read-models.ts';
+import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
+import { listHookPointContracts } from '../../hooks/index.ts';
+import { createRuntimeOpsApi } from '../../runtime/runtime-ops-api.ts';
+import { createOperatorClient } from '../../runtime/operator-client.ts';
+import { createPeerClient } from '../../runtime/peer-client.ts';
+import { createRuntimeHookApi } from '../../runtime/runtime-hook-api.ts';
+import { createRuntimeKnowledgeApi } from '../../runtime/runtime-knowledge-api.ts';
+import { createMemoryApi } from '../../knowledge/knowledge-api.ts';
+import { createRuntimeMcpApi } from '../../runtime/runtime-mcp-api.ts';
+import { createRuntimeProviderApi } from '../../runtime/runtime-provider-api.ts';
 import {
   resetTestRuntimeServices,
 } from '../helpers/runtime-services.ts';
 
 let productRemoteRunnerRegistry: RemoteRunnerRegistry;
 let productRemoteSupervisor: RemoteSupervisor;
-let localUserAuthManager = new UserAuthManager();
+let localUserAuthManager: UserAuthManager;
 let runtimeServices: RuntimeServices;
 
 describe('product breadth commands', () => {
@@ -42,9 +52,11 @@ describe('product breadth commands', () => {
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
       workingDir: root,
+      homeDirectory: root,
       configManager: new ConfigManager({
         configDir: join(root, '.goodvibes', 'tui'),
         workingDir: root,
+        homeDir: root,
       }),
       getConversationTitle: () => 'test-runtime',
     });
@@ -54,6 +66,8 @@ describe('product breadth commands', () => {
     });
     productRemoteSupervisor = new RemoteSupervisor(productRemoteRunnerRegistry);
     localUserAuthManager = new UserAuthManager({
+      bootstrapFilePath: join(root, '.goodvibes', 'tui', 'auth-users.json'),
+      bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
       users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin-pass'), roles: ['admin'] }],
     });
   });
@@ -79,11 +93,13 @@ describe('product breadth commands', () => {
     }
   });
 
-  function makeContext(out: string[]) {
+  function makeContext(out: string[]): CommandContext {
     const memoryRecords: Array<{ id: string; scope: string; cls: string; summary: string }> = [];
     const forensicsRegistry = new ForensicsRegistry();
     const runtimeStore = runtimeServices.runtimeStore;
     const integrationHelpers = new IntegrationHelperService({
+      workingDirectory: runtimeServices.workingDirectory,
+      homeDirectory: runtimeServices.homeDirectory,
       runtimeStore,
       runtimeBus: runtimeServices.runtimeBus,
       automationManager: runtimeServices.automationManager,
@@ -117,82 +133,240 @@ describe('product breadth commands', () => {
       budgetBreaches: [],
       jumpLinks: [],
     });
+    const readModels = createUiReadModels({
+      ...runtimeServices,
+      localUserAuthManager,
+      remoteRunnerRegistry: productRemoteRunnerRegistry,
+      remoteSupervisor: productRemoteSupervisor,
+      integrationHelpers,
+    } as RuntimeServices, { forensicsRegistry });
+    const uiServices = createUiRuntimeServices({
+      ...runtimeServices,
+      localUserAuthManager,
+      remoteRunnerRegistry: productRemoteRunnerRegistry,
+      remoteSupervisor: productRemoteSupervisor,
+      integrationHelpers,
+    } as RuntimeServices, { forensicsRegistry });
+    const operatorClient = createOperatorClient(uiServices);
+    const peerClient = createPeerClient({
+      runtimeStore,
+      distributedRuntime: runtimeServices.distributedRuntime,
+      remoteRunnerRegistry: productRemoteRunnerRegistry,
+      remoteSupervisor: productRemoteSupervisor,
+    });
+    const providerApi = createRuntimeProviderApi(runtimeServices);
+    const opsControlPlane = {
+      cancelTask: () => {},
+      pauseTask: () => {},
+      resumeTask: () => {},
+      retryTask: () => {},
+      cancelAgent: () => {},
+    };
+    const opsApi = createRuntimeOpsApi({
+      tasksReadModel: readModels.tasks,
+      taskManager: {
+        createTask: (input) => ({
+          id: `task-${Date.now()}`,
+          kind: input.kind,
+          title: input.title,
+          description: input.description,
+          status: 'queued',
+          owner: input.owner,
+          cancellable: input.cancellable ?? true,
+          parentTaskId: input.parentTaskId,
+          childTaskIds: [],
+          queuedAt: Date.now(),
+          correlationId: input.correlationId,
+          retryPolicy: input.retryPolicy,
+          turnId: input.turnId,
+        }),
+        startTask: () => { throw new Error('not implemented in test'); },
+        blockTask: () => { throw new Error('not implemented in test'); },
+        completeTask: (taskId, result) => ({ id: taskId, kind: 'integration', title: taskId, status: 'completed', owner: 'test', cancellable: true, childTaskIds: [], queuedAt: Date.now(), endedAt: Date.now(), result }),
+        failTask: (taskId, params) => ({ id: taskId, kind: 'integration', title: taskId, status: 'failed', owner: 'test', cancellable: true, childTaskIds: [], queuedAt: Date.now(), endedAt: Date.now(), error: params.error }),
+        cancelTask: (taskId) => ({ id: taskId, kind: 'integration', title: taskId, status: 'cancelled', owner: 'test', cancellable: true, childTaskIds: [], queuedAt: Date.now(), endedAt: Date.now() }),
+        updateTask: (taskId, params) => ({ id: taskId, kind: 'integration', title: params.title ?? taskId, description: params.description, status: 'queued', owner: 'test', cancellable: true, childTaskIds: [], queuedAt: Date.now(), result: params.result }),
+        getTask: () => undefined,
+        getTasksByKind: () => [],
+        getRunningTasks: () => [],
+        getRunningCount: () => 0,
+        getChildTasks: () => [],
+        getTaskStatus: () => undefined,
+        retryTask: (taskId) => ({ id: taskId, kind: 'integration', title: taskId, status: 'queued', owner: 'test', cancellable: true, childTaskIds: [], queuedAt: Date.now() }),
+      },
+      opsControlPlane,
+    });
+    const hookApi = createRuntimeHookApi({
+      dispatcher: {
+        listHooks: () => [],
+        listChains: () => [],
+      },
+      workbench: runtimeServices.hookWorkbench,
+      listContracts: () => listHookPointContracts(),
+    });
+    const remoteRuntime = {
+      listActiveConnections: () => readModels.remote.getSnapshot().acp.activeConnections,
+      getSnapshot: () => readModels.remote.getSnapshot(),
+      listPools: () => productRemoteRunnerRegistry.listPools(),
+      getPool: (id: string) => productRemoteRunnerRegistry.getPool(id),
+      createPool: (input: { id: string; label: string }) => productRemoteRunnerRegistry.createPool(input),
+      assignRunnerToPool: (poolId: string, runnerId: string) => productRemoteRunnerRegistry.assignRunnerToPool(poolId, runnerId),
+      removeRunnerFromPool: (poolId: string, runnerId: string) => productRemoteRunnerRegistry.removeRunnerFromPool(poolId, runnerId),
+      listContracts: () => productRemoteRunnerRegistry.listContracts(),
+      getContract: (runnerId: string) => productRemoteRunnerRegistry.getContract(runnerId),
+      registerContract: (contract: Parameters<typeof productRemoteRunnerRegistry.registerContract>[0]) => productRemoteRunnerRegistry.registerContract(contract),
+      upsertContractForAgent: (runnerId: string) => productRemoteRunnerRegistry.upsertContractForAgent(runnerId, runtimeStore),
+      listArtifacts: () => productRemoteRunnerRegistry.listArtifacts(),
+      getArtifact: (artifactId: string) => productRemoteRunnerRegistry.getArtifact(artifactId),
+      buildReviewSummary: (artifactId: string) => productRemoteRunnerRegistry.buildReviewSummary(artifactId),
+      exportArtifact: (artifactId: string, path?: string) => productRemoteRunnerRegistry.exportArtifact(artifactId, path),
+      exportArtifactForAgent: async (agentId: string, path?: string) => {
+        const artifact = productRemoteRunnerRegistry.captureArtifactForRunner(agentId, runtimeStore);
+        if (!artifact) return null;
+        return productRemoteRunnerRegistry.exportArtifact(artifact.id, path);
+      },
+      importArtifact: (path: string) => productRemoteRunnerRegistry.importArtifact(path),
+      exportSessionBundle: (path: string) => productRemoteRunnerRegistry.exportSessionBundle(runtimeStore, path),
+      importSessionBundle: (path: string) => productRemoteRunnerRegistry.importSessionBundle(path),
+    };
+    const providerRegistry = runtimeServices.providerRegistry;
+    const conversationManager = {} as never;
+    const configManager = runtimeServices.configManager;
+    const toolRegistry = {} as never;
+    const mcpRegistry = {
+      listRecentSecurityDecisions: () => [],
+    } as never;
+    const mcpApi = createRuntimeMcpApi({
+      serverNames: ['workspace-docs'],
+      listServers: () => [{ name: 'workspace-docs', connected: false }],
+      listServerSecurity: () => [{
+        name: 'workspace-docs',
+        connected: false,
+        role: 'docs',
+        trustMode: 'ask-on-risk',
+        allowedPaths: [],
+        allowedHosts: [],
+        schemaFreshness: 'quarantined',
+        quarantineReason: 'operator_flagged',
+        quarantineDetail: 'manual review required',
+      }],
+      listServerSandboxBindings: () => [],
+      listRecentSecurityDecisions: () => [],
+      listAllTools: async () => [],
+      setServerTrustMode: () => {},
+      setServerRole: () => {},
+      quarantineSchema: () => {},
+      approveSchemaQuarantine: () => {},
+    });
+    const knowledgeService = {
+      listIssues: () => [],
+    } as never;
+    const memoryRegistry = {
+      add: async (opts: MemoryAddOptions) => {
+        const record = {
+          id: `mem-${memoryRecords.length + 1}`,
+          scope: opts.scope ?? 'project',
+          cls: opts.cls,
+          summary: opts.summary,
+        };
+        memoryRecords.push(record);
+        return record as never;
+      },
+      reviewQueue: (_limit: number) => [],
+      exportBundle: (filter?: { scope?: string }) => ({
+        schemaVersion: 'v1',
+        exportedAt: Date.now(),
+        scope: (filter?.scope as 'session' | 'project' | 'team' | 'all' | undefined) ?? 'all',
+        recordCount: memoryRecords.length,
+        linkCount: 0,
+        records: [],
+        links: [],
+      }),
+      importBundle: async () => ({
+        importedRecords: 0,
+        skippedRecords: 0,
+        importedLinks: 0,
+      }),
+    } as never;
+    const knowledgeApi = {
+      ...createRuntimeKnowledgeApi(runtimeServices),
+      memory: createMemoryApi(memoryRegistry),
+    };
+
     return {
-      providerRegistry: runtimeServices.providerRegistry,
-      conversationManager: {} as never,
-      config: runtimeServices.configManager.getAll(),
-      configManager: runtimeServices.configManager,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-product',
+      session: {
+        conversationManager,
+        runtime: {
+          model: '',
+          provider: '',
+          debugMode: false,
+          systemPrompt: '',
+          reasoningEffort: '',
+          sessionId: 'sess-product',
+        },
+        sessionManager: runtimeServices.sessionManager,
+        sessionMemoryStore: runtimeServices.sessionMemoryStore,
+        sessionLineageTracker: runtimeServices.sessionLineageTracker,
+      },
+      provider: {
+        providerRegistry,
+        providerOptimizer: runtimeServices.providerOptimizer,
+        favoritesStore: runtimeServices.favoritesStore,
+        benchmarkStore: runtimeServices.benchmarkStore,
+      },
+      workspace: {
+        shellPaths: runtimeServices.shellPaths,
+        panelManager: runtimeServices.panelManager,
+        profileManager: runtimeServices.profileManager,
+        bookmarkManager: runtimeServices.bookmarkManager,
+        worktreeRegistry: runtimeServices.worktreeRegistry,
+        sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
+      },
+      platform: {
+        config: runtimeServices.configManager.getAll(),
+        configManager,
+        readModels,
+        serviceRegistry: runtimeServices.serviceRegistry,
+        subscriptionManager: runtimeServices.subscriptionManager,
+        secretsManager: runtimeServices.secretsManager,
+        localUserAuthManager,
+        tokenAuditor: runtimeServices.tokenAuditor,
+        replayEngine: runtimeServices.replayEngine,
+        webhookNotifier: runtimeServices.webhookNotifier,
+      },
+      ops: {
+        automationManager: runtimeServices.automationManager,
+        agentManager: runtimeServices.agentManager,
+        modeManager: runtimeServices.modeManager,
+        remoteRuntime,
+        planManager: runtimeServices.planManager,
+        adaptivePlanner: runtimeServices.adaptivePlanner,
+        sessionOrchestration: runtimeServices.sessionOrchestration,
+      },
+      extensions: {
+        toolRegistry,
+        mcpRegistry,
+        forensicsRegistry,
+        policyRegistry: runtimeServices.policyRuntimeState.getRegistry(),
+        policyRuntimeState: runtimeServices.policyRuntimeState,
+        memoryRegistry,
+        integrationHelpers,
+        knowledgeService,
+        pluginManager: runtimeServices.pluginManager,
+        hookWorkbench: runtimeServices.hookWorkbench,
+      },
+      clients: {
+        operator: operatorClient,
+        peer: peerClient,
+        providerApi,
+        knowledgeApi,
+        hookApi,
+        mcpApi,
+        opsApi,
       },
       renderRequest: () => {},
       print: (text: string) => { out.push(text); },
       exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {
-        listRecentSecurityDecisions: () => [],
-      } as never,
-      runtimeStore,
-      integrationHelpers,
-      knowledgeService: {
-        listIssues: () => [],
-      } as never,
-      remoteRunnerRegistry: productRemoteRunnerRegistry,
-      remoteSupervisor: productRemoteSupervisor,
-      forensicsRegistry,
-      panelManager: runtimeServices.panelManager,
-      profileManager: runtimeServices.profileManager,
-      bookmarkManager: runtimeServices.bookmarkManager,
-      sessionManager: runtimeServices.sessionManager,
-      sessionOrchestration: runtimeServices.sessionOrchestration,
-      pluginManager: runtimeServices.pluginManager,
-      tokenAuditor: runtimeServices.tokenAuditor,
-      replayEngine: runtimeServices.replayEngine,
-      webhookNotifier: runtimeServices.webhookNotifier,
-      sessionMemoryStore: runtimeServices.sessionMemoryStore,
-      sessionLineageTracker: runtimeServices.sessionLineageTracker,
-      planManager: runtimeServices.planManager,
-      adaptivePlanner: runtimeServices.adaptivePlanner,
-      sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
-      worktreeRegistry: runtimeServices.worktreeRegistry,
-      secretsManager: runtimeServices.secretsManager,
-      serviceRegistry: runtimeServices.serviceRegistry,
-      subscriptionManager: runtimeServices.subscriptionManager,
-      localUserAuthManager,
-      modeManager: runtimeServices.modeManager,
-      policyRuntimeState: runtimeServices.policyRuntimeState,
-      memoryRegistry: {
-        add: async (opts: MemoryAddOptions) => {
-          const record = {
-            id: `mem-${memoryRecords.length + 1}`,
-            scope: opts.scope ?? 'project',
-            cls: opts.cls,
-            summary: opts.summary,
-          };
-          memoryRecords.push(record);
-          return record as never;
-        },
-        reviewQueue: (_limit: number) => [],
-        exportBundle: (filter?: { scope?: string }) => ({
-          schemaVersion: 'v1',
-          exportedAt: Date.now(),
-          scope: (filter?.scope as 'session' | 'project' | 'team' | 'all' | undefined) ?? 'all',
-          recordCount: memoryRecords.length,
-          linkCount: 0,
-          records: [],
-          links: [],
-        }),
-        importBundle: async () => ({
-          importedRecords: 0,
-          skippedRecords: 0,
-          importedLinks: 0,
-        }),
-      } as never,
     };
   }
 
@@ -213,8 +387,41 @@ describe('product breadth commands', () => {
     expect(command).toBeDefined();
 
     const out: string[] = [];
-    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
-    ctx.providerRegistry = {
+    const baseCtx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
+    const ctx = {
+      ...baseCtx,
+      clients: {
+        ...baseCtx.clients,
+        providerApi: {
+          ...(baseCtx.clients?.providerApi ?? {}),
+          listModels: async () => [{
+            modelId: 'model-1',
+            providerId: 'openai',
+            registryKey: 'openai:model-1',
+            displayName: 'Model 1',
+            description: 'stub',
+            selectable: true,
+            current: true,
+            capabilities: {
+              toolCalling: true,
+              codeEditing: true,
+              reasoning: true,
+              multimodal: true,
+            },
+            contextWindow: 128_000,
+            favorite: {
+              pinned: false,
+              recent: false,
+            },
+            routing: {
+              kind: 'direct',
+              failoverStrategy: 'none',
+            },
+          }],
+        },
+      },
+    } as typeof baseCtx;
+    (ctx.provider as { providerRegistry: CommandContext['provider']['providerRegistry'] }).providerRegistry = {
       listModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
       getCurrentModel: () => ({ id: 'model-1', provider: 'openai' }),
       getSelectableModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
@@ -312,8 +519,41 @@ describe('product breadth commands', () => {
     expect(setup).toBeDefined();
 
     const out: string[] = [];
-    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
-    ctx.providerRegistry = {
+    const baseCtx = makeContext(out) as ReturnType<typeof makeContext> & { openSecurityPanel?: () => void };
+    const ctx = {
+      ...baseCtx,
+      clients: {
+        ...baseCtx.clients,
+        providerApi: {
+          ...(baseCtx.clients?.providerApi ?? {}),
+          listModels: async () => [{
+            modelId: 'model-1',
+            providerId: 'openai',
+            registryKey: 'openai:model-1',
+            displayName: 'Model 1',
+            description: 'stub',
+            selectable: true,
+            current: true,
+            capabilities: {
+              toolCalling: true,
+              codeEditing: true,
+              reasoning: true,
+              multimodal: true,
+            },
+            contextWindow: 128_000,
+            favorite: {
+              pinned: false,
+              recent: false,
+            },
+            routing: {
+              kind: 'direct',
+              failoverStrategy: 'none',
+            },
+          }],
+        },
+      },
+    } as typeof baseCtx;
+    (ctx.provider as { providerRegistry: CommandContext['provider']['providerRegistry'] }).providerRegistry = {
       listModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
       getCurrentModel: () => ({ id: 'model-1', provider: 'openai' }),
       getSelectableModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
@@ -379,14 +619,14 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out);
-    ctx.configManager.setDynamic('behavior.guidanceMode', 'guided');
-    ctx.conversationManager = {
+    ctx.platform.configManager.setDynamic('behavior.guidanceMode', 'guided');
+    (ctx.session as { conversationManager: CommandContext['session']['conversationManager'] }).conversationManager = {
       getMessagesForLLM: () => [
         { role: 'user', content: 'x'.repeat(80_000) },
         { role: 'assistant', content: 'done' },
       ],
     } as never;
-    ctx.providerRegistry = {
+    (ctx.provider as { providerRegistry: CommandContext['provider']['providerRegistry'] }).providerRegistry = {
       getCurrentModel: () => ({ id: 'openrouter/free', provider: 'openrouter' }),
       getContextWindowForModel: () => 32_000,
       listModels: () => [{ id: 'model-1' }],
@@ -467,7 +707,7 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out);
-    ctx.conversationManager = {
+    (ctx.session as { conversationManager: CommandContext['session']['conversationManager'] }).conversationManager = {
       getTranscriptEventIndex: () => ({
         events: [
           { kind: 'user_input', messageIndex: 0, title: 'User input', detail: 'review auth flow' },
@@ -481,7 +721,7 @@ describe('product breadth commands', () => {
         ],
       }),
     } as never;
-    ctx.toolRegistry = {
+    (ctx.extensions as { toolRegistry: CommandContext['extensions']['toolRegistry'] }).toolRegistry = {
       list: () => [],
     } as never;
 
@@ -619,7 +859,7 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx: ReturnType<typeof makeContext> & { openSecurityPanel?: () => void } = makeContext(out);
-    ctx.runtimeStore!.setState((state) => ({
+    runtimeServices.runtimeStore.setState((state) => ({
       ...state,
       mcp: {
         ...state.mcp,
@@ -661,7 +901,7 @@ describe('product breadth commands', () => {
         ]),
       },
     }));
-    ctx.mcpRegistry = {
+    (ctx.extensions as { mcpRegistry: CommandContext['extensions']['mcpRegistry'] }).mcpRegistry = {
       listRecentSecurityDecisions: () => [{
         serverName: 'weird',
         toolName: 'search_docs',
@@ -674,7 +914,7 @@ describe('product breadth commands', () => {
         evaluatedAt: Date.now(),
       }],
     } as never;
-    ctx.policyRuntimeState = runtimeServices.policyRuntimeState;
+    (ctx.extensions as { policyRuntimeState?: CommandContext['extensions']['policyRuntimeState'] }).policyRuntimeState = runtimeServices.policyRuntimeState;
 
     await security!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('Security Review');
@@ -946,7 +1186,7 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out);
-    ctx.runtimeStore!.setState((state) => ({
+    runtimeServices.runtimeStore.setState((state) => ({
       ...state,
       mcp: {
         ...state.mcp,
@@ -1351,7 +1591,7 @@ describe('product breadth commands', () => {
     out.length = 0;
     await managed!.handler(['apply', bundlePath], ctx);
     expect(out.join('\n')).toContain('Managed settings bundle applied');
-    expect(ctx.runtime.model).toBe('model-1');
+    expect(ctx.session.runtime.model).toBe('model-1');
 
     const rollbackToken = out.join('\n').match(/rollback ([A-Za-z0-9-]+)/)?.[1];
     expect(rollbackToken).toBeDefined();
@@ -1405,12 +1645,12 @@ describe('product breadth commands', () => {
     });
 
     await config!.handler(['provider.model', 'changed-model'], ctx);
-    expect(ctx.runtime.model).toBe('changed-model');
+    expect(ctx.session.runtime.model).toBe('changed-model');
 
     out.length = 0;
     await config!.handler(['profile', 'load', 'restore-me'], ctx);
     expect(out.join('\n')).toContain('Profile loaded: restore-me');
-    expect(ctx.runtime.model).toBe('model-1');
+    expect(ctx.session.runtime.model).toBe('model-1');
   });
 
   test('session command surfaces saved return-context posture in list and info output', async () => {
@@ -1421,8 +1661,8 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const ctx = makeContext(out);
-    ctx.runtime.sessionId = 'sess-demo';
-    ctx.conversationManager = {
+    ctx.session.runtime.sessionId = 'sess-demo';
+    (ctx.session as { conversationManager: CommandContext['session']['conversationManager'] }).conversationManager = {
       title: 'Resume Me',
       toJSON: () => ({
         messages: [{ role: 'user', content: 'hello' }],
@@ -1552,9 +1792,13 @@ describe('product breadth commands', () => {
       port: 39451,
       host: '127.0.0.1',
       userAuth: new UserAuthManager({
+        bootstrapFilePath: join(root, '.goodvibes', 'tui', 'auth-users.json'),
+        bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
         users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin'), roles: ['admin'] }],
       }),
-    });
+      workingDir: root,
+      homeDirectory: root,
+    }, runtimeServices.configManager);
     daemon.enable({ daemon: true });
     await daemon.start();
     try {
@@ -1800,13 +2044,32 @@ describe('product breadth commands', () => {
 
     const out: string[] = [];
     const created: Array<{ kind: string; owner: string; title: string; description?: string }> = [];
-    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { taskManager?: TaskManager };
-    ctx.taskManager = {
-      createTask(input: { kind: string; owner: string; title: string; description?: string }) {
-        created.push(input);
-        return { id: `task-${created.length}` };
+    const ctx = makeContext(out) as ReturnType<typeof makeContext> & { clients?: NonNullable<CommandContext['clients']> };
+    ctx.clients = {
+      ...ctx.clients,
+      opsApi: {
+        tasks: {
+          snapshot: () => ({ tasks: [] }),
+          list: () => [],
+          get: () => null,
+          running: () => [],
+          create(input) {
+            created.push(input);
+            return { id: `task-${created.length}` } as never;
+          },
+          update: () => ({ id: 'task-update' } as never),
+          complete: () => ({ id: 'task-complete' } as never),
+          fail: () => ({ id: 'task-fail' } as never),
+          cancel: () => {},
+          pause: () => {},
+          resume: () => {},
+          retry: () => {},
+        },
+        agents: {
+          cancel: () => {},
+        },
       },
-    } as never;
+    };
 
     await teamwork!.handler(['review'], ctx);
     expect(out.join('\n')).toContain('Teamwork Review');

@@ -50,7 +50,7 @@ function makeTool(): { tool: ReadTool; cache: FileStateCache; index: ProjectInde
   resetTestProjectIndexes();
   const index = getTestProjectIndex(PROJECT_ROOT);
   const intelligence = getTestCodeIntelligence();
-  const tool = new ReadTool(cache, index, intelligence);
+  const tool = new ReadTool(index, cache, intelligence);
   return { tool, cache, index, intelligence };
 }
 
@@ -639,7 +639,7 @@ describe('ReadTool', () => {
     test('upserts file into project index after read', async () => {
       resetTestProjectIndexes();
       const idx = getTestProjectIndex(PROJECT_ROOT);
-      const newTool = new ReadTool(cache, idx, intelligence);
+      const newTool = new ReadTool(idx, cache, intelligence);
       const rel = writeRelative(tmpDir, 'indexed.ts', 'export const IDX = 1;\n');
       await newTool.execute({ files: [{ path: rel }] });
       const absPath = resolve(PROJECT_ROOT, rel);

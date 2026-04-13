@@ -31,22 +31,32 @@ import { IncidentReviewPanel } from '../incident-review-panel.ts';
 import { ForensicsPanel } from '../forensics-panel.ts';
 import { PolicyPanel } from '../policy-panel.ts';
 import { EvalPanel } from '../eval-panel.ts';
+import { createProviderAccountSnapshotQuery } from '../provider-account-snapshot.ts';
+import {
+  createEnvironmentVariableQuery,
+  createProviderRuntimeInspectionQuery,
+} from '../../runtime/ui-service-queries.ts';
+import { createRuntimeProviderApi } from '../../runtime/runtime-provider-api.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requireMcpRegistry, requirePluginManager, requireUiServices } from './shared.ts';
 
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
+  const ui = requireUiServices(deps);
+  const providerRuntime = createProviderRuntimeInspectionQuery(createRuntimeProviderApi(ui));
+  const providerAccounts = createProviderAccountSnapshotQuery({
+    providerModels: deps.providerRegistry,
+    services: deps.serviceRegistry,
+    subscriptions: deps.subscriptionManager,
+    environment: createEnvironmentVariableQuery(process.env),
+  });
+
   manager.registerType({
     id: 'cockpit',
     name: 'Cockpit',
     icon: 'O',
     category: 'monitoring',
     description: 'Unified operator summary for orchestration, permissions, communication, MCP, plugins, and integrations',
-    factory: () => new CockpitPanel(
-      deps.runtimeStore,
-      deps.policyRuntimeState,
-      deps.forensicsRegistry,
-      deps.tokenAuditor,
-    ),
+    factory: () => new CockpitPanel(ui.readModels.cockpit),
   });
 
   manager.registerType({
@@ -82,7 +92,10 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'K',
     category: 'monitoring',
     description: 'Project-local and global skill discovery with origin and dependency details',
-    factory: () => new SkillsPanel({ panelHealthMonitor: deps.panelHealthMonitor }),
+    factory: () => new SkillsPanel({
+      panelHealthMonitor: deps.panelHealthMonitor,
+      shellPaths: ui.shellPaths,
+    }),
   });
 
   manager.registerType({
@@ -100,7 +113,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'M',
     category: 'monitoring',
     description: 'Automation jobs, runs, deliveries, and failure posture across the control plane',
-    factory: () => new AutomationControlPanel(deps.runtimeStore),
+    factory: () => new AutomationControlPanel(ui.readModels.automation),
   });
 
   manager.registerType({
@@ -109,7 +122,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'R',
     category: 'monitoring',
     description: 'Cross-surface route bindings and shared session attachment state',
-    factory: () => new RoutesPanel(deps.runtimeStore),
+    factory: () => new RoutesPanel(ui.readModels.routes),
   });
 
   manager.registerType({
@@ -118,7 +131,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'W',
     category: 'monitoring',
     description: 'Watcher health, lag, and degraded source state for automation inputs',
-    factory: () => new WatchersPanel(deps.runtimeStore),
+    factory: () => new WatchersPanel(ui.readModels.watchers),
   });
 
   manager.registerType({
@@ -128,12 +141,8 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     category: 'monitoring',
     description: 'Daemon control-plane state, clients, approvals, and recent operator activity',
     factory: () => {
-      const controlPlaneDeps = requireControlPlanePanelDeps(deps);
-      return new ControlPlanePanel(deps.runtimeStore, {
-        approvalBroker: controlPlaneDeps.approvalBroker,
-        sessionBroker: controlPlaneDeps.sessionBroker,
-        getRecentEvents: controlPlaneDeps.getControlPlaneRecentEvents,
-      });
+      requireControlPlanePanelDeps(deps);
+      return new ControlPlanePanel(ui.readModels.controlPlane);
     },
   });
 
@@ -161,11 +170,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'Q',
     category: 'monitoring',
     description: 'Provider auth routes, subscription quota-window hints, and billing-path safety notes',
-    factory: () => new ProviderAccountsPanel({
-      providerRegistry: deps.providerRegistry,
-      serviceRegistry: deps.serviceRegistry,
-      subscriptionManager: deps.subscriptionManager,
-    }),
+    factory: () => new ProviderAccountsPanel({ providerAccounts }),
   });
 
   manager.registerType({
@@ -213,14 +218,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'U',
     category: 'monitoring',
     description: 'Security review workspace for token audit, policy posture, MCP quarantine, and incident pressure',
-    factory: () => new SecurityPanel(
-      requirePluginManager(deps),
-      deps.tokenAuditor,
-      deps.policyRuntimeState,
-      deps.runtimeStore,
-      deps.forensicsRegistry,
-      requireMcpRegistry(deps),
-    ),
+    factory: () => new SecurityPanel(ui.readModels.security),
   });
 
   manager.registerType({
@@ -229,7 +227,12 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'M',
     category: 'monitoring',
     description: 'Curated plugin and skill marketplace with provenance, compatibility, and install posture',
-    factory: () => new MarketplacePanel(deps.runtimeStore),
+    factory: () => {
+      return new MarketplacePanel(ui.readModels.marketplace, {
+        cwd: ui.shellPaths.workingDirectory,
+        homeDir: ui.shellPaths.homeDirectory,
+      });
+    },
   });
 
   manager.registerType({
@@ -247,7 +250,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'J',
     category: 'monitoring',
     description: 'Queued, running, blocked, failed, and completed task summaries from the runtime store',
-    factory: () => new TasksPanel(deps.runtimeStore),
+    factory: () => new TasksPanel(ui.readModels.tasks, ui.readModels.worktrees),
   });
 
   manager.registerType({
@@ -256,7 +259,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'Q',
     category: 'monitoring',
     description: 'Task-graph status, node roles, and bounded recursion guard activity',
-    factory: () => new OrchestrationPanel(deps.runtimeStore),
+    factory: () => new OrchestrationPanel(ui.readModels.orchestration),
   });
 
   manager.registerType({
@@ -265,7 +268,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'O',
     category: 'monitoring',
     description: 'Adaptive planner strategy timeline, override posture, and recent execution-mode decisions',
-    factory: () => new OpsStrategyPanel(deps.runtimeBus, deps.adaptivePlanner),
+    factory: () => new OpsStrategyPanel(ui.events.planner, deps.adaptivePlanner),
   });
 
   manager.registerType({
@@ -274,7 +277,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'Y',
     category: 'monitoring',
     description: 'Structured agent communication, blocked routes, and delivery status',
-    factory: () => new CommunicationPanel(deps.runtimeStore),
+    factory: () => new CommunicationPanel(ui.readModels.communication),
   });
 
   manager.registerType({
@@ -283,14 +286,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'R',
     category: 'monitoring',
     description: 'Self-hosted daemon and ACP transport state with active remote connections',
-    factory: () => {
-      const ui = requireUiServices(deps);
-      return new RemotePanel(deps.runtimeStore, {
-        distributedRuntime: ui.distributedRuntime,
-        remoteRunnerRegistry: ui.remoteRunnerRegistry,
-        remoteSupervisor: ui.remoteSupervisor,
-      });
-    },
+    factory: () => new RemotePanel(ui.readModels.remote),
   });
 
   manager.registerType({
@@ -299,7 +295,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'R',
     category: 'monitoring',
     description: 'Per-provider performance metrics: latency, error rate, request count, sparkline trends',
-    factory: () => new ProviderStatsPanel(deps.runtimeBus, deps.requestRender, deps.providerRegistry),
+    factory: () => new ProviderStatsPanel(ui.events.turns, ui.events.providers, deps.requestRender, ui.readModels.providers),
   });
 
   manager.registerType({
@@ -309,15 +305,21 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     category: 'monitoring',
     description: 'Provider health dashboard: real-time status, latency, errors, and rate-limit cooldowns',
     factory: () => new ProviderHealthPanel(
-      deps.runtimeBus,
-      deps.providerRegistry,
-      deps.localUserAuthManager,
-      deps.serviceRegistry,
-      deps.subscriptionManager,
+      providerRuntime,
+      {
+        turnEvents: ui.events.turns,
+        providerEvents: ui.events.providers,
+        providers: ui.readModels.providers,
+        session: ui.readModels.session,
+        security: ui.readModels.security,
+        localAuth: ui.readModels.localAuth,
+        settings: ui.readModels.settings,
+        remote: ui.readModels.remote,
+        intelligence: ui.readModels.intelligence,
+        continuity: ui.readModels.continuity,
+        worktrees: ui.readModels.worktrees,
+      },
       deps.requestRender,
-      deps.runtimeStore,
-      deps.configManager,
-      deps.uiServices?.remoteSupervisor,
     ),
   });
 
@@ -328,7 +330,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     category: 'monitoring',
     description: 'API debug panel: per-call log with model, provider, tokens, latency, status, and error history',
     factory: () => {
-      const panel = new DebugPanel(deps.runtimeBus, deps.requestRender);
+      const panel = new DebugPanel(ui.events.turns, deps.requestRender);
       if (deps.orchestrator) panel.wireOrchestrator(deps.orchestrator);
       return panel;
     },

@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { resolve as resolvePath } from 'node:path';
 
 export type SecretProviderSource =
@@ -119,6 +118,7 @@ export type SecretCommandRunner = (
 export interface SecretRefResolutionOptions {
   readonly resolveLocalSecret?: (key: string) => Promise<string | null>;
   readonly runCommand?: SecretCommandRunner;
+  readonly homeDirectory?: string;
 }
 
 export interface SecretRefResolution {
@@ -175,9 +175,14 @@ function readStringRecord(value: unknown): Record<string, string> | undefined {
   return result;
 }
 
-function expandUserPath(path: string): string {
-  if (path === '~') return homedir();
-  if (path.startsWith('~/')) return resolvePath(homedir(), path.slice(2));
+function expandUserPath(path: string, homeDirectory: string | undefined): string {
+  if (path === '~' || path.startsWith('~/')) {
+    if (!homeDirectory) {
+      throw new Error('Secret reference expansion requires an explicit homeDirectory.');
+    }
+    if (path === '~') return homeDirectory;
+    return resolvePath(homeDirectory, path.slice(2));
+  }
   return path;
 }
 
@@ -519,8 +524,8 @@ function selectPath(value: unknown, selector: string): unknown {
   return current;
 }
 
-function resolveFileRef(ref: FileSecretRef): string | null {
-  const raw = readFileSync(expandUserPath(ref.path), 'utf-8');
+function resolveFileRef(ref: FileSecretRef, options: SecretRefResolutionOptions): string | null {
+  const raw = readFileSync(expandUserPath(ref.path, options.homeDirectory), 'utf-8');
   if (!ref.selector) return stripFinalNewline(raw);
   const parsed = JSON.parse(raw) as unknown;
   const selected = selectPath(parsed, ref.selector);
@@ -542,9 +547,9 @@ async function resolveOnePasswordRef(ref: OnePasswordSecretRef, options: SecretR
   return output.length > 0 ? output : null;
 }
 
-function bitwardenEnv(ref: BitwardenSecretRef): Record<string, string> {
+function bitwardenEnv(ref: BitwardenSecretRef, options: SecretRefResolutionOptions): Record<string, string> {
   const env: Record<string, string> = {};
-  if (ref.appDataDir) env.BITWARDENCLI_APPDATA_DIR = expandUserPath(ref.appDataDir);
+  if (ref.appDataDir) env.BITWARDENCLI_APPDATA_DIR = expandUserPath(ref.appDataDir, options.homeDirectory);
   if (ref.sessionEnv && process.env[ref.sessionEnv]) env.BW_SESSION = process.env[ref.sessionEnv]!;
   return env;
 }
@@ -564,7 +569,7 @@ async function validateBitwardenStatus(ref: BitwardenSecretRef, options: SecretR
   const shouldValidate = ref.source === 'vaultwarden' || ref.validateServer === true || Boolean(expectedServer);
   if (!shouldValidate) return;
   const output = await runChecked(ref, ref.cli ?? 'bw', ['status', '--nointeraction'], options, {
-    env: bitwardenEnv(ref),
+    env: bitwardenEnv(ref, options),
     timeoutMs: ref.timeoutMs ?? 10_000,
   });
   const status = JSON.parse(output || '{}') as { serverUrl?: string; status?: string };
@@ -610,7 +615,7 @@ function extractBitwardenItemField(rawItem: string, ref: BitwardenSecretRef): st
 
 async function resolveBitwardenRef(ref: BitwardenSecretRef, options: SecretRefResolutionOptions): Promise<string | null> {
   await validateBitwardenStatus(ref, options);
-  const env = bitwardenEnv(ref);
+  const env = bitwardenEnv(ref, options);
   if (ref.syncBeforeRead) {
     await runChecked(ref, ref.cli ?? 'bw', ['sync', '--nointeraction'], options, { env, timeoutMs: ref.timeoutMs ?? 20_000 });
   }
@@ -642,7 +647,7 @@ async function resolveBitwardenSecretsManagerRef(
 
   const args = ['secret', 'get', ref.id, '--output', 'json', '--color', 'no'];
   if (ref.profile) args.push('--profile', ref.profile);
-  if (ref.configFile) args.push('--config-file', expandUserPath(ref.configFile));
+  if (ref.configFile) args.push('--config-file', expandUserPath(ref.configFile, options.homeDirectory));
   if (ref.serverUrl) args.push('--server-url', ref.serverUrl);
 
   const output = await runChecked(ref, ref.cli ?? 'bws', args, options, { env, timeoutMs: ref.timeoutMs ?? 10_000 });
@@ -668,7 +673,7 @@ export async function resolveSecretRef(
       if (!options.resolveLocalSecret) throw new Error('GoodVibes secret ref requires a local secret resolver');
       return { source: ref.source, value: await options.resolveLocalSecret(ref.id) };
     case 'file':
-      return { source: ref.source, value: resolveFileRef(ref) };
+      return { source: ref.source, value: resolveFileRef(ref, options) };
     case 'exec': {
       const output = await runChecked(ref, ref.command, ref.args ?? [], options, {
         env: ref.env,

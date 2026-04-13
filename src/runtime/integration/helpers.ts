@@ -19,6 +19,8 @@ import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '../worktr
 import { inspectInboundTls, inspectOutboundTls } from '../network/index.ts';
 
 export interface IntegrationHelpersContext {
+  readonly workingDirectory: string;
+  readonly homeDirectory: string;
   readonly runtimeStore: RuntimeStore;
   readonly runtimeBus: RuntimeEventBus;
   readonly configManager?: ConfigManager;
@@ -488,19 +490,25 @@ export class IntegrationHelperService {
 
   getContinuitySnapshot(): Record<string, unknown> {
     const state = this.context.runtimeStore.getState();
-    const recovery = checkRecoveryFile();
+    const recovery = checkRecoveryFile({
+      workingDirectory: this.context.workingDirectory,
+      homeDirectory: this.context.homeDirectory,
+    });
     return {
       sessionId: state.session.id,
       status: state.session.status,
       recoveryState: state.session.recoveryState,
-      lastSessionPointer: readLastSessionPointer(),
+      lastSessionPointer: readLastSessionPointer({
+        workingDirectory: this.context.workingDirectory,
+        homeDirectory: this.context.homeDirectory,
+      }),
       recoveryFilePresent: Boolean(recovery),
       recoveryFile: recovery ?? null,
     };
   }
 
   getWorktreeSnapshot(): Record<string, unknown> {
-    const records = listPersistedWorktreeMeta();
+    const records = listPersistedWorktreeMeta({ workingDirectory: this.context.workingDirectory });
     return {
       summary: summarizeWorktreeOwnership(records),
       records,

@@ -11,7 +11,7 @@ describe('Cron parser', () => {
 
   beforeEach(() => {
     resetTestTaskScheduler();
-    scheduler = new TaskScheduler();
+    scheduler = getTestTaskScheduler('/tmp/gv-scheduler-cron-' + Math.random().toString(36).slice(2) + '.json');
   });
 
   test('wildcard (*) matches any minute', () => {
@@ -90,7 +90,7 @@ describe('computeNextRun — dayOfMonth/dayOfWeek OR logic', () => {
 
   beforeEach(() => {
     resetTestTaskScheduler();
-    scheduler = new TaskScheduler();
+    scheduler = getTestTaskScheduler('/tmp/gv-scheduler-dom-dow-' + Math.random().toString(36).slice(2) + '.json');
   });
 
   test('both wildcard — matches every day', () => {
@@ -150,7 +150,7 @@ describe('computeNextRun basic cases', () => {
 
   beforeEach(() => {
     resetTestTaskScheduler();
-    scheduler = new TaskScheduler();
+    scheduler = getTestTaskScheduler('/tmp/gv-scheduler-tz-' + Math.random().toString(36).slice(2) + '.json');
   });
 
   test('every 30 minutes', () => {
@@ -190,7 +190,7 @@ describe('Task lifecycle', () => {
   beforeEach(() => {
     resetTestTaskScheduler();
     // Use in-memory store path that won't write to real disk
-    scheduler = new TaskScheduler('/tmp/gv-scheduler-test-' + Math.random().toString(36).slice(2) + '.json');
+    scheduler = getTestTaskScheduler('/tmp/gv-scheduler-test-' + Math.random().toString(36).slice(2) + '.json');
   });
 
   test('add() creates a task with generated id and nextRun', () => {
@@ -266,7 +266,10 @@ describe('Task lifecycle', () => {
   });
 
   test('runNow reschedules task after execution (even on failure)', async () => {
-    const scheduler2 = new TaskScheduler('/tmp/gv-scheduler-test-' + Math.random().toString(36).slice(2) + '.json');
+    const scheduler2 = new TaskScheduler({
+      storePath: '/tmp/gv-scheduler-test-' + Math.random().toString(36).slice(2) + '.json',
+      spawnTask: () => 'agent-scheduler-runnow',
+    });
     scheduler2.start();
     const task = scheduler2.add({ name: 'resched-test', cron: '* * * * *', prompt: 'test', enabled: true });
 

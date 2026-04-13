@@ -1,6 +1,5 @@
 import { readFileSync } from 'fs';
 import { dirname, resolve, join } from 'path';
-import { homedir } from 'os';
 import { logger } from './logger.ts';
 
 /**
@@ -78,35 +77,42 @@ export function readPromptFile(
  * @param getConfigPath Optional injector for the config-specified systemPromptFile path.
  *                      Defaults to reading from configManager (used in production).
  */
+export interface LoadSystemPromptOptions {
+  readonly workingDirectory: string;
+  readonly homeDirectory: string;
+  readonly getConfigPath?: () => string | undefined;
+  readonly argv?: readonly string[];
+}
+
 export function loadSystemPrompt(
-  getConfigPath?: () => string | undefined,
+  options: LoadSystemPromptOptions,
 ): string {
   const parts: string[] = [];
-  const home = homedir();
+  const argv = options.argv ?? process.argv;
 
   // 1. CLI arg override — exclusive, does not chain with other sources
-  const argIdx = process.argv.indexOf('--system-prompt-file');
-  if (argIdx !== -1 && process.argv[argIdx + 1]) {
-    const content = readPromptFile(process.argv[argIdx + 1]);
+  const argIdx = argv.indexOf('--system-prompt-file');
+  if (argIdx !== -1 && argv[argIdx + 1]) {
+    const content = readPromptFile(argv[argIdx + 1]!);
     if (content) return content;
   }
 
   // 2. ~/.goodvibes/SYSTEM.md (base)
-  const systemContent = readPromptFile(join(home, '.goodvibes', 'SYSTEM.md'));
+  const systemContent = readPromptFile(join(options.homeDirectory, '.goodvibes', 'SYSTEM.md'));
   if (systemContent) parts.push(systemContent);
 
   // 3. ~/.goodvibes/GOODVIBES.md (global extensions)
-  const globalContent = readPromptFile(join(home, '.goodvibes', 'GOODVIBES.md'));
+  const globalContent = readPromptFile(join(options.homeDirectory, '.goodvibes', 'GOODVIBES.md'));
   if (globalContent) parts.push(globalContent);
 
   // 4. .goodvibes/GOODVIBES.md (project)
   const projectContent = readPromptFile(
-    join(process.cwd(), '.goodvibes', 'GOODVIBES.md'),
+    join(options.workingDirectory, '.goodvibes', 'GOODVIBES.md'),
   );
   if (projectContent) parts.push(projectContent);
 
   // 5. Config-specified file (additional, appended last)
-  const configPath = getConfigPath?.();
+  const configPath = options.getConfigPath?.();
   if (typeof configPath === 'string' && configPath) {
     const configContent = readPromptFile(configPath);
     if (configContent) parts.push(configContent);

@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { createTaskTool } from '../../tools/task/index.ts';
 import { teamTool } from '../../tools/team/index.ts';
 import { worklistTool } from '../../tools/worklist/index.ts';
-import { packetTool } from '../../tools/packet/index.ts';
-import { queryTool } from '../../tools/query/index.ts';
+import { createPacketTool } from '../../tools/packet/index.ts';
+import { createQueryTool } from '../../tools/query/index.ts';
 import { createRemoteTool } from '../../tools/remote-trigger/index.ts';
 import { controlTool } from '../../tools/control/index.ts';
 import { CrossSessionTaskRegistry } from '../../sessions/orchestration/index.ts';
@@ -15,7 +15,7 @@ import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 describe('tool breadth additions', () => {
   const originalCwd = process.cwd();
   let root = '';
-  let taskTool = createTaskTool(new CrossSessionTaskRegistry());
+  let taskTool = createTaskTool(new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-tool-breadth-init-'))));
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-tool-breadth-'));
@@ -57,22 +57,22 @@ describe('tool breadth additions', () => {
   });
 
   test('team tool persists team definitions and role lanes', async () => {
-    const created = await teamTool.execute({ mode: 'create', teamId: 'release-core', name: 'Release Core', summary: 'Owns certification and rollout' });
+    const created = await teamTool.execute({ storageRoot: root, mode: 'create', teamId: 'release-core', name: 'Release Core', summary: 'Owns certification and rollout' });
     expect(created.success).toBe(true);
 
-    const added = await teamTool.execute({ mode: 'add-member', teamId: 'release-core', memberId: 'agent-review', role: 'reviewer', lanes: ['wrfc', 'security'] });
+    const added = await teamTool.execute({ storageRoot: root, mode: 'add-member', teamId: 'release-core', memberId: 'agent-review', role: 'reviewer', lanes: ['wrfc', 'security'] });
     expect(added.success).toBe(true);
     expect(added.output).toContain('agent-review');
 
-    const lanes = await teamTool.execute({ mode: 'set-lanes', teamId: 'release-core', memberId: 'agent-review', lanes: ['wrfc', 'release'] });
+    const lanes = await teamTool.execute({ storageRoot: root, mode: 'set-lanes', teamId: 'release-core', memberId: 'agent-review', lanes: ['wrfc', 'release'] });
     expect(lanes.success).toBe(true);
     expect(lanes.output).toContain('release');
 
-    const listed = await teamTool.execute({ mode: 'list' });
+    const listed = await teamTool.execute({ storageRoot: root, mode: 'list' });
     expect(listed.success).toBe(true);
     expect(listed.output).toContain('Release Core');
 
-    const summary = await teamTool.execute({ mode: 'show', teamId: 'release-core', view: 'summary' });
+    const summary = await teamTool.execute({ storageRoot: root, mode: 'show', teamId: 'release-core', view: 'summary' });
     expect(summary.success).toBe(true);
     expect(summary.output).toContain('"memberCount":1');
 
@@ -81,10 +81,11 @@ describe('tool breadth additions', () => {
   });
 
   test('worklist tool persists checklist items and lifecycle changes', async () => {
-    const created = await worklistTool.execute({ mode: 'create', worklistId: 'roadmap-2', title: 'Roadmap v2 closure' });
+    const created = await worklistTool.execute({ storageRoot: root, mode: 'create', worklistId: 'roadmap-2', title: 'Roadmap v2 closure' });
     expect(created.success).toBe(true);
 
     const added = await worklistTool.execute({
+      storageRoot: root,
       mode: 'add-item',
       worklistId: 'roadmap-2',
       itemId: 'item-1',
@@ -95,24 +96,37 @@ describe('tool breadth additions', () => {
     expect(added.success).toBe(true);
     expect(added.output).toContain('Finish bridge productization');
 
-    const completed = await worklistTool.execute({ mode: 'complete-item', worklistId: 'roadmap-2', itemId: 'item-1' });
+    const completed = await worklistTool.execute({ storageRoot: root, mode: 'complete-item', worklistId: 'roadmap-2', itemId: 'item-1' });
     expect(completed.success).toBe(true);
     expect(completed.output).toContain('"status":"done"');
 
-    const reopened = await worklistTool.execute({ mode: 'reopen-item', worklistId: 'roadmap-2', itemId: 'item-1' });
+    const reopened = await worklistTool.execute({ storageRoot: root, mode: 'reopen-item', worklistId: 'roadmap-2', itemId: 'item-1' });
     expect(reopened.success).toBe(true);
     expect(reopened.output).toContain('"status":"open"');
 
-    const listed = await worklistTool.execute({ mode: 'list' });
+    const listed = await worklistTool.execute({ storageRoot: root, mode: 'list' });
     expect(listed.success).toBe(true);
     expect(listed.output).toContain('roadmap-2');
 
-    const summary = await worklistTool.execute({ mode: 'show', worklistId: 'roadmap-2', view: 'summary' });
+    const summary = await worklistTool.execute({ storageRoot: root, mode: 'show', worklistId: 'roadmap-2', view: 'summary' });
     expect(summary.success).toBe(true);
     expect(summary.output).toContain('"itemCount":1');
   });
 
+  test('team and worklist tools require explicit storage roots', async () => {
+    const teamResult = await teamTool.execute({ mode: 'list' });
+    expect(teamResult.success).toBe(false);
+    expect(teamResult.error).toContain('storageRoot');
+
+    const worklistResult = await worklistTool.execute({ mode: 'list' });
+    expect(worklistResult.success).toBe(false);
+    expect(worklistResult.error).toContain('storageRoot');
+  });
+
   test('packet and query tools manage durable operator packets and Q&A', async () => {
+    const packetTool = createPacketTool(root);
+    const queryTool = createQueryTool(root);
+
     const packet = await packetTool.execute({
       mode: 'create',
       packetId: 'bridge-rollout',

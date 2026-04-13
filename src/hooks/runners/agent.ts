@@ -1,6 +1,6 @@
 import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
 import { logger } from '../../utils/logger.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import type { AgentManager } from '../../tools/agent/index.ts';
 
 /**
  * Agent hook runner — spawns a subagent via AgentManager and waits for
@@ -17,7 +17,7 @@ import { AgentManager } from '../../tools/agent/index.ts';
 export async function run(
   hook: HookDefinition,
   event: HookEvent,
-  manager: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'> = new AgentManager(),
+  manager: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'>,
 ): Promise<HookResult> {
   const promptTemplate = hook.prompt;
   if (promptTemplate == null) {

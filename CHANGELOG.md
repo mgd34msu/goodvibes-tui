@@ -4,6 +4,34 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.17.0] — 2026-04-12
+
+### Consumer-Shaped Foundation Surfaces
+
+- Added explicit operator and peer client surfaces plus direct, HTTP, SSE, and WebSocket transport layers so future shells and companion clients can target one typed foundation instead of reaching into runtime internals
+- Added stable shell-facing service queries, read models, and API façades for providers, hooks, MCP, knowledge, peer/runtime operations, and shell paths so commands and panels consume product semantics rather than raw store or event-bus layout
+- Split provider-health aggregation into domain/tracker modules and expanded foundation-surface, transport-parity, and operator-surface release gates so client-shaped runtime access is enforced by CI
+
+### Ownership Cleanup, Shell De-Privileging, And Extension Seams
+
+- Removed the remaining privileged command and panel reach-throughs into provider registries, knowledge services, memory registries, and peer/runtime internals by routing those paths through shaped runtime APIs
+- Replaced more fallback-owned managers and ambient path discovery with explicit bootstrap-owned home, project, config, storage, and service roots across config, secrets, subscriptions, automation, sessions, bookmarks, profiles, daemon services, and tool registration
+- Tightened plugin, hook, MCP, discovery, provider, automation, and runtime integration seams around explicit ownership so future extraction can happen without legacy shims or hidden bootstrap shortcuts
+
+### Stability, UX, And Release-Gate Fixes
+
+- Fixed an approval callback ordering race so daemon approval completion cannot drop callbacks under CI or fast local runs
+- Fixed slash-command/modal handoff regressions that blocked modal selection actions and left the slash menu latched after exiting nested modals
+- Expanded regression coverage around provider migration paths, remote/runtime commands, knowledge flows, panel read models, transport behavior, and foundation-surface certification
+
+### Verification
+
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test` (`7011` pass, `0` fail)
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.16.0] — 2026-04-12
 
 ### V1 Architecture Hardening And SDK Readiness

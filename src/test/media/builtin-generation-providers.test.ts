@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { ArtifactStore } from '../../artifacts/index.ts';
 import { ensureBuiltinMediaProviders, MediaProviderRegistry } from '../../media/index.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
+import type { ProviderRuntimeMetadata } from '../../providers/interface.ts';
 
 const BUILTIN_MEDIA_ENV_KEYS = [
   'BYTEPLUS_API_KEY',
@@ -16,9 +17,12 @@ const BUILTIN_MEDIA_ENV_KEYS = [
   'COMFY_BASE_URL',
 ] as const;
 
-function makeImageModelRegistry(): Pick<ProviderRegistry, 'getCurrentModel' | 'getForModel' | 'listModels'> {
+function makeImageModelRegistry(): Pick<ProviderRegistry, 'describeRuntime' | 'getCurrentModel' | 'getForModel' | 'listModels'> {
   return {
     listModels: () => [],
+    describeRuntime: async (): Promise<ProviderRuntimeMetadata> => ({
+      policy: { local: false },
+    }),
     getCurrentModel: () => ({
       id: 'stub-model',
       provider: 'stub',

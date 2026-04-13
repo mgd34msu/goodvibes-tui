@@ -19,11 +19,14 @@ import {
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
 } from '../../runtime/ecosystem/catalog.ts';
-import { buildEcosystemRecommendations } from '../../runtime/ecosystem/recommendations.ts';
-import { openCommandPanel } from './runtime-services.ts';
+import { openCommandPanel, requireEcosystemCatalogPaths, requireReadModels, requireShellPaths } from './runtime-services.ts';
 
-function resolveMarketplaceEntry(kind: EcosystemEntryKind, entryId: string): EcosystemCatalogEntry | null {
-  return loadEcosystemCatalog(kind).find((candidate) => candidate.id === entryId) ?? null;
+function resolveMarketplaceEntry(
+  kind: EcosystemEntryKind,
+  entryId: string,
+  options: Parameters<typeof loadEcosystemCatalog>[1],
+): EcosystemCatalogEntry | null {
+  return loadEcosystemCatalog(kind, options).find((candidate) => candidate.id === entryId) ?? null;
 }
 
 function formatCompatibility(review: ReturnType<typeof reviewEcosystemCatalogEntry>): string {
@@ -38,20 +41,22 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
     description: 'Browse the unified plugin and skill marketplace',
     usage: '[open|overview|recommend|browse [query]|review <plugin|skill|hook-pack|policy-pack> <id>|provenance <plugin|skill|hook-pack|policy-pack> <id>|install-hint <plugin|skill|hook-pack|policy-pack> <id>|install <plugin|skill|hook-pack|policy-pack> <id> [project|user]|update <plugin|skill|hook-pack|policy-pack> <id> [project|user]|rollback <plugin|skill|hook-pack|policy-pack> <id> [project|user] [backupId]|history <plugin|skill|hook-pack|policy-pack> <id> [project|user]|uninstall <plugin|skill|hook-pack|policy-pack> <id> [project|user]|receipt <plugin|skill|hook-pack|policy-pack> <id> [project|user]|bundle export <path> [project|user]|bundle inspect <path>|bundle import <path> [project|user]|installed]',
     handler(args, ctx) {
+      const shellPaths = requireShellPaths(ctx);
+      const ecosystemPaths = requireEcosystemCatalogPaths(ctx);
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
         openCommandPanel(ctx, 'marketplace');
         return;
       }
       if (sub === 'overview') {
-        const pluginCatalog = loadEcosystemCatalog('plugin');
-        const skillCatalog = loadEcosystemCatalog('skill');
-        const hookPackCatalog = loadEcosystemCatalog('hook-pack');
-        const policyPackCatalog = loadEcosystemCatalog('policy-pack');
-        const installedPlugins = listInstalledEcosystemEntries('plugin');
-        const installedSkills = listInstalledEcosystemEntries('skill');
-        const installedHookPacks = listInstalledEcosystemEntries('hook-pack');
-        const installedPolicyPacks = listInstalledEcosystemEntries('policy-pack');
+        const pluginCatalog = loadEcosystemCatalog('plugin', ecosystemPaths);
+        const skillCatalog = loadEcosystemCatalog('skill', ecosystemPaths);
+        const hookPackCatalog = loadEcosystemCatalog('hook-pack', ecosystemPaths);
+        const policyPackCatalog = loadEcosystemCatalog('policy-pack', ecosystemPaths);
+        const installedPlugins = listInstalledEcosystemEntries('plugin', ecosystemPaths);
+        const installedSkills = listInstalledEcosystemEntries('skill', ecosystemPaths);
+        const installedHookPacks = listInstalledEcosystemEntries('hook-pack', ecosystemPaths);
+        const installedPolicyPacks = listInstalledEcosystemEntries('policy-pack', ecosystemPaths);
         ctx.print([
           'Marketplace Overview',
           `  curated plugins: ${pluginCatalog.length}`,
@@ -67,10 +72,10 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
       }
       if (sub === 'browse') {
         const query = args.slice(1).join(' ');
-        const pluginEntries = query ? searchEcosystemCatalog('plugin', query) : loadEcosystemCatalog('plugin');
-        const skillEntries = query ? searchEcosystemCatalog('skill', query) : loadEcosystemCatalog('skill');
-        const hookPackEntries = query ? searchEcosystemCatalog('hook-pack', query) : loadEcosystemCatalog('hook-pack');
-        const policyPackEntries = query ? searchEcosystemCatalog('policy-pack', query) : loadEcosystemCatalog('policy-pack');
+        const pluginEntries = query ? searchEcosystemCatalog('plugin', query, ecosystemPaths) : loadEcosystemCatalog('plugin', ecosystemPaths);
+        const skillEntries = query ? searchEcosystemCatalog('skill', query, ecosystemPaths) : loadEcosystemCatalog('skill', ecosystemPaths);
+        const hookPackEntries = query ? searchEcosystemCatalog('hook-pack', query, ecosystemPaths) : loadEcosystemCatalog('hook-pack', ecosystemPaths);
+        const policyPackEntries = query ? searchEcosystemCatalog('policy-pack', query, ecosystemPaths) : loadEcosystemCatalog('policy-pack', ecosystemPaths);
         ctx.print([
           `Marketplace Browse${query ? ` (${query})` : ''}`,
           `  plugins: ${pluginEntries.length}`,
@@ -85,7 +90,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
         return;
       }
       if (sub === 'recommend') {
-        const recommendations = buildEcosystemRecommendations(ctx.runtimeStore);
+        const recommendations = requireReadModels(ctx).marketplace.getSnapshot().recommendations;
         ctx.print(recommendations.length > 0
           ? [
             'Marketplace Recommendations',
@@ -97,10 +102,10 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
       }
       if (sub === 'installed') {
         const receipts = [
-          ...listInstalledEcosystemEntries('plugin').map((receipt) => `  plugin  ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
-          ...listInstalledEcosystemEntries('skill').map((receipt) => `  skill   ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
-          ...listInstalledEcosystemEntries('hook-pack').map((receipt) => `  hook-pack   ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
-          ...listInstalledEcosystemEntries('policy-pack').map((receipt) => `  policy-pack ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
+          ...listInstalledEcosystemEntries('plugin', ecosystemPaths).map((receipt) => `  plugin  ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
+          ...listInstalledEcosystemEntries('skill', ecosystemPaths).map((receipt) => `  skill   ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
+          ...listInstalledEcosystemEntries('hook-pack', ecosystemPaths).map((receipt) => `  hook-pack   ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
+          ...listInstalledEcosystemEntries('policy-pack', ecosystemPaths).map((receipt) => `  policy-pack ${receipt.entry.id}  ${receipt.scope}  ${receipt.targetPath}`),
         ];
         ctx.print(receipts.length > 0
           ? ['Marketplace Installs', ...receipts].join('\n')
@@ -116,15 +121,15 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
           return;
         }
         if (mode === 'export') {
-          const bundle = exportEcosystemCatalogBundle(scope);
-          const targetPath = resolve(process.cwd(), target!);
+          const bundle = exportEcosystemCatalogBundle(scope, ecosystemPaths);
+          const targetPath = shellPaths.resolveWorkspacePath(target!);
           mkdirSync(dirname(targetPath), { recursive: true });
           writeFileSync(targetPath, `${JSON.stringify(bundle, null, 2)}\n`, 'utf-8');
           ctx.print(`Marketplace bundle exported to ${targetPath}`);
           return;
         }
         if (mode === 'inspect') {
-          const bundle = JSON.parse(readFileSync(resolve(process.cwd(), target!), 'utf-8')) as EcosystemCatalogBundle;
+          const bundle = JSON.parse(readFileSync(shellPaths.resolveWorkspacePath(target!), 'utf-8')) as EcosystemCatalogBundle;
           const summary = inspectEcosystemCatalogBundle(bundle);
           ctx.print([
             'Marketplace Bundle Review',
@@ -136,10 +141,10 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
           return;
         }
         if (mode === 'import') {
-          const bundle = JSON.parse(readFileSync(resolve(process.cwd(), target!), 'utf-8')) as EcosystemCatalogBundle;
-          const result = importEcosystemCatalogBundle(bundle, { scope });
+          const bundle = JSON.parse(readFileSync(shellPaths.resolveWorkspacePath(target!), 'utf-8')) as EcosystemCatalogBundle;
+          const result = importEcosystemCatalogBundle(bundle, { ...ecosystemPaths, scope });
           ctx.print([
-            `Marketplace bundle imported from ${resolve(process.cwd(), target!)}`,
+            `Marketplace bundle imported from ${shellPaths.resolveWorkspacePath(target!)}`,
             `  entries: ${result.imported}`,
             ...Object.entries(result.pathByKind).map(([kind, path]) => `  ${kind}: ${path}`),
           ].join('\n'));
@@ -156,12 +161,12 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
         return;
       }
       if (sub === 'review') {
-        const entry = resolveMarketplaceEntry(kind!, entryId!);
+        const entry = resolveMarketplaceEntry(kind!, entryId!, ecosystemPaths);
         if (!entry) {
           ctx.print(`Unknown curated ${kind} entry: ${entryId}`);
           return;
         }
-        const review = reviewEcosystemCatalogEntry(entry);
+        const review = reviewEcosystemCatalogEntry(entry, ecosystemPaths);
         ctx.print([
           `Marketplace Review: ${entry.name}`,
           `  kind: ${kind}`,
@@ -177,12 +182,12 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
         return;
       }
       if (sub === 'provenance') {
-        const entry = resolveMarketplaceEntry(kind!, entryId!);
+        const entry = resolveMarketplaceEntry(kind!, entryId!, ecosystemPaths);
         if (!entry) {
           ctx.print(`Unknown curated ${kind} entry: ${entryId}`);
           return;
         }
-        const review = reviewEcosystemCatalogEntry(entry);
+        const review = reviewEcosystemCatalogEntry(entry, ecosystemPaths);
         ctx.print([
           `Marketplace Provenance: ${entry.name}`,
           `  source: ${entry.source}`,
@@ -196,7 +201,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
         return;
       }
       if (sub === 'install-hint') {
-        const entry = resolveMarketplaceEntry(kind!, entryId!);
+        const entry = resolveMarketplaceEntry(kind!, entryId!, ecosystemPaths);
         if (!entry) {
           ctx.print(`Unknown curated ${kind} entry: ${entryId}`);
           return;
@@ -212,7 +217,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
       }
       if (sub === 'receipt') {
         const scope = args[3] === 'user' ? 'user' : 'project';
-        const result = inspectInstalledEcosystemEntry(kind!, entryId!, { scope });
+        const result = inspectInstalledEcosystemEntry(kind!, entryId!, { ...ecosystemPaths, scope });
         if (!result.ok) {
           ctx.print(`Error: ${result.error}`);
           return;
@@ -232,7 +237,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
       }
       if (sub === 'history') {
         const scope = args[3] === 'user' ? 'user' : 'project';
-        const backups = listEcosystemInstallBackups(kind!, entryId!, { scope });
+        const backups = listEcosystemInstallBackups(kind!, entryId!, { ...ecosystemPaths, scope });
         ctx.print(backups.length > 0
           ? [
             `Marketplace Rollback History: ${kind} ${entryId}`,
@@ -244,7 +249,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
       if (sub === 'install' || sub === 'update' || sub === 'rollback' || sub === 'uninstall') {
         const scope = args[3] === 'user' ? 'user' : 'project';
         if (sub === 'install') {
-          const result = installEcosystemCatalogEntry(kind!, entryId!, { scope });
+          const result = installEcosystemCatalogEntry(kind!, entryId!, { ...ecosystemPaths, scope });
           if (!result.ok) {
             ctx.print(`Error: ${result.error}`);
             return;
@@ -253,7 +258,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
           return;
         }
         if (sub === 'update') {
-          const result = updateInstalledEcosystemEntry(kind!, entryId!, { scope });
+          const result = updateInstalledEcosystemEntry(kind!, entryId!, { ...ecosystemPaths, scope });
           if (!result.ok) {
             ctx.print(`Error: ${result.error}`);
             return;
@@ -263,7 +268,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
         }
         if (sub === 'rollback') {
           const backupId = args[4];
-          const result = rollbackInstalledEcosystemEntry(kind!, entryId!, { scope, backupId });
+          const result = rollbackInstalledEcosystemEntry(kind!, entryId!, { ...ecosystemPaths, scope, backupId });
           if (!result.ok) {
             ctx.print(`Error: ${result.error}`);
             return;
@@ -271,7 +276,7 @@ export function registerMarketplaceRuntimeCommands(registry: CommandRegistry): v
           ctx.print(`Rolled back curated ${kind} ${entryId} in ${result.receipt.targetPath} using backup ${result.restoredFrom.id}`);
           return;
         }
-        const result = uninstallEcosystemCatalogEntry(kind!, entryId!, { scope });
+        const result = uninstallEcosystemCatalogEntry(kind!, entryId!, { ...ecosystemPaths, scope });
         if (!result.ok) {
           ctx.print(`Error: ${result.error}`);
           return;

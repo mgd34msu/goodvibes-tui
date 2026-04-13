@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
@@ -7,11 +7,15 @@ import { createInitialTasksState } from '../../runtime/store/domains/tasks.ts';
 import { TasksPanel } from '../../panels/tasks-panel.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import type { Line } from '../../types/grid.ts';
+import type { UiWorktreeSnapshot } from '../../runtime/ui-read-models.ts';
 import { UserAuthManager } from '../../security/user-auth.ts';
 import { ConfigManager } from '../../config/manager.ts';
+import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '../../config/subscriptions.ts';
 import { createTestProviderRegistry } from '../helpers/test-managers.ts';
+import { createStaticUiReadModel, createTasksReadModel } from '../helpers/ui-read-models.ts';
+import { buildProviderAccountSnapshot } from '../../panels/provider-account-snapshot.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -21,23 +25,27 @@ function linesText(lines: Line[]): string {
 }
 
 describe('TasksPanel', () => {
-  const originalCwd = process.cwd();
   let root = '';
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-tasks-panel-'));
-    process.chdir(root);
   });
 
   afterEach(() => {
-    process.chdir(originalCwd);
-    rmSync(join(root, '.goodvibes'), { recursive: true, force: true });
-    rmSync(join(originalCwd, '.goodvibes', 'tui', 'worktrees.json'), { force: true });
+    rmSync(root, { recursive: true, force: true });
   });
+
+  function createConfigManager(): ConfigManager {
+    return new ConfigManager({
+      workingDir: root,
+      homeDir: root,
+      configDir: join(root, '.goodvibes', 'global-tui'),
+    });
+  }
 
   test('renders empty guidance when no tasks exist', () => {
     const store = createRuntimeStore();
-    const panel = new TasksPanel(store);
+    const panel = new TasksPanel(createTasksReadModel(store));
     const text = linesText(panel.render(120, 12));
     expect(text).toContain('Task Control Room');
     expect(text).toContain('No tasks recorded yet');
@@ -46,24 +54,24 @@ describe('TasksPanel', () => {
   test('renders task summaries and selection detail from the runtime store', () => {
     const store = createRuntimeStore();
     const now = Date.now();
-    const worktreeStore = JSON.stringify({
-      version: 1,
-      records: {
-        [join(originalCwd, '.goodvibes', '.worktrees', 'agent-running')]: {
-          path: join(originalCwd, '.goodvibes', '.worktrees', 'agent-running'),
-          kind: 'agent',
-          state: 'paused',
-          ownerId: 'agent-running',
-          taskId: 'running-1',
-          sessionId: 'sess-1',
-          updatedAt: now,
-        },
+    const worktrees = createStaticUiReadModel<UiWorktreeSnapshot>({
+      summary: {
+        total: 1,
+        active: 0,
+        paused: 1,
+        cleanupPending: 0,
+        discard: 0,
       },
-    }, null, 2);
-    mkdirSync(join(originalCwd, '.goodvibes', 'tui'), { recursive: true });
-    writeFileSync(join(originalCwd, '.goodvibes', 'tui', 'worktrees.json'), worktreeStore);
-    mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
-    writeFileSync(join(root, '.goodvibes', 'tui', 'worktrees.json'), worktreeStore);
+      records: [{
+        path: join(root, '.goodvibes', '.worktrees', 'agent-running'),
+        kind: 'agent',
+        state: 'paused',
+        ownerId: 'agent-running',
+        taskId: 'running-1',
+        sessionId: 'sess-1',
+        updatedAt: now,
+      }],
+    });
     store.setState((state) => ({
       ...state,
       tasks: {
@@ -145,7 +153,7 @@ describe('TasksPanel', () => {
       },
     }));
 
-    const panel = new TasksPanel(store);
+    const panel = new TasksPanel(createTasksReadModel(store), worktrees);
     const initial = linesText(panel.render(120, 24));
     expect(initial).toContain('Task posture');
     expect(initial).toContain('queued 1');
@@ -181,7 +189,7 @@ describe('TasksPanel', () => {
       icon: 'T',
       category: 'session',
       description: 'Task Control Room',
-      factory: () => new TasksPanel(createRuntimeStore()),
+      factory: () => new TasksPanel(createTasksReadModel(createRuntimeStore())),
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'tasks')).toBe(true);
   });
@@ -192,20 +200,38 @@ describe('TasksPanel', () => {
     const { SettingsSyncPanel } = await import('../../panels/settings-sync-panel.ts');
 
     const accountsPanel = new ProviderAccountsPanel({
-      providerRegistry: createTestProviderRegistry(),
-      serviceRegistry: new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json')),
-      subscriptionManager: new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json')),
+      providerAccounts: {
+        loadSnapshot: () => {
+          const secretsManager = new SecretsManager({ projectRoot: root, globalHome: root });
+          const subscriptionManager = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
+          const serviceRegistry = new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
+            secretsManager,
+            subscriptionManager,
+          });
+          return buildProviderAccountSnapshot({
+            providerModels: createTestProviderRegistry(),
+            services: serviceRegistry,
+            subscriptions: subscriptionManager,
+            environment: {
+              hasEnvironmentVariable: (name: string) => Boolean(process.env[name]),
+            },
+          });
+        },
+      },
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
     const accountsText = linesText(accountsPanel.render(120, 18));
     expect(accountsText).toContain('Provider posture');
     expect(accountsText).toContain('/accounts repair <provider>');
 
-    const authText = linesText(new LocalAuthPanel(new UserAuthManager()).render(120, 18));
+    const authText = linesText(new LocalAuthPanel(new UserAuthManager({
+      bootstrapFilePath: join(root, '.goodvibes', 'tui', 'auth-users.json'),
+      bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
+    })).render(120, 18));
     expect(authText).toContain('Local auth posture');
     expect(authText).toContain('/auth local rotate-password <user> <password>');
 
-    const settingsText = linesText(new SettingsSyncPanel(new ConfigManager()).render(120, 20));
+    const settingsText = linesText(new SettingsSyncPanel(createConfigManager()).render(120, 20));
     expect(settingsText).toContain('Settings posture');
     expect(settingsText).toContain('/settingssync conflicts');
     expect(settingsText).toContain('/managed review');

@@ -6,6 +6,7 @@ import type { RuntimeStore } from './store/index.ts';
 import type { RuntimeServices } from './services.ts';
 import type { MutableRuntimeState } from './context.ts';
 import type { CommandContext } from '../input/command-registry.ts';
+import type { OpsControlPlane } from './ops/control-plane.ts';
 import { CommandRegistry } from '../input/command-registry.ts';
 import { registerBuiltinCommands } from '../input/commands.ts';
 import { InputHistory } from '../input/input-history.ts';
@@ -15,17 +16,26 @@ import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
 import { SystemMessagesPanel } from '../panels/system-messages-panel.ts';
 import { createSystemMessageRouter, type SystemMessageRouter } from '../core/system-message-router.ts';
+import { listHookPointContracts } from '../hooks/index.ts';
 import { getConfigSnapshot } from '../config/index.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { createResumeSessionHandler } from './bootstrap-hook-bridge.ts';
 import { logger } from '../utils/logger.ts';
 import { loadBootstrapSystemPrompt } from './bootstrap-helpers.ts';
+import { createShellPlanRuntime, createShellRemoteCommandService } from './shell-command-services.ts';
+import { createRuntimeKnowledgeApi } from './runtime-knowledge-api.ts';
+import { createRuntimeHookApi } from './runtime-hook-api.ts';
+import { createRuntimeMcpApi } from './runtime-mcp-api.ts';
+import { createRuntimeProviderApi } from './runtime-provider-api.ts';
+import { createDirectTransport } from './transports/direct.ts';
 import type { ControlPlaneRecentEvent } from '../control-plane/gateway.ts';
 import type { BuiltinPanelDeps } from '../panels/builtin/shared.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
 import type { ForensicsRegistry } from './forensics/index.ts';
 import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
+import type { TaskManager } from './tasks/types.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
+import { createRuntimeOpsApi } from './runtime-ops-api.ts';
 
 export interface BootstrapShellState {
   readonly commandRegistry: CommandRegistry;
@@ -53,6 +63,8 @@ export interface BootstrapShellOptions {
   readonly forensicsRegistry: ForensicsRegistry;
   readonly policyRuntimeState: PolicyRuntimeState;
   readonly uiServices: UiRuntimeServices;
+  readonly taskManager: TaskManager;
+  readonly opsControlPlane?: OpsControlPlane;
   readonly completeModelSelectionSideEffect?: () => void;
 }
 
@@ -74,6 +86,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     forensicsRegistry,
     policyRuntimeState,
     uiServices,
+    taskManager,
+    opsControlPlane,
     completeModelSelectionSideEffect,
   } = options;
 
@@ -103,10 +117,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     getCtxWindow: () => services.providerRegistry.getContextWindowForModel(services.providerRegistry.getCurrentModel()),
     resumeSession,
     requestRender,
-    runtimeBus,
     forensicsRegistry,
     policyRuntimeState,
-    runtimeStore,
     approvalBroker: services.approvalBroker,
     sessionBroker: services.sessionBroker,
     automationManager: services.automationManager,
@@ -139,6 +151,32 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   const commandRegistry = new CommandRegistry();
   registerBuiltinCommands(commandRegistry);
+  const directTransport = createDirectTransport(services);
+  const providerApi = createRuntimeProviderApi(services);
+  const knowledgeApi = createRuntimeKnowledgeApi(services);
+  const hookApi = createRuntimeHookApi({
+    dispatcher: {
+      listHooks: () => services.hookDispatcher.listHooks(),
+      listChains: () => services.hookDispatcher.getChains(),
+    },
+    workbench: services.hookWorkbench,
+    listContracts: () => listHookPointContracts(),
+  });
+  const mcpApi = createRuntimeMcpApi(services.mcpRegistry);
+  const opsApi = createRuntimeOpsApi({
+    tasksReadModel: uiServices.readModels.tasks,
+    taskManager,
+    opsControlPlane,
+  });
+  const remoteRuntime = createShellRemoteCommandService({
+    readModels: uiServices.readModels,
+    remoteRunnerRegistry: services.remoteRunnerRegistry,
+    runtimeStore,
+  });
+  const planRuntime = createShellPlanRuntime({
+    adaptivePlanner: services.adaptivePlanner,
+    runtimeBus,
+  });
 
   const commandContext: CommandContext = createBootstrapCommandContext({
     configManager,
@@ -152,8 +190,10 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     mcpRegistry: services.mcpRegistry,
     forensicsRegistry,
     policyRuntimeState,
-    runtimeStore,
-    runtimeBus,
+    readModels: uiServices.readModels,
+    shellPaths: services.shellPaths,
+    remoteRuntime,
+    planRuntime,
     fileUndoManager: services.fileUndoManager,
     memoryRegistry: services.memoryRegistry,
     integrationHelpers: services.integrationHelpers,
@@ -164,13 +204,12 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     hookWorkbench: services.hookWorkbench,
     agentManager: services.agentManager,
     modeManager: services.modeManager,
-    remoteRunnerRegistry: services.remoteRunnerRegistry,
-    remoteSupervisor: services.remoteSupervisor,
     sessionManager: services.sessionManager,
     profileManager: services.profileManager,
     bookmarkManager: services.bookmarkManager,
     favoritesStore: services.favoritesStore,
     benchmarkStore: services.benchmarkStore,
+    providerApi,
     subscriptionManager: services.subscriptionManager,
     secretsManager: services.secretsManager,
     serviceRegistry: services.serviceRegistry,
@@ -184,6 +223,13 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     planManager: services.planManager,
     adaptivePlanner: services.adaptivePlanner,
     sessionOrchestration: services.sessionOrchestration,
+    operatorClient: directTransport.operator,
+    peerClient: directTransport.peer,
+    knowledgeApi,
+    hookApi,
+    mcpApi,
+    opsApi,
+    directTransport,
     panelManager: services.panelManager,
     panelHealthMonitor: services.panelHealthMonitor,
     worktreeRegistry: services.worktreeRegistry,
@@ -199,7 +245,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     completeModelSelectionSideEffect,
   });
 
-  const gitStatusProvider = new GitStatusProvider();
+  const gitStatusProvider = new GitStatusProvider(services.workingDirectory);
   const lastGitInfoRef = { value: undefined as GitHeaderInfo | undefined };
   gitStatusProvider.getStatus().then((info) => {
     lastGitInfoRef.value = info;
@@ -207,7 +253,10 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
   }).catch(() => { /* non-fatal */ });
 
   const saveHistory = configManager.get('behavior.saveHistory') as boolean;
-  const inputHistory = new InputHistory(undefined, saveHistory);
+  const inputHistory = new InputHistory({
+    historyPath: services.shellPaths.resolveUserTuiPath('input-history.json'),
+    persist: saveHistory,
+  });
 
   return {
     commandRegistry,

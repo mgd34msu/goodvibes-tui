@@ -347,7 +347,7 @@ export function computeAstEdit(
   const replaceStr = item.replace_base64 ? decodeBase64(item.replace_base64) : item.replace;
   let intel: CodeIntelligence;
   try {
-    intel = new CodeIntelligence();
+    intel = new CodeIntelligence({});
   } catch (e) {
     logger.debug('CodeIntelligence instance not available', { error: String(e) });
     return Promise.resolve(computeExactEdit(fileContent, item));

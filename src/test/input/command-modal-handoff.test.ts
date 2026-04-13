@@ -1,17 +1,42 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import { handleCommandModeToken } from '../../input/handler-command-route.ts';
 import { handlePromptTextToken } from '../../input/handler-feed-routes.ts';
+import { InputHandler } from '../../input/handler.ts';
+import { SelectionManager } from '../../input/selection.ts';
+import { InfiniteBuffer } from '../../core/history.ts';
+import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { registerConfigCommand } from '../../input/commands/config.ts';
 
 
 function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandContext {
-  return {
-    providerRegistry: {} as never,
-    conversationManager: { log: () => {} } as never,
-    config: {} as never,
-    configManager: {} as never,
-    runtime: {} as never,
+  const providerRegistry = {} as never;
+  const conversationManager = { log: () => {} } as never;
+  const configManager = {} as never;
+  const base: CommandContext = {
+    session: {
+      conversationManager,
+      runtime: {} as never,
+    },
+    provider: {
+      providerRegistry,
+    },
+    workspace: {},
+    platform: {
+      config: {} as never,
+      configManager,
+    },
+    ops: {},
+    extensions: {
+      toolRegistry: {} as never,
+      mcpRegistry: {} as never,
+    },
     renderRequest: () => {},
     submitInput: () => {},
     executeCommand: async () => false,
@@ -23,7 +48,34 @@ function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandCon
     scrollToLine: () => {},
     print: () => {},
     exit: () => {},
+  };
+  return {
+    ...base,
     ...overrides,
+    session: {
+      ...base.session,
+      ...overrides.session,
+    },
+    provider: {
+      ...base.provider,
+      ...overrides.provider,
+    },
+    workspace: {
+      ...base.workspace,
+      ...overrides.workspace,
+    },
+    platform: {
+      ...base.platform,
+      ...overrides.platform,
+    },
+    ops: {
+      ...base.ops,
+      ...overrides.ops,
+    },
+    extensions: {
+      ...base.extensions,
+      ...overrides.extensions,
+    },
   } as CommandContext;
 }
 
@@ -75,7 +127,7 @@ describe('command modal handoff', () => {
     expect(resetCount).toBe(1);
   });
 
-  test('restores the slash command menu after closing a nested modal', async () => {
+  test('reopens the previous modal when a stacked modal closes', async () => {
     const modalStack = ['command', 'modelPicker'];
     let activeName = 'modelPicker';
     let autocompleteQuery = 'stale';
@@ -119,7 +171,8 @@ describe('command modal handoff', () => {
     expect(autocompleteQuery).toBe('');
     expect(activeName).toBe('command');
   });
-  test('keeps command on the stack when a slash command opens a nested modal', async () => {
+
+  test('consumes the slash-command layer once a nested modal opens', async () => {
     const modalStack = ['command'];
     const registry = new CommandRegistry();
     const state = {
@@ -145,7 +198,9 @@ describe('command modal handoff', () => {
 
     expect(handled).toBe(true);
     expect(state.commandMode).toBe(false);
-    expect(modalStack).toEqual(['command', 'modelPicker']);
+    expect(state.prompt).toBe('');
+    expect(state.cursorPos).toBe(0);
+    expect(modalStack).toEqual(['modelPicker']);
   });
 
   test('removes command from the stack when no nested modal opens', async () => {
@@ -239,5 +294,76 @@ describe('command modal handoff', () => {
     expect(textRoute.commandMode).toBe(false);
     expect(textRoute.prompt).toBe('a');
     expect(modalStack).toEqual([]);
+  });
+
+  test('input handler clears command mode after a slash command opens a selection modal', async () => {
+    const dir = join(tmpdir(), `gv-command-modal-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dir, { recursive: true });
+    try {
+      const history = new InfiniteBuffer();
+      const input = new InputHandler(
+        () => {},
+        new SelectionManager(),
+        () => 0,
+        () => 20,
+        () => history,
+        () => {},
+        () => {},
+        createDefaultUiRuntimeServices(),
+      );
+      input.setContentWidth(80);
+
+      const registry = new CommandRegistry();
+      registerConfigCommand(registry);
+      const configManager = new ConfigManager({
+        workingDir: dir,
+        configDir: join(dir, '.goodvibes', 'tui'),
+      });
+      const context = makeCommandContext({
+        platform: {
+          config: configManager.getAll(),
+          configManager,
+        },
+        renderRequest: () => {},
+        workspace: {
+          shellPaths: createShellPathService({
+            workingDirectory: dir,
+            homeDirectory: dir,
+          }),
+        },
+        executeCommand: async (name, args) => registry.execute(name, args, context),
+      });
+      context.openSelection = (...args) => input.openSelection(...args);
+      input.setCommandRegistry(registry, context);
+
+      input.feed('/config\r');
+      await Promise.resolve();
+
+      expect(input.selectionModal.active).toBe(true);
+      expect(input.commandMode).toBe(false);
+      expect(input.prompt).toBe('');
+      expect(input.modalStack).toEqual(['selection']);
+
+      const dangerIndex = input.selectionModal.filteredItems.findIndex((item) => item.id === 'danger.daemon');
+      expect(dangerIndex).toBeGreaterThanOrEqual(0);
+      input.selectionModal.selectedIndex = dangerIndex;
+
+      const before = configManager.get('danger.daemon');
+      input.feed(' ');
+
+      expect(configManager.get('danger.daemon')).toBe(!before);
+      expect(input.selectionModal.active).toBe(true);
+      expect(input.commandMode).toBe(false);
+      expect(input.modalStack).toEqual(['selection']);
+
+      input.feed('\x1b');
+
+      expect(input.selectionModal.active).toBe(false);
+      expect(input.commandMode).toBe(false);
+      expect(input.prompt).toBe('');
+      expect(input.modalStack).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

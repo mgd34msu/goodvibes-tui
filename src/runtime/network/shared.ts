@@ -1,24 +1,22 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
 import type { ConfigManager } from '../../config/manager.ts';
 
 const PEM_EXTENSIONS = new Set(['.pem', '.crt', '.cer']);
 
-export function getGoodVibesRootDir(configManager?: Pick<ConfigManager, 'getControlPlaneConfigDir'> | null): string {
-  const configuredDir = configManager?.getControlPlaneConfigDir?.();
-  if (!configuredDir) {
-    return join(homedir(), '.goodvibes');
-  }
+type NetworkRootConfig = Pick<ConfigManager, 'getControlPlaneConfigDir'>;
+
+export function getGoodVibesRootDir(configManager: NetworkRootConfig): string {
+  const configuredDir = configManager.getControlPlaneConfigDir();
   const normalized = resolve(configuredDir);
   return basename(normalized) === 'tui' ? dirname(normalized) : normalized;
 }
 
-export function getDefaultCertDirectory(configManager?: Pick<ConfigManager, 'getControlPlaneConfigDir'> | null): string {
+export function getDefaultCertDirectory(configManager: NetworkRootConfig): string {
   return join(getGoodVibesRootDir(configManager), 'certs');
 }
 
-export function getDefaultInboundCertPaths(configManager?: Pick<ConfigManager, 'getControlPlaneConfigDir'> | null): {
+export function getDefaultInboundCertPaths(configManager: NetworkRootConfig): {
   readonly certFile: string;
   readonly keyFile: string;
 } {
@@ -31,7 +29,7 @@ export function getDefaultInboundCertPaths(configManager?: Pick<ConfigManager, '
 
 export function resolvePathFromGoodVibesRoot(
   value: string | null | undefined,
-  configManager?: Pick<ConfigManager, 'getControlPlaneConfigDir'> | null,
+  configManager: NetworkRootConfig,
 ): string | null {
   const trimmed = value?.trim();
   if (!trimmed) return null;

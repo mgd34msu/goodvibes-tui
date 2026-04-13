@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { CommandContext } from '../../input/command-registry.ts';
 import { recallCommand } from '../../input/commands/memory.ts';
 import { MemoryRegistry } from '../../state/memory-store.ts';
-import type { MemoryAddOptions } from '../../state/memory-store.ts';
+import type { MemoryAddOptions, MemoryBundle } from '../../state/memory-store.ts';
+import { createMemoryApi } from '../../knowledge/knowledge-api.ts';
 import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { createShellPathService } from '../../runtime/shell-paths.ts';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 function makeRegistry(): MemoryRegistry {
+  const links: Array<{ fromId: string; toId: string; relation: string; createdAt: number }> = [];
   const records: Array<{
     id: string;
     scope: string;
@@ -39,6 +43,57 @@ function makeRegistry(): MemoryRegistry {
       records.push(record);
       return record as never;
     },
+    search: (filter?: { scope?: string; cls?: string; query?: string }) => {
+      return records.filter((record) => (
+        (!filter?.scope || record.scope === filter.scope)
+        && (!filter?.cls || record.cls === filter.cls)
+        && (!filter?.query || `${record.summary} ${record.detail ?? ''}`.toLowerCase().includes(filter.query.toLowerCase()))
+      )) as never;
+    },
+    searchSemantic: () => [] as never,
+    vectorStats: () => ({
+      backend: 'sqlite-vec',
+      enabled: true,
+      available: true,
+      dimensions: 1536,
+      indexedRecords: records.length,
+      path: ':memory:',
+    }),
+    rebuildVectors: () => ({
+      backend: 'sqlite-vec',
+      enabled: true,
+      available: true,
+      dimensions: 1536,
+      indexedRecords: records.length,
+      path: ':memory:',
+    }),
+    rebuildVectorsAsync: async () => ({
+      backend: 'sqlite-vec',
+      enabled: true,
+      available: true,
+      dimensions: 1536,
+      indexedRecords: records.length,
+      path: ':memory:',
+    }),
+    doctor: async () => ({
+      vector: {
+        backend: 'sqlite-vec',
+        enabled: true,
+        available: true,
+        dimensions: 1536,
+        indexedRecords: records.length,
+        path: ':memory:',
+      },
+      embeddings: {
+        configured: true,
+        activeProviderId: 'hashed-local',
+        defaultProviderId: 'hashed-local',
+        registeredProviders: [],
+        warnings: [],
+      },
+      checkedAt: Date.now(),
+    }) as never,
+    reviewQueue: (limit = 10) => records.slice(0, limit) as never,
     update: (id: string, patch: { scope?: string; summary?: string; detail?: string; tags?: string[] }) => {
       const record = records.find((entry) => entry.id === id);
       if (!record) return null;
@@ -48,6 +103,22 @@ function makeRegistry(): MemoryRegistry {
       if (patch.tags !== undefined) record.tags = patch.tags;
       record.updatedAt = Date.now();
       return record as never;
+    },
+    get: (id: string) => records.find((entry) => entry.id === id) as never,
+    link: async (fromId: string, toId: string, relation: string) => {
+      const from = records.find((entry) => entry.id === fromId);
+      const to = records.find((entry) => entry.id === toId);
+      if (!from || !to) return null;
+      const link = { fromId, toId, relation, createdAt: Date.now() };
+      links.push(link);
+      return link as never;
+    },
+    linksFor: (id: string) => links.filter((link) => link.fromId === id || link.toId === id) as never,
+    delete: (id: string) => {
+      const index = records.findIndex((entry) => entry.id === id);
+      if (index === -1) return false;
+      records.splice(index, 1);
+      return true;
     },
     review: (id: string, patch: { state?: string; confidence?: number; staleReason?: string }) => {
       const record = records.find((entry) => entry.id === id);
@@ -70,8 +141,74 @@ function makeRegistry(): MemoryRegistry {
         links: [],
       } as never;
     },
+    importBundle: async (bundle: MemoryBundle) => {
+      for (const record of bundle.records as Array<typeof records[number]>) {
+        if (!records.some((entry) => entry.id === record.id)) {
+          records.push({ ...record });
+        }
+      }
+      return {
+        importedRecords: bundle.records.length,
+        skippedRecords: 0,
+        importedLinks: bundle.links.length,
+      } as never;
+    },
     getAll: () => records as never,
   } as unknown as MemoryRegistry;
+}
+
+function makeRecallCommandContext(
+  printed: string[],
+  options: {
+    memoryRegistry: MemoryRegistry;
+    forensicsRegistry: ForensicsRegistry;
+    policyRuntimeState?: PolicyRuntimeState;
+    mcpRegistry?: CommandContext['extensions']['mcpRegistry'];
+    shellPaths?: CommandContext['workspace']['shellPaths'];
+  },
+): CommandContext {
+  const providerRegistry = {} as never;
+  const conversationManager = {} as never;
+  const configManager = {} as never;
+  return {
+    session: {
+      conversationManager,
+      runtime: {
+        model: '',
+        provider: '',
+        debugMode: false,
+        systemPrompt: '',
+        reasoningEffort: '',
+        sessionId: 'session-1',
+      },
+    },
+    provider: {
+      providerRegistry,
+    },
+    workspace: {
+      shellPaths: options.shellPaths,
+    },
+    platform: {
+      config: {} as never,
+      configManager,
+    },
+    ops: {},
+    extensions: {
+      toolRegistry: {} as never,
+      mcpRegistry: options.mcpRegistry ?? ({} as never),
+      memoryRegistry: options.memoryRegistry,
+      forensicsRegistry: options.forensicsRegistry,
+      policyRuntimeState: options.policyRuntimeState,
+    },
+    clients: {
+      knowledgeApi: {
+        memory: createMemoryApi(options.memoryRegistry),
+      } as never,
+    },
+    renderRequest: () => {},
+    print: (text: string) => { printed.push(text); },
+    exit: () => {},
+  };
 }
 
 describe('recallCommand', () => {
@@ -103,27 +240,10 @@ describe('recallCommand', () => {
   });
 
   test('captures the latest incident into memory', async () => {
-    await recallCommand.handler(['capture', 'incident', 'latest'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'session-1',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { printed.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await recallCommand.handler(['capture', 'incident', 'latest'], makeRecallCommandContext(printed, {
       memoryRegistry: makeRegistry(),
       forensicsRegistry,
-    });
+    }));
 
     expect(printed.some((line) => line.includes('Captured incident incident-1 into memory'))).toBe(true);
   });
@@ -144,50 +264,20 @@ describe('recallCommand', () => {
       ],
     });
 
-    await recallCommand.handler(['capture', 'policy'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'session-1',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { printed.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: { listServerSecurity: () => [] } as never,
+    await recallCommand.handler(['capture', 'policy'], makeRecallCommandContext(printed, {
       memoryRegistry: makeRegistry(),
       forensicsRegistry,
       policyRuntimeState,
-    });
+      mcpRegistry: { listServerSecurity: () => [] } as never,
+    }));
 
     expect(printed.some((line) => line.includes('Captured policy preflight into memory'))).toBe(true);
   });
 
   test('captures MCP security posture into memory', async () => {
-    await recallCommand.handler(['capture', 'mcp', 'ops'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'session-1',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { printed.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
+    await recallCommand.handler(['capture', 'mcp', 'ops'], makeRecallCommandContext(printed, {
+      memoryRegistry: makeRegistry(),
+      forensicsRegistry,
       mcpRegistry: {
         listServerSecurity: () => [{
           name: 'ops',
@@ -201,9 +291,7 @@ describe('recallCommand', () => {
           quarantineDetail: 'unexpected deploy surface',
         }],
       } as never,
-      memoryRegistry: makeRegistry(),
-      forensicsRegistry,
-    });
+    }));
 
     expect(printed.some((line) => line.includes('Captured MCP server ops into memory'))).toBe(true);
   });
@@ -212,54 +300,25 @@ describe('recallCommand', () => {
     const registry = makeRegistry();
     await registry.add({ cls: 'decision', summary: 'Share this', scope: 'project' });
 
-    await recallCommand.handler(['promote', 'mem-1', 'team'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'session-1',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { printed.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await recallCommand.handler(['promote', 'mem-1', 'team'], makeRecallCommandContext(printed, {
       memoryRegistry: registry,
       forensicsRegistry,
-    });
+    }));
 
     expect(printed.some((line) => line.includes('Promoted mem-1 to team scope'))).toBe(true);
 
     const dir = mkdtempSync(join(tmpdir(), 'gv-memory-handoff-'));
     const bundlePath = join(dir, 'team-handoff.json');
+    const shellPaths = createShellPathService({
+      workingDirectory: dir,
+      homeDirectory: dir,
+    });
     printed.length = 0;
-    await recallCommand.handler(['handoff-export', bundlePath, '--scope', 'team'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'session-1',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { printed.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await recallCommand.handler(['handoff-export', bundlePath, '--scope', 'team'], makeRecallCommandContext(printed, {
       memoryRegistry: registry,
       forensicsRegistry,
-    });
+      shellPaths,
+    }));
 
     expect(printed.some((line) => line.includes('Exported team handoff bundle'))).toBe(true);
     expect(existsSync(bundlePath)).toBe(true);
@@ -274,53 +333,19 @@ describe('recallCommand', () => {
       tags: ['deploy', 'mcp'],
       review: { state: 'reviewed', confidence: 92 },
     });
-    await recallCommand.handler(['explain', 'deploy', 'the', 'release'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'session-1',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { printed.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await recallCommand.handler(['explain', 'deploy', 'the', 'release'], makeRecallCommandContext(printed, {
       memoryRegistry: registry,
       forensicsRegistry,
-    });
+    }));
 
     expect(printed.join('\n')).toContain('Injected Project Knowledge');
     expect(printed.join('\n')).toContain('matched task token "deploy"');
 
     printed.length = 0;
-    await recallCommand.handler(['stale', 'mem-1', 'operator', 'revalidation', 'needed'], {
-      providerRegistry: {} as never,
-      conversationManager: {} as never,
-      config: {} as never,
-      configManager: {} as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'session-1',
-      },
-      renderRequest: () => {},
-      print: (text: string) => { printed.push(text); },
-      exit: () => {},
-      toolRegistry: {} as never,
-      mcpRegistry: {} as never,
+    await recallCommand.handler(['stale', 'mem-1', 'operator', 'revalidation', 'needed'], makeRecallCommandContext(printed, {
       memoryRegistry: registry,
       forensicsRegistry,
-    });
+    }));
 
     expect(printed.some((line) => line.includes('Reviewed mem-1: stale'))).toBe(true);
   });

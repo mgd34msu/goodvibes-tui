@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
-import * as os from 'os';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitProviderWarning } from '../runtime/emitters/index.ts';
 import { OpenAICompatProvider } from './openai-compat.ts';
@@ -12,9 +11,6 @@ import {
   LocalContextIngestionService,
   resolveContextWindow,
 } from './local-context-ingestion.ts';
-
-/** Directory where custom provider JSON files are stored. */
-const PROVIDERS_DIR = path.join(os.homedir(), '.goodvibes', 'tui', 'providers');
 
 /** Debounce delay for file watcher (ms). */
 const WATCH_DEBOUNCE_MS = 300;
@@ -72,6 +68,8 @@ export interface LoadCustomProvidersResult {
 
 /** Options for loadCustomProviders. */
 export interface LoadCustomProvidersOptions {
+  /** Directory that owns custom provider JSON files. */
+  providersDir: string;
   /**
    * When true, attempts to fetch max_context_length from each provider's
    * /v1/models endpoint and uses the reported value with 'provider_api'
@@ -168,12 +166,12 @@ function validateCustomProvider(data: unknown): { valid: boolean; errors: string
 /**
  * Ensure the providers directory exists, creating it if necessary.
  */
-async function ensureProvidersDir(): Promise<void> {
+async function ensureProvidersDir(providersDir: string): Promise<void> {
   try {
-    await fsPromises.mkdir(PROVIDERS_DIR, { recursive: true });
+    await fsPromises.mkdir(providersDir, { recursive: true });
   } catch (err) {
     throw new Error(
-      `[custom-loader] Failed to create providers directory '${PROVIDERS_DIR}': ${
+      `[custom-loader] Failed to create providers directory '${providersDir}': ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
@@ -181,7 +179,7 @@ async function ensureProvidersDir(): Promise<void> {
 }
 
 /**
- * Load all custom providers from ~/.goodvibes/tui/providers/*.json.
+ * Load all custom providers from an owned providers directory.
  * Auto-creates the directory if it does not exist.
  * Invalid files are skipped with a warning rather than failing the whole load.
  *
@@ -190,17 +188,18 @@ async function ensureProvidersDir(): Promise<void> {
  * `max_context_length` with `provider_api` provenance.
  */
 export async function loadCustomProviders(
-  options: LoadCustomProvidersOptions = {},
+  options: LoadCustomProvidersOptions,
 ): Promise<LoadCustomProvidersResult> {
   const warnings: string[] = [];
   const providers: Array<{ config: CustomProviderConfig; provider: LLMProvider }> = [];
   const models: ModelDefinition[] = [];
+  const { providersDir } = options;
 
-  await ensureProvidersDir();
+  await ensureProvidersDir(providersDir);
 
   let entries: string[];
   try {
-    const dirents = await fsPromises.readdir(PROVIDERS_DIR, { withFileTypes: true });
+    const dirents = await fsPromises.readdir(providersDir, { withFileTypes: true });
     entries = dirents
       .filter((d) => d.isFile() && d.name.endsWith('.json'))
       .map((d) => d.name);
@@ -218,7 +217,7 @@ export async function loadCustomProviders(
   const validConfigs: Array<{ cfg: CustomProviderConfig; provider: LLMProvider; apiKey: string }> = [];
 
   for (const filename of entries) {
-    const filepath = path.join(PROVIDERS_DIR, filename);
+    const filepath = path.join(providersDir, filename);
     let raw: string;
     try {
       raw = await fsPromises.readFile(filepath, 'utf-8');
@@ -346,7 +345,7 @@ export async function loadCustomProviders(
 }
 
 /**
- * Start watching ~/.goodvibes/tui/providers/ for file changes.
+ * Start watching an owned providers directory for file changes.
  * Debounces rapid events by 300ms before invoking the onChange callback.
  * Emits typed provider warnings if the watcher cannot be started.
  * Returns a handle with a `close()` method to stop watching.
@@ -354,6 +353,7 @@ export async function loadCustomProviders(
 export function watchCustomProviders(
   runtimeBus: RuntimeEventBus | null,
   onChange: () => void,
+  providersDir: string,
 ): { close: () => void } {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let watcher: fs.FSWatcher | null = null;
@@ -376,7 +376,7 @@ export function watchCustomProviders(
       // some Linux filesystems. If that becomes a problem, consider replacing this
       // with the 'chokidar' library which uses inotify directly.
       watcher = fs.watch(
-        PROVIDERS_DIR,
+        providersDir,
         { persistent: false }, // Don't keep the Node process alive just for this watcher
         (_eventType, _filename) => {
         if (debounceTimer) clearTimeout(debounceTimer);
@@ -398,7 +398,7 @@ export function watchCustomProviders(
 
   // Ensure the directory exists before starting the watcher
   fsPromises
-    .mkdir(PROVIDERS_DIR, { recursive: true })
+    .mkdir(providersDir, { recursive: true })
     .then(() => {
       if (closed) return;
       startWatch();

@@ -15,8 +15,8 @@ export class GitService {
   private hooks: HookDispatcher | null;
   private cwd: string;
 
-  constructor(cwd?: string, hooks?: HookDispatcher) {
-    this.cwd = cwd ?? process.cwd();
+  constructor(cwd: string, hooks?: HookDispatcher) {
+    this.cwd = cwd;
     this.hooks = hooks ?? null;
     this.git = simpleGit({ baseDir: this.cwd });
   }
@@ -376,9 +376,8 @@ export class GitService {
    * Initialize a new git repository at the given path using Bun.spawnSync.
    * Returns true on success, false on failure.
    */
-  static initRepo(cwd?: string): { success: boolean; error?: string } {
-    const dir = cwd ?? process.cwd();
-    const result = Bun.spawnSync(['git', 'init', dir]);
+  static initRepo(cwd: string): { success: boolean; error?: string } {
+    const result = Bun.spawnSync(['git', 'init', cwd]);
     if (result.exitCode === 0) {
       return { success: true };
     }
@@ -390,15 +389,13 @@ export class GitService {
    * Return true if the given directory is inside a git repository.
    * Uses `git rev-parse --git-dir` which exits 0 only inside a repo.
    */
-  static isGitRepo(cwd?: string): boolean {
-    const dir = cwd ?? process.cwd();
-    const result = Bun.spawnSync(['git', '-C', dir, 'rev-parse', '--git-dir']);
+  static isGitRepo(cwd: string): boolean {
+    const result = Bun.spawnSync(['git', '-C', cwd, 'rev-parse', '--git-dir']);
     return result.exitCode === 0;
   }
 
-  static getRepoRoot(cwd?: string): string | null {
-    const dir = cwd ?? process.cwd();
-    const result = Bun.spawnSync(['git', '-C', dir, 'rev-parse', '--show-toplevel']);
+  static getRepoRoot(cwd: string): string | null {
+    const result = Bun.spawnSync(['git', '-C', cwd, 'rev-parse', '--show-toplevel']);
     if (result.exitCode !== 0 || !result.stdout) return null;
     const root = new TextDecoder().decode(result.stdout).trim();
     return root.length > 0 ? root : null;

@@ -6,7 +6,11 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
+import { createShellPathService } from '../../runtime/shell-paths.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
+import type { PeerClient } from '../../runtime/peer-client.ts';
+import { getDistributedNodeHostContract } from '../../runtime/remote/distributed-runtime-contract.ts';
+import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import {
   getTestAgentManager,
   getTestRemoteRunnerRegistry,
@@ -14,34 +18,190 @@ import {
   resetTestRuntimeServices,
 } from '../helpers/runtime-services.ts';
 
+type CommandContextOverrides =
+  Omit<Partial<CommandContext>, 'session' | 'provider' | 'workspace' | 'platform' | 'ops' | 'extensions'> & {
+    session?: Partial<CommandContext['session']> & {
+      runtime?: Partial<CommandContext['session']['runtime']>;
+    };
+    provider?: Partial<CommandContext['provider']>;
+    workspace?: Partial<CommandContext['workspace']>;
+    platform?: Partial<CommandContext['platform']>;
+    ops?: Partial<CommandContext['ops']>;
+    extensions?: Partial<CommandContext['extensions']>;
+  };
+
 function createRemoteCommandContext(
   store: ReturnType<typeof createRuntimeStore>,
   out: string[],
-  overrides: Partial<CommandContext> = {},
+  overrides: CommandContextOverrides = {},
 ): CommandContext {
-  return {
-    providerRegistry: {} as never,
-    conversationManager: {} as never,
-    config: {} as never,
-    configManager: {} as never,
-    runtime: {
-      model: '',
-      provider: '',
-      debugMode: false,
-      systemPrompt: '',
-      reasoningEffort: '',
-      sessionId: 'sess-remote-command',
+  const shellRoot = mkdtempSync(join(tmpdir(), 'gv-remote-shell-'));
+  const remoteRunnerRegistry = getTestRemoteRunnerRegistry();
+  const remoteSupervisor = getTestRemoteSupervisor();
+  const remoteRuntime = {
+    listActiveConnections: () => {
+      const state = store.getState().acp;
+      return state.activeConnectionIds
+        .map((id) => state.connections.get(id))
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
+    },
+    getSnapshot: () => ({
+      daemon: { transportState: 'connected', isRunning: true, reconnectAttempts: 0, runningJobCount: 0, lastError: undefined },
+      acp: {
+        transportState: store.getState().acp.managerTransportState,
+        totalMessages: store.getState().acp.totalMessages,
+        activeConnections: remoteRuntime.listActiveConnections(),
+      },
+      pools: remoteRunnerRegistry.listPools(),
+      contracts: remoteRunnerRegistry.listContracts(),
+      artifacts: remoteRunnerRegistry.listArtifacts(),
+      supervisor: remoteSupervisor.getSnapshot(store),
+      distributed: { pairRequests: [], peers: [], work: [] },
+    }),
+    listPools: () => remoteRunnerRegistry.listPools(),
+    getPool: (id: string) => remoteRunnerRegistry.getPool(id),
+    createPool: (input: { id: string; label: string }) => remoteRunnerRegistry.createPool(input),
+    assignRunnerToPool: (poolId: string, runnerId: string) => remoteRunnerRegistry.assignRunnerToPool(poolId, runnerId),
+    removeRunnerFromPool: (poolId: string, runnerId: string) => remoteRunnerRegistry.removeRunnerFromPool(poolId, runnerId),
+    listContracts: () => remoteRunnerRegistry.listContracts(),
+    getContract: (runnerId: string) => remoteRunnerRegistry.getContract(runnerId),
+    registerContract: (contract: Parameters<typeof remoteRunnerRegistry.registerContract>[0]) => remoteRunnerRegistry.registerContract(contract),
+    upsertContractForAgent: (runnerId: string) => remoteRunnerRegistry.upsertContractForAgent(runnerId, store),
+    listArtifacts: () => remoteRunnerRegistry.listArtifacts(),
+    getArtifact: (artifactId: string) => remoteRunnerRegistry.getArtifact(artifactId),
+    buildReviewSummary: (artifactId: string) => remoteRunnerRegistry.buildReviewSummary(artifactId),
+    exportArtifact: (artifactId: string, path?: string) => remoteRunnerRegistry.exportArtifact(artifactId, path),
+    exportArtifactForAgent: async (agentId: string, path?: string) => {
+      const artifact = remoteRunnerRegistry.captureArtifactForRunner(agentId, store);
+      if (!artifact) return null;
+      return remoteRunnerRegistry.exportArtifact(artifact.id, path);
+    },
+    importArtifact: (path: string) => remoteRunnerRegistry.importArtifact(path),
+    exportSessionBundle: (path: string) => remoteRunnerRegistry.exportSessionBundle(store, path),
+    importSessionBundle: (path: string) => remoteRunnerRegistry.importSessionBundle(path),
+  };
+  const peerClient: Pick<PeerClient, 'getSnapshot' | 'runners'> = {
+    getSnapshot: () => ({
+      capturedAt: Date.now(),
+      nodeHostContract: getDistributedNodeHostContract(),
+      acp: {
+        transportState: store.getState().acp.managerTransportState,
+        totalMessages: store.getState().acp.totalMessages,
+        activeConnections: remoteRuntime.listActiveConnections(),
+      },
+      pairing: {
+        requests: [],
+        total: 0,
+        pending: 0,
+        approved: 0,
+        verified: 0,
+        rejected: 0,
+        expired: 0,
+      },
+      peers: [],
+      peerSnapshots: [],
+      work: [],
+      runners: {
+        pools: remoteRunnerRegistry.listPools(),
+        contracts: remoteRunnerRegistry.listContracts(),
+        artifacts: remoteRunnerRegistry.listArtifacts(),
+      },
+      supervisor: remoteSupervisor.getSnapshot(store),
+    }),
+    runners: {
+      listPools: () => remoteRunnerRegistry.listPools(),
+      getPool: (id: string) => remoteRunnerRegistry.getPool(id),
+      createPool: (input) => remoteRunnerRegistry.createPool(input),
+      assignRunnerToPool: (poolId: string, runnerId: string) => remoteRunnerRegistry.assignRunnerToPool(poolId, runnerId),
+      removeRunnerFromPool: (poolId: string, runnerId: string) => remoteRunnerRegistry.removeRunnerFromPool(poolId, runnerId),
+      listContracts: () => remoteRunnerRegistry.listContracts(),
+      getContract: (runnerId: string) => remoteRunnerRegistry.getContract(runnerId),
+      registerContract: (contract) => remoteRunnerRegistry.registerContract(contract),
+      upsertContractForAgent: (agentId: string) => remoteRunnerRegistry.upsertContractForAgent(agentId, store),
+      listArtifacts: () => remoteRunnerRegistry.listArtifacts(),
+      getArtifact: (artifactId: string) => remoteRunnerRegistry.getArtifact(artifactId),
+      captureArtifactForAgent: (agentId: string) => remoteRunnerRegistry.captureArtifactForAgent(agentId, store),
+      captureArtifactForRunner: (runnerId: string) => remoteRunnerRegistry.captureArtifactForRunner(runnerId, store),
+      exportArtifact: (artifactId: string, path?: string) => remoteRunnerRegistry.exportArtifact(artifactId, path),
+      importArtifact: (path: string) => remoteRunnerRegistry.importArtifact(path),
+      buildReviewSummary: (artifactId: string) => remoteRunnerRegistry.buildReviewSummary(artifactId),
+      exportSessionBundle: (path?: string) => remoteRunnerRegistry.exportSessionBundle(store, path),
+      importSessionBundle: (path: string) => remoteRunnerRegistry.importSessionBundle(path),
+    },
+  };
+  const providerRegistry = {} as never;
+  const conversationManager = {} as never;
+  const configManager = {} as never;
+  const base: CommandContext = {
+    session: {
+      conversationManager,
+      runtime: {
+        model: '',
+        provider: '',
+        debugMode: false,
+        systemPrompt: '',
+        reasoningEffort: '',
+        sessionId: 'sess-remote-command',
+      },
+    },
+    provider: {
+      providerRegistry,
+    },
+    workspace: {
+      shellPaths: createShellPathService({
+        workingDirectory: shellRoot,
+        homeDirectory: shellRoot,
+      }),
+    },
+    platform: {
+      config: {} as never,
+      configManager,
+      readModels: {
+        remote: createStaticUiReadModel(remoteRuntime.getSnapshot()),
+      } as never,
+    },
+    ops: {
+      remoteRuntime,
+      agentManager: getTestAgentManager(),
+    },
+    extensions: {
+      toolRegistry: {} as never,
+      mcpRegistry: {} as never,
+    },
+    clients: {
+      peer: peerClient as PeerClient,
     },
     renderRequest: () => {},
     print: (text: string) => { out.push(text); },
     exit: () => {},
-    toolRegistry: {} as never,
-    mcpRegistry: {} as never,
-    runtimeStore: store,
-    remoteRunnerRegistry: getTestRemoteRunnerRegistry(),
-    remoteSupervisor: getTestRemoteSupervisor(),
-    agentManager: getTestAgentManager(),
+  };
+  return {
+    ...base,
     ...overrides,
+    session: {
+      ...base.session,
+      ...overrides.session,
+    },
+    provider: {
+      ...base.provider,
+      ...overrides.provider,
+    },
+    workspace: {
+      ...base.workspace,
+      ...overrides.workspace,
+    },
+    platform: {
+      ...base.platform,
+      ...overrides.platform,
+    },
+    ops: {
+      ...base.ops,
+      ...overrides.ops,
+    },
+    extensions: {
+      ...base.extensions,
+      ...overrides.extensions,
+    },
   };
 }
 
@@ -113,9 +273,11 @@ describe('remote command', () => {
     const out: string[] = [];
 
     const ctx = createRemoteCommandContext(store, out, {
-      acpManager: {
-        spawn,
-      } as never,
+      ops: {
+        acpManager: {
+          spawn,
+        } as never,
+      },
     });
 
     await remote!.handler(['dispatch', 'researcher', 'Inspect', 'deployment', 'logs'], ctx);
@@ -185,9 +347,11 @@ describe('remote command', () => {
     const envPath = join(dir, 'remote-env.sh');
 
     const ctx = createRemoteCommandContext(store, out, {
-      configManager: {
-        getCategory: () => ({ daemon: false, httpListener: false }),
-      } as never,
+      platform: {
+        configManager: {
+          getCategory: () => ({ daemon: false, httpListener: false }),
+        } as never,
+      },
     });
 
     await remote!.handler(['setup'], ctx);
@@ -233,20 +397,26 @@ describe('remote command', () => {
     const spawn = mock(async () => 'remote-runner-pool-1');
     const out: string[] = [];
     const ctx = createRemoteCommandContext(store, out, {
-      configManager: {
-        getCategory: () => ({ daemon: false, httpListener: false }),
-      } as never,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-remote-pool',
+      platform: {
+        configManager: {
+          getCategory: () => ({ daemon: false, httpListener: false }),
+        } as never,
       },
-      acpManager: {
-        spawn,
-      } as never,
+      session: {
+        runtime: {
+          model: '',
+          provider: '',
+          debugMode: false,
+          systemPrompt: '',
+          reasoningEffort: '',
+          sessionId: 'sess-remote-pool',
+        },
+      },
+      ops: {
+        acpManager: {
+          spawn,
+        } as never,
+      },
     });
 
     await remote!.handler(['pool', 'create', 'ops', 'Ops Pool'], ctx);
@@ -278,13 +448,15 @@ describe('remote command', () => {
     const out: string[] = [];
     const dir = mkdtempSync(join(tmpdir(), 'gv-teleport-cmd-'));
     const ctx = createRemoteCommandContext(store, out, {
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId: 'sess-teleport-command',
+      session: {
+        runtime: {
+          model: '',
+          provider: '',
+          debugMode: false,
+          systemPrompt: '',
+          reasoningEffort: '',
+          sessionId: 'sess-teleport-command',
+        },
       },
     });
     store.setState((state) => ({

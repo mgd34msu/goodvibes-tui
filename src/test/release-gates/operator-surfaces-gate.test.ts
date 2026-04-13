@@ -13,9 +13,32 @@ import { AgentManager } from '../../tools/agent/index.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { ConversationManager } from '../../core/conversation.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
+import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
+import { createRuntimeHookApi } from '../../runtime/runtime-hook-api.ts';
+import { createRuntimeKnowledgeApi } from '../../runtime/runtime-knowledge-api.ts';
+import { createRuntimeMcpApi } from '../../runtime/runtime-mcp-api.ts';
+import { createRuntimeProviderApi } from '../../runtime/runtime-provider-api.ts';
+import { createOperatorClient } from '../../runtime/operator-client.ts';
+import { createPeerClient } from '../../runtime/peer-client.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { ToolRegistry } from '../../tools/registry.ts';
 import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
+import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
+import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
+import { listHookPointContracts } from '../../hooks/contracts.ts';
+
+type CommandContextOverrides =
+  Omit<Partial<CommandContext>, 'session' | 'provider' | 'workspace' | 'platform' | 'ops' | 'extensions'> & {
+    session?: Partial<CommandContext['session']> & {
+      runtime?: Partial<CommandContext['session']['runtime']>;
+    };
+    provider?: Partial<CommandContext['provider']>;
+    workspace?: Partial<CommandContext['workspace']>;
+    platform?: Partial<CommandContext['platform']>;
+    ops?: Partial<CommandContext['ops']>;
+    extensions?: Partial<CommandContext['extensions']>;
+  };
+import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
 
 describe('operator surfaces gate', () => {
   let configManager: ConfigManager;
@@ -33,62 +56,133 @@ describe('operator surfaces gate', () => {
       runtimeStore: createRuntimeStore(),
       configManager,
       workingDir: configManager.getControlPlaneConfigDir(),
+      homeDirectory: tmpdir(),
       getConversationTitle: () => 'operator-surfaces',
     });
   });
 
   function makeCommandContext(
     sessionId: string,
-    overrides: Partial<CommandContext> = {},
+    overrides: CommandContextOverrides = {},
   ): CommandContext {
-    const { runtime: runtimeOverride, ...rest } = overrides;
-    return {
-      providerRegistry: runtimeServices.providerRegistry,
-      conversationManager: new ConversationManager(() => 80),
-      config: configManager.getRaw(),
-      configManager,
-      runtime: {
-        model: '',
-        provider: '',
-        debugMode: false,
-        systemPrompt: '',
-        reasoningEffort: '',
-        sessionId,
-        ...(runtimeOverride ?? {}),
+    const { session: sessionOverride, ...rest } = overrides;
+    const providerRegistry = runtimeServices.providerRegistry;
+    const conversationManager = new ConversationManager(() => 80);
+    const uiServices = createUiRuntimeServices(runtimeServices);
+    const base: CommandContext = {
+      session: {
+        conversationManager,
+        sessionManager: runtimeServices.sessionManager,
+        runtime: {
+          model: '',
+          provider: '',
+          debugMode: false,
+          systemPrompt: '',
+          reasoningEffort: '',
+          sessionId,
+        },
+      },
+      provider: {
+        providerRegistry,
+      },
+      workspace: {
+        shellPaths: runtimeServices.shellPaths,
+        panelHealthMonitor: runtimeServices.panelHealthMonitor,
+        worktreeRegistry: runtimeServices.worktreeRegistry,
+        sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
+        bookmarkManager: runtimeServices.bookmarkManager,
+        profileManager: runtimeServices.profileManager,
+      },
+      platform: {
+        config: configManager.getRaw(),
+        configManager,
+        readModels: uiServices.readModels,
+        subscriptionManager: runtimeServices.subscriptionManager,
+      },
+      ops: {
+        agentManager: runtimeServices.agentManager,
+      },
+      extensions: {
+        toolRegistry: new ToolRegistry(),
+        mcpRegistry: runtimeServices.mcpRegistry,
+        knowledgeService: runtimeServices.knowledgeService,
+        hookWorkbench: runtimeServices.hookWorkbench,
+        pluginManager: runtimeServices.pluginManager,
+      },
+      clients: {
+        operator: createOperatorClient(uiServices),
+        peer: createPeerClient({
+          runtimeStore: runtimeServices.runtimeStore,
+          distributedRuntime: runtimeServices.distributedRuntime,
+          remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
+          remoteSupervisor: runtimeServices.remoteSupervisor,
+        }),
+        providerApi: createRuntimeProviderApi(runtimeServices),
+        knowledgeApi: createRuntimeKnowledgeApi(runtimeServices),
+        hookApi: createRuntimeHookApi({
+          dispatcher: {
+            listHooks: () => runtimeServices.hookDispatcher.listHooks(),
+            listChains: () => runtimeServices.hookWorkbench.listManagedChains(),
+          },
+          workbench: runtimeServices.hookWorkbench,
+          listContracts: () => listHookPointContracts(),
+        }),
+        mcpApi: createRuntimeMcpApi(runtimeServices.mcpRegistry),
       },
       renderRequest: () => {},
       print: () => {},
       exit: () => {},
-      toolRegistry: new ToolRegistry(),
-      mcpRegistry: runtimeServices.mcpRegistry,
-      panelHealthMonitor: runtimeServices.panelHealthMonitor,
-      worktreeRegistry: runtimeServices.worktreeRegistry,
-      sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
-      runtimeStore: runtimeServices.runtimeStore,
-      agentManager: runtimeServices.agentManager,
-      knowledgeService: runtimeServices.knowledgeService,
-      hookWorkbench: runtimeServices.hookWorkbench,
-      pluginManager: runtimeServices.pluginManager,
-      subscriptionManager: runtimeServices.subscriptionManager,
-      sessionManager: runtimeServices.sessionManager,
-      bookmarkManager: runtimeServices.bookmarkManager,
-      profileManager: runtimeServices.profileManager,
+    };
+    return {
+      ...base,
       ...rest,
+      session: {
+        ...base.session,
+        ...sessionOverride,
+        runtime: {
+          ...base.session.runtime,
+          ...sessionOverride?.runtime,
+        },
+      },
+      provider: {
+        ...base.provider,
+        ...overrides.provider,
+      },
+      workspace: {
+        ...base.workspace,
+        ...overrides.workspace,
+      },
+      platform: {
+        ...base.platform,
+        ...overrides.platform,
+      },
+      ops: {
+        ...base.ops,
+        ...overrides.ops,
+      },
+      extensions: {
+        ...base.extensions,
+        ...overrides.extensions,
+      },
     };
   }
 
   test('built-in strategic operator panels are registered on the active runtime surface', () => {
     const manager = new PanelManager();
+    const uiServices = createUiRuntimeServices(runtimeServices);
     registerBuiltinPanels(manager, {
-      runtimeBus: new RuntimeEventBus(),
       providerRegistry: runtimeServices.providerRegistry,
+      uiServices,
       forensicsRegistry: new ForensicsRegistry(),
       policyRuntimeState,
-      memoryRegistry: new MemoryRegistry(new MemoryStore(':memory:')),
+      memoryRegistry: new MemoryRegistry(new MemoryStore(':memory:', {
+        embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
+      })),
       tokenAuditor: runtimeServices.tokenAuditor,
       panelHealthMonitor: runtimeServices.panelHealthMonitor,
       worktreeRegistry: runtimeServices.worktreeRegistry,
       sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
+      systemMessagesPanel: new SystemMessagesPanel(runtimeServices.configManager, runtimeServices.panelHealthMonitor),
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
 
@@ -147,7 +241,9 @@ describe('operator surfaces gate', () => {
       openPolicyPanel: () => {
         opened = true;
       },
-      policyRegistry: policyRuntimeState.getRegistry(),
+      extensions: {
+        policyRegistry: policyRuntimeState.getRegistry(),
+      },
     }));
 
     expect(opened).toBe(true);
@@ -338,7 +434,11 @@ describe('operator surfaces gate', () => {
       print: (text: string) => {
         printed.push(text);
       },
-      runtimeStore: store,
+      platform: {
+        readModels: {
+          orchestration: createOrchestrationReadModel(store),
+        } as never,
+      },
     }));
 
     expect(printed.join('\n')).toContain('Graph graph-1');
@@ -361,8 +461,9 @@ describe('operator surfaces gate', () => {
       print: (text: string) => {
         printed.push(text);
       },
-      runtimeStore: createRuntimeStore(),
-      agentManager: manager,
+      ops: {
+        agentManager: manager,
+      },
     }));
 
     expect(manager.getStatus(a.id)?.status).toBe('cancelled');

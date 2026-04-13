@@ -3,7 +3,7 @@ import { ConfigManager } from '../config/manager.ts';
 import { SecretsManager } from '../config/secrets.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { SubscriptionManager } from '../config/subscriptions.ts';
-import { AutomationDeliveryManager, AutomationManager } from '../automation/index.ts';
+import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '../automation/index.ts';
 import { ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '../channels/index.ts';
 import { ChannelDeliveryRouter } from '../channels/delivery-router.ts';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '../control-plane/index.ts';
@@ -65,6 +65,7 @@ import { ToolLLM } from '../config/tool-llm.ts';
 import { PanelHealthMonitor } from './perf/panel-health-monitor.ts';
 import { WorktreeRegistry } from './worktree/registry.ts';
 import { SandboxSessionRegistry } from './sandbox/session-registry.ts';
+import { createShellPathService, type ShellPathService } from './shell-paths.ts';
 import type { FeatureFlagManager } from './feature-flags/index.ts';
 import { createFeatureFlagManager } from './feature-flags/index.ts';
 import { PolicyRuntimeState } from './permissions/policy-runtime.ts';
@@ -76,13 +77,17 @@ import {
 export interface RuntimeServicesOptions {
   readonly runtimeBus: RuntimeEventBus;
   readonly runtimeStore: RuntimeStore;
-  readonly configManager?: ConfigManager;
+  readonly configManager: ConfigManager;
   readonly featureFlags?: FeatureFlagManager;
   readonly getConversationTitle?: () => string | undefined;
-  readonly workingDir?: string;
+  readonly workingDir: string;
+  readonly homeDirectory: string;
 }
 
 export interface RuntimeServices {
+  readonly workingDirectory: string;
+  readonly homeDirectory: string;
+  readonly shellPaths: ShellPathService;
   readonly configManager: ConfigManager;
   readonly featureFlags: FeatureFlagManager;
   readonly runtimeBus: RuntimeEventBus;
@@ -163,13 +168,22 @@ export interface RuntimeServices {
 }
 
 export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeServices {
-  const configManager = options.configManager ?? new ConfigManager();
+  const workingDirectory = options.workingDir;
+  const homeDirectory = options.homeDirectory;
+  const shellPaths = createShellPathService({
+    workingDirectory,
+    homeDirectory,
+  });
+  const configManager = options.configManager;
   const featureFlags = options.featureFlags ?? createFeatureFlagManager();
   const runtimeDispatch = createDomainDispatch(options.runtimeStore);
   const gatewayMethods = new GatewayMethodCatalog();
   const panelManager = new PanelManager();
-  const keybindingsManager = new KeybindingsManager();
+  const keybindingsManager = new KeybindingsManager({
+    configPath: shellPaths.resolveUserTuiPath('keybindings.json'),
+  });
   const routeBindings = new RouteBindingManager({
+    store: new AutomationRouteStore({ configManager }),
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
   });
@@ -177,21 +191,29 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const channelPlugins = new ChannelPluginRegistry();
   surfaceRegistry.attachPluginRegistry(channelPlugins);
   const secretsManager = new SecretsManager({
-    projectRoot: options.workingDir ?? process.cwd(),
+    projectRoot: workingDirectory,
+    globalHome: homeDirectory,
+    configManager,
   });
-  const subscriptionManager = new SubscriptionManager();
-  const serviceRegistry = new ServiceRegistry(undefined, {
+  const subscriptionManager = new SubscriptionManager(
+    shellPaths.resolveUserTuiPath('subscriptions.json'),
+  );
+  const serviceRegistry = new ServiceRegistry(shellPaths.resolveProjectTuiPath('services.json'), {
     secretsManager,
     subscriptionManager,
   });
   const providerCapabilityRegistry = new ProviderCapabilityRegistry();
   const cacheHitTracker = new CacheHitTracker();
-  const favoritesStore = new FavoritesStore();
-  const benchmarkStore = new BenchmarkStore();
-  const modelLimitsService = new ModelLimitsService();
+  const favoritesStore = new FavoritesStore({ dir: shellPaths.userTuiRoot });
+  const benchmarkStore = new BenchmarkStore({ dir: shellPaths.userTuiRoot });
+  const modelLimitsService = new ModelLimitsService({
+    cachePath: shellPaths.resolveUserTuiPath('model-limits.json'),
+  });
   const providerRegistry = new ProviderRegistry({
     configManager,
     subscriptionManager,
+    secretsManager,
+    serviceRegistry,
     capabilityRegistry: providerCapabilityRegistry,
     cacheHitTracker,
     favoritesStore,
@@ -205,20 +227,25 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     configManager,
     providerRegistry,
   });
-  const localUserAuthManager = new UserAuthManager();
-  const profileManager = new ProfileManager();
-  const bookmarkManager = new BookmarkManager();
-  const sessionManager = new SessionManager(options.workingDir);
-  const sessionOrchestration = new CrossSessionTaskRegistry(options.workingDir);
+  const localUserAuthManager = new UserAuthManager({
+    bootstrapFilePath: shellPaths.resolveUserTuiPath('auth-users.json'),
+    bootstrapCredentialPath: shellPaths.resolveUserTuiPath('auth-bootstrap.txt'),
+  });
+  const profileManager = new ProfileManager(shellPaths.resolveUserTuiPath('profiles'));
+  const bookmarkManager = new BookmarkManager(shellPaths.resolveUserTuiPath('bookmarks'));
+  const sessionManager = new SessionManager(workingDirectory);
+  const sessionOrchestration = new CrossSessionTaskRegistry(workingDirectory);
   const hookActivityTracker = new HookActivityTracker();
-  const watcherRegistry = new WatcherRegistry();
+  const watcherRegistry = new WatcherRegistry({
+    storePath: shellPaths.resolveProjectTuiPath('watchers.json'),
+  });
   watcherRegistry.attachRuntime({
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
   });
   const agentMessageBus = new AgentMessageBus();
   agentMessageBus.setRuntimeBus(options.runtimeBus);
-  const archetypeLoader = new ArchetypeLoader();
+  const archetypeLoader = new ArchetypeLoader(join(workingDirectory, '.goodvibes', 'agents'));
   const agentOrchestrator = new AgentOrchestrator({
     messageBus: agentMessageBus,
   });
@@ -233,29 +260,34 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const wrfcController = new WrfcController(options.runtimeBus, agentMessageBus, {
     agentManager,
     configManager,
+    projectRoot: workingDirectory,
   });
   agentManager.setWrfcController(wrfcController);
-  const hookDispatcher = new HookDispatcher({ agentManager, toolLLM }, hookActivityTracker);
+  const hookDispatcher = new HookDispatcher({ agentManager, toolLLM, projectRoot: workingDirectory }, hookActivityTracker);
   configManager.attachHookDispatcher(hookDispatcher);
   const hookWorkbench = createHookWorkbench({
     hookDispatcher,
     configManager,
   });
-  const approvalBroker = new ApprovalBroker();
+  const approvalBroker = new ApprovalBroker({
+    storePath: shellPaths.resolveProjectTuiPath('control-plane', 'approvals.json'),
+  });
   const sessionBroker = new SharedSessionBroker({
+    storePath: shellPaths.resolveProjectTuiPath('control-plane', 'sessions.json'),
     routeBindings,
     agentStatusProvider: agentManager,
     messageSender: agentMessageBus,
   });
   const artifactStore = new ArtifactStore({ configManager });
   const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
-  const memoryDbPath = join(options.workingDir ?? process.cwd(), '.goodvibes', 'tui', 'memory.sqlite');
+  const memoryDbPath = join(workingDirectory, '.goodvibes', 'tui', 'memory.sqlite');
   const memoryStore = new MemoryStore(memoryDbPath, {
     embeddingRegistry: memoryEmbeddingRegistry,
   });
   const memoryRegistry = new MemoryRegistry(memoryStore);
   const deliveryManager = new AutomationDeliveryManager({
     configManager,
+    serviceRegistry,
     runtimeBus: options.runtimeBus,
     runtimeStore: options.runtimeStore,
     routeBindings,
@@ -292,7 +324,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const voiceProviders = new VoiceProviderRegistry();
   ensureBuiltinVoiceProviders(voiceProviders);
   const voiceService = new VoiceService(voiceProviders);
-  const webSearchProviders = new WebSearchProviderRegistry();
+  const webSearchProviders = new WebSearchProviderRegistry({
+    env: process.env,
+    serviceRegistry,
+  });
   const webSearchService = new WebSearchService(webSearchProviders, {
     serviceRegistry,
     featureFlags,
@@ -300,10 +335,18 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const mediaProviders = new MediaProviderRegistry();
   ensureBuiltinMediaProviders(mediaProviders, artifactStore, providerRegistry);
   const multimodalService = new MultimodalService(artifactStore, mediaProviders, voiceService, knowledgeService);
-  const pluginManager = new PluginManager();
+  const pluginManager = new PluginManager({
+    pathOptions: {
+      cwd: shellPaths.workingDirectory,
+      homeDir: shellPaths.homeDirectory,
+    },
+    stateFilePath: shellPaths.resolveUserTuiPath('plugins.json'),
+  });
   const workflow = createWorkflowServices();
   hookDispatcher.setTriggerManager(workflow.triggerManager);
-  const channelPolicy = new ChannelPolicyManager();
+  const channelPolicy = new ChannelPolicyManager({
+    storePath: shellPaths.resolveProjectTuiPath('channels', 'policies.json'),
+  });
   const distributedRuntime = new DistributedRuntimeManager();
   distributedRuntime.attachRuntime({
     sessionBridge: sessionBroker,
@@ -312,7 +355,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
   const remoteSupervisor = new RemoteSupervisor(remoteRunnerRegistry);
-  const sandboxSessionRegistry = new SandboxSessionRegistry();
+  const sandboxSessionRegistry = new SandboxSessionRegistry(workingDirectory);
   const mcpRegistry = new McpRegistry({
     hookDispatcher,
     sandboxSessions: sandboxSessionRegistry,
@@ -321,20 +364,20 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   mcpRegistry.setSandboxRuntime(configManager, sandboxSessionRegistry);
   const tokenAuditor = new ApiTokenAuditor({ managed: false });
   const panelHealthMonitor = new PanelHealthMonitor();
-  const worktreeRegistry = new WorktreeRegistry(options.workingDir);
+  const worktreeRegistry = new WorktreeRegistry(workingDirectory);
   const webhookNotifier = new WebhookNotifier();
-  const replayEngine = new DeterministicReplayEngine();
+  const replayEngine = new DeterministicReplayEngine(workingDirectory);
   const providerOptimizer = new ProviderOptimizer(providerRegistry, providerCapabilityRegistry, false);
   const sessionMemoryStore = new SessionMemoryStore();
   const sessionLineageTracker = new SessionLineageTracker();
   const sessionChangeTracker = new SessionChangeTracker();
-  const planManager = new ExecutionPlanManager(options.workingDir);
+  const planManager = new ExecutionPlanManager(workingDirectory);
   const adaptivePlanner = new AdaptivePlanner();
   const idempotencyStore = new IdempotencyStore();
-  const overflowHandler = new OverflowHandler();
+  const overflowHandler = new OverflowHandler({ baseDir: workingDirectory });
   const policyRuntimeState = new PolicyRuntimeState();
   const fileCache = new FileStateCache();
-  const projectIndex = new ProjectIndex(options.workingDir);
+  const projectIndex = new ProjectIndex(workingDirectory);
   const channelDeliveryRouter = new ChannelDeliveryRouter({
     configManager,
     serviceRegistry,
@@ -344,6 +387,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const modeManager = new ModeManager();
   const fileUndoManager = new FileUndoManager();
   const integrationHelpers = new IntegrationHelperService({
+    workingDirectory,
+    homeDirectory,
     runtimeStore: options.runtimeStore,
     runtimeBus: options.runtimeBus,
     configManager,
@@ -364,6 +409,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   agentOrchestrator.setDependencies({
     fileCache,
     projectIndex,
+    workingDirectory,
     fileUndoManager,
     modeManager,
     processManager,
@@ -378,12 +424,16 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     providerOptimizer,
     toolLLM,
     serviceRegistry,
+    sessionOrchestration,
     featureFlags,
     overflowHandler,
     sandboxSessionRegistry,
   });
 
   return {
+    workingDirectory,
+    homeDirectory,
+    shellPaths,
     configManager,
     featureFlags,
     runtimeBus: options.runtimeBus,

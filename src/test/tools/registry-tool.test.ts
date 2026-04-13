@@ -78,7 +78,6 @@ type PreviewModeOutput = {
 // ---------------------------------------------------------------------------
 
 let tmpDir: string;
-let origCwd: () => string;
 let toolRegistry: ToolRegistry;
 let tool: ReturnType<typeof createRegistryTool>;
 
@@ -103,21 +102,16 @@ beforeEach(() => {
     '---\nname: researcher\narchetype: analyst\ndescription: Research agent that gathers information\n---\n\nAgent body.\n',
   );
 
-  // Override process.cwd so tool sees our tmp dir
-  origCwd = process.cwd.bind(process);
-  (process as unknown as Record<string, unknown>).cwd = () => tmpDir;
-
   // Build a small ToolRegistry with a couple of mock tools
   toolRegistry = new ToolRegistry();
   toolRegistry.register(makeTool('read', 'Read files from disk'));
   toolRegistry.register(makeTool('write', 'Write files to disk'));
   toolRegistry.register(makeTool('shell-exec', 'Execute shell commands'));
 
-  tool = createRegistryTool(toolRegistry);
+  tool = createRegistryTool(toolRegistry, { workingDirectory: tmpDir });
 });
 
 afterEach(() => {
-  (process as unknown as Record<string, unknown>).cwd = origCwd;
   if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
 });
 

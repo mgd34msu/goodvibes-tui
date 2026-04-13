@@ -9,6 +9,7 @@ import { AutomationRouteStore } from '../../automation/store/routes.ts';
 import { AutomationRunStore } from '../../automation/store/runs.ts';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
 import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
+import { ConfigManager } from '../../config/manager.ts';
 import { PersistentStore } from '../../state/persistent-store.ts';
 import type { LegacySchedulerSnapshot } from '../../automation/migration.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
@@ -28,7 +29,14 @@ describe('AutomationManager target semantics', () => {
 
   function buildManager(spawnTask?: (prompt: string) => string) {
     const liveAgents = new Map<string, 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'>();
-    const agentManager = new AgentManager({ executor: testAgentExecutor });
+    const configManager = new ConfigManager({
+      workingDir: root,
+      configDir: join(root, '.goodvibes', 'tui'),
+    });
+    const agentManager = new AgentManager({
+      executor: testAgentExecutor,
+      configManager,
+    });
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, 'automation-routes.json')),
     });
@@ -48,12 +56,17 @@ describe('AutomationManager target semantics', () => {
       },
     });
     const manager = new AutomationManager({
+      configManager,
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),
       routeBindings,
       sessionBroker,
-      spawnTask: ({ prompt }) => spawnTask ? spawnTask(prompt) : `agent-${Math.random().toString(16).slice(2, 8)}`,
+      spawnTask: ({ prompt }) => {
+        return spawnTask ? spawnTask(prompt) : `agent-${Math.random().toString(16).slice(2, 8)}`;
+      },
+      cancelTask: () => undefined,
+      agentStatusProvider: { getStatus: () => null },
     });
     return {
       manager,

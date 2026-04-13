@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
 
@@ -155,7 +154,7 @@ export function getQualityTierFromScore(score: number): QualityTier {
 }
 
 export interface BenchmarkStoreOptions {
-  readonly dir?: string;
+  readonly dir: string;
 }
 
 export class BenchmarkStore {
@@ -164,8 +163,8 @@ export class BenchmarkStore {
   private nameIndex: Map<string, BenchmarkEntry> | null = null;
   private readonly refreshCallbacks = new Set<() => void>();
 
-  constructor(options: BenchmarkStoreOptions = {}) {
-    this.dir = options.dir ?? join(homedir(), '.goodvibes', 'tui');
+  constructor(options: BenchmarkStoreOptions) {
+    this.dir = options.dir;
   }
 
   getCachePath(): string {
