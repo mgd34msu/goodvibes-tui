@@ -16,18 +16,18 @@ import {
   type AutomationScheduleDefinition,
 } from '../../automation/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
+import type { ConfigKey } from '../../config/schema.ts';
+import {
+  buildMissingScopeBody,
+  resolveAuthenticatedPrincipal,
+  resolvePrivateHostFetchOptions,
+  type AuthenticatedPrincipal,
+} from '../http-policy.ts';
 
 type JsonBody = Record<string, unknown>;
 
-interface AuthenticatedPrincipal {
-  readonly principalId: string;
-  readonly principalKind: 'user' | 'bot' | 'service' | 'token';
-  readonly admin: boolean;
-  readonly scopes: readonly string[];
-}
-
 interface DaemonKnowledgeRouteContext {
-  readonly configManager: { get(key: string): unknown };
+  readonly configManager: { get(key: ConfigKey): unknown };
   readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
   readonly parseOptionalJsonBody: (req: Request) => Promise<JsonBody | null | Response>;
   readonly parseJsonText: (raw: string) => JsonBody | Response;
@@ -36,10 +36,6 @@ interface DaemonKnowledgeRouteContext {
   readonly extractAuthToken: (req: Request) => string;
   readonly knowledgeService: KnowledgeService;
   readonly knowledgeGraphqlService: KnowledgeGraphqlService;
-}
-
-function readAllowPrivateHosts(value: unknown): boolean {
-  return value === true;
 }
 
 export function createDaemonKnowledgeRouteHandlers(
@@ -350,7 +346,7 @@ async function handleKnowledgeGraphql(context: DaemonKnowledgeRouteContext, req:
   if (req.method === 'GET' && /\bmutation\b/.test(parsed.query)) {
     return Response.json({ error: 'GraphQL mutations must use POST.' }, { status: 405 });
   }
-  const principal = context.describeAuthenticatedPrincipal(context.extractAuthToken(req));
+  const principal = resolveAuthenticatedPrincipal(req, context);
   if (!principal) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -362,14 +358,9 @@ async function handleKnowledgeGraphql(context: DaemonKnowledgeRouteContext, req:
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
   }
 
-  const missing = missingScopes(principal.scopes, access.requiredScopes);
-  if (missing.length > 0) {
-    return Response.json({
-      error: `Missing required scope${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}`,
-      requiredScopes: [...access.requiredScopes],
-      grantedScopes: [...principal.scopes],
-      missingScopes: missing,
-    }, { status: 403 });
+  const scopeDenied = buildMissingScopeBody('knowledge GraphQL operation', access.requiredScopes, principal.scopes);
+  if (scopeDenied) {
+    return Response.json(scopeDenied, { status: 403 });
   }
   if (access.adminRequired && !principal.admin) {
     return Response.json({ error: 'Knowledge GraphQL mutation requires admin access.' }, { status: 403 });
@@ -386,21 +377,13 @@ async function handleKnowledgeGraphql(context: DaemonKnowledgeRouteContext, req:
   return Response.json(result, { status });
 }
 
-function missingScopes(grantedScopes: readonly string[] | undefined, requiredScopes: readonly string[]): string[] {
-  if (!requiredScopes.length) return [];
-  const granted = grantedScopes ?? [];
-  return requiredScopes.filter((required) => !granted.some((value) => value === '*' || value === required || (value.endsWith(':*') && required.startsWith(value.slice(0, -1)))));
-}
-
 function buildKnowledgePrivateHostFetchOptions(
   context: DaemonKnowledgeRouteContext,
   requested: unknown,
-): { allowPrivateHosts: true } | {} {
-  if (!readAllowPrivateHosts(requested)) return {};
-  if (!Boolean(context.configManager.get('network.remoteFetch.allowPrivateHosts'))) {
-    throw new Error('Private-host remote fetches are disabled by config.');
-  }
-  return { allowPrivateHosts: true };
+): { allowPrivateHosts: true } | {} | Response {
+  return resolvePrivateHostFetchOptions(requested, {
+    configManager: context.configManager,
+  });
 }
 
 async function handleKnowledgeIngestUrl(context: DaemonKnowledgeRouteContext, request: Request): Promise<Response> {
@@ -410,6 +393,8 @@ async function handleKnowledgeIngestUrl(context: DaemonKnowledgeRouteContext, re
   if (body instanceof Response) return body;
   const url = typeof body.url === 'string' ? body.url.trim() : '';
   if (!url) return Response.json({ error: 'Missing url' }, { status: 400 });
+  const privateHostFetchOptions = buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts);
+  if (privateHostFetchOptions instanceof Response) return privateHostFetchOptions;
   try {
     return Response.json(await context.knowledgeService.ingestUrl({
       url,
@@ -419,7 +404,7 @@ async function handleKnowledgeIngestUrl(context: DaemonKnowledgeRouteContext, re
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
       ...(typeof body.sourceType === 'string' ? { sourceType: body.sourceType as KnowledgeSourceRecord['sourceType'] } : {}),
       ...(typeof body.connectorId === 'string' ? { connectorId: body.connectorId } : {}),
-      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
+      ...privateHostFetchOptions,
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
     }), { status: 201 });
   } catch (error) {
@@ -432,6 +417,8 @@ async function handleKnowledgeIngestArtifact(context: DaemonKnowledgeRouteContex
   if (admin) return admin;
   const body = await context.parseJsonBody(request);
   if (body instanceof Response) return body;
+  const privateHostFetchOptions = buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts);
+  if (privateHostFetchOptions instanceof Response) return privateHostFetchOptions;
   try {
     return Response.json(await context.knowledgeService.ingestArtifact({
       ...(typeof body.artifactId === 'string' ? { artifactId: body.artifactId } : {}),
@@ -443,7 +430,7 @@ async function handleKnowledgeIngestArtifact(context: DaemonKnowledgeRouteContex
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
       ...(typeof body.sourceType === 'string' ? { sourceType: body.sourceType as KnowledgeSourceRecord['sourceType'] } : {}),
       ...(typeof body.connectorId === 'string' ? { connectorId: body.connectorId } : {}),
-      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
+      ...privateHostFetchOptions,
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
     }), { status: 201 });
   } catch (error) {
@@ -458,11 +445,13 @@ async function handleKnowledgeImportBookmarks(context: DaemonKnowledgeRouteConte
   if (body instanceof Response) return body;
   const path = typeof body.path === 'string' ? body.path.trim() : '';
   if (!path) return Response.json({ error: 'Missing path' }, { status: 400 });
+  const privateHostFetchOptions = buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts);
+  if (privateHostFetchOptions instanceof Response) return privateHostFetchOptions;
   try {
     return Response.json(await context.knowledgeService.importBookmarksFromFile({
       path,
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
-      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
+      ...privateHostFetchOptions,
     }), { status: 201 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
@@ -476,11 +465,13 @@ async function handleKnowledgeImportUrls(context: DaemonKnowledgeRouteContext, r
   if (body instanceof Response) return body;
   const path = typeof body.path === 'string' ? body.path.trim() : '';
   if (!path) return Response.json({ error: 'Missing path' }, { status: 400 });
+  const privateHostFetchOptions = buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts);
+  if (privateHostFetchOptions instanceof Response) return privateHostFetchOptions;
   try {
     return Response.json(await context.knowledgeService.importUrlsFromFile({
       path,
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
-      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
+      ...privateHostFetchOptions,
     }), { status: 201 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
@@ -494,6 +485,8 @@ async function handleKnowledgeIngestConnector(context: DaemonKnowledgeRouteConte
   if (body instanceof Response) return body;
   const connectorId = typeof body.connectorId === 'string' ? body.connectorId.trim() : '';
   if (!connectorId) return Response.json({ error: 'Missing connectorId' }, { status: 400 });
+  const privateHostFetchOptions = buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts);
+  if (privateHostFetchOptions instanceof Response) return privateHostFetchOptions;
   try {
     return Response.json(await context.knowledgeService.ingestConnectorInput({
       connectorId,
@@ -501,7 +494,7 @@ async function handleKnowledgeIngestConnector(context: DaemonKnowledgeRouteConte
       ...(typeof body.content === 'string' ? { content: body.content } : {}),
       ...(typeof body.path === 'string' ? { path: body.path } : {}),
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
-      ...buildKnowledgePrivateHostFetchOptions(context, body.allowPrivateHosts),
+      ...privateHostFetchOptions,
     }), { status: 201 });
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });

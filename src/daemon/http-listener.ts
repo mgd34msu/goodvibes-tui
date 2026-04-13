@@ -1,8 +1,10 @@
-import { timingSafeEqual } from 'crypto';
 import { logger } from '../utils/logger.ts';
 import { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookEvent } from '../hooks/types.ts';
-import { buildOperatorSessionCookie, extractOperatorAuthToken } from '../security/http-auth.ts';
+import {
+  authenticateOperatorRequest,
+  buildOperatorSessionCookie,
+} from '../security/http-auth.ts';
 import { UserAuthManager } from '../security/user-auth.ts';
 import { ConfigManager } from '../config/manager.ts';
 import { extractForwardedClientIp, resolveInboundTlsContext, type ResolvedInboundTlsContext } from '../runtime/network/index.ts';
@@ -162,15 +164,18 @@ export class HttpListener {
   // -------------------------------------------------------------------------
 
   private checkAuth(req: Request): boolean {
-    const bearer = extractOperatorAuthToken(req);
+    return authenticateOperatorRequest(req, {
+      sharedToken: this.authToken,
+      userAuth: this.userAuth,
+    }) !== null;
+  }
 
-    if (this.authToken) {
-      if (bearer.length !== this.authToken.length) return false;
-      return timingSafeEqual(Buffer.from(bearer), Buffer.from(this.authToken));
+  private async parseJsonBody(req: Request): Promise<Record<string, unknown> | Response> {
+    try {
+      return await req.json() as Record<string, unknown>;
+    } catch {
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
-
-    if (!bearer) return false;
-    return this.userAuth.validateSession(bearer) !== null;
   }
 
   // -------------------------------------------------------------------------
@@ -216,12 +221,8 @@ export class HttpListener {
   }
 
   private async handleLogin(req: Request): Promise<Response> {
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json() as Record<string, unknown>;
-    } catch {
-      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
 
     const username = typeof body.username === 'string' ? body.username : '';
     const password = typeof body.password === 'string' ? body.password : '';
@@ -249,12 +250,8 @@ export class HttpListener {
   }
 
   private async handleWebhook(req: Request): Promise<Response> {
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json() as Record<string, unknown>;
-    } catch {
-      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-    }
+    const body = await this.parseJsonBody(req);
+    if (body instanceof Response) return body;
 
     // Construct a HookEvent from the incoming payload
     const eventType = typeof body.event === 'string' ? body.event : 'webhook';

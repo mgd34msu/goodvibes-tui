@@ -191,12 +191,8 @@ export function createDaemonSystemRouteHandlers(
     postConfig: async (req) => {
       const admin = context.requireAdmin(req);
       if (admin) return admin;
-      let payload: { key?: string; value?: unknown };
-      try {
-        payload = await req.json() as { key?: string; value?: unknown };
-      } catch {
-        return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-      }
+      const payload = await context.parseJsonBody(req);
+      if (payload instanceof Response) return payload;
       const { key, value } = payload;
       if (!key || typeof key !== 'string') {
         return Response.json({ error: 'Missing or invalid key' }, { status: 400 });

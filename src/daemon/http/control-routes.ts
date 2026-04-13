@@ -3,17 +3,16 @@ import type { RuntimeEventDomain } from '../../runtime/events/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
 import { inspectInboundTls, inspectOutboundTls } from '../../runtime/network/index.ts';
 import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
+import {
+  resolveAuthenticatedPrincipal,
+  type AuthenticatedPrincipal,
+} from '../http-policy.ts';
 
 interface ControlRouteContext {
   readonly authToken: string | null;
   readonly configManager: import('../../config/manager.ts').ConfigManager;
   readonly controlPlaneGateway: import('../../control-plane/index.ts').ControlPlaneGateway;
-  readonly describeAuthenticatedPrincipal: (token: string) => {
-    principalId: string;
-    principalKind: 'user' | 'bot' | 'service' | 'token';
-    admin: boolean;
-    scopes: readonly string[];
-  } | null;
+  readonly describeAuthenticatedPrincipal: (token: string) => AuthenticatedPrincipal | null;
   readonly extractAuthToken: (req: Request) => string;
   readonly gatewayMethods: import('../../control-plane/index.ts').GatewayMethodCatalog;
   readonly invokeGatewayMethodCall: (input: {
@@ -29,6 +28,7 @@ interface ControlRouteContext {
       readonly clientKind?: string;
     };
   }) => Promise<{ status: number; ok: boolean; body: unknown }>;
+  readonly parseOptionalJsonBody: (req: Request) => Promise<Record<string, unknown> | null | Response>;
   readonly requireAdmin: (req: Request) => Response | null;
   readonly requireAuthenticatedSession: (req: Request) => { username: string; roles: readonly string[] } | null;
 }
@@ -102,16 +102,10 @@ export function createDaemonControlRouteHandlers(
         const admin = context.requireAdmin(req);
         if (admin) return admin;
       }
-      const principal = context.describeAuthenticatedPrincipal(context.extractAuthToken(req));
-      let payload: Record<string, unknown> = {};
-      const raw = await req.text();
-      if (raw.trim()) {
-        try {
-          payload = JSON.parse(raw) as Record<string, unknown>;
-        } catch {
-          return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-        }
-      }
+      const principal = resolveAuthenticatedPrincipal(req, context);
+      const parsedBody = await context.parseOptionalJsonBody(req);
+      if (parsedBody instanceof Response) return parsedBody;
+      const payload = parsedBody ?? {};
       const response = await context.invokeGatewayMethodCall({
         authToken: context.extractAuthToken(req),
         methodId,
@@ -131,7 +125,7 @@ export function createDaemonControlRouteHandlers(
       const url = new URL(req.url);
       const rawDomains = url.searchParams.get('domains');
       const domains = (rawDomains ? rawDomains.split(',').map((value) => value.trim()).filter(Boolean) : []) as RuntimeEventDomain[];
-      const principal = context.describeAuthenticatedPrincipal(context.extractAuthToken(req));
+      const principal = resolveAuthenticatedPrincipal(req, context);
       return context.controlPlaneGateway.createEventStream(req, {
         clientKind: 'web',
         transport: 'sse',

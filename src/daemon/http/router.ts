@@ -190,6 +190,7 @@ export class DaemonHttpRouter {
         extractAuthToken: this.context.extractAuthToken,
         gatewayMethods: this.context.gatewayMethods,
         invokeGatewayMethodCall: this.context.invokeGatewayMethodCall,
+        parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
         requireAdmin: this.context.requireAdmin,
         requireAuthenticatedSession: this.context.requireAuthenticatedSession,
       }, req),

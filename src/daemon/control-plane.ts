@@ -1,13 +1,22 @@
-import { timingSafeEqual } from 'node:crypto';
 import type { AgentManager } from '../tools/agent/index.ts';
 import type { UserAuthManager } from '../security/user-auth.ts';
-import { extractOperatorAuthToken } from '../security/http-auth.ts';
+import {
+  authenticateOperatorRequest,
+  authenticateOperatorToken,
+  extractOperatorAuthToken,
+  isOperatorAdmin,
+} from '../security/http-auth.ts';
 import type { ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
 import type { GatewayMethodCatalog, GatewayMethodDescriptor } from '../control-plane/index.ts';
 import type { RuntimeEventDomain } from '../runtime/events/index.ts';
 import type { DistributedRuntimeManager } from '../runtime/remote/index.ts';
 import { extractForwardedClientIp } from '../runtime/network/index.ts';
-import { missingScopes, resolveGatewayPathTemplate } from './helpers.ts';
+import { resolveGatewayPathTemplate } from './helpers.ts';
+import {
+  buildMissingScopeBody,
+  resolveAuthenticatedPrincipal,
+  type AuthenticatedPrincipal,
+} from './http-policy.ts';
 
 export interface ControlPlaneWebSocketData {
   readonly channel: 'control-plane';
@@ -58,13 +67,6 @@ interface UpgradeCapableServer {
   upgrade(req: Request, options?: { data?: unknown }): boolean;
 }
 
-type Principal = {
-  principalId: string;
-  principalKind: 'user' | 'bot' | 'service' | 'token';
-  admin: boolean;
-  scopes: readonly string[];
-};
-
 export class DaemonControlPlaneHelper {
   constructor(private readonly context: DaemonControlPlaneContext) {}
 
@@ -77,31 +79,31 @@ export class DaemonControlPlaneHelper {
   }
 
   checkAuth(req: Request): boolean {
-    const bearer = this.extractAuthToken(req);
-    const sharedToken = this.context.authToken();
-    if (sharedToken) {
-      if (bearer.length !== sharedToken.length) return false;
-      return timingSafeEqual(Buffer.from(bearer), Buffer.from(sharedToken));
-    }
-    if (!bearer) return false;
-    return this.context.userAuth.validateSession(bearer) !== null;
+    return authenticateOperatorRequest(req, {
+      sharedToken: this.context.authToken(),
+      userAuth: this.context.userAuth,
+    }) !== null;
   }
 
   requireAuthenticatedSession(req: Request): { username: string; roles: readonly string[] } | null {
-    const bearer = this.extractAuthToken(req);
-    if (!bearer || this.context.authToken()) return null;
-    const session = this.context.userAuth.validateSession(bearer);
-    if (!session) return null;
-    const user = this.context.userAuth.getUser(session.username);
-    if (!user) return null;
-    return user;
+    const authenticated = authenticateOperatorRequest(req, {
+      sharedToken: this.context.authToken(),
+      userAuth: this.context.userAuth,
+    });
+    if (!authenticated || authenticated.kind !== 'session') return null;
+    return {
+      username: authenticated.username,
+      roles: authenticated.roles,
+    };
   }
 
   requireAdmin(req: Request): Response | null {
-    if (this.context.authToken()) return null;
-    const user = this.requireAuthenticatedSession(req);
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!user.roles.includes('admin')) {
+    const authenticated = authenticateOperatorRequest(req, {
+      sharedToken: this.context.authToken(),
+      userAuth: this.context.userAuth,
+    });
+    if (!authenticated) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!isOperatorAdmin(authenticated)) {
       return Response.json({ error: 'Admin role required' }, { status: 403 });
     }
     return null;
@@ -122,11 +124,13 @@ export class DaemonControlPlaneHelper {
     return auth;
   }
 
-  describeAuthenticatedPrincipal(token: string): Principal | null {
-    const sharedToken = this.context.authToken();
-    if (sharedToken) {
-      if (token.length !== sharedToken.length) return null;
-      if (!timingSafeEqual(Buffer.from(token), Buffer.from(sharedToken))) return null;
+  describeAuthenticatedPrincipal(token: string): AuthenticatedPrincipal | null {
+    const authenticated = authenticateOperatorToken(token, {
+      sharedToken: this.context.authToken(),
+      userAuth: this.context.userAuth,
+    });
+    if (!authenticated) return null;
+    if (authenticated.kind === 'shared-token') {
       return {
         principalId: 'shared-token',
         principalKind: 'token',
@@ -134,14 +138,9 @@ export class DaemonControlPlaneHelper {
         scopes: this.getGrantedGatewayScopes(true),
       };
     }
-    if (!token) return null;
-    const session = this.context.userAuth.validateSession(token);
-    if (!session) return null;
-    const user = this.context.userAuth.getUser(session.username);
-    if (!user) return null;
-    const admin = user.roles.includes('admin');
+    const admin = authenticated.roles.includes('admin');
     return {
-      principalId: user.username,
+      principalId: authenticated.username,
       principalKind: 'user',
       admin,
       scopes: this.getGrantedGatewayScopes(admin),
@@ -190,17 +189,12 @@ export class DaemonControlPlaneHelper {
         body: { error: `Gateway method requires a remote-peer principal: ${descriptor.id}` },
       };
     }
-    const missing = missingScopes(context?.scopes, descriptor.scopes);
-    if (missing.length > 0) {
+    const body = buildMissingScopeBody(descriptor.id, descriptor.scopes, context?.scopes);
+    if (body) {
       return {
         status: 403,
         ok: false,
-        body: {
-          error: `Missing required scope${missing.length === 1 ? '' : 's'} for ${descriptor.id}: ${missing.join(', ')}`,
-          requiredScopes: [...descriptor.scopes],
-          grantedScopes: [...(context?.scopes ?? [])],
-          missingScopes: missing,
-        },
+        body,
       };
     }
     return null;
@@ -215,7 +209,7 @@ export class DaemonControlPlaneHelper {
       return null;
     }
     const token = this.extractAuthToken(req);
-    const principal = token ? this.describeAuthenticatedPrincipal(token) : null;
+    const principal = resolveAuthenticatedPrincipal(req, this);
     if (token && !principal) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
