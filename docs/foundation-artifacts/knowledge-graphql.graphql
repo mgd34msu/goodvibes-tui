@@ -1,0 +1,397 @@
+scalar JSON
+
+enum KnowledgeProjectionKind {
+  OVERVIEW
+  BUNDLE
+  SOURCE
+  NODE
+  ISSUE
+  DASHBOARD
+  ROLLUP
+}
+
+enum KnowledgePacketDetail {
+  COMPACT
+  STANDARD
+  DETAILED
+}
+
+enum KnowledgeJobMode {
+  INLINE
+  BACKGROUND
+}
+
+type KnowledgeStatus {
+  ready: Boolean!
+  storagePath: String!
+  sourceCount: Int!
+  nodeCount: Int!
+  edgeCount: Int!
+  issueCount: Int!
+  extractionCount: Int!
+  jobRunCount: Int!
+  usageCount: Int!
+  candidateCount: Int!
+  reportCount: Int!
+  scheduleCount: Int!
+  note: String!
+}
+
+type KnowledgeConnectorSetupField {
+  key: String!
+  label: String!
+  kind: String!
+  optional: Boolean
+  source: String
+  description: String
+}
+
+type KnowledgeConnectorSetup {
+  version: String!
+  summary: String!
+  transportHints: [String!]!
+  steps: [String!]!
+  fields: [KnowledgeConnectorSetupField!]!
+  metadata: JSON
+}
+
+type KnowledgeConnectorDoctorCheck {
+  id: String!
+  label: String!
+  status: String!
+  detail: String!
+  metadata: JSON
+}
+
+type KnowledgeConnectorDoctorReport {
+  connectorId: String!
+  ready: Boolean!
+  summary: String!
+  checks: [KnowledgeConnectorDoctorCheck!]!
+  hints: [String!]!
+  metadata: JSON
+}
+
+type KnowledgeConnector {
+  id: String!
+  displayName: String
+  version: String
+  description: String!
+  sourceType: String!
+  inputSchema: JSON
+  examples: [JSON!]!
+  capabilities: [String!]!
+  setup: KnowledgeConnectorSetup
+  metadata: JSON
+}
+
+type KnowledgeSource {
+  id: String!
+  connectorId: String!
+  sourceType: String!
+  title: String
+  sourceUri: String
+  canonicalUri: String
+  summary: String
+  description: String
+  tags: [String!]!
+  folderPath: String
+  status: String!
+  artifactId: String
+  contentHash: String
+  lastCrawledAt: Float
+  crawlError: String
+  sessionId: String
+  metadata: JSON
+  createdAt: Float!
+  updatedAt: Float!
+}
+
+type KnowledgeNode {
+  id: String!
+  kind: String!
+  slug: String!
+  title: String!
+  summary: String
+  aliases: [String!]!
+  status: String!
+  confidence: Int!
+  sourceId: String
+  metadata: JSON
+  createdAt: Float!
+  updatedAt: Float!
+}
+
+type KnowledgeEdge {
+  id: String!
+  fromKind: String!
+  fromId: String!
+  toKind: String!
+  toId: String!
+  relation: String!
+  weight: Float!
+  metadata: JSON
+  createdAt: Float!
+  updatedAt: Float!
+}
+
+type KnowledgeIssue {
+  id: String!
+  severity: String!
+  code: String!
+  message: String!
+  status: String!
+  sourceId: String
+  nodeId: String
+  metadata: JSON
+  createdAt: Float!
+  updatedAt: Float!
+}
+
+type KnowledgeExtraction {
+  id: String!
+  sourceId: String!
+  artifactId: String
+  extractorId: String!
+  format: String!
+  title: String
+  summary: String
+  excerpt: String
+  sections: [String!]!
+  links: [String!]!
+  estimatedTokens: Int!
+  structure: JSON
+  metadata: JSON
+  createdAt: Float!
+  updatedAt: Float!
+}
+
+type KnowledgeItemView {
+  source: KnowledgeSource
+  node: KnowledgeNode
+  issue: KnowledgeIssue
+  relatedEdges: [KnowledgeEdge!]!
+  linkedSources: [KnowledgeSource!]!
+  linkedNodes: [KnowledgeNode!]!
+}
+
+type KnowledgeSearchResult {
+  kind: String!
+  id: String!
+  score: Float!
+  reason: String!
+  source: KnowledgeSource
+  node: KnowledgeNode
+}
+
+type KnowledgePacketItem {
+  kind: String!
+  id: String!
+  title: String!
+  summary: String
+  uri: String
+  reason: String!
+  score: Float!
+  estimatedTokens: Int!
+  related: [String!]!
+  evidence: [String!]!
+  metadata: JSON
+}
+
+type KnowledgePacket {
+  task: String!
+  writeScope: [String!]!
+  generatedAt: Float!
+  detail: KnowledgePacketDetail!
+  strategy: String!
+  budgetLimit: Int!
+  estimatedTokens: Int!
+  items: [KnowledgePacketItem!]!
+}
+
+type KnowledgeProjectionTarget {
+  targetId: String!
+  kind: KnowledgeProjectionKind!
+  title: String!
+  description: String!
+  itemId: String
+  defaultPath: String!
+  defaultFilename: String!
+  metadata: JSON
+}
+
+type KnowledgeProjectionPage {
+  path: String!
+  title: String!
+  format: String!
+  content: String!
+  itemIds: [String!]!
+  metadata: JSON
+}
+
+type KnowledgeProjectionBundle {
+  id: String!
+  target: KnowledgeProjectionTarget!
+  generatedAt: Float!
+  pageCount: Int!
+  pages: [KnowledgeProjectionPage!]!
+  metadata: JSON
+}
+
+type ArtifactDescriptor {
+  id: String!
+  kind: String!
+  mimeType: String!
+  filename: String
+  sizeBytes: Int!
+  sourceUri: String
+  createdAt: Float!
+  metadata: JSON
+}
+
+type KnowledgeJob {
+  id: String!
+  label: String!
+  description: String!
+  defaultMode: KnowledgeJobMode!
+  triggerKinds: [String!]!
+  lastRunAt: Float
+  metadata: JSON
+}
+
+type KnowledgeJobRun {
+  id: String!
+  jobId: String!
+  status: String!
+  mode: KnowledgeJobMode!
+  requestedAt: Float!
+  startedAt: Float
+  completedAt: Float
+  error: String
+  result: JSON
+  metadata: JSON
+}
+
+type KnowledgeBatchIngestResult {
+  imported: Int!
+  failed: Int!
+  sources: [KnowledgeSource!]!
+  errors: [String!]!
+}
+
+type KnowledgeUsageRecord {
+  id: String!
+  targetKind: String!
+  targetId: String!
+  usageKind: String!
+  task: String
+  sessionId: String
+  score: Float
+  metadata: JSON
+  createdAt: Float!
+}
+
+type KnowledgeConsolidationCandidate {
+  id: String!
+  candidateType: String!
+  status: String!
+  subjectKind: String!
+  subjectId: String!
+  title: String!
+  summary: String
+  score: Float!
+  evidence: [String!]!
+  suggestedMemoryClass: String
+  suggestedScope: String
+  decidedAt: Float
+  decidedBy: String
+  metadata: JSON
+  createdAt: Float!
+  updatedAt: Float!
+}
+
+type KnowledgeConsolidationReport {
+  id: String!
+  kind: String!
+  title: String!
+  summary: String!
+  highlights: [String!]!
+  metrics: JSON
+  metadata: JSON
+  createdAt: Float!
+  updatedAt: Float!
+}
+
+type KnowledgeSchedule {
+  id: String!
+  jobId: String!
+  label: String!
+  enabled: Boolean!
+  schedule: JSON!
+  lastRunAt: Float
+  nextRunAt: Float
+  metadata: JSON
+  createdAt: Float!
+  updatedAt: Float!
+}
+
+input KnowledgeJobRunInput {
+  mode: KnowledgeJobMode
+}
+
+input KnowledgePacketInput {
+  task: String!
+  writeScope: [String!]
+  limit: Int
+  detail: KnowledgePacketDetail
+  budgetLimit: Int
+}
+
+type Query {
+  status: KnowledgeStatus!
+  connectors: [KnowledgeConnector!]!
+  connectorDoctor(id: String!): KnowledgeConnectorDoctorReport
+  sources(limit: Int, offset: Int): [KnowledgeSource!]!
+  nodes(limit: Int, offset: Int): [KnowledgeNode!]!
+  issues(limit: Int, offset: Int): [KnowledgeIssue!]!
+  itemView(kind: String!, id: String!): KnowledgeItemView
+  extractions(limit: Int, sourceId: String): [KnowledgeExtraction!]!
+  neighbors(kind: String!, id: String!, relation: String, limit: Int): [KnowledgeEdge!]!
+  search(query: String!, limit: Int): [KnowledgeSearchResult!]!
+  packet(task: String!, writeScope: [String!], limit: Int, detail: KnowledgePacketDetail, budgetLimit: Int): KnowledgePacket!
+  projectionTargets(limit: Int): [KnowledgeProjectionTarget!]!
+  projection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeProjectionBundle!
+  jobs: [KnowledgeJob!]!
+  job(id: String!): KnowledgeJob
+  jobRuns(limit: Int, jobId: String): [KnowledgeJobRun!]!
+  usage(limit: Int, targetKind: String, targetId: String, usageKind: String): [KnowledgeUsageRecord!]!
+  usageRecords(limit: Int, targetKind: String, targetId: String, usageKind: String): [KnowledgeUsageRecord!]!
+  consolidationCandidates(limit: Int, status: String): [KnowledgeConsolidationCandidate!]!
+  consolidationReports(limit: Int): [KnowledgeConsolidationReport!]!
+  schedules(limit: Int): [KnowledgeSchedule!]!
+  sourceExtraction(sourceId: String!): KnowledgeExtraction
+}
+
+type Mutation {
+  ingestUrl(url: String!, sourceType: String, connectorId: String, folderPath: String, tags: [String!], sessionId: String, allowPrivateHosts: Boolean): KnowledgeSource!
+  ingestArtifact(path: String!, connectorId: String, tags: [String!], sessionId: String, allowPrivateHosts: Boolean): KnowledgeSource!
+  importBookmarksFromFile(path: String!, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
+  importUrlsFromFile(path: String!, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
+  ingestBookmarkSeeds(seeds: [String!]!, connectorId: String, sessionId: String): KnowledgeBatchIngestResult!
+  ingestWithConnector(connectorId: String!, input: String!, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
+  ingestConnectorInput(input: String!, connectorId: String, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
+  renderProjection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeProjectionBundle!
+  materializeProjection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeMaterializedProjection!
+  reindex: KnowledgeStatus!
+  runJob(id: String!, mode: KnowledgeJobMode): KnowledgeJobRun!
+  saveSchedule(id: String, jobId: String!, label: String!, enabled: Boolean!, schedule: JSON!, metadata: JSON): KnowledgeSchedule!
+  deleteSchedule(id: String!): Boolean!
+  setScheduleEnabled(id: String!, enabled: Boolean!): KnowledgeSchedule
+  decideConsolidationCandidate(id: String!, status: String!, decidedBy: String): KnowledgeConsolidationCandidate!
+  lint: [KnowledgeIssue!]!
+}
+
+type KnowledgeMaterializedProjection {
+  artifact: ArtifactDescriptor!
+  bundle: KnowledgeProjectionBundle!
+}

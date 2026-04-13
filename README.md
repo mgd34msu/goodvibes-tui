@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.17.1-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.17.2-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -168,6 +168,8 @@ The runtime is organized around typed store domains, typed runtime events, a sha
 - Bootstrap composition root with explicit initialization order
 - App-scoped runtime service graph with explicit operator and peer contract ownership instead of ambient singleton wiring
 - Stable operator and peer client surfaces with direct, HTTP, SSE, and WebSocket transports for future terminal, web, and mobile shells
+- Checked-in foundation artifacts for the operator contract, peer contract, canonical knowledge GraphQL schema, and canonical knowledge SQL schema under [`docs/foundation-artifacts`](docs/foundation-artifacts/README.md)
+- Reference in-process and HTTP consumer examples under [`examples/reference-operator-client`](examples/reference-operator-client/README.md), [`examples/reference-http-client`](examples/reference-http-client/README.md), and [`examples/reference-node-host`](examples/reference-node-host/README.md)
 - Session continuity, return-context summaries, knowledge capture, compaction, guidance, diagnostics, notifications, retention, idempotency, and integration-helper APIs
 - Feature flags, profiles, profile sync bundles, live settings editing, and UI routing controls for system / operational / WRFC messages
 - Performance budgets, panel-health contracts, telemetry exporters, and operator playbooks for stuck turns, reconnect failures, permission deadlocks, plugin degradation, and recovery scenarios

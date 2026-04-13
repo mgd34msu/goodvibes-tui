@@ -1,7 +1,9 @@
 export {
   createSchema as createKnowledgeSchema,
+  getKnowledgeSchemaStatements,
   nowMs as knowledgeNowMs,
   parseJsonValue as parseKnowledgeJsonValue,
+  renderKnowledgeSchemaSql,
   resolveKnowledgeDbPathFromControlPlaneDir,
   stableText as stabilizeKnowledgeText,
   uniq as uniqKnowledgeValues,

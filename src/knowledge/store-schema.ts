@@ -240,6 +240,23 @@ export function createSchema(db: { run(sql: string): void }): void {
   db.run(`CREATE INDEX IF NOT EXISTS idx_knowledge_schedules_job_id ON knowledge_schedules(job_id)`);
 }
 
+export function getKnowledgeSchemaStatements(): readonly string[] {
+  const statements: string[] = [];
+  createSchema({
+    run(sql: string): void {
+      const normalized = sql.trim();
+      if (normalized.length > 0) statements.push(normalized);
+    },
+  });
+  return statements;
+}
+
+export function renderKnowledgeSchemaSql(): string {
+  return `${getKnowledgeSchemaStatements()
+    .map((statement) => statement.endsWith(';') ? statement : `${statement};`)
+    .join('\n\n')}\n`;
+}
+
 function rowObject(columns: string[], values: unknown[]): Record<string, unknown> {
   return Object.fromEntries(columns.map((column, index) => [column, values[index]]));
 }
