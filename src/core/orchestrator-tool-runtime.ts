@@ -436,6 +436,7 @@ export function autoSpawnPendingItems(
         task: item.description,
         template: 'engineer',
         model: currentModel.id,
+        provider: currentModel.provider,
       };
       const agentRecord = agentManager.spawn(spawnInput);
       if (runtimeBus && ctx) {

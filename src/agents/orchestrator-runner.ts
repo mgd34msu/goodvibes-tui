@@ -65,6 +65,7 @@ export interface AgentOrchestratorRunContext {
   readonly resolveFallbackModelRoutes: (
     providerRegistry: Pick<ProviderRegistry, 'listModels' | 'getForModel'>,
     record: AgentRecord,
+    currentModel: { id: string; provider: string },
     primaryRequestedModelId: string,
   ) => Array<{ provider: LLMProvider; modelId: string; requestedModelId: string }>;
 }
@@ -368,8 +369,15 @@ export async function runAgentTask(
     const primaryRoute = context.resolveProviderForRecord(providerRegistry, record, currentModel);
     let activeRoute = primaryRoute;
     let fallbackRouteIndex = 0;
-    const fallbackRoutes = context.resolveFallbackModelRoutes(providerRegistry, record, primaryRoute.requestedModelId);
+    const fallbackRoutes = context.resolveFallbackModelRoutes(
+      providerRegistry,
+      record,
+      currentModel,
+      primaryRoute.requestedModelId,
+    );
     const modelId = primaryRoute.modelId;
+    record.model = record.model ?? primaryRoute.requestedModelId;
+    record.provider = record.provider ?? activeRoute.provider.name;
 
     session = new AgentSession(record.id, modelId, record.provider ?? currentModel.provider ?? 'unknown', {
       sessionsDir: join(context.workingDirectory, '.goodvibes', 'tui', 'sessions'),
@@ -518,6 +526,8 @@ export async function runAgentTask(
                 reason,
               });
               context.providerOptimizer?.recordFallbackTransition(previousRoute.requestedModelId, activeRoute.requestedModelId, reason);
+              record.model = activeRoute.requestedModelId;
+              record.provider = activeRoute.provider.name;
               record.progress = `Model fallback → ${activeRoute.requestedModelId}`;
               context.emitAgentProgress(record.id, record.progress);
               context.emitOrchestrationProgress(record, record.progress);

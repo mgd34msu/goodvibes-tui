@@ -25,6 +25,7 @@ import {
   emitOrchestrationNodeFailed,
   emitOrchestrationNodeProgress,
 } from '../runtime/emitters/index.ts';
+import { splitModelRegistryKey } from '../providers/registry-helpers.ts';
 import { runAgentTask, type AgentOrchestratorRunContext } from './orchestrator-runner.ts';
 export { summarizeToolArgs } from './orchestrator-utils.ts';
 
@@ -233,22 +234,26 @@ export class AgentOrchestrator {
     record: AgentRecord,
     currentModel: { id: string; provider: string },
   ): { provider: LLMProvider; modelId: string; requestedModelId: string } {
-    const requestedModelId = record.model;
-    let modelId = requestedModelId ?? currentModel.id;
+    const requestedModelId = record.model ?? currentModel.id;
+    const providerOverride = this.resolveProviderOverride(record, currentModel);
+    const scopedModelId = this.normalizeRequestedModelId(requestedModelId, providerOverride);
 
     try {
       return {
-        provider: providerRegistry.getForModel(modelId, record.provider),
-        modelId: this.resolveChatModelId(providerRegistry, modelId, record.provider),
-        requestedModelId: modelId,
+        provider: providerRegistry.getForModel(scopedModelId, providerOverride),
+        modelId: this.resolveChatModelId(providerRegistry, scopedModelId, providerOverride),
+        requestedModelId: scopedModelId,
       };
     } catch (err) {
-      if (requestedModelId && requestedModelId !== currentModel.id) {
+      if (
+        requestedModelId !== currentModel.id
+        && (!providerOverride || currentModel.provider === providerOverride)
+      ) {
         logger.debug(`[AgentOrchestrator] Requested model '${requestedModelId}' not found, falling back to '${currentModel.id}'`);
         try {
           return {
-            provider: providerRegistry.getForModel(currentModel.id),
-            modelId: this.resolveChatModelId(providerRegistry, currentModel.id),
+            provider: providerRegistry.getForModel(currentModel.id, currentModel.provider),
+            modelId: this.resolveChatModelId(providerRegistry, currentModel.id, currentModel.provider),
             requestedModelId: currentModel.id,
           };
         } catch (fallbackErr) {
@@ -263,11 +268,30 @@ export class AgentOrchestrator {
       }
 
       throw new Error(
-        `Cannot resolve provider for model '${modelId}': ${
+        `Cannot resolve provider for model '${scopedModelId}': ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
     }
+  }
+
+  private resolveProviderOverride(
+    record: AgentRecord,
+    currentModel: { id: string; provider: string },
+  ): string | undefined {
+    const scopedProvider = record.provider ?? currentModel.provider;
+    return scopedProvider !== 'synthetic' ? scopedProvider : undefined;
+  }
+
+  private normalizeRequestedModelId(
+    requestedModelId: string,
+    providerOverride?: string,
+  ): string {
+    if (!providerOverride || !requestedModelId.includes(':')) {
+      return requestedModelId;
+    }
+
+    return splitModelRegistryKey(requestedModelId).resolvedModelId;
   }
 
   private resolveChatModelId(
@@ -277,12 +301,14 @@ export class AgentOrchestrator {
   ): string {
     const registry = providerRegistry.listModels();
     const def = requestedModelId.includes(':')
-      ? registry.find((model) => model.registryKey === requestedModelId)
-        ?? registry.find((model) => model.id === requestedModelId && (!providerOverride || model.provider === providerOverride))
-        ?? registry.find((model) => model.id === requestedModelId)
+      ? providerOverride
+        ? registry.find((model) => model.registryKey === requestedModelId && model.provider === providerOverride)
+          ?? registry.find((model) => model.id === splitModelRegistryKey(requestedModelId).resolvedModelId && model.provider === providerOverride)
+        : registry.find((model) => model.registryKey === requestedModelId)
+          ?? registry.find((model) => model.id === requestedModelId)
+          ?? registry.find((model) => model.id === splitModelRegistryKey(requestedModelId).resolvedModelId)
       : providerOverride
         ? registry.find((model) => model.id === requestedModelId && model.provider === providerOverride)
-          ?? registry.find((model) => model.id === requestedModelId)
         : registry.find((model) => model.id === requestedModelId);
     if (def) return def.id;
     return requestedModelId;
@@ -291,20 +317,22 @@ export class AgentOrchestrator {
   private resolveFallbackModelRoutes(
     providerRegistry: Pick<ProviderRegistry, 'listModels' | 'getForModel'>,
     record: AgentRecord,
+    currentModel: { id: string; provider: string },
     primaryRequestedModelId: string,
   ): Array<{ provider: LLMProvider; modelId: string; requestedModelId: string }> {
     const fallbacks = record.fallbackModels ?? [];
     if (fallbacks.length === 0) return [];
+    const providerOverride = this.resolveProviderOverride(record, currentModel);
     const seen = new Set([primaryRequestedModelId]);
     const routes: Array<{ provider: LLMProvider; modelId: string; requestedModelId: string }> = [];
     for (const rawFallback of fallbacks) {
-      const requestedModelId = rawFallback.trim();
+      const requestedModelId = this.normalizeRequestedModelId(rawFallback.trim(), providerOverride);
       if (!requestedModelId || seen.has(requestedModelId)) continue;
       seen.add(requestedModelId);
       try {
         routes.push({
-          provider: providerRegistry.getForModel(requestedModelId),
-          modelId: this.resolveChatModelId(providerRegistry, requestedModelId),
+          provider: providerRegistry.getForModel(requestedModelId, providerOverride),
+          modelId: this.resolveChatModelId(providerRegistry, requestedModelId, providerOverride),
           requestedModelId,
         });
       } catch (error) {
@@ -346,8 +374,8 @@ export class AgentOrchestrator {
       buildScopedRegistry: (allowedNames, fullRegistry) => this.buildScopedRegistry(allowedNames, fullRegistry),
       resolveProviderForRecord: (providerRegistry, record, currentModel) =>
         this.resolveProviderForRecord(providerRegistry, record, currentModel),
-      resolveFallbackModelRoutes: (providerRegistry, record, primaryRequestedModelId) =>
-        this.resolveFallbackModelRoutes(providerRegistry, record, primaryRequestedModelId),
+      resolveFallbackModelRoutes: (providerRegistry, record, currentModel, primaryRequestedModelId) =>
+        this.resolveFallbackModelRoutes(providerRegistry, record, currentModel, primaryRequestedModelId),
     };
   }
 
