@@ -446,6 +446,26 @@ describe('WrfcController', () => {
       expect(reviewerRecord.wrfcId).toBe(chain.id);
     });
 
+    test('reviewer spawn inherits the engineer model and provider', async () => {
+      const controller = initTestWrfcController(runtimeBus);
+      const engineerRecord = makeRecord({ model: 'gpt-5.4', provider: 'openai' });
+      controller.createChain(engineerRecord);
+
+      const reviewerRecord = makeRecord({ id: 'agent-reviewer-provider' });
+      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
+      mockGetStatus.mockImplementation((id: string) => {
+        if (id === engineerRecord.id) return engineerRecord;
+        return null;
+      });
+
+      emitAgentCompleted(runtimeBus, engineerRecord.id);
+      await new Promise((r) => setTimeout(r, 10));
+
+      const spawnInput = mockSpawn.mock.calls[0][0] as { model?: string; provider?: string };
+      expect(spawnInput.model).toBe('gpt-5.4');
+      expect(spawnInput.provider).toBe('openai');
+    });
+
     test('review score >= threshold transitions chain to gating', async () => {
       const controller = initTestWrfcController(runtimeBus);
       const engineerRecord = makeRecord();

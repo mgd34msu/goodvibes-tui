@@ -241,6 +241,7 @@ export class WrfcController {
   private startReview(chain: WrfcChain, report: CompletionReport): void {
     this.transition(chain, 'reviewing');
     const reviewerRecord = this.spawnWrfcAgent(
+      chain,
       'reviewer',
       buildReviewTask(chain.id, report, getWrfcScoreThreshold(this.configManager)),
       true,
@@ -346,6 +347,7 @@ export class WrfcController {
     });
 
     const fixerRecord = this.spawnWrfcAgent(
+      chain,
       'engineer',
       buildFixTask(chain.id, review, getWrfcScoreThreshold(this.configManager), chain.fixAttempts),
       true,
@@ -518,7 +520,7 @@ export class WrfcController {
     }
 
     const followUpTask = buildGateFailureTask(chain.id, chain.task, failedGates);
-    const followUpRecord = this.spawnWrfcAgent('engineer', followUpTask, false);
+    const followUpRecord = this.spawnWrfcAgent(chain, 'engineer', followUpTask, false);
     const followUpChain = this.findChainByAgentId(followUpRecord.id);
     if (followUpChain) {
       followUpChain.parentChainId = chain.id;
@@ -758,14 +760,23 @@ export class WrfcController {
   }
 
   private spawnWrfcAgent(
+    chain: WrfcChain,
     template: 'engineer' | 'reviewer',
     task: string,
     dangerouslyDisableWrfc: boolean,
   ): AgentRecord {
+    const sourceAgent = [chain.fixerAgentId, chain.engineerAgentId]
+      .filter((value): value is string => typeof value === 'string')
+      .map((agentId) => this.agentManager.getStatus(agentId))
+      .find((record): record is AgentRecord => record != null) ?? null;
     return this.agentManager.spawn({
       mode: 'spawn',
       task,
       template,
+      ...(sourceAgent?.model ? { model: sourceAgent.model } : {}),
+      ...(sourceAgent?.provider ? { provider: sourceAgent.provider } : {}),
+      ...(sourceAgent?.fallbackModels?.length ? { fallbackModels: [...sourceAgent.fallbackModels] } : {}),
+      ...(sourceAgent?.reasoningEffort ? { reasoningEffort: sourceAgent.reasoningEffort } : {}),
       ...(dangerouslyDisableWrfc ? { dangerously_disable_wrfc: true } : {}),
     });
   }

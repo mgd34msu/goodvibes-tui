@@ -288,6 +288,87 @@ describe('AgentOrchestrator', () => {
       expect(request.reasoningEffort).toBe('high');
     });
 
+    test('uses the current provider when the selected model id is provider-ambiguous', async () => {
+      const provider = makeMockProvider([{ content: 'Task done.' }]);
+      const reg = getActualRegistry();
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      const seen: Array<{ modelId: string; provider?: string }> = [];
+      reg.getForModel = mock((modelId: string, providerId?: string) => {
+        seen.push({ modelId, provider: providerId });
+        return provider;
+      });
+      reg.getCurrentModel = mock(() => ({
+        ...MOCK_MODEL,
+        id: 'gpt-5.4',
+        provider: 'openai',
+        registryKey: 'openai:gpt-5.4',
+      }));
+      try {
+        const record = makeRecord({ model: 'gpt-5.4' });
+        await orchestrator.runAgent(record);
+        expect(record.status).toBe('completed');
+        expect(seen[0]).toEqual({ modelId: 'gpt-5.4', provider: 'openai' });
+      } finally {
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+    });
+
+    test('keeps concrete providers scoped even when a mismatched registry key is requested', async () => {
+      const provider = makeMockProvider([{ content: 'Task done.' }]);
+      const reg = getActualRegistry();
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      const seen: Array<{ modelId: string; provider?: string }> = [];
+      reg.getForModel = mock((modelId: string, providerId?: string) => {
+        seen.push({ modelId, provider: providerId });
+        return provider;
+      });
+      reg.getCurrentModel = mock(() => ({
+        ...MOCK_MODEL,
+        id: 'gpt-5.4',
+        provider: 'openai',
+        registryKey: 'openai:gpt-5.4',
+      }));
+      try {
+        const record = makeRecord({ model: 'abacus:gpt-5.4' });
+        await orchestrator.runAgent(record);
+        expect(record.status).toBe('completed');
+        expect(seen[0]).toEqual({ modelId: 'gpt-5.4', provider: 'openai' });
+      } finally {
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+    });
+
+    test('allows cross-provider registry keys when the selected provider is synthetic', async () => {
+      const provider = makeMockProvider([{ content: 'Task done.' }]);
+      const reg = getActualRegistry();
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      const seen: Array<{ modelId: string; provider?: string }> = [];
+      reg.getForModel = mock((modelId: string, providerId?: string) => {
+        seen.push({ modelId, provider: providerId });
+        return provider;
+      });
+      reg.getCurrentModel = mock(() => ({
+        ...MOCK_MODEL,
+        id: 'best-coder',
+        provider: 'synthetic',
+        registryKey: 'synthetic:best-coder',
+      }));
+      try {
+        const record = makeRecord({ model: 'abacus:gpt-5.4' });
+        await orchestrator.runAgent(record);
+        expect(record.status).toBe('completed');
+        expect(seen[0]).toEqual({ modelId: 'abacus:gpt-5.4', provider: undefined });
+      } finally {
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+      }
+    });
+
     test('uses configured fallback models when the primary provider call fails', async () => {
       const primaryProvider: LLMProvider = {
         name: 'primary',
