@@ -7,6 +7,7 @@ import type { MultimodalAnalysisRequest, MultimodalAnalysisResult, MultimodalDet
 import type { VoiceAudioArtifact, VoiceService } from '../../voice/index.ts';
 import type { WebSearchSafeSearch, WebSearchService, WebSearchTimeRange, WebSearchVerbosity } from '../../web-search/index.ts';
 import type { FetchExtractMode } from '../../tools/fetch/schema.ts';
+import { resolvePrivateHostFetchOptions } from '../http-policy.ts';
 
 type JsonBody = Record<string, unknown>;
 
@@ -19,17 +20,6 @@ interface DaemonMediaRouteContext {
   readonly artifactStore: ArtifactStore;
   readonly mediaProviders: MediaProviderRegistry;
   readonly multimodalService: MultimodalService;
-}
-
-function allowPrivateHostFetchRequested(value: unknown): boolean {
-  return value === true;
-}
-
-function ensurePrivateHostFetchAllowed(context: DaemonMediaRouteContext, req: Request): Response | null {
-  if (!Boolean(context.configManager.get('network.remoteFetch.allowPrivateHosts'))) {
-    return Response.json({ error: 'Private-host remote fetches are disabled by config.' }, { status: 403 });
-  }
-  return context.requireAdmin(req);
 }
 
 export function createDaemonMediaRouteHandlers(
@@ -185,11 +175,12 @@ async function handleMediaAnalyze(context: DaemonMediaRouteContext, req: Request
 async function handleArtifactCreate(context: DaemonMediaRouteContext, req: Request): Promise<Response> {
   const body = await context.parseJsonBody(req);
   if (body instanceof Response) return body;
-  const allowPrivateHosts = allowPrivateHostFetchRequested(body.allowPrivateHosts);
-  if (allowPrivateHosts) {
-    const denied = ensurePrivateHostFetchAllowed(context, req);
-    if (denied) return denied;
-  }
+  const privateHostFetchOptions = resolvePrivateHostFetchOptions(body.allowPrivateHosts, {
+    configManager: context.configManager,
+    req,
+    requireElevatedAccess: (request) => context.requireAdmin(request),
+  });
+  if (privateHostFetchOptions instanceof Response) return privateHostFetchOptions;
   try {
     const artifact = await context.artifactStore.create({
       ...(typeof body.kind === 'string' ? { kind: body.kind as ArtifactKind } : {}),
@@ -199,7 +190,7 @@ async function handleArtifactCreate(context: DaemonMediaRouteContext, req: Reque
       ...(typeof body.text === 'string' ? { text: body.text } : {}),
       ...(typeof body.path === 'string' ? { path: body.path } : {}),
       ...(typeof body.uri === 'string' ? { uri: body.uri } : {}),
-      ...(allowPrivateHosts ? { allowPrivateHosts: true } : {}),
+      ...privateHostFetchOptions,
       ...(typeof body.retentionMs === 'number' ? { retentionMs: body.retentionMs } : {}),
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
     });
@@ -292,19 +283,22 @@ async function handleMultimodalAnalyze(context: DaemonMediaRouteContext, req: Re
   const requestedArtifact = typeof body.artifact === 'object' && body.artifact !== null
     ? body.artifact as Record<string, unknown>
     : null;
-  const allowPrivateHosts = allowPrivateHostFetchRequested(body.allowPrivateHosts)
-    || allowPrivateHostFetchRequested(requestedArtifact?.allowPrivateHosts);
-  if (allowPrivateHosts) {
-    const denied = ensurePrivateHostFetchAllowed(context, req);
-    if (denied) return denied;
-  }
+  const privateHostFetchOptions = resolvePrivateHostFetchOptions(
+    body.allowPrivateHosts === true || requestedArtifact?.allowPrivateHosts === true,
+    {
+      configManager: context.configManager,
+      req,
+      requireElevatedAccess: (request) => context.requireAdmin(request),
+    },
+  );
+  if (privateHostFetchOptions instanceof Response) return privateHostFetchOptions;
   try {
     const analysis = await context.multimodalService.analyze({
       ...(typeof body.artifactId === 'string' ? { artifactId: body.artifactId } : {}),
       ...(requestedArtifact ? {
         artifact: {
           ...(requestedArtifact as MultimodalAnalysisRequest['artifact']),
-          ...(allowPrivateHosts ? { allowPrivateHosts: true } : {}),
+          ...privateHostFetchOptions,
         },
       } : {}),
       ...(typeof body.prompt === 'string' ? { prompt: body.prompt } : {}),
