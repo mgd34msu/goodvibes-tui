@@ -10,6 +10,7 @@ import {
   objectSchema,
 } from './method-catalog-shared.ts';
 import { VERSION } from '../version.ts';
+import { OPERATOR_SESSION_COOKIE_NAME } from '../security/http-auth.ts';
 
 const OPERATOR_CONTRACT_VERSION = 1;
 const OPERATOR_WS_PATH = '/api/control-plane/ws';
@@ -33,6 +34,12 @@ export interface OperatorContractManifest {
       readonly path: string;
       readonly requestSchema: Record<string, unknown>;
       readonly responseSchema: Record<string, unknown>;
+    };
+    readonly sessionCookie: {
+      readonly name: string;
+      readonly httpOnly: boolean;
+      readonly sameSite: string;
+      readonly path: string;
     };
     readonly bearer: {
       readonly header: string;
@@ -114,11 +121,17 @@ export const OPERATOR_CONTRACT_SCHEMA = objectSchema({
       requestSchema: JSON_OBJECT_SCHEMA,
       responseSchema: JSON_OBJECT_SCHEMA,
     }, ['method', 'path', 'requestSchema', 'responseSchema']),
+    sessionCookie: objectSchema({
+      name: STRING_SCHEMA,
+      httpOnly: BOOLEAN_SCHEMA,
+      sameSite: STRING_SCHEMA,
+      path: STRING_SCHEMA,
+    }, ['name', 'httpOnly', 'sameSite', 'path']),
     bearer: objectSchema({
       header: STRING_SCHEMA,
       queryParameters: arraySchema(STRING_SCHEMA),
     }, ['header', 'queryParameters']),
-  }, ['modes', 'login', 'bearer']),
+  }, ['modes', 'login', 'sessionCookie', 'bearer']),
   transports: objectSchema({
     http: objectSchema({
       statusPath: STRING_SCHEMA,
@@ -214,9 +227,15 @@ export function buildOperatorContract(catalog: GatewayMethodCatalog): OperatorCo
           expiresAt: NUMBER_SCHEMA,
         }, ['authenticated', 'token', 'username', 'expiresAt']),
       },
+      sessionCookie: {
+        name: OPERATOR_SESSION_COOKIE_NAME,
+        httpOnly: true,
+        sameSite: 'Lax',
+        path: '/',
+      },
       bearer: {
         header: 'Authorization: Bearer <token>',
-        queryParameters: ['token', 'access_token'],
+        queryParameters: [],
       },
     },
     transports: {

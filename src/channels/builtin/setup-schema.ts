@@ -291,7 +291,8 @@ export function getBuiltinSetupSchema(surface: ChannelSurface): ChannelSetupSche
           setupField('businessAccountId', 'Business account id', 'string', false, { configKey: 'surfaces.whatsapp.businessAccountId' }),
           setupField('defaultRecipient', 'Default recipient', 'string', false, { configKey: 'surfaces.whatsapp.defaultRecipient' }),
           setupField('accessToken', 'Access token', 'secret', true, { configKey: 'surfaces.whatsapp.accessToken', secretTargetId: 'primary' }),
-          setupField('verifyToken', 'Verify token', 'secret', false, { configKey: 'surfaces.whatsapp.verifyToken', secretTargetId: 'signingSecret' }),
+          setupField('verifyToken', 'Verify token', 'secret', false, { configKey: 'surfaces.whatsapp.verifyToken' }),
+          setupField('signingSecret', 'Signing secret', 'secret', false, { configKey: 'surfaces.whatsapp.signingSecret', secretTargetId: 'signingSecret' }),
         ],
         secretTargets: [
           secretTarget(surface, 'primary', 'Access token', true, 'Used for WhatsApp provider API calls.', {
@@ -300,16 +301,16 @@ export function getBuiltinSetupSchema(surface: ChannelSurface): ChannelSetupSche
             envKeys: ['WHATSAPP_ACCESS_TOKEN'],
             configKeys: ['surfaces.whatsapp.accessToken'],
           }),
-          secretTarget(surface, 'signingSecret', 'Verify token', false, 'Used for inbound webhook or provider verification.', {
+          secretTarget(surface, 'signingSecret', 'Signing secret', false, 'Used to verify inbound WhatsApp webhook requests or bridge callbacks.', {
             serviceName: 'whatsapp',
             serviceField: 'signingSecret',
-            envKeys: ['WHATSAPP_VERIFY_TOKEN'],
-            configKeys: ['surfaces.whatsapp.verifyToken'],
+            envKeys: ['WHATSAPP_SIGNING_SECRET', 'WHATSAPP_BRIDGE_TOKEN'],
+            configKeys: ['surfaces.whatsapp.signingSecret'],
           }),
         ],
         externalSteps: [
           'Choose Meta Cloud API or a bridge-backed deployment.',
-          'Store the access token and any verify token required by the provider.',
+          'Store the access token, verification token, and signing secret required by the provider.',
           'Set the phone number id, business account id, and default recipient if you want direct routing.',
         ],
         metadata: {},

@@ -1,3 +1,4 @@
+import { parseJsonRecord, readBearerOrHeaderToken, readTextBodyWithinLimit } from '../helpers.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -22,13 +23,15 @@ export async function handleBlueBubblesSurfaceWebhook(req: Request, context: Sur
     || '';
   const url = new URL(req.url);
   const providedPassword = url.searchParams.get('password')
-    ?? req.headers.get('x-goodvibes-bluebubbles-token')
-    ?? req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+    ?? readBearerOrHeaderToken(req, 'x-goodvibes-bluebubbles-token')
     ?? '';
   if (configuredPassword && providedPassword !== configuredPassword) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const body = await req.json().catch(() => null);
+  const rawBody = await readTextBodyWithinLimit(req);
+  if (rawBody instanceof Response) return rawBody;
+  const body = parseJsonRecord(rawBody);
+  if (body instanceof Response) return body;
   const payload = readRecord(body);
   if (!payload) return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   const message = readRecord(payload.message) ?? payload;

@@ -40,7 +40,11 @@ describe('Knowledge projections', () => {
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-projection-'));
     configManager = new ConfigManager({ configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
-    artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
+    configManager.set('network.remoteFetch.allowPrivateHosts', true);
+    artifactStore = new ArtifactStore({
+      rootDir: join(root, 'artifacts'),
+      configManager,
+    });
     knowledgeStore = new KnowledgeStore({ dbPath: join(root, 'knowledge.sqlite') });
     memoryStore = new MemoryStore(join(root, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
@@ -58,6 +62,7 @@ describe('Knowledge projections', () => {
       connectorId: 'bookmark',
       folderPath: 'Research/Projection',
       tags: ['projection', 'knowledge'],
+      allowPrivateHosts: true,
     });
 
     const targets = await service.listProjectionTargets(8);
@@ -78,6 +83,7 @@ describe('Knowledge projections', () => {
       url: `${baseUrl}/projection`,
       sourceType: 'url',
       connectorId: 'url',
+      allowPrivateHosts: true,
     });
 
     const materialized = await service.materializeProjection({

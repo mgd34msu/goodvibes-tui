@@ -1,6 +1,7 @@
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
 import type { UserAuthManager } from '../../security/user-auth.ts';
+import { buildOperatorSessionCookie } from '../../security/http-auth.ts';
 import type { AgentManager } from '../../tools/agent/index.ts';
 import type { AutomationManager } from '../../automation/index.ts';
 import type { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../../control-plane/index.ts';
@@ -166,11 +167,8 @@ export class DaemonHttpRouter {
       if (pluginResponse) return pluginResponse;
     }
 
-    if (url.pathname === '/api/control-plane/web' && req.method === 'GET' && !this.context.authToken()) {
-      if (!this.context.checkAuth(req)) {
-        return Response.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-      return this.context.controlPlaneGateway.renderWebUi(this.context.extractAuthToken(req));
+    if (url.pathname === '/api/control-plane/web' && req.method === 'GET') {
+      return this.context.controlPlaneGateway.renderWebUi();
     }
 
     if (!this.context.checkAuth(req)) {
@@ -288,6 +286,7 @@ export class DaemonHttpRouter {
         distributedRuntime: this.context.distributedRuntime,
       }),
       ...createDaemonKnowledgeRouteHandlers({
+        configManager: this.context.configManager,
         parseJsonBody: (request) => this.parseJsonBody(request),
         parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
         parseJsonText: (raw) => this.parseJsonText(raw),
@@ -301,6 +300,7 @@ export class DaemonHttpRouter {
         parseJsonBody: (request) => this.parseJsonBody(request),
         voiceService: this.context.voiceService,
         configManager: this.context.configManager,
+        requireAdmin: (request) => this.context.requireAdmin(request),
         webSearchService: this.context.webSearchService,
         artifactStore: this.context.artifactStore,
         mediaProviders: this.context.mediaProviders,
@@ -380,6 +380,14 @@ export class DaemonHttpRouter {
       token: session.token,
       username: session.username,
       expiresAt: session.expiresAt,
+    }, {
+      headers: {
+        'Set-Cookie': buildOperatorSessionCookie(session.token, {
+          req,
+          expiresAt: session.expiresAt,
+          trustProxy: Boolean(this.context.configManager.get('controlPlane.trustProxy')),
+        }),
+      },
     });
   }
 

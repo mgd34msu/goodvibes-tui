@@ -114,6 +114,7 @@ export class DaemonServer {
   private readonly httpRouter: DaemonHttpRouter;
   private replyPoller: ReturnType<typeof setInterval> | null = null;
   private tlsState: ResolvedInboundTlsContext | null = null;
+  private approvalBrokerUnsubscribe: (() => void) | null = null;
 
   constructor(private config: DaemonConfig = {}, _configManager?: ConfigManager) {
     const ownedWorkingDir = config.runtimeServices?.workingDirectory ?? config.workingDir;
@@ -303,9 +304,6 @@ export class DaemonServer {
       syncFinishedAgentTask: (record) => this.syncFinishedAgentTask(record),
       trySpawnAgent: (input, logLabel, sessionId) => this.trySpawnAgent(input, logLabel, sessionId),
     });
-    this.approvalBroker.subscribe((approval) => {
-      void this.surfaceDeliveryHelper.notifyApprovalUpdate(approval);
-    });
     this.distributedRuntime.attachRuntime({
       sessionBridge: this.sessionBroker,
       approvalBridge: this.approvalBroker,
@@ -381,6 +379,11 @@ export class DaemonServer {
     }
 
     new GlobalNetworkTransportInstaller().install(this.configManager);
+    if (!this.approvalBrokerUnsubscribe) {
+      this.approvalBrokerUnsubscribe = this.approvalBroker.subscribe((approval) => {
+        void this.surfaceDeliveryHelper.notifyApprovalUpdate(approval);
+      });
+    }
     this.routeBindings.attachRuntime({
       runtimeBus: this.runtimeBus,
       runtimeStore: this.runtimeStore,
@@ -481,6 +484,8 @@ export class DaemonServer {
       this.automationManager.stop();
       this.providerRuntime.stopAll();
       this.watcherRegistry.stopWatcher('daemon-heartbeat', 'daemon-start-failed');
+      this.approvalBrokerUnsubscribe?.();
+      this.approvalBrokerUnsubscribe = null;
       if (this.server !== null) {
         this.server.stop(true);
         this.server = null;
@@ -505,6 +510,8 @@ export class DaemonServer {
       this.replyPoller = null;
     }
     this.pendingSurfaceReplies.clear();
+    this.approvalBrokerUnsubscribe?.();
+    this.approvalBrokerUnsubscribe = null;
     this.server.stop(true);
     this.server = null;
     this.tlsState = null;

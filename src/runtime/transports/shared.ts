@@ -122,6 +122,7 @@ export function createJsonInit(
 ): RequestInit {
   return {
     method,
+    credentials: 'include',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
@@ -183,6 +184,12 @@ export function createRemoteUiRuntimeEvents(connect: DomainEventConnector): UiRu
     const envelopeListeners = new Map<string, Set<(envelope: RuntimeEventEnvelope<string, TEvent>) => void>>();
     let disconnect: (() => void) | null = null;
     let connectPromise: Promise<void> | null = null;
+    let disconnectPending = false;
+
+    const hasListeners = (): boolean => (
+      hasAnyListener(payloadListeners as Map<string, Set<unknown>>)
+      || hasAnyListener(envelopeListeners as Map<string, Set<unknown>>)
+    );
 
     const maybeConnect = (): void => {
       if (disconnect || connectPromise) return;
@@ -198,24 +205,34 @@ export function createRemoteUiRuntimeEvents(connect: DomainEventConnector): UiRu
           listener(typedEnvelope);
         }
       })).then((cleanup) => {
-        disconnect = typeof cleanup === 'function' ? cleanup : null;
+        if (typeof cleanup !== 'function') return;
+        if (disconnectPending && !hasListeners()) {
+          cleanup();
+          return;
+        }
+        disconnect = cleanup;
       }).catch((error: unknown) => {
         if (!isExpectedDisconnectError(error)) {
           throw error;
         }
       }).finally(() => {
         connectPromise = null;
+        disconnectPending = false;
       });
     };
 
     const maybeDisconnect = (): void => {
-      if (hasAnyListener(payloadListeners as Map<string, Set<unknown>>) || hasAnyListener(envelopeListeners as Map<string, Set<unknown>>)) {
+      if (hasListeners()) {
         return;
       }
       if (disconnect) {
         disconnect();
+        disconnect = null;
+        return;
       }
-      disconnect = null;
+      if (connectPromise) {
+        disconnectPending = true;
+      }
     };
 
     return {
@@ -258,26 +275,18 @@ export function createRemoteUiRuntimeEvents(connect: DomainEventConnector): UiRu
 export function buildEventSourceUrl(
   baseUrl: string,
   domain: RuntimeEventDomain,
-  token?: string | null,
 ): string {
   const url = new URL('/api/control-plane/events', `${normalizeBaseUrl(baseUrl)}/`);
   url.searchParams.set('domains', domain);
-  if (token) {
-    url.searchParams.set('token', token);
-  }
   return url.toString();
 }
 
 export function buildWebSocketUrl(
   baseUrl: string,
   domains: readonly RuntimeEventDomain[],
-  token?: string | null,
 ): string {
   const base = normalizeBaseUrl(baseUrl);
   const url = new URL('/api/control-plane/ws', base.replace(/^http(s?):\/\//, 'ws$1://'));
-  if (token) {
-    url.searchParams.set('token', token);
-  }
   url.searchParams.set('clientKind', 'web');
   if (domains.length > 0) {
     url.searchParams.set('domains', domains.join(','));
@@ -291,10 +300,11 @@ export function createEventSourceConnector(
   fetchImpl: typeof fetch,
 ): DomainEventConnector {
   return async (domain, onEnvelope) => {
-    const url = buildEventSourceUrl(baseUrl, domain, token);
+    const url = buildEventSourceUrl(baseUrl, domain);
     const controller = new AbortController();
     const response = await fetchImpl(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      credentials: 'include',
       signal: controller.signal,
     });
     if (!response.ok || !response.body) {
@@ -380,8 +390,16 @@ export function createWebSocketConnector(
   WebSocketImpl: typeof WebSocket,
 ): DomainEventConnector {
   return async (domain, onEnvelope) => {
-    const url = buildWebSocketUrl(baseUrl, [domain], token);
+    const url = buildWebSocketUrl(baseUrl, [domain]);
     const socket = new WebSocketImpl(url);
+    const onOpen = () => {
+      if (!token) return;
+      socket.send(JSON.stringify({
+        type: 'auth',
+        token,
+        domains: [domain],
+      }));
+    };
     const onMessage = (event: MessageEvent<string>) => {
       try {
         const frame = JSON.parse(event.data) as { type?: string; event?: string; payload?: unknown };
@@ -392,8 +410,10 @@ export function createWebSocketConnector(
         // Ignore malformed frames.
       }
     };
+    socket.addEventListener('open', onOpen);
     socket.addEventListener('message', onMessage);
     return () => {
+      socket.removeEventListener('open', onOpen);
       socket.removeEventListener('message', onMessage);
       socket.close();
     };

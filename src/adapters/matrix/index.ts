@@ -1,3 +1,4 @@
+import { parseJsonRecord, readBearerOrHeaderToken, readTextBodyWithinLimit } from '../helpers.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -20,13 +21,14 @@ export async function handleMatrixSurfaceWebhook(req: Request, context: SurfaceA
     || await context.serviceRegistry.resolveSecret('matrix', 'primary')
     || process.env.MATRIX_ACCESS_TOKEN
     || '';
-  const providedToken = req.headers.get('x-goodvibes-matrix-token')
-    ?? req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-    ?? '';
+  const providedToken = readBearerOrHeaderToken(req, 'x-goodvibes-matrix-token');
   if (configuredToken && providedToken !== configuredToken) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const body = await req.json().catch(() => null);
+  const rawBody = await readTextBodyWithinLimit(req);
+  if (rawBody instanceof Response) return rawBody;
+  const body = parseJsonRecord(rawBody);
+  if (body instanceof Response) return body;
   const payload = readRecord(body);
   if (!payload) return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   const event = readRecord(payload.event) ?? payload;

@@ -45,7 +45,11 @@ describe('KnowledgeGraphqlService', () => {
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-graphql-'));
     configManager = new ConfigManager({ configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
-    artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
+    configManager.set('network.remoteFetch.allowPrivateHosts', true);
+    artifactStore = new ArtifactStore({
+      rootDir: join(root, 'artifacts'),
+      configManager,
+    });
     knowledgeStore = new KnowledgeStore({ dbPath: join(root, 'knowledge.sqlite') });
     memoryStore = new MemoryStore(join(root, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
@@ -63,6 +67,7 @@ describe('KnowledgeGraphqlService', () => {
       sourceType: 'bookmark',
       connectorId: 'bookmark',
       tags: ['graphql'],
+      allowPrivateHosts: true,
     });
 
     const result = await graphqlService.execute({
@@ -103,6 +108,7 @@ describe('KnowledgeGraphqlService', () => {
       url: `${baseUrl}/graphql-page`,
       sourceType: 'url',
       connectorId: 'url',
+      allowPrivateHosts: true,
     });
 
     expect(inspectKnowledgeGraphqlAccess('{ status { sourceCount } }')).toEqual({
@@ -211,6 +217,7 @@ describe('KnowledgeGraphqlService', () => {
       sourceType: 'bookmark',
       connectorId: 'bookmark',
       tags: ['project:goodvibes-tui', 'capability:knowledge'],
+      allowPrivateHosts: true,
     });
     await service.recordUsage({ targetKind: 'source', targetId: ingested.source.id, usageKind: 'search-hit', score: 95, sessionId: 's1' });
     await service.recordUsage({ targetKind: 'source', targetId: ingested.source.id, usageKind: 'packet-item', score: 92, sessionId: 's2' });

@@ -343,8 +343,6 @@ export class DaemonSurfaceDeliveryHelper {
     const url = new URL(`${base.replace(/\/+$/, '')}/api/control-plane/web`);
     if (input.approvalId) url.searchParams.set('approval', input.approvalId);
     if (input.sessionId) url.searchParams.set('session', input.sessionId);
-    const authToken = this.context.authToken();
-    if (authToken) url.searchParams.set('token', authToken);
     return url.toString();
   }
 

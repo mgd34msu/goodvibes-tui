@@ -62,6 +62,9 @@ export const runtimeConfigDefaults = {
       customCaDir: '',
       allowInsecureLocalhost: false,
     },
+    remoteFetch: {
+      allowPrivateHosts: false,
+    },
   },
 };
 
@@ -336,5 +339,11 @@ export const runtimeSecondaryConfigSettings: ConfigSettingDefinition[] = [
     type: 'boolean',
     default: false,
     description: 'Allow self-signed HTTPS only for localhost/loopback outbound requests',
+  },
+  {
+    key: 'network.remoteFetch.allowPrivateHosts',
+    type: 'boolean',
+    default: false,
+    description: 'Allow explicit admin-approved remote fetches from private, localhost, or metadata hosts for artifacts and ingest flows',
   },
 ];

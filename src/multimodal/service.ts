@@ -269,7 +269,7 @@ export class MultimodalService {
     if (!artifact) throw new Error('Multimodal analysis requires artifactId or artifact input.');
     const created = await this.artifactStore.create({
       ...(artifact.dataBase64 ? { dataBase64: artifact.dataBase64 } : {}),
-      ...(artifact.uri ? { uri: artifact.uri, allowPrivateHosts: true } : {}),
+      ...(artifact.uri ? { uri: artifact.uri, allowPrivateHosts: artifact.allowPrivateHosts } : {}),
       ...(artifact.mimeType ? { mimeType: artifact.mimeType } : {}),
       ...(artifact.filename ? { filename: artifact.filename } : {}),
       metadata: artifact.metadata ?? {},

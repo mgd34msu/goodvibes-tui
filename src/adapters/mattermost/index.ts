@@ -1,3 +1,4 @@
+import { parseJsonRecord, readBearerOrHeaderToken, readTextBodyWithinLimit } from '../helpers.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -8,31 +9,38 @@ function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-async function readBody(req: Request): Promise<Record<string, unknown> | null> {
+async function readBody(req: Request): Promise<Record<string, unknown> | Response | null> {
   const contentType = req.headers.get('content-type') ?? '';
-  if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+  if (contentType.includes('multipart/form-data')) {
+    const contentLength = parseInt(req.headers.get('content-length') ?? '0', 10);
+    if (Number.isFinite(contentLength) && contentLength > 1_000_000) {
+      return Response.json({ error: 'Payload too large' }, { status: 413 });
+    }
     const form = await req.formData().catch(() => null);
     if (!form) return null;
-    const entries: Record<string, unknown> = {};
-    for (const [key, value] of form.entries()) {
-      entries[key] = typeof value === 'string' ? value : String(value);
-    }
-    return entries;
+    return Object.fromEntries(
+      [...form.entries()].map(([key, value]) => [key, typeof value === 'string' ? value : String(value)]),
+    );
   }
-  const parsed = await req.json().catch(() => null);
-  return readRecord(parsed);
+  const rawBody = await readTextBodyWithinLimit(req);
+  if (rawBody instanceof Response) return rawBody;
+  if (contentType.includes('application/x-www-form-urlencoded')) {
+    return Object.fromEntries(new URLSearchParams(rawBody));
+  }
+  const parsed = parseJsonRecord(rawBody);
+  return parsed instanceof Response ? null : readRecord(parsed);
 }
 
 export async function handleMattermostSurfaceWebhook(req: Request, context: SurfaceAdapterContext): Promise<Response> {
   const body = await readBody(req);
+  if (body instanceof Response) return body;
   if (!body) return Response.json({ error: 'Invalid webhook payload' }, { status: 400 });
   const configuredToken =
     String(context.configManager.get('surfaces.mattermost.botToken') ?? '')
     || await context.serviceRegistry.resolveSecret('mattermost', 'primary')
     || process.env.MATTERMOST_BOT_TOKEN
     || '';
-  const providedToken = req.headers.get('x-goodvibes-mattermost-token')
-    ?? req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  const providedToken = readBearerOrHeaderToken(req, 'x-goodvibes-mattermost-token')
     ?? readString(body.token)
     ?? '';
   if (configuredToken && providedToken !== configuredToken) {
@@ -40,7 +48,13 @@ export async function handleMattermostSurfaceWebhook(req: Request, context: Surf
   }
 
   const post = typeof body.post === 'string'
-    ? readRecord(JSON.parse(body.post))
+    ? (() => {
+        try {
+          return readRecord(JSON.parse(body.post));
+        } catch {
+          return null;
+        }
+      })()
     : readRecord(body.post);
   const message = readString(post?.message) ?? readString(body.text) ?? '';
   const channelId = readString(post?.channel_id) ?? readString(body.channel_id);

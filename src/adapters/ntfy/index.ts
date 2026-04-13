@@ -1,12 +1,5 @@
+import { parseJsonRecord, readBearerOrHeaderToken, readTextBodyWithinLimit } from '../helpers.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
-
-function parseJsonRecord(rawBody: string): Record<string, unknown> | Response {
-  try {
-    return JSON.parse(rawBody) as Record<string, unknown>;
-  } catch {
-    return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
-  }
-}
 
 export async function handleNtfySurfaceWebhook(req: Request, context: SurfaceAdapterContext): Promise<Response> {
   const enabled = Boolean(context.configManager.get('surfaces.ntfy.enabled'));
@@ -18,14 +11,14 @@ export async function handleNtfySurfaceWebhook(req: Request, context: SurfaceAda
   if (!enabled || !configuredToken) {
     return Response.json({ error: 'ntfy webhook ingress is not configured' }, { status: 503 });
   }
-  const providedToken = req.headers.get('x-goodvibes-ntfy-token')
-    ?? req.headers.get('x-ntfy-token')
-    ?? req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  const providedToken = req.headers.get('x-ntfy-token')
+    ?? readBearerOrHeaderToken(req, 'x-goodvibes-ntfy-token')
     ?? '';
   if (providedToken !== configuredToken) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const rawBody = await req.text();
+  const rawBody = await readTextBodyWithinLimit(req);
+  if (rawBody instanceof Response) return rawBody;
   let body: Record<string, unknown> = {};
   if ((req.headers.get('content-type') ?? '').includes('application/json')) {
     const parsed = parseJsonRecord(rawBody);

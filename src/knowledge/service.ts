@@ -406,6 +406,7 @@ export class KnowledgeService {
     readonly sessionId?: string;
     readonly sourceType?: KnowledgeSourceType;
     readonly connectorId?: string;
+    readonly allowPrivateHosts?: boolean;
     readonly metadata?: Record<string, unknown>;
   }): Promise<{ source: KnowledgeSourceRecord; artifactId?: string; extraction?: KnowledgeExtractionRecord; issues: readonly KnowledgeIssueRecord[] }> {
     return ingestKnowledgeUrl(this.getIngestContext(), input);
@@ -421,6 +422,7 @@ export class KnowledgeService {
     readonly sessionId?: string;
     readonly sourceType?: KnowledgeSourceType;
     readonly connectorId?: string;
+    readonly allowPrivateHosts?: boolean;
     readonly metadata?: Record<string, unknown>;
   }): Promise<{ source: KnowledgeSourceRecord; artifactId?: string; extraction?: KnowledgeExtractionRecord; issues: readonly KnowledgeIssueRecord[] }> {
     return ingestKnowledgeArtifact(this.getIngestContext(), input);
@@ -429,6 +431,7 @@ export class KnowledgeService {
   async importBookmarksFromFile(input: {
     readonly path: string;
     readonly sessionId?: string;
+    readonly allowPrivateHosts?: boolean;
   }): Promise<KnowledgeBatchIngestResult> {
     return importKnowledgeBookmarksFromFile(this.getIngestContext(), input);
   }
@@ -436,6 +439,7 @@ export class KnowledgeService {
   async importUrlsFromFile(input: {
     readonly path: string;
     readonly sessionId?: string;
+    readonly allowPrivateHosts?: boolean;
   }): Promise<KnowledgeBatchIngestResult> {
     return importKnowledgeUrlsFromFile(this.getIngestContext(), input);
   }
@@ -445,16 +449,18 @@ export class KnowledgeService {
     sessionId?: string,
     sourceType: KnowledgeSourceType = 'bookmark',
     connectorId = 'bookmark',
+    allowPrivateHosts?: boolean,
   ): Promise<KnowledgeBatchIngestResult> {
-    return ingestKnowledgeBookmarkSeeds(this.getIngestContext(), seeds, sessionId, sourceType, connectorId);
+    return ingestKnowledgeBookmarkSeeds(this.getIngestContext(), seeds, sessionId, sourceType, connectorId, allowPrivateHosts);
   }
 
   async ingestWithConnector(
     connectorId: string,
     input: unknown,
     sessionId?: string,
+    allowPrivateHosts?: boolean,
   ): Promise<KnowledgeBatchIngestResult> {
-    return ingestKnowledgeWithConnector(this.getIngestContext(), connectorId, input, sessionId);
+    return ingestKnowledgeWithConnector(this.getIngestContext(), connectorId, input, sessionId, allowPrivateHosts);
   }
 
   async ingestConnectorInput(input: {
@@ -463,6 +469,7 @@ export class KnowledgeService {
     readonly content?: string;
     readonly path?: string;
     readonly sessionId?: string;
+    readonly allowPrivateHosts?: boolean;
   }): Promise<KnowledgeBatchIngestResult> {
     return ingestKnowledgeConnectorInput(this.getIngestContext(), input);
   }

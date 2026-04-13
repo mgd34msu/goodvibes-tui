@@ -63,7 +63,7 @@ export function createDaemonControlRouteHandlers(
     }),
     getControlPlaneSnapshot: () => Response.json(context.controlPlaneGateway.getSnapshot()),
     getOperatorContract: () => Response.json({ contract: buildOperatorContract(context.gatewayMethods) }),
-    getControlPlaneWeb: () => context.controlPlaneGateway.renderWebUi(context.extractAuthToken(request)),
+    getControlPlaneWeb: () => context.controlPlaneGateway.renderWebUi(),
     getControlPlaneRecentEvents: (limit) => Response.json({ events: context.controlPlaneGateway.listRecentEvents(limit) }),
     getControlPlaneMessages: () => Response.json({ messages: context.controlPlaneGateway.listSurfaceMessages() }),
     getControlPlaneClients: () => Response.json({ clients: context.controlPlaneGateway.listClients() }),

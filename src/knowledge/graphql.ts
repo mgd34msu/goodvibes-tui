@@ -193,6 +193,7 @@ export class KnowledgeGraphqlService {
           sessionId?: string;
           sourceType?: string;
           connectorId?: string;
+          allowPrivateHosts?: boolean;
           metadata?: Record<string, unknown>;
         },
         context: KnowledgeGraphqlContext,
@@ -206,6 +207,7 @@ export class KnowledgeGraphqlService {
           sessionId: args.sessionId,
           sourceType: args.sourceType as Parameters<KnowledgeService['ingestUrl']>[0]['sourceType'],
           connectorId: args.connectorId,
+          allowPrivateHosts: args.allowPrivateHosts,
           metadata: args.metadata,
         });
         return result.source;
@@ -221,6 +223,7 @@ export class KnowledgeGraphqlService {
           sessionId?: string;
           sourceType?: string;
           connectorId?: string;
+          allowPrivateHosts?: boolean;
           metadata?: Record<string, unknown>;
         },
         context: KnowledgeGraphqlContext,
@@ -236,19 +239,23 @@ export class KnowledgeGraphqlService {
           sessionId: args.sessionId,
           sourceType: args.sourceType as Parameters<KnowledgeService['ingestArtifact']>[0]['sourceType'],
           connectorId: args.connectorId,
+          allowPrivateHosts: args.allowPrivateHosts,
           metadata: args.metadata,
         });
         return result.source;
       },
-      importBookmarks: async (args: { path: string; sessionId?: string }, context: KnowledgeGraphqlContext) => {
+      importBookmarks: async (args: { path: string; sessionId?: string; allowPrivateHosts?: boolean }, context: KnowledgeGraphqlContext) => {
         assertWriteAccess(context);
         return this.service.importBookmarksFromFile(args);
       },
-      importUrls: async (args: { path: string; sessionId?: string }, context: KnowledgeGraphqlContext) => {
+      importUrls: async (args: { path: string; sessionId?: string; allowPrivateHosts?: boolean }, context: KnowledgeGraphqlContext) => {
         assertWriteAccess(context);
         return this.service.importUrlsFromFile(args);
       },
-      ingestConnector: async (args: { connectorId: string; input?: unknown; content?: string; path?: string; sessionId?: string }, context: KnowledgeGraphqlContext) => {
+      ingestConnector: async (
+        args: { connectorId: string; input?: unknown; content?: string; path?: string; sessionId?: string; allowPrivateHosts?: boolean },
+        context: KnowledgeGraphqlContext,
+      ) => {
         assertWriteAccess(context);
         return this.service.ingestConnectorInput(args);
       },

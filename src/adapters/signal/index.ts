@@ -1,3 +1,4 @@
+import { parseJsonRecord, readBearerOrHeaderToken, readTextBodyWithinLimit } from '../helpers.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -15,14 +16,15 @@ export async function handleSignalSurfaceWebhook(req: Request, context: SurfaceA
     || process.env.SIGNAL_BRIDGE_TOKEN
     || '';
   if (configuredToken) {
-    const providedToken = req.headers.get('x-goodvibes-signal-token')
-      ?? req.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-      ?? '';
+    const providedToken = readBearerOrHeaderToken(req, 'x-goodvibes-signal-token');
     if (providedToken !== configuredToken) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }
-  const body = await req.json().catch(() => null);
+  const rawBody = await readTextBodyWithinLimit(req);
+  if (rawBody instanceof Response) return rawBody;
+  const body = parseJsonRecord(rawBody);
+  if (body instanceof Response) return body;
   const payload = readRecord(body);
   if (!payload) return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
   const recipient = readString(payload.recipient) ?? readString(payload.source) ?? readString(payload.phoneNumber);
