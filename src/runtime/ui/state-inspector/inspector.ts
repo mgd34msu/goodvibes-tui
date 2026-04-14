@@ -23,6 +23,7 @@ import { BoundedTransitionLog } from './transition-log.ts';
 import { TimelineBuffer } from './timeline.ts';
 import type { InspectableDomain } from '../../diagnostics/panels/state-inspector.ts';
 import { serializeSafe } from './serialize.ts';
+import { summarizeError } from '../../../utils/error-display.ts';
 
 // ── Domain state cache ────────────────────────────────────────────────────────
 
@@ -420,7 +421,7 @@ export class StateInspectorProvider {
       } catch (err) {
         // Non-fatal: subscriber errors must not crash the provider
         sub.errorCount = (sub.errorCount ?? 0) + 1;
-        sub.lastError = err instanceof Error ? err.message : String(err);
+        sub.lastError = summarizeError(err);
       }
     }
   }

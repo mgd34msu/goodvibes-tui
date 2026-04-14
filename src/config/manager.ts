@@ -7,6 +7,7 @@ import { logger } from '../utils/logger.ts';
 import type { HookDispatcher } from '../hooks/index.ts';
 import type { HookEvent } from '../hooks/types.ts';
 import { getManagedSettingLock } from '../runtime/settings/control-plane.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Deep immutable type — prevents mutation of nested objects returned from getAll(). */
 export type DeepReadonly<T> = {
@@ -88,7 +89,7 @@ function ensureSharedConfig(sharedPath: string): void {
     try {
       writeFileSync(sharedPath, '{}\n', 'utf-8');
     } catch (err) {
-      logger.debug('Could not create shared goodvibes.json (non-fatal)', { error: String(err) });
+      logger.debug('Could not create shared goodvibes.json (non-fatal)', { error: summarizeError(err) });
     }
   }
 }
@@ -276,7 +277,7 @@ export class ConfigManager {
       mkdirSync(dirname(this.configPath), { recursive: true });
       writeFileSync(this.configPath, JSON.stringify(this.config, null, 2) + '\n', 'utf-8');
     } catch (err) {
-      logger.debug('Config save failed (non-fatal)', { error: String(err) });
+      logger.debug('Config save failed (non-fatal)', { error: summarizeError(err) });
     }
   }
 
@@ -289,7 +290,7 @@ export class ConfigManager {
       mkdirSync(dirname(this.projectConfigPath), { recursive: true });
       writeFileSync(this.projectConfigPath, JSON.stringify(this.config, null, 2) + '\n', 'utf-8');
     } catch (err) {
-      logger.debug('Project config save failed (non-fatal)', { error: String(err) });
+      logger.debug('Project config save failed (non-fatal)', { error: summarizeError(err) });
     }
   }
 
@@ -303,7 +304,7 @@ export class ConfigManager {
 
         this.config = sanitizeConfigShape(deepMerge(cloneDefaultConfig(), parsed) as GoodVibesConfig);
       } catch (err) {
-        logger.debug('Global config load failed (non-fatal, using defaults)', { error: String(err) });
+        logger.debug('Global config load failed (non-fatal, using defaults)', { error: summarizeError(err) });
       }
     }
 
@@ -314,7 +315,7 @@ export class ConfigManager {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
         this.config = sanitizeConfigShape(deepMerge(this.config, parsed) as GoodVibesConfig);
       } catch (err) {
-        logger.debug('Project config load failed (non-fatal)', { error: String(err) });
+        logger.debug('Project config load failed (non-fatal)', { error: summarizeError(err) });
       }
     }
   }

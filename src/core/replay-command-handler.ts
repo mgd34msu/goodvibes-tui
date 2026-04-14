@@ -16,6 +16,7 @@
 
 import type { DeterministicReplayEngine } from './deterministic-replay.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface ReplayCommandResult {
   /** Human-readable output to show the user. */
@@ -241,7 +242,7 @@ export function handleReplayCommand(
       // We fire-and-forget here and report optimistically; errors are logged
       // by the engine. Callers that need the result can await the returned promise.
       engine.export(filePath).catch((err: unknown) => {
-        logger.warn('[ReplayCommandHandler] export failed', { filePath, err: String(err) });
+        logger.warn('[ReplayCommandHandler] export failed', { filePath, err: summarizeError(err) });
       });
       logger.info('[ReplayCommandHandler] export triggered', { filePath, runId: snap.runId });
 

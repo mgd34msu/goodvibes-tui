@@ -7,6 +7,7 @@ import type { ConversationTitleSource } from '../../core/conversation.ts';
 import type { SessionReturnContextSummary } from '../../runtime/session-return-context.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '../../runtime/session-return-context.ts';
 import { requirePanelManager, requireProviderApi, requireSessionManager } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
   const normalized = (raw ?? 'all').toLowerCase().replace(/-/g, '_');
@@ -211,7 +212,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       ctx.print(`Session renamed to: ${newName}`);
       ctx.renderRequest();
     } catch (e) {
-      ctx.print(`Failed to rename: ${(e as Error).message}`);
+      ctx.print(`Failed to rename: ${summarizeError(e)}`);
     }
     return true;
   }
@@ -277,7 +278,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
         }
       }
     } catch (e) {
-      ctx.print(`Failed to resume session: ${(e as Error).message}`);
+      ctx.print(`Failed to resume session: ${summarizeError(e)}`);
     }
     return true;
   }
@@ -303,7 +304,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       ctx.renderRequest();
       ctx.print(`Session forked:\n  New ID: ${newId}\n  Name:   ${forkName}\n  From:   ${currentTitle || ctx.session.runtime.sessionId}\n  Messages: ${messages.length}`);
     } catch (e) {
-      ctx.print(`Failed to fork session: ${(e as Error).message}`);
+      ctx.print(`Failed to fork session: ${summarizeError(e)}`);
     }
     return true;
   }
@@ -326,7 +327,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       const nameNote = sanitizedName !== rawName ? ` (saved as "${sanitizedName}")` : '';
       ctx.print(`Session saved: ${rawName}${nameNote}\n  → ${filePath}`);
     } catch (e) {
-      ctx.print(`Failed to save session: ${(e as Error).message}`);
+      ctx.print(`Failed to save session: ${summarizeError(e)}`);
     }
     return true;
   }
@@ -377,7 +378,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       const { meta, messages } = sm.load(loadName);
       printSessionExport(ctx, loadName, meta.title, messages as Array<Record<string, unknown>>, format);
     } catch (e) {
-      ctx.print(`Failed to export session: ${(e as Error).message}`);
+      ctx.print(`Failed to export session: ${summarizeError(e)}`);
     }
     return true;
   }
@@ -432,7 +433,7 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       sm.delete(found.name);
       ctx.print(`Session deleted: ${found.name}${found.title ? ` (${found.title})` : ''}`);
     } catch (e) {
-      ctx.print(`Failed to delete session: ${(e as Error).message}`);
+      ctx.print(`Failed to delete session: ${summarizeError(e)}`);
     }
     return true;
   }

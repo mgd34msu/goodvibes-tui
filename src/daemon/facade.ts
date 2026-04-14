@@ -1,4 +1,6 @@
 import { logger } from '../utils/logger.ts';
+import { jsonErrorResponse } from './http/error-response.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import type { ConfigManager } from '../config/manager.ts';
@@ -336,7 +338,7 @@ export class DaemonServer {
         trustProxy: this.tlsState.trustProxy,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       if (this.replyPoller !== null) {
         clearInterval(this.replyPoller);
         this.replyPoller = null;
@@ -373,6 +375,7 @@ export class DaemonServer {
     this.pendingSurfaceReplies.clear();
     this.approvalBrokerUnsubscribe?.();
     this.approvalBrokerUnsubscribe = null;
+    this.httpRouter.dispose();
     this.server.stop(true);
     this.server = null;
     this.tlsState = null;
@@ -588,9 +591,9 @@ export class DaemonServer {
       this.syncSpawnedAgentTask(record, sessionId);
       return record;
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       logger.error(`${logLabel}: agent spawn failed`, { error: message });
-      return Response.json({ error: `Failed to spawn agent: ${message}` }, { status: 500 });
+      return jsonErrorResponse(err, { status: 500, fallbackMessage: 'Failed to spawn agent' });
     }
   }
   private syncSpawnedAgentTask(record: AgentRecord, sessionId?: string): void {

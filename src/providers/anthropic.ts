@@ -12,6 +12,7 @@ import {
   fromAnthropicContent,
 } from './tool-formats.ts';
 import type { AnthropicContentBlock } from './tool-formats.ts';
+import { toProviderError } from '../utils/error-display.ts';
 
 const ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_API_VERSION = '2023-06-01';
@@ -262,14 +263,21 @@ export class AnthropicProvider implements LLMProvider {
           signal,
         });
       } catch (err: unknown) {
-        throw new ProviderError(
-          err instanceof Error ? err.message : String(err),
-        );
+        throw toProviderError(err, {
+          provider: this.name,
+          operation: 'chat',
+          phase: 'request',
+        });
       }
 
       if (!res.ok) {
         const text = await res.text().catch(() => 'unknown error');
-        throw new ProviderError(formatAnthropicErrorText(res.status, text), res.status);
+        throw new ProviderError(formatAnthropicErrorText(res.status, text), {
+          statusCode: res.status,
+          provider: this.name,
+          operation: 'chat',
+          phase: 'request',
+        });
       }
 
       // Parse SSE stream
@@ -284,7 +292,14 @@ export class AnthropicProvider implements LLMProvider {
       const toolBlocks = new Map<number, { id: string; name: string; args: string }>();
 
       const reader = res.body?.getReader();
-      if (!reader) throw new ProviderError('No response body');
+      if (!reader) {
+        throw new ProviderError('Anthropic chat returned no response body.', {
+          statusCode: 502,
+          provider: this.name,
+          operation: 'chat',
+          phase: 'response',
+        });
+      }
 
       const decoder = new TextDecoder();
       let buffer = '';

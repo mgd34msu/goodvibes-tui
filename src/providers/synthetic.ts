@@ -5,6 +5,7 @@ import type { BenchmarkEntry } from './model-benchmarks.ts';
 import { compositeScore } from './model-benchmarks.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitModelFallback } from '../runtime/emitters/index.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // --- Types ---
 
@@ -264,7 +265,12 @@ export class SyntheticProvider implements LLMProvider {
       if (!resolved) {
         throw new ProviderError(
           'No API keys configured for any provider offering free models',
-          400,
+          {
+            statusCode: 400,
+            provider: this.name,
+            operation: 'chat',
+            phase: 'routing',
+          },
         );
       }
       logger.debug(`[Synthetic] best-free resolved to: ${resolved}`);
@@ -274,7 +280,12 @@ export class SyntheticProvider implements LLMProvider {
     const result = buildBackendList(syntheticId, this.getCatalogModels);
 
     if (!result) {
-      throw new ProviderError(`Unknown synthetic model: ${syntheticId}`, 400);
+      throw new ProviderError(`Unknown synthetic model: ${syntheticId}`, {
+        statusCode: 400,
+        provider: this.name,
+        operation: 'chat',
+        phase: 'routing',
+      });
     }
 
     const { backends, canonical } = result;
@@ -282,7 +293,12 @@ export class SyntheticProvider implements LLMProvider {
     if (backends.length === 0) {
       throw new ProviderError(
         `No API keys configured for any provider offering ${canonical.id}`,
-        400,
+        {
+          statusCode: 400,
+          provider: this.name,
+          operation: 'chat',
+          phase: 'routing',
+        },
       );
     }
 
@@ -386,7 +402,7 @@ export class SyntheticProvider implements LLMProvider {
         cooldownArr[idx] = now + TRANSIENT_COOLDOWN_MS;
         this.cooldowns.set(syntheticId, cooldownArr);
         if (TRANSIENT_COOLDOWN_MS < shortestCooldown) shortestCooldown = TRANSIENT_COOLDOWN_MS;
-        logger.debug(`[Synthetic] ${backend.providerName} failed for ${syntheticId}: ${(err as Error).message ?? err}, trying next backend`);
+        logger.debug(`[Synthetic] ${backend.providerName} failed for ${syntheticId}: ${summarizeError(err) ?? err}, trying next backend`);
         errors.push({ backend, error: err as Error });
         continue;
       }
@@ -417,7 +433,12 @@ export class SyntheticProvider implements LLMProvider {
       await new Promise<void>((resolve, reject) => {
         const onAbort = () => {
           clearTimeout(timer);
-          reject(new ProviderError('Request aborted during cooldown wait', 499));
+          reject(new ProviderError('Request aborted during cooldown wait', {
+            statusCode: 499,
+            provider: this.name,
+            operation: 'chat',
+            phase: 'cooldown',
+          }));
         };
         const timer = setTimeout(() => {
           if (params.signal) params.signal.removeEventListener('abort', onAbort);
@@ -426,7 +447,12 @@ export class SyntheticProvider implements LLMProvider {
         if (params.signal) {
           if (params.signal.aborted) {
             clearTimeout(timer);
-            reject(new ProviderError('Request aborted during cooldown wait', 499));
+            reject(new ProviderError('Request aborted during cooldown wait', {
+              statusCode: 499,
+              provider: this.name,
+              operation: 'chat',
+              phase: 'cooldown',
+            }));
             return;
           }
           params.signal.addEventListener('abort', onAbort, { once: true });
@@ -494,13 +520,13 @@ export class SyntheticProvider implements LLMProvider {
                   provider: backend.providerName,
                 });
               } catch (e) {
-                logger.debug('[Synthetic] runtime bus emit failed', { error: String(e) });
+                logger.debug('[Synthetic] runtime bus emit failed', { error: summarizeError(e) });
               }
             }
 
             return response;
           } catch (err) {
-            logger.debug(`[Synthetic] Fallback ${fallbackId} via ${backend.providerName} failed: ${(err as Error).message}`);
+            logger.debug(`[Synthetic] Fallback ${fallbackId} via ${backend.providerName} failed: ${summarizeError(err)}`);
             continue;
           }
         }
@@ -512,14 +538,24 @@ export class SyntheticProvider implements LLMProvider {
       // All free models exhausted
       throw new ProviderError(
         `All free models exhausted. No alternatives available. Last tried: ${[...tried].join(', ')}`,
-        429,
+        {
+          statusCode: 429,
+          provider: this.name,
+          operation: 'chat',
+          phase: 'routing',
+        },
       );
     }
 
     throw new ProviderError(
       `All backends for ${syntheticId} exhausted. Shortest cooldown expires in ${cooldownSec}s. ` +
       `Tried: ${errors.map(e => `${e.backend.providerName} (${e.error.message})`).join(', ')}`,
-      429,
+      {
+        statusCode: 429,
+        provider: this.name,
+        operation: 'chat',
+        phase: 'routing',
+      },
     );
   }
 }

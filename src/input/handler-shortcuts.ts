@@ -14,6 +14,7 @@ type WrappedPromptInfo = {
 };
 
 export type GlobalShortcutRouteState = {
+  panelFocused: boolean;
   panelManager: PanelManager;
   keybindingsManager: KeybindingsManager;
   prompt: string;
@@ -60,7 +61,7 @@ export function handleGlobalShortcutToken(
     state.handleCtrlC();
     return true;
   }
-  if (token.logicalName === 'escape') {
+  if (token.logicalName === 'escape' && !state.panelFocused) {
     state.handleEscape();
     return true;
   }

@@ -5,6 +5,7 @@ import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import { ProviderError } from '../types/errors.ts';
 import { buildStandardProviderAuthRoutes } from './runtime-metadata.ts';
+import { toProviderError } from '../utils/error-display.ts';
 
 const COPILOT_TOKEN_URL = 'https://api.github.com/copilot_internal/v2/token';
 const DEFAULT_COPILOT_API_BASE_URL = 'https://api.individual.githubcopilot.com';
@@ -207,7 +208,10 @@ export class GitHubCopilotProvider implements LLMProvider {
       });
       return provider.chat({ ...params, model });
     } catch (error) {
-      throw new ProviderError(error instanceof Error ? error.message : String(error));
+      throw toProviderError(error, {
+        provider: this.name,
+        operation: 'chat',
+      });
     }
   }
 

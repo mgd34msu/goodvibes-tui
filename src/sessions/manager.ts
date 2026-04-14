@@ -4,6 +4,7 @@ import { logger } from '../utils/logger.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import type { SessionReturnContextSummary } from '../runtime/session-return-context.ts';
 import type { ConversationTitleSource } from '../core/conversation.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * Metadata for a saved session (the first JSONL line).
@@ -313,7 +314,7 @@ export class SessionManager {
     try {
       unlinkSync(filePath);
     } catch (e) {
-      throw new Error(`Failed to delete session: ${(e as Error).message}`);
+      throw new Error(`Failed to delete session: ${summarizeError(e)}`);
     }
   }
 

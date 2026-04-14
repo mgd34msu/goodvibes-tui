@@ -63,6 +63,9 @@ export class AgentLogsPanel extends BasePanel {
   constructor(agentEvents: UiEventFeed<AgentEvent>, private readonly deps: AgentLogsPanelDeps) {
     super('agent-logs', 'Agents', 'A', 'agent');
     this.agentEvents = agentEvents;
+    this._refreshAgents();
+    this._startPolling();
+    this._subscribeEvents();
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -70,8 +73,7 @@ export class AgentLogsPanel extends BasePanel {
   override onActivate(): void {
     super.onActivate();
     this._refreshAgents();
-    this._startPolling();
-    this._subscribeEvents();
+    this._pollCurrentAgent();
   }
 
   override onDeactivate(): void {
@@ -87,6 +89,7 @@ export class AgentLogsPanel extends BasePanel {
 
   handleInput(key: string): boolean {
     switch (key) {
+      case 'tab':
       case '\t': // Tab — cycle to next agent
         this._selectNextAgent();
         return true;

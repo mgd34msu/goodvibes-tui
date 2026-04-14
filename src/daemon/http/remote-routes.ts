@@ -1,5 +1,6 @@
 import type { DistributedPeerAuth, DistributedRuntimeManager } from '../../runtime/remote/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
+import { jsonErrorResponse } from './error-response.ts';
 
 type JsonBody = Record<string, unknown>;
 
@@ -256,7 +257,7 @@ async function handleInvokeRemotePeer(context: DaemonRemoteRouteContext, peerId:
     });
     return Response.json(invoked, { status: 202 });
   } catch (error) {
-    return Response.json({ error: (error as Error).message }, { status: 404 });
+    return jsonErrorResponse(error, { status: 404 });
   }
 }
 

@@ -17,6 +17,7 @@ import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-po
 import type { ExecutionIntent } from '../../runtime/execution-intents.ts';
 import { logger } from '../../utils/logger.ts';
 import type { AgentInput } from './schema.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export type AgentExecutor = {
   runAgent(record: AgentRecord): Promise<void>;
@@ -357,14 +358,16 @@ export class AgentManager {
       try {
         this.wrfcController?.createChain(record);
       } catch (error) {
-        logger.error('Failed to create WRFC chain', { agentId: id, error: String(error) });
+        logger.error('Failed to create WRFC chain', { agentId: id, error: summarizeError(error) });
       }
     }
 
     if (this.executor) {
       this.executor.runAgent(record).catch((error) => {
         record.status = 'failed';
-        record.error = error instanceof Error ? error.message : String(error);
+        record.error = summarizeError(error, {
+          ...(record.provider ? { provider: record.provider } : {}),
+        });
         record.completedAt = Date.now();
       });
     } else {

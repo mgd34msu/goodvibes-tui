@@ -253,6 +253,42 @@ describe('InputTokenizer', () => {
       expect(t.shift).toBe(true);
       expect(t.meta).toBe(false);
     });
+
+    test('CSI u Ctrl+[ produces key with logicalName=[ and ctrl=true', () => {
+      const tokens = tokenizer.feed('\x1b[91;5u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('[');
+      expect(t.ctrl).toBe(true);
+    });
+
+    test('CSI u Ctrl+] produces key with logicalName=] and ctrl=true', () => {
+      const tokens = tokenizer.feed('\x1b[93;5u');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe(']');
+      expect(t.ctrl).toBe(true);
+    });
+
+    test('modifyOtherKeys Ctrl+[ produces key with logicalName=[ and ctrl=true', () => {
+      const tokens = tokenizer.feed('\x1b[27;5;91~');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe('[');
+      expect(t.ctrl).toBe(true);
+    });
+
+    test('modifyOtherKeys Ctrl+] produces key with logicalName=] and ctrl=true', () => {
+      const tokens = tokenizer.feed('\x1b[27;5;93~');
+      expect(tokens).toHaveLength(1);
+      const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
+      expect(t.type).toBe('key');
+      expect(t.logicalName).toBe(']');
+      expect(t.ctrl).toBe(true);
+    });
   });
 
   describe('bracketed paste', () => {
@@ -301,30 +337,30 @@ describe('InputTokenizer', () => {
   });
 
   describe('panel control codes', () => {
-    test('0x1c (Ctrl+\\\\) produces key with logicalName="|" and ctrl=true', () => {
+    test('0x1c (Ctrl+\\\\) produces key with logicalName="\\\\" and ctrl=true', () => {
       const tokens = tokenizer.feed('\x1c');
       expect(tokens).toHaveLength(1);
       const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
       expect(t.type).toBe('key');
-      expect(t.logicalName).toBe('|');
+      expect(t.logicalName).toBe('\\');
       expect(t.ctrl).toBe(true);
     });
 
-    test('0x1d (Ctrl+]) produces key with logicalName="}" and ctrl=true', () => {
+    test('0x1d (Ctrl+]) produces key with logicalName="]" and ctrl=true', () => {
       const tokens = tokenizer.feed('\x1d');
       expect(tokens).toHaveLength(1);
       const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
       expect(t.type).toBe('key');
-      expect(t.logicalName).toBe('}');
+      expect(t.logicalName).toBe(']');
       expect(t.ctrl).toBe(true);
     });
 
-    test('0x1e (Ctrl+^) produces key with logicalName="~" and ctrl=true', () => {
+    test('0x1e (Ctrl+^) produces key with logicalName="^" and ctrl=true', () => {
       const tokens = tokenizer.feed('\x1e');
       expect(tokens).toHaveLength(1);
       const t = tokens[0] as Extract<InputToken, { type: 'key' }>;
       expect(t.type).toBe('key');
-      expect(t.logicalName).toBe('~');
+      expect(t.logicalName).toBe('^');
       expect(t.ctrl).toBe(true);
     });
   });

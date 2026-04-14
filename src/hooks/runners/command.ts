@@ -14,6 +14,7 @@
  */
 import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /**
  * Run a shell command hook.
@@ -85,7 +86,7 @@ export async function run(hook: HookDefinition, event: HookEvent): Promise<HookR
       return { ok: true };
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     logger.error('command hook error', { command, error: message });
     return { ok: false, error: message };
   }

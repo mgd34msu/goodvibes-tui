@@ -19,6 +19,7 @@ import { randomBytes } from 'node:crypto';
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ToolLLM } from '../../config/tool-llm.ts';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /** Result of an auto-heal attempt. */
 export interface HealResult {
@@ -90,7 +91,7 @@ export class AutoHealer {
         }
       }
     } catch (err) {
-      logger.debug('AutoHealer.heal: unexpected error (non-fatal)', { error: String(err) });
+      logger.debug('AutoHealer.heal: unexpected error (non-fatal)', { error: summarizeError(err) });
       return { healed: false, content };
     }
   }
@@ -144,7 +145,7 @@ export class AutoHealer {
       // Formatter ran but errors remain — pass updated content to next stage
       return { healed: false, content: formatted };
     } catch (err) {
-      logger.debug('AutoHealer: formatter stage failed (non-fatal)', { error: String(err) });
+      logger.debug('AutoHealer: formatter stage failed (non-fatal)', { error: summarizeError(err) });
       return { healed: false, content };
     }
   }
@@ -184,7 +185,7 @@ export class AutoHealer {
 
       return { healed: false, content: fixed };
     } catch (err) {
-      logger.debug('AutoHealer: linter stage failed (non-fatal)', { error: String(err) });
+      logger.debug('AutoHealer: linter stage failed (non-fatal)', { error: summarizeError(err) });
       return { healed: false, content };
     }
   }
@@ -241,7 +242,7 @@ export class AutoHealer {
       logger.debug('AutoHealer: errors resolved by LLM');
       return { healed: true, content: response, method: 'llm' };
     } catch (err) {
-      logger.debug('AutoHealer: LLM stage failed (non-fatal)', { error: String(err) });
+      logger.debug('AutoHealer: LLM stage failed (non-fatal)', { error: summarizeError(err) });
       return { healed: false, content };
     }
   }

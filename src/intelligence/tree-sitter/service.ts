@@ -11,6 +11,7 @@ import type { QueryMatch } from 'web-tree-sitter';
 import { logger } from '../../utils/logger.ts';
 import { detectLanguage } from './languages.ts';
 import { TREE_SITTER_WASM, GRAMMAR_WASM } from './embedded-wasm.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 const MAX_CACHE_SIZE = 100;
 
@@ -45,7 +46,7 @@ export class TreeSitterService {
         this.initialized = true;
         logger.info('TreeSitterService: WASM initialized');
       } catch (err) {
-        logger.error('TreeSitterService: WASM init failed', { error: String(err) });
+        logger.error('TreeSitterService: WASM init failed', { error: summarizeError(err) });
         this.initPromise = null; // allow retry on next call
       }
     })();
@@ -75,7 +76,7 @@ export class TreeSitterService {
       logger.info('TreeSitterService: loaded grammar', { langId });
       return language;
     } catch (err) {
-      logger.error('TreeSitterService: failed to load grammar', { langId, error: String(err) });
+      logger.error('TreeSitterService: failed to load grammar', { langId, error: summarizeError(err) });
       return null;
     }
   }
@@ -129,7 +130,7 @@ export class TreeSitterService {
       logger.error('TreeSitterService: parse failed', {
         filePath,
         langId: resolvedLangId,
-        error: String(err),
+        error: summarizeError(err),
       });
       return null;
     }
@@ -159,7 +160,7 @@ export class TreeSitterService {
       q.delete();
       return matches;
     } catch (err) {
-      logger.error('TreeSitterService: query failed', { error: String(err) });
+      logger.error('TreeSitterService: query failed', { error: summarizeError(err) });
       return [];
     }
   }

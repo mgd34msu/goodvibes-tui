@@ -5,6 +5,7 @@ import type { MemoryBundle, MemorySearchFilter } from '../../state/memory-store.
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope, resolveBundlePath } from './recall-shared.ts';
 import { requireShellPaths } from './runtime-services.ts';
 import { getMemoryApi } from './recall-query.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function handleRecallExport(args: string[], context: CommandContext): void {
   const memory = getMemoryApi(context);
@@ -63,7 +64,7 @@ export async function handleRecallImport(args: string[], context: CommandContext
   try {
     bundle = JSON.parse(readFileSync(targetPath, 'utf-8')) as MemoryBundle;
   } catch (error) {
-    context.print(`[recall] Failed to read memory bundle: ${error instanceof Error ? error.message : String(error)}`);
+    context.print(`[recall] Failed to read memory bundle: ${summarizeError(error)}`);
     return;
   }
 
@@ -117,7 +118,7 @@ export function handleRecallHandoffInspect(args: string[], context: CommandConte
     const bundle = JSON.parse(readFileSync(targetPath, 'utf-8')) as MemoryBundle;
     context.print(inspectBundle(bundle));
   } catch (error) {
-    context.print(`[recall] Failed to inspect handoff bundle: ${error instanceof Error ? error.message : String(error)}`);
+    context.print(`[recall] Failed to inspect handoff bundle: ${summarizeError(error)}`);
   }
 }
 

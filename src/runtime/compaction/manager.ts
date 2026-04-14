@@ -55,6 +55,7 @@ import {
 import { computeQualityScore, escalateStrategy, LOW_QUALITY_THRESHOLD } from './quality-score.ts';
 import type { CompactionQualityScore } from './quality-score.ts';
 import type { ProviderMessage } from '../../providers/interface.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Manager options
@@ -214,7 +215,7 @@ export class CompactionManager {
     try {
       strategyOutput = await this._runStrategy(strategy, strategyInput);
     } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
+      const error = summarizeError(err);
       this._transition('failed');
       emitCompactionFailed(this._bus, this._ctx, {
         sessionId: this._sessionId,
@@ -280,7 +281,7 @@ export class CompactionManager {
           strategyOutput = escalatedOutput;
           strategy = escalated;
         } catch (err) {
-          const error = err instanceof Error ? err.message : String(err);
+          const error = summarizeError(err);
           logger.warn('[CompactionManager] escalated strategy also failed; using original output', {
             sessionId: this._sessionId,
             strategy: escalated,

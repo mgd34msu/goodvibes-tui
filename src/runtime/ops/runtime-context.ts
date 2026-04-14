@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { existsSync, readFileSync } from 'fs';
 import type { RuntimeEventBus } from '../events/index.ts';
 import type { RuntimeStore } from '../store/index.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export interface OpsRuntimeContextConfig {
   runtimeBus: RuntimeEventBus;
@@ -93,7 +94,7 @@ export function readRecoveryFileMetadata(path: string): { ok: boolean; summary: 
   } catch (error) {
     return {
       ok: false,
-      summary: `Recovery file is not parseable: ${error instanceof Error ? error.message : String(error)}`,
+      summary: `Recovery file is not parseable: ${summarizeError(error)}`,
     };
   }
 }

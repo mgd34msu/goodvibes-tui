@@ -17,6 +17,7 @@ import type { ProviderRegistry } from './registry.ts';
 import { hasKeyForProvider } from './model-catalog.ts';
 import type { CatalogProvider } from './model-catalog.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -397,7 +398,7 @@ export function autoRegisterProviders(
       providerRegistry.register(provider);
       registered.push(entry.name);
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
+      const errMsg = summarizeError(err);
       // IMPORTANT: Use logger (NOT process.stderr.write) for all output here.
       // process.stderr.write bypasses the TUI renderer and writes directly to the
       // terminal, corrupting the cell-based display. All diagnostic output in a TUI

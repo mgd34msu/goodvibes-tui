@@ -6,6 +6,7 @@ import { registerChannelAgentTools } from '../tools/channel/agent-tools.ts';
 import { AgentMessageBus } from './message-bus.ts';
 import type { ChannelPluginRegistry } from '../channels/index.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import { FileStateCache } from '../state/file-cache.ts';
 import { ProjectIndex } from '../state/project-index.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
@@ -268,9 +269,9 @@ export class AgentOrchestrator {
         } catch (fallbackErr) {
           throw new Error(
             `Cannot resolve provider for model '${routing.requestedModelId}' (${
-              err instanceof Error ? err.message : String(err)
+              summarizeError(err)
             }) or fallback '${currentModel.id}' (${
-              fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr)
+              summarizeError(fallbackErr)
             })`,
           );
         }
@@ -278,7 +279,7 @@ export class AgentOrchestrator {
 
       throw new Error(
         `Cannot resolve provider for model '${scopedModelId}': ${
-          err instanceof Error ? err.message : String(err)
+          summarizeError(err)
         }`,
       );
     }
@@ -389,7 +390,7 @@ export class AgentOrchestrator {
         logger.warn('[AgentOrchestrator] Ignoring unresolved fallback model', {
           agentId: record.id,
           modelId: requestedModelId,
-          error: error instanceof Error ? error.message : String(error),
+          error: summarizeError(error),
         });
       }
     }

@@ -24,6 +24,7 @@ import type { AgentInput } from '../tools/agent/schema.ts';
 import type { ExecutionPlan, ExecutionPlanManager, PlanItem } from './execution-plan.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { evaluateOrchestrationSpawn } from '../runtime/orchestration/spawn-policy.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 type HookDispatcherLike = {
   fire(event: HookEvent): Promise<HookResult>;
@@ -145,7 +146,7 @@ export async function executeToolCalls(
           ? err.message
           : err instanceof Error
             ? err.message
-            : String(err);
+            : summarizeError(err);
       result = {
         callId: call.id,
         success: false,
@@ -226,7 +227,7 @@ export async function executeToolCalls(
           sessionId: deps.sessionId,
           timestamp: Date.now(),
           payload: { tool: call.name, path: filePath, callId: call.id },
-        }).catch((err: unknown) => { logger.debug(`Post:file:${call.name} hook error`, { error: String(err) }); });
+        }).catch((err: unknown) => { logger.debug(`Post:file:${call.name} hook error`, { error: summarizeError(err) }); });
       } else {
         deps.hookDispatcher.fire({
           path: `Fail:file:${call.name}` as HookEventPath,
@@ -236,7 +237,7 @@ export async function executeToolCalls(
           sessionId: deps.sessionId,
           timestamp: Date.now(),
           payload: { tool: call.name, path: filePath, callId: call.id, error: result.error },
-        }).catch((err: unknown) => { logger.debug(`Fail:file:${call.name} hook error`, { error: String(err) }); });
+        }).catch((err: unknown) => { logger.debug(`Fail:file:${call.name} hook error`, { error: summarizeError(err) }); });
       }
     }
 

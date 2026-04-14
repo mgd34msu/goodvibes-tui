@@ -114,7 +114,7 @@ function initProgressFile(cmdStr: string, workingDirectory: string): { path: str
   try {
     mkdirSync(progressDirectory, { recursive: true });
   } catch (err) {
-    logger.debug('initProgressFile: mkdirSync failed (dir may already exist)', { error: err instanceof Error ? err.message : String(err) });
+    logger.debug('initProgressFile: mkdirSync failed (dir may already exist)', { error: summarizeError(err) });
   }
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const filePath = getProgressFilePath(workingDirectory, id);
@@ -122,12 +122,13 @@ function initProgressFile(cmdStr: string, workingDirectory: string): { path: str
   return {
     path: filePath,
     append: (chunk: string) => {
-      try { appendFileSync(filePath, chunk); } catch (err) { logger.debug('initProgressFile: appendFileSync failed', { path: filePath, error: err instanceof Error ? err.message : String(err) }); }
+      try { appendFileSync(filePath, chunk); } catch (err) { logger.debug('initProgressFile: appendFileSync failed', { path: filePath, error: summarizeError(err) }); }
     },
   };
 }
 
 import { copyFileSync, renameSync, unlinkSync, rmSync, cpSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
+import { summarizeError } from '../../utils/error-display.ts';
 
 function spawnBackground(
   processManager: ProcessManager,
@@ -583,7 +584,7 @@ export function createExecTool(
           try {
             cmdStr = decodeCmd(cmdInput);
           } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
+            const msg = summarizeError(err);
             return { success: false, error: msg };
           }
           resolvedCmds.push({ cmdStr, cmdInput });
@@ -606,7 +607,7 @@ export function createExecTool(
 
         return { success: allSuccess, output: JSON.stringify(responseData) };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = summarizeError(err);
         return { success: false, error: message };
       }
     },

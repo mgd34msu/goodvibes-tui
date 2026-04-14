@@ -23,7 +23,10 @@ describe('GatewayMethodCatalog', () => {
     const methods = catalog.list();
 
     expect(methods.some((method) => method.id === 'control.snapshot')).toBe(true);
+    expect(methods.some((method) => method.id === 'control.auth.current')).toBe(true);
     expect(methods.some((method) => method.id === 'automation.heartbeat.run')).toBe(true);
+    expect(methods.some((method) => method.id === 'telemetry.snapshot')).toBe(true);
+    expect(methods.some((method) => method.id === 'telemetry.stream')).toBe(true);
     expect(methods.some((method) => method.id === 'remote.node_host.contract')).toBe(true);
     expect(methods.some((method) => method.id === 'control.events.catalog')).toBe(true);
     expect(methods.some((method) => method.id === 'local_auth.status')).toBe(true);
@@ -53,6 +56,9 @@ describe('GatewayMethodCatalog', () => {
     expect(events.some((event) => event.id === 'control.ready')).toBe(true);
 
     expect(catalog.findByHttpBinding('GET', '/api/control-plane/methods/control.status')?.id).toBe('control.methods.get');
+    expect(catalog.findByHttpBinding('GET', '/api/control-plane/whoami')?.id).toBe('control.auth.current');
+    expect(catalog.findByHttpBinding('GET', '/api/telemetry')?.id).toBe('telemetry.snapshot');
+    expect(catalog.findByHttpBinding('GET', '/api/v1/telemetry/events')?.id).toBe('telemetry.events.list');
     expect(catalog.findByHttpBinding('GET', '/api/artifacts/art-123/content')?.id).toBe('artifacts.content.get');
     expect(catalog.findByHttpBinding('GET', '/api/remote/device/contract')?.id).toBe('remote.node_host.contract');
     expect(catalog.findByHttpBinding('GET', '/api/channels/setup/telegram')?.id).toBe('channels.setup.get');
@@ -106,14 +112,20 @@ describe('GatewayMethodCatalog', () => {
     expect(contract.operator.schemaCoverage.methods).toBe(catalog.list().length);
 
     expect(schemaProperty(catalog.get('control.contract')?.outputSchema, 'contract', 'product', 'id')).toBeDefined();
+    expect(schemaProperty(catalog.get('control.contract')?.outputSchema, 'contract', 'auth', 'current', 'path')).toBeDefined();
     expect(schemaProperty(catalog.get('control.contract')?.outputSchema, 'contract', 'operator', 'methods', 'id')).toBeDefined();
     expect(schemaProperty(catalog.get('control.contract')?.outputSchema, 'contract', 'operator', 'events', 'id')).toBeDefined();
 
+    expect(schemaProperty(catalog.get('control.auth.current')?.outputSchema, 'principalId')).toBeDefined();
     expect(schemaProperty(catalog.get('control.methods.list')?.outputSchema, 'methods', 'id')).toBeDefined();
     expect(schemaProperty(catalog.get('control.methods.get')?.outputSchema, 'method', 'id')).toBeDefined();
     expect(schemaProperty(catalog.get('control.events.catalog')?.outputSchema, 'events', 'id')).toBeDefined();
     expect(schemaProperty(catalog.get('control.messages.list')?.outputSchema, 'messages', 'attachments', 'artifactId')).toBeDefined();
     expect(schemaProperty(catalog.get('control.clients.list')?.outputSchema, 'clients', 'surface')).toBeDefined();
+    expect(schemaProperty(catalog.get('telemetry.snapshot')?.outputSchema, 'capabilities', 'signals', 'events')).toBeDefined();
+    expect(schemaProperty(catalog.get('telemetry.events.list')?.outputSchema, 'items', 'traceId')).toBeDefined();
+    expect(schemaProperty(catalog.get('telemetry.traces.list')?.outputSchema, 'items', 'spanContext', 'traceId')).toBeDefined();
+    expect(schemaProperty(catalog.get('telemetry.metrics.get')?.outputSchema, 'aggregates', 'totalEvents')).toBeDefined();
 
     expect(schemaProperty(catalog.get('panels.list')?.outputSchema, 'panels', 'id')).toBeDefined();
     expect(schemaProperty(catalog.get('surfaces.list')?.outputSchema, 'surfaces', 'id')).toBeDefined();

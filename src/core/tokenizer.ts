@@ -150,9 +150,15 @@ export class InputTokenizer {
             else if (charCode === 57374) logicalName = 'f11';
             else if (charCode === 57375) logicalName = 'f12';
           }
-          // CSI u: map printable ASCII charCodes to their lowercase letter name
-          if (logicalName === full && charCode >= 97 && charCode <= 122) logicalName = String.fromCharCode(charCode);
-          if (logicalName === full && charCode >= 65 && charCode <= 90) logicalName = String.fromCharCode(charCode + 32);
+          // CSI u / modifyOtherKeys: map printable ASCII charCodes directly.
+          // Lowercase letters normalize to their lowercase names; punctuation
+          // such as Ctrl+[ and Ctrl+] must preserve the literal character.
+          if (logicalName === full && charCode >= 32 && charCode <= 126) {
+            logicalName = String.fromCharCode(charCode);
+            if (charCode >= 65 && charCode <= 90) {
+              logicalName = logicalName.toLowerCase();
+            }
+          }
           tokens.push({ type: 'key', name: full, logicalName, ctrl, shift, meta });
           this.buffer = this.buffer.slice(full.length);
           continue;
@@ -176,6 +182,10 @@ export class InputTokenizer {
         else if (code === 10) { logicalName = 'enter'; isShift = true; }
         else if (code === 127 || code === 8) { logicalName = 'backspace'; }
         else if (code === 9) { logicalName = 'tab'; }
+        else if (code === 28) { logicalName = '\\'; isCtrl = true; }
+        else if (code === 29) { logicalName = ']'; isCtrl = true; }
+        else if (code === 30) { logicalName = '^'; isCtrl = true; }
+        else if (code === 31) { logicalName = '_'; isCtrl = true; }
         else if (code < 32) {
            logicalName = String.fromCharCode(code + 96).toLowerCase(); 
            isCtrl = true;

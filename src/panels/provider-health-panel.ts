@@ -375,6 +375,8 @@ export class ProviderHealthPanel extends BasePanel {
   ) {
     super('provider-health', 'Health', 'N', 'monitoring');
     this._subscribe();
+    void this._refreshAccountPosture(true);
+    this._ensureRefreshTimer();
   }
 
   // -------------------------------------------------------------------------
@@ -449,15 +451,7 @@ export class ProviderHealthPanel extends BasePanel {
     super.onActivate();
     this.markDirty();
     void this._refreshAccountPosture(true);
-    // Tick every second so cooldown countdowns stay live
-    if (this._refreshTimer !== null) clearInterval(this._refreshTimer);
-    this._refreshTimer = setInterval(() => {
-      if (Date.now() - this._accountRefreshAt > 30_000) {
-        void this._refreshAccountPosture();
-      }
-      this.markDirty();
-      this.requestRender();
-    }, 1_000);
+    this._ensureRefreshTimer();
   }
 
   override onDeactivate(): void {
@@ -471,6 +465,17 @@ export class ProviderHealthPanel extends BasePanel {
     }
     for (const unsub of this._unsubs) unsub();
     this._unsubs = [];
+  }
+
+  private _ensureRefreshTimer(): void {
+    if (this._refreshTimer !== null) return;
+    this._refreshTimer = setInterval(() => {
+      if (Date.now() - this._accountRefreshAt > 30_000) {
+        void this._refreshAccountPosture();
+      }
+      this.markDirty();
+      this.requestRender();
+    }, 1_000);
   }
 
   handleInput(key: string): boolean {

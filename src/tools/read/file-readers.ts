@@ -23,6 +23,7 @@ import {
 } from './media.ts';
 import type { ReadFileInput, ExtractMode, OutputFormat } from './schema.ts';
 import { formatContent, extractOutline, extractSymbols, extractAst } from './text.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export interface FileReadResult {
   path: string;
@@ -214,7 +215,7 @@ async function readImageFile(
   try {
     imgBuffer = readFileSync(target.resolvedPath);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return createReadErrorResult(target, `Cannot read image: ${message}`);
   }
 
@@ -306,7 +307,7 @@ function readArchiveFile(target: ReadTarget, context: ReadExecutionContext): Fil
   try {
     archiveBuffer = readFileSync(target.resolvedPath);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return createReadErrorResult(target, `Cannot read archive: ${message}`);
   }
 
@@ -324,7 +325,7 @@ function readPdfFile(target: ReadTarget, context: ReadExecutionContext, fileInpu
     pdfByteSize = buf.length;
     pdfRaw = buf.toString('binary');
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return createReadErrorResult(target, `Cannot read PDF: ${message}`);
   }
 
@@ -342,7 +343,7 @@ function readNotebookFile(target: ReadTarget, context: ReadExecutionContext): Fi
     nbRaw = readFileSync(target.resolvedPath, 'utf-8');
     nbByteSize = Buffer.byteLength(nbRaw, 'utf-8');
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return createReadErrorResult(target, `Cannot read notebook: ${message}`);
   }
 
@@ -358,7 +359,7 @@ async function readTextFile(target: ReadTarget, context: ReadExecutionContext, f
   try {
     fullBuf = readFileSync(target.resolvedPath);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     logger.debug('read tool: file read failed', { path: target.resolvedPath, error: message });
     return createReadErrorResult(target, `Cannot read file: ${message}`);
   }
@@ -372,7 +373,7 @@ async function readTextFile(target: ReadTarget, context: ReadExecutionContext, f
   try {
     rawContent = fullBuf.toString('utf-8');
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     logger.debug('read tool: utf-8 decode failed', { path: target.resolvedPath, error: message });
     return createReadErrorResult(target, `Cannot decode file as UTF-8: ${message}`, fullBuf.length);
   }
@@ -440,7 +441,7 @@ export async function readOneFile(
   try {
     resolvedPath = resolveAndValidatePath(fileInput.path, projectIndex.baseDir);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     logger.debug('read tool: path validation failed', { path: fileInput.path, error: message });
     return createReadErrorResult({ fileInput, resolvedPath: fileInput.path, extract }, message);
   }

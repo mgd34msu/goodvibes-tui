@@ -14,6 +14,7 @@ import {
 } from './trust-tiers.ts';
 import { applyExtract, sniffContentType } from './extract.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export interface FetchRuntimeDeps {
   readonly serviceRegistry?: Pick<ServiceRegistry, 'resolveAuth'> | null;
@@ -441,7 +442,7 @@ async function fetchOne(
       ? `Timeout after ${urlInput.timeout_ms ?? DEFAULT_TIMEOUT_MS}ms`
       : err instanceof Error
         ? err.message
-        : String(err);
+        : summarizeError(err);
     logger.debug('fetch tool: request failed', { url: urlInput.url, error: message });
     return { url: urlInput.url, error: message, duration_ms: durationMs };
   }
@@ -489,7 +490,7 @@ export function createFetchTool(
         const output = await runtime.execute(input, deps);
         return { success: true, output: JSON.stringify(output) };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = summarizeError(err);
         logger.error('fetch tool: unexpected error', { error: message });
         return { success: false, error: `Unexpected error: ${message}` };
       }

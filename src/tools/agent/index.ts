@@ -7,6 +7,7 @@ import { AgentMessageBus } from '../../agents/message-bus.ts';
 import type { WrfcController } from '../../agents/wrfc-controller.ts';
 import { AGENT_TEMPLATES, AgentManager } from './manager.ts';
 import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-policy.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 export type { AgentRecord } from './manager.ts';
 export { AGENT_TEMPLATES, AgentManager } from './manager.ts';
 
@@ -80,7 +81,9 @@ export function createAgentTool(config: {
         } catch (error) {
           return {
             success: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: summarizeError(error, {
+              ...(typeof input.provider === 'string' ? { provider: input.provider } : {}),
+            }),
           };
         }
 
@@ -482,7 +485,7 @@ export function createAgentTool(config: {
           } catch (error) {
             return {
               success: false,
-              error: error instanceof Error ? error.message : String(error),
+              error: summarizeError(error),
             };
           }
           results.push({ id: record.id, task: taskDef.task.slice(0, 80), template: record.template, cohort: record.cohort });
@@ -566,7 +569,7 @@ export function createAgentTool(config: {
             }),
           };
         } catch (err) {
-          return { success: false, error: `Failed to list WRFC chains: ${err instanceof Error ? err.message : String(err)}` };
+          return { success: false, error: `Failed to list WRFC chains: ${summarizeError(err)}` };
         }
       }
 
@@ -594,7 +597,7 @@ export function createAgentTool(config: {
             }),
           };
         } catch (err) {
-          return { success: false, error: `Failed to get WRFC history: ${err instanceof Error ? err.message : String(err)}` };
+          return { success: false, error: `Failed to get WRFC history: ${summarizeError(err)}` };
         }
       }
 

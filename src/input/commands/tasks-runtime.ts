@@ -2,6 +2,7 @@ import type { CommandRegistry } from '../command-registry.ts';
 import type { RuntimeTask, TaskLifecycleState } from '../../runtime/store/domains/tasks.ts';
 import { reviewWorktreeAttachments } from '../../runtime/worktree/registry.ts';
 import { requireOperatorClient, requireOpsApi, requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 function sortRuntimeTasks(tasks: RuntimeTask[]): RuntimeTask[] {
   const statusOrder: TaskLifecycleState[] = ['running', 'queued', 'blocked', 'failed', 'completed', 'cancelled'];
@@ -222,7 +223,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
             return;
         }
       } catch (error) {
-        ctx.print(error instanceof Error ? error.message : String(error));
+        ctx.print(summarizeError(error));
       }
     },
   });

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { createDirectTransport } from '../../runtime/transports/direct.ts';
+import { createDirectTransportServices } from '../../runtime/foundation-services.ts';
+import {
+  createDirectTransport,
+  createDirectTransportFromServices,
+} from '../../runtime/transports/direct.ts';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 async function waitFor<T>(fn: () => T | undefined | null, timeoutMs = 500, intervalMs = 5): Promise<T> {
@@ -93,5 +97,24 @@ describe('DirectTransport', () => {
     expect(snapshot.peer.pairing.total).toBe(1);
     expect(snapshot.peer.peers.some((peer) => peer.id === verified?.peer.id)).toBe(true);
     expect(snapshot.peer.nodeHostContract.basePath).toBe('/api/remote');
+  });
+
+  test('can be created from the narrowed foundation seam', async () => {
+    const runtimeServices = getTestRuntimeServices();
+    const services = createDirectTransportServices(runtimeServices);
+
+    const transport = createDirectTransportFromServices(services);
+    const legacy = createDirectTransport(runtimeServices);
+
+    expect(transport.kind).toBe('direct');
+    expect(Object.keys(transport.operator).sort()).toEqual(Object.keys(legacy.operator).sort());
+    expect(Object.keys(transport.peer).sort()).toEqual(Object.keys(legacy.peer).sort());
+
+    const session = await transport.operator.sessions.ensureSession({
+      sessionId: 'direct-transport-from-services',
+      title: 'Direct Transport From Services',
+    });
+
+    expect(transport.operator.sessions.get(session.id)?.title).toBe('Direct Transport From Services');
   });
 });

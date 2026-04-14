@@ -52,11 +52,12 @@ export class ContextVisualizerPanel extends BasePanel {
   ) {
     super('context', 'Context', 'C', 'ai');
     this.sessionMemoryStore = sessionMemoryStore;
+    this._attachBus();
+    this._refresh();
   }
 
   override onActivate(): void {
     this.needsRender = true;
-    this._attachBus();
     this._refresh();
   }
 

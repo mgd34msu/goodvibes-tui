@@ -12,6 +12,7 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { ConversationManager } from '../../core/conversation.ts';
+import { createOperatorClientServices } from '../../runtime/foundation-services.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeHookApi } from '../../runtime/runtime-hook-api.ts';
@@ -110,7 +111,7 @@ describe('operator surfaces gate', () => {
         pluginManager: runtimeServices.pluginManager,
       },
       clients: {
-        operator: createOperatorClient(uiServices),
+        operator: createOperatorClient(createOperatorClientServices(runtimeServices)),
         peer: createPeerClient({
           runtimeStore: runtimeServices.runtimeStore,
           distributedRuntime: runtimeServices.distributedRuntime,

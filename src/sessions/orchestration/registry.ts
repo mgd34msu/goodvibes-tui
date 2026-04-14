@@ -23,6 +23,7 @@ import type {
 } from './types.ts';
 import { makeRefKey } from './types.ts';
 import type { TaskLifecycleState } from '../../runtime/store/domains/tasks.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /** Current schema version for the persisted graph file. */
 const GRAPH_SCHEMA_VERSION = 1;
@@ -299,7 +300,7 @@ export class CrossSessionTaskRegistry {
       // Non-fatal: malformed or missing graph file — start with empty graph
       logger.debug('CrossSessionTaskRegistry: could not load task graph', {
         path: this._graphPath,
-        error: (e as Error).message,
+        error: summarizeError(e),
       });
     }
   }
@@ -326,7 +327,7 @@ export class CrossSessionTaskRegistry {
       } catch (e) {
         logger.warn('CrossSessionTaskRegistry: failed to flush task graph', {
           path: this._graphPath,
-          error: (e as Error).message,
+          error: summarizeError(e),
         });
       }
     }, 100);
@@ -345,7 +346,7 @@ export class CrossSessionTaskRegistry {
       // Non-fatal: failed to persist graph — in-memory graph remains authoritative
       logger.debug('CrossSessionTaskRegistry: failed to flush task graph', {
         path: this._graphPath,
-        error: (e as Error).message,
+        error: summarizeError(e),
       });
     }
   }

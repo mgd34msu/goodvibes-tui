@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger.ts';
 import { LspClient } from './client.ts';
 import { getBinaryPath, ensureBinary } from './binary-downloader.ts';
 import type { ShellPathService } from '../../runtime/shell-paths.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 type LspRoots = Pick<ShellPathService, 'workingDirectory' | 'resolveProjectPath'>;
 
@@ -105,7 +106,7 @@ export class LspService {
       logger.info('LspService: started server', { langId, command: config.command });
       return client;
     } catch (err) {
-      logger.error('LspService: failed to start server', { langId, err: String(err) });
+      logger.error('LspService: failed to start server', { langId, err: summarizeError(err) });
       try { await client.stop(); } catch { /* ignore */ }
       return null;
     }

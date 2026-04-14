@@ -8,14 +8,14 @@ import type { Line } from '../types/grid.ts';
 import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import {
   buildBodyText,
-  buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildPanelListRow,
   buildPanelLine,
   buildSummaryBlock,
   buildPanelWorkspace,
-  resolveScrollablePanelSection,
+  resolvePrimaryScrollableSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
@@ -143,6 +143,7 @@ export class SystemMessagesPanel extends BasePanel {
 
     const highCount = this._messages.filter((entry) => entry.priority === 'high').length;
     const lowCount = this._messages.length - highCount;
+    this._lastVisibleIdx = Math.min(this._lastVisibleIdx, this._messages.length - 1);
     const ui = this.configManager.getRaw().ui;
     const postureLines = [
       buildKeyValueLine(width, [
@@ -158,45 +159,55 @@ export class SystemMessagesPanel extends BasePanel {
       buildGuidanceLine(width, '/settings', 'adjust where operational and WRFC messages render across panels and conversation', C),
     ];
 
-    const messageRows: Line[] = [];
-    let selectedLineIndex = 0;
-    for (let index = 0; index < this._messages.length; index++) {
-      const entry = this._messages[index]!;
-      const prefix = `${fmtTime(entry.ts)}  `;
-      const fg = entry.priority === 'high' ? C.high : C.low;
-      const wrapped = buildBodyText(width, `${prefix}${entry.text}`, C, fg);
-      if (index === this._lastVisibleIdx) {
-        selectedLineIndex = messageRows.length;
-      }
-      messageRows.push(...wrapped);
-    }
+    const selected = this._messages[this._lastVisibleIdx]!;
+    const messageRows: Line[] = this._messages.map((entry, index) => {
+      const preview = entry.text.replace(/\s+/g, ' ').trim();
+      return buildPanelListRow(width, [
+        { text: `${fmtTime(entry.ts)}  `, fg: C.ts },
+        {
+          text: `${entry.priority === 'high' ? 'HIGH' : 'LOW '.padEnd(4)}  `,
+          fg: entry.priority === 'high' ? C.high : C.low,
+          bold: entry.priority === 'high',
+        },
+        { text: preview, fg: C.value },
+      ], C, {
+        selected: index === this._lastVisibleIdx,
+        marker: entry.priority === 'high' ? '!' : '·',
+      });
+    });
 
     const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'System posture', postureLines, C) };
-    const messagesSection = resolveScrollablePanelSection(width, height, {
+    const detailSection: PanelWorkspaceSection = {
+      title: 'Selected Message',
+      lines: [
+        buildPanelLine(width, [
+          [' Time ', C.label],
+          [fmtTime(selected.ts), C.value],
+          ['   Priority ', C.label],
+          [selected.priority, selected.priority === 'high' ? C.high : C.low],
+        ]),
+        ...buildBodyText(width, selected.text, C, C.value),
+      ],
+    };
+    const messagesSection = resolvePrimaryScrollableSection(width, height, {
       intro,
       palette: C,
       beforeSections: [postureSection],
       section: {
-        title: 'Messages',
-        scrollableLines: messageRows.map((line, idx) => (
-          idx === selectedLineIndex
-            ? line.map((cell, col) => ({
-                ...cell,
-                bg: C.selectBg,
-                fg: col === 0 && cell.char !== ' ' ? C.info : cell.fg,
-              }))
-            : line
-        )),
-        selectedIndex: selectedLineIndex,
+        title: 'Timeline',
+        scrollableLines: messageRows,
+        selectedIndex: this._lastVisibleIdx,
         scrollOffset: this._scrollOffset,
         minRows: 4,
         appendWindowSummary: { dimColor: C.ts },
       },
+      afterSections: [detailSection],
     });
     this._scrollOffset = messagesSection.scrollOffset;
     const sections: PanelWorkspaceSection[] = [
       postureSection,
       messagesSection.section,
+      detailSection,
     ];
     const lines = buildPanelWorkspace(width, height, {
       title: 'System Messages',

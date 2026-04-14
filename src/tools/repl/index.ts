@@ -8,6 +8,7 @@ import type { SandboxSessionRegistry } from '../../runtime/sandbox/session-regis
 import { executeSandboxCommand } from '../../runtime/sandbox/backend.ts';
 import type { SandboxLaunchPlan } from '../../runtime/sandbox/types.ts';
 import type { Tool } from '../../types/tools.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 import { REPL_TOOL_SCHEMA, type ReplToolInput } from './schema.ts';
 
 interface ReplHistoryEntry {
@@ -165,6 +166,7 @@ async function evalSql(
   const payload = JSON.stringify({ expression });
   const script = `
 import { Database } from 'bun:sqlite';
+import { summarizeError } from '../../utils/error-display.ts';
 const payload = JSON.parse(process.env.GV_REPL_PAYLOAD ?? '{}');
 const db = new Database(':memory:');
 db.exec("CREATE TABLE sandbox_eval (id INTEGER PRIMARY KEY, value TEXT);");
@@ -307,9 +309,9 @@ export function createReplTool(
         sessionId: sandboxSession.id,
         backend: sandboxSession.resolvedBackend ?? sandboxSession.backend,
         launchSummary: sandboxSession.launchPlan?.summary,
-        error: String(error),
+        error: summarizeError(error),
       }]);
-      return { success: false, error: String(error) };
+      return { success: false, error: summarizeError(error) };
     }
     },
   };

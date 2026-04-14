@@ -34,6 +34,7 @@ import type {
   CompactionConfig,
 } from './compaction-types.ts';
 import { DEFAULT_COMPACTION_CONFIG, estimateTokens } from './compaction-types.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   buildHandoffHeader,
   buildSessionMemories,
@@ -188,7 +189,7 @@ async function llmExtract(
   } catch (err) {
     logger.warn(`Compaction: failed to get provider for ${label}`, {
       modelId,
-      err: err instanceof Error ? err.message : String(err),
+      err: summarizeError(err),
     });
     return null;
   }
@@ -206,7 +207,7 @@ async function llmExtract(
     return text;
   } catch (err) {
     logger.warn(`Compaction: LLM extraction failed for ${label}`, {
-      err: err instanceof Error ? err.message : String(err),
+      err: summarizeError(err),
     });
     return null;
   }

@@ -1,5 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { requirePanelManager } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerOperatorPanelCommand(registry: CommandRegistry): void {
   registry.register({
@@ -52,7 +53,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           }
           ctx.print(`Panel opened: ${id}${pane ? ` (${pane} pane)` : ''}`);
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
       } else if (sub === 'close') {
         const id = args[1];
@@ -62,7 +63,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           ctx.renderRequest();
           ctx.print(`Panel closed: ${id}`);
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
       } else if (sub === 'move') {
         const dest = args[1]?.toLowerCase();
@@ -77,7 +78,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           ctx.renderRequest();
           ctx.print(`Panel moved to ${dest} pane`);
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
       } else if (sub === 'focus') {
         const pane = args[1]?.toLowerCase();

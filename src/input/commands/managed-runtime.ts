@@ -18,6 +18,7 @@ import {
   stageManagedSettingsBundle,
 } from '../../runtime/settings/control-plane.ts';
 import { requireProfileManager, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 function buildConfigSnapshot(
   manager: { get: (key: ConfigKey) => unknown },
@@ -140,8 +141,8 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
           ctx.print(`Staged managed settings applied (${result.appliedCount} changes, rollback ${result.rollbackToken}${result.remainingCount > 0 ? `, ${result.remainingCount} still staged` : ''}).`);
         } catch (error) {
-          recordSettingsSyncFailure('managed', (error as Error).message, controlPlaneConfigDir);
-          ctx.print((error as Error).message);
+          recordSettingsSyncFailure('managed', summarizeError(error), controlPlaneConfigDir);
+          ctx.print(summarizeError(error));
         }
         return;
       }
@@ -159,8 +160,8 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
           ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
           ctx.print(`Managed rollback ${token} restored ${restored} setting(s).`);
         } catch (error) {
-          recordSettingsSyncFailure('managed', (error as Error).message, controlPlaneConfigDir);
-          ctx.print((error as Error).message);
+          recordSettingsSyncFailure('managed', summarizeError(error), controlPlaneConfigDir);
+          ctx.print(summarizeError(error));
         }
         return;
       }

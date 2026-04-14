@@ -7,6 +7,7 @@ import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { createOperatorClientServices } from '../../runtime/foundation-services.ts';
 import { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
@@ -147,7 +148,7 @@ describe('product breadth commands', () => {
       remoteSupervisor: productRemoteSupervisor,
       integrationHelpers,
     } as RuntimeServices, { forensicsRegistry });
-    const operatorClient = createOperatorClient(uiServices);
+    const operatorClient = createOperatorClient(createOperatorClientServices(runtimeServices));
     const peerClient = createPeerClient({
       runtimeStore,
       distributedRuntime: runtimeServices.distributedRuntime,

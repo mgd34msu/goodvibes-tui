@@ -21,6 +21,7 @@ import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
 import type { FeatureFlag, FlagState } from '../runtime/feature-flags/types.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -417,7 +418,7 @@ export class SettingsModal {
         this._persistFlagState(flag.id, newState, flag.defaultState as FlagState);
         flagEntry.state = newState;
       } catch (e) {
-        logger.error('SettingsModal: failed to toggle feature flag', { flag: flag.id, error: String(e) });
+        logger.error('SettingsModal: failed to toggle feature flag', { flag: flag.id, error: summarizeError(e) });
       }
     }
   }
@@ -686,7 +687,7 @@ export class SettingsModal {
       }
       this.configManager.mergeCategory('featureFlags', current);
     } catch (e) {
-      logger.error('SettingsModal: failed to persist flag state', { flagId, error: String(e) });
+      logger.error('SettingsModal: failed to persist flag state', { flagId, error: summarizeError(e) });
     }
   }
 
@@ -711,7 +712,7 @@ export class SettingsModal {
         }
       }
     } catch (e) {
-      logger.error('SettingsModal: failed to set config value', { key, error: String(e) });
+      logger.error('SettingsModal: failed to set config value', { key, error: summarizeError(e) });
     }
   }
 }

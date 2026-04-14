@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface ModelBenchmarks {
   gpqa?: number;
@@ -187,7 +188,7 @@ export class BenchmarkStore {
     this.nameIndex = this.cache ? buildNameIndex(this.cache.entries) : null;
     if (!this.cache || this.isCacheStale(this.cache)) {
       void this.refreshBenchmarks().catch((err) => {
-        logger.debug('[model-benchmarks] Background refresh failed', { error: String(err) });
+        logger.debug('[model-benchmarks] Background refresh failed', { error: summarizeError(err) });
       });
     }
   }
@@ -309,7 +310,7 @@ export class BenchmarkStore {
       if (parsed.version !== 1 || !Array.isArray(parsed.entries)) return null;
       return parsed;
     } catch (err) {
-      const message = String(err);
+      const message = summarizeError(err);
       if (message.includes('ENOENT') || message.includes('no such file')) {
         logger.debug('[model-benchmarks] No cache file found (first run)');
       } else {
@@ -325,7 +326,7 @@ export class BenchmarkStore {
       writeFileSync(this.getTmpPath(), JSON.stringify(cache, null, 2), 'utf-8');
       renameSync(this.getTmpPath(), this.getCachePath());
     } catch (err) {
-      logger.warn('[model-benchmarks] Cache write failed', { error: String(err) });
+      logger.warn('[model-benchmarks] Cache write failed', { error: summarizeError(err) });
     }
   }
 

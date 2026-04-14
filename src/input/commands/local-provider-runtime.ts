@@ -5,6 +5,7 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { fetchModelContextWindows } from '../../discovery/scanner.ts';
 import type { CustomProviderConfig } from '../../providers/custom-loader.ts';
 import { requireProviderApi, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 function isValidProviderName(name: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(name);
@@ -102,7 +103,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
           mkdirSync(providersDir, { recursive: true });
           await writeFile(providerFile, JSON.stringify(config, null, 2), 'utf-8');
         } catch (e) {
-          ctx.print(`Error writing provider file: ${(e as Error).message}`);
+          ctx.print(`Error writing provider file: ${summarizeError(e)}`);
           return;
         }
         ctx.print(`Provider '${name}' added with ${models.length} model(s):\n${discoveredModelIds.length > 0 ? discoveredModelIds.map((id) => `  • ${id} (${(contextWindows[id] ?? 8192).toLocaleString()} ctx)`).join('\n') : `  • ${defaultModel} (starter entry)`}\nThe file watcher will auto-register it shortly.`);
@@ -128,7 +129,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
           await unlink(providerFile);
           ctx.print(`Provider '${name}' removed. The file watcher will deregister it shortly.`);
         } catch (e) {
-          ctx.print(`Error removing provider file: ${(e as Error).message}`);
+          ctx.print(`Error removing provider file: ${summarizeError(e)}`);
         }
         return;
       }
@@ -162,7 +163,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
         ctx.platform.configManager.set('provider.model', selected.registryKey);
         ctx.print(`Switched to provider: ${selected.providerId} (model: ${selected.modelId})`);
       } catch (e) {
-        ctx.print(`Error: ${(e as Error).message}`);
+        ctx.print(`Error: ${summarizeError(e)}`);
       }
     },
   });

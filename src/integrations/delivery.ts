@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Delivery outcome taxonomy
@@ -356,7 +357,7 @@ export class DeliveryQueue {
       });
       return 'delivered';
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorMsg = summarizeError(err);
       const failureClass = classifyDeliveryError(err);
 
       if (failureClass === 'terminal' || entry.attempts > this._config.maxRetries) {
@@ -442,7 +443,7 @@ export class DeliveryQueue {
         listener(dlqEntry);
       } catch (err) {
         logger.debug('[delivery] listener error:', {
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
           entryId: dlqEntry.id,
         });
       }

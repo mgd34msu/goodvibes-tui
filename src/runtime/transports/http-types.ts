@@ -1,5 +1,6 @@
 import type {
   ControlPlaneRecentEvent,
+  ControlPlaneAuthSnapshot,
   SharedApprovalRecord,
   SharedSessionInputRecord,
   SharedSessionMessage,
@@ -8,6 +9,16 @@ import type {
 } from '../../control-plane/index.ts';
 import type { SteerSharedSessionMessageInput } from '../../control-plane/index.ts';
 import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../../providers/runtime-snapshot.ts';
+import type {
+  TelemetryAggregates,
+  TelemetryCapabilities,
+  TelemetryFilter,
+  TelemetryListResponse,
+  TelemetryRecord,
+  TelemetryRuntimeSnapshot,
+  TelemetrySnapshot,
+  TelemetryViewMode,
+} from '../telemetry/api.ts';
 import type {
   DistributedNodeHostContract,
   DistributedPendingWork,
@@ -106,6 +117,46 @@ export interface HttpTransportProvidersClient {
 export interface HttpTransportControlPlaneClient {
   snapshot(): Promise<UiControlPlaneSnapshot>;
   recentEvents(limit?: number): Promise<readonly ControlPlaneRecentEvent[]>;
+  currentAuth(): Promise<HttpTransportControlPlaneAuthSnapshot>;
+}
+
+export interface HttpTransportControlPlaneAuthSnapshot extends ControlPlaneAuthSnapshot {}
+
+export interface HttpTransportTelemetryMetricsSnapshot {
+  readonly version: 1;
+  readonly view: TelemetryViewMode;
+  readonly rawAccessible: boolean;
+  readonly generatedAt: number;
+  readonly runtime: TelemetryRuntimeSnapshot;
+  readonly sessionMetrics: TelemetrySnapshot['sessionMetrics'];
+  readonly aggregates: TelemetryAggregates;
+}
+
+export type HttpTransportTelemetryQuery = TelemetryFilter | number;
+
+export interface HttpTransportTelemetryStreamReady {
+  readonly version: 1;
+  readonly capabilities: TelemetryCapabilities;
+  readonly view: TelemetryViewMode;
+  readonly rawAccessible: boolean;
+  readonly resumedFrom?: string;
+}
+
+export interface HttpTransportTelemetryStreamHandlers {
+  readonly onRecord: (record: TelemetryRecord) => void;
+  readonly onReady?: (payload: HttpTransportTelemetryStreamReady) => void;
+}
+
+export interface HttpTransportTelemetryClient {
+  snapshot(query?: HttpTransportTelemetryQuery): Promise<TelemetrySnapshot>;
+  events(query?: HttpTransportTelemetryQuery): Promise<TelemetryListResponse<TelemetryRecord>>;
+  errors(query?: HttpTransportTelemetryQuery): Promise<TelemetryListResponse<TelemetryRecord>>;
+  traces(query?: HttpTransportTelemetryQuery): Promise<TelemetryListResponse<import('../telemetry/types.ts').ReadableSpan>>;
+  metrics(query?: HttpTransportTelemetryQuery): Promise<HttpTransportTelemetryMetricsSnapshot>;
+  otlpTraces(query?: HttpTransportTelemetryQuery): Promise<Record<string, unknown>>;
+  otlpLogs(query?: HttpTransportTelemetryQuery): Promise<Record<string, unknown>>;
+  otlpMetrics(query?: HttpTransportTelemetryQuery): Promise<Record<string, unknown>>;
+  stream(handlers: HttpTransportTelemetryStreamHandlers, query?: HttpTransportTelemetryQuery): Promise<() => void>;
 }
 
 export interface HttpTransportOperatorClient {
@@ -114,6 +165,7 @@ export interface HttpTransportOperatorClient {
   readonly approvals: HttpTransportApprovalsClient;
   readonly providers: HttpTransportProvidersClient;
   readonly controlPlane: HttpTransportControlPlaneClient;
+  readonly telemetry: HttpTransportTelemetryClient;
   readonly events: UiRuntimeEvents;
   readonly shellPaths: TransportPaths;
 }

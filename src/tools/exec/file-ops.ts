@@ -3,6 +3,7 @@ import { resolve, isAbsolute, join, relative, dirname } from 'node:path';
 import { logger } from '../../utils/logger.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import type { ExecFileOp } from './schema.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export interface FileOpResult {
   op: string;
@@ -94,7 +95,7 @@ async function updateImportsAfterMove(oldSrc: string, newDst: string, projectRoo
       } catch (err) {
         logger.debug('exec file_ops update_imports: write failed (non-fatal)', {
           file,
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
         });
       }
     }
@@ -176,7 +177,7 @@ export async function executeFileOperations(
         pendingImportUpdates.push({ src: opResult.source, dst: opResult.destination });
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = summarizeError(err);
       return { fileOpResults, fileOpError: `file_ops failed: ${msg}` };
     }
   }
@@ -190,7 +191,7 @@ export async function executeFileOperations(
       logger.debug('exec file_ops: update_imports failed (non-fatal)', {
         src,
         dst,
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
     }
   }

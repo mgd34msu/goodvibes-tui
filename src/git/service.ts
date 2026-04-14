@@ -2,6 +2,7 @@ import simpleGit, { type SimpleGit, type StatusResult } from 'simple-git';
 import type { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookEvent } from '../hooks/types.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * GitService — Wraps simple-git with hook emission on all mutating operations.
@@ -207,7 +208,7 @@ export class GitService {
       await this.firePost('commit', { message, ...output });
       return output;
     } catch (err) {
-      await this.fireFail('commit', { message, error: String(err) });
+      await this.fireFail('commit', { message, error: summarizeError(err) });
       throw err;
     }
   }
@@ -229,7 +230,7 @@ export class GitService {
       }
       await this.firePost('checkout', { branch });
     } catch (err) {
-      await this.fireFail('checkout', { branch, error: String(err) });
+      await this.fireFail('checkout', { branch, error: summarizeError(err) });
       throw err;
     }
   }
@@ -244,7 +245,7 @@ export class GitService {
       return { success: true };
     } catch (err) {
       // simple-git throws on merge conflicts — only handle actual conflicts
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       if (!message.includes('CONFLICT')) {
         await this.fireFail('merge', { branch, error: message });
         throw err;
@@ -276,7 +277,7 @@ export class GitService {
       await this.git.push(remote, branch, flags);
       await this.firePost('push', { remote, branch });
     } catch (err) {
-      await this.fireFail('push', { remote, branch, error: String(err) });
+      await this.fireFail('push', { remote, branch, error: summarizeError(err) });
       throw err;
     }
   }
@@ -290,7 +291,7 @@ export class GitService {
       await this.git.pull(remote, branch);
       await this.firePost('pull', { remote, branch });
     } catch (err) {
-      await this.fireFail('pull', { remote, branch, error: String(err) });
+      await this.fireFail('pull', { remote, branch, error: summarizeError(err) });
       throw err;
     }
   }
@@ -328,7 +329,7 @@ export class GitService {
       if (!isReadOnly) await this.firePost('stash', { action, result });
       return result;
     } catch (err) {
-      if (!isReadOnly) await this.fireFail('stash', { action, error: String(err) });
+      if (!isReadOnly) await this.fireFail('stash', { action, error: summarizeError(err) });
       throw err;
     }
   }
@@ -343,7 +344,7 @@ export class GitService {
       await this.git.raw(['worktree', 'add', path, '-b', branch]);
       await this.firePost('worktreeAdd', { path, branch });
     } catch (err) {
-      await this.fireFail('worktreeAdd', { path, branch, error: String(err) });
+      await this.fireFail('worktreeAdd', { path, branch, error: summarizeError(err) });
       throw err;
     }
   }
@@ -354,7 +355,7 @@ export class GitService {
       await this.git.raw(['worktree', 'remove', path]);
       await this.firePost('worktreeRemove', { path });
     } catch (err) {
-      await this.fireFail('worktreeRemove', { path, error: String(err) });
+      await this.fireFail('worktreeRemove', { path, error: summarizeError(err) });
       throw err;
     }
   }

@@ -26,6 +26,7 @@ import type {
   ValidatorName,
 } from './types.ts';
 import { executeNotebookEdit } from './notebook.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 const DIFF_TRUNCATE_THRESHOLD = 5000;
 const DIFF_PREVIEW_LENGTH = 500;
@@ -121,7 +122,7 @@ function prepareTextEditInput(
     try {
       resolvedPaths.set(item.path, resolveAndValidatePath(item.path, env.cwd));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = summarizeError(err);
       if (transactionMode === 'atomic') {
         return { error: `Path error for '${item.path}': ${msg}` };
       }
@@ -198,7 +199,7 @@ function writeSuccessfulTextEdits(
       }
       env.changeTracker?.recordChange(resolvedPath);
     } catch (err) {
-      const msg = `Write failed for '${resolvedPath}': ${err instanceof Error ? err.message : String(err)}`;
+      const msg = `Write failed for '${resolvedPath}': ${summarizeError(err)}`;
       for (const res of results) {
         if (res.path === r.path) {
           res.success = false;
@@ -250,7 +251,7 @@ async function buildImportGraphWarning(cwd: string, writtenPaths: Set<string>): 
     }
     return `\n⚠ Import graph: ${affectedSet.size} transitive dependent(s) affected. tsc reported errors outside the affected set — check unrelated files.`;
   } catch (err) {
-    logger.warn('[import-graph] Import graph tracing failed', { error: err instanceof Error ? err.message : String(err) });
+    logger.warn('[import-graph] Import graph tracing failed', { error: summarizeError(err) });
     return undefined;
   }
 }
@@ -610,7 +611,7 @@ export function createEditTool(fileCache: FileStateCache, options?: EditToolOpti
       }
       return await executeTextEdits(input, env);
     } catch (err) {
-      return { success: false, error: `Unexpected error: ${err instanceof Error ? err.message : String(err)}` };
+      return { success: false, error: `Unexpected error: ${summarizeError(err)}` };
     }
   }
 

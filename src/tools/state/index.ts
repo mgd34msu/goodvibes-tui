@@ -10,6 +10,7 @@ import { logger } from '../../utils/logger.ts';
 import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import { STATE_TOOL_SCHEMA } from './schema.ts';
 import type { StateInput } from './schema.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -123,7 +124,7 @@ export function createStateTool(
       }
     } catch (err) {
       _telemetry.errors++;
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       logger.debug('state tool: unexpected error', { error: message });
       return { success: false, error: `Unexpected error: ${message}` };
     }
@@ -166,7 +167,7 @@ async function runAnalytics(
     } catch (err) {
       return {
         success: false,
-        error: `TelemetryDB init failed: ${err instanceof Error ? err.message : String(err)}`,
+        error: `TelemetryDB init failed: ${summarizeError(err)}`,
       };
     }
   }
@@ -188,7 +189,7 @@ async function runAnalytics(
         output: JSON.stringify({ mode: 'analytics', action: 'record', tool, duration, tokens }),
       };
     } catch (err) {
-      return { success: false, error: `record failed: ${err instanceof Error ? err.message : String(err)}` };
+      return { success: false, error: `record failed: ${summarizeError(err)}` };
     }
   }
 
@@ -222,7 +223,7 @@ async function runAnalytics(
         }),
       };
     } catch (err) {
-      return { success: false, error: `query failed: ${err instanceof Error ? err.message : String(err)}` };
+      return { success: false, error: `query failed: ${summarizeError(err)}` };
     }
   }
 
@@ -234,7 +235,7 @@ async function runAnalytics(
         output: JSON.stringify({ mode: 'analytics', action: 'summary', ...summary }),
       };
     } catch (err) {
-      return { success: false, error: `summary failed: ${err instanceof Error ? err.message : String(err)}` };
+      return { success: false, error: `summary failed: ${summarizeError(err)}` };
     }
   }
 
@@ -247,7 +248,7 @@ async function runAnalytics(
         output: JSON.stringify({ mode: 'analytics', action: 'export', format, data }),
       };
     } catch (err) {
-      return { success: false, error: `export failed: ${err instanceof Error ? err.message : String(err)}` };
+      return { success: false, error: `export failed: ${summarizeError(err)}` };
     }
   }
 
@@ -274,7 +275,7 @@ async function runAnalytics(
         }),
       };
     } catch (err) {
-      return { success: false, error: `dashboard failed: ${err instanceof Error ? err.message : String(err)}` };
+      return { success: false, error: `dashboard failed: ${summarizeError(err)}` };
     }
   }
 
@@ -286,7 +287,7 @@ async function runAnalytics(
         output: JSON.stringify({ mode: 'analytics', action: 'sync', persisted: saved }),
       };
     } catch (err) {
-      return { success: false, error: `sync failed: ${err instanceof Error ? err.message : String(err)}` };
+      return { success: false, error: `sync failed: ${summarizeError(err)}` };
     }
   }
 
@@ -431,7 +432,7 @@ function runMode(
     try {
       mm.setMode(name);
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
+      return { success: false, error: summarizeError(err) };
     }
     const verbosityDefaults = mm.getVerbosityDefaults();
     return {
@@ -600,7 +601,7 @@ async function runMemory(
     } catch (err) {
       return {
         success: false,
-        error: `Memory list failed: ${err instanceof Error ? err.message : String(err)}`,
+        error: `Memory list failed: ${summarizeError(err)}`,
       };
     }
   }
@@ -645,7 +646,7 @@ async function runMemory(
     } catch (err) {
       return {
         success: false,
-        error: `Memory get failed: ${err instanceof Error ? err.message : String(err)}`,
+        error: `Memory get failed: ${summarizeError(err)}`,
       };
     }
   }
@@ -675,7 +676,7 @@ async function runMemory(
     } catch (err) {
       return {
         success: false,
-        error: `Memory set failed: ${err instanceof Error ? err.message : String(err)}`,
+        error: `Memory set failed: ${summarizeError(err)}`,
       };
     }
   }

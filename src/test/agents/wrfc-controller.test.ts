@@ -420,10 +420,10 @@ describe('WrfcController', () => {
 
       const spawnInput = mockSpawn.mock.calls[0][0] as { task: string };
       expect(spawnInput.task).toContain('WRFC Review Request');
-      expect(spawnInput.task).toContain('Engineer completion report');
-      expect(spawnInput.task).toContain('gatheredContext');
-      expect(spawnInput.task).toContain('plannedActions');
-      expect(spawnInput.task).toContain('appliedChanges');
+      expect(spawnInput.task).toContain('Engineer report digest');
+      expect(spawnInput.task).toContain('Gathered context');
+      expect(spawnInput.task).toContain('Planned actions');
+      expect(spawnInput.task).toContain('Applied changes');
     });
 
     test('reviewer record has dangerously_disable_wrfc=true and same wrfcId', async () => {

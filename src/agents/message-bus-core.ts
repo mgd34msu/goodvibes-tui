@@ -2,6 +2,7 @@ import { logger } from '../utils/logger.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { CommunicationKind, CommunicationScope } from '../runtime/events/communication.ts';
 import { emitCommunicationBlocked, emitCommunicationDelivered, emitCommunicationSent } from '../runtime/emitters/index.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   communicationRoleForTemplate,
   evaluateCommunicationRoute,
@@ -164,7 +165,7 @@ export class AgentMessageBus {
           callback(message);
         } catch (error) {
           logger.debug('MessageBus: subscriber error in broadcast', {
-            error: error instanceof Error ? error.message : String(error),
+            error: summarizeError(error),
           });
         }
       }
@@ -303,7 +304,7 @@ export class AgentMessageBus {
         callback(message);
       } catch (error) {
         logger.debug('MessageBus: subscriber error in deliver', {
-          error: error instanceof Error ? error.message : String(error),
+          error: summarizeError(error),
         });
       }
     }

@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -372,7 +373,7 @@ export class OverflowHandler {
     try {
       entry = this.backend.write(filename, content);
     } catch (err) {
-      logger.info(`[overflow] Backend write error: ${err instanceof Error ? err.message : String(err)}`);
+      logger.info(`[overflow] Backend write error: ${summarizeError(err)}`);
       entry = null;
     }
 

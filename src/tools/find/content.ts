@@ -1,5 +1,6 @@
 import { stat as statAsync } from 'node:fs/promises';
 import type { ContentQuery, OutputOptions, ContentMatch } from './shared.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 import {
   collectFilesForSearch,
   isBinary,
@@ -60,7 +61,7 @@ async function executeContentQuery(
   try {
     regex = new RegExp(rawPattern, flags);
   } catch (e) {
-    return { error: `Invalid regex: ${e instanceof Error ? e.message : String(e)}` };
+    return { error: `Invalid regex: ${summarizeError(e)}` };
   }
 
   const files = await collectFilesForSearch(basePath, query.glob);

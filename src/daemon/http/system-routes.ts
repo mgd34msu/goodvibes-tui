@@ -3,6 +3,7 @@ import type { JsonRecord } from '../helpers.ts';
 import { inspectInboundTls, inspectOutboundTls } from '../../runtime/network/index.ts';
 import { isValidConfigKey } from '../../config/schema.ts';
 import type { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
+import { jsonErrorResponse } from './error-response.ts';
 
 interface SystemRouteContext {
   readonly approvalBroker: import('../../control-plane/index.ts').ApprovalBroker;
@@ -209,7 +210,7 @@ export function createDaemonSystemRouteHandlers(
       try {
         context.configManager.setDynamic(key, value);
       } catch (error: unknown) {
-        return Response.json({ error: error instanceof Error ? error.message : 'Failed to set config' }, { status: 400 });
+        return jsonErrorResponse(error, { status: 400, fallbackMessage: 'Failed to set config' });
       }
       return Response.json({ success: true, key, value });
     },

@@ -1,6 +1,7 @@
 import { logger } from '../../utils/logger.ts';
 import { DiscordIntegration, DiscordInteractionResponseType, DiscordInteractionType } from '../../integrations/index.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export async function handleDiscordSurfaceWebhook(req: Request, context: SurfaceAdapterContext): Promise<Response> {
   const contentLength = parseInt(req.headers.get('content-length') ?? '0', 10);
@@ -160,7 +161,7 @@ export async function handleDiscordInteractionPayload(
           .editOriginalResponse(appId, token, '', [embed])
           .catch((error: unknown) => {
             logger.warn('handleDiscordSurfaceWebhook: follow-up failed', {
-              error: error instanceof Error ? error.message : String(error),
+              error: summarizeError(error),
             });
           });
       })();

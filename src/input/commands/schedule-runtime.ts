@@ -9,6 +9,7 @@ import {
 import type { AutomationManager } from '../../automation/index.ts';
 import type { AutomationJob } from '../../automation/jobs.ts';
 import type { AutomationScheduleDefinition } from '../../automation/schedules.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 import type {
   AutomationExecutionPolicy,
   AutomationExternalContentSource,
@@ -203,7 +204,7 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
             }
           }
         } catch (error) {
-          ctx.print(`Error: ${error instanceof Error ? error.message : String(error)}`);
+          ctx.print(`Error: ${summarizeError(error)}`);
           return;
         }
 
@@ -247,7 +248,7 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
             + `  next run: ${formatNextRun(job.nextRunAt)}`
           );
         } catch (error) {
-          ctx.print(`Error: ${error instanceof Error ? error.message : String(error)}`);
+          ctx.print(`Error: ${summarizeError(error)}`);
         }
         return;
       }
@@ -310,7 +311,7 @@ export function registerScheduleRuntimeCommands(registry: CommandRegistry): void
             + `  agent: ${run.agentId ?? 'unavailable'}`
           );
         } catch (error) {
-          ctx.print(`Error running automation job: ${error instanceof Error ? error.message : String(error)}`);
+          ctx.print(`Error running automation job: ${summarizeError(error)}`);
         }
         return;
       }

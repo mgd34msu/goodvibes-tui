@@ -39,6 +39,7 @@ import type { UiRuntimeServices } from './ui-services.ts';
 import { createDeferredStartupCoordinator } from './deferred-startup.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ── Bootstrap context type ──────────────────────────────────────────────────
 
@@ -152,6 +153,7 @@ export async function bootstrapRuntime(
     agentStatusIntervalRef,
     permissionPromptRef,
     systemMessageRouterRef,
+    conversationFollowUpRef,
     requestRender,
     setRenderRequest,
     runtimeSessionIdRef,
@@ -196,6 +198,7 @@ export async function bootstrapRuntime(
       wrfcController: services.wrfcController,
     },
   );
+  conversationFollowUpRef.value = (item) => orchestrator.enqueueConversationFollowUp(item);
   orchestrator.setCoreServices({
     configManager,
     providerRegistry,
@@ -290,7 +293,7 @@ export async function bootstrapRuntime(
       requestRender();
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = summarizeError(error);
       logger.error('Deferred plugin startup failed', { error: message });
       systemMessageRouter.high(`[Startup] Plugin initialization failed: ${message}`);
       requestRender();
@@ -311,7 +314,7 @@ export async function bootstrapRuntime(
       requestRender();
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = summarizeError(error);
       logger.error('Deferred external service startup failed', { error: message });
       systemMessageRouter.high(`[Startup] Background services failed to start: ${message}`);
       requestRender();
@@ -346,7 +349,7 @@ export async function bootstrapRuntime(
         requestRender();
       },
       onError: (error) => {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = summarizeError(error);
         logger.error('Deferred automation startup failed', { error: message });
         systemMessageRouter.high(`[Startup] Automation failed to initialize: ${message}`);
         requestRender();

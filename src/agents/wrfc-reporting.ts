@@ -1,7 +1,11 @@
-import type { CompletionReport, ReviewerReport } from './completion-report.ts';
+import type { CompletionReport, EngineerReport, ReviewerReport } from './completion-report.ts';
 import { parseCompletionReport } from './completion-report.ts';
 import type { QualityGateResult } from './wrfc-types.ts';
 import { logger } from '../utils/logger.ts';
+
+const REVIEW_BRIEF_ITEM_LIMIT = 6;
+const REVIEW_BRIEF_FILE_LIMIT = 8;
+const REVIEW_BRIEF_TEXT_LIMIT = 220;
 
 export function extractScoreFromText(text: string): number | null {
   const scorePattern = /\*{0,2}(?:overall\s+)?score\s*:?\s*\*{0,2}\s*(\d+(?:\.\d+)?)\s*\/\s*10/i;
@@ -50,18 +54,23 @@ export function extractIssuesFromText(text: string): ReviewerReport['issues'] {
   return issues;
 }
 
-export function parseEngineerCompletionReport(rawOutput: string, template?: string): CompletionReport {
+export function parseEngineerCompletionReport(rawOutput: string, _template?: string): CompletionReport {
   const report = parseCompletionReport(rawOutput);
   if (report) return report;
   return {
     version: 1,
-    archetype: template ?? 'engineer',
+    archetype: 'engineer',
     summary: rawOutput.slice(0, 500) || '(no output)',
     gatheredContext: [],
     plannedActions: [],
     appliedChanges: [],
-    result: rawOutput,
-  } as CompletionReport;
+    filesCreated: [],
+    filesModified: [],
+    filesDeleted: [],
+    decisions: [],
+    issues: [],
+    uncertainties: [],
+  } as EngineerReport;
 }
 
 export function parseReviewerCompletionReport(
@@ -104,18 +113,17 @@ export function buildReviewTask(
   report: CompletionReport,
   threshold: number,
 ): string {
+  const lines = buildReviewBrief(report);
   return [
     `WRFC Review Request`,
     `Chain ID: ${chainId}`,
     ``,
-    `Engineer completion report:`,
-    `\`\`\`json`,
-    JSON.stringify(report, null, 2),
-    `\`\`\``,
+    `Engineer report digest:`,
+    ...lines,
     ``,
     `Instructions:`,
-    `1. Read all files listed in the engineer report (filesCreated, filesModified).`,
-    `2. Inspect the engineer's gatheredContext, plannedActions, and appliedChanges for discipline and coherence.`,
+    `1. Read the referenced files directly before scoring. Do not rely on this digest alone.`,
+    `2. Inspect the engineer's gatheredContext, plannedActions, appliedChanges, and decisions for discipline and coherence.`,
     `3. Verify the implementation meets all stated requirements.`,
     `4. Score the implementation using the 10-dimension review rubric.`,
     `5. The passing score threshold is ${threshold}/10.`,
@@ -129,6 +137,94 @@ export function buildReviewTask(
     `- dimensions: array of { name, score, maxScore, issues[] }`,
     `- issues: array of { severity, description, file?, line?, pointValue }`,
   ].join('\n');
+}
+
+function truncateReviewText(text: string, max = REVIEW_BRIEF_TEXT_LIMIT): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, max - 3)}...`;
+}
+
+function formatInlineList(items: readonly string[], limit: number): string {
+  if (items.length === 0) return 'none';
+  const visible = items.slice(0, limit).map((item) => truncateReviewText(item, 120));
+  if (items.length <= limit) return visible.join(', ');
+  return `${visible.join(', ')} (+${items.length - limit} more)`;
+}
+
+function appendListSection(
+  lines: string[],
+  title: string,
+  items: readonly string[],
+  limit = REVIEW_BRIEF_ITEM_LIMIT,
+): void {
+  if (items.length === 0) return;
+  lines.push(`${title}:`);
+  for (const item of items.slice(0, limit)) {
+    lines.push(`- ${truncateReviewText(item)}`);
+  }
+  if (items.length > limit) {
+    lines.push(`- (+${items.length - limit} more)`);
+  }
+}
+
+function appendDecisionSection(
+  lines: string[],
+  decisions: EngineerReport['decisions'],
+  limit = 4,
+): void {
+  if (decisions.length === 0) return;
+  lines.push('Decisions:');
+  for (const decision of decisions.slice(0, limit)) {
+    lines.push(`- ${truncateReviewText(decision.what, 120)} | why: ${truncateReviewText(decision.why, 120)}`);
+  }
+  if (decisions.length > limit) {
+    lines.push(`- (+${decisions.length - limit} more)`);
+  }
+}
+
+function normalizeEngineerReport(report: CompletionReport): EngineerReport {
+  const candidate = report as Partial<EngineerReport>;
+  return {
+    version: 1,
+    archetype: 'engineer',
+    summary: typeof candidate.summary === 'string' ? candidate.summary : '(no summary)',
+    ...(typeof candidate.wrfcId === 'string' ? { wrfcId: candidate.wrfcId } : {}),
+    gatheredContext: Array.isArray(candidate.gatheredContext) ? candidate.gatheredContext.filter((item): item is string => typeof item === 'string') : [],
+    plannedActions: Array.isArray(candidate.plannedActions) ? candidate.plannedActions.filter((item): item is string => typeof item === 'string') : [],
+    appliedChanges: Array.isArray(candidate.appliedChanges) ? candidate.appliedChanges.filter((item): item is string => typeof item === 'string') : [],
+    filesCreated: Array.isArray(candidate.filesCreated) ? candidate.filesCreated.filter((item): item is string => typeof item === 'string') : [],
+    filesModified: Array.isArray(candidate.filesModified) ? candidate.filesModified.filter((item): item is string => typeof item === 'string') : [],
+    filesDeleted: Array.isArray(candidate.filesDeleted) ? candidate.filesDeleted.filter((item): item is string => typeof item === 'string') : [],
+    decisions: Array.isArray(candidate.decisions)
+      ? candidate.decisions.filter((decision): decision is { what: string; why: string } =>
+        Boolean(decision) &&
+        typeof decision === 'object' &&
+        typeof decision.what === 'string' &&
+        typeof decision.why === 'string')
+      : [],
+    issues: Array.isArray(candidate.issues) ? candidate.issues.filter((item): item is string => typeof item === 'string') : [],
+    uncertainties: Array.isArray(candidate.uncertainties) ? candidate.uncertainties.filter((item): item is string => typeof item === 'string') : [],
+  };
+}
+
+function buildReviewBrief(report: CompletionReport): string[] {
+  const engineer = normalizeEngineerReport(report);
+  const lines = [
+    `- Summary: ${truncateReviewText(engineer.summary)}`,
+    `- Files created (${engineer.filesCreated.length}): ${formatInlineList(engineer.filesCreated, REVIEW_BRIEF_FILE_LIMIT)}`,
+    `- Files modified (${engineer.filesModified.length}): ${formatInlineList(engineer.filesModified, REVIEW_BRIEF_FILE_LIMIT)}`,
+    `- Files deleted (${engineer.filesDeleted.length}): ${formatInlineList(engineer.filesDeleted, REVIEW_BRIEF_FILE_LIMIT)}`,
+  ];
+
+  appendListSection(lines, 'Gathered context', engineer.gatheredContext);
+  appendListSection(lines, 'Planned actions', engineer.plannedActions);
+  appendListSection(lines, 'Applied changes', engineer.appliedChanges);
+  appendDecisionSection(lines, engineer.decisions);
+  appendListSection(lines, 'Known issues', engineer.issues, 4);
+  appendListSection(lines, 'Uncertainties', engineer.uncertainties, 4);
+
+  return lines;
 }
 
 export function buildFixTask(

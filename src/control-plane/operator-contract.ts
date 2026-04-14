@@ -9,6 +9,7 @@ import {
   objectSchema,
 } from './method-catalog-shared.ts';
 import {
+  CONTROL_AUTH_CURRENT_RESPONSE_SCHEMA,
   CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
   CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
 } from './operator-contract-schemas.ts';
@@ -20,6 +21,8 @@ const OPERATOR_WS_PATH = '/api/control-plane/ws';
 const OPERATOR_EVENTS_PATH = '/api/control-plane/events';
 const OPERATOR_METHODS_PATH = '/api/control-plane/methods';
 const OPERATOR_EVENTS_CATALOG_PATH = '/api/control-plane/events/catalog';
+const OPERATOR_AUTH_CURRENT_PATH = '/api/control-plane/auth';
+const OPERATOR_AUTH_CURRENT_ALIAS_PATHS = ['/api/control-plane/whoami'];
 const PEER_CONTRACT_PATH = '/api/remote/node-host/contract';
 const PEER_CONTRACT_ALIAS_PATHS = ['/api/remote/device/contract'];
 
@@ -36,6 +39,12 @@ export interface OperatorContractManifest {
       readonly method: string;
       readonly path: string;
       readonly requestSchema: Record<string, unknown>;
+      readonly responseSchema: Record<string, unknown>;
+    };
+    readonly current: {
+      readonly method: string;
+      readonly path: string;
+      readonly aliasPaths: readonly string[];
       readonly responseSchema: Record<string, unknown>;
     };
     readonly sessionCookie: {
@@ -124,6 +133,12 @@ export const OPERATOR_CONTRACT_SCHEMA = objectSchema({
       requestSchema: CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
       responseSchema: CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
     }, ['method', 'path', 'requestSchema', 'responseSchema']),
+    current: objectSchema({
+      method: STRING_SCHEMA,
+      path: STRING_SCHEMA,
+      aliasPaths: arraySchema(STRING_SCHEMA),
+      responseSchema: CONTROL_AUTH_CURRENT_RESPONSE_SCHEMA,
+    }, ['method', 'path', 'aliasPaths', 'responseSchema']),
     sessionCookie: objectSchema({
       name: STRING_SCHEMA,
       httpOnly: BOOLEAN_SCHEMA,
@@ -134,7 +149,7 @@ export const OPERATOR_CONTRACT_SCHEMA = objectSchema({
       header: STRING_SCHEMA,
       queryParameters: arraySchema(STRING_SCHEMA),
     }, ['header', 'queryParameters']),
-  }, ['modes', 'login', 'sessionCookie', 'bearer']),
+  }, ['modes', 'login', 'current', 'sessionCookie', 'bearer']),
   transports: objectSchema({
     http: objectSchema({
       statusPath: STRING_SCHEMA,
@@ -229,6 +244,12 @@ export function buildOperatorContract(catalog: GatewayMethodCatalog): OperatorCo
           username: STRING_SCHEMA,
           expiresAt: NUMBER_SCHEMA,
         }, ['authenticated', 'token', 'username', 'expiresAt']),
+      },
+      current: {
+        method: 'GET',
+        path: OPERATOR_AUTH_CURRENT_PATH,
+        aliasPaths: OPERATOR_AUTH_CURRENT_ALIAS_PATHS,
+        responseSchema: CONTROL_AUTH_CURRENT_RESPONSE_SCHEMA,
       },
       sessionCookie: {
         name: OPERATOR_SESSION_COOKIE_NAME,

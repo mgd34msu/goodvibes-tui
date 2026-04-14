@@ -26,6 +26,7 @@ import {
 } from './transport-contract.ts';
 import { randomUUID } from 'node:crypto';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /** Default reconnect policy. */
 const DEFAULT_RECONNECT_POLICY: Readonly<RetryPolicy> = Object.freeze({
@@ -343,7 +344,7 @@ export class ReconnectEngine {
       } catch (err) {
         // Replay failure is non-fatal — degraded mode, not terminal
         logger.warn('ReconnectEngine: replay request failed (degraded mode)', {
-          err: err instanceof Error ? err.message : String(err),
+          err: summarizeError(err),
         });
       }
     }

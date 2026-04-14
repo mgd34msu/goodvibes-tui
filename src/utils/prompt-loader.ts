@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { dirname, resolve, join } from 'path';
 import { logger } from './logger.ts';
+import { summarizeError } from './error-display.ts';
 
 /**
  * Read a prompt file, resolving `@path/to/file` includes recursively.
@@ -37,7 +38,7 @@ export function readPromptFile(
     if (code === 'ENOENT') {
       logger.debug('System prompt file not found', { path: resolved });
     } else {
-      logger.error('Failed to read system prompt file', { path: resolved, error: String(err) });
+      logger.error('Failed to read system prompt file', { path: resolved, error: summarizeError(err) });
     }
     return '';
   }

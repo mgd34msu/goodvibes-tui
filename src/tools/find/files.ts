@@ -2,6 +2,7 @@ import { join, relative } from 'node:path';
 import { statSync, lstatSync } from 'node:fs';
 import type { FilesQuery, OutputOptions } from './shared.ts';
 import { buildGitignoreMatcher, collectGlobFiles, makeCountResult, makeFilesResult, matchesGlob, validateSearchPath } from './shared.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export async function executeFilesQuery(
   query: FilesQuery,
@@ -37,7 +38,7 @@ export async function executeFilesQuery(
     try {
       hasContentRegex = new RegExp(query.has_content);
     } catch (e) {
-      return { error: `Invalid has_content regex: ${e instanceof Error ? e.message : String(e)}` };
+      return { error: `Invalid has_content regex: ${summarizeError(e)}` };
     }
   }
 

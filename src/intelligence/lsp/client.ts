@@ -1,5 +1,6 @@
 import { logger } from '../../utils/logger.ts';
 import type { JsonRpcRequest, JsonRpcResponse, JsonRpcNotification } from './protocol.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -35,7 +36,7 @@ export class LspClient {
       });
       this._startReadLoop();
     } catch (err) {
-      logger.error('LspClient: failed to start process', { command: this.command, err: String(err) });
+      logger.error('LspClient: failed to start process', { command: this.command, err: summarizeError(err) });
       this.proc = null;
       throw err;
     }
@@ -69,7 +70,7 @@ export class LspClient {
       } catch (err) {
         clearTimeout(timer);
         this.pendingRequests.delete(id);
-        reject(new Error(`LspClient: failed to write request: ${String(err)}`));
+        reject(new Error(`LspClient: failed to write request: ${summarizeError(err)}`));
       }
     });
   }
@@ -83,7 +84,7 @@ export class LspClient {
       const frame = LspClient.encodeFrame(json);
       (this.proc.stdin as import('bun').FileSink).write(frame);
     } catch (err) {
-      logger.error('LspClient: failed to send notification', { method, err: String(err) });
+      logger.error('LspClient: failed to send notification', { method, err: summarizeError(err) });
     }
   }
 
@@ -141,7 +142,7 @@ export class LspClient {
           this._processBuffer();
         }
       } catch (err) {
-        logger.debug('LspClient: stdout read loop ended', { err: String(err) });
+        logger.debug('LspClient: stdout read loop ended', { err: summarizeError(err) });
       } finally {
         this.readLoopRunning = false;
         // Reject any remaining pending requests
@@ -187,7 +188,7 @@ export class LspClient {
     try {
       msg = JSON.parse(body);
     } catch (err) {
-      logger.error('LspClient: failed to parse JSON-RPC message', { err: String(err), body: body.slice(0, 200) });
+      logger.error('LspClient: failed to parse JSON-RPC message', { err: summarizeError(err), body: body.slice(0, 200) });
       return;
     }
 

@@ -8,6 +8,7 @@ import type { PermissionDecision as LayeredPermissionDecision } from '../runtime
 import type { HookDispatcher } from '../hooks/index.ts';
 import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import type {
   PermissionCategory,
   PermissionCheckResult,
@@ -201,7 +202,7 @@ export class PermissionManager {
         toolName,
         category,
         analysis,
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
       throw error;
     }

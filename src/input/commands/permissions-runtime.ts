@@ -1,5 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 const VALID_MODES = ['allow-all', 'prompt', 'custom'] as const;
 const VALID_ACTIONS = ['allow', 'prompt', 'deny'] as const;
@@ -84,7 +85,7 @@ export function registerPermissionsRuntimeCommands(registry: CommandRegistry): v
           cm.setDynamic(`permissions.tools.${toolName}` as Parameters<typeof cm.set>[0], action);
           ctx.print(`Permission for ${toolName} set to: ${action}`);
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
         return;
       }
@@ -96,7 +97,7 @@ export function registerPermissionsRuntimeCommands(registry: CommandRegistry): v
         cm.setDynamic('permissions.mode', args[0]);
         ctx.print(`Permission mode set to: ${args[0]}`);
       } catch (e) {
-        ctx.print(`Error: ${(e as Error).message}`);
+        ctx.print(`Error: ${summarizeError(e)}`);
       }
     },
   });

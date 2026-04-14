@@ -3,6 +3,7 @@ import { ToolError } from '../types/errors.ts';
 import { repairToolCall } from './auto-repair.ts';
 import { ToolContractVerifier } from '../runtime/tools/contract-verifier.ts';
 import type { ContractVerificationResult, ContractVerifierOptions } from '../runtime/tools/contract-verifier.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * ToolRegistry - Central registry for all tools available to the LLM.
@@ -126,7 +127,7 @@ export class ToolRegistry {
 
       return toolResult;
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       const toolErr = new ToolError(message, name);
       if (err instanceof Error) toolErr.cause = err;
       throw toolErr;

@@ -8,6 +8,7 @@
 import { logger } from '../utils/logger.ts';
 import { VERSION } from '../version.ts';
 import type { McpServerConfig } from './config.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface McpProcessSpec {
   command: string;
@@ -206,9 +207,9 @@ export class McpClient {
       this.restartCount = 0;
       this._startReadLoop();
     } catch (err) {
-      logger.error('McpClient: failed to start process', { server: this.config.name, err: String(err) });
+      logger.error('McpClient: failed to start process', { server: this.config.name, err: summarizeError(err) });
       this.proc = null;
-      throw new Error(`McpClient(${this.config.name}): failed to start: ${String(err)}`);
+      throw new Error(`McpClient(${this.config.name}): failed to start: ${summarizeError(err)}`);
     }
   }
 
@@ -224,7 +225,7 @@ export class McpClient {
       this._notify('notifications/initialized', {});
       this.initialized = true;
     } catch (err) {
-      logger.error('McpClient: initialize handshake failed', { server: this.config.name, err: String(err) });
+      logger.error('McpClient: initialize handshake failed', { server: this.config.name, err: summarizeError(err) });
       throw err;
     }
   }
@@ -257,7 +258,7 @@ export class McpClient {
       } catch (err) {
         clearTimeout(timer);
         this.pendingRequests.delete(id);
-        reject(new Error(`McpClient(${this.config.name}): write failed: ${String(err)}`));
+        reject(new Error(`McpClient(${this.config.name}): write failed: ${summarizeError(err)}`));
       }
     });
   }
@@ -269,7 +270,7 @@ export class McpClient {
       const msg = { jsonrpc: '2.0', method, params };
       (this.proc.stdin as import('bun').FileSink).write(JSON.stringify(msg) + '\n');
     } catch (err) {
-      logger.debug('McpClient: failed to send notification', { method, err: String(err) });
+      logger.debug('McpClient: failed to send notification', { method, err: summarizeError(err) });
     }
   }
 
@@ -290,7 +291,7 @@ export class McpClient {
           this._processBuffer();
         }
       } catch (err) {
-        logger.debug('McpClient: stdout read loop ended', { server: this.config.name, err: String(err) });
+        logger.debug('McpClient: stdout read loop ended', { server: this.config.name, err: summarizeError(err) });
       } finally {
         this.readLoopRunning = false;
         // Reject remaining pending requests
@@ -325,7 +326,7 @@ export class McpClient {
     try {
       msg = JSON.parse(line);
     } catch (err) {
-      logger.debug('McpClient: failed to parse JSON line', { server: this.config.name, err: String(err), line: line.slice(0, 200) });
+      logger.debug('McpClient: failed to parse JSON line', { server: this.config.name, err: summarizeError(err), line: line.slice(0, 200) });
       return;
     }
 
@@ -361,7 +362,7 @@ export class McpClient {
         this.toolInfoCache = null;
         logger.info('McpClient: restart successful', { server: this.config.name });
       } catch (err) {
-        logger.error('McpClient: restart failed', { server: this.config.name, err: String(err) });
+        logger.error('McpClient: restart failed', { server: this.config.name, err: summarizeError(err) });
       }
     }, delay);
   }

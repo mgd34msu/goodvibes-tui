@@ -5,6 +5,7 @@ import {
 } from '../../automation/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
 import type { DaemonRuntimeRouteContext } from './runtime-route-types.ts';
+import { jsonErrorResponse } from './error-response.ts';
 
 export function createDaemonRuntimeAutomationRouteHandlers(
   context: DaemonRuntimeRouteContext,
@@ -104,7 +105,7 @@ async function handlePostSchedule(context: DaemonRuntimeRouteContext, req: Reque
     });
     return Response.json(job, { status: 201 });
   } catch (e: unknown) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Failed to create schedule' }, { status: 400 });
+    return jsonErrorResponse(e, { status: 400, fallbackMessage: 'Failed to create schedule' });
   }
 }
 
@@ -119,7 +120,7 @@ async function handlePatchSchedule(context: DaemonRuntimeRouteContext, id: strin
       ? Response.json(updated)
       : Response.json({ error: `Schedule not found: ${id}` }, { status: 404 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : 'Failed to update schedule' }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400, fallbackMessage: 'Failed to update schedule' });
   }
 }
 
@@ -144,7 +145,7 @@ async function handleRunScheduleNow(context: DaemonRuntimeRouteContext, id: stri
     const run = await context.automationManager.runNow(job.id);
     return Response.json({ jobId: job.id, runId: run.id, agentId: run.agentId, status: run.status });
   } catch (e: unknown) {
-    return Response.json({ error: e instanceof Error ? e.message : 'Failed to run schedule' }, { status: 500 });
+    return jsonErrorResponse(e, { status: 500, fallbackMessage: 'Failed to run schedule' });
   }
 }
 
@@ -179,9 +180,11 @@ async function handleAutomationRunAction(
     const run = await context.automationManager.retryRun(runId);
     return context.recordApiResponse(req, `/api/automation/runs/${runId}/${action}`, Response.json({ run }, { status: 202 }));
   } catch (error) {
-    return context.recordApiResponse(req, `/api/automation/runs/${runId}/${action}`, Response.json({
-      error: error instanceof Error ? error.message : 'Failed to retry automation run',
-    }, { status: 400 }));
+    return context.recordApiResponse(
+      req,
+      `/api/automation/runs/${runId}/${action}`,
+      jsonErrorResponse(error, { status: 400, fallbackMessage: 'Failed to retry automation run' }),
+    );
   }
 }
 

@@ -1,8 +1,11 @@
 import type { SharedApprovalRecord, SharedSessionRecord } from '../../control-plane/index.ts';
+import {
+  createDirectTransportServices,
+  type DirectTransportServices,
+} from '../foundation-services.ts';
 import { createOperatorClient, type OperatorClient, type OperatorControlPlaneSnapshot, type OperatorProvidersSnapshot } from '../operator-client.ts';
 import { createPeerClient, type PeerClient, type PeerClientSnapshot } from '../peer-client.ts';
 import type { RuntimeServices } from '../services.ts';
-import { createUiRuntimeServices } from '../ui-services.ts';
 import type { UiSessionSnapshot, UiTasksSnapshot } from '../ui-read-models.ts';
 import type { ShellPathService } from '../shell-paths.ts';
 
@@ -29,15 +32,9 @@ export interface DirectTransport {
   snapshot(): Promise<DirectTransportSnapshot>;
 }
 
-export function createDirectTransport(runtimeServices: RuntimeServices): DirectTransport {
-  const services = createUiRuntimeServices(runtimeServices);
-  const operator = createOperatorClient(services);
-  const peer = createPeerClient({
-    runtimeStore: runtimeServices.runtimeStore,
-    distributedRuntime: runtimeServices.distributedRuntime,
-    remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
-    remoteSupervisor: runtimeServices.remoteSupervisor,
-  });
+export function createDirectTransportFromServices(services: DirectTransportServices): DirectTransport {
+  const operator = createOperatorClient(services.operator);
+  const peer = createPeerClient(services.peer);
 
   return Object.freeze({
     kind: 'direct' as const,
@@ -68,4 +65,8 @@ export function createDirectTransport(runtimeServices: RuntimeServices): DirectT
       };
     },
   });
+}
+
+export function createDirectTransport(runtimeServices: RuntimeServices): DirectTransport {
+  return createDirectTransportFromServices(createDirectTransportServices(runtimeServices));
 }

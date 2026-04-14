@@ -3,6 +3,7 @@ import { join } from 'path';
 import { logger } from '../utils/logger.ts';
 import { randomBytes } from 'crypto';
 import { JsonFileStore } from './json-file-store.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * Reserved keys that cannot be set by callers.
@@ -189,11 +190,11 @@ export class KVState {
           unlinkSync(f.path);
           logger.debug('KVState: cleaned up old session', { file: f.name });
         } catch (err) {
-          logger.debug('KVState: could not delete session file', { file: f.name, error: String(err) });
+          logger.debug('KVState: could not delete session file', { file: f.name, error: summarizeError(err) });
         }
       }
     } catch (err) {
-      logger.debug('KVState: cleanupOldSessions failed (non-fatal)', { error: String(err) });
+      logger.debug('KVState: cleanupOldSessions failed (non-fatal)', { error: summarizeError(err) });
     }
   }
 
@@ -222,7 +223,7 @@ export class KVState {
     this.persistTimer = setTimeout(() => {
       this.persistTimer = null;
       this.persist().catch(err => {
-        logger.debug('KVState: scheduled persist failed', { error: String(err) });
+        logger.debug('KVState: scheduled persist failed', { error: summarizeError(err) });
       });
     }, 5000);
   }

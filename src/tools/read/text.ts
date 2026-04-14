@@ -1,6 +1,7 @@
 import { logger } from '../../utils/logger.ts';
 import { CodeIntelligence } from '../../intelligence/facade.ts';
 import type { SymbolInfo } from '../../intelligence/tree-sitter/queries.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 const SIGNATURE_PATTERNS: RegExp[] = [
   /^\s*export\s+(async\s+)?function\s+/,
@@ -103,7 +104,7 @@ export async function extractOutline(
     const entries = await ci.getOutline(filePath, rawContent);
     if (entries.length > 0) return formatOutlineEntries(entries, includeLineNumbers);
   } catch (err) {
-    logger.debug('read tool: tree-sitter outline failed, using regex fallback', { filePath, error: String(err) });
+    logger.debug('read tool: tree-sitter outline failed, using regex fallback', { filePath, error: summarizeError(err) });
   }
   return extractOutlineRegex(lines, includeLineNumbers);
 }
@@ -121,7 +122,7 @@ export async function extractSymbols(
     const exported = symbols.filter((s) => s.exported);
     if (exported.length > 0) return formatSymbolEntries(exported, includeLineNumbers);
   } catch (err) {
-    logger.debug('read tool: tree-sitter symbols failed, using regex fallback', { filePath, error: String(err) });
+    logger.debug('read tool: tree-sitter symbols failed, using regex fallback', { filePath, error: summarizeError(err) });
   }
   return extractSymbolsRegex(lines, includeLineNumbers);
 }
@@ -138,7 +139,7 @@ export async function extractAst(
     const entries = await ci.getOutline(filePath, rawContent);
     if (entries.length > 0) return formatOutlineEntries(entries, includeLineNumbers);
   } catch (err) {
-    logger.debug('read tool: tree-sitter ast failed, using outline fallback', { filePath, error: String(err) });
+    logger.debug('read tool: tree-sitter ast failed, using outline fallback', { filePath, error: summarizeError(err) });
   }
   return (
     '# Note: tree-sitter outline unavailable for this file. Falling back to regex.\n'

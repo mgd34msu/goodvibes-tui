@@ -1,5 +1,6 @@
 import type { ConfigManager } from '../config/manager.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
+import type { ConversationFollowUpItem } from '../core/conversation-follow-ups.ts';
 import type { AgentEvent, ProviderEvent, RuntimeEventBus, WorkflowEvent } from './events/index.ts';
 import type { createDomainDispatch } from './store/index.ts';
 import type { WrfcController } from '../agents/wrfc-controller.ts';
@@ -11,6 +12,7 @@ export interface BootstrapRuntimeEventBridgeOptions {
   readonly runtimeBus: RuntimeEventBus;
   readonly domainDispatch: ReturnType<typeof createDomainDispatch>;
   readonly getSystemMessageRouter: () => SystemMessageRouter | null;
+  readonly queueConversationFollowUp?: (item: ConversationFollowUpItem) => void;
   readonly requestRender: () => void;
   readonly configManager: ConfigManager;
   readonly agentManager: AgentManager;
@@ -43,11 +45,23 @@ function buildCohortReport(agentManager: AgentManager, cohort: string): string {
   return lines.join('\n');
 }
 
+function buildCohortFollowUp(agentManager: AgentManager, cohort: string): ConversationFollowUpItem {
+  const agents = agentManager.listByCohort(cohort);
+  const completed = agents.filter((agent) => agent.status === 'completed').length;
+  const failed = agents.filter((agent) => agent.status === 'failed').length;
+  const cancelled = agents.filter((agent) => agent.status === 'cancelled').length;
+  return {
+    key: `cohort:${cohort}:complete`,
+    summary: `Agent cohort "${cohort}" finished with ${completed} completed, ${failed} failed, and ${cancelled} cancelled out of ${agents.length} total agents.`,
+  };
+}
+
 function checkCohortCompletion(
   agentManager: AgentManager,
   wrfcController: WrfcController,
   record: { cohort?: string } | null,
   getSystemMessageRouter: () => SystemMessageRouter | null,
+  queueConversationFollowUp?: (item: ConversationFollowUpItem) => void,
 ): void {
   if (!record?.cohort) return;
   const cohortAgents = agentManager.listByCohort(record.cohort);
@@ -68,6 +82,7 @@ function checkCohortCompletion(
   withRouter(getSystemMessageRouter, (router) => {
     router.low(buildCohortReport(agentManager, record.cohort!));
   });
+  queueConversationFollowUp?.(buildCohortFollowUp(agentManager, record.cohort));
 }
 
 export function registerBootstrapRuntimeEvents(
@@ -77,6 +92,7 @@ export function registerBootstrapRuntimeEvents(
     runtimeBus,
     domainDispatch,
     getSystemMessageRouter,
+    queueConversationFollowUp,
     requestRender,
     configManager,
     agentManager,
@@ -138,10 +154,14 @@ export function registerBootstrapRuntimeEvents(
     withRouter(getSystemMessageRouter, (router) => {
       router.wrfc(`[WRFC] \u2713 Chain ${payload.chainId.slice(0, 12)} PASSED \u2014 all gates clear`);
     });
+    queueConversationFollowUp?.({
+      key: `wrfc:${payload.chainId}:passed`,
+      summary: `WRFC chain ${payload.chainId.slice(0, 12)} passed all gates.`,
+    });
     const chain = wrfcController.getChain(payload.chainId);
     if (chain?.engineerAgentId) {
       const record = agentManager.getStatus(chain.engineerAgentId);
-      checkCohortCompletion(agentManager, wrfcController, record ?? null, getSystemMessageRouter);
+      checkCohortCompletion(agentManager, wrfcController, record ?? null, getSystemMessageRouter, queueConversationFollowUp);
     }
     requestRender();
   }));
@@ -150,10 +170,14 @@ export function registerBootstrapRuntimeEvents(
     withRouter(getSystemMessageRouter, (router) => {
       router.wrfc(`[WRFC] \u2717 Chain ${payload.chainId.slice(0, 12)} FAILED: ${payload.reason.slice(0, 80)}`);
     });
+    queueConversationFollowUp?.({
+      key: `wrfc:${payload.chainId}:failed`,
+      summary: `WRFC chain ${payload.chainId.slice(0, 12)} failed: ${payload.reason.slice(0, 120)}`,
+    });
     const chain = wrfcController.getChain(payload.chainId);
     if (chain?.engineerAgentId) {
       const record = agentManager.getStatus(chain.engineerAgentId);
-      checkCohortCompletion(agentManager, wrfcController, record ?? null, getSystemMessageRouter);
+      checkCohortCompletion(agentManager, wrfcController, record ?? null, getSystemMessageRouter, queueConversationFollowUp);
     }
     requestRender();
   }));
@@ -189,8 +213,12 @@ export function registerBootstrapRuntimeEvents(
       withRouter(getSystemMessageRouter, (router) => {
         router.low(`[Agents] \u2713 ${record.template} ${payload.agentId.slice(-8)}: "${taskSnippet}" \u2014 completed in ${durationSeconds}s (${record.toolCallCount} tool calls)`);
       });
+      queueConversationFollowUp?.({
+        key: `agent:${payload.agentId}:completed`,
+        summary: `${record.template} agent ${payload.agentId.slice(-8)} completed "${taskSnippet}" in ${durationSeconds}s after ${record.toolCallCount} tool calls.`,
+      });
     }
-    checkCohortCompletion(agentManager, wrfcController, record ?? null, getSystemMessageRouter);
+    checkCohortCompletion(agentManager, wrfcController, record ?? null, getSystemMessageRouter, queueConversationFollowUp);
     requestRender();
   }));
 
@@ -202,8 +230,12 @@ export function registerBootstrapRuntimeEvents(
       withRouter(getSystemMessageRouter, (router) => {
         router.low(`[Agents] \u2717 ${record.template} ${payload.agentId.slice(-8)}: "${taskSnippet}" \u2014 failed in ${durationSeconds}s: ${payload.error.slice(0, 80)}`);
       });
+      queueConversationFollowUp?.({
+        key: `agent:${payload.agentId}:failed`,
+        summary: `${record.template} agent ${payload.agentId.slice(-8)} failed after ${durationSeconds}s while working on "${taskSnippet}": ${payload.error.slice(0, 120)}`,
+      });
     }
-    checkCohortCompletion(agentManager, wrfcController, record ?? null, getSystemMessageRouter);
+    checkCohortCompletion(agentManager, wrfcController, record ?? null, getSystemMessageRouter, queueConversationFollowUp);
     requestRender();
   }));
 

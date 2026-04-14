@@ -1,6 +1,7 @@
 import type { Tool, ToolCall } from '../../../types/tools.ts';
 import type { ToolRuntimeContext } from '../context.ts';
 import type { PhaseResult, ToolExecutionRecord } from '../types.ts';
+import { summarizeError } from '../../../utils/error-display.ts';
 
 /**
  * posthook — Phase 6 of the tool execution pipeline.
@@ -45,7 +46,7 @@ export async function posthookPhase(
     };
   } catch (err) {
     // Post-hook failure must not fail the tool call
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return {
       phase: 'posthooked',
       success: true,

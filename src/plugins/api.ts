@@ -15,6 +15,7 @@ import type { VoiceProvider, VoiceProviderRegistry } from '../voice/index.ts';
 import type { MediaProvider, MediaProviderRegistry } from '../media/index.ts';
 import type { WebSearchProvider, WebSearchProviderRegistry } from '../web-search/index.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * PluginProviderConfig — minimal config for registering a custom LLM provider
@@ -191,7 +192,7 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
           try {
             await handler(args);
           } catch (err) {
-            logger.error(`[plugin:${ctx.pluginName}] Command '${name}' threw: ${String(err)}`);
+            logger.error(`[plugin:${ctx.pluginName}] Command '${name}' threw: ${summarizeError(err)}`);
           }
         },
       };
@@ -242,11 +243,11 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
           ctx.cleanup.push(unregister);
           logger.info(`[plugin:${ctx.pluginName}] Registered provider '${name}' with ${config.models.length} model(s)`);
         } catch (err) {
-          logger.error(`[plugin:${ctx.pluginName}] registerProvider '${name}' failed: ${String(err)}`);
+          logger.error(`[plugin:${ctx.pluginName}] registerProvider '${name}' failed: ${summarizeError(err)}`);
           throw err;
         }
       } catch (err) {
-        logger.error(`[plugin:${ctx.pluginName}] Could not import OpenAICompatProvider: ${String(err)}`);
+        logger.error(`[plugin:${ctx.pluginName}] Could not import OpenAICompatProvider: ${summarizeError(err)}`);
         throw err;
       }
     },
@@ -296,7 +297,7 @@ export function createPluginAPI(ctx: PluginAPIContext): PluginAPI {
           try {
             return await handler(args);
           } catch (err) {
-            return { success: false, error: String(err) };
+            return { success: false, error: summarizeError(err) };
           }
         },
       });

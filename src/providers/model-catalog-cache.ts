@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import type { CatalogModel } from './model-catalog.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 interface CatalogModelPricing {
   input: number;
@@ -156,7 +157,7 @@ function loadCatalogCache(cachePath: string): CatalogCacheFile | null {
     if (parsed.version !== 1 || !Array.isArray(parsed.models)) return null;
     return parsed;
   } catch (err) {
-    const msg = String(err);
+    const msg = summarizeError(err);
     if (msg.includes('ENOENT') || msg.includes('no such file')) {
       logger.debug('[model-catalog] No cache file (first run)');
     } else {
@@ -178,7 +179,7 @@ function saveCatalogCache(models: CatalogModel[], cachePath: string, tmpPath: st
     fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), 'utf-8');
     fs.renameSync(tmpPath, cachePath);
   } catch (err) {
-    logger.warn('[model-catalog] Cache write failed', { error: String(err) });
+    logger.warn('[model-catalog] Cache write failed', { error: summarizeError(err) });
   }
 }
 

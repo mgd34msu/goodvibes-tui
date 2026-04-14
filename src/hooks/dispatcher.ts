@@ -15,6 +15,7 @@ import * as httpRunner from './runners/http.ts';
 import * as tsRunner from './runners/typescript.ts';
 import { fireTriggers } from '../workflow/trigger-executor.ts';
 import type { TriggerManagerLike } from '../workflow/trigger-executor.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 type HookRunnerDeps = {
   readonly agentManager?: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'>;
@@ -162,7 +163,7 @@ export class HookDispatcher {
     } catch (err) {
       logger.error('HookDispatcher: failed to load hooks file', {
         filePath,
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
     }
   }
@@ -241,7 +242,7 @@ export class HookDispatcher {
             });
           })
           .catch((err) => {
-            const message = err instanceof Error ? err.message : String(err);
+            const message = summarizeError(err);
             logger.error('HookDispatcher: async hook error', {
               path: event.path,
               error: message,
@@ -264,7 +265,7 @@ export class HookDispatcher {
       try {
         result = await runHook(hook, event, this.runnerDeps, this.hooksBaseDirectory);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = summarizeError(err);
         logger.error('HookDispatcher: hook threw unexpectedly', {
           path: event.path,
           error: message,
@@ -326,7 +327,7 @@ export class HookDispatcher {
       fireTriggers(event, this.triggerManager).catch((err) => {
         logger.debug('HookDispatcher: trigger fire error', {
           path: event.path,
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
         });
       });
     }

@@ -17,12 +17,14 @@ import {
 } from '../../automation/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
 import type { ConfigKey } from '../../config/schema.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 import {
   buildMissingScopeBody,
   resolveAuthenticatedPrincipal,
   resolvePrivateHostFetchOptions,
   type AuthenticatedPrincipal,
 } from '../http-policy.ts';
+import { jsonErrorResponse } from './error-response.ts';
 
 type JsonBody = Record<string, unknown>;
 
@@ -279,7 +281,7 @@ function readKnowledgeSchedule(value: unknown): AutomationScheduleDefinition | R
         throw new Error('Schedule kind must be at, every, or cron.');
     }
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -355,7 +357,7 @@ async function handleKnowledgeGraphql(context: DaemonKnowledgeRouteContext, req:
   try {
     access = inspectKnowledgeGraphqlAccess(parsed.query, parsed.operationName);
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 
   const scopeDenied = buildMissingScopeBody('knowledge GraphQL operation', access.requiredScopes, principal.scopes);
@@ -408,7 +410,7 @@ async function handleKnowledgeIngestUrl(context: DaemonKnowledgeRouteContext, re
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
     }), { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -434,7 +436,7 @@ async function handleKnowledgeIngestArtifact(context: DaemonKnowledgeRouteContex
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
     }), { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -454,7 +456,7 @@ async function handleKnowledgeImportBookmarks(context: DaemonKnowledgeRouteConte
       ...privateHostFetchOptions,
     }), { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -474,7 +476,7 @@ async function handleKnowledgeImportUrls(context: DaemonKnowledgeRouteContext, r
       ...privateHostFetchOptions,
     }), { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -497,7 +499,7 @@ async function handleKnowledgeIngestConnector(context: DaemonKnowledgeRouteConte
       ...privateHostFetchOptions,
     }), { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -544,8 +546,10 @@ async function handleKnowledgeDecideCandidate(context: DaemonKnowledgeRouteConte
       }),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return Response.json({ error: message }, { status: message.startsWith('Unknown knowledge consolidation candidate:') ? 404 : 400 });
+    const message = summarizeError(error);
+    return jsonErrorResponse(error, {
+      status: message.startsWith('Unknown knowledge consolidation candidate:') ? 404 : 400,
+    });
   }
 }
 
@@ -563,8 +567,10 @@ async function handleKnowledgeRunJob(context: DaemonKnowledgeRouteContext, jobId
       }),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return Response.json({ error: message }, { status: message.startsWith('Unknown knowledge job:') ? 404 : 400 });
+    const message = summarizeError(error);
+    return jsonErrorResponse(error, {
+      status: message.startsWith('Unknown knowledge job:') ? 404 : 400,
+    });
   }
 }
 
@@ -589,7 +595,7 @@ async function handleKnowledgeSaveSchedule(context: DaemonKnowledgeRouteContext,
       }),
     }, { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -615,7 +621,7 @@ async function handleKnowledgeRenderProjection(context: DaemonKnowledgeRouteCont
   try {
     return Response.json(await context.knowledgeService.renderProjection(parsed));
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -632,6 +638,6 @@ async function handleKnowledgeMaterializeProjection(context: DaemonKnowledgeRout
       ...(typeof body.filename === 'string' ? { filename: body.filename } : {}),
     }), { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }

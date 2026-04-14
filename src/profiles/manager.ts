@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlink
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
 import type { GoodVibesConfig } from '../config/schema.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * ProfileData - TUI-specific settings stored in a profile.
@@ -84,7 +85,7 @@ export class ProfileManager {
         },
       };
     } catch (e) {
-      throw new Error(`Failed to parse profile "${name}": ${(e as Error).message}`);
+      throw new Error(`Failed to parse profile "${name}": ${summarizeError(e)}`);
     }
   }
 

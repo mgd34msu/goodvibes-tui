@@ -24,6 +24,7 @@ import {
 import type { OAuthProviderConfig } from './subscriptions.ts';
 import { SubscriptionManager } from './subscriptions.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -156,7 +157,7 @@ export class ServiceRegistry {
           serviceName,
           field,
           ref: describeSecretRef(candidate),
-          error: error instanceof Error ? error.message : String(error),
+          error: summarizeError(error),
         });
         return null;
       }
@@ -313,7 +314,7 @@ export class ServiceRegistry {
           ...(response.ok ? {} : { error: `HTTP ${response.status}` }),
         };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = summarizeError(error);
         logger.debug('ServiceRegistry: service test failed', { serviceName, url, error: message });
       }
     }

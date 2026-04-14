@@ -49,6 +49,19 @@ export { SpanStatusCode as SpanStatusCodes, SpanKind as SpanKinds } from './type
 // Re-export tracer and meter classes
 export { RuntimeTracer } from './tracer.ts';
 export { RuntimeMeter } from './meter.ts';
+export type {
+  TelemetrySeverity,
+  TelemetryViewMode,
+  TelemetryFilter,
+  TelemetryRecord,
+  TelemetryPageInfo,
+  TelemetryListResponse,
+  TelemetryCapabilities,
+  TelemetryAggregates,
+  TelemetryRuntimeSnapshot,
+  TelemetrySnapshot,
+} from './api.ts';
+export { TelemetryApiService } from './api.ts';
 
 // Re-export span helpers
 export type {

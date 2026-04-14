@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,7 +73,7 @@ export class FileUndoManager {
         logger.debug('file-undo: restored previous content', { path: op.path });
       }
     } catch (err) {
-      logger.debug('file-undo: undo write failed', { path: op.path, error: String(err) });
+      logger.debug('file-undo: undo write failed', { path: op.path, error: summarizeError(err) });
       // Put it back on the stack so state is consistent
       this.undoStack.push(op);
       throw err;
@@ -101,7 +102,7 @@ export class FileUndoManager {
       writeFileSync(op.path, op.afterContent, 'utf-8');
       logger.debug('file-undo: re-applied operation', { path: op.path });
     } catch (err) {
-      logger.debug('file-undo: redo write failed', { path: op.path, error: String(err) });
+      logger.debug('file-undo: redo write failed', { path: op.path, error: summarizeError(err) });
       this.redoStack.push(op);
       throw err;
     }

@@ -36,6 +36,7 @@ import type {
   McpServerPermissions,
 } from './types.ts';
 import { DEFAULT_RECONNECT_CONFIG } from './types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /** Callback type for state-change notifications. */
 export type McpEventHandler = (event: McpEvent) => void;
@@ -363,7 +364,7 @@ export class McpLifecycleManager {
 
       // Load tool list
       const tools = await client.listTools().catch((err: unknown) => {
-        logger.debug('McpLifecycleManager: listTools failed', { server: serverName, err: String(err) });
+        logger.debug('McpLifecycleManager: listTools failed', { server: serverName, err: summarizeError(err) });
         return [];
       });
       entry.availableTools = tools.map((t) => t.name);
@@ -387,7 +388,7 @@ export class McpLifecycleManager {
         tools: entry.availableTools.length,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       entry.lastError = message;
       logger.error('McpLifecycleManager: connection failed', { server: serverName, err: message });
       this._scheduleReconnect(serverName);
@@ -408,7 +409,7 @@ export class McpLifecycleManager {
         await client.disconnect();
       } catch (err) {
         // Non-fatal — we are stopping regardless
-        logger.debug('McpLifecycleManager: disconnect error (suppressed)', { server: serverName, err: String(err) });
+        logger.debug('McpLifecycleManager: disconnect error (suppressed)', { server: serverName, err: summarizeError(err) });
       }
       this.clients.delete(serverName);
     }
@@ -505,7 +506,7 @@ export class McpLifecycleManager {
         handler(event);
       } catch (err) {
         // Non-fatal: handler errors must not crash the manager
-        logger.debug('McpLifecycleManager: event handler threw', { event: event.type, err: String(err) });
+        logger.debug('McpLifecycleManager: event handler threw', { event: event.type, err: summarizeError(err) });
       }
     }
   }

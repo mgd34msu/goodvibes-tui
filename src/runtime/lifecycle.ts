@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.ts';
 export { saveSession } from './session-persistence.ts';
 import { saveSession, type SessionPersistenceOptions, type SessionSnapshot } from './session-persistence.ts';
 import type { CrossSessionTaskRegistry } from '../sessions/orchestration/index.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ── Startup lifecycle ────────────────────────────────────────────────────────
 
@@ -34,10 +35,10 @@ export function fireSessionStart(
       timestamp: Date.now(),
       payload: { sessionId },
     }).catch((err: unknown) => {
-      logger.debug('fireSessionStart hook error (non-fatal)', { error: String(err) });
+      logger.debug('fireSessionStart hook error (non-fatal)', { error: summarizeError(err) });
     });
   } catch (err) {
-    logger.debug('fireSessionStart sync error (non-fatal)', { error: String(err) });
+    logger.debug('fireSessionStart sync error (non-fatal)', { error: summarizeError(err) });
   }
 }
 
@@ -88,19 +89,19 @@ export async function shutdownRuntime(
         sessionId,
         timestamp: Date.now(),
         payload: { sessionId },
-      }).catch((err: unknown) => { logger.debug('shutdownRuntime hook fire error (non-fatal)', { specific, error: String(err) }); });
-    } catch (err) { logger.debug('shutdownRuntime hook sync error (non-fatal)', { specific, error: String(err) }); }
+      }).catch((err: unknown) => { logger.debug('shutdownRuntime hook fire error (non-fatal)', { specific, error: summarizeError(err) }); });
+    } catch (err) { logger.debug('shutdownRuntime hook sync error (non-fatal)', { specific, error: summarizeError(err) }); }
   };
 
   fireHook('end');
   fireHook('save');
 
   // Step 3: stop ScheduleManager
-  try { scheduleManager?.destroy(); } catch (err) { logger.debug('ScheduleManager.destroy failed (non-fatal)', { error: String(err) }); }
+  try { scheduleManager?.destroy(); } catch (err) { logger.debug('ScheduleManager.destroy failed (non-fatal)', { error: summarizeError(err) }); }
 
   // Step 4: stop provider registry watcher
-  try { providerRegistry?.stopWatching(); } catch (err) { logger.debug('providerRegistry.stopWatching failed (non-fatal)', { error: String(err) }); }
+  try { providerRegistry?.stopWatching(); } catch (err) { logger.debug('providerRegistry.stopWatching failed (non-fatal)', { error: summarizeError(err) }); }
 
   // Step 5: dispose cross-session orchestration registry if it is app-owned in this runtime
-  try { sessionOrchestration?.dispose(); } catch (err) { logger.debug('sessionOrchestration.dispose failed (non-fatal)', { error: String(err) }); }
+  try { sessionOrchestration?.dispose(); } catch (err) { logger.debug('sessionOrchestration.dispose failed (non-fatal)', { error: summarizeError(err) }); }
 }

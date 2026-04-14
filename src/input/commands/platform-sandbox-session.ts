@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import type { CommandContext } from '../command-registry.ts';
 import { inspectSandboxSessionArtifact, listSandboxProfiles, renderSandboxSessions } from '../../runtime/sandbox/manager.ts';
 import { requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 const SANDBOX_PROFILE_IDS = [
   'eval-js',
@@ -93,7 +94,7 @@ export async function handleSandboxSessionCommand(args: string[], ctx: CommandCo
       if (stderr) lines.push(`  stderr: ${stderr}`);
       ctx.print(lines.join('\n'));
     } catch (error) {
-      ctx.print(error instanceof Error ? error.message : String(error));
+      ctx.print(summarizeError(error));
     }
     return true;
   }

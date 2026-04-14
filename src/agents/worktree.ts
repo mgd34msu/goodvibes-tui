@@ -3,6 +3,7 @@ import { join } from 'path';
 import simpleGit from 'simple-git';
 import { GitService } from '../git/service.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 
 /**
@@ -113,7 +114,7 @@ export class AgentWorktree {
       return count > 0;
     } catch (err) {
       // If rev-list fails (e.g. brand-new worktree with no commits), treat as no changes
-      logger.debug('AgentWorktree._hasChanges: rev-list failed, treating as no changes', { branch, error: String(err) });
+      logger.debug('AgentWorktree._hasChanges: rev-list failed, treating as no changes', { branch, error: summarizeError(err) });
       return false;
     }
   }
@@ -126,12 +127,12 @@ export class AgentWorktree {
       await this.git.worktreeRemove(worktreePath);
     } catch (err) {
       // Try with --force flag via raw if normal remove fails
-      logger.debug('AgentWorktree._removeWorktree: first attempt failed, retrying with --force', { worktreePath, error: String(err) });
+      logger.debug('AgentWorktree._removeWorktree: first attempt failed, retrying with --force', { worktreePath, error: summarizeError(err) });
       try {
         const wgit = simpleGit({ baseDir: this.git.getCwd() });
         await wgit.raw(['worktree', 'remove', '--force', worktreePath]);
       } catch (err) {
-        logger.error('AgentWorktree._removeWorktree failed', { worktreePath, error: String(err) });
+        logger.error('AgentWorktree._removeWorktree failed', { worktreePath, error: summarizeError(err) });
         throw err;
       }
     }
@@ -146,7 +147,7 @@ export class AgentWorktree {
       await wgit.raw(['branch', '-D', branch]);
     } catch (err) {
       // Branch may not exist — that's fine
-      logger.debug('AgentWorktree._deleteBranch: ignored error', { branch, error: String(err) });
+      logger.debug('AgentWorktree._deleteBranch: ignored error', { branch, error: summarizeError(err) });
     }
   }
 }

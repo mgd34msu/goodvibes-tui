@@ -2,6 +2,7 @@ import { logger } from '../utils/logger.ts';
 import type { HookEvent } from '../hooks/types.ts';
 import type { TriggerDefinition } from '../tools/workflow/index.ts';
 import { matchesEventPath } from '../hooks/matcher.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // TriggerExecutor
@@ -279,7 +280,7 @@ function evaluateCondition(condition: string, event: HookEvent): boolean {
   } catch (err) {
     logger.debug('TriggerExecutor: condition evaluation error', {
       condition,
-      error: err instanceof Error ? err.message : String(err),
+      error: summarizeError(err),
     });
     return false;
   }
@@ -320,7 +321,7 @@ async function executeAction(
     proc.exited.catch((err) => {
       logger.debug('TriggerExecutor: action process error', {
         triggerId: trigger.id,
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
     });
 
@@ -328,7 +329,7 @@ async function executeAction(
     logger.debug('TriggerExecutor: action spawned', { triggerId: trigger.id, pid, action: trigger.action });
     return { ...base, executed: true, pid };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     logger.debug('TriggerExecutor: failed to spawn action', { triggerId: trigger.id, error: message });
     return { ...base, executed: false, error: message };
   }

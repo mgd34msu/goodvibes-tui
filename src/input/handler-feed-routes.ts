@@ -9,6 +9,7 @@ import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, registerPaste } from './handler-content-actions.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export type PanelFocusRouteState = {
   panelManager: PanelManager;
@@ -28,6 +29,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
   panelFocused: boolean;
 } {
   let panelFocused = state.panelFocused;
+
   if (
     token.type === 'key' &&
     token.logicalName === 'tab' &&
@@ -38,11 +40,7 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     const pm = state.panelManager;
     if (pm.isVisible() && pm.getAllOpen().length > 0) {
       if (panelFocused) {
-        if (pm.isBottomPaneVisible()) {
-          pm.togglePaneFocus();
-        } else {
-          panelFocused = false;
-        }
+        panelFocused = false;
       } else if (!state.handlePathCompletion()) {
         panelFocused = true;
       }
@@ -89,6 +87,9 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       state.requestRender();
       return { handled: true, panelFocused };
     }
+    if (token.ctrl || token.meta) {
+      return { handled: false, panelFocused };
+    }
     const activePanel = state.panelManager.getActive();
     if (activePanel?.handleInput) {
       const consumed = activePanel.handleInput(token.logicalName);
@@ -101,11 +102,6 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
   }
 
   if (token.type === 'text' && token.value) {
-    if (token.value === ',' || token.value === '.') {
-      state.cyclePanelTab(token.value === '.' ? 'next' : 'prev');
-      state.requestRender();
-      return { handled: true, panelFocused };
-    }
     const activePanel = state.panelManager.getActive();
     if (activePanel?.handleInput) {
       for (const ch of token.value) {
@@ -288,7 +284,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
     if (state.commandContext?.executeCommand) {
       void state.commandContext.executeCommand(commandName, []).catch((error) => {
         state.commandContext?.print(
-          `[${commandName}] ${error instanceof Error ? error.message : String(error)}`,
+          `[${commandName}] ${summarizeError(error)}`,
         );
       });
       return;

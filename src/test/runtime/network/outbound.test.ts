@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import {
   createNetworkFetch,
   inspectOutboundTls,
 } from '../../../runtime/network/index.ts';
+import { logger } from '../../../utils/logger.ts';
 
 describe('runtime/network outbound TLS', () => {
   let root: string;
@@ -85,5 +86,41 @@ describe('runtime/network outbound TLS', () => {
     expect(calls).toHaveLength(1);
     expect(Array.isArray(calls[0]?.tls?.ca)).toBe(true);
     expect((calls[0]?.tls?.ca as unknown[]).length).toBe(1);
+  });
+
+  test('emits provider egress trace for chat completions', async () => {
+    const config = new ConfigManager({ configDir, workingDir: root });
+    const debugSpy = spyOn(logger, 'debug');
+    const fetchImpl = mock(async () => new Response('ok', {
+      status: 200,
+      headers: { 'x-request-id': 'req-egress-1' },
+    })) as unknown as typeof globalThis.fetch;
+
+    try {
+      const wrappedFetch = createNetworkFetch(fetchImpl, config);
+      await wrappedFetch('https://api.inceptionlabs.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      });
+
+      const requestCall = debugSpy.mock.calls.find(([message]) => message === 'Outbound provider request');
+      const responseCall = debugSpy.mock.calls.find(([message]) => message === 'Outbound provider response');
+
+      expect(requestCall?.[1]).toMatchObject({
+        method: 'POST',
+        host: 'api.inceptionlabs.ai',
+        path: '/v1/chat/completions',
+        contentType: 'application/json',
+      });
+      expect(responseCall?.[1]).toMatchObject({
+        method: 'POST',
+        host: 'api.inceptionlabs.ai',
+        path: '/v1/chat/completions',
+        status: 200,
+        requestId: 'req-egress-1',
+      });
+    } finally {
+      debugSpy.mockRestore();
+    }
   });
 });

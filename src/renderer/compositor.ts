@@ -17,8 +17,10 @@ export interface SearchInfo {
 }
 
 export interface PanelCompositeData {
+  /** Workspace-level tab bar spanning all open panels. */
+  workspaceBar: Line;
   /** Top pane: tab bar */
-  topTabBar: Line;
+  topTabBar?: Line;
   /** Top pane: panel content lines */
   topContent: Line[];
   /** Whether the top pane is focused (affects separator color) */
@@ -88,22 +90,23 @@ export class Compositor {
 
     // --- Pre-compute panel row layout when split pane is active ---
     // When both top and bottom panes are visible, the panel area is split:
-    //   row 0:              top tab bar
-    //   rows 1..topH:       top content
-    //   row topH+1:         horizontal separator (───)
-    //   row topH+2:         bottom tab bar
-    //   rows topH+3..end:   bottom content
+    //   row 0:              workspace tab bar
+    //   row 1:              top tab bar
+    //   rows 2..topH+1:     top content
+    //   row topH+2:         horizontal separator (───)
+    //   row topH+3:         bottom tab bar
+    //   rows topH+4..end:   bottom content
     const hasBottomPane = hasPanel && panel!.bottomTabBar !== undefined;
     let topPaneHeight = 0;   // number of content rows in top pane
     let bottomPaneHeight = 0;
     let hSepRow = -1;        // viewport row of the horizontal separator
     if (hasPanel && hasBottomPane) {
-      const panelAreaRows = vHeight; // total rows available in panel area
+      const panelAreaRows = Math.max(0, vHeight - 1); // subtract workspace tab bar
       // top: 1 (tabbar) + topContent rows; bottom: 1 (sep) + 1 (tabbar) + bottomContent
       const contentRows = Math.max(0, panelAreaRows - 3); // subtract top-tabbar + h-sep + bottom-tabbar
       topPaneHeight = Math.max(1, Math.floor(contentRows * panel!.verticalSplitRatio));
       bottomPaneHeight = Math.max(1, contentRows - topPaneHeight);
-      hSepRow = 1 + topPaneHeight; // viewport row index of horizontal separator
+      hSepRow = 2 + topPaneHeight; // workspace bar + top tab bar + top content rows
     }
 
     const sepFg = hasPanel && panel!.separator
@@ -144,9 +147,9 @@ export class Compositor {
         const panelStartX = sepX + 1;
 
         if (!hasBottomPane) {
-          // --- Single pane mode (original behavior) ---
-          // viewport row 0 → tabBar, viewport rows 1+ → panel content
-          const panelLine = i === 0 ? p.topTabBar : p.topContent[i - 1];
+          // --- Single pane mode ---
+          // viewport row 0 → workspace bar, viewport rows 1+ → panel content
+          const panelLine = i === 0 ? p.workspaceBar : p.topContent[i - 1];
           if (panelLine !== undefined) {
             for (let x = 0; x < panelWidth; x++) {
               const cell = panelLine[x];
@@ -158,17 +161,20 @@ export class Compositor {
         } else {
           // --- Two pane mode ---
           // Row layout (by viewport row i):
-          //   i = 0:                      top tab bar
-          //   1 <= i <= topPaneHeight:     top content[i-1]
+          //   i = 0:                      workspace tab bar
+          //   i = 1:                      top tab bar
+          //   2 <= i <= topPaneHeight+1:  top content[i-2]
           //   i = hSepRow:                horizontal separator
           //   i = hSepRow+1:              bottom tab bar
           //   i >= hSepRow+2:             bottom content[i - (hSepRow+2)]
           let panelLine: Line | undefined;
 
           if (i === 0) {
+            panelLine = p.workspaceBar;
+          } else if (i === 1) {
             panelLine = p.topTabBar;
-          } else if (i <= topPaneHeight) {
-            panelLine = p.topContent[i - 1];
+          } else if (i <= topPaneHeight + 1) {
+            panelLine = p.topContent[i - 2];
           } else if (i === hSepRow) {
             // Horizontal separator between the two panes
             // Render ─ chars across the panel width

@@ -10,6 +10,7 @@ import { resolveAndValidatePath } from '../utils/path-safety.ts';
 import { analyzePermissionRequest } from '../permissions/analysis.ts';
 import { logger } from '../utils/logger.ts';
 import type { SelectionManager } from './selection.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export const MARKER_REGEX = /\[(TEXT|IMAGE): [^\]]+\]/g;
 
@@ -152,7 +153,7 @@ export function expandPrompt(
       expanded = expanded.slice(0, injectMatch.index) + content + expanded.slice(injectMatch.index + injectMatch[0].length);
       injectRegex.lastIndex = injectMatch.index + content.length;
     } catch (err) {
-      logger.debug('expandPrompt: failed to read injected file', { path: filePath, error: String(err) });
+      logger.debug('expandPrompt: failed to read injected file', { path: filePath, error: summarizeError(err) });
     }
   }
 
@@ -294,7 +295,7 @@ export function handleBlockSave(
     const displayPath = homePath ? filePath.replace(homePath, '~') : filePath;
     conversationManager.log(`[Saved to: ${displayPath}]`, { fg: '#22c55e' });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = summarizeError(err);
     conversationManager.log(`[Save failed: ${msg}]`, { fg: '#ef4444' });
   }
   requestRender();
@@ -382,12 +383,12 @@ export function handleDiffApply(
         conversationManager.log(`[Diff apply failed: original text not found in ${diff.filePath}]`, { fg: '#ef4444' });
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = summarizeError(err);
       conversationManager.log(`[Diff apply error: ${msg}]`, { fg: '#ef4444' });
     }
     requestRender();
   }).catch((err) => {
-    conversationManager.log(`[Diff apply error: ${err instanceof Error ? err.message : String(err)}]`, { fg: '#ef4444' });
+    conversationManager.log(`[Diff apply error: ${summarizeError(err)}]`, { fg: '#ef4444' });
     requestRender();
   });
   return true;

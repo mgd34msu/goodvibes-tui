@@ -23,6 +23,7 @@ import { buildLayeredOrchestratorSystemPrompt, buildOrchestratorSystemPrompt } f
 import type { AgentMessageBus } from './message-bus.ts';
 import type { KnowledgeService } from '../knowledge/index.ts';
 import type { ArchetypeLoader } from './archetypes.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 const MAX_TURNS = 50;
 const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];
@@ -212,7 +213,7 @@ async function executeToolCalls(
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      const toolErr = err instanceof Error ? err.message : String(err);
+      const toolErr = summarizeError(err);
       results.push({
         callId: call.id,
         success: false,
@@ -311,7 +312,9 @@ async function handleAgentRunFailure(
   preAgentProcessIds: Set<string>,
   err: unknown,
 ): Promise<void> {
-  const message = err instanceof Error ? err.message : String(err);
+  const message = summarizeError(err, {
+    ...(record.provider ? { provider: record.provider } : {}),
+  });
   if (conversation) {
     const lastMessages = conversation.getMessagesForLLM();
     const lastAssistant = [...lastMessages].reverse().find((m) => m.role === 'assistant');

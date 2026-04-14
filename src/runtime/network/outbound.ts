@@ -3,6 +3,7 @@ import { getCACertificates } from 'node:tls';
 import type { ConfigManager } from '../../config/manager.ts';
 import { logger } from '../../utils/logger.ts';
 import { isLocalHostname, readPemEntriesFromDirectory, resolvePathFromGoodVibesRoot } from './shared.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export type OutboundTrustMode = 'bundled' | 'bundled+custom' | 'custom';
 
@@ -135,6 +136,83 @@ function extractRequestUrl(input: RequestInfo | URL): URL | null {
   }
 }
 
+function extractRequestMethod(input: RequestInfo | URL, init?: RequestInit): string {
+  if (init?.method) return init.method.toUpperCase();
+  if (typeof Request !== 'undefined' && input instanceof Request) return input.method.toUpperCase();
+  return 'GET';
+}
+
+function extractHeaderValue(headers: HeadersInit | undefined, name: string): string | undefined {
+  if (!headers) return undefined;
+  if (headers instanceof Headers) return headers.get(name) ?? undefined;
+  if (Array.isArray(headers)) {
+    const loweredName = name.toLowerCase();
+    const match = headers.find(([key]) => key.toLowerCase() === loweredName);
+    return match?.[1];
+  }
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== name.toLowerCase()) continue;
+    if (Array.isArray(value)) return value.join(', ');
+    return value;
+  }
+  return undefined;
+}
+
+function shouldTraceProviderRequest(url: URL, method: string): boolean {
+  if (method !== 'POST') return false;
+  return (
+    url.pathname.endsWith('/chat/completions') ||
+    url.pathname.endsWith('/responses') ||
+    url.pathname.endsWith('/messages')
+  );
+}
+
+async function executeNetworkFetch(
+  fetchImpl: typeof globalThis.fetch,
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  configManager: ConfigManager,
+): Promise<Response> {
+  const nextInit = applyOutboundTlsToFetchInit(input, init, configManager);
+  const url = extractRequestUrl(input);
+  const method = extractRequestMethod(input, nextInit);
+  const shouldTrace = url ? shouldTraceProviderRequest(url, method) : false;
+
+  if (shouldTrace && url) {
+    logger.debug('Outbound provider request', {
+      method,
+      host: url.host,
+      path: url.pathname,
+      contentType: extractHeaderValue(nextInit.headers, 'content-type'),
+      contentLength: extractHeaderValue(nextInit.headers, 'content-length'),
+    });
+  }
+
+  try {
+    const response = await fetchImpl(input, nextInit);
+    if (shouldTrace && url) {
+      logger.debug('Outbound provider response', {
+        method,
+        host: url.host,
+        path: url.pathname,
+        status: response.status,
+        requestId: response.headers.get('x-request-id') ?? response.headers.get('request-id') ?? undefined,
+      });
+    }
+    return response;
+  } catch (error) {
+    if (shouldTrace && url) {
+      logger.error('Outbound provider request failed', {
+        method,
+        host: url.host,
+        path: url.pathname,
+        error: summarizeError(error),
+      });
+    }
+    throw error;
+  }
+}
+
 export function applyOutboundTlsToFetchInit(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
@@ -176,7 +254,7 @@ export function createNetworkFetch(
   configManager: ConfigManager,
 ): typeof globalThis.fetch {
   const wrapped = (async (input: RequestInfo | URL, init?: RequestInit) =>
-    fetchImpl(input, applyOutboundTlsToFetchInit(input, init, configManager))) as typeof globalThis.fetch;
+    executeNetworkFetch(fetchImpl, input, init, configManager)) as typeof globalThis.fetch;
   Object.assign(wrapped, fetchImpl);
   return wrapped;
 }
@@ -203,7 +281,7 @@ export class GlobalNetworkTransportInstaller {
       if (!this.originalFetchRef || !this.configManager) {
         throw new Error('Global network transport is not initialized correctly.');
       }
-      return this.originalFetchRef(input, applyOutboundTlsToFetchInit(input, init, this.configManager));
+      return executeNetworkFetch(this.originalFetchRef, input, init, this.configManager);
     }) as WrappedNetworkFetch;
     Object.assign(wrapped, globalThis.fetch);
     wrapped[NETWORK_FETCH_WRAPPER] = true;

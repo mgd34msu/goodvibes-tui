@@ -19,6 +19,7 @@ import {
 import type { OpenAIToolCall } from './tool-formats.ts';
 import type { CacheHitTracker } from './cache-strategy.ts';
 import { extractOpenAIStreamTextDelta } from './openai-stream-delta.ts';
+import { summarizeError, toProviderError } from '../utils/error-display.ts';
 
 const NOOP_CACHE_HIT_TRACKER: Pick<CacheHitTracker, 'recordTurn'> = {
   recordTurn: () => {},
@@ -122,10 +123,12 @@ export class OpenAIProvider implements LLMProvider {
       } catch (err: unknown) {
         const { hasStatus } = await import('../utils/retry.ts');
         const status = hasStatus(err) ? err.status : undefined;
-        throw new ProviderError(
-          err instanceof Error ? err.message : String(err),
-          status,
-        );
+        throw toProviderError(err, {
+          ...(status !== undefined ? { statusCode: status } : {}),
+          provider: this.name,
+          operation: 'chat',
+          phase: 'stream',
+        });
       }
 
       // Some models may emit tool calls as raw text tokens instead of the
@@ -159,14 +162,23 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
-    const response = await this.client.embeddings.create(
-      {
-        model: request.model ?? this.embeddingModel,
-        input: request.text,
-        ...(request.dimensions ? { dimensions: request.dimensions } : {}),
-      },
-      request.signal ? { signal: request.signal } : undefined,
-    );
+    let response;
+    try {
+      response = await this.client.embeddings.create(
+        {
+          model: request.model ?? this.embeddingModel,
+          input: request.text,
+          ...(request.dimensions ? { dimensions: request.dimensions } : {}),
+        },
+        request.signal ? { signal: request.signal } : undefined,
+      );
+    } catch (error: unknown) {
+      throw toProviderError(error, {
+        provider: this.name,
+        operation: 'embed',
+        phase: 'request',
+      });
+    }
     const embedding = response.data[0]?.embedding ?? [];
     return {
       vector: Float32Array.from(embedding),

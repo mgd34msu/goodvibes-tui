@@ -1,5 +1,6 @@
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireLocalUserAuthManager } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 function formatRoles(roles: readonly string[]): string {
   return roles.length > 0 ? roles.join(', ') : '(none)';
@@ -25,7 +26,7 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
       const added = auth.addUser(username, password, roles);
       ctx.print(`Added local auth user ${added.username} (${formatRoles(added.roles)}).`);
     } catch (error) {
-      ctx.print((error as Error).message);
+      ctx.print(summarizeError(error));
     }
     return;
   }
@@ -40,7 +41,7 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
       const deleted = auth.deleteUser(username);
       ctx.print(deleted ? `Deleted local auth user ${username}.` : `Unknown local auth user: ${username}`);
     } catch (error) {
-      ctx.print((error as Error).message);
+      ctx.print(summarizeError(error));
     }
     return;
   }
@@ -56,7 +57,7 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
       auth.rotatePassword(username, password);
       ctx.print(`Rotated password for ${username}. Existing sessions were revoked.`);
     } catch (error) {
-      ctx.print((error as Error).message);
+      ctx.print(summarizeError(error));
     }
     return;
   }

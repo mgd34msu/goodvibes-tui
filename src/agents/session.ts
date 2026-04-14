@@ -3,6 +3,7 @@ import { join, dirname } from 'path';
 import { ConversationManager } from '../core/conversation.ts';
 import { KVState } from '../state/kv-state.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface AgentSessionPaths {
   readonly sessionsDir: string;
@@ -79,7 +80,7 @@ export class AgentSession {
       }
       appendFileSync(this.sessionFile, JSON.stringify(msg) + '\n', 'utf-8');
     } catch (err) {
-      logger.error('AgentSession.appendMessage failed', { agentId: this.agentId, error: String(err) });
+      logger.error('AgentSession.appendMessage failed', { agentId: this.agentId, error: summarizeError(err) });
     }
   }
 
@@ -91,7 +92,7 @@ export class AgentSession {
     try {
       await this.kvState.dispose();
     } catch (err) {
-      logger.error('AgentSession.dispose failed', { agentId: this.agentId, error: String(err) });
+      logger.error('AgentSession.dispose failed', { agentId: this.agentId, error: summarizeError(err) });
     }
     logger.debug('AgentSession disposed', { agentId: this.agentId });
   }

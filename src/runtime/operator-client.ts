@@ -14,10 +14,10 @@ import { buildAuthInspectionSnapshot, type AuthInspectionSnapshot } from './auth
 import { buildProviderAccountSnapshot, type ProviderAccountSnapshot } from './provider-accounts/registry.ts';
 import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../providers/runtime-snapshot.ts';
 import { getProviderRuntimeSnapshot, getProviderUsageSnapshot, listProviderRuntimeSnapshots } from '../providers/runtime-snapshot.ts';
+import type { OperatorClientServices } from './foundation-services.ts';
 import type { RuntimeTask } from './store/domains/tasks.ts';
 import type { UiControlPlaneSnapshot, UiSessionSnapshot, UiTasksSnapshot } from './ui-read-models.ts';
 import type { UiRuntimeEvents } from './ui-events.ts';
-import type { UiRuntimeServices } from './ui-services.ts';
 import type { ShellPathService } from './shell-paths.ts';
 
 export interface OperatorControlPlaneSnapshot extends UiControlPlaneSnapshot {}
@@ -81,7 +81,7 @@ export interface OperatorApprovalsClient {
   ): Promise<SharedApprovalRecord | null>;
 }
 
-export type OperatorSessionEnsureInput = NonNullable<Parameters<UiRuntimeServices['sessions']['sessionBroker']['ensureSession']>[0]>;
+export type OperatorSessionEnsureInput = NonNullable<Parameters<OperatorClientServices['sessionBroker']['ensureSession']>[0]>;
 
 export interface OperatorProvidersClient {
   listIds(): readonly string[];
@@ -121,21 +121,21 @@ function getTaskSnapshot(snapshot: UiTasksSnapshot, taskId: string): RuntimeTask
   return snapshot.tasks.find((task) => task.id === taskId) ?? null;
 }
 
-export function createOperatorClient(services: UiRuntimeServices): OperatorClient {
+export function createOperatorClient(services: OperatorClientServices): OperatorClient {
   const sessions = {
     current: (): UiSessionSnapshot => services.readModels.session.getSnapshot(),
-    list: (limit = 100): readonly SharedSessionRecord[] => services.sessions.sessionBroker.listSessions(normalizeLimit(limit)),
-    get: (sessionId: string): SharedSessionRecord | null => services.sessions.sessionBroker.getSession(sessionId),
-    messages: (sessionId: string, limit = 100): readonly SharedSessionMessage[] => services.sessions.sessionBroker.getMessages(sessionId, normalizeLimit(limit)),
-    inputs: (sessionId: string, limit = 100): readonly SharedSessionInputRecord[] => services.sessions.sessionBroker.getInputs(sessionId, normalizeLimit(limit)),
-    ensureSession: (input: Parameters<UiRuntimeServices['sessions']['sessionBroker']['ensureSession']>[0] = {}): Promise<SharedSessionRecord> => services.sessions.sessionBroker.ensureSession(input),
-    close: (sessionId: string): Promise<SharedSessionRecord | null> => services.sessions.sessionBroker.closeSession(sessionId),
-    reopen: (sessionId: string): Promise<SharedSessionRecord | null> => services.sessions.sessionBroker.reopenSession(sessionId),
-    bindAgent: (sessionId: string, agentId: string): Promise<SharedSessionRecord | null> => services.sessions.sessionBroker.bindAgent(sessionId, agentId),
-    submitMessage: (input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessions.sessionBroker.submitMessage(input),
-    steerMessage: (input: SteerSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessions.sessionBroker.steerMessage(input),
-    followUpMessage: (input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessions.sessionBroker.followUpMessage(input),
-    cancelInput: (sessionId: string, inputId: string): Promise<SharedSessionInputRecord | null> => services.sessions.sessionBroker.cancelInput(sessionId, inputId),
+    list: (limit = 100): readonly SharedSessionRecord[] => services.sessionBroker.listSessions(normalizeLimit(limit)),
+    get: (sessionId: string): SharedSessionRecord | null => services.sessionBroker.getSession(sessionId),
+    messages: (sessionId: string, limit = 100): readonly SharedSessionMessage[] => services.sessionBroker.getMessages(sessionId, normalizeLimit(limit)),
+    inputs: (sessionId: string, limit = 100): readonly SharedSessionInputRecord[] => services.sessionBroker.getInputs(sessionId, normalizeLimit(limit)),
+    ensureSession: (input: Parameters<OperatorClientServices['sessionBroker']['ensureSession']>[0] = {}): Promise<SharedSessionRecord> => services.sessionBroker.ensureSession(input),
+    close: (sessionId: string): Promise<SharedSessionRecord | null> => services.sessionBroker.closeSession(sessionId),
+    reopen: (sessionId: string): Promise<SharedSessionRecord | null> => services.sessionBroker.reopenSession(sessionId),
+    bindAgent: (sessionId: string, agentId: string): Promise<SharedSessionRecord | null> => services.sessionBroker.bindAgent(sessionId, agentId),
+    submitMessage: (input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessionBroker.submitMessage(input),
+    steerMessage: (input: SteerSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessionBroker.steerMessage(input),
+    followUpMessage: (input: SubmitSharedSessionMessageInput): Promise<SharedSessionSubmission> => services.sessionBroker.followUpMessage(input),
+    cancelInput: (sessionId: string, inputId: string): Promise<SharedSessionInputRecord | null> => services.sessionBroker.cancelInput(sessionId, inputId),
   } satisfies OperatorSessionsClient;
 
   const tasks = {
@@ -146,67 +146,67 @@ export function createOperatorClient(services: UiRuntimeServices): OperatorClien
   } satisfies OperatorTasksClient;
 
   const approvals = {
-    list: (limit = 100): readonly SharedApprovalRecord[] => services.coordination.approvalBroker.listApprovals(normalizeLimit(limit)),
-    get: (approvalId: string): SharedApprovalRecord | null => services.coordination.approvalBroker.getApproval(approvalId),
-    request: (input: RequestSharedApprovalInput): Promise<PermissionPromptDecision> => services.coordination.approvalBroker.requestApproval(input),
-    claim: (approvalId: string, actor: string, actorSurface = 'operator', note?: string): Promise<SharedApprovalRecord | null> => services.coordination.approvalBroker.claimApproval(approvalId, actor, actorSurface, note),
+    list: (limit = 100): readonly SharedApprovalRecord[] => services.approvalBroker.listApprovals(normalizeLimit(limit)),
+    get: (approvalId: string): SharedApprovalRecord | null => services.approvalBroker.getApproval(approvalId),
+    request: (input: RequestSharedApprovalInput): Promise<PermissionPromptDecision> => services.approvalBroker.requestApproval(input),
+    claim: (approvalId: string, actor: string, actorSurface = 'operator', note?: string): Promise<SharedApprovalRecord | null> => services.approvalBroker.claimApproval(approvalId, actor, actorSurface, note),
     resolve: (approvalId: string, input: {
       readonly approved: boolean;
       readonly remember?: boolean;
       readonly actor: string;
       readonly actorSurface?: string;
       readonly note?: string;
-    }): Promise<SharedApprovalRecord | null> => services.coordination.approvalBroker.resolveApproval(approvalId, input),
-    approve: (approvalId: string, actor: string, actorSurface = 'operator', note?: string): Promise<SharedApprovalRecord | null> => services.coordination.approvalBroker.resolveApproval(approvalId, {
+    }): Promise<SharedApprovalRecord | null> => services.approvalBroker.resolveApproval(approvalId, input),
+    approve: (approvalId: string, actor: string, actorSurface = 'operator', note?: string): Promise<SharedApprovalRecord | null> => services.approvalBroker.resolveApproval(approvalId, {
       approved: true,
       actor,
       actorSurface,
       note,
     }),
-    deny: (approvalId: string, actor: string, actorSurface = 'operator', note?: string): Promise<SharedApprovalRecord | null> => services.coordination.approvalBroker.resolveApproval(approvalId, {
+    deny: (approvalId: string, actor: string, actorSurface = 'operator', note?: string): Promise<SharedApprovalRecord | null> => services.approvalBroker.resolveApproval(approvalId, {
       approved: false,
       actor,
       actorSurface,
       note,
     }),
-    cancel: (approvalId: string, actor: string, actorSurface = 'operator', note?: string): Promise<SharedApprovalRecord | null> => services.coordination.approvalBroker.cancelApproval(approvalId, actor, actorSurface, note),
+    cancel: (approvalId: string, actor: string, actorSurface = 'operator', note?: string): Promise<SharedApprovalRecord | null> => services.approvalBroker.cancelApproval(approvalId, actor, actorSurface, note),
     update: (approvalId: string, input: {
       readonly actor: string;
       readonly actorSurface?: string;
       readonly note?: string;
       readonly metadata?: Record<string, unknown>;
-    }): Promise<SharedApprovalRecord | null> => services.coordination.approvalBroker.recordRemoteUpdate(approvalId, input),
+    }): Promise<SharedApprovalRecord | null> => services.approvalBroker.recordRemoteUpdate(approvalId, input),
   } satisfies OperatorApprovalsClient;
 
   const providers = {
     listIds: (): readonly string[] => services.readModels.providers.getSnapshot().providerIds,
-    runtimeSnapshots: (): Promise<readonly ProviderRuntimeSnapshot[]> => listProviderRuntimeSnapshots(services.providers.providerRegistry),
-    runtimeSnapshot: (providerId: string): Promise<ProviderRuntimeSnapshot | null> => getProviderRuntimeSnapshot(services.providers.providerRegistry, providerId),
-    usageSnapshot: (providerId: string): Promise<ProviderUsageSnapshot | null> => getProviderUsageSnapshot(services.providers.providerRegistry, providerId),
+    runtimeSnapshots: (): Promise<readonly ProviderRuntimeSnapshot[]> => listProviderRuntimeSnapshots(services.providerRegistry),
+    runtimeSnapshot: (providerId: string): Promise<ProviderRuntimeSnapshot | null> => getProviderRuntimeSnapshot(services.providerRegistry, providerId),
+    usageSnapshot: (providerId: string): Promise<ProviderUsageSnapshot | null> => getProviderUsageSnapshot(services.providerRegistry, providerId),
     accountSnapshot: (): Promise<ProviderAccountSnapshot> => buildProviderAccountSnapshot({
-      providerRegistry: services.providers.providerRegistry,
-      serviceRegistry: services.platform.serviceRegistry,
-      subscriptionManager: services.platform.subscriptionManager,
-      secretsManager: services.platform.secretsManager,
+      providerRegistry: services.providerRegistry,
+      serviceRegistry: services.serviceRegistry,
+      subscriptionManager: services.subscriptionManager,
+      secretsManager: services.secretsManager,
     }),
     authInspection: (): Promise<AuthInspectionSnapshot> => buildAuthInspectionSnapshot({
-      serviceRegistry: services.platform.serviceRegistry,
-      subscriptionManager: services.platform.subscriptionManager,
-      secretsManager: services.platform.secretsManager,
+      serviceRegistry: services.serviceRegistry,
+      subscriptionManager: services.subscriptionManager,
+      secretsManager: services.secretsManager,
     }),
     snapshot: async (): Promise<OperatorProvidersSnapshot> => {
       const [runtimeSnapshots, accountSnapshot, authInspection] = await Promise.all([
-        listProviderRuntimeSnapshots(services.providers.providerRegistry),
+        listProviderRuntimeSnapshots(services.providerRegistry),
         buildProviderAccountSnapshot({
-          providerRegistry: services.providers.providerRegistry,
-          serviceRegistry: services.platform.serviceRegistry,
-          subscriptionManager: services.platform.subscriptionManager,
-          secretsManager: services.platform.secretsManager,
+          providerRegistry: services.providerRegistry,
+          serviceRegistry: services.serviceRegistry,
+          subscriptionManager: services.subscriptionManager,
+          secretsManager: services.secretsManager,
         }),
         buildAuthInspectionSnapshot({
-          serviceRegistry: services.platform.serviceRegistry,
-          subscriptionManager: services.platform.subscriptionManager,
-          secretsManager: services.platform.secretsManager,
+          serviceRegistry: services.serviceRegistry,
+          subscriptionManager: services.subscriptionManager,
+          secretsManager: services.secretsManager,
         }),
       ]);
       return {
@@ -230,6 +230,6 @@ export function createOperatorClient(services: UiRuntimeServices): OperatorClien
     providers,
     controlPlane,
     events: services.events,
-    shellPaths: services.environment.shellPaths,
+    shellPaths: services.shellPaths,
   });
 }

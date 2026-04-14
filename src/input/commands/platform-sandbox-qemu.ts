@@ -10,6 +10,7 @@ import {
   scaffoldSandboxQemuSetupBundle,
 } from '../../runtime/sandbox/provisioning.ts';
 import { requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export async function handleSandboxQemuCommand(args: string[], ctx: CommandContext): Promise<boolean> {
   const shellPaths = requireShellPaths(ctx);
@@ -72,7 +73,7 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
         '  next: boot the image, run the guest bootstrap script, then /sandbox guest-test eval-js',
       ].join('\n'));
     } catch (error) {
-      ctx.print(error instanceof Error ? error.message : String(error));
+      ctx.print(summarizeError(error));
     }
     return true;
   }
@@ -89,7 +90,7 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       ctx.platform.configManager.setDynamic('sandbox.vmBackend', 'qemu');
       ctx.print(`Created QEMU image ${created.path} (${created.sizeGb}G).`);
     } catch (error) {
-      ctx.print(error instanceof Error ? error.message : String(error));
+      ctx.print(summarizeError(error));
     }
     return true;
   }

@@ -1,6 +1,7 @@
 import { mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -89,7 +90,7 @@ export class TelemetryDB {
       this.ready = true;
     } catch (err) {
       logger.error('TelemetryDB: failed to initialize', {
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
       throw err;
     }
@@ -262,7 +263,7 @@ export class TelemetryDB {
       return true;
     } catch (err) {
       logger.error('TelemetryDB: failed to save', {
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
       return false;
     }

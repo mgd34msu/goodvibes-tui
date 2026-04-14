@@ -9,6 +9,7 @@ import type { ProfileInfo, ProfileData, ProfileManager } from '../profiles/manag
 import { logger } from '../utils/logger.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import type { ConfigKey } from '../config/schema.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Known display setting keys (subset of ConfigKey that maps to display.*). */
 const DISPLAY_KEYS: ConfigKey[] = [
@@ -37,7 +38,7 @@ function applyProfileCategory(
     if (field && Object.prototype.hasOwnProperty.call(data, field)) {
       try {
         cm.setDynamic(key, data[field]);
-      } catch (e) { logger.debug('applyProfileCategory: key set failed', { key, error: String(e) }); }
+      } catch (e) { logger.debug('applyProfileCategory: key set failed', { key, error: summarizeError(e) }); }
     }
   }
 }
@@ -119,10 +120,10 @@ export class ProfilePickerModal {
       // Apply provider settings (model + reasoningEffort only)
       if (data.provider) {
         if (data.provider.model !== undefined) {
-          try { configManager.set('provider.model', data.provider.model); } catch (e) { logger.debug('profile: model set failed', { error: String(e) }); }
+          try { configManager.set('provider.model', data.provider.model); } catch (e) { logger.debug('profile: model set failed', { error: summarizeError(e) }); }
         }
         if (data.provider.reasoningEffort !== undefined) {
-          try { configManager.set('provider.reasoningEffort', data.provider.reasoningEffort); } catch (e) { logger.debug('profile: reasoningEffort set failed', { error: String(e) }); }
+          try { configManager.set('provider.reasoningEffort', data.provider.reasoningEffort); } catch (e) { logger.debug('profile: reasoningEffort set failed', { error: summarizeError(e) }); }
         }
       }
 
@@ -135,7 +136,7 @@ export class ProfilePickerModal {
       this.statusMessage = `Loaded profile: ${profile.name}`;
       return true;
     } catch (e) {
-      this.statusMessage = `Error: ${(e as Error).message}`;
+      this.statusMessage = `Error: ${summarizeError(e)}`;
       return false;
     }
   }
@@ -170,7 +171,7 @@ export class ProfilePickerModal {
       return true;
     } catch (e) {
       this.deleteConfirmationTarget = null;
-      this.statusMessage = `Error: ${(e as Error).message}`;
+      this.statusMessage = `Error: ${summarizeError(e)}`;
       return false;
     }
   }
@@ -203,7 +204,7 @@ export class ProfilePickerModal {
       this._clampScroll();
       return true;
     } catch (e) {
-      this.statusMessage = `Error: ${(e as Error).message}`;
+      this.statusMessage = `Error: ${summarizeError(e)}`;
       return false;
     }
   }

@@ -22,6 +22,7 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   type AgentDisplayRow as DisplayRow,
   type AgentInspectorEntryKind as EntryKind,
@@ -452,7 +453,7 @@ export class AgentInspectorPanel extends BasePanel {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== 'ENOENT') {
-        logger.debug('AgentInspectorPanel: failed to load session log', { error: String(err) });
+        logger.debug('AgentInspectorPanel: failed to load session log', { error: summarizeError(err) });
       }
       this.timeline = [];
     }

@@ -4,6 +4,75 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.2] — 2026-04-13
+
+### Panel Navigation And Global Shortcut Recovery
+
+- Restored the intended panel workspace navigation model so `Tab` swaps focus between the prompt and panel area while `Ctrl+P`, `Ctrl+[`, and `Ctrl+]` remain the global panel workspace controls
+- Fixed extended-keyboard punctuation decoding and shortcut routing so `Ctrl+[`, `Ctrl+]`, and other punctuation-based global bindings continue to work even when panel focus is active
+- Corrected global `Ctrl+C` handling so prompt content clears first and empty-prompt cancel or exit behavior still works consistently from input, panel, and modal focus states
+
+### Verification
+
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test`
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
+## [0.18.1] — 2026-04-13
+
+### Conversation Follow-Ups And Panel Workspace UX
+
+- Added lightweight assistant follow-up acknowledgements in the main conversation for agent completion/failure, cohort completion, and WRFC pass/fail milestones instead of forcing users to infer those transitions from secondary surfaces
+- Reworked the panel workspace around retained preloaded panels, a workspace tab strip, clearer system-message presentation, and startup prewarming so important panel data is already loaded before the panel is opened
+- Updated panel workspace behavior so `Tab` swaps focus between the prompt and panel area while `Ctrl+P`, `Ctrl+[`, and `Ctrl+]` remain global workspace controls
+
+### Input Routing And Shortcut Reliability
+
+- Fixed extended-keyboard decoding and shortcut routing so global controls continue to work while panel focus is active, including correct handling for `Ctrl+[`, `Ctrl+]`, and prompt/panel focus transitions
+- Fixed `Ctrl+C` so it is truly global across the shell: if the prompt has content it clears it first, otherwise it falls through to generation cancel and exit-notice behavior regardless of panel or modal focus
+- Corrected feed-path state synchronization so imperative shortcut handlers no longer lose prompt, focus, or modal state changes when the input context is written back after a token pass
+
+### Verification
+
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test`
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
+## [0.18.0] — 2026-04-13
+
+### Provider Routing And WRFC Reliability
+
+- Fixed explicit-provider routing so reviewer and fixer flows stay pinned to the selected concrete provider instead of falling through to another provider that happens to expose the same model id
+- Added provider request and stream-phase diagnostics so provider-boundary failures preserve upstream request ids, provider codes, and routing context instead of collapsing into misleading local errors
+- Tightened WRFC reviewer payload shaping so review tasks carry compact structured context rather than unnecessarily large embedded engineer reports
+
+### Descriptive Errors And Telemetry Foundation
+
+- Reworked the shared error model so provider, daemon, transport, and automation failures now preserve structured categories, sources, guidance, retry hints, request ids, and upstream metadata instead of flattening to raw status text
+- Added a first-class telemetry API with snapshot, events, errors, traces, metrics, SSE streaming, and OTLP-shaped export documents, with safe-by-default redaction and elevated raw access controls
+- Normalized the daemon’s dynamic JSON error responses around the same structured error surface so external consumers can reason about failures without string-matching ad hoc messages
+
+### SDK-Facing Control-Plane Contract Hardening
+
+- Added typed telemetry DTOs to the operator contract, method catalog, and checked-in foundation artifacts so future SDK generators can consume stable telemetry schemas rather than infer them from route behavior
+- Added public current-principal/auth-introspection endpoints and transport support so SDK consumers can inspect effective auth mode, scopes, and operator identity through the same contract surface they use for product APIs
+- Extended release-gate and transport coverage around the new telemetry and control-plane auth surfaces so the contract stays frozen as the server and foundation layers evolve
+
+### Verification
+
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test`
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.17.4] — 2026-04-13
 
 ### Final Domain Splits For Shell, Runtime Views, And Server Composition

@@ -2,6 +2,7 @@ import { logger } from '../utils/logger.ts';
 import type { AutomationDeliveryManager } from './delivery-manager.ts';
 import type { AutomationJob } from './jobs.ts';
 import type { AutomationRun } from './runs.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 interface AutomationFailureFollowUpContext {
   readonly jobs: Map<string, AutomationJob>;
@@ -65,7 +66,7 @@ export function scheduleAutomationFailureFollowUp(
         jobId: latestJob.id,
         runId: run.id,
         attempt: run.attempt + 1,
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
     });
   }, Math.max(1_000, job.failure.cooldownMs));
@@ -95,7 +96,7 @@ export function maybeDeliverAutomationFailureNotice(
     logger.warn('AutomationManager: failure notice delivery failed', {
       jobId: job.id,
       runId: run.id,
-      error: error instanceof Error ? error.message : String(error),
+      error: summarizeError(error),
     });
   });
 }
@@ -129,7 +130,7 @@ export function maybeDeliverAutomationRun(
       logger.warn('AutomationManager: delivery failed', {
         runId: run.id,
         jobId: job.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
     })
     .finally(() => {

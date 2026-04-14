@@ -17,6 +17,7 @@ import { ConfigManager } from './manager.ts';
 import type { GoodVibesConfig } from './schema.ts';
 import { SecretsManager } from './secrets.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export function getConfigSnapshot(configManager: Pick<ConfigManager, 'getRaw'>): Readonly<GoodVibesConfig> {
   return configManager.getRaw();
@@ -48,7 +49,7 @@ export function getConfiguredSystemPrompt(configManager: Pick<ConfigManager, 'ge
   try {
     return readFileSync(file, 'utf-8');
   } catch (err) {
-    logger.debug('systemPrompt file read failed (non-fatal)', { file, error: String(err) });
+    logger.debug('systemPrompt file read failed (non-fatal)', { file, error: summarizeError(err) });
     return undefined;
   }
 }

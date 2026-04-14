@@ -1,9 +1,7 @@
-import OpenAI from 'openai';
 import type { ProviderCapability } from './capabilities.ts';
 import type {
   ChatRequest,
   ChatResponse,
-  ContentPart,
   LLMProvider,
   PartialToolCall,
   ProviderEmbeddingRequest,
@@ -16,49 +14,30 @@ import type { ToolCall, ToolDefinition } from '../types/tools.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
-
-type ResponsesInputItem =
-  | { role: 'user'; content: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string; detail: 'auto' }> }
-  | { type: 'message'; role: 'assistant'; content: Array<{ type: 'output_text'; text: string; annotations: [] }>; status: 'completed'; id: string }
-  | { type: 'function_call'; id: string; call_id: string; name: string; arguments: string }
-  | { type: 'function_call_output'; call_id: string; output: string };
-
-type NativeChatOutputItem =
-  | { type: 'message'; content?: string }
-  | { type: 'reasoning'; content?: string }
-  | { type: 'tool_call'; tool?: string; arguments?: Record<string, unknown> }
-  | { type: 'invalid_tool_call'; reason?: string };
-
-type NativeChatResult = {
-  output?: NativeChatOutputItem[];
-  stats?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    total_output_tokens?: number;
-  };
-  response_id?: string;
-};
-
-type NativeChatContext = {
-  input: string | Array<Record<string, unknown>>;
-  previousResponseId?: string;
-};
-
-type LMStudioResponsesStream = AsyncIterable<unknown> & {
-  finalResponse?: () => Promise<Record<string, unknown>>;
-};
-
-type LMStudioResponsesClient = {
-  create(
-    params: Record<string, unknown>,
-    options?: { signal?: AbortSignal },
-  ): Promise<LMStudioResponsesStream>;
-};
-
-type NativeFetch = (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) => Promise<Response>;
+import {
+  buildHttpError,
+  buildResponsesInput,
+  buildResponsesReasoning,
+  buildResponsesTools,
+  consumeSSE,
+  createResponsesClient,
+  deriveNativeChatUrl,
+  extractNativeMessageText,
+  type LMStudioResponsesClient,
+  type LMStudioResponsesStream,
+  makeTranscriptKey,
+  mapNativeReasoningEffort,
+  mapResponsesStopReason,
+  type NativeChatContext,
+  type NativeChatResult,
+  type NativeFetch,
+  normalizeProviderError,
+  parseJsonObject,
+  shouldFallbackFromNative,
+  shouldFallbackFromResponses,
+  toNativeChatInput,
+  toRecord,
+} from './lm-studio-helpers.ts';
 
 export interface LMStudioProviderOptions extends OpenAICompatOptions {
   nativeFetch?: NativeFetch;
@@ -100,7 +79,7 @@ export class LMStudioProvider implements LLMProvider {
           return await this.chatViaNativeChat(params, model, nativeContext);
         } catch (err: unknown) {
           if (!shouldFallbackFromNative(err)) {
-            throw normalizeProviderError(err);
+            throw normalizeProviderError(err, this.name, 'chat', 'request');
           }
         }
       }
@@ -109,7 +88,7 @@ export class LMStudioProvider implements LLMProvider {
         return await this.chatViaResponses(params, model);
       } catch (err: unknown) {
         if (!shouldFallbackFromResponses(err)) {
-          throw normalizeProviderError(err);
+          throw normalizeProviderError(err, this.name, 'chat', 'request');
         }
       }
 
@@ -119,7 +98,12 @@ export class LMStudioProvider implements LLMProvider {
 
   async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
     if (!this.fallbackProvider.embed) {
-      throw new ProviderError('LM Studio fallback provider does not support embeddings.', 501);
+      throw new ProviderError('LM Studio fallback provider does not support embeddings.', {
+        statusCode: 501,
+        provider: this.name,
+        operation: 'embed',
+        phase: 'response',
+      });
     }
     return this.fallbackProvider.embed(request);
   }
@@ -238,14 +222,19 @@ export class LMStudioProvider implements LLMProvider {
         signal: params.signal,
       });
     } catch (err: unknown) {
-      throw normalizeProviderError(err);
+      throw normalizeProviderError(err, this.name, 'chat', 'request');
     }
 
     if (!response.ok) {
-      throw await buildHttpError('LM Studio native chat', response);
+      throw await buildHttpError('LM Studio native chat', response, this.name, 'chat', 'request');
     }
     if (!response.body) {
-      throw new ProviderError('LM Studio native chat returned no response body.', 502);
+      throw new ProviderError('LM Studio native chat returned no response body.', {
+        statusCode: 502,
+        provider: this.name,
+        operation: 'chat',
+        phase: 'response',
+      });
     }
 
     let text = '';
@@ -275,9 +264,19 @@ export class LMStudioProvider implements LLMProvider {
           const record = error as Record<string, unknown>;
           const message = typeof record['message'] === 'string' ? record['message'] : 'Unknown LM Studio streaming error';
           const code = typeof record['code'] === 'string' ? `${record['code']}: ` : '';
-          streamedError = new ProviderError(`LM Studio native chat error: ${code}${message}`, 400);
+          streamedError = new ProviderError(`LM Studio native chat error: ${code}${message}`, {
+            statusCode: 400,
+            provider: this.name,
+            operation: 'chat',
+            phase: 'stream',
+          });
         } else {
-          streamedError = new ProviderError('LM Studio native chat returned a streaming error.', 400);
+          streamedError = new ProviderError('LM Studio native chat returned a streaming error.', {
+            statusCode: 400,
+            provider: this.name,
+            operation: 'chat',
+            phase: 'stream',
+          });
         }
         return;
       }
@@ -296,7 +295,12 @@ export class LMStudioProvider implements LLMProvider {
 
     if (streamedError) throw streamedError;
     if (!finalResult) {
-      throw new ProviderError('LM Studio native chat stream ended without a final result.', 502);
+      throw new ProviderError('LM Studio native chat stream ended without a final result.', {
+        statusCode: 502,
+        provider: this.name,
+        operation: 'chat',
+        phase: 'stream',
+      });
     }
 
     if (!text) {
@@ -337,7 +341,7 @@ export class LMStudioProvider implements LLMProvider {
     try {
       stream = await this.responsesClient.create(body, { signal: params.signal });
     } catch (err: unknown) {
-      throw normalizeProviderError(err);
+      throw normalizeProviderError(err, this.name, 'chat', 'request');
     }
 
     let text = '';
@@ -450,7 +454,12 @@ export class LMStudioProvider implements LLMProvider {
         const error = toRecord(failed['error']);
         const code = typeof error['code'] === 'string' ? `${error['code']}: ` : '';
         const message = typeof error['message'] === 'string' ? error['message'] : 'Unknown failure';
-        throw new ProviderError(`LM Studio Responses error: ${code}${message}`, 400);
+        throw new ProviderError(`LM Studio Responses error: ${code}${message}`, {
+          statusCode: 400,
+          provider: this.name,
+          operation: 'chat',
+          phase: 'stream',
+        });
       }
     }
 
@@ -472,294 +481,4 @@ export class LMStudioProvider implements LLMProvider {
 
     return response;
   }
-}
-
-function createResponsesClient(
-  baseURL: string,
-  apiKey: string,
-  defaultHeaders: Record<string, string> | undefined,
-): LMStudioResponsesClient {
-  const client = new OpenAI({
-    apiKey,
-    baseURL,
-    ...(defaultHeaders ? { defaultHeaders } : {}),
-  });
-  return {
-    create: (params, options) => client.responses.create(params as never, options) as unknown as Promise<LMStudioResponsesStream>,
-  };
-}
-
-function deriveNativeChatUrl(baseURL: string): string {
-  const trimmed = baseURL.replace(/\/+$/, '');
-  const origin = trimmed.endsWith('/v1') ? trimmed.slice(0, -3) : trimmed;
-  return `${origin}/api/v1/chat`;
-}
-
-function toNativeChatInput(content: string | ContentPart[]): string | Array<Record<string, unknown>> {
-  if (!Array.isArray(content)) return content;
-  return content.map((part) => (
-    part.type === 'text'
-      ? { type: 'message', content: part.text }
-      : { type: 'image', data_url: `data:${part.mediaType};base64,${part.data}` }
-  ));
-}
-
-function buildResponsesTools(tools?: ToolDefinition[]): Array<Record<string, unknown>> | undefined {
-  if (!tools || tools.length === 0) return undefined;
-  return tools.map((tool) => ({
-    type: 'function',
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters,
-    strict: false,
-  }));
-}
-
-function buildResponsesInput(messages: ProviderMessage[]): ResponsesInputItem[] {
-  const input: ResponsesInputItem[] = [];
-  let assistantIndex = 0;
-
-  for (const message of messages) {
-    if (message.role === 'user') {
-      if (Array.isArray(message.content)) {
-        input.push({
-          role: 'user',
-          content: message.content.map((part) => (
-            part.type === 'text'
-              ? { type: 'input_text', text: part.text }
-              : { type: 'input_image', image_url: `data:${part.mediaType};base64,${part.data}`, detail: 'auto' }
-          )),
-        });
-      } else {
-        input.push({
-          role: 'user',
-          content: [{ type: 'input_text', text: message.content }],
-        });
-      }
-      continue;
-    }
-
-    if (message.role === 'assistant') {
-      if (message.content) {
-        input.push({
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'output_text', text: message.content, annotations: [] }],
-          status: 'completed',
-          id: `msg_${assistantIndex++}`,
-        });
-      }
-      for (const toolCall of message.toolCalls ?? []) {
-        input.push({
-          type: 'function_call',
-          id: `fc_${toolCall.id}`,
-          call_id: toolCall.id,
-          name: toolCall.name,
-          arguments: JSON.stringify(toolCall.arguments),
-        });
-      }
-      continue;
-    }
-
-    input.push({
-      type: 'function_call_output',
-      call_id: message.callId,
-      output: message.content,
-    });
-  }
-
-  return input;
-}
-
-function buildResponsesReasoning(
-  reasoningEffort: ChatRequest['reasoningEffort'],
-): Record<string, unknown> | undefined {
-  if (!reasoningEffort || reasoningEffort === 'instant') return undefined;
-  return { effort: reasoningEffort, summary: 'auto' };
-}
-
-function mapNativeReasoningEffort(
-  reasoningEffort: ChatRequest['reasoningEffort'],
-): 'off' | 'low' | 'medium' | 'high' | undefined {
-  switch (reasoningEffort) {
-    case 'instant':
-      return 'off';
-    case 'low':
-    case 'medium':
-    case 'high':
-      return reasoningEffort;
-    default:
-      return undefined;
-  }
-}
-
-function mapResponsesStopReason(
-  status: string | undefined,
-  toolCalls: ToolCall[],
-): ChatResponse['stopReason'] {
-  if (toolCalls.length > 0 && status === 'completed') return 'tool_use';
-  if (status === 'incomplete') return 'max_tokens';
-  if (status === 'failed' || status === 'cancelled') return 'error';
-  return 'end';
-}
-
-function extractNativeMessageText(output: NativeChatOutputItem[] | undefined): string {
-  if (!Array.isArray(output)) return '';
-  return output
-    .filter((item): item is Extract<NativeChatOutputItem, { type: 'message' }> => item.type === 'message')
-    .map((item) => item.content ?? '')
-    .join('');
-}
-
-async function consumeSSE(
-  body: ReadableStream<Uint8Array>,
-  onEvent: (eventType: string, payload: Record<string, unknown>) => void,
-): Promise<void> {
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let currentEvent = '';
-  let currentData: string[] = [];
-
-  const flush = (): void => {
-    if (!currentEvent || currentData.length === 0) {
-      currentEvent = '';
-      currentData = [];
-      return;
-    }
-    const rawPayload = currentData.join('\n').trim();
-    currentEvent = currentEvent.trim();
-    currentData = [];
-    if (!rawPayload || rawPayload === '[DONE]') {
-      currentEvent = '';
-      return;
-    }
-    const payload = JSON.parse(rawPayload) as Record<string, unknown>;
-    const eventType = currentEvent;
-    currentEvent = '';
-    onEvent(eventType, payload);
-  };
-
-  for await (const chunk of body) {
-    buffer += decoder.decode(chunk, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line) {
-        flush();
-        continue;
-      }
-      if (line.startsWith('event:')) {
-        currentEvent = line.slice('event:'.length).trim();
-        continue;
-      }
-      if (line.startsWith('data:')) {
-        currentData.push(line.slice('data:'.length).trim());
-      }
-    }
-  }
-
-  buffer += decoder.decode();
-  if (buffer) {
-    const lines = buffer.split(/\r?\n/);
-    for (const line of lines) {
-      if (!line) {
-        flush();
-        continue;
-      }
-      if (line.startsWith('event:')) {
-        currentEvent = line.slice('event:'.length).trim();
-        continue;
-      }
-      if (line.startsWith('data:')) {
-        currentData.push(line.slice('data:'.length).trim());
-      }
-    }
-  }
-  flush();
-}
-
-async function buildHttpError(prefix: string, response: Response): Promise<ProviderError> {
-  const text = await response.text();
-  try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    const error = toRecord(parsed['error']);
-    if (Object.keys(error).length > 0) {
-      const code = typeof error['code'] === 'string' ? `${error['code']}: ` : '';
-      const message = typeof error['message'] === 'string' ? error['message'] : text;
-      return new ProviderError(`${prefix} error ${response.status}: ${code}${message}`, response.status);
-    }
-  } catch {
-    // fall through to raw body
-  }
-  return new ProviderError(`${prefix} error ${response.status}: ${text || response.statusText}`, response.status);
-}
-
-function makeTranscriptKey(
-  model: string,
-  systemPrompt: string | undefined,
-  messages: ProviderMessage[],
-): string {
-  return stableStringify({
-    model,
-    ...(systemPrompt ? { systemPrompt } : {}),
-    messages,
-  });
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
-  const record = value as Record<string, unknown>;
-  const keys = Object.keys(record).sort();
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`;
-}
-
-function parseJsonObject(raw: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // ignore malformed arguments
-  }
-  return {};
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
-}
-
-function shouldFallbackFromNative(err: unknown): boolean {
-  const status = getErrorStatus(err);
-  const message = getErrorMessage(err);
-  if (status === 404 || status === 405 || status === 501) return true;
-  if (status === 400 && /previous_response_id|response_id/i.test(message)) return true;
-  return /not implemented|unsupported|unknown endpoint/i.test(message);
-}
-
-function shouldFallbackFromResponses(err: unknown): boolean {
-  const status = getErrorStatus(err);
-  const message = getErrorMessage(err);
-  if (status === 404 || status === 405 || status === 501) return true;
-  return /not implemented|unsupported|unknown endpoint/i.test(message);
-}
-
-function getErrorStatus(err: unknown): number | undefined {
-  if (err && typeof err === 'object') {
-    const record = err as { status?: unknown; statusCode?: unknown };
-    if (typeof record.status === 'number') return record.status;
-    if (typeof record.statusCode === 'number') return record.statusCode;
-  }
-  return undefined;
-}
-
-function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
-function normalizeProviderError(err: unknown): ProviderError {
-  if (err instanceof ProviderError) return err;
-  const status = getErrorStatus(err);
-  return new ProviderError(getErrorMessage(err), status);
 }

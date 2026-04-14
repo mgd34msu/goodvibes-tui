@@ -15,6 +15,7 @@ import type { PluginLoaderDeps } from '../../plugins/loader.ts';
 import type { LoadedPlugin } from '../../plugins/loader.ts';
 import type { PluginHealthCheckResult, PluginManifestV2 } from './types.ts';
 import type { PluginLifecycleManager } from './manager.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /**
  * Options for a single plugin hot-reload operation.
@@ -124,7 +125,7 @@ export async function runHotReload(
     mutableRecord.reloading = true;
     logger.debug(`[plugin-hot-reload] ${name}: phase 1/6 quiesced`);
   } catch (err) {
-    return failure('quiesce', String(err), startTs);
+    return failure('quiesce', summarizeError(err), startTs);
   }
 
   // ── Phase 2: Prepare unregister ──────────────────────────────────────────
@@ -142,7 +143,7 @@ export async function runHotReload(
     options.removeLoadedPlugin(name);
     logger.debug(`[plugin-hot-reload] ${name}: phase 3/6 unloaded`);
   } catch (err) {
-    return failure('unload', String(err), startTs);
+    return failure('unload', summarizeError(err), startTs);
   }
 
   // ── Phase 4 + 5: Reload + Re-register ──────────────────────────────────
@@ -158,7 +159,7 @@ export async function runHotReload(
     options.storeLoadedPlugin(name, reloadedPlugin);
     logger.debug(`[plugin-hot-reload] ${name}: phases 4+5/6 reloaded + re-registered`);
   } catch (err) {
-    return failure('reload', String(err), startTs);
+    return failure('reload', summarizeError(err), startTs);
   }
 
   // ── Phase 6: Health check ────────────────────────────────────────────────
@@ -173,7 +174,7 @@ export async function runHotReload(
   } catch (err) {
     healthResult = {
       healthy: false,
-      message: String(err),
+      message: summarizeError(err),
       durationMs: Date.now() - startTs,
     };
   }

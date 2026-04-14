@@ -27,7 +27,7 @@ const PARALLELISM_WORDS = /\b(agent|parallel|phase|step|stage|pipeline|batch|con
 
 const FILE_REFERENCES = /(\.ts|\.[jt]sx?|\.py|\.go|\.rs|\.json|\.yaml|\.yml|\.toml|\.md|\.sh|\bfile\b|\bfolder\b|\bdirectory\b|\bdir\b|src\/|lib\/|app\/|test\/|pkg\/)/i;
 
-const DELIVERABLE_SEPARATORS = /\band\b|;|\n-\s|\n\*\s|\n\d+\.\s/;
+const DELIVERABLE_SEPARATORS = /\band\b.+\band\b|;|\n-\s|\n\*\s|\n\d+\.\s/i;
 
 // Multiple sentences: two or more sentence-ending punctuation marks (. ! ?) followed by whitespace + capital
 const MULTI_SENTENCE = /[.!?][\s]+[A-Z].*[.!?][\s]+[A-Z]/;

@@ -1,5 +1,6 @@
 import { GitService } from '../git/service.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Git state shown in the header bar. */
 export interface GitHeaderInfo {
@@ -41,7 +42,7 @@ export class GitStatusProvider {
         }
       });
     } else if (!this.fetching) {
-      this._fetch().catch(err => { logger.debug('GitStatusProvider: background refresh failed', { error: String(err) }); });
+      this._fetch().catch(err => { logger.debug('GitStatusProvider: background refresh failed', { error: summarizeError(err) }); });
     }
     return this.cache;
   }

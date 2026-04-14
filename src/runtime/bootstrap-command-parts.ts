@@ -41,6 +41,7 @@ import type { BootstrapCommandShellServices } from './shell-command-services.ts'
 import type { OperatorClient } from './operator-client.ts';
 import type { PeerClient } from './peer-client.ts';
 import type { DirectTransport } from './transports/direct.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export type BootstrapCommandSessionSection = CommandContext['session'];
 export type BootstrapCommandProviderSection = CommandContext['provider'];
@@ -203,7 +204,7 @@ export function createBootstrapCommandActions(
           : '';
         conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}${ctxNote}`, { fg: '135' });
       } catch (e) {
-        conversation.log(`Error switching model: ${(e as Error).message}`, { fg: '#ef4444' });
+        conversation.log(`Error switching model: ${summarizeError(e)}`, { fg: '#ef4444' });
       }
       completeModelSelectionSideEffect?.();
       requestRender();

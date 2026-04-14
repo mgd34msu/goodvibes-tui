@@ -479,7 +479,25 @@ export class InputHandler {
 
     this.requestRender = bufferedRequestRender;
     try {
-      const context = {
+      let context!: import('./handler-feed.ts').InputFeedContext;
+      const syncFeedContextFromHandler = (): void => {
+        context.prompt = this.prompt;
+        context.cursorPos = this.cursorPos;
+        context.commandMode = this.commandMode;
+        context.panelFocused = this.panelFocused;
+        context.indicatorFocused = this.indicatorFocused;
+        context.helpOverlayActive = this.helpOverlayActive;
+        context.helpScrollOffset = this.helpScrollOffset;
+        context.shortcutsOverlayActive = this.shortcutsOverlayActive;
+        context.shortcutsScrollOffset = this.shortcutsScrollOffset;
+        context.selectionCallback = this.selectionCallback;
+        context.nextPasteId = this.nextPasteId;
+        context.nextImageId = this.nextImageId;
+        context.mouseDownRow = this.mouseDownRow;
+        context.mouseDownCol = this.mouseDownCol;
+      };
+
+      context = {
         prompt: this.prompt,
         cursorPos: this.cursorPos,
         commandMode: this.commandMode,
@@ -524,16 +542,31 @@ export class InputHandler {
         scroll: this.scroll,
         requestRender: bufferedRequestRender,
         modalOpened: (name: string) => this.modalOpened(name),
-        handleEscape: () => this.handleEscape(),
+        handleEscape: () => {
+          this.handleEscape();
+          syncFeedContextFromHandler();
+        },
         handleCopy: () => this.handleCopy(),
-        handleCtrlC: () => this.handleCtrlC(),
+        handleCtrlC: () => {
+          this.handleCtrlC();
+          syncFeedContextFromHandler();
+        },
         handleBlockCopy: () => this.handleBlockCopy(),
         handleBookmark: () => this.handleBookmark(),
         handleBlockSave: () => this.handleBlockSave(),
         handleDiffApply: () => this.handleDiffApply(),
-        handleUndo: () => this.handleUndo(),
-        handleRedo: () => this.handleRedo(),
-        handlePaste: () => this.handlePaste(),
+        handleUndo: () => {
+          this.handleUndo();
+          syncFeedContextFromHandler();
+        },
+        handleRedo: () => {
+          this.handleRedo();
+          syncFeedContextFromHandler();
+        },
+        handlePaste: () => {
+          this.handlePaste();
+          syncFeedContextFromHandler();
+        },
         saveUndoState: () => this.saveUndoState(),
         ensureInputCursorVisible: (contentWidth?: number) => this.ensureInputCursorVisible(contentWidth),
         registerPaste: (content: string) => this.registerPaste(content),
@@ -749,8 +782,8 @@ export class InputHandler {
   private cyclePanelTab(direction: 'next' | 'prev'): void {
     const pm = this.uiServices.shell.panelManager;
     if (pm.isVisible()) {
-      if (direction === 'next') pm.nextPanel();
-      else pm.prevPanel();
+      if (direction === 'next') pm.nextWorkspaceTab();
+      else pm.prevWorkspaceTab();
       this.requestRender();
     }
   }

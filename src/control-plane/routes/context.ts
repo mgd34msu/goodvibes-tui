@@ -2,6 +2,7 @@ export type MaybeResponse = Response | Promise<Response>;
 
 export interface DaemonApiRouteHandlers {
   getStatus(): MaybeResponse;
+  getCurrentAuth(req: Request): MaybeResponse;
   getReview(): MaybeResponse;
   getIntegrationSession(): MaybeResponse;
   getIntegrationTasks(): MaybeResponse;
@@ -14,6 +15,15 @@ export interface DaemonApiRouteHandlers {
   getControlPlaneRecentEvents(limit: number): MaybeResponse;
   getControlPlaneMessages(): MaybeResponse;
   getControlPlaneClients(): MaybeResponse;
+  getTelemetrySnapshot(req: Request): MaybeResponse;
+  getTelemetryEvents(req: Request): MaybeResponse;
+  getTelemetryErrors(req: Request): MaybeResponse;
+  getTelemetryTraces(req: Request): MaybeResponse;
+  getTelemetryMetrics(req: Request): MaybeResponse;
+  createTelemetryEventStream(req: Request): MaybeResponse;
+  getTelemetryOtlpTraces(req: Request): MaybeResponse;
+  getTelemetryOtlpLogs(req: Request): MaybeResponse;
+  getTelemetryOtlpMetrics(req: Request): MaybeResponse;
   getGatewayMethods(url: URL): MaybeResponse;
   getGatewayEvents(url: URL): MaybeResponse;
   getGatewayMethod(methodId: string): MaybeResponse;

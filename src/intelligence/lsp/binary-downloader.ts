@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, chmodSync, unlinkSync, renameSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /** Platform + arch key for download URL resolution. */
 type PlatformKey = 'linux-x64' | 'linux-arm64' | 'darwin-x64' | 'darwin-arm64';
@@ -204,7 +205,7 @@ async function downloadBinary(binaryDir: string, name: string): Promise<string |
     logger.info(`BinaryDownloader: ${name} downloaded to ${destPath}`);
     return destPath;
   } catch (err) {
-    logger.debug(`BinaryDownloader: failed to download ${name}`, { error: String(err) });
+    logger.debug(`BinaryDownloader: failed to download ${name}`, { error: summarizeError(err) });
     // Clean up partial download
     const tmpPath = `${destPath}.tmp`;
     try { if (existsSync(tmpPath)) unlinkSync(tmpPath); } catch { /* ignore */ }
@@ -258,7 +259,7 @@ async function ensureGopls(binaryDir: string): Promise<string | null> {
 
     return null;
   } catch (err) {
-    logger.debug('BinaryDownloader: gopls install error', { error: String(err) });
+    logger.debug('BinaryDownloader: gopls install error', { error: summarizeError(err) });
     return null;
   }
 }

@@ -72,6 +72,23 @@ export type { BootstrapContext } from './bootstrap.ts';
 export { shutdownRuntime } from './lifecycle.ts';
 export { createUiRuntimeServices } from './ui-services.ts';
 export type { UiRuntimeServices } from './ui-services.ts';
+export {
+  createDirectTransportServices,
+  createOperatorClientServices,
+  createPeerClientDependencies,
+} from './foundation-services.ts';
+export type {
+  DirectTransportServicesOptions,
+  DirectTransportServices,
+  OperatorClientServicesOptions,
+  OperatorClientServices,
+  OperatorClientReadModels,
+} from './foundation-services.ts';
+export { createRuntimeFoundationClients } from './foundation-clients.ts';
+export type {
+  RuntimeFoundationClients,
+  RuntimeFoundationClientsOptions,
+} from './foundation-clients.ts';
 export { createOperatorClient } from './operator-client.ts';
 export type { OperatorClient } from './operator-client.ts';
 export { createPeerClient } from './peer-client.ts';
@@ -82,7 +99,7 @@ export { createRuntimeHookApi } from './runtime-hook-api.ts';
 export { createRuntimeMcpApi } from './runtime-mcp-api.ts';
 export { createRuntimeOpsApi } from './runtime-ops-api.ts';
 export type { OpsApi } from './ops-api.ts';
-export { createDirectTransport } from './transports/direct.ts';
+export { createDirectTransport, createDirectTransportFromServices } from './transports/direct.ts';
 export type { DirectTransport } from './transports/direct.ts';
 
 // Network

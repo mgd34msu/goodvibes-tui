@@ -32,6 +32,7 @@ import {
   type SandboxSessionRegistry,
 } from '../runtime/sandbox/session-registry.ts';
 import { resolveSandboxCommandPlan } from '../runtime/sandbox/backend.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 function compactEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   return Object.fromEntries(
@@ -112,7 +113,7 @@ export class McpRegistry {
           });
         }
       } catch (err) {
-        logger.info('McpRegistry: failed to list tools from server', { server: serverName, err: String(err) });
+        logger.info('McpRegistry: failed to list tools from server', { server: serverName, err: summarizeError(err) });
       }
     }
     return results;
@@ -188,10 +189,10 @@ export class McpRegistry {
         sessionId: '', timestamp: Date.now(),
         payload: { tool: qualifiedName, args },
       };
-      dispatcher.fire(postEvent).catch((err: unknown) => { logger.debug('Post:mcp:call hook error', { error: String(err) }); });
+      dispatcher.fire(postEvent).catch((err: unknown) => { logger.debug('Post:mcp:call hook error', { error: summarizeError(err) }); });
       return result;
     } catch (err) {
-      this.freshness.markFailed(parsed.serverName, err instanceof Error ? err.message : String(err));
+      this.freshness.markFailed(parsed.serverName, summarizeError(err));
       // Fail:mcp:call hook (fire-and-forget)
       const failEvent: HookEvent = {
         path: 'Fail:mcp:call',
@@ -199,7 +200,7 @@ export class McpRegistry {
         category: 'mcp',
         specific: 'call',
         sessionId: '', timestamp: Date.now(),
-        payload: { tool: qualifiedName, args, error: err instanceof Error ? err.message : String(err) },
+        payload: { tool: qualifiedName, args, error: summarizeError(err) },
       };
       dispatcher.fire(failEvent).catch((hookErr: unknown) => { logger.debug('Fail:mcp:call hook error', { error: String(hookErr) }); });
       throw err;
@@ -221,7 +222,7 @@ export class McpRegistry {
         sessionId: '', timestamp: Date.now(),
         payload: { server: name },
       };
-      dispatcher.fire(disconnectedEvent).catch((err: unknown) => { logger.debug('Lifecycle:mcp:disconnected hook error', { error: String(err) }); });
+      dispatcher.fire(disconnectedEvent).catch((err: unknown) => { logger.debug('Lifecycle:mcp:disconnected hook error', { error: summarizeError(err) }); });
     }
     await Promise.allSettled(
       Array.from(this.clients.values()).map((client) => client.disconnect()),
@@ -401,14 +402,14 @@ export class McpRegistry {
         sessionId: '', timestamp: Date.now(),
         payload: { server: name },
       };
-      this.hookDispatcher.fire(connectedEvent).catch((err: unknown) => { logger.debug('Lifecycle:mcp:connected hook error', { error: String(err) }); });
+      this.hookDispatcher.fire(connectedEvent).catch((err: unknown) => { logger.debug('Lifecycle:mcp:connected hook error', { error: summarizeError(err) }); });
     } catch (err) {
       if (sandboxSessionId) {
         this.sandboxSessions.stop(sandboxSessionId);
         this.sandboxSessionByServer.delete(name);
       }
-      this.freshness.markFailed(name, err instanceof Error ? err.message : String(err));
-      logger.error('McpRegistry: failed to connect server', { name, err: String(err) });
+      this.freshness.markFailed(name, summarizeError(err));
+      logger.error('McpRegistry: failed to connect server', { name, err: summarizeError(err) });
       // Don't register the client — it's not usable
     }
   }

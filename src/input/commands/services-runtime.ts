@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionAction, SelectionItem } from '../selection-modal.ts';
 import { openCommandPanel, requireServiceRegistry, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerServicesRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -163,7 +164,7 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
           writeFileSync(targetPath, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
           ctx.print(`Imported services config from ${sourcePath}`);
         } catch (error) {
-          ctx.print(`Failed to import services config: ${(error as Error).message}`);
+          ctx.print(`Failed to import services config: ${summarizeError(error)}`);
         }
         return;
       }

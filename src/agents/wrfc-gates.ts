@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { summarizeError } from '../utils/error-display.ts';
 
 export const WRFC_GATE_TIMEOUT_MS = 120_000;
 
@@ -63,7 +64,7 @@ export async function executeGateCommand(command: string): Promise<{ passed: boo
   } catch (error) {
     return {
       passed: false,
-      output: error instanceof Error ? error.message : String(error),
+      output: summarizeError(error),
     };
   }
 }

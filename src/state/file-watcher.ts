@@ -6,6 +6,7 @@ import type { FileStateCache } from './file-cache.ts';
 import type { ProjectIndex } from './project-index.ts';
 import type { HookDispatcher } from '../hooks/dispatcher.ts';
 import type { HookEvent } from '../hooks/types.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * Default paths to watch relative to project root.
@@ -121,11 +122,11 @@ export class FileWatcher {
 
     // Close all watchers
     for (const watcher of this.watchers.values()) {
-      try { watcher.close(); } catch (err) { logger.debug('FileWatcher: watcher close error', { error: String(err) }); }
+      try { watcher.close(); } catch (err) { logger.debug('FileWatcher: watcher close error', { error: summarizeError(err) }); }
     }
     this.watchers.clear();
     for (const [absPath, listener] of this.pollListeners) {
-      try { unwatchFile(absPath, listener); } catch (err) { logger.debug('FileWatcher: unwatchFile error', { absPath, error: String(err) }); }
+      try { unwatchFile(absPath, listener); } catch (err) { logger.debug('FileWatcher: unwatchFile error', { absPath, error: summarizeError(err) }); }
     }
     this.pollListeners.clear();
     this.watchedPaths.clear();
@@ -177,12 +178,12 @@ export class FileWatcher {
 
     const watcher = this.watchers.get(absPath);
     if (watcher) {
-      try { watcher.close(); } catch (err) { logger.debug('FileWatcher: watcher close error', { error: String(err) }); }
+      try { watcher.close(); } catch (err) { logger.debug('FileWatcher: watcher close error', { error: summarizeError(err) }); }
       this.watchers.delete(absPath);
     }
     const pollListener = this.pollListeners.get(absPath);
     if (pollListener) {
-      try { unwatchFile(absPath, pollListener); } catch (err) { logger.debug('FileWatcher: unwatchFile error', { absPath, error: String(err) }); }
+      try { unwatchFile(absPath, pollListener); } catch (err) { logger.debug('FileWatcher: unwatchFile error', { absPath, error: summarizeError(err) }); }
       this.pollListeners.delete(absPath);
     }
   }
@@ -222,7 +223,7 @@ export class FileWatcher {
       );
 
       watcher.on('error', (err) => {
-        logger.debug('FileWatcher: watcher error', { absPath, error: String(err) });
+        logger.debug('FileWatcher: watcher error', { absPath, error: summarizeError(err) });
         this.watchers.delete(absPath);
       });
 
@@ -238,7 +239,7 @@ export class FileWatcher {
         this.pollListeners.set(absPath, pollListener);
       }
     } catch (err) {
-      logger.debug('FileWatcher: failed to open watcher', { absPath, error: String(err) });
+      logger.debug('FileWatcher: failed to open watcher', { absPath, error: summarizeError(err) });
     }
   }
 
@@ -286,7 +287,7 @@ export class FileWatcher {
         payload: { filePath: absPath },
       };
       this.hookDispatcher.fire(event).catch((err) => {
-        logger.debug('FileWatcher: hook fire error', { absPath, error: String(err) });
+        logger.debug('FileWatcher: hook fire error', { absPath, error: summarizeError(err) });
       });
     }
   }

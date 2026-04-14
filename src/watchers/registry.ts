@@ -5,6 +5,7 @@ import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { WatcherKind, WatcherRecord, WatcherSourceStatus } from '../runtime/store/domains/watchers.ts';
 import type { AutomationSourceRecord } from '../automation/sources.ts';
 import type { WatcherSourceKind } from '../runtime/events/watchers.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   emitWatcherFailed,
   emitWatcherHeartbeat,
@@ -417,9 +418,9 @@ export class WatcherRegistry {
       const failed: WatcherRecord = this.normalizeRecord({
         ...watcher.record,
         state: 'failed',
-        lastError: error instanceof Error ? error.message : String(error),
+        lastError: summarizeError(error),
         sourceStatus: 'failed',
-        degradedReason: error instanceof Error ? error.message : String(error),
+        degradedReason: summarizeError(error),
       });
       this.watchers.set(id, { ...watcher, record: failed });
       this.persist();

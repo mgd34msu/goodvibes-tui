@@ -24,6 +24,7 @@ import type { ProviderCacheCapability } from './cache-capability.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import type { HelperModel } from '../config/helper-model.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Result of a strategy planning run. */
 export interface PlanResult {
@@ -94,7 +95,7 @@ export class CachePlanner {
         }
       } catch (err) {
         logger.debug('[CachePlanner] Helper planning failed, falling back to heuristic', {
-          error: String(err),
+          error: summarizeError(err),
         });
       }
     }
@@ -210,7 +211,7 @@ export class CachePlanner {
       };
     } catch (err) {
       logger.debug('[CachePlanner] Failed to parse helper response', {
-        error: String(err),
+        error: summarizeError(err),
         response: response.slice(0, 200),
       });
       return null;

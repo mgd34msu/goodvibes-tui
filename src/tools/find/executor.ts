@@ -9,6 +9,7 @@ import { executeStructuralQuery } from './structural.ts';
 import { executeSymbolsQuery } from './symbols.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
 import { FindRuntimeService } from './shared.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function createFindTool(
   projectRoot: string,
@@ -80,7 +81,7 @@ export function createFindTool(
       } catch (err) {
         return {
           success: false,
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
         };
       }
     },

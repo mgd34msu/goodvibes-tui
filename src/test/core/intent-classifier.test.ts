@@ -107,6 +107,11 @@ describe('classifyIntent', () => {
       expect(result.signals).toContain('multiple_deliverables');
     });
 
+    test('single coordinating "and" does not count as multiple deliverables', () => {
+      const result = classifyIntent('Update src/runtime/bootstrap.ts and preserve the existing shutdown flow.');
+      expect(result.signals).not.toContain('multiple_deliverables');
+    });
+
     test('file_references signal fires for .ts extension', () => {
       const result = classifyIntent('Refactor the auth.ts and session.ts modules');
       expect(result.signals).toContain('file_references');

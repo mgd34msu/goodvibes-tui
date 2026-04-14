@@ -17,6 +17,7 @@ import { loadBaseline, captureBaseline, formatBaselineComparison, writeBaseline 
 import type { EvalRegistry } from '../../panels/eval-panel.ts';
 import { formatSuiteResult, formatGateResult } from '../../runtime/eval/format.ts';
 import { requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ── Subcommand helpers ────────────────────────────────────────────────────────
 
@@ -146,7 +147,7 @@ async function handleGate(args: string[], context: CommandContext): Promise<void
       await writeBaseline(baselineFile, newBaseline, projectRoot);
       context.print(`[eval] Baseline saved to ${baselineFile}`);
     } catch (err) {
-      context.print(`[eval] Warning: could not save baseline: ${err instanceof Error ? err.message : String(err)}`);
+      context.print(`[eval] Warning: could not save baseline: ${summarizeError(err)}`);
     }
   }
 

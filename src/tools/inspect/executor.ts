@@ -1,4 +1,5 @@
 import type { ApiFramework, InspectInput } from './schema.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 import {
   createInspectFailure,
   createInspectSuccess,
@@ -176,7 +177,7 @@ export async function executeInspectMode(
         return createInspectFailure(`Unknown mode: ${input.mode}`);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return { success: false, error: `inspect (${input.mode}): ${message}` };
   }
 }

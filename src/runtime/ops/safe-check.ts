@@ -5,6 +5,7 @@
  * returning a structured failure result instead of throwing.
  */
 import type { DiagnosticCheckResult } from './types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /** @internal Run a check safely — never throws. */
 export async function safeCheck(
@@ -15,7 +16,7 @@ export async function safeCheck(
   } catch (err) {
     return {
       passed: false,
-      summary: `Check threw unexpectedly: ${err instanceof Error ? err.message : String(err)}`,
+      summary: `Check threw unexpectedly: ${summarizeError(err)}`,
       severity: 'error',
     };
   }

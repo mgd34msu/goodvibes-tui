@@ -12,6 +12,7 @@
  */
 import { FEATURE_FLAG_MAP } from './flags.ts';
 import type { FlagConfig, FlagState, FlagTransition, FeatureFlag } from './types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /** Subscriber callback type for flag state changes */
 export type FlagSubscriber = (
@@ -290,7 +291,7 @@ class FeatureFlagManagerImpl {
         // Subscribers must not crash the manager
         process.stderr.write(
           `[FeatureFlagManager] Subscriber error for flag "${flagId}": ${
-            err instanceof Error ? err.message : String(err)
+            summarizeError(err)
           }\n`,
         );
       }

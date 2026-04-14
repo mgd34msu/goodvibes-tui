@@ -4,6 +4,7 @@ import type { ReplaySnapshotInput } from '../../runtime/forensics/registry.ts';
 import { logger } from '../../utils/logger.ts';
 import { registerOperatorPanelCommand } from './operator-panel-runtime.ts';
 import { requireOpsApi, requireProfileManager, requireReplayEngine } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerOperatorRuntimeCommands(registry: CommandRegistry): void {
   registerOperatorPanelCommand(registry);
@@ -108,7 +109,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
         try {
           ctx.platform.configManager.setDynamic('behavior.hitlMode' as import('../../config/schema.ts').ConfigKey, newMode);
         } catch (e) {
-          logger.warn('[/mode] Failed to persist mode', { error: String(e) });
+          logger.warn('[/mode] Failed to persist mode', { error: summarizeError(e) });
         }
         const preset = mgr.getHITLPreset();
         ctx.print(`HITL mode set to: ${preset.name}\n${preset.description}`);
@@ -207,7 +208,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
           }
           ctx.print(`[Ops] Task ${taskId}: ${action} dispatched.`);
         } catch (e) {
-          ctx.print(`[Ops] Error: ${e instanceof Error ? e.message : String(e)}`);
+          ctx.print(`[Ops] Error: ${summarizeError(e)}`);
         }
         return;
       }
@@ -225,7 +226,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
           opsApi.agents.cancel(agentId, note);
           ctx.print(`[Ops] Agent ${agentId}: cancel dispatched.`);
         } catch (e) {
-          ctx.print(`[Ops] Error: ${(e as Error).message}`);
+          ctx.print(`[Ops] Error: ${summarizeError(e)}`);
         }
         return;
       }

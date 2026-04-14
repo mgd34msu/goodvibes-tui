@@ -5,6 +5,7 @@ import { compactMessages } from './context-compaction.ts';
 import type { CompactionContext } from './context-compaction.ts';
 import type { SessionMemoryStore } from './session-memory.ts';
 import type { SessionLineageTracker } from './session-lineage.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface ConversationCompactionHost {
   getMessageCount(): number;
@@ -60,7 +61,7 @@ export async function compactConversation(
       tokensSaved: saved,
     });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = summarizeError(err);
     logger.error('Compact failed', { error: msg });
     throw err;
   }

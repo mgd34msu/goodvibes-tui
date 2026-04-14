@@ -2,6 +2,7 @@ import type { HookChain, HookEvent, HookResult, ChainStep } from './types.ts';
 import type { HookDispatcher } from './dispatcher.ts';
 import { matchesEventPath } from './matcher.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Parse a duration string like "30s" or "5m" into milliseconds */
 function parseDuration(s: string): number {
@@ -225,7 +226,7 @@ export function safeEvaluate(condition: string, context: Record<string, unknown>
   } catch (err) {
     logger.error('ChainEngine: condition evaluation error', {
       condition,
-      error: err instanceof Error ? err.message : String(err),
+      error: summarizeError(err),
     });
     return false;
   }
@@ -320,7 +321,7 @@ export class ChainEngine {
               } catch (err) {
                 logger.error('ChainEngine: chain action error', {
                   chain: chain.name,
-                  error: err instanceof Error ? err.message : String(err),
+                  error: summarizeError(err),
                 });
               }
               this._resetState(chain.name);
@@ -328,7 +329,7 @@ export class ChainEngine {
           } catch (err) {
             logger.error('ChainEngine: debounce callback error', {
               chain: chain.name,
-              error: err instanceof Error ? err.message : String(err),
+              error: summarizeError(err),
             });
           }
         }, debounceMs);
@@ -349,9 +350,9 @@ export class ChainEngine {
         } catch (err) {
           logger.error('ChainEngine: chain action error', {
             chain: chain.name,
-            error: err instanceof Error ? err.message : String(err),
+            error: summarizeError(err),
           });
-          result = { ok: false, error: err instanceof Error ? err.message : String(err) };
+          result = { ok: false, error: summarizeError(err) };
         }
         this._resetState(chain.name);
       }

@@ -1,6 +1,7 @@
 import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
 import { logger } from '../../utils/logger.ts';
 import type { ToolLLM } from '../../config/tool-llm.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /**
  * Prompt hook runner — sends event data to an LLM via ToolLLM.
@@ -61,7 +62,7 @@ export async function run(
       return { ok: true };
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     logger.error('prompt hook error', { event: event.path, error: message });
     return { ok: false, error: message };
   }

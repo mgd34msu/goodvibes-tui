@@ -22,6 +22,7 @@
 import type { Node } from 'web-tree-sitter';
 import { TreeSitterService } from '../intelligence/tree-sitter/service.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -447,7 +448,7 @@ export class SyntaxHighlighter {
     this.service = new TreeSitterService();
     // Kick off WASM initialization in background
     this.service.initialize().catch((err: unknown) => {
-      logger.warn('SyntaxHighlighter: background init failed', { error: String(err) });
+      logger.warn('SyntaxHighlighter: background init failed', { error: summarizeError(err) });
     });
   }
 
@@ -522,7 +523,7 @@ export class SyntaxHighlighter {
         this.cache.set(key, highlighted);
         logger.debug('SyntaxHighlighter: parsed and cached', { langId, lines: codeLines.length });
       } catch (err) {
-        logger.warn('SyntaxHighlighter: parse error', { langId, error: String(err) });
+        logger.warn('SyntaxHighlighter: parse error', { langId, error: summarizeError(err) });
       } finally {
         this.pending.delete(key);
       }

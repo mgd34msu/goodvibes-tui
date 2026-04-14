@@ -6,6 +6,7 @@ import {
   emitPermissionRequested,
 } from '../../emitters/permissions.ts';
 import type { PermissionCheckResult } from '../../../permissions/types.ts';
+import { summarizeError } from '../../../utils/error-display.ts';
 
 /**
  * permission — Phase 3 of the tool execution pipeline.
@@ -120,7 +121,7 @@ export async function permissionPhase(
       durationMs: performance.now() - start,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return {
       phase: 'permissioned',
       success: false,

@@ -16,6 +16,7 @@ import type {
   RetryConfig,
 } from './types.ts';
 import { DEFAULT_QUEUE_CONFIG } from './types.ts';
+import { summarizeError } from '../../../utils/error-display.ts';
 
 /** Internal entry held in the ring buffer. */
 interface QueueEntry {
@@ -221,7 +222,7 @@ export class ExportQueue {
         return;
       } catch (err) {
         attempts++;
-        lastError = err instanceof Error ? err.message : String(err);
+        lastError = summarizeError(err);
         if (attempt < maxRetries) {
           const delay = computeDelay(attempt, this._config.retry);
           console.warn(
