@@ -4,6 +4,29 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.3] — 2026-04-14
+
+### SDK-Ready Transport And Contract Seams
+
+- Added source-owned foundation contract types plus generated typed operator, peer, and runtime-event client maps so remote clients consume stable typed daemon surfaces instead of inferring them from route behavior
+- Split the runtime transport layer into explicit HTTP auth/retry/json, SSE/reconnect, direct-client, contract-route, operator remote-client, peer remote-client, and runtime/domain-event modules instead of leaving those concerns in a few broad transport files
+- Expanded runtime event domain metadata, distributed runtime contracts, and shared event-envelope wiring so remote clients and future companion surfaces can subscribe to named domains with stable payload semantics
+
+### Daemon Route Extraction And Artifact Hardening
+
+- Broke reusable daemon route logic into packageable channel, integration, knowledge, media, system, telemetry, and shared route-helper contexts while moving TUI-specific host adapters into dedicated router route-context builders
+- Hardened operator, peer, remote, and telemetry route contracts around narrowed route types, shared auth/error helpers, and explicit runtime route semantics rather than deep TUI-only internal dependencies
+- Refreshed the checked-in operator and peer foundation artifacts, added generated foundation client types, and extended release-gate coverage so the extracted daemon and transport surfaces stay frozen as the source tree evolves
+
+### Verification
+
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Full typecheck passes: `bunx tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Full test runner passes: `bun test`
+- Build passes: `bun run build`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.2] — 2026-04-13
 
 ### Panel Navigation And Global Shortcut Recovery

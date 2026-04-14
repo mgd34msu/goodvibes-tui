@@ -1,19 +1,9 @@
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import type { DaemonRouteContext } from '../types.ts';
-import { readChannelConversationKind, readChannelLifecycleAction } from '../helpers.ts';
-
-type ChannelRouteContext = Pick<
-  DaemonRouteContext,
-  | 'channelPlugins'
-  | 'channelPolicy'
-  | 'parseJsonBody'
-  | 'parseOptionalJsonBody'
-  | 'requireAdmin'
-  | 'surfaceRegistry'
->;
+import { readChannelConversationKind, readChannelLifecycleAction } from './route-helpers.ts';
+import type { ChannelDirectoryScope, ChannelSurface, DaemonChannelRouteContext } from './channel-route-types.ts';
 
 export function createDaemonChannelRouteHandlers(
-  context: ChannelRouteContext,
+  context: DaemonChannelRouteContext,
 ): Pick<
   DaemonApiRouteHandlers,
   | 'getSurfaces'
@@ -50,11 +40,11 @@ export function createDaemonChannelRouteHandlers(
     getSurfaces: () => Response.json({ surfaces: context.surfaceRegistry.list() }),
     getChannelAccounts: () => context.channelPlugins.listAccounts().then((accounts) => Response.json({ accounts })),
     getChannelSurfaceAccounts: (surface) => context.channelPlugins
-      .listAccounts(surface as import('../../channels/index.ts').ChannelSurface)
+      .listAccounts(surface as ChannelSurface)
       .then((accounts) => Response.json({ accounts })),
     getChannelAccount: async (surface, accountId) => {
       const account = await context.channelPlugins.getAccount(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         accountId,
       );
       return account
@@ -63,7 +53,7 @@ export function createDaemonChannelRouteHandlers(
     },
     getChannelSetupSchema: async (surface, url) => {
       const schema = await context.channelPlugins.getSetupSchema(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         url.searchParams.get('accountId') ?? undefined,
       );
       return schema
@@ -72,7 +62,7 @@ export function createDaemonChannelRouteHandlers(
     },
     getChannelDoctor: async (surface, url) => {
       const report = await context.channelPlugins.doctor(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         url.searchParams.get('accountId') ?? undefined,
       );
       return report
@@ -81,13 +71,13 @@ export function createDaemonChannelRouteHandlers(
     },
     getChannelRepairActions: async (surface, url) => Response.json({
       actions: await context.channelPlugins.listRepairActions(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         url.searchParams.get('accountId') ?? undefined,
       ),
     }),
     getChannelLifecycle: async (surface, url) => {
       const state = await context.channelPlugins.getLifecycleState(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         url.searchParams.get('accountId') ?? undefined,
       );
       return state
@@ -100,7 +90,7 @@ export function createDaemonChannelRouteHandlers(
       const body = await context.parseOptionalJsonBody(req);
       if (body instanceof Response) return body;
       const state = await context.channelPlugins.migrateLifecycle(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         typeof body?.accountId === 'string' ? body.accountId : undefined,
         body ?? undefined,
       );
@@ -121,7 +111,7 @@ export function createDaemonChannelRouteHandlers(
         return Response.json({ error: 'Unknown channel account action' }, { status: 400 });
       }
       const result = await context.channelPlugins.runAccountAction(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         lifecycleAction,
         accountId ?? (typeof input?.accountId === 'string' ? input.accountId : undefined),
         input,
@@ -132,16 +122,16 @@ export function createDaemonChannelRouteHandlers(
     },
     getChannelCapabilities: () => context.channelPlugins.listCapabilities().then((capabilities) => Response.json({ capabilities })),
     getChannelSurfaceCapabilities: (surface) => context.channelPlugins
-      .listCapabilities(surface as import('../../channels/index.ts').ChannelSurface)
+      .listCapabilities(surface as ChannelSurface)
       .then((capabilities) => Response.json({ capabilities })),
     getChannelTools: () => context.channelPlugins.listTools().then((tools) => Response.json({ tools })),
     getChannelSurfaceTools: (surface) => context.channelPlugins
-      .listTools(surface as import('../../channels/index.ts').ChannelSurface)
+      .listTools(surface as ChannelSurface)
       .then((tools) => Response.json({ tools })),
     getChannelAgentTools: () => Response.json({ tools: context.channelPlugins.listAgentTools().map((tool) => tool.definition) }),
     getChannelSurfaceAgentTools: (surface) => Response.json({
       tools: context.channelPlugins
-        .listAgentTools(surface as import('../../channels/index.ts').ChannelSurface)
+        .listAgentTools(surface as ChannelSurface)
         .map((tool) => tool.definition),
     }),
     postChannelTool: async (surface, toolId, req) => {
@@ -153,7 +143,7 @@ export function createDaemonChannelRouteHandlers(
         return body;
       }
       const result = await context.channelPlugins.runTool(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         toolId,
         input,
       );
@@ -163,7 +153,7 @@ export function createDaemonChannelRouteHandlers(
     },
     getChannelActions: () => context.channelPlugins.listOperatorActions().then((actions) => Response.json({ actions })),
     getChannelSurfaceActions: (surface) => context.channelPlugins
-      .listOperatorActions(surface as import('../../channels/index.ts').ChannelSurface)
+      .listOperatorActions(surface as ChannelSurface)
       .then((actions) => Response.json({ actions })),
     postChannelAction: async (surface, actionId, req) => {
       const admin = context.requireAdmin(req);
@@ -174,7 +164,7 @@ export function createDaemonChannelRouteHandlers(
         return body;
       }
       const result = await context.channelPlugins.runOperatorAction(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         actionId,
         input,
       );
@@ -199,7 +189,7 @@ export function createDaemonChannelRouteHandlers(
       }
       const preferredKind = readChannelConversationKind(body.preferredKind);
       const target = await context.channelPlugins.resolveTarget(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         {
           input: targetInput,
           ...(typeof body.accountId === 'string' ? { accountId: body.accountId } : {}),
@@ -222,7 +212,7 @@ export function createDaemonChannelRouteHandlers(
       if (body instanceof Response) return body;
       const target = typeof body.target === 'string' && body.target.trim()
         ? await context.channelPlugins.resolveTarget(
-            surface as import('../../channels/index.ts').ChannelSurface,
+            surface as ChannelSurface,
             {
               input: body.target,
               ...(typeof body.accountId === 'string' ? { accountId: body.accountId } : {}),
@@ -231,7 +221,7 @@ export function createDaemonChannelRouteHandlers(
           )
         : null;
       const result = await context.channelPlugins.authorizeActorAction(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         {
           actionId: typeof body.actionId === 'string' ? body.actionId : 'unknown',
           ...(typeof body.actorId === 'string' ? { actorId: body.actorId } : {}),
@@ -250,7 +240,7 @@ export function createDaemonChannelRouteHandlers(
       const body = await context.parseJsonBody(req);
       if (body instanceof Response) return body;
       const result = await context.channelPlugins.resolveAllowlist(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         {
           ...(Array.isArray(body.add) ? { add: body.add.filter((value): value is string => typeof value === 'string') } : {}),
           ...(Array.isArray(body.remove) ? { remove: body.remove.filter((value): value is string => typeof value === 'string') } : {}),
@@ -271,7 +261,7 @@ export function createDaemonChannelRouteHandlers(
       const body = await context.parseJsonBody(req);
       if (body instanceof Response) return body;
       const result = await context.channelPlugins.editAllowlist(
-        surface as import('../../channels/index.ts').ChannelSurface,
+        surface as ChannelSurface,
         {
           ...(Array.isArray(body.add) ? { add: body.add.filter((value): value is string => typeof value === 'string') } : {}),
           ...(Array.isArray(body.remove) ? { remove: body.remove.filter((value): value is string => typeof value === 'string') } : {}),
@@ -292,7 +282,7 @@ export function createDaemonChannelRouteHandlers(
       if (admin) return admin;
       const body = await context.parseJsonBody(req);
       if (body instanceof Response) return body;
-      const updated = await context.channelPolicy.upsertPolicy(surface as import('../../channels/index.ts').ChannelSurface, {
+      const updated = await context.channelPolicy.upsertPolicy(surface as ChannelSurface, {
         ...(body.enabled !== undefined ? { enabled: Boolean(body.enabled) } : {}),
         ...(body.requireMention !== undefined ? { requireMention: Boolean(body.requireMention) } : {}),
         ...(body.allowDirectMessages !== undefined ? { allowDirectMessages: Boolean(body.allowDirectMessages) } : {}),
@@ -332,10 +322,10 @@ export function createDaemonChannelRouteHandlers(
     getChannelPolicyAudit: (limit) => Response.json({ audit: context.channelPolicy.listAudit(limit) }),
     getChannelStatus: () => context.channelPlugins.listStatus().then((channels) => Response.json({ channels })),
     getChannelDirectory: (surface, url) => context.channelPlugins.queryDirectory(
-      surface as import('../../channels/index.ts').ChannelSurface,
+      surface as ChannelSurface,
       {
         query: url.searchParams.get('q') ?? '',
-        ...(url.searchParams.get('scope') ? { scope: url.searchParams.get('scope') as import('../../channels/index.ts').ChannelDirectoryScope } : {}),
+        ...(url.searchParams.get('scope') ? { scope: url.searchParams.get('scope') as ChannelDirectoryScope } : {}),
         ...(url.searchParams.get('groupId') ? { groupId: url.searchParams.get('groupId') as string } : {}),
         ...(url.searchParams.get('limit') ? { limit: Number(url.searchParams.get('limit')) } : {}),
         ...(url.searchParams.get('live') ? { live: url.searchParams.get('live') === 'true' } : {}),

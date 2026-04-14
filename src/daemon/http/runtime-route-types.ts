@@ -1,8 +1,49 @@
-import type { AutomationJob } from '../../automation/jobs.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import type { DomainDispatch, RuntimeStore } from '../../runtime/store/index.ts';
 
 export type JsonBody = Record<string, unknown>;
+
+export type AutomationSurfaceKind = string;
+export interface SharedSessionRoutingIntent {
+  readonly modelId?: string;
+  readonly providerId?: string;
+  readonly tools?: readonly string[];
+  readonly executionIntent?: unknown;
+}
+interface AutomationRouteBinding {
+  readonly id?: string;
+}
+export type ExecutionIntent = unknown;
+type AgentRecordLike = {
+  readonly id: string;
+  readonly status: string;
+  readonly task: string;
+  readonly model?: string | null;
+  readonly tools: readonly string[];
+  readonly startedAt: number;
+  readonly completedAt?: number;
+  readonly toolCallCount?: number;
+  readonly progress?: string | null;
+  readonly error?: string | null;
+};
+type AutomationJobLike = { readonly id: string };
+type AutomationRunLike = {
+  readonly id: string;
+  readonly jobId: string;
+  readonly agentId?: string;
+  readonly status: string;
+  readonly startedAt?: number;
+  readonly queuedAt: number;
+  readonly continuationMode?: string;
+};
+interface RuntimeTaskLike {
+  readonly kind?: string;
+  readonly owner?: string;
+  readonly description?: string;
+  readonly title?: string;
+}
+interface RuntimeTaskStateLike {
+  readonly tasks: Map<string, RuntimeTaskLike>;
+}
 
 export interface DaemonRuntimeRouteContext {
   readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
@@ -14,7 +55,7 @@ export interface DaemonRuntimeRouteContext {
     submitMessage(input: {
       sessionId?: string;
       routeId?: string;
-      surfaceKind: import('../../automation/types.ts').AutomationSurfaceKind;
+      surfaceKind: AutomationSurfaceKind;
       surfaceId: string;
       externalId?: string;
       threadId?: string;
@@ -23,12 +64,12 @@ export interface DaemonRuntimeRouteContext {
       title?: string;
       body: string;
       metadata?: Record<string, unknown>;
-      routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent;
+      routing?: SharedSessionRoutingIntent;
     }): Promise<{
       mode: 'continued-live' | 'spawn' | 'queued-follow-up' | 'rejected';
-      input: { id: string; routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent };
+      input: { id: string; routing?: SharedSessionRoutingIntent };
       session: { id: string; status: string };
-      routeBinding?: import('../../automation/routes.ts').AutomationRouteBinding;
+      routeBinding?: AutomationRouteBinding;
       task?: string;
       activeAgentId?: string | null;
       userMessage?: unknown;
@@ -36,7 +77,7 @@ export interface DaemonRuntimeRouteContext {
     steerMessage(input: {
       sessionId?: string;
       routeId?: string;
-      surfaceKind: import('../../automation/types.ts').AutomationSurfaceKind;
+      surfaceKind: AutomationSurfaceKind;
       surfaceId: string;
       externalId?: string;
       threadId?: string;
@@ -45,13 +86,13 @@ export interface DaemonRuntimeRouteContext {
       title?: string;
       body: string;
       metadata?: Record<string, unknown>;
-      routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent;
+      routing?: SharedSessionRoutingIntent;
       allowSpawnFallback?: boolean;
     }): Promise<{
       mode: 'continued-live' | 'spawn' | 'queued-follow-up' | 'rejected';
-      input: { id: string; state: string; routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent };
+      input: { id: string; state: string; routing?: SharedSessionRoutingIntent };
       session: { id: string; status: string };
-      routeBinding?: import('../../automation/routes.ts').AutomationRouteBinding;
+      routeBinding?: AutomationRouteBinding;
       task?: string;
       activeAgentId?: string | null;
       userMessage?: unknown;
@@ -59,7 +100,7 @@ export interface DaemonRuntimeRouteContext {
     followUpMessage(input: {
       sessionId?: string;
       routeId?: string;
-      surfaceKind: import('../../automation/types.ts').AutomationSurfaceKind;
+      surfaceKind: AutomationSurfaceKind;
       surfaceId: string;
       externalId?: string;
       threadId?: string;
@@ -68,12 +109,12 @@ export interface DaemonRuntimeRouteContext {
       title?: string;
       body: string;
       metadata?: Record<string, unknown>;
-      routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent;
+      routing?: SharedSessionRoutingIntent;
     }): Promise<{
       mode: 'continued-live' | 'spawn' | 'queued-follow-up' | 'rejected';
-      input: { id: string; state: string; routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent };
+      input: { id: string; state: string; routing?: SharedSessionRoutingIntent };
       session: { id: string; status: string };
-      routeBinding?: import('../../automation/routes.ts').AutomationRouteBinding;
+      routeBinding?: AutomationRouteBinding;
       task?: string;
       activeAgentId?: string | null;
       userMessage?: unknown;
@@ -83,9 +124,9 @@ export interface DaemonRuntimeRouteContext {
       id?: string;
       title?: string;
       metadata?: Record<string, unknown>;
-      routeBinding?: import('../../automation/routes.ts').AutomationRouteBinding;
+      routeBinding?: AutomationRouteBinding;
       participant?: {
-        surfaceKind: import('../../automation/types.ts').AutomationSurfaceKind;
+        surfaceKind: AutomationSurfaceKind;
         surfaceId: string;
         externalId?: string;
         userId?: string;
@@ -103,25 +144,28 @@ export interface DaemonRuntimeRouteContext {
     completeAgent(sessionId: string, agentId: string, message: string, meta: { status: string; routeId?: string }): Promise<void>;
   };
   readonly agentManager: {
-    getStatus(agentId: string): import('../../tools/agent/index.ts').AgentRecord | null;
+    getStatus(agentId: string): AgentRecordLike | null;
     cancel(agentId: string): void;
   };
   readonly automationManager: {
-    listJobs(): AutomationJob[];
-    listRuns(): Array<{ id: string; jobId: string; agentId?: string; status: string; startedAt?: number; queuedAt: number; continuationMode?: string }>;
-    getRun(runId: string): { id: string; jobId: string; agentId?: string; status: string; startedAt?: number; queuedAt: number; continuationMode?: string } | null | undefined;
+    listJobs(): AutomationJobLike[];
+    listRuns(): AutomationRunLike[];
+    getRun(runId: string): AutomationRunLike | null | undefined;
     triggerHeartbeat(input: { source: string }): Promise<unknown>;
     cancelRun(runId: string, reason: string): Promise<unknown | null>;
     retryRun(runId: string): Promise<unknown>;
-    createJob(input: Record<string, unknown>): Promise<AutomationJob>;
-    updateJob(jobId: string, input: Record<string, unknown>): Promise<AutomationJob | null>;
+    createJob(input: Record<string, unknown>): Promise<AutomationJobLike>;
+    updateJob(jobId: string, input: Record<string, unknown>): Promise<AutomationJobLike | null>;
     removeJob(jobId: string): Promise<void>;
-    setEnabled(jobId: string, enabled: boolean): Promise<AutomationJob | null>;
+    setEnabled(jobId: string, enabled: boolean): Promise<AutomationJobLike | null>;
     runNow(jobId: string): Promise<{ id: string; agentId?: string; status: string }>;
   };
+  readonly normalizeAtSchedule: (at: number) => unknown;
+  readonly normalizeEverySchedule: (interval: string | number, anchorAt?: number) => unknown;
+  readonly normalizeCronSchedule: (expression: string, timezone?: string, staggerMs?: unknown) => unknown;
   readonly routeBindings: {
     start(): Promise<void>;
-    getBinding(id: string): import('../../automation/routes.ts').AutomationRouteBinding | undefined;
+    getBinding(id: string): AutomationRouteBinding | undefined;
   };
   readonly trySpawnAgent: (input: {
     mode: 'spawn';
@@ -130,20 +174,27 @@ export interface DaemonRuntimeRouteContext {
     tools?: string[] | readonly string[];
     provider?: string;
     context?: string;
-    executionIntent?: import('../../runtime/execution-intents.ts').ExecutionIntent;
-  }, logLabel: string, sessionId?: string) => import('../../tools/agent/index.ts').AgentRecord | Response;
+    executionIntent?: ExecutionIntent;
+  }, logLabel: string, sessionId?: string) => AgentRecordLike | Response;
   readonly queueSurfaceReplyFromBinding: (
-    binding: import('../../automation/routes.ts').AutomationRouteBinding | undefined,
+    binding: AutomationRouteBinding | undefined,
     input: { readonly agentId: string; readonly task: string; readonly sessionId?: string; },
   ) => void;
   readonly surfaceDeliveryEnabled: (surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage' | 'msteams' | 'bluebubbles' | 'mattermost' | 'matrix') => boolean;
-  readonly syncSpawnedAgentTask: (record: import('../../tools/agent/index.ts').AgentRecord, sessionId?: string) => void;
-  readonly syncFinishedAgentTask: (record: import('../../tools/agent/index.ts').AgentRecord) => void;
+  readonly syncSpawnedAgentTask: (record: AgentRecordLike, sessionId?: string) => void;
+  readonly syncFinishedAgentTask: (record: AgentRecordLike) => void;
   readonly configManager: {
     get(key: string): unknown;
   };
-  readonly runtimeStore: RuntimeStore | null;
-  readonly runtimeDispatch: DomainDispatch | null;
+  readonly runtimeStore: { getState(): { tasks: RuntimeTaskStateLike } } | null;
+  readonly runtimeDispatch: {
+    transitionRuntimeTask(
+      taskId: string,
+      status: string,
+      patch: Record<string, unknown>,
+      source: string,
+    ): void;
+  } | null;
 }
 
 export type DaemonRuntimeRouteHandlerMap = Pick<

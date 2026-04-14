@@ -58,15 +58,17 @@ describe('daemon telemetry routes', () => {
 
     const handlers = createDaemonTelemetryRouteHandlers({
       telemetryApi,
-      extractAuthToken: (req) => req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '',
-      describeAuthenticatedPrincipal: (token) => token === 'test-token'
-        ? {
-            principalId: 'tester',
-            principalKind: 'token',
-            admin: true,
-            scopes: ['read:telemetry', 'read:telemetry-sensitive'],
-          }
-        : null,
+      resolveAuthenticatedPrincipal: (req: Request) => {
+        const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
+        return token === 'test-token'
+          ? {
+              principalId: 'tester',
+              principalKind: 'token',
+              admin: true,
+              scopes: ['read:telemetry', 'read:telemetry-sensitive'],
+            }
+          : null;
+      },
     });
 
     const snapshotResponse = await handlers.getTelemetrySnapshot(new Request('http://127.0.0.1/api/v1/telemetry?limit=1', {
@@ -103,15 +105,17 @@ describe('daemon telemetry routes', () => {
 
     const handlers = createDaemonTelemetryRouteHandlers({
       telemetryApi,
-      extractAuthToken: (req) => req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '',
-      describeAuthenticatedPrincipal: (token) => token === 'limited-token'
-        ? {
-            principalId: 'limited',
-            principalKind: 'user',
-            admin: false,
-            scopes: ['read:telemetry'],
-          }
-        : null,
+      resolveAuthenticatedPrincipal: (req: Request) => {
+        const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
+        return token === 'limited-token'
+          ? {
+              principalId: 'limited',
+              principalKind: 'user',
+              admin: false,
+              scopes: ['read:telemetry'],
+            }
+          : null;
+      },
     });
 
     const response = await handlers.getTelemetrySnapshot(new Request('http://127.0.0.1/api/v1/telemetry?view=raw', {

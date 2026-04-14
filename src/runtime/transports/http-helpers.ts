@@ -7,8 +7,10 @@ import type { DistributedNodeHostContract } from '../remote/distributed-runtime-
 import type { ControlPlaneClientRecord } from '../store/domains/control-plane.ts';
 import type { TelemetryFilter, TelemetryRecord } from '../telemetry/api.ts';
 import type { UiControlPlaneSnapshot } from '../ui-read-models.ts';
-import type { TransportPaths } from './shared.ts';
-import { createJsonInit, requestJson } from './shared.ts';
+import type { TransportPaths } from './transport-paths.ts';
+import { buildUrl, normalizeBaseUrl } from './transport-paths.ts';
+import { createJsonInit, requestJson } from './http-json-transport.ts';
+import { openServerSentEventStream } from './sse-stream.ts';
 import type {
   HttpSessionEnsureInput,
   HttpSessionMessageInput,
@@ -18,14 +20,6 @@ import type {
   HttpTransportTelemetryStreamHandlers,
   HttpTransportTelemetryStreamReady,
 } from './http-types.ts';
-
-export function normalizeBaseUrl(baseUrl: string): string {
-  const normalized = baseUrl.trim();
-  if (!normalized) {
-    throw new Error('Transport baseUrl is required');
-  }
-  return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
-}
 
 export function createFetch(fetchImpl?: typeof fetch): typeof fetch {
   return fetchImpl ?? globalThis.fetch.bind(globalThis);
@@ -235,80 +229,20 @@ export async function connectTelemetryStream(
   token: string | null | undefined,
   handlers: HttpTransportTelemetryStreamHandlers,
 ): Promise<() => void> {
-  const controller = new AbortController();
-  const response = await fetchImpl(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    credentials: 'include',
-    signal: controller.signal,
-  });
-  if (!response.ok || !response.body) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Unable to connect telemetry stream: ${response.status} ${body}`.trim());
-  }
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let eventName = '';
-  let data = '';
-  const handleRecord = (): void => {
-    if (!eventName || !data.trim()) {
-      eventName = '';
-      data = '';
-      return;
-    }
-    try {
-      if (eventName === 'telemetry') {
-        handlers.onRecord(JSON.parse(data) as TelemetryRecord);
-      } else if (eventName === 'ready' && handlers.onReady) {
-        handlers.onReady(JSON.parse(data) as HttpTransportTelemetryStreamReady);
+  return await openServerSentEventStream(fetchImpl, url, {
+    onEvent: (eventName, payload) => {
+      if (eventName === 'telemetry' && payload && typeof payload === 'object') {
+        handlers.onRecord(payload as TelemetryRecord);
       }
-    } finally {
-      eventName = '';
-      data = '';
-    }
-  };
-  const consumeLine = (line: string): void => {
-    if (!line) {
-      handleRecord();
-      return;
-    }
-    if (line.startsWith(':')) return;
-    if (line.startsWith('event:')) {
-      eventName = line.slice(6).trim();
-      return;
-    }
-    if (line.startsWith('data:')) {
-      data += `${data ? '\n' : ''}${line.slice(5).trim()}`;
-    }
-  };
-  void (async () => {
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let newlineIndex = buffer.indexOf('\n');
-        while (newlineIndex >= 0) {
-          const raw = buffer.slice(0, newlineIndex).replace(/\r$/, '');
-          buffer = buffer.slice(newlineIndex + 1);
-          consumeLine(raw);
-          newlineIndex = buffer.indexOf('\n');
+    },
+    onReady: handlers.onReady
+      ? (payload) => {
+          handlers.onReady?.(payload as HttpTransportTelemetryStreamReady);
         }
-      }
-      if (buffer.trim()) {
-        consumeLine(buffer.replace(/\r$/, ''));
-        handleRecord();
-      }
-    } finally {
-      controller.abort();
-    }
-  })().catch((error: unknown) => {
-    if (error instanceof DOMException && error.name === 'AbortError') return;
-    throw error;
+      : undefined,
+  }, {
+    authToken: token,
   });
-  return () => {
-    controller.abort();
-  };
 }
 
 export async function requestJsonWithFallback<T>(
@@ -325,5 +259,5 @@ export async function requestJsonWithFallback<T>(
 }
 
 export function buildTransportUrl(baseUrl: string, path: string): string {
-  return new URL(path, `${normalizeBaseUrl(baseUrl)}/`).toString();
+  return buildUrl(baseUrl, path);
 }

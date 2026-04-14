@@ -1,6 +1,19 @@
-import type { DistributedNodeHostContract } from './distributed-runtime-types.ts';
+import type { PeerContractManifest } from '../../types/foundation-contract.ts';
+import {
+  NODE_HOST_HEARTBEAT_INPUT_SCHEMA,
+  NODE_HOST_PAIR_REQUEST_INPUT_SCHEMA,
+  NODE_HOST_PAIR_REQUEST_OUTPUT_SCHEMA,
+  NODE_HOST_PAIR_VERIFY_INPUT_SCHEMA,
+  NODE_HOST_PAIR_VERIFY_OUTPUT_SCHEMA,
+  NODE_HOST_WORK_COMPLETE_INPUT_SCHEMA,
+  NODE_HOST_WORK_PULL_INPUT_SCHEMA,
+  REMOTE_SNAPSHOT_SCHEMA,
+  REMOTE_WORK_LIST_OUTPUT_SCHEMA,
+  REMOTE_WORK_OUTPUT_SCHEMA,
+  REMOTE_PEER_OUTPUT_SCHEMA,
+} from './distributed-runtime-contract-schemas.ts';
 
-export function getDistributedNodeHostContract(): DistributedNodeHostContract {
+export function getDistributedNodeHostContract(): PeerContractManifest {
   return {
     schemaVersion: 1,
     transport: 'http-json',
@@ -17,6 +30,8 @@ export function getDistributedNodeHostContract(): DistributedNodeHostContract {
         path: '/api/remote/pair/request',
         auth: 'none',
         description: 'Create a pending pair request and receive a challenge for operator approval.',
+        inputSchema: NODE_HOST_PAIR_REQUEST_INPUT_SCHEMA,
+        outputSchema: NODE_HOST_PAIR_REQUEST_OUTPUT_SCHEMA,
       },
       {
         id: 'pair.verify',
@@ -24,6 +39,8 @@ export function getDistributedNodeHostContract(): DistributedNodeHostContract {
         path: '/api/remote/pair/verify',
         auth: 'none',
         description: 'Exchange an approved pair request and challenge for a scoped peer token.',
+        inputSchema: NODE_HOST_PAIR_VERIFY_INPUT_SCHEMA,
+        outputSchema: NODE_HOST_PAIR_VERIFY_OUTPUT_SCHEMA,
       },
       {
         id: 'peer.heartbeat',
@@ -32,6 +49,8 @@ export function getDistributedNodeHostContract(): DistributedNodeHostContract {
         auth: 'bearer-peer-token',
         requiredScope: 'remote:heartbeat',
         description: 'Report peer liveness, capability, command, version, and client-mode metadata.',
+        inputSchema: NODE_HOST_HEARTBEAT_INPUT_SCHEMA,
+        outputSchema: REMOTE_PEER_OUTPUT_SCHEMA,
       },
       {
         id: 'work.pull',
@@ -40,6 +59,8 @@ export function getDistributedNodeHostContract(): DistributedNodeHostContract {
         auth: 'bearer-peer-token',
         requiredScope: 'remote:pull',
         description: 'Claim queued work for the authenticated peer.',
+        inputSchema: NODE_HOST_WORK_PULL_INPUT_SCHEMA,
+        outputSchema: REMOTE_WORK_LIST_OUTPUT_SCHEMA,
       },
       {
         id: 'work.complete',
@@ -48,6 +69,8 @@ export function getDistributedNodeHostContract(): DistributedNodeHostContract {
         auth: 'bearer-peer-token',
         requiredScope: 'remote:complete',
         description: 'Complete, fail, or cancel a claimed work item.',
+        inputSchema: NODE_HOST_WORK_COMPLETE_INPUT_SCHEMA,
+        outputSchema: REMOTE_WORK_OUTPUT_SCHEMA,
       },
       {
         id: 'operator.snapshot',
@@ -55,6 +78,7 @@ export function getDistributedNodeHostContract(): DistributedNodeHostContract {
         path: '/api/remote',
         auth: 'bearer-operator-token',
         description: 'Inspect distributed runtime pair requests, peers, work, and audit state.',
+        outputSchema: REMOTE_SNAPSHOT_SCHEMA,
       },
     ],
     workCompletionStatuses: ['completed', 'failed', 'cancelled'],

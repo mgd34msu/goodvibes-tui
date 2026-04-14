@@ -1,6 +1,8 @@
 import { createHttpTransport } from './http.ts';
+import { createClientTransport } from './client-transport.ts';
 import type { HttpTransportOptions, HttpTransportPeerClient, HttpTransportOperatorClient, HttpTransportSnapshot } from './http-types.ts';
-import { createRemoteUiRuntimeEvents, createWebSocketConnector } from './shared.ts';
+import { createWebSocketConnector } from './shared.ts';
+import { createRemoteUiRuntimeEvents } from './ui-runtime-events.ts';
 
 export interface RealtimeTransportOptions extends HttpTransportOptions {
   readonly webSocketImpl?: typeof WebSocket;
@@ -33,17 +35,10 @@ export function createRealtimeTransport(options: RealtimeTransportOptions): Real
     ...baseTransport.operator,
     events,
   };
+  const transport = createClientTransport('realtime', operator, baseTransport.peer);
 
   return Object.freeze({
-    kind: 'realtime' as const,
-    operator,
-    peer: baseTransport.peer,
-    getOperatorClient(): HttpTransportOperatorClient {
-      return operator;
-    },
-    getPeerClient(): HttpTransportPeerClient {
-      return baseTransport.peer;
-    },
+    ...transport,
     async snapshot(): Promise<RealtimeTransportSnapshot> {
       const snapshot = await baseTransport.snapshot();
       return {

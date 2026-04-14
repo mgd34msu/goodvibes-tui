@@ -1,8 +1,28 @@
-import type { DistributedPeerAuth, DistributedRuntimeManager } from '../../runtime/remote/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
 import { jsonErrorResponse } from './error-response.ts';
+import { serializableJsonResponse } from './route-helpers.ts';
 
 type JsonBody = Record<string, unknown>;
+type RemotePeerAuth = unknown;
+
+interface DistributedRuntimeRouteService {
+  listPairRequests(): unknown;
+  approvePairRequest(requestId: string, input: Record<string, unknown>): Promise<unknown | null>;
+  rejectPairRequest(requestId: string, input: Record<string, unknown>): Promise<unknown | null>;
+  listPeers(): unknown;
+  rotatePeerToken(peerId: string, input: Record<string, unknown>): Promise<unknown | null>;
+  revokePeerToken(peerId: string, input: Record<string, unknown>): Promise<unknown | null>;
+  disconnectPeer(peerId: string, input: Record<string, unknown>): Promise<unknown | null>;
+  listWork(): unknown;
+  invokePeer(input: Record<string, unknown>): Promise<unknown>;
+  cancelWork(workId: string, input: Record<string, unknown>): Promise<unknown | null>;
+  getNodeHostContract(): unknown;
+  requestPairing(input: Record<string, unknown>): Promise<unknown>;
+  verifyPairRequest(requestId: string, challenge: string, input: Record<string, unknown>): Promise<unknown | null>;
+  heartbeatPeer(auth: RemotePeerAuth, input: Record<string, unknown>): Promise<unknown>;
+  claimWork(auth: RemotePeerAuth, input: Record<string, unknown>): Promise<unknown>;
+  completeWork(auth: RemotePeerAuth, workId: string, input: Record<string, unknown>): Promise<unknown | null>;
+}
 
 interface SessionUserLike {
   readonly username: string;
@@ -12,9 +32,9 @@ interface DaemonRemoteRouteContext {
   readonly authToken?: string | null;
   readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
   readonly requireAdmin: (req: Request) => Response | null;
-  readonly requireRemotePeer: (req: Request, scope?: string) => Promise<DistributedPeerAuth | Response>;
+  readonly requireRemotePeer: (req: Request, scope?: string) => Promise<RemotePeerAuth | Response>;
   readonly requireAuthenticatedSession: (req: Request) => SessionUserLike | null;
-  readonly distributedRuntime: DistributedRuntimeManager;
+  readonly distributedRuntime: DistributedRuntimeRouteService;
 }
 
 export function createDaemonRemoteRouteHandlers(
@@ -44,7 +64,7 @@ export function createDaemonRemoteRouteHandlers(
     getRemoteWork: () => Response.json({ work: context.distributedRuntime.listWork() }),
     invokeRemotePeer: async (peerId, request) => handleInvokeRemotePeer(context, peerId, request),
     cancelRemoteWork: async (workId, request) => handleCancelRemoteWork(context, workId, request),
-    getRemoteNodeHostContract: () => Response.json({ contract: context.distributedRuntime.getNodeHostContract() }),
+    getRemoteNodeHostContract: () => serializableJsonResponse({ contract: context.distributedRuntime.getNodeHostContract() }),
   };
 }
 

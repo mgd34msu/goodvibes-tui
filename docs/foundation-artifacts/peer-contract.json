@@ -26,14 +26,514 @@
       "method": "POST",
       "path": "/api/remote/pair/request",
       "auth": "none",
-      "description": "Create a pending pair request and receive a challenge for operator approval."
+      "description": "Create a pending pair request and receive a challenge for operator approval.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "peerKind": {
+            "type": "string",
+            "enum": [
+              "node",
+              "device"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "requestedId": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string"
+          },
+          "deviceFamily": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "clientMode": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ttlMs": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "$.endpoints[0].inputSchema.properties.metadata.additionalProperties"
+                  }
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "$.endpoints[0].inputSchema.properties.metadata.additionalProperties"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "peerKind",
+          "label"
+        ],
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "request": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "peerKind": {
+                "type": "string",
+                "enum": [
+                  "node",
+                  "device"
+                ]
+              },
+              "requestedId": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "deviceFamily": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "clientMode": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "commands": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "requestedBy": {
+                "type": "string",
+                "enum": [
+                  "remote",
+                  "operator"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "approved",
+                  "verified",
+                  "rejected",
+                  "expired"
+                ]
+              },
+              "challengePreview": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "updatedAt": {
+                "type": "number"
+              },
+              "approvedAt": {
+                "type": "number"
+              },
+              "verifiedAt": {
+                "type": "number"
+              },
+              "rejectedAt": {
+                "type": "number"
+              },
+              "expiresAt": {
+                "type": "number"
+              },
+              "peerId": {
+                "type": "string"
+              },
+              "remoteAddress": {
+                "type": "string"
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "$.endpoints[0].outputSchema.properties.request.properties.metadata.additionalProperties"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "$.endpoints[0].outputSchema.properties.request.properties.metadata.additionalProperties"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "peerKind",
+              "requestedId",
+              "label",
+              "capabilities",
+              "commands",
+              "requestedBy",
+              "status",
+              "challengePreview",
+              "createdAt",
+              "updatedAt",
+              "expiresAt",
+              "metadata"
+            ],
+            "additionalProperties": true
+          },
+          "challenge": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request",
+          "challenge"
+        ],
+        "additionalProperties": false
+      }
     },
     {
       "id": "pair.verify",
       "method": "POST",
       "path": "/api/remote/pair/verify",
       "auth": "none",
-      "description": "Exchange an approved pair request and challenge for a scoped peer token."
+      "description": "Exchange an approved pair request and challenge for a scoped peer token.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "challenge": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "$.endpoints[1].inputSchema.properties.metadata.additionalProperties"
+                  }
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "$.endpoints[1].inputSchema.properties.metadata.additionalProperties"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "requestId",
+          "challenge"
+        ],
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "peer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "node",
+                  "device"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "requestedId": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "deviceFamily": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "clientMode": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "commands": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "permissions": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "boolean"
+                }
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "paired",
+                  "connected",
+                  "idle",
+                  "disconnected",
+                  "revoked"
+                ]
+              },
+              "pairedAt": {
+                "type": "number"
+              },
+              "verifiedAt": {
+                "type": "number"
+              },
+              "lastSeenAt": {
+                "type": "number"
+              },
+              "lastConnectedAt": {
+                "type": "number"
+              },
+              "lastDisconnectedAt": {
+                "type": "number"
+              },
+              "lastRemoteAddress": {
+                "type": "string"
+              },
+              "activeTokenId": {
+                "type": "string"
+              },
+              "tokens": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "issuedAt": {
+                      "type": "number"
+                    },
+                    "lastUsedAt": {
+                      "type": "number"
+                    },
+                    "rotatedAt": {
+                      "type": "number"
+                    },
+                    "revokedAt": {
+                      "type": "number"
+                    },
+                    "fingerprint": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "scopes",
+                    "issuedAt",
+                    "fingerprint"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "$.endpoints[1].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "$.endpoints[1].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "label",
+              "requestedId",
+              "capabilities",
+              "commands",
+              "status",
+              "pairedAt",
+              "tokens",
+              "metadata"
+            ],
+            "additionalProperties": true
+          },
+          "token": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "scopes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "issuedAt": {
+                "type": "number"
+              },
+              "lastUsedAt": {
+                "type": "number"
+              },
+              "rotatedAt": {
+                "type": "number"
+              },
+              "revokedAt": {
+                "type": "number"
+              },
+              "fingerprint": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "scopes",
+              "issuedAt",
+              "fingerprint",
+              "value"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "peer",
+          "token"
+        ],
+        "additionalProperties": false
+      }
     },
     {
       "id": "peer.heartbeat",
@@ -41,7 +541,240 @@
       "path": "/api/remote/heartbeat",
       "auth": "bearer-peer-token",
       "requiredScope": "remote:heartbeat",
-      "description": "Report peer liveness, capability, command, version, and client-mode metadata."
+      "description": "Report peer liveness, capability, command, version, and client-mode metadata.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "type": "string"
+          },
+          "clientMode": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "$.endpoints[2].inputSchema.properties.metadata.additionalProperties"
+                  }
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "$.endpoints[2].inputSchema.properties.metadata.additionalProperties"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "peer": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "node",
+                  "device"
+                ]
+              },
+              "label": {
+                "type": "string"
+              },
+              "requestedId": {
+                "type": "string"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "deviceFamily": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "clientMode": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "commands": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "permissions": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "boolean"
+                }
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "paired",
+                  "connected",
+                  "idle",
+                  "disconnected",
+                  "revoked"
+                ]
+              },
+              "pairedAt": {
+                "type": "number"
+              },
+              "verifiedAt": {
+                "type": "number"
+              },
+              "lastSeenAt": {
+                "type": "number"
+              },
+              "lastConnectedAt": {
+                "type": "number"
+              },
+              "lastDisconnectedAt": {
+                "type": "number"
+              },
+              "lastRemoteAddress": {
+                "type": "string"
+              },
+              "activeTokenId": {
+                "type": "string"
+              },
+              "tokens": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "scopes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "issuedAt": {
+                      "type": "number"
+                    },
+                    "lastUsedAt": {
+                      "type": "number"
+                    },
+                    "rotatedAt": {
+                      "type": "number"
+                    },
+                    "revokedAt": {
+                      "type": "number"
+                    },
+                    "fingerprint": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "scopes",
+                    "issuedAt",
+                    "fingerprint"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "$.endpoints[2].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "$.endpoints[2].outputSchema.properties.peer.properties.metadata.additionalProperties"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "label",
+              "requestedId",
+              "capabilities",
+              "commands",
+              "status",
+              "pairedAt",
+              "tokens",
+              "metadata"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "peer"
+        ],
+        "additionalProperties": false
+      }
     },
     {
       "id": "work.pull",
@@ -49,7 +782,287 @@
       "path": "/api/remote/work/pull",
       "auth": "bearer-peer-token",
       "requiredScope": "remote:pull",
-      "description": "Claim queued work for the authenticated peer."
+      "description": "Claim queued work for the authenticated peer.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "maxItems": {
+            "type": "number"
+          },
+          "leaseMs": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "work": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "peerId": {
+                  "type": "string"
+                },
+                "peerKind": {
+                  "type": "string",
+                  "enum": [
+                    "node",
+                    "device"
+                  ]
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "invoke",
+                    "status.request",
+                    "location.request",
+                    "session.message",
+                    "automation.run"
+                  ]
+                },
+                "command": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "default",
+                    "normal",
+                    "high"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "claimed",
+                    "completed",
+                    "failed",
+                    "cancelled",
+                    "expired"
+                  ]
+                },
+                "payload": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "$.endpoints[3].outputSchema.properties.work.items.properties.payload"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "$.endpoints[3].outputSchema.properties.work.items.properties.payload"
+                      }
+                    }
+                  ]
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "updatedAt": {
+                  "type": "number"
+                },
+                "queuedBy": {
+                  "type": "string"
+                },
+                "claimedAt": {
+                  "type": "number"
+                },
+                "claimTokenId": {
+                  "type": "string"
+                },
+                "leaseExpiresAt": {
+                  "type": "number"
+                },
+                "completedAt": {
+                  "type": "number"
+                },
+                "timeoutMs": {
+                  "type": "number"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "routeId": {
+                  "type": "string"
+                },
+                "automationRunId": {
+                  "type": "string"
+                },
+                "automationJobId": {
+                  "type": "string"
+                },
+                "approvalId": {
+                  "type": "string"
+                },
+                "result": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "$.endpoints[3].outputSchema.properties.work.items.properties.result"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "$.endpoints[3].outputSchema.properties.work.items.properties.result"
+                      }
+                    }
+                  ]
+                },
+                "error": {
+                  "type": "string"
+                },
+                "telemetry": {
+                  "type": "object",
+                  "properties": {
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "inputTokens": {
+                          "type": "number"
+                        },
+                        "outputTokens": {
+                          "type": "number"
+                        },
+                        "cacheReadTokens": {
+                          "type": "number"
+                        },
+                        "cacheWriteTokens": {
+                          "type": "number"
+                        },
+                        "reasoningTokens": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "inputTokens",
+                        "outputTokens",
+                        "cacheReadTokens",
+                        "cacheWriteTokens"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "llmCallCount": {
+                      "type": "number"
+                    },
+                    "toolCallCount": {
+                      "type": "number"
+                    },
+                    "turnCount": {
+                      "type": "number"
+                    },
+                    "modelId": {
+                      "type": "string"
+                    },
+                    "providerId": {
+                      "type": "string"
+                    },
+                    "reasoningSummaryPresent": {
+                      "type": "boolean"
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "local-agent",
+                        "shared-session",
+                        "remote-node",
+                        "remote-device"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "usage"
+                  ],
+                  "additionalProperties": true
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "$ref": "$.endpoints[3].outputSchema.properties.work.items.properties.metadata.additionalProperties"
+                        }
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "$.endpoints[3].outputSchema.properties.work.items.properties.metadata.additionalProperties"
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "peerId",
+                "peerKind",
+                "type",
+                "command",
+                "priority",
+                "status",
+                "createdAt",
+                "updatedAt",
+                "queuedBy",
+                "metadata"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "work"
+        ],
+        "additionalProperties": false
+      }
     },
     {
       "id": "work.complete",
@@ -57,14 +1070,1307 @@
       "path": "/api/remote/work/{workId}/complete",
       "auth": "bearer-peer-token",
       "requiredScope": "remote:complete",
-      "description": "Complete, fail, or cancel a claimed work item."
+      "description": "Complete, fail, or cancel a claimed work item.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "$.endpoints[4].inputSchema.properties.result"
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "$.endpoints[4].inputSchema.properties.result"
+                }
+              }
+            ]
+          },
+          "error": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "$.endpoints[4].inputSchema.properties.metadata.additionalProperties"
+                  }
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "$.endpoints[4].inputSchema.properties.metadata.additionalProperties"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "workId"
+        ],
+        "additionalProperties": true
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "work": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "peerId": {
+                "type": "string"
+              },
+              "peerKind": {
+                "type": "string",
+                "enum": [
+                  "node",
+                  "device"
+                ]
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "invoke",
+                  "status.request",
+                  "location.request",
+                  "session.message",
+                  "automation.run"
+                ]
+              },
+              "command": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "string",
+                "enum": [
+                  "default",
+                  "normal",
+                  "high"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "claimed",
+                  "completed",
+                  "failed",
+                  "cancelled",
+                  "expired"
+                ]
+              },
+              "payload": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "$.endpoints[4].outputSchema.properties.work.properties.payload"
+                    }
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "$.endpoints[4].outputSchema.properties.work.properties.payload"
+                    }
+                  }
+                ]
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "updatedAt": {
+                "type": "number"
+              },
+              "queuedBy": {
+                "type": "string"
+              },
+              "claimedAt": {
+                "type": "number"
+              },
+              "claimTokenId": {
+                "type": "string"
+              },
+              "leaseExpiresAt": {
+                "type": "number"
+              },
+              "completedAt": {
+                "type": "number"
+              },
+              "timeoutMs": {
+                "type": "number"
+              },
+              "sessionId": {
+                "type": "string"
+              },
+              "routeId": {
+                "type": "string"
+              },
+              "automationRunId": {
+                "type": "string"
+              },
+              "automationJobId": {
+                "type": "string"
+              },
+              "approvalId": {
+                "type": "string"
+              },
+              "result": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "$.endpoints[4].outputSchema.properties.work.properties.result"
+                    }
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "$.endpoints[4].outputSchema.properties.work.properties.result"
+                    }
+                  }
+                ]
+              },
+              "error": {
+                "type": "string"
+              },
+              "telemetry": {
+                "type": "object",
+                "properties": {
+                  "usage": {
+                    "type": "object",
+                    "properties": {
+                      "inputTokens": {
+                        "type": "number"
+                      },
+                      "outputTokens": {
+                        "type": "number"
+                      },
+                      "cacheReadTokens": {
+                        "type": "number"
+                      },
+                      "cacheWriteTokens": {
+                        "type": "number"
+                      },
+                      "reasoningTokens": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "inputTokens",
+                      "outputTokens",
+                      "cacheReadTokens",
+                      "cacheWriteTokens"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "llmCallCount": {
+                    "type": "number"
+                  },
+                  "toolCallCount": {
+                    "type": "number"
+                  },
+                  "turnCount": {
+                    "type": "number"
+                  },
+                  "modelId": {
+                    "type": "string"
+                  },
+                  "providerId": {
+                    "type": "string"
+                  },
+                  "reasoningSummaryPresent": {
+                    "type": "boolean"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "local-agent",
+                      "shared-session",
+                      "remote-node",
+                      "remote-device"
+                    ]
+                  }
+                },
+                "required": [
+                  "usage"
+                ],
+                "additionalProperties": true
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "$.endpoints[4].outputSchema.properties.work.properties.metadata.additionalProperties"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "$.endpoints[4].outputSchema.properties.work.properties.metadata.additionalProperties"
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "peerId",
+              "peerKind",
+              "type",
+              "command",
+              "priority",
+              "status",
+              "createdAt",
+              "updatedAt",
+              "queuedBy",
+              "metadata"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "work"
+        ],
+        "additionalProperties": false
+      }
     },
     {
       "id": "operator.snapshot",
       "method": "GET",
       "path": "/api/remote",
       "auth": "bearer-operator-token",
-      "description": "Inspect distributed runtime pair requests, peers, work, and audit state."
+      "description": "Inspect distributed runtime pair requests, peers, work, and audit state.",
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "daemon": {
+            "type": "object",
+            "properties": {
+              "transportState": {
+                "type": "string"
+              },
+              "isRunning": {
+                "type": "boolean"
+              },
+              "reconnectAttempts": {
+                "type": "number"
+              },
+              "runningJobCount": {
+                "type": "number"
+              },
+              "lastError": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "transportState",
+              "isRunning",
+              "reconnectAttempts",
+              "runningJobCount"
+            ],
+            "additionalProperties": true
+          },
+          "acp": {
+            "type": "object",
+            "properties": {
+              "transportState": {
+                "type": "string"
+              },
+              "activeConnectionIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "totalSpawned": {
+                "type": "number"
+              },
+              "totalFailed": {
+                "type": "number"
+              },
+              "lastError": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "transportState",
+              "activeConnectionIds",
+              "totalSpawned",
+              "totalFailed"
+            ],
+            "additionalProperties": true
+          },
+          "registry": {
+            "type": "object",
+            "properties": {
+              "pools": {
+                "type": "number"
+              },
+              "contracts": {
+                "type": "number"
+              },
+              "artifacts": {
+                "type": "number"
+              },
+              "poolEntries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "trustClass": {
+                      "type": "string"
+                    },
+                    "preferredTemplate": {
+                      "type": "string"
+                    },
+                    "maxRunners": {
+                      "type": "number"
+                    },
+                    "runnerIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "trustClass",
+                    "preferredTemplate",
+                    "maxRunners",
+                    "runnerIds"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "contractEntries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "runnerId": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "template": {
+                      "type": "string"
+                    },
+                    "poolId": {
+                      "type": "string"
+                    },
+                    "taskId": {
+                      "type": "string"
+                    },
+                    "sourceTransport": {
+                      "type": "string"
+                    },
+                    "trustClass": {
+                      "type": "string"
+                    },
+                    "executionProtocol": {
+                      "type": "string"
+                    },
+                    "reviewMode": {
+                      "type": "string"
+                    },
+                    "communicationLane": {
+                      "type": "string"
+                    },
+                    "transportState": {
+                      "type": "string"
+                    },
+                    "lastError": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "runnerId",
+                    "label",
+                    "template",
+                    "sourceTransport",
+                    "trustClass",
+                    "executionProtocol",
+                    "reviewMode",
+                    "communicationLane",
+                    "transportState"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "artifactEntries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "runnerId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "runnerId",
+                    "createdAt",
+                    "status",
+                    "summary"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "pools",
+              "contracts",
+              "artifacts",
+              "poolEntries",
+              "contractEntries",
+              "artifactEntries"
+            ],
+            "additionalProperties": false
+          },
+          "supervisor": {
+            "type": "object",
+            "properties": {
+              "sessions": {
+                "type": "number"
+              },
+              "degraded": {
+                "type": "number"
+              },
+              "capturedAt": {
+                "type": "number"
+              },
+              "entries": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "runnerId": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "transportState": {
+                      "type": "string"
+                    },
+                    "heartbeat": {
+                      "type": "string"
+                    },
+                    "taskId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "runnerId",
+                    "label",
+                    "transportState",
+                    "heartbeat"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "sessions",
+              "degraded",
+              "capturedAt",
+              "entries"
+            ],
+            "additionalProperties": false
+          },
+          "distributed": {
+            "type": "object",
+            "properties": {
+              "pairRequests": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "peerKind": {
+                      "type": "string",
+                      "enum": [
+                        "node",
+                        "device"
+                      ]
+                    },
+                    "requestedId": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string"
+                    },
+                    "deviceFamily": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "clientMode": {
+                      "type": "string"
+                    },
+                    "capabilities": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "commands": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "requestedBy": {
+                      "type": "string",
+                      "enum": [
+                        "remote",
+                        "operator"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "verified",
+                        "rejected",
+                        "expired"
+                      ]
+                    },
+                    "challengePreview": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "approvedAt": {
+                      "type": "number"
+                    },
+                    "verifiedAt": {
+                      "type": "number"
+                    },
+                    "rejectedAt": {
+                      "type": "number"
+                    },
+                    "expiresAt": {
+                      "type": "number"
+                    },
+                    "peerId": {
+                      "type": "string"
+                    },
+                    "remoteAddress": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.pairRequests.items.properties.metadata.additionalProperties"
+                            }
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.pairRequests.items.properties.metadata.additionalProperties"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "peerKind",
+                    "requestedId",
+                    "label",
+                    "capabilities",
+                    "commands",
+                    "requestedBy",
+                    "status",
+                    "challengePreview",
+                    "createdAt",
+                    "updatedAt",
+                    "expiresAt",
+                    "metadata"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "peers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "node",
+                        "device"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "requestedId": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string"
+                    },
+                    "deviceFamily": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "clientMode": {
+                      "type": "string"
+                    },
+                    "capabilities": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "commands": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "permissions": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "boolean"
+                      }
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "paired",
+                        "connected",
+                        "idle",
+                        "disconnected",
+                        "revoked"
+                      ]
+                    },
+                    "pairedAt": {
+                      "type": "number"
+                    },
+                    "verifiedAt": {
+                      "type": "number"
+                    },
+                    "lastSeenAt": {
+                      "type": "number"
+                    },
+                    "lastConnectedAt": {
+                      "type": "number"
+                    },
+                    "lastDisconnectedAt": {
+                      "type": "number"
+                    },
+                    "lastRemoteAddress": {
+                      "type": "string"
+                    },
+                    "activeTokenId": {
+                      "type": "string"
+                    },
+                    "tokens": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "scopes": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "issuedAt": {
+                            "type": "number"
+                          },
+                          "lastUsedAt": {
+                            "type": "number"
+                          },
+                          "rotatedAt": {
+                            "type": "number"
+                          },
+                          "revokedAt": {
+                            "type": "number"
+                          },
+                          "fingerprint": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "label",
+                          "scopes",
+                          "issuedAt",
+                          "fingerprint"
+                        ],
+                        "additionalProperties": true
+                      }
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.peers.items.properties.metadata.additionalProperties"
+                            }
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.peers.items.properties.metadata.additionalProperties"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "label",
+                    "requestedId",
+                    "capabilities",
+                    "commands",
+                    "status",
+                    "pairedAt",
+                    "tokens",
+                    "metadata"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "work": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "peerId": {
+                      "type": "string"
+                    },
+                    "peerKind": {
+                      "type": "string",
+                      "enum": [
+                        "node",
+                        "device"
+                      ]
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "invoke",
+                        "status.request",
+                        "location.request",
+                        "session.message",
+                        "automation.run"
+                      ]
+                    },
+                    "command": {
+                      "type": "string"
+                    },
+                    "priority": {
+                      "type": "string",
+                      "enum": [
+                        "default",
+                        "normal",
+                        "high"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "claimed",
+                        "completed",
+                        "failed",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "payload": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.work.items.properties.payload"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.work.items.properties.payload"
+                          }
+                        }
+                      ]
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "queuedBy": {
+                      "type": "string"
+                    },
+                    "claimedAt": {
+                      "type": "number"
+                    },
+                    "claimTokenId": {
+                      "type": "string"
+                    },
+                    "leaseExpiresAt": {
+                      "type": "number"
+                    },
+                    "completedAt": {
+                      "type": "number"
+                    },
+                    "timeoutMs": {
+                      "type": "number"
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "routeId": {
+                      "type": "string"
+                    },
+                    "automationRunId": {
+                      "type": "string"
+                    },
+                    "automationJobId": {
+                      "type": "string"
+                    },
+                    "approvalId": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.work.items.properties.result"
+                          }
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.work.items.properties.result"
+                          }
+                        }
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "telemetry": {
+                      "type": "object",
+                      "properties": {
+                        "usage": {
+                          "type": "object",
+                          "properties": {
+                            "inputTokens": {
+                              "type": "number"
+                            },
+                            "outputTokens": {
+                              "type": "number"
+                            },
+                            "cacheReadTokens": {
+                              "type": "number"
+                            },
+                            "cacheWriteTokens": {
+                              "type": "number"
+                            },
+                            "reasoningTokens": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "inputTokens",
+                            "outputTokens",
+                            "cacheReadTokens",
+                            "cacheWriteTokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "llmCallCount": {
+                          "type": "number"
+                        },
+                        "toolCallCount": {
+                          "type": "number"
+                        },
+                        "turnCount": {
+                          "type": "number"
+                        },
+                        "modelId": {
+                          "type": "string"
+                        },
+                        "providerId": {
+                          "type": "string"
+                        },
+                        "reasoningSummaryPresent": {
+                          "type": "boolean"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "local-agent",
+                            "shared-session",
+                            "remote-node",
+                            "remote-device"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "usage"
+                      ],
+                      "additionalProperties": true
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.work.items.properties.metadata.additionalProperties"
+                            }
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.work.items.properties.metadata.additionalProperties"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "peerId",
+                    "peerKind",
+                    "type",
+                    "command",
+                    "priority",
+                    "status",
+                    "createdAt",
+                    "updatedAt",
+                    "queuedBy",
+                    "metadata"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "audit": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "pair-requested",
+                        "pair-approved",
+                        "pair-rejected",
+                        "pair-verified",
+                        "pair-expired",
+                        "token-rotated",
+                        "token-revoked",
+                        "peer-connected",
+                        "peer-disconnected",
+                        "work-queued",
+                        "work-claimed",
+                        "work-completed",
+                        "work-failed",
+                        "work-cancelled",
+                        "work-expired"
+                      ]
+                    },
+                    "actor": {
+                      "type": "string"
+                    },
+                    "peerId": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "workId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.audit.items.properties.metadata.additionalProperties"
+                            }
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "$.endpoints[5].outputSchema.properties.distributed.properties.audit.items.properties.metadata.additionalProperties"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "action",
+                    "actor",
+                    "createdAt",
+                    "metadata"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            },
+            "required": [
+              "pairRequests",
+              "peers",
+              "work",
+              "audit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "daemon",
+          "acp",
+          "registry",
+          "supervisor",
+          "distributed"
+        ],
+        "additionalProperties": false
+      }
     }
   ],
   "workCompletionStatuses": [

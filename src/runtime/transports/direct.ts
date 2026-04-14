@@ -8,6 +8,10 @@ import { createPeerClient, type PeerClient, type PeerClientSnapshot } from '../p
 import type { RuntimeServices } from '../services.ts';
 import type { UiSessionSnapshot, UiTasksSnapshot } from '../ui-read-models.ts';
 import type { ShellPathService } from '../shell-paths.ts';
+import { createDirectClientTransport } from './direct-client.ts';
+import type { DirectClientTransport } from './direct-client.ts';
+export { createDirectClientTransport } from './direct-client.ts';
+export type { DirectClientTransport } from './direct-client.ts';
 
 export interface DirectTransportSnapshot {
   readonly kind: 'direct';
@@ -35,17 +39,10 @@ export interface DirectTransport {
 export function createDirectTransportFromServices(services: DirectTransportServices): DirectTransport {
   const operator = createOperatorClient(services.operator);
   const peer = createPeerClient(services.peer);
+  const transport = createDirectClientTransport(operator, peer);
 
   return Object.freeze({
-    kind: 'direct' as const,
-    operator,
-    peer,
-    getOperatorClient(): OperatorClient {
-      return operator;
-    },
-    getPeerClient(): PeerClient {
-      return peer;
-    },
+    ...transport,
     async snapshot(): Promise<DirectTransportSnapshot> {
       const [providers] = await Promise.all([
         operator.providers.snapshot(),
@@ -67,6 +64,10 @@ export function createDirectTransportFromServices(services: DirectTransportServi
   });
 }
 
-export function createDirectTransport(runtimeServices: RuntimeServices): DirectTransport {
+export function createRuntimeDirectTransport(runtimeServices: RuntimeServices): DirectTransport {
   return createDirectTransportFromServices(createDirectTransportServices(runtimeServices));
+}
+
+export function createDirectTransport(runtimeServices: RuntimeServices): DirectTransport {
+  return createRuntimeDirectTransport(runtimeServices);
 }

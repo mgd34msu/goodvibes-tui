@@ -1,16 +1,24 @@
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
+import { isValidConfigKey } from '../../config/schema.ts';
 import type { UserAuthManager } from '../../security/user-auth.ts';
-import { buildOperatorSessionCookie } from '../../security/http-auth.ts';
+import { buildOperatorSessionCookie, OPERATOR_SESSION_COOKIE_NAME } from '../../security/http-auth.ts';
 import type { AgentManager } from '../../tools/agent/index.ts';
-import type { AutomationManager } from '../../automation/index.ts';
+import { normalizeAtSchedule, normalizeCronSchedule, normalizeEverySchedule, type AutomationManager } from '../../automation/index.ts';
 import type { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../../control-plane/index.ts';
 import type { GatewayMethodCatalog } from '../../control-plane/index.ts';
+import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
+import {
+  getProviderRuntimeSnapshot,
+  getProviderUsageSnapshot,
+  listProviderRuntimeSnapshots,
+} from '../../providers/runtime-snapshot.ts';
 import type { RouteBindingManager, ChannelPolicyManager, ChannelPluginRegistry, SurfaceRegistry } from '../../channels/index.ts';
 import type { WatcherRegistry } from '../../watchers/index.ts';
 import type { DistributedPeerAuth, DistributedRuntimeManager } from '../../runtime/remote/index.ts';
 import type { KnowledgeGraphqlService, KnowledgeService } from '../../knowledge/index.ts';
+import { inspectKnowledgeGraphqlAccess } from '../../knowledge/index.ts';
 import type { VoiceService } from '../../voice/index.ts';
 import type { WebSearchService } from '../../web-search/index.ts';
 import type { ArtifactStore } from '../../artifacts/index.ts';
@@ -20,6 +28,7 @@ import type { IntegrationHelperService } from '../../runtime/integration/helpers
 import type { DomainDispatch, RuntimeStore } from '../../runtime/store/index.ts';
 import type { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { TelemetryApiService } from '../../runtime/telemetry/api.ts';
+import { inspectInboundTls, inspectOutboundTls } from '../../runtime/network/index.ts';
 import type { MemoryEmbeddingProviderRegistry, MemoryRegistry } from '../../state/index.ts';
 import { dispatchDaemonApiRoutes } from '../../control-plane/routes/index.ts';
 import { handleGitHubAutomationWebhook, handleSlackSurfaceWebhook, handleDiscordSurfaceWebhook, handleNtfySurfaceWebhook, handleGenericWebhookSurface } from '../../adapters/index.ts';
@@ -39,11 +48,18 @@ import { createDaemonIntegrationRouteHandlers } from './integration-routes.ts';
 import { createDaemonTelemetryRouteHandlers } from './telemetry-routes.ts';
 import { createDaemonChannelRouteHandlers } from './channel-routes.ts';
 import { createDaemonSystemRouteHandlers } from './system-routes.ts';
+import {
+  buildChannelRouteContext,
+  buildKnowledgeRouteContext,
+  buildMediaRouteContext,
+  buildSystemRouteContext,
+} from './router-route-contexts.ts';
 import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '../../adapters/index.ts';
 import type { PlatformServiceManager } from '../service-manager.ts';
 import type { JsonRecord } from '../helpers.ts';
 import { jsonErrorResponse } from './error-response.ts';
 import { AppError } from '../../types/errors.ts';
+import { VERSION } from '../../version.ts';
 
 interface DaemonHttpRouterContext {
   readonly configManager: ConfigManager;
@@ -221,11 +237,18 @@ export class DaemonHttpRouter {
     return dispatchDaemonApiRoutes(req, {
       ...createDaemonControlRouteHandlers({
         authToken: this.context.authToken(),
-        configManager: this.context.configManager,
+        version: VERSION,
+        sessionCookieName: OPERATOR_SESSION_COOKIE_NAME,
         controlPlaneGateway: this.context.controlPlaneGateway,
-        describeAuthenticatedPrincipal: this.context.describeAuthenticatedPrincipal,
         extractAuthToken: this.context.extractAuthToken,
+        resolveAuthenticatedPrincipal: (request) => {
+          const token = this.context.extractAuthToken(request);
+          return token ? this.context.describeAuthenticatedPrincipal(token) : null;
+        },
         gatewayMethods: this.context.gatewayMethods,
+        getOperatorContract: () => buildOperatorContract(this.context.gatewayMethods),
+        inspectInboundTls: (surface) => inspectInboundTls(this.context.configManager, surface),
+        inspectOutboundTls: () => inspectOutboundTls(this.context.configManager),
         invokeGatewayMethodCall: this.context.invokeGatewayMethodCall,
         parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
         requireAdmin: this.context.requireAdmin,
@@ -233,40 +256,52 @@ export class DaemonHttpRouter {
       }, req),
       ...createDaemonIntegrationRouteHandlers({
         channelPlugins: this.context.channelPlugins,
-        configManager: this.context.configManager,
         integrationHelpers: this.context.integrationHelpers,
         memoryEmbeddingRegistry: this.context.memoryEmbeddingRegistry,
         memoryRegistry: this.context.memoryRegistry,
         parseJsonBody: (request) => this.parseJsonBody(request),
-        providerRegistry: this.context.providerRegistry,
+        providerRuntime: {
+          listSnapshots: () => listProviderRuntimeSnapshots(this.context.providerRegistry),
+          getSnapshot: (providerId) => getProviderRuntimeSnapshot(this.context.providerRegistry, providerId),
+          getUsageSnapshot: (providerId) => getProviderUsageSnapshot(this.context.providerRegistry, providerId),
+        },
         requireAdmin: (request) => this.context.requireAdmin(request),
         userAuth: this.context.userAuth,
       }, req),
       ...createDaemonTelemetryRouteHandlers({
         telemetryApi: this.telemetryApi,
-        extractAuthToken: (request) => this.context.extractAuthToken(request),
-        describeAuthenticatedPrincipal: (token) => this.context.describeAuthenticatedPrincipal(token),
+        resolveAuthenticatedPrincipal: (request) => {
+          const token = this.context.extractAuthToken(request);
+          return token ? this.context.describeAuthenticatedPrincipal(token) : null;
+        },
       }),
       ...createDaemonChannelRouteHandlers({
-        channelPlugins: this.context.channelPlugins,
-        channelPolicy: this.context.channelPolicy,
-        parseJsonBody: (request) => this.parseJsonBody(request),
-        parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
-        requireAdmin: (request) => this.context.requireAdmin(request),
-        surfaceRegistry: this.context.surfaceRegistry,
+        ...buildChannelRouteContext({
+          channelPlugins: this.context.channelPlugins,
+          channelPolicy: this.context.channelPolicy,
+          parseJsonBody: (request) => this.parseJsonBody(request),
+          parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
+          requireAdmin: (request) => this.context.requireAdmin(request),
+          surfaceRegistry: this.context.surfaceRegistry,
+        }),
       }),
       ...createDaemonSystemRouteHandlers({
-        approvalBroker: this.context.approvalBroker,
-        configManager: this.context.configManager,
-        integrationHelpers: this.context.integrationHelpers,
-        parseJsonBody: (request) => this.parseJsonBody(request),
-        parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
-        platformServiceManager: this.context.platformServiceManager,
-        recordApiResponse: (request, path, response, clientKind) => this.recordApiResponse(request, path, response, clientKind),
-        requireAdmin: (request) => this.context.requireAdmin(request),
-        requireAuthenticatedSession: (request) => this.context.requireAuthenticatedSession(request),
-        routeBindings: this.context.routeBindings,
-        watcherRegistry: this.context.watcherRegistry,
+        ...buildSystemRouteContext({
+          approvalBroker: this.context.approvalBroker,
+          configManager: this.context.configManager,
+          integrationHelpers: this.context.integrationHelpers,
+          inspectInboundTls: (surface) => inspectInboundTls(this.context.configManager, surface),
+          inspectOutboundTls: () => inspectOutboundTls(this.context.configManager),
+          isValidConfigKey,
+          parseJsonBody: (request) => this.parseJsonBody(request),
+          parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
+          platformServiceManager: this.context.platformServiceManager,
+          recordApiResponse: (request, path, response, clientKind) => this.recordApiResponse(request, path, response, clientKind),
+          requireAdmin: (request) => this.context.requireAdmin(request),
+          requireAuthenticatedSession: (request) => this.context.requireAuthenticatedSession(request),
+          routeBindings: this.context.routeBindings,
+          watcherRegistry: this.context.watcherRegistry,
+        }),
       }, req),
       ...createDaemonRuntimeRouteHandlers({
         parseJsonBody: (request) => this.parseJsonBody(request),
@@ -275,13 +310,21 @@ export class DaemonHttpRouter {
         requireAdmin: (request) => this.context.requireAdmin(request),
         sessionBroker: {
           start: () => this.context.sessionBroker.start(),
-          submitMessage: (input) => this.context.sessionBroker.submitMessage(input),
-          steerMessage: (input) => this.context.sessionBroker.steerMessage(input),
-          followUpMessage: (input) => this.context.sessionBroker.followUpMessage(input),
+          submitMessage: (input) => this.context.sessionBroker.submitMessage(
+            input as Parameters<SharedSessionBroker['submitMessage']>[0],
+          ),
+          steerMessage: (input) => this.context.sessionBroker.steerMessage(
+            input as Parameters<SharedSessionBroker['steerMessage']>[0],
+          ),
+          followUpMessage: (input) => this.context.sessionBroker.followUpMessage(
+            input as Parameters<SharedSessionBroker['followUpMessage']>[0],
+          ),
           bindAgent: async (sessionId, agentId) => {
             await this.context.sessionBroker.bindAgent(sessionId, agentId);
           },
-          createSession: (input) => this.context.sessionBroker.createSession(input),
+          createSession: (input) => this.context.sessionBroker.createSession(
+            input as Parameters<SharedSessionBroker['createSession']>[0],
+          ),
           getSession: (sessionId) => this.context.sessionBroker.getSession(sessionId),
           getMessages: (sessionId, limit) => this.context.sessionBroker.getMessages(sessionId, limit),
           getInputs: (sessionId, limit) => this.context.sessionBroker.getInputs(sessionId, limit),
@@ -311,15 +354,29 @@ export class DaemonHttpRouter {
           setEnabled: (jobId, enabled) => this.context.automationManager.setEnabled(jobId, enabled),
           runNow: (jobId) => this.context.automationManager.runNow(jobId),
         },
-        routeBindings: this.context.routeBindings,
+        normalizeAtSchedule,
+        normalizeEverySchedule,
+        normalizeCronSchedule,
+        routeBindings: {
+          start: () => this.context.routeBindings.start(),
+          getBinding: (id) => this.context.routeBindings.getBinding(id),
+        },
         trySpawnAgent: (input, logLabel, sessionId) => this.context.trySpawnAgent({
           ...input,
           ...(input.tools ? { tools: [...input.tools] } : {}),
         } as Parameters<AgentManager['spawn']>[0], logLabel, sessionId),
-        queueSurfaceReplyFromBinding: (binding, input) => this.context.queueSurfaceReplyFromBinding(binding, input),
+        queueSurfaceReplyFromBinding: (binding, input) => this.context.queueSurfaceReplyFromBinding(
+          binding as Parameters<typeof this.context.queueSurfaceReplyFromBinding>[0],
+          input,
+        ),
         surfaceDeliveryEnabled: (surface) => this.context.surfaceDeliveryEnabled(surface),
-        syncSpawnedAgentTask: (record, sessionId) => this.context.syncSpawnedAgentTask(record, sessionId),
-        syncFinishedAgentTask: (record) => this.context.syncFinishedAgentTask(record),
+        syncSpawnedAgentTask: (record, sessionId) => this.context.syncSpawnedAgentTask(
+          record as Parameters<typeof this.context.syncSpawnedAgentTask>[0],
+          sessionId,
+        ),
+        syncFinishedAgentTask: (record) => this.context.syncFinishedAgentTask(
+          record as Parameters<typeof this.context.syncFinishedAgentTask>[0],
+        ),
         configManager: this.context.configManager,
         runtimeStore: this.context.runtimeStore,
         runtimeDispatch: this.context.runtimeDispatch,
@@ -333,25 +390,35 @@ export class DaemonHttpRouter {
         distributedRuntime: this.context.distributedRuntime,
       }),
       ...createDaemonKnowledgeRouteHandlers({
-        configManager: this.context.configManager,
-        parseJsonBody: (request) => this.parseJsonBody(request),
-        parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
-        parseJsonText: (raw) => this.parseJsonText(raw),
-        requireAdmin: (request) => this.context.requireAdmin(request),
-        describeAuthenticatedPrincipal: (token) => this.context.describeAuthenticatedPrincipal(token),
-        extractAuthToken: (request) => this.context.extractAuthToken(request),
-        knowledgeService: this.context.knowledgeService,
-        knowledgeGraphqlService: this.context.knowledgeGraphqlService,
+        ...buildKnowledgeRouteContext({
+          configManager: this.context.configManager,
+          inspectGraphqlAccess: inspectKnowledgeGraphqlAccess,
+          normalizeAtSchedule,
+          normalizeEverySchedule,
+          normalizeCronSchedule,
+          parseJsonBody: (request) => this.parseJsonBody(request),
+          parseOptionalJsonBody: (request) => this.parseOptionalJsonBody(request),
+          parseJsonText: (raw) => this.parseJsonText(raw),
+          requireAdmin: (request) => this.context.requireAdmin(request),
+          resolveAuthenticatedPrincipal: (request) => {
+            const token = this.context.extractAuthToken(request);
+            return token ? this.context.describeAuthenticatedPrincipal(token) : null;
+          },
+          knowledgeService: this.context.knowledgeService,
+          knowledgeGraphqlService: this.context.knowledgeGraphqlService,
+        }),
       }),
       ...createDaemonMediaRouteHandlers({
-        parseJsonBody: (request) => this.parseJsonBody(request),
-        voiceService: this.context.voiceService,
-        configManager: this.context.configManager,
-        requireAdmin: (request) => this.context.requireAdmin(request),
-        webSearchService: this.context.webSearchService,
-        artifactStore: this.context.artifactStore,
-        mediaProviders: this.context.mediaProviders,
-        multimodalService: this.context.multimodalService,
+        ...buildMediaRouteContext({
+          artifactStore: this.context.artifactStore,
+          configManager: this.context.configManager,
+          mediaProviders: this.context.mediaProviders,
+          multimodalService: this.context.multimodalService,
+          parseJsonBody: (request) => this.parseJsonBody(request),
+          requireAdmin: (request) => this.context.requireAdmin(request),
+          voiceService: this.context.voiceService,
+          webSearchService: this.context.webSearchService,
+        }),
       }),
     });
   }

@@ -1,6 +1,4 @@
-import type { ArtifactFetchMode } from '../artifacts/types.ts';
-import type { ConfigKey } from '../config/schema.ts';
-import { missingScopes } from './helpers.ts';
+import { missingScopes } from './http/route-helpers.ts';
 
 export type AuthenticatedPrincipalKind = 'user' | 'bot' | 'service' | 'token';
 
@@ -18,7 +16,7 @@ interface AuthenticatedPrincipalResolver {
 
 interface PrivateHostFetchConfig {
   readonly configManager: {
-    get(key: ConfigKey): unknown;
+    get(key: string): unknown;
   };
 }
 
@@ -58,7 +56,7 @@ export function buildMissingScopeBody(
 export function resolvePrivateHostFetchOptions(
   requested: unknown,
   context: PrivateHostFetchConfig | ElevatedPrivateHostFetchConfig,
-): { allowPrivateHosts: true; fetchMode: Extract<ArtifactFetchMode, 'allow-private-hosts'> } | {} | Response {
+): { allowPrivateHosts: true; fetchMode: 'allow-private-hosts' } | {} | Response {
   if (requested !== true) return {};
   if (!Boolean(context.configManager.get('network.remoteFetch.allowPrivateHosts'))) {
     return Response.json({ error: 'Private-host remote fetches are disabled by config.' }, { status: 403 });

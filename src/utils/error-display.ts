@@ -1,4 +1,5 @@
 import { AppError, ProviderError, type ErrorCategory, type ErrorSource, type ProviderErrorOptions } from '../types/errors.ts';
+import type { StructuredDaemonErrorBody } from '../types/daemon-error-contract.ts';
 
 const MAX_ERROR_LENGTH = 240;
 
@@ -256,7 +257,7 @@ export function formatError(error: unknown, options: ErrorNormalizationOptions =
   return lines.join('\n');
 }
 
-export function buildErrorResponseBody(error: unknown, options: ErrorNormalizationOptions = {}): Record<string, unknown> {
+export function buildErrorResponseBody(error: unknown, options: ErrorNormalizationOptions = {}): StructuredDaemonErrorBody {
   const normalized = normalizeError(error, options);
   return {
     error: normalized.summary,

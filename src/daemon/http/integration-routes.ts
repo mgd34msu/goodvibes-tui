@@ -1,25 +1,9 @@
-import type { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
-import { getProviderRuntimeSnapshot, getProviderUsageSnapshot, listProviderRuntimeSnapshots } from '../../providers/runtime-snapshot.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import type { DaemonRouteContext } from '../types.ts';
-import type { MemoryEmbeddingProviderRegistry, MemoryRegistry } from '../../state/index.ts';
 import { jsonErrorResponse } from './error-response.ts';
-
-type IntegrationRouteContext = Pick<
-  DaemonRouteContext,
-  | 'channelPlugins'
-  | 'configManager'
-  | 'integrationHelpers'
-  | 'memoryEmbeddingRegistry'
-  | 'memoryRegistry'
-  | 'parseJsonBody'
-  | 'providerRegistry'
-  | 'requireAdmin'
-  | 'userAuth'
->;
+import type { DaemonIntegrationRouteContext, IntegrationHelperServiceLike, RuntimeEventDomain } from './integration-route-types.ts';
 
 export function createDaemonIntegrationRouteHandlers(
-  context: IntegrationRouteContext,
+  context: DaemonIntegrationRouteContext,
   request: Request,
 ): Pick<
   DaemonApiRouteHandlers,
@@ -87,15 +71,15 @@ export function createDaemonIntegrationRouteHandlers(
         channels: channelAccounts,
       });
     },
-    getProviders: async () => Response.json({ providers: await listProviderRuntimeSnapshots(context.providerRegistry) }),
+    getProviders: async () => Response.json({ providers: await context.providerRuntime.listSnapshots() }),
     getProvider: async (providerId) => {
-      const provider = await getProviderRuntimeSnapshot(context.providerRegistry, providerId);
+      const provider = await context.providerRuntime.getSnapshot(providerId);
       return provider
         ? Response.json(provider)
         : Response.json({ error: 'Unknown provider' }, { status: 404 });
     },
     getProviderUsage: async (providerId) => {
-      const usage = await getProviderUsageSnapshot(context.providerRegistry, providerId);
+      const usage = await context.providerRuntime.getUsageSnapshot(providerId);
       return usage
         ? Response.json(usage)
         : Response.json({ error: 'Unknown provider' }, { status: 404 });
@@ -196,15 +180,15 @@ export function createDaemonIntegrationRouteHandlers(
     getEvents: (req) => {
       const url = new URL(req.url);
       const rawDomains = url.searchParams.get('domains');
-      const domains = (rawDomains ? rawDomains.split(',').map((value) => value.trim()).filter(Boolean) : []) as import('../../runtime/events/index.ts').RuntimeEventDomain[];
+      const domains = (rawDomains ? rawDomains.split(',').map((value) => value.trim()).filter(Boolean) : []) as RuntimeEventDomain[];
       return withHelpers(context.integrationHelpers, (helpers) => helpers.createEventStream(req, domains));
     },
   };
 }
 
 function withHelpers<T>(
-  helpers: IntegrationHelperService | null | undefined,
-  run: (helpers: IntegrationHelperService) => T,
+  helpers: IntegrationHelperServiceLike | null | undefined,
+  run: (helpers: IntegrationHelperServiceLike) => T,
 ): T | Response {
   if (!helpers) {
     return Response.json({ error: 'Integration helper service unavailable' }, { status: 503 });

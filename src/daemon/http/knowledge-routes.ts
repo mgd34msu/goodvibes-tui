@@ -1,44 +1,20 @@
-import {
-  inspectKnowledgeGraphqlAccess,
-  type KnowledgeConsolidationCandidateRecord,
-  type KnowledgePacket,
-  type KnowledgeProjectionTargetKind,
-  type KnowledgeScheduleRecord,
-  type KnowledgeService,
-  type KnowledgeSourceRecord,
-  type KnowledgeUsageRecord,
-} from '../../knowledge/index.ts';
-import type { KnowledgeGraphqlService } from '../../knowledge/index.ts';
-import {
-  normalizeAtSchedule,
-  normalizeCronSchedule,
-  normalizeEverySchedule,
-  type AutomationScheduleDefinition,
-} from '../../automation/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import type { ConfigKey } from '../../config/schema.ts';
-import { summarizeError } from '../../utils/error-display.ts';
 import {
   buildMissingScopeBody,
-  resolveAuthenticatedPrincipal,
   resolvePrivateHostFetchOptions,
-  type AuthenticatedPrincipal,
 } from '../http-policy.ts';
-import { jsonErrorResponse } from './error-response.ts';
+import { jsonErrorResponse, summarizeErrorForRecord } from './error-response.ts';
+import type {
+  AutomationScheduleDefinition,
+  DaemonKnowledgeRouteContext,
+  KnowledgeCandidateStatus,
+  KnowledgePacketDetail,
+  KnowledgeProjectionTargetKind,
+  KnowledgeSourceType,
+  KnowledgeUsageKind,
+} from './knowledge-route-types.ts';
 
 type JsonBody = Record<string, unknown>;
-
-interface DaemonKnowledgeRouteContext {
-  readonly configManager: { get(key: ConfigKey): unknown };
-  readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
-  readonly parseOptionalJsonBody: (req: Request) => Promise<JsonBody | null | Response>;
-  readonly parseJsonText: (raw: string) => JsonBody | Response;
-  readonly requireAdmin: (req: Request) => Response | null;
-  readonly describeAuthenticatedPrincipal: (token: string) => AuthenticatedPrincipal | null;
-  readonly extractAuthToken: (req: Request) => string;
-  readonly knowledgeService: KnowledgeService;
-  readonly knowledgeGraphqlService: KnowledgeGraphqlService;
-}
 
 export function createDaemonKnowledgeRouteHandlers(
   context: DaemonKnowledgeRouteContext,
@@ -127,7 +103,7 @@ export function createDaemonKnowledgeRouteHandlers(
         usage: context.knowledgeService.listUsageRecords(readLimit(url, 100), {
           ...(targetKind ? { targetKind: targetKind as 'source' | 'node' | 'issue' } : {}),
           ...(targetId ? { targetId } : {}),
-          ...(usageKind ? { usageKind: usageKind as KnowledgeUsageRecord['usageKind'] } : {}),
+          ...(usageKind ? { usageKind: usageKind as KnowledgeUsageKind } : {}),
         }),
       });
     },
@@ -137,7 +113,7 @@ export function createDaemonKnowledgeRouteHandlers(
       const subjectId = url.searchParams.get('subjectId') ?? undefined;
       return Response.json({
         candidates: context.knowledgeService.listConsolidationCandidates(readLimit(url, 100), {
-          ...(status ? { status: status as KnowledgeConsolidationCandidateRecord['status'] } : {}),
+          ...(status ? { status: status as KnowledgeCandidateStatus } : {}),
           ...(subjectKind ? { subjectKind: subjectKind as 'source' | 'node' | 'issue' } : {}),
           ...(subjectId ? { subjectId } : {}),
         }),
@@ -249,7 +225,10 @@ function readKnowledgeProjectionRequest(
   };
 }
 
-function readKnowledgeSchedule(value: unknown): AutomationScheduleDefinition | Response {
+function readKnowledgeSchedule(
+  context: DaemonKnowledgeRouteContext,
+  value: unknown,
+): AutomationScheduleDefinition | Response {
   if (typeof value !== 'object' || value === null) {
     return Response.json({ error: 'Missing schedule object' }, { status: 400 });
   }
@@ -259,24 +238,30 @@ function readKnowledgeSchedule(value: unknown): AutomationScheduleDefinition | R
     switch (kind) {
       case 'every':
         if (typeof schedule.intervalMs === 'number') {
-          return normalizeEverySchedule(schedule.intervalMs, typeof schedule.anchorAt === 'number' ? schedule.anchorAt : undefined);
+          return context.normalizeEverySchedule(
+            schedule.intervalMs,
+            typeof schedule.anchorAt === 'number' ? schedule.anchorAt : undefined,
+          );
         }
         if (typeof schedule.interval === 'string') {
-          return normalizeEverySchedule(schedule.interval, typeof schedule.anchorAt === 'number' ? schedule.anchorAt : undefined);
+          return context.normalizeEverySchedule(
+            schedule.interval,
+            typeof schedule.anchorAt === 'number' ? schedule.anchorAt : undefined,
+          );
         }
         throw new Error('Every schedule requires intervalMs or interval.');
       case 'cron':
         if (typeof schedule.expression !== 'string' || !schedule.expression.trim()) {
           throw new Error('Cron schedule requires expression.');
         }
-        return normalizeCronSchedule(
+        return context.normalizeCronSchedule(
           schedule.expression,
           typeof schedule.timezone === 'string' ? schedule.timezone : undefined,
           schedule.staggerMs,
         );
       case 'at':
         if (typeof schedule.at !== 'number') throw new Error('At schedule requires at.');
-        return normalizeAtSchedule(schedule.at);
+        return context.normalizeAtSchedule(schedule.at);
       default:
         throw new Error('Schedule kind must be at, every, or cron.');
     }
@@ -348,14 +333,14 @@ async function handleKnowledgeGraphql(context: DaemonKnowledgeRouteContext, req:
   if (req.method === 'GET' && /\bmutation\b/.test(parsed.query)) {
     return Response.json({ error: 'GraphQL mutations must use POST.' }, { status: 405 });
   }
-  const principal = resolveAuthenticatedPrincipal(req, context);
+  const principal = context.resolveAuthenticatedPrincipal(req);
   if (!principal) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   let access;
   try {
-    access = inspectKnowledgeGraphqlAccess(parsed.query, parsed.operationName);
+    access = context.inspectGraphqlAccess(parsed.query, parsed.operationName);
   } catch (error) {
     return jsonErrorResponse(error, { status: 400 });
   }
@@ -404,7 +389,7 @@ async function handleKnowledgeIngestUrl(context: DaemonKnowledgeRouteContext, re
       ...(typeof body.folderPath === 'string' ? { folderPath: body.folderPath } : {}),
       ...(Array.isArray(body.tags) ? { tags: body.tags.filter((entry): entry is string => typeof entry === 'string') } : {}),
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
-      ...(typeof body.sourceType === 'string' ? { sourceType: body.sourceType as KnowledgeSourceRecord['sourceType'] } : {}),
+      ...(typeof body.sourceType === 'string' ? { sourceType: body.sourceType as KnowledgeSourceType } : {}),
       ...(typeof body.connectorId === 'string' ? { connectorId: body.connectorId } : {}),
       ...privateHostFetchOptions,
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
@@ -430,7 +415,7 @@ async function handleKnowledgeIngestArtifact(context: DaemonKnowledgeRouteContex
       ...(typeof body.folderPath === 'string' ? { folderPath: body.folderPath } : {}),
       ...(Array.isArray(body.tags) ? { tags: body.tags.filter((entry): entry is string => typeof entry === 'string') } : {}),
       ...(typeof body.sessionId === 'string' ? { sessionId: body.sessionId } : {}),
-      ...(typeof body.sourceType === 'string' ? { sourceType: body.sourceType as KnowledgeSourceRecord['sourceType'] } : {}),
+      ...(typeof body.sourceType === 'string' ? { sourceType: body.sourceType as KnowledgeSourceType } : {}),
       ...(typeof body.connectorId === 'string' ? { connectorId: body.connectorId } : {}),
       ...privateHostFetchOptions,
       ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
@@ -519,7 +504,9 @@ async function handleKnowledgePacket(context: DaemonKnowledgeRouteContext, reque
   if (!task) return Response.json({ error: 'Missing task' }, { status: 400 });
   const writeScope = Array.isArray(body.writeScope) ? body.writeScope.filter((entry): entry is string => typeof entry === 'string') : [];
   const limit = typeof body.limit === 'number' ? body.limit : 6;
-  const detail = typeof body.detail === 'string' ? body.detail.toLowerCase() as KnowledgePacket['detail'] : undefined;
+  const detail = typeof body.detail === 'string'
+    ? body.detail.toLowerCase() as KnowledgePacketDetail
+    : undefined;
   const budgetLimit = typeof body.budgetLimit === 'number' ? body.budgetLimit : undefined;
   return Response.json(await context.knowledgeService.buildPacket(task, writeScope, limit, {
     ...(detail ? { detail } : {}),
@@ -546,7 +533,7 @@ async function handleKnowledgeDecideCandidate(context: DaemonKnowledgeRouteConte
       }),
     });
   } catch (error) {
-    const message = summarizeError(error);
+    const message = summarizeErrorForRecord(error);
     return jsonErrorResponse(error, {
       status: message.startsWith('Unknown knowledge consolidation candidate:') ? 404 : 400,
     });
@@ -567,7 +554,7 @@ async function handleKnowledgeRunJob(context: DaemonKnowledgeRouteContext, jobId
       }),
     });
   } catch (error) {
-    const message = summarizeError(error);
+    const message = summarizeErrorForRecord(error);
     return jsonErrorResponse(error, {
       status: message.startsWith('Unknown knowledge job:') ? 404 : 400,
     });
@@ -581,7 +568,7 @@ async function handleKnowledgeSaveSchedule(context: DaemonKnowledgeRouteContext,
   if (body instanceof Response) return body;
   const jobId = typeof body.jobId === 'string' ? body.jobId.trim() : '';
   if (!jobId) return Response.json({ error: 'Missing jobId' }, { status: 400 });
-  const schedule = readKnowledgeSchedule(body.schedule);
+  const schedule = readKnowledgeSchedule(context, body.schedule);
   if (schedule instanceof Response) return schedule;
   try {
     return Response.json({
