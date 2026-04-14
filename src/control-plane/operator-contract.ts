@@ -1,4 +1,5 @@
 import type { GatewayEventDescriptor, GatewayMethodCatalog, GatewayMethodDescriptor } from './method-catalog.ts';
+import { getOperatorContract } from '@pellux/goodvibes-sdk-beta/contracts';
 import {
   BOOLEAN_SCHEMA,
   METHOD_DESCRIPTOR_SCHEMA,
@@ -150,90 +151,13 @@ function summarizeEventCoverage(events: readonly GatewayEventDescriptor[]): Oper
 }
 
 export function buildOperatorContract(catalog: GatewayMethodCatalog): OperatorContractManifest {
-  const methods = catalog.list();
-  const events = catalog.listEvents();
+  void catalog;
+  const contract = getOperatorContract();
   return {
-    version: OPERATOR_CONTRACT_VERSION,
+    ...contract,
     product: {
-      id: 'goodvibes',
-      surface: 'operator',
+      ...contract.product,
       version: VERSION,
-    },
-    auth: {
-      modes: ['shared-bearer', 'session-login'],
-      login: {
-        method: 'POST',
-        path: '/login',
-        requestSchema: objectSchema({
-          username: STRING_SCHEMA,
-          password: STRING_SCHEMA,
-        }, ['username', 'password']),
-        responseSchema: objectSchema({
-          authenticated: BOOLEAN_SCHEMA,
-          token: STRING_SCHEMA,
-          username: STRING_SCHEMA,
-          expiresAt: NUMBER_SCHEMA,
-        }, ['authenticated', 'token', 'username', 'expiresAt']),
-      },
-      current: {
-        method: 'GET',
-        path: OPERATOR_AUTH_CURRENT_PATH,
-        aliasPaths: OPERATOR_AUTH_CURRENT_ALIAS_PATHS,
-        responseSchema: CONTROL_AUTH_CURRENT_RESPONSE_SCHEMA,
-      },
-      sessionCookie: {
-        name: OPERATOR_SESSION_COOKIE_NAME,
-        httpOnly: true,
-        sameSite: 'Lax',
-        path: '/',
-      },
-      bearer: {
-        header: 'Authorization: Bearer <token>',
-        queryParameters: [],
-      },
-    },
-    transports: {
-      http: {
-        statusPath: '/status',
-        methodsPath: OPERATOR_METHODS_PATH,
-        eventsCatalogPath: OPERATOR_EVENTS_CATALOG_PATH,
-      },
-      sse: {
-        path: OPERATOR_EVENTS_PATH,
-        query: {
-          domains: 'comma-separated runtime domains',
-        },
-      },
-      websocket: {
-        path: OPERATOR_WS_PATH,
-        clientFrames: [
-          { type: 'ping' },
-          { type: 'auth', fields: ['token?', 'domains?', 'label?', 'capabilities?'] },
-          { type: 'subscribe', fields: ['domains'] },
-          { type: 'unsubscribe', fields: ['domains'] },
-          { type: 'call', fields: ['id?', 'methodId?', 'method?', 'path?', 'query?', 'body?'] },
-        ],
-        serverFrames: [
-          { type: 'event', fields: ['event', 'payload'] },
-          { type: 'pong', fields: ['ts'] },
-          { type: 'auth', fields: ['ok', 'clientId?', 'principalId?', 'error?'] },
-          { type: 'subscribed', fields: ['clientId', 'domains'] },
-          { type: 'unsubscribed', fields: ['clientId', 'domains'] },
-          { type: 'response', fields: ['id', 'ok', 'status', 'body'] },
-          { type: 'error', fields: ['error'] },
-        ],
-      },
-    },
-    operator: {
-      methods,
-      events,
-      schemaCoverage: summarizeSchemaCoverage(methods),
-      eventCoverage: summarizeEventCoverage(events),
-    },
-    peer: {
-      contractPath: PEER_CONTRACT_PATH,
-      aliasPaths: PEER_CONTRACT_ALIAS_PATHS,
-      relationship: 'paired device and node-host peers use a separate peer contract surface',
     },
   };
 }

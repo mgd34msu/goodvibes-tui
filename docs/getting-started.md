@@ -2,11 +2,25 @@
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) v1.0 or later
+- For npm install: Node.js 20+ and npm
+- For source/dev workflows: [Bun](https://bun.sh) v1.3.10 or later
 - Optional: [Go](https://go.dev) for Go language-server support
 - Optional: `rust-analyzer` for Rust work; GoodVibes can download it automatically on first use
 
 ## Install
+
+Install from npm on Linux, macOS, or WSL:
+
+```sh
+npm install -g goodvibes-tui
+goodvibes
+```
+
+The npm package downloads the matching prebuilt release binary during install.
+
+Native Windows is not supported. Use WSL on Windows.
+
+Or install from source:
 
 ```sh
 git clone https://github.com/mgd34msu/goodvibes-tui.git

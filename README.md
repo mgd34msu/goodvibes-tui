@@ -12,6 +12,15 @@ A terminal-native AI coding, operations, automation, knowledge, and integration 
 
 ## Start Here
 
+Install from npm:
+
+```sh
+npm install -g goodvibes-tui
+goodvibes
+```
+
+Or run from source:
+
 ```sh
 git clone https://github.com/mgd34msu/goodvibes-tui.git
 cd goodvibes-tui
@@ -26,6 +35,12 @@ Common entrypoints:
 - `bun run daemon` — run the headless daemon/API host from source
 - `bun run build` — compile the TUI entrypoint into `dist/goodvibes`
 - `./dist/goodvibes` — run the compiled TUI binary
+
+Release distribution:
+
+- GitHub Releases are the primary distribution path for compiled binaries
+- `npm install -g goodvibes-tui` is supported on Linux, macOS, and WSL by downloading the matching prebuilt release binary during install
+- native Windows is not supported; use WSL on Windows
 
 Common paths:
 
@@ -69,6 +84,7 @@ Inbound TLS can run in `off`, `proxy`, or `direct` mode. Direct mode defaults to
 - [Knowledge, artifacts, and multimodal](docs/knowledge-artifacts-and-multimodal.md)
 - [Channels, remote runtime, and API](docs/channels-remote-and-api.md)
 - [Tools and commands](docs/tools-and-commands.md)
+- [Release and publishing](docs/release-and-publishing.md)
 - [Foundation artifacts](docs/foundation-artifacts/README.md)
 
 ---

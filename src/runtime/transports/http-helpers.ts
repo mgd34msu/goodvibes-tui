@@ -3,12 +3,11 @@ import type {
   SharedApprovalRecord,
   SharedSessionRecord,
 } from '../../control-plane/index.ts';
-import type { DistributedNodeHostContract } from '../remote/distributed-runtime-types.ts';
 import type { ControlPlaneClientRecord } from '../store/domains/control-plane.ts';
 import type { TelemetryFilter, TelemetryRecord } from '../telemetry/api.ts';
 import type { UiControlPlaneSnapshot } from '../ui-read-models.ts';
 import type { TransportPaths } from './transport-paths.ts';
-import { buildUrl, normalizeBaseUrl } from './transport-paths.ts';
+import { buildUrl } from './transport-paths.ts';
 import { createJsonInit, requestJson } from './http-json-transport.ts';
 import { openServerSentEventStream } from './sse-stream.ts';
 import type {
@@ -21,20 +20,8 @@ import type {
   HttpTransportTelemetryStreamReady,
 } from './http-types.ts';
 
-export function createFetch(fetchImpl?: typeof fetch): typeof fetch {
-  return fetchImpl ?? globalThis.fetch.bind(globalThis);
-}
-
 export function createJsonRequestInit(token: string | null | undefined, body?: unknown, method = 'GET'): RequestInit {
   return createJsonInit(token, body, method);
-}
-
-export function maybeList<T>(value: unknown, key: string): readonly T[] {
-  if (Array.isArray(value)) return value as readonly T[];
-  if (typeof value === 'object' && value !== null && Array.isArray((value as Record<string, unknown>)[key])) {
-    return (value as Record<string, unknown>)[key] as readonly T[];
-  }
-  return [];
 }
 
 export function maybeObject<T extends object>(value: unknown): T | null {
@@ -74,15 +61,6 @@ function readString(value: unknown, fallback = ''): string {
 
 function readBoolean(value: unknown): boolean {
   return value === true;
-}
-
-export function readNodeHostContract(
-  body: { contract?: DistributedNodeHostContract } | DistributedNodeHostContract,
-): DistributedNodeHostContract {
-  if (isRecord(body) && 'contract' in body && body.contract) {
-    return body.contract;
-  }
-  return body as DistributedNodeHostContract;
 }
 
 export async function readControlPlaneSnapshot(
@@ -187,16 +165,6 @@ export function buildTaskSubmitBody(input: HttpTaskSubmitInput): Record<string, 
   };
 }
 
-function isNotFoundError(error: unknown): boolean {
-  return Boolean(
-    typeof error === 'object'
-    && error !== null
-    && 'transport' in error
-    && typeof (error as { transport?: { readonly status?: number } }).transport?.status === 'number'
-    && (error as { transport?: { readonly status?: number } }).transport?.status === 404,
-  );
-}
-
 export function normalizeTelemetryQuery(query: HttpTransportTelemetryQuery | undefined, defaultLimit: number): TelemetryFilter {
   if (typeof query === 'number') {
     return { limit: Math.max(1, Math.floor(query)) };
@@ -243,19 +211,6 @@ export async function connectTelemetryStream(
   }, {
     authToken: token,
   });
-}
-
-export async function requestJsonWithFallback<T>(
-  fetchImpl: typeof fetch,
-  url: string,
-  init: RequestInit = {},
-): Promise<T | null> {
-  try {
-    return await requestJson<T>(fetchImpl, url, init);
-  } catch (error) {
-    if (isNotFoundError(error)) return null;
-    throw error;
-  }
 }
 
 export function buildTransportUrl(baseUrl: string, path: string): string {
