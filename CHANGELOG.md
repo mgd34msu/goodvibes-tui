@@ -11,12 +11,14 @@ All notable changes to GoodVibes TUI.
 - Added source-owned foundation contract types plus generated typed operator, peer, and runtime-event client maps so remote clients consume stable typed daemon surfaces instead of inferring them from route behavior
 - Split the runtime transport layer into explicit HTTP auth/retry/json, SSE/reconnect, direct-client, contract-route, operator remote-client, peer remote-client, and runtime/domain-event modules instead of leaving those concerns in a few broad transport files
 - Expanded runtime event domain metadata, distributed runtime contracts, and shared event-envelope wiring so remote clients and future companion surfaces can subscribe to named domains with stable payload semantics
+- Fixed the extracted HTTP JSON transport so explicit `Authorization` and `Content-Type` headers are preserved through request construction, keeping remote operator and peer clients aligned with their contract tests and downstream SDK copies
 
 ### Daemon Route Extraction And Artifact Hardening
 
 - Broke reusable daemon route logic into packageable channel, integration, knowledge, media, system, telemetry, and shared route-helper contexts while moving TUI-specific host adapters into dedicated router route-context builders
 - Hardened operator, peer, remote, and telemetry route contracts around narrowed route types, shared auth/error helpers, and explicit runtime route semantics rather than deep TUI-only internal dependencies
 - Refreshed the checked-in operator and peer foundation artifacts, added generated foundation client types, and extended release-gate coverage so the extracted daemon and transport surfaces stay frozen as the source tree evolves
+- Fixed daemon contract and gateway catalog responses to serialize recursive JSON-schema structures safely instead of failing at runtime when `Response.json()` encountered cyclical schema references
 
 ### Verification
 
