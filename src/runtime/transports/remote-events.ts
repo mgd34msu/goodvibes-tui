@@ -2,15 +2,15 @@ export type {
   DomainEventConnector,
   DomainEvents as RemoteDomainEvents,
   SerializedEventEnvelope as SerializedRuntimeEnvelope,
-} from './domain-events.ts';
-export { createRemoteDomainEvents } from './domain-events.ts';
-export type { RemoteRuntimeEvents } from './runtime-events-client.ts';
+  RemoteRuntimeEvents,
+  RuntimeEventConnectorOptions,
+} from '@pellux/goodvibes-sdk-beta/transport-realtime';
 export {
   buildEventSourceUrl,
   buildWebSocketUrl,
   createEventSourceConnector,
+  createRemoteDomainEvents,
   createRemoteRuntimeEvents,
   createWebSocketConnector,
-} from './runtime-events-client.ts';
-export type { RuntimeEventConnectorOptions } from './runtime-events-client.ts';
+} from '@pellux/goodvibes-sdk-beta/transport-realtime';
 export { createRemoteUiRuntimeEvents } from './ui-runtime-events.ts';

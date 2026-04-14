@@ -1,18 +1,17 @@
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-
-export type JsonBody = Record<string, unknown>;
+import type { DaemonRuntimeRouteContext as SdkDaemonRuntimeRouteContext, JsonBody } from '@pellux/goodvibes-sdk-beta/daemon';
+import type { ExecutionIntent } from '../../runtime/execution-intents.ts';
 
 export type AutomationSurfaceKind = string;
 export interface SharedSessionRoutingIntent {
   readonly modelId?: string;
   readonly providerId?: string;
   readonly tools?: readonly string[];
-  readonly executionIntent?: unknown;
+  readonly executionIntent?: ExecutionIntent;
 }
 interface AutomationRouteBinding {
   readonly id?: string;
 }
-export type ExecutionIntent = unknown;
 type AgentRecordLike = {
   readonly id: string;
   readonly status: string;
@@ -45,7 +44,7 @@ interface RuntimeTaskStateLike {
   readonly tasks: Map<string, RuntimeTaskLike>;
 }
 
-export interface DaemonRuntimeRouteContext {
+export interface DaemonRuntimeRouteContext extends Omit<SdkDaemonRuntimeRouteContext, 'trySpawnAgent'> {
   readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
   readonly parseOptionalJsonBody: (req: Request) => Promise<JsonBody | null | Response>;
   readonly recordApiResponse: (req: Request, path: string, response: Response) => Response;
@@ -196,6 +195,8 @@ export interface DaemonRuntimeRouteContext {
     ): void;
   } | null;
 }
+
+export type { JsonBody };
 
 export type DaemonRuntimeRouteHandlerMap = Pick<
   DaemonApiRouteHandlers,
