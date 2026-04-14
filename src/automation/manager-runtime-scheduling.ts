@@ -4,6 +4,7 @@ import type { AutomationJob } from './jobs.ts';
 import type { AutomationRun } from './runs.ts';
 import type { AutomationRunTrigger } from './types.ts';
 import { computeNextRun } from './manager-runtime-helpers.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
@@ -76,7 +77,7 @@ export function scheduleAutomationJob(context: AutomationSchedulingContext, job:
       .catch((error) => {
         logger.error('AutomationManager: scheduled execution failed', {
           jobId: latest.id,
-          error: error instanceof Error ? error.message : String(error),
+          error: summarizeError(error),
         });
       })
       .finally(() => {

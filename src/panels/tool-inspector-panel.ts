@@ -110,11 +110,11 @@ export class ToolInspectorPanel extends BasePanel {
     private readonly turnEvents: UiEventFeed<TurnEvent>,
   ) {
     super('tools', 'Tools', 'X', 'ai');
+    this._attachBus();
   }
 
   override onActivate(): void {
     this.needsRender = true;
-    this._attachBus();
   }
 
   override onDeactivate(): void {

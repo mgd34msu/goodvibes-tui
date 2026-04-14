@@ -9,6 +9,7 @@ import { CONFIG_SCHEMA } from '../../config/index.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '../../config/secret-refs.ts';
 import { openCommandPanel, requireBookmarkManager, requireProviderApi, requireSecretsManager } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContext): void {
   const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
@@ -178,7 +179,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
           const resolved = await resolveSecretRef(refText, { resolveLocalSecret: (key) => mgr.get(key) });
           ctx.print(`[secrets] ${describeSecretRef(refText)}: ${resolved.value ? 'resolved <redacted>' : 'missing'}`);
         } catch (error) {
-          ctx.print(`[secrets] ${describeSecretRef(refText)} failed: ${error instanceof Error ? error.message : String(error)}`);
+          ctx.print(`[secrets] ${describeSecretRef(refText)} failed: ${summarizeError(error)}`);
         }
         return;
       }
@@ -289,7 +290,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         try {
           ctx.print(`${key} = ${String(ctx.platform.configManager.get(key as Parameters<typeof ctx.platform.configManager.get>[0]))}`);
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
         return;
       }
@@ -304,7 +305,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         ctx.platform.configManager.setDynamic(key as Parameters<typeof ctx.platform.configManager.get>[0], coerced);
         ctx.print(`⚠ Set ${key} = ${String(coerced)}`);
       } catch (e) {
-        ctx.print(`Error: ${(e as Error).message}`);
+        ctx.print(`Error: ${summarizeError(e)}`);
       }
     },
   });
@@ -331,7 +332,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       try {
         resolvedPath = resolveAndValidatePath(rawPath, projectRoot);
       } catch (err) {
-        ctx.print(`Error: ${err instanceof Error ? err.message : String(err)}`);
+        ctx.print(`Error: ${summarizeError(err)}`);
         return;
       }
       if (!existsSync(resolvedPath)) {
@@ -353,7 +354,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
       try {
         data = (await readFile(resolvedPath)).toString('base64');
       } catch (err) {
-        ctx.print(`Failed to read image: ${err instanceof Error ? err.message : String(err)}`);
+        ctx.print(`Failed to read image: ${summarizeError(err)}`);
         return;
       }
       const currentModel = await requireProviderApi(ctx).getCurrentModel();
@@ -379,7 +380,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         catalogOk = true;
         ctx.print(`Model catalog refreshed: ${catalog.modelCount} models from ${catalog.providerCount} providers`);
       } catch (e) {
-        ctx.print(`Catalog refresh failed: ${(e as Error).message}`);
+        ctx.print(`Catalog refresh failed: ${summarizeError(e)}`);
       }
       ctx.print('Refreshing benchmarks...');
       try {
@@ -387,7 +388,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         benchmarksOk = true;
         ctx.print(`Benchmarks refreshed${benchmarkCount > 0 ? `: ${benchmarkCount} model records available.` : '.'}`);
       } catch (e) {
-        ctx.print(`Benchmarks refresh failed: ${(e as Error).message}`);
+        ctx.print(`Benchmarks refresh failed: ${summarizeError(e)}`);
       }
       ctx.print('Refreshing token limits...');
       try {
@@ -395,7 +396,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         limitsOk = true;
         ctx.print(`Token limits refreshed: ${count} models updated.`);
       } catch (e) {
-        ctx.print(`Token limits refresh failed: ${(e as Error).message}`);
+        ctx.print(`Token limits refresh failed: ${summarizeError(e)}`);
       }
       if (!catalogOk || !benchmarksOk || !limitsOk) ctx.print('Some refreshes failed — see messages above.');
     },
@@ -427,7 +428,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         await providerApi.pinModel(modelId);
         ctx.print(`Pinned: ${modelId}`);
       } catch (e) {
-        ctx.print(`Error: ${(e as Error).message}`);
+        ctx.print(`Error: ${summarizeError(e)}`);
       }
     },
   });

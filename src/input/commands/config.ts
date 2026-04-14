@@ -4,6 +4,7 @@ import { configSnapshotToProfileData, profileDataToConfigSnapshot } from '../../
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { requireProfileManager, requireProviderApi, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 interface ConfigBundle {
   readonly schemaVersion: 'v1';
@@ -146,7 +147,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             const filePath = pm.save(profileName, data);
             ctx.print(`Profile saved: ${profileName}\n  → ${filePath}`);
           } catch (e) {
-            ctx.print(`Failed to save profile: ${(e as Error).message}`);
+            ctx.print(`Failed to save profile: ${summarizeError(e)}`);
           }
           return;
         }
@@ -169,7 +170,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             ctx.print(`Profile loaded: ${profileName}`);
             ctx.renderRequest();
           } catch (e) {
-            ctx.print(`Failed to load profile: ${(e as Error).message}`);
+            ctx.print(`Failed to load profile: ${summarizeError(e)}`);
           }
           return;
         }
@@ -247,7 +248,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             const bundle = JSON.parse(readFileSync(sourcePath, 'utf-8')) as ConfigBundle;
             ctx.print(`${inspectConfigBundle(bundle)}\n  path: ${sourcePath}`);
           } catch (error) {
-            ctx.print(`Failed to read config bundle: ${(error as Error).message}`);
+            ctx.print(`Failed to read config bundle: ${summarizeError(error)}`);
           }
           return;
         }
@@ -262,7 +263,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
           try {
             bundle = JSON.parse(readFileSync(sourcePath, 'utf-8')) as ConfigBundle;
           } catch (error) {
-            ctx.print(`Failed to read config bundle: ${(error as Error).message}`);
+            ctx.print(`Failed to read config bundle: ${summarizeError(error)}`);
             return;
           }
           for (const entry of CONFIG_SCHEMA) {
@@ -314,7 +315,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
           if (resetKey === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = schema.default as string;
           ctx.print(`Reset ${resetKey} to default: ${String(schema.default)}`);
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
         return;
       }
@@ -447,7 +448,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
           ];
           ctx.print(lines.join('\n'));
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
         return;
       }
@@ -465,7 +466,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
         try {
           coerced = coerceValue(rawValue, schema.type, schema.enumValues);
         } catch (e) {
-          ctx.print(`Invalid value for ${key}: ${(e as Error).message}`);
+          ctx.print(`Invalid value for ${key}: ${summarizeError(e)}`);
           return;
         }
 
@@ -476,7 +477,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
           if (key === 'provider.provider') ctx.session.runtime.provider = coerced as string;
           if (key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = coerced as string;
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
         return;
       }
@@ -499,7 +500,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
               cm.set('provider.provider', selected.providerId);
               ctx.print(`Model set to: ${selected.displayName}`);
             } catch (e) {
-              ctx.print(`Error: ${(e as Error).message}`);
+              ctx.print(`Error: ${summarizeError(e)}`);
             }
             break;
           default:

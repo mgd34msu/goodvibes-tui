@@ -40,6 +40,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     icon: 'J',
     category: 'monitoring',
     description: 'Operational system messages routed away from the main conversation (scans, discovery, plugin events, tool status)',
+    preload: true,
     factory: () => deps.systemMessagesPanel,
   });
 

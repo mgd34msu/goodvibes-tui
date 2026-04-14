@@ -8,6 +8,7 @@ import {
 import { UserAuthManager } from '../security/user-auth.ts';
 import { ConfigManager } from '../config/manager.ts';
 import { extractForwardedClientIp, resolveInboundTlsContext, type ResolvedInboundTlsContext } from '../runtime/network/index.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -292,7 +293,7 @@ export class HttpListener {
         { status: result.ok ? 200 : 422 },
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       logger.error('HttpListener: hook dispatch failed', { error: message });
       return Response.json({ error: `Hook dispatch failed: ${message}` }, { status: 500 });
     }

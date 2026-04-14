@@ -1,5 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { requireMcpApi } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -36,7 +37,7 @@ export function registerMcpRuntimeCommands(registry: CommandRegistry): void {
         try {
           allTools = await mcpApi.listAllTools();
         } catch (e) {
-          ctx.print(`Error listing tools: ${(e as Error).message}`);
+          ctx.print(`Error listing tools: ${summarizeError(e)}`);
           return;
         }
         const tools = filterServer ? allTools.filter(t => t.serverName === filterServer) : allTools;

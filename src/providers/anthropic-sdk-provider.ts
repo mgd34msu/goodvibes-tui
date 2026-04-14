@@ -16,6 +16,7 @@ import {
 import { ProviderError } from '../types/errors.ts';
 import { withRetry } from '../utils/retry.ts';
 import { buildStandardProviderAuthRoutes } from './runtime-metadata.ts';
+import { toProviderError } from '../utils/error-display.ts';
 
 const DEFAULT_MAX_OUTPUT = 8192;
 
@@ -180,7 +181,11 @@ export class AnthropicSdkProvider implements LLMProvider {
           stopReason,
         };
       } catch (error) {
-        throw new ProviderError(error instanceof Error ? error.message : String(error));
+        throw toProviderError(error, {
+          provider: this.name,
+          operation: 'chat',
+          phase: 'stream',
+        });
       }
     });
   }

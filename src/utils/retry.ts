@@ -1,4 +1,5 @@
 import { AppError, RETRYABLE_STATUS_CODES } from '../types/errors.ts';
+import { summarizeError } from './error-display.ts';
 
 /** Configuration for retry behaviour with exponential backoff. */
 export interface RetryConfig {
@@ -80,7 +81,7 @@ export async function withRetry<T>(
     try {
       return await fn();
     } catch (err: unknown) {
-      lastError = err instanceof Error ? err : new Error(String(err));
+      lastError = err instanceof Error ? err : new Error(summarizeError(err));
 
       if (attempt === cfg.maxRetries) {
         break;

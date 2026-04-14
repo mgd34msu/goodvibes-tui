@@ -5,6 +5,7 @@ import { FileStateCache } from '../../state/file-cache.ts';
 import { ProjectIndex } from '../../state/project-index.ts';
 import { CodeIntelligence } from '../../intelligence/facade.ts';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 import {
   paginateFiles,
   readOneFile,
@@ -47,7 +48,7 @@ export class ReadTool implements Tool {
     try {
       return await this._execute(args as unknown as ReadInput);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       logger.error('read tool: unexpected error', { error: message });
       return { success: false, error: `Unexpected error: ${message}` };
     }

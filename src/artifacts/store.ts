@@ -5,6 +5,7 @@ import { basename, join } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import { classifyHostTrustTier, extractHostname } from '../tools/fetch/trust-tiers.ts';
 import type { ConfigKey } from '../config/schema.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import type {
   ArtifactAcquisitionMode,
   ArtifactAttachment,
@@ -309,7 +310,7 @@ export class ArtifactStore {
       } catch (error) {
         logger.debug('[artifacts] skipping unreadable artifact metadata', {
           path: metadataPath,
-          error: error instanceof Error ? error.message : String(error),
+          error: summarizeError(error),
         });
       }
     }
@@ -331,7 +332,7 @@ export class ArtifactStore {
     } catch (error) {
       logger.debug('[artifacts] failed to prune expired artifact files', {
         artifactId: record.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
     }
   }

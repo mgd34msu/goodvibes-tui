@@ -8,10 +8,18 @@ import * as Mcp from '../../mcp/index.ts';
 import * as Providers from '../../providers/index.ts';
 import type { KnowledgeApi } from '../../knowledge/index.ts';
 import type { ProviderApi } from '../../providers/index.ts';
+import {
+  createDirectTransportServices,
+  createOperatorClientServices,
+  createPeerClientDependencies,
+} from '../../runtime/foundation-services.ts';
 import { createOperatorClient, type OperatorClient } from '../../runtime/operator-client.ts';
 import { createPeerClient, type PeerClient } from '../../runtime/peer-client.ts';
-import { createDirectTransport, type DirectTransport } from '../../runtime/transports/direct.ts';
-import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
+import {
+  createDirectTransport,
+  createDirectTransportFromServices,
+  type DirectTransport,
+} from '../../runtime/transports/direct.ts';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function resetPeerFoundationState(): void {
@@ -41,17 +49,15 @@ describe('foundation surfaces gate', () => {
   test('stable in-process foundation surfaces preserve their public consumer domains', () => {
     const runtimeServices = getTestRuntimeServices();
     resetPeerFoundationState();
-    const uiServices = createUiRuntimeServices(runtimeServices);
+    const foundationServices = {
+      operator: createOperatorClientServices(runtimeServices),
+      peer: createPeerClientDependencies(runtimeServices),
+    };
 
     const foundation = {
-      operator: createOperatorClient(uiServices),
-      peer: createPeerClient({
-        runtimeStore: runtimeServices.runtimeStore,
-        distributedRuntime: runtimeServices.distributedRuntime,
-        remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
-        remoteSupervisor: runtimeServices.remoteSupervisor,
-      }),
-      transport: createDirectTransport(runtimeServices),
+      operator: createOperatorClient(foundationServices.operator),
+      peer: createPeerClient(foundationServices.peer),
+      transport: createDirectTransportFromServices(foundationServices),
       providers: Providers.createProviderApi({
         providerRegistry: runtimeServices.providerRegistry,
         favoritesStore: runtimeServices.favoritesStore,
@@ -65,6 +71,30 @@ describe('foundation surfaces gate', () => {
       readonly providers: ProviderApi;
       readonly knowledge: KnowledgeApi;
     };
+
+    expect(sortedKeys(foundationServices.operator)).toEqual([
+      'approvalBroker',
+      'events',
+      'providerRegistry',
+      'readModels',
+      'secretsManager',
+      'serviceRegistry',
+      'sessionBroker',
+      'shellPaths',
+      'subscriptionManager',
+    ]);
+    expect(sortedKeys(foundationServices.operator.readModels)).toEqual([
+      'controlPlane',
+      'providers',
+      'session',
+      'tasks',
+    ]);
+    expect(sortedKeys(foundationServices.peer)).toEqual([
+      'distributedRuntime',
+      'remoteRunnerRegistry',
+      'remoteSupervisor',
+      'runtimeStore',
+    ]);
 
     expect(sortedKeys(foundation.operator)).toEqual([
       'approvals',
@@ -205,16 +235,14 @@ describe('foundation surfaces gate', () => {
   test('foundation surfaces support one coherent in-process consumer workflow', async () => {
     const runtimeServices = getTestRuntimeServices();
     resetPeerFoundationState();
-    const uiServices = createUiRuntimeServices(runtimeServices);
+    const foundationServices = {
+      operator: createOperatorClientServices(runtimeServices),
+      peer: createPeerClientDependencies(runtimeServices),
+    };
 
-    const operator: OperatorClient = createOperatorClient(uiServices);
-    const peer: PeerClient = createPeerClient({
-      runtimeStore: runtimeServices.runtimeStore,
-      distributedRuntime: runtimeServices.distributedRuntime,
-      remoteRunnerRegistry: runtimeServices.remoteRunnerRegistry,
-      remoteSupervisor: runtimeServices.remoteSupervisor,
-    });
-    const transport: DirectTransport = createDirectTransport(runtimeServices);
+    const operator: OperatorClient = createOperatorClient(foundationServices.operator);
+    const peer: PeerClient = createPeerClient(foundationServices.peer);
+    const transport: DirectTransport = createDirectTransportFromServices(foundationServices);
     const providers: ProviderApi = Providers.createProviderApi({
       providerRegistry: runtimeServices.providerRegistry,
       favoritesStore: runtimeServices.favoritesStore,
@@ -249,6 +277,9 @@ describe('foundation surfaces gate', () => {
       throw new Error(`Expected all runtime metadata scope, received ${runtimeMetadata.scope}`);
     }
     expect(Array.isArray(runtimeMetadata.snapshots)).toBe(true);
+    const legacyTransport = createDirectTransport(runtimeServices);
+    expect(sortedKeys(legacyTransport.operator)).toEqual(sortedKeys(transport.operator));
+    expect(sortedKeys(legacyTransport.peer)).toEqual(sortedKeys(transport.peer));
 
     const artifactPath = join(runtimeServices.shellPaths.workingDirectory, 'foundation-surface-note.md');
     writeFileSync(artifactPath, '# Foundation Surface Note\n\nThis note proves the in-process knowledge API remains consumable.\n', 'utf-8');

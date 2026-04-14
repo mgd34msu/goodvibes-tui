@@ -51,3 +51,4 @@ export type {
   RequestSharedApprovalInput,
 } from './approval-broker.ts';
 export { ApprovalBroker } from './approval-broker.ts';
+export type { ControlPlaneAuthMode, ControlPlaneAuthSnapshot } from './auth-snapshot.ts';

@@ -1,6 +1,7 @@
 import { promises as fs, renameSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * PersistentStore — generic JSON file persistence with atomic writes.
@@ -27,7 +28,7 @@ export class PersistentStore<T extends Record<string, unknown>> {
       const raw = await fs.readFile(this.filePath, 'utf-8');
       return JSON.parse(raw) as T;
     } catch (err) {
-      logger.debug('PersistentStore: failed to load, starting fresh', { file: this.filePath, error: String(err) });
+      logger.debug('PersistentStore: failed to load, starting fresh', { file: this.filePath, error: summarizeError(err) });
       return null;
     }
   }
@@ -42,7 +43,7 @@ export class PersistentStore<T extends Record<string, unknown>> {
       // renameSync is atomic on POSIX
       await fs.rename(tmpPath, this.filePath);
     } catch (err) {
-      logger.debug('PersistentStore: persist failed (non-fatal)', { file: this.filePath, error: String(err) });
+      logger.debug('PersistentStore: persist failed (non-fatal)', { file: this.filePath, error: summarizeError(err) });
     }
   }
 }

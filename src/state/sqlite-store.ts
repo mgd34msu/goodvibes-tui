@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 interface SqlDatabase {
   run(sql: string, params?: (string | number | Uint8Array | null)[]): void;
@@ -64,7 +65,7 @@ export class SQLiteStore {
       return true;
     } catch (err) {
       logger.error('SQLiteStore: failed to save', {
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
       return false;
     }
@@ -95,7 +96,7 @@ export class SQLiteStore {
     } catch (err) {
       this.db = null;
       logger.error('SQLiteStore: failed to initialize', {
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
       throw err;
     }

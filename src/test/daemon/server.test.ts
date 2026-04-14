@@ -325,6 +325,78 @@ describe('DaemonServer', () => {
     await reader!.cancel();
   });
 
+  test('control-plane auth introspection reports anonymous, shared-token, and session-cookie principals', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const anonymous = await fetch('http://127.0.0.1:39421/api/control-plane/auth');
+    expect(anonymous.status).toBe(200);
+    expect(await anonymous.json()).toEqual({
+      authenticated: false,
+      authMode: 'anonymous',
+      tokenPresent: false,
+      authorizationHeaderPresent: false,
+      sessionCookiePresent: false,
+      principalId: null,
+      principalKind: null,
+      admin: false,
+      scopes: [],
+      roles: [],
+    });
+
+    const shared = await fetch('http://127.0.0.1:39421/api/control-plane/whoami', {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(shared.status).toBe(200);
+    const sharedBody = await shared.json() as {
+      authenticated: boolean;
+      authMode: string;
+      principalId: string | null;
+      principalKind: string | null;
+      admin: boolean;
+      scopes: string[];
+    };
+    expect(sharedBody.authenticated).toBe(true);
+    expect(sharedBody.authMode).toBe('shared-token');
+    expect(sharedBody.principalId).toBe('shared-token');
+    expect(sharedBody.principalKind).toBe('token');
+    expect(sharedBody.admin).toBe(true);
+    expect(sharedBody.scopes).toContain('read:control-plane');
+    expect(sharedBody.scopes).toContain('read:telemetry');
+
+    await daemon.stop();
+    daemon.enable({ daemon: true });
+    await daemon.start();
+
+    const login = await fetch('http://127.0.0.1:39421/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin' }),
+    });
+    const sessionCookie = login.headers.get('set-cookie');
+    expect(sessionCookie).toContain('goodvibes_session=');
+    const cookieHeader = sessionCookie!.split(';', 1)[0];
+
+    const session = await fetch('http://127.0.0.1:39421/api/control-plane/auth', {
+      headers: { Cookie: cookieHeader },
+    });
+    expect(session.status).toBe(200);
+    const sessionBody = await session.json() as {
+      authenticated: boolean;
+      authMode: string;
+      sessionCookiePresent: boolean;
+      principalId: string | null;
+      principalKind: string | null;
+      roles: string[];
+    };
+    expect(sessionBody.authenticated).toBe(true);
+    expect(sessionBody.authMode).toBe('session');
+    expect(sessionBody.sessionCookiePresent).toBe(true);
+    expect(sessionBody.principalId).toBe('admin');
+    expect(sessionBody.principalKind).toBe('user');
+    expect(sessionBody.roles).toContain('admin');
+  });
+
   test('control-plane event streams no longer accept auth tokens in query parameters', async () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
@@ -1275,11 +1347,14 @@ describe('DaemonServer', () => {
 
     const operatorContract = buildOperatorContract(runtimeServices.gatewayMethods);
     expect(operatorContract.auth.login.path).toBe('/login');
+    expect(operatorContract.auth.current.path).toBe('/api/control-plane/auth');
+    expect(operatorContract.auth.current.aliasPaths).toContain('/api/control-plane/whoami');
     expect(operatorContract.auth.sessionCookie.name).toBe('goodvibes_session');
     expect(operatorContract.auth.bearer.queryParameters).toEqual([]);
     expect(operatorContract.transports.websocket.path).toBe('/api/control-plane/ws');
     expect(operatorContract.peer.contractPath).toBe('/api/remote/node-host/contract');
     expect(operatorContract.operator.methods.some((method) => method.id === 'control.contract')).toBe(true);
+    expect(operatorContract.operator.methods.some((method) => method.id === 'telemetry.snapshot')).toBe(true);
     expect(operatorContract.operator.events.some((event) => event.id === 'runtime.automation')).toBe(true);
 
     const statusInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.status/invoke', {

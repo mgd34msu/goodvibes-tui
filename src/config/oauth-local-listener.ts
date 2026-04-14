@@ -1,5 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface OAuthLocalListenerConfig {
   readonly expectedState: string;
@@ -119,13 +120,13 @@ export async function createOAuthLocalListener(config: OAuthLocalListenerConfig)
     } catch (error) {
       res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(errorHtml('Internal callback error.'));
-      settleFailure(error instanceof Error ? error : new Error(String(error)));
+      settleFailure(error instanceof Error ? error : new Error(summarizeError(error)));
       close();
     }
   });
 
   server.on('error', (error) => {
-    settleFailure(error instanceof Error ? error : new Error(String(error)));
+    settleFailure(error instanceof Error ? error : new Error(summarizeError(error)));
     close();
   });
 

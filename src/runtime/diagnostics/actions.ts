@@ -17,6 +17,7 @@ import { logger } from '../../utils/logger.ts';
 import type { DeterministicReplayEngine } from '../../core/deterministic-replay.ts';
 import type { PermissionSimulator } from '../permissions/simulation.ts';
 import type { OpsControlPlane } from '../ops/control-plane.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ── Action type union ─────────────────────────────────────────────────────────
 
@@ -351,7 +352,7 @@ export class DiagnosticActionDispatcher {
     try {
       return await this._route(action);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       logger.debug('[DiagnosticActionDispatcher] action error', {
         type: action.type,
         err: message,

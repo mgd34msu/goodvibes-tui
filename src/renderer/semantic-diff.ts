@@ -16,6 +16,7 @@ import { extractSymbols } from '../intelligence/tree-sitter/queries.ts';
 import type { SymbolInfo } from '../intelligence/tree-sitter/queries.ts';
 import { detectLanguage } from '../intelligence/tree-sitter/languages.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -284,7 +285,7 @@ export async function computeSemanticDiff(
   } catch (err) {
     logger.error('computeSemanticDiff: comparison failed', {
       filePath,
-      error: String(err),
+      error: summarizeError(err),
     });
     svc.invalidate(beforeKey);
     svc.invalidate(afterKey);

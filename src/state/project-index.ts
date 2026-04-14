@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs';
 import { join, dirname, sep } from 'path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * A file entry in the flat in-memory index.
@@ -81,7 +82,7 @@ export class ProjectIndex {
       this.loaded = true;
       logger.debug('ProjectIndex: loaded', { files: this.files.size });
     } catch (err) {
-      logger.debug('ProjectIndex: load failed (non-fatal)', { error: String(err) });
+      logger.debug('ProjectIndex: load failed (non-fatal)', { error: summarizeError(err) });
       this.loaded = true;
     }
   }
@@ -208,7 +209,7 @@ export class ProjectIndex {
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
       this.flush().catch(err => {
-        logger.debug('ProjectIndex: scheduled flush failed', { error: String(err) });
+        logger.debug('ProjectIndex: scheduled flush failed', { error: summarizeError(err) });
       });
     }, 5000);
   }
@@ -243,7 +244,7 @@ export class ProjectIndex {
       writeFileSync(tmpPath, JSON.stringify(disk) + '\n', 'utf-8');
       renameSync(tmpPath, this.indexPath);
     } catch (err) {
-      logger.debug('ProjectIndex: flush failed (non-fatal)', { error: String(err) });
+      logger.debug('ProjectIndex: flush failed (non-fatal)', { error: summarizeError(err) });
     }
   }
 }

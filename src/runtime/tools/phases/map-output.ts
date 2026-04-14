@@ -5,6 +5,7 @@ import type { PhaseResult, ToolExecutionRecord } from '../types.ts';
 import type { PhasedTool } from '../adapter.ts';
 import type { ToolClass } from '../output-policy.ts';
 import { applyOutputPolicy, getPolicy } from '../output-policy.ts';
+import { summarizeError } from '../../../utils/error-display.ts';
 
 /**
  * mapOutput — Phase 5 of the tool execution pipeline.
@@ -86,7 +87,7 @@ export async function mapOutputPhase(
     };
   } catch (err) {
     // Mapping failure is non-fatal — pass through unmapped result
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return {
       phase: 'mapped',
       success: true,

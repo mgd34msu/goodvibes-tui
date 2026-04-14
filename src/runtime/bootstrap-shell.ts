@@ -16,18 +16,13 @@ import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import { registerBuiltinPanels } from '../panels/builtin-panels.ts';
 import { SystemMessagesPanel } from '../panels/system-messages-panel.ts';
 import { createSystemMessageRouter, type SystemMessageRouter } from '../core/system-message-router.ts';
-import { listHookPointContracts } from '../hooks/index.ts';
 import { getConfigSnapshot } from '../config/index.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { createResumeSessionHandler } from './bootstrap-hook-bridge.ts';
 import { logger } from '../utils/logger.ts';
 import { loadBootstrapSystemPrompt } from './bootstrap-helpers.ts';
 import { createShellPlanRuntime, createShellRemoteCommandService } from './shell-command-services.ts';
-import { createRuntimeKnowledgeApi } from './runtime-knowledge-api.ts';
-import { createRuntimeHookApi } from './runtime-hook-api.ts';
-import { createRuntimeMcpApi } from './runtime-mcp-api.ts';
-import { createRuntimeProviderApi } from './runtime-provider-api.ts';
-import { createDirectTransport } from './transports/direct.ts';
+import { createRuntimeFoundationClients } from './foundation-clients.ts';
 import type { ControlPlaneRecentEvent } from '../control-plane/gateway.ts';
 import type { BuiltinPanelDeps } from '../panels/builtin/shared.ts';
 import type { ToolRegistry } from '../tools/registry.ts';
@@ -35,7 +30,7 @@ import type { ForensicsRegistry } from './forensics/index.ts';
 import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
 import type { TaskManager } from './tasks/types.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
-import { createRuntimeOpsApi } from './runtime-ops-api.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface BootstrapShellState {
   readonly commandRegistry: CommandRegistry;
@@ -136,6 +131,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     hookWorkbench: services.hookWorkbench,
     mcpRegistry: services.mcpRegistry,
   });
+  services.panelManager.prewarmRegistered();
 
   const systemMessageRouter = createSystemMessageRouter(
     conversation,
@@ -151,23 +147,20 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   const commandRegistry = new CommandRegistry();
   registerBuiltinCommands(commandRegistry);
-  const directTransport = createDirectTransport(services);
-  const providerApi = createRuntimeProviderApi(services);
-  const knowledgeApi = createRuntimeKnowledgeApi(services);
-  const hookApi = createRuntimeHookApi({
-    dispatcher: {
-      listHooks: () => services.hookDispatcher.listHooks(),
-      listChains: () => services.hookDispatcher.getChains(),
-    },
-    workbench: services.hookWorkbench,
-    listContracts: () => listHookPointContracts(),
-  });
-  const mcpApi = createRuntimeMcpApi(services.mcpRegistry);
-  const opsApi = createRuntimeOpsApi({
+  const foundationClients = createRuntimeFoundationClients({
+    runtimeServices: services,
     tasksReadModel: uiServices.readModels.tasks,
     taskManager,
     opsControlPlane,
   });
+  const {
+    directTransport,
+    hookApi,
+    knowledgeApi,
+    mcpApi,
+    opsApi,
+    providerApi,
+  } = foundationClients;
   const remoteRuntime = createShellRemoteCommandService({
     readModels: uiServices.readModels,
     remoteRunnerRegistry: services.remoteRunnerRegistry,
@@ -238,7 +231,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     activatePlan: (_planId, task) => {
       setTimeout(() => {
         orchestrator.handleUserInput(task).catch((err) => {
-          logger.debug('activatePlan handler failed', { error: String(err) });
+          logger.debug('activatePlan handler failed', { error: summarizeError(err) });
         });
       }, 50);
     },

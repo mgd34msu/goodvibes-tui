@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
 import type { ShellPathService } from '../runtime/shell-paths.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface LanguageConfig {
   lsp?: {
@@ -104,7 +105,7 @@ function readConfigFile(filePath: string): LanguageConfig | null {
   } catch (err) {
     logger.debug('config: failed to read language config', {
       filePath,
-      error: String(err),
+      error: summarizeError(err),
     });
     return null;
   }

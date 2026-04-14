@@ -305,6 +305,7 @@ export function createDaemonFacadeCollaborators(
     memoryEmbeddingRegistry: runtime.runtimeServices.memoryEmbeddingRegistry,
     platformServiceManager: runtime.platformServiceManager,
     integrationHelpers: runtime.integrationHelpers,
+    runtimeBus: runtime.runtimeBus,
     runtimeStore: runtime.runtimeStore,
     runtimeDispatch: runtime.runtimeDispatch,
     githubWebhookSecret: runtime.githubWebhookSecret,

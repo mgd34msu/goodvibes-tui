@@ -1,6 +1,7 @@
 import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
 import { logger } from '../../utils/logger.ts';
 import type { AgentManager } from '../../tools/agent/index.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /**
  * Agent hook runner — spawns a subagent via AgentManager and waits for
@@ -40,7 +41,7 @@ export async function run(
       model: hook.model,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     logger.error('agent hook: spawn failed', { event: event.path, error: message });
     return { ok: false, error: `agent spawn failed: ${message}` };
   }

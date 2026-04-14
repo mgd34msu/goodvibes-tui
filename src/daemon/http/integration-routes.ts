@@ -3,6 +3,7 @@ import { getProviderRuntimeSnapshot, getProviderUsageSnapshot, listProviderRunti
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
 import type { DaemonRouteContext } from '../types.ts';
 import type { MemoryEmbeddingProviderRegistry, MemoryRegistry } from '../../state/index.ts';
+import { jsonErrorResponse } from './error-response.ts';
 
 type IntegrationRouteContext = Pick<
   DaemonRouteContext,
@@ -121,7 +122,7 @@ export function createDaemonIntegrationRouteHandlers(
         context.memoryEmbeddingRegistry.setDefaultProvider(providerId);
         return Response.json(await context.memoryRegistry.doctor());
       } catch (error) {
-        return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+        return jsonErrorResponse(error, { status: 400 });
       }
     },
     getLocalAuth: () => {
@@ -140,7 +141,7 @@ export function createDaemonIntegrationRouteHandlers(
       try {
         return Response.json({ user: context.userAuth.addUser(username, password, roles) }, { status: 201 });
       } catch (error) {
-        return Response.json({ error: (error as Error).message }, { status: 400 });
+        return jsonErrorResponse(error, { status: 400 });
       }
     },
     deleteLocalAuthUser: (username) => {
@@ -152,7 +153,7 @@ export function createDaemonIntegrationRouteHandlers(
           ? Response.json({ deleted: true })
           : Response.json({ error: 'Unknown user' }, { status: 404 });
       } catch (error) {
-        return Response.json({ error: (error as Error).message }, { status: 400 });
+        return jsonErrorResponse(error, { status: 400 });
       }
     },
     postLocalAuthPassword: async (username, req) => {
@@ -165,7 +166,7 @@ export function createDaemonIntegrationRouteHandlers(
         context.userAuth.rotatePassword(username, password);
         return Response.json({ rotated: true });
       } catch (error) {
-        return Response.json({ error: (error as Error).message }, { status: 400 });
+        return jsonErrorResponse(error, { status: 400 });
       }
     },
     deleteLocalAuthSession: (sessionId) => {

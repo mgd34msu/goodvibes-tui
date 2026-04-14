@@ -12,6 +12,7 @@ import type {
   SandboxSessionKind,
 } from './types.ts';
 import type { SandboxCommandResult } from './backend.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 function createSandboxSessionId(): string {
   return `sandbox_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -161,7 +162,7 @@ export class SandboxSessionRegistry {
         } catch (error) {
           state = 'failed';
           startupStatus = 'failed';
-          startupDetail = error instanceof Error ? error.message : String(error);
+          startupDetail = summarizeError(error);
         }
       } else {
         state = 'planned';

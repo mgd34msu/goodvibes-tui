@@ -18,6 +18,7 @@ import {
 } from './tool-formats.ts';
 import type { GeminiPart } from './tool-formats.ts';
 import type { CacheHitTracker } from './cache-strategy.ts';
+import { summarizeError, toProviderError } from '../utils/error-display.ts';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const GEMINI_CACHE_TTL_SECONDS = 3600;
@@ -119,7 +120,7 @@ export class GeminiProvider implements LLMProvider {
       fetch(`${GEMINI_API_BASE}/${oldName}`, {
         method: 'DELETE',
         headers: { 'x-goog-api-key': this.apiKey },
-      }).catch(err => logger.warn('[Gemini] Failed to delete old cache', { error: String(err) }));
+      }).catch(err => logger.warn('[Gemini] Failed to delete old cache', { error: summarizeError(err) }));
     }
 
     // Create new cached content
@@ -166,7 +167,7 @@ export class GeminiProvider implements LLMProvider {
       logger.info(`[Gemini] Created cache: ${data.name} (expires ${data.expireTime})`);
       return data.name;
     } catch (err) {
-      logger.debug('[Gemini] Cache creation error', { error: String(err) });
+      logger.debug('[Gemini] Cache creation error', { error: summarizeError(err) });
       return null;
     }
   }
@@ -243,14 +244,21 @@ export class GeminiProvider implements LLMProvider {
           signal,
         });
       } catch (err: unknown) {
-        throw new ProviderError(
-          err instanceof Error ? err.message : String(err),
-        );
+        throw toProviderError(err, {
+          provider: this.name,
+          operation: 'chat',
+          phase: 'request',
+        });
       }
 
       if (!res.ok) {
         const text = await res.text().catch(() => 'unknown error');
-        throw new ProviderError(`Gemini API error ${res.status}: ${text}`, res.status);
+        throw new ProviderError(`Gemini API error ${res.status}: ${text}`, {
+          statusCode: res.status,
+          provider: this.name,
+          operation: 'chat',
+          phase: 'request',
+        });
       }
 
       // Accumulate state from streaming chunks
@@ -262,7 +270,14 @@ export class GeminiProvider implements LLMProvider {
       let streamedText = '';
 
       const reader = res.body?.getReader();
-      if (!reader) throw new ProviderError('No response body');
+      if (!reader) {
+        throw new ProviderError('Gemini chat returned no response body.', {
+          statusCode: 502,
+          provider: this.name,
+          operation: 'chat',
+          phase: 'response',
+        });
+      }
 
       const decoder = new TextDecoder();
       let buffer = '';
@@ -367,19 +382,33 @@ export class GeminiProvider implements LLMProvider {
       body['config'] = { outputDimensionality: request.dimensions };
     }
 
-    const res = await fetch(`${GEMINI_API_BASE}/models/${model}:embedContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': this.apiKey,
-      },
-      body: JSON.stringify(body),
-      signal: request.signal,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${GEMINI_API_BASE}/models/${model}:embedContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': this.apiKey,
+        },
+        body: JSON.stringify(body),
+        signal: request.signal,
+      });
+    } catch (error: unknown) {
+      throw toProviderError(error, {
+        provider: this.name,
+        operation: 'embed',
+        phase: 'request',
+      });
+    }
 
     if (!res.ok) {
       const text = await res.text().catch(() => 'unknown error');
-      throw new ProviderError(`Gemini embeddings API error ${res.status}: ${text}`, res.status);
+      throw new ProviderError(`Gemini embeddings API error ${res.status}: ${text}`, {
+        statusCode: res.status,
+        provider: this.name,
+        operation: 'embed',
+        phase: 'request',
+      });
     }
 
     const data = await res.json() as { embedding?: { values?: number[] } };

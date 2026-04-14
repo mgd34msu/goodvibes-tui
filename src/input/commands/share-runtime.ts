@@ -4,6 +4,7 @@ import type { CommandRegistry } from '../command-registry.ts';
 import { defaultExportPath, exportToHTML, exportToJSON, exportToMarkdownExtended } from '../../export/session-export.ts';
 import { logger } from '../../utils/logger.ts';
 import { requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerShareRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -88,7 +89,7 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
         else if (format === 'json') outputContent = exportToJSON(messages, metadata, options);
         else outputContent = exportToMarkdownExtended(messages, metadata, options);
       } catch (err) {
-        ctx.print(`Export failed: ${(err as Error).message}`);
+        ctx.print(`Export failed: ${summarizeError(err)}`);
         return;
       }
 
@@ -103,7 +104,7 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
       try {
         await writeFile(outputPath, outputContent, 'utf-8');
       } catch (err) {
-        ctx.print(`Failed to write export: ${(err as Error).message}`);
+        ctx.print(`Failed to write export: ${summarizeError(err)}`);
         return;
       }
 

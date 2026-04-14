@@ -12,6 +12,7 @@
 
 import type { RemoteSession, RemoteTask, RemoteHealth, DurableIdentity } from './types.ts';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ── Snapshot types ────────────────────────────────────────────────────────────
 
@@ -230,7 +231,7 @@ export class RemoteObservabilityProvider {
       } catch (err) {
         // Non-fatal — subscriber errors must not crash the provider
         logger.debug('RemoteObservabilityProvider: subscriber error', {
-          err: err instanceof Error ? err.message : String(err),
+          err: summarizeError(err),
         });
       }
     }

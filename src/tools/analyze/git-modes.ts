@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 import { GitService } from '../../git/service.ts';
 import type { ToolLLM } from '../../config/tool-llm.ts';
 import type { AnalyzeInput, SemanticDiffSummary } from './types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 import {
   isBreakingUpgrade,
   loadDependencyVersions,
@@ -118,7 +119,7 @@ export async function runDiff(
   try {
     statOutput = await git.diffStat(before, after);
   } catch (err) {
-    return { error: `git diff failed: ${err instanceof Error ? err.message : String(err)}`, before, after };
+    return { error: `git diff failed: ${summarizeError(err)}`, before, after };
   }
 
   let fullDiff: string;
@@ -197,7 +198,7 @@ export async function runBreaking(
   try {
     fullDiff = await git.diffBetween(before, after, input.files);
   } catch (err) {
-    return { error: `git diff failed: ${err instanceof Error ? err.message : String(err)}`, before, after };
+    return { error: `git diff failed: ${summarizeError(err)}`, before, after };
   }
 
   const { before: beforeSigs, after: afterSigs } = extractSignaturesFromDiff(fullDiff);
@@ -264,7 +265,7 @@ export async function runSemanticDiff(
     fullDiff = await git.diffBetween(before, after, input.files);
     statOutput = await git.diffStat(before, after);
   } catch (err) {
-    return { error: `git diff failed: ${err instanceof Error ? err.message : String(err)}`, before, after };
+    return { error: `git diff failed: ${summarizeError(err)}`, before, after };
   }
 
   const changedFiles = parseDiffStats(statOutput).map((file) => file.file);

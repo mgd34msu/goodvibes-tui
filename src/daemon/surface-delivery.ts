@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.ts';
 import { validatePublicWebhookUrl } from '../utils/url-safety.ts';
 import type { SharedApprovalRecord } from '../control-plane/index.ts';
 import type { PendingSurfaceReply } from './types.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 type DeliverySurface =
   | 'slack'
@@ -119,7 +120,7 @@ export class DaemonSurfaceDeliveryHelper {
             logger.debug('DaemonServer: progress delivery failed', {
               surface: pending.surfaceKind,
               agentId: pending.agentId,
-              error: error instanceof Error ? error.message : String(error),
+              error: summarizeError(error),
             });
           }
         }
@@ -144,7 +145,7 @@ export class DaemonSurfaceDeliveryHelper {
         logger.warn('DaemonServer: surface reply delivery failed', {
           surface: pending.surfaceKind,
           agentId: pending.agentId,
-          error: error instanceof Error ? error.message : String(error),
+          error: summarizeError(error),
         });
       }
       completed.push(pending.agentId);

@@ -2,6 +2,7 @@ import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import { GitService } from '../git/service.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -179,7 +180,7 @@ export class GitPanel extends BasePanel {
       // Do not clear expandedDiff during auto-refresh — only clear on explicit user action
       this.markDirty();
     } catch (err) {
-      const msg = String(err);
+      const msg = summarizeError(err);
       // If the failure is because this directory isn't a git repo, auto-initialise
       // and retry once so the panel becomes functional immediately.
       if (/not a git\b/i.test(msg)) {
@@ -332,7 +333,7 @@ export class GitPanel extends BasePanel {
       this.scrollOffset = 0;
       this.markDirty();
     } catch (err) {
-      this.expandedDiff = [`Error: ${String(err)}`];
+      this.expandedDiff = [`Error: ${summarizeError(err)}`];
       this.scrollOffset = 0;
       this.markDirty();
     }

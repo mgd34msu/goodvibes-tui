@@ -70,11 +70,11 @@ export class ThinkingPanel extends BasePanel {
 
   constructor(private readonly turnEvents: UiEventFeed<TurnEvent>) {
     super('thinking', 'Thinking', 'T', 'ai');
+    this._attachBus();
   }
 
   override onActivate(): void {
     this.needsRender = true;
-    this._attachBus();
   }
 
   override onDeactivate(): void {

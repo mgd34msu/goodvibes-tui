@@ -44,12 +44,18 @@ import type { CanonicalModel } from './synthetic.ts';
 import { LocalContextIngestionService } from './local-context-ingestion.ts';
 import { getModelLimitsCachePath, ModelLimitsService } from './model-limits.ts';
 import { getGitHubCopilotTokenCachePath } from './github-copilot.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   getBaseModelId,
   splitModelRegistryKey,
   stableStringify,
   withRegistryKey,
 } from './registry-helpers.ts';
+import {
+  buildModelRegistry,
+  findModelDefinition,
+  findModelDefinitionForProvider,
+} from './registry-models.ts';
 import type {
   ModelDefinition,
   ProviderRegistryOptions,
@@ -168,43 +174,15 @@ export class ProviderRegistry {
     return new Set([...this.runtimeCatalogSuppressions.values()].flat());
   }
 
-  private findModelDefinition(
-    modelId: string,
-    registry: ModelDefinition[] = this.getModelRegistry(),
-  ): ModelDefinition | undefined {
-    if (modelId.includes(':')) {
-      return registry.find((model) => model.registryKey === modelId) ?? registry.find((model) => model.id === modelId);
-    }
-    return registry.find((model) => model.id === modelId);
-  }
-
   private getModelRegistry(): ModelDefinition[] {
-    const catalogModels = this.getCatalogBuiltins();
-    const syntheticModels = this.getSyntheticBuiltins();
-    const suppressedCatalogIds = this.getSuppressedCatalogModelIds();
-
-    const catalogFiltered = catalogModels.filter(
-      (builtin) =>
-        !this.customModels.some((model) => model.id === builtin.id) &&
-        !this.runtimeModels.some((model) => model.id === builtin.id) &&
-        !suppressedCatalogIds.has(builtin.id) &&
-        !builtin.id.startsWith('hf:'),
-    );
-
-    const discoveredFiltered = this.discoveredModels.filter(
-      (discovered) =>
-        !catalogModels.some((model) => model.id === discovered.id) &&
-        !this.customModels.some((model) => model.id === discovered.id) &&
-        !this.runtimeModels.some((model) => model.id === discovered.id),
-    );
-
-    return [
-      ...this.customModels.map(withRegistryKey),
-      ...this.runtimeModels.map(withRegistryKey),
-      ...syntheticModels.map(withRegistryKey),
-      ...catalogFiltered.map(withRegistryKey),
-      ...discoveredFiltered.map(withRegistryKey),
-    ];
+    return buildModelRegistry({
+      customModels: this.customModels,
+      runtimeModels: this.runtimeModels,
+      syntheticModels: this.getSyntheticBuiltins(),
+      catalogModels: this.getCatalogBuiltins(),
+      discoveredModels: this.discoveredModels,
+      suppressedCatalogIds: this.getSuppressedCatalogModelIds(),
+    });
   }
 
   /** Register a provider. Overwrites any existing entry with the same name. */
@@ -331,19 +309,17 @@ export class ProviderRegistry {
    * - If input contains `:`, treats as registryKey — exact match on `m.registryKey`
    * - If no `:`, treats as plain modelId — exact match on `m.id`
    * When `provider` is supplied alongside a plain modelId, it disambiguates.
-   * Falls back to provider-agnostic search if constrained search yields nothing.
+   * Explicit provider constraints do not fall through to other providers.
    */
   getForModel(modelId: string, provider?: string): LLMProvider {
     const registry = this.getModelRegistry();
     const def = provider
-      ? (modelId.includes(':')
-        ? this.findModelDefinition(modelId, registry)
-          ?? registry.find((model) => model.id === modelId && model.provider === provider)
-          ?? registry.find((model) => model.id === modelId)
-        : registry.find((model) => model.id === modelId && model.provider === provider)
-          ?? registry.find((model) => model.id === modelId))
-      : this.findModelDefinition(modelId, registry);
-    if (!def) throw new Error(`No model '${modelId}' in registry.`);
+      ? findModelDefinitionForProvider(modelId, provider, registry, CATALOG_PROVIDER_NAME_ALIASES)
+      : findModelDefinition(modelId, registry);
+    if (!def) {
+      if (provider) throw new Error(`No model '${modelId}' for provider '${provider}' in registry.`);
+      throw new Error(`No model '${modelId}' in registry.`);
+    }
     return this.get(def.provider);
   }
 
@@ -460,7 +436,7 @@ export class ProviderRegistry {
   /** Currently active model definition. */
   getCurrentModel(): ModelDefinition {
     const registry = this.getModelRegistry();
-    const def = this.findModelDefinition(this.currentModelId, registry);
+    const def = findModelDefinition(this.currentModelId, registry);
     if (!def) {
       const baseId = getBaseModelId(this.currentModelId);
       const isInCatalog = this.getCatalogBuiltins().some((m) => m.id === baseId || m.id === this.currentModelId);
@@ -525,7 +501,7 @@ export class ProviderRegistry {
 
   /** Switch to a different model. Accepts registryKey or plain modelId. Throws if not selectable. */
   setCurrentModel(modelId: string): void {
-    const def = this.findModelDefinition(modelId);
+    const def = findModelDefinition(modelId, this.getModelRegistry());
     if (!def) throw new Error(`Model '${modelId}' not found.`);
     if (!def.selectable) throw new Error(`Model '${modelId}' is not selectable.`);
     // Store the registryKey for unambiguous future lookups
@@ -641,7 +617,7 @@ export class ProviderRegistry {
    * Prefers a synthetic failover wrapper; falls back to same-tier model on a different provider.
    */
   findAlternativeModel(currentModelId: string): ModelDefinition | null {
-    const current = this.findModelDefinition(currentModelId);
+    const current = findModelDefinition(currentModelId, this.getModelRegistry());
     if (!current || current.provider === 'synthetic') return null;
     // Check if synthetic wrapper exists
     const baseName = current.id.split('/').pop() ?? '';
@@ -688,7 +664,7 @@ export class ProviderRegistry {
     provider: LLMProvider | undefined;
   } {
     const registry = this.getModelRegistry();
-    const def = this.findModelDefinition(modelId, registry);
+    const def = findModelDefinition(modelId, registry);
     const { providerId: fallbackProviderId, resolvedModelId: fallbackModelId } = splitModelRegistryKey(modelId);
     const providerId = def?.provider ?? fallbackProviderId;
     const resolvedModelId = def?.id ?? fallbackModelId;
@@ -726,7 +702,7 @@ export class ProviderRegistry {
     }
     if (!cached || isCatalogCacheStale(cached)) {
       void this.refreshCatalog().catch((err) => {
-        logger.debug('[model-catalog] Background refresh failed', { error: String(err) });
+        logger.debug('[model-catalog] Background refresh failed', { error: summarizeError(err) });
       });
     }
   }

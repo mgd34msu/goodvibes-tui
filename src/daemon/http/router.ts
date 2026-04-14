@@ -18,6 +18,8 @@ import type { MediaProviderRegistry } from '../../media/index.ts';
 import type { MultimodalService } from '../../multimodal/index.ts';
 import type { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
 import type { DomainDispatch, RuntimeStore } from '../../runtime/store/index.ts';
+import type { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { TelemetryApiService } from '../../runtime/telemetry/api.ts';
 import type { MemoryEmbeddingProviderRegistry, MemoryRegistry } from '../../state/index.ts';
 import { dispatchDaemonApiRoutes } from '../../control-plane/routes/index.ts';
 import { handleGitHubAutomationWebhook, handleSlackSurfaceWebhook, handleDiscordSurfaceWebhook, handleNtfySurfaceWebhook, handleGenericWebhookSurface } from '../../adapters/index.ts';
@@ -34,11 +36,14 @@ import {
 import { createDaemonRuntimeRouteHandlers } from './runtime-routes.ts';
 import { createDaemonControlRouteHandlers } from './control-routes.ts';
 import { createDaemonIntegrationRouteHandlers } from './integration-routes.ts';
+import { createDaemonTelemetryRouteHandlers } from './telemetry-routes.ts';
 import { createDaemonChannelRouteHandlers } from './channel-routes.ts';
 import { createDaemonSystemRouteHandlers } from './system-routes.ts';
 import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '../../adapters/index.ts';
 import type { PlatformServiceManager } from '../service-manager.ts';
 import type { JsonRecord } from '../helpers.ts';
+import { jsonErrorResponse } from './error-response.ts';
+import { AppError } from '../../types/errors.ts';
 
 interface DaemonHttpRouterContext {
   readonly configManager: ConfigManager;
@@ -68,6 +73,7 @@ interface DaemonHttpRouterContext {
   readonly memoryEmbeddingRegistry: MemoryEmbeddingProviderRegistry;
   readonly platformServiceManager: PlatformServiceManager;
   readonly integrationHelpers: IntegrationHelperService | null;
+  readonly runtimeBus: RuntimeEventBus;
   readonly runtimeStore: RuntimeStore | null;
   readonly runtimeDispatch: DomainDispatch | null;
   readonly githubWebhookSecret: string | null;
@@ -115,7 +121,20 @@ interface DaemonHttpRouterContext {
 }
 
 export class DaemonHttpRouter {
-  constructor(private readonly context: DaemonHttpRouterContext) {}
+  private readonly telemetryApi: TelemetryApiService | null;
+
+  constructor(private readonly context: DaemonHttpRouterContext) {
+    this.telemetryApi = context.runtimeStore
+      ? new TelemetryApiService({
+        runtimeBus: context.runtimeBus,
+        runtimeStore: context.runtimeStore,
+      })
+      : null;
+  }
+
+  dispose(): void {
+    this.telemetryApi?.dispose();
+  }
 
   async handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -170,14 +189,32 @@ export class DaemonHttpRouter {
     if (url.pathname === '/api/control-plane/web' && req.method === 'GET') {
       return this.context.controlPlaneGateway.renderWebUi();
     }
+    if ((url.pathname === '/api/control-plane/auth' || url.pathname === '/api/control-plane/whoami') && req.method === 'GET') {
+      const apiResponse = await this.dispatchApiRoutes(req);
+      if (apiResponse) return apiResponse;
+    }
 
     if (!this.context.checkAuth(req)) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      return jsonErrorResponse(
+        new AppError('Authentication required', 'AUTH_REQUIRED', false, {
+          category: 'authentication',
+          source: 'runtime',
+          guidance: 'Authenticate with the operator shared token or an authenticated user session before calling daemon APIs.',
+        }),
+        { status: 401 },
+      );
     }
 
     const apiResponse = await this.dispatchApiRoutes(req);
     if (apiResponse) return apiResponse;
-    return Response.json({ error: 'Not found' }, { status: 404 });
+    return jsonErrorResponse(
+      new AppError(`Route not found: ${url.pathname}`, 'NOT_FOUND', false, {
+        category: 'not_found',
+        source: 'runtime',
+        guidance: 'Check the daemon API path and version. New SDK-facing routes are published under /api/v1.',
+      }),
+      { status: 404 },
+    );
   }
 
   async dispatchApiRoutes(req: Request): Promise<Response | null> {
@@ -205,6 +242,11 @@ export class DaemonHttpRouter {
         requireAdmin: (request) => this.context.requireAdmin(request),
         userAuth: this.context.userAuth,
       }, req),
+      ...createDaemonTelemetryRouteHandlers({
+        telemetryApi: this.telemetryApi,
+        extractAuthToken: (request) => this.context.extractAuthToken(request),
+        describeAuthenticatedPrincipal: (token) => this.context.describeAuthenticatedPrincipal(token),
+      }),
       ...createDaemonChannelRouteHandlers({
         channelPlugins: this.context.channelPlugins,
         channelPolicy: this.context.channelPolicy,

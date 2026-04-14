@@ -1,8 +1,10 @@
 import { VERSION } from '../../version.ts';
+import type { ControlPlaneAuthSnapshot } from '../../control-plane/auth-snapshot.ts';
 import type { RuntimeEventDomain } from '../../runtime/events/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
 import { inspectInboundTls, inspectOutboundTls } from '../../runtime/network/index.ts';
 import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
+import { OPERATOR_SESSION_COOKIE_NAME } from '../../security/http-auth.ts';
 import {
   resolveAuthenticatedPrincipal,
   type AuthenticatedPrincipal,
@@ -39,6 +41,7 @@ export function createDaemonControlRouteHandlers(
 ): Pick<
   DaemonApiRouteHandlers,
   | 'getStatus'
+  | 'getCurrentAuth'
   | 'getControlPlaneSnapshot'
   | 'getOperatorContract'
   | 'getControlPlaneWeb'
@@ -51,6 +54,11 @@ export function createDaemonControlRouteHandlers(
   | 'invokeGatewayMethod'
   | 'createControlPlaneEventStream'
 > {
+  const hasAuthorizationHeader = Boolean(request.headers.get('authorization')?.trim());
+  const sessionCookiePresent = (request.headers.get('cookie') ?? '')
+    .split(';')
+    .some((segment) => segment.trim().startsWith(`${OPERATOR_SESSION_COOKIE_NAME}=`));
+
   return {
     getStatus: () => Response.json({
       status: 'running',
@@ -61,6 +69,32 @@ export function createDaemonControlRouteHandlers(
         outbound: inspectOutboundTls(context.configManager),
       },
     }),
+    getCurrentAuth: (req) => {
+      const token = context.extractAuthToken(req).trim();
+      const principal = resolveAuthenticatedPrincipal(req, context);
+      const session = principal?.principalKind === 'user'
+        ? context.requireAuthenticatedSession(req)
+        : null;
+      const authMode = principal
+        ? (principal.principalKind === 'token' && principal.principalId === 'shared-token' ? 'shared-token' : 'session')
+        : token.length > 0
+          ? 'invalid'
+          : 'anonymous';
+      const snapshot: ControlPlaneAuthSnapshot = {
+        authenticated: principal !== null,
+        authMode,
+        tokenPresent: token.length > 0,
+        authorizationHeaderPresent: hasAuthorizationHeader,
+        sessionCookiePresent,
+        principalId: principal?.principalId ?? null,
+        principalKind: principal?.principalKind ?? null,
+        admin: principal?.admin ?? false,
+        scopes: principal?.scopes ?? [],
+        roles: session?.roles ?? [],
+      };
+
+      return Response.json(snapshot);
+    },
     getControlPlaneSnapshot: () => Response.json(context.controlPlaneGateway.getSnapshot()),
     getOperatorContract: () => Response.json({ contract: buildOperatorContract(context.gatewayMethods) }),
     getControlPlaneWeb: () => context.controlPlaneGateway.renderWebUi(),

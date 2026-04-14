@@ -19,6 +19,7 @@ import { type ConfigKey } from '../../config/index.ts';
 import { CONFIG_KEYS } from '../../config/schema.ts';
 import type { CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -140,8 +141,8 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
           const result = applySettingsSyncBundle(ctx.platform.configManager, bundle, sourcePath);
           ctx.print(`Settings sync bundle pulled from ${sourcePath} (${result.appliedCount} applied, ${result.conflictCount} conflicts).`);
         } catch (error) {
-          recordSettingsSyncFailure('settings-sync', (error as Error).message, controlPlaneConfigDir);
-          ctx.print((error as Error).message);
+          recordSettingsSyncFailure('settings-sync', summarizeError(error), controlPlaneConfigDir);
+          ctx.print(summarizeError(error));
         }
         return;
       }

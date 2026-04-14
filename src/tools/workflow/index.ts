@@ -1,5 +1,6 @@
 import type { Tool } from '../../types/tools.ts';
 import { workflowSchema } from './schema.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Workflow definitions
@@ -548,7 +549,7 @@ export function createWorkflowTool(services: WorkflowServices): Tool {
       } catch (err) {
         return {
           success: false,
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
         };
       }
     },

@@ -9,6 +9,7 @@
 import { logger } from '../../utils/logger.ts';
 import type { RuntimeEventEnvelope } from './envelope.ts';
 import type { AnyRuntimeEvent, RuntimeEventDomain, DomainEventMap } from './domain-map.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export type { RuntimeEventEnvelope, EnvelopeContext } from './envelope.ts';
 export { createEventEnvelope } from './envelope.ts';
@@ -156,7 +157,7 @@ export class RuntimeEventBus {
         } catch (err) {
           logger.error('[RuntimeEventBus] listener error', {
             eventType: envelope.type,
-            error: err instanceof Error ? err.message : String(err),
+            error: summarizeError(err),
           });
         }
       }
@@ -171,7 +172,7 @@ export class RuntimeEventBus {
           logger.error('[RuntimeEventBus] domain listener error', {
             domain,
             eventType: envelope.type,
-            error: err instanceof Error ? err.message : String(err),
+            error: summarizeError(err),
           });
         }
       }

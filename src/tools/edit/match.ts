@@ -3,6 +3,7 @@ import * as astGrep from '@ast-grep/napi';
 import { logger } from '../../utils/logger.ts';
 import { CodeIntelligence } from '../../intelligence/index.ts';
 import type { EditItem, OccurrenceSpec, EditResult, EditResultStatus } from './types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function decodeBase64(value: string): string {
   return Buffer.from(value, 'base64').toString('utf-8');
@@ -349,7 +350,7 @@ export function computeAstEdit(
   try {
     intel = new CodeIntelligence({});
   } catch (e) {
-    logger.debug('CodeIntelligence instance not available', { error: String(e) });
+    logger.debug('CodeIntelligence instance not available', { error: summarizeError(e) });
     return Promise.resolve(computeExactEdit(fileContent, item));
   }
 
@@ -406,7 +407,7 @@ export function computeAstPatternEdit(
   try {
     root = parser.parse(fileContent);
   } catch (e) {
-    logger.debug('AST pattern parse failed', { error: String(e) });
+    logger.debug('AST pattern parse failed', { error: summarizeError(e) });
     return computeExactEdit(fileContent, item);
   }
 
@@ -414,7 +415,7 @@ export function computeAstPatternEdit(
   try {
     matches = root.root().findAll(findStr);
   } catch (err) {
-    return { error: `ast_pattern: invalid pattern '${findStr}': ${err instanceof Error ? err.message : String(err)}` };
+    return { error: `ast_pattern: invalid pattern '${findStr}': ${summarizeError(err)}` };
   }
 
   if (matches.length === 0) {
@@ -498,7 +499,7 @@ export function computeSingleEdit(
   try {
     positions = findAllPositions(fileContent, findStr, mode, caseSensitive, whitespaceSensitive, multiline);
   } catch (err) {
-    return { error: `Invalid find pattern: ${err instanceof Error ? err.message : String(err)}` };
+    return { error: `Invalid find pattern: ${summarizeError(err)}` };
   }
 
   let hintsWarning: string | undefined;

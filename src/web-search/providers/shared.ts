@@ -2,6 +2,7 @@ import type { ServiceRegistry } from '../../config/service-registry.ts';
 import { executeFetchInput, type FetchOutput, type FetchUrlResult } from '../../tools/fetch/index.ts';
 import type { FetchAuthInput, FetchInput, FetchUrlInput } from '../../tools/fetch/schema.ts';
 import type { WebSearchEvidence, WebSearchProviderDescriptor, WebSearchResult } from '../types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 type EnvMap = Record<string, string | undefined>;
 type FetchExecutor = (input: FetchInput) => Promise<FetchOutput>;
@@ -185,7 +186,7 @@ export async function executeJsonRequest<T = unknown>(config: JsonRequestConfig)
   try {
     payload = JSON.parse(response.content) as T;
   } catch (error) {
-    throw new Error(`Search provider returned invalid JSON for ${config.url}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`Search provider returned invalid JSON for ${config.url}: ${summarizeError(error)}`);
   }
   return { payload, response };
 }

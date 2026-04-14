@@ -389,3 +389,75 @@ describe('ProviderRegistry.get() — alias resolution', () => {
     expect(() => providerRegistry.get('nonexistent')).toThrow();
   });
 });
+
+describe('ProviderRegistry.getForModel() — explicit provider lock', () => {
+  beforeEach(() => {
+    cacheFixture = createProviderCacheFixture(testManagers.configManager.getControlPlaneConfigDir());
+  });
+
+  afterEach(() => {
+    cacheFixture.restoreEnv();
+    cacheFixture.cleanup();
+  });
+
+  it('keeps an explicit provider pinned even when another provider exposes the same model id', () => {
+    loadCatalog([
+      {
+        id: 'mercury-2',
+        name: 'Mercury 2',
+        provider: 'Venice AI',
+        providerId: 'venice',
+        providerEnvVars: ['VENICE_API_KEY'],
+        pricing: { input: 0.3, output: 0.9 },
+        tier: 'paid',
+      },
+      {
+        id: 'mercury-2',
+        name: 'Mercury 2',
+        provider: 'Inception',
+        providerId: 'inception',
+        providerEnvVars: ['INCEPTION_API_KEY'],
+        pricing: { input: 0.25, output: 0.75 },
+        tier: 'paid',
+      },
+    ]);
+
+    const provider = providerRegistry.getForModel('mercury-2', 'inceptionlabs');
+    expect(provider.name).toBe('inceptionlabs');
+  });
+
+  it('accepts catalog aliases when resolving an explicitly pinned provider', () => {
+    loadCatalog([
+      {
+        id: 'mercury-2',
+        name: 'Mercury 2',
+        provider: 'Inception',
+        providerId: 'inception',
+        providerEnvVars: ['INCEPTION_API_KEY'],
+        pricing: { input: 0.25, output: 0.75 },
+        tier: 'paid',
+      },
+    ]);
+
+    const provider = providerRegistry.getForModel('mercury-2', 'inception');
+    expect(provider.name).toBe('inceptionlabs');
+  });
+
+  it('throws instead of falling through to a different provider when the pinned provider does not offer the model', () => {
+    loadCatalog([
+      {
+        id: 'mercury-2',
+        name: 'Mercury 2',
+        provider: 'Venice AI',
+        providerId: 'venice',
+        providerEnvVars: ['VENICE_API_KEY'],
+        pricing: { input: 0.3, output: 0.9 },
+        tier: 'paid',
+      },
+    ]);
+
+    expect(() => providerRegistry.getForModel('mercury-2', 'inceptionlabs')).toThrow(
+      "No model 'mercury-2' for provider 'inceptionlabs' in registry.",
+    );
+  });
+});

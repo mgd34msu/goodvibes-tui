@@ -15,6 +15,7 @@ import { resolve, normalize } from 'node:path';
 import { logger } from '../utils/logger.ts';
 import type { LedgerEntry } from '../runtime/telemetry/exporters/local-ledger.ts';
 import type { RuntimeStateSnapshot } from '../runtime/diagnostics/types.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ── Mismatch classifier ────────────────────────────────────────────────────
 
@@ -431,7 +432,7 @@ export class DeterministicReplayEngine {
       await writeFile(resolved, JSON.stringify(report, null, 2), 'utf8');
       logger.info('[DeterministicReplayEngine] exported report', { filePath: resolved, runId: this._runId });
     } catch (err) {
-      logger.warn('[DeterministicReplayEngine] export failed', { filePath: resolved, err: String(err) });
+      logger.warn('[DeterministicReplayEngine] export failed', { filePath: resolved, err: summarizeError(err) });
       throw err;
     }
   }
@@ -753,7 +754,7 @@ export class DeterministicReplayEngine {
         cb();
       } catch (err) {
         // Non-fatal: subscriber errors must not crash the engine.
-        logger.debug('[DeterministicReplayEngine] subscriber error', { error: String(err) });
+        logger.debug('[DeterministicReplayEngine] subscriber error', { error: summarizeError(err) });
       }
     }
   }

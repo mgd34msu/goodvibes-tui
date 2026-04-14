@@ -53,6 +53,7 @@ import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './runtime/session-return-context.ts';
 import { GlobalNetworkTransportInstaller } from './runtime/network/index.ts';
+import { summarizeError } from './utils/error-display.ts';
 
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
@@ -272,7 +273,7 @@ async function main() {
     // Clear bootstrap-owned unsubs + interval via ctx.shutdown()
     const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
     ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints()) }).catch((err) => {
-      logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: String(err) });
+      logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: summarizeError(err) });
     });
     // Clear recovery interval
     if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
@@ -325,7 +326,7 @@ async function main() {
     }
     if (processedText || content) {
       orchestrator.handleUserInput(processedText, content).catch((err: unknown) => {
-        logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: String(err) });
+        logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: summarizeError(err) });
       });
     } else {
       render();
@@ -703,8 +704,8 @@ async function main() {
         conversation.title || '',
         { workingDirectory: workingDir, homeDirectory, sessionManager: ctx.services.sessionManager },
       );
-      hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: String(err) }));
-    } catch (e) { logger.debug('auto-save on turn:complete failed', { error: String(e) }); }
+      hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: summarizeError(err) }));
+    } catch (e) { logger.debug('auto-save on turn:complete failed', { error: summarizeError(e) }); }
     gitStatusProvider.refresh().then((info) => {
       lastGitInfoRef.value = info;
       render();

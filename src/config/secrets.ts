@@ -24,6 +24,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import type { ConfigManager } from './manager.ts';
 import { getSecretRefSource, isSecretRefInput, resolveSecretRef } from './secret-refs.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export type SecretStorageMode = 'plaintext_allowed' | 'preferred_secure' | 'require_secure';
 export type SecretScope = 'project' | 'user';
@@ -237,7 +238,7 @@ export class SecretsManager {
       logger.warn('SecretsManager: failed to resolve secret reference', {
         key,
         refSource: getSecretRefSource(value) ?? 'unknown',
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
       return null;
     }
@@ -275,7 +276,7 @@ export class SecretsManager {
         logger.warn('SecretsManager: secure write failed, fell back to plaintext', {
           key,
           path: fallback.path,
-          error: String(error),
+          error: summarizeError(error),
         });
         return;
       }

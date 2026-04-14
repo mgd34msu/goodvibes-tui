@@ -281,6 +281,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'Y',
     category: 'monitoring',
     description: 'Structured agent communication, blocked routes, and delivery status',
+    preload: true,
     factory: () => new CommunicationPanel(ui.readModels.communication),
   });
 
@@ -308,6 +309,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'N',
     category: 'monitoring',
     description: 'Provider health dashboard: real-time status, latency, errors, and rate-limit cooldowns',
+    preload: true,
     factory: () => new ProviderHealthPanel(
       providerRuntime,
       {

@@ -16,6 +16,7 @@ import { completePlanItemsForAgent } from './wrfc-plan-sync.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import type { ExecutionPlanManager } from '../core/execution-plan.ts';
 import type { AgentEvent, RuntimeEventBus } from '../runtime/events/index.ts';
 import {
@@ -24,7 +25,6 @@ import {
   emitWorkflowReviewCompleted,
 } from '../runtime/emitters/index.ts';
 import {
-  getEnabledWrfcGates,
   getWrfcAutoCommit,
   getWrfcMaxFixAttempts,
   getWrfcScoreThreshold,
@@ -37,17 +37,12 @@ import {
   emitWrfcCascadeAbort,
   emitWrfcChainCreated,
   emitWrfcChainPassed,
-  emitWrfcGateResult,
   emitWrfcGraphCreated,
   emitWrfcStateChanged,
   failWrfcOrchestrationNode,
   startWrfcOrchestrationNode,
 } from './wrfc-runtime-events.ts';
-import {
-  executeGateCommand,
-  getSkippedGateReason,
-  loadPackageScripts,
-} from './wrfc-gates.ts';
+import { runWrfcGateChecks } from './wrfc-gate-runtime.ts';
 
 export { extractScoreFromText, extractPassedFromText, extractIssuesFromText } from './wrfc-reporting.ts';
 
@@ -175,7 +170,7 @@ export class WrfcController {
         this.onAgentComplete(payload.agentId).catch((error) => {
           logger.error('WrfcController.onAgentComplete unhandled error', {
             agentId: payload.agentId,
-            error: String(error),
+            error: summarizeError(error),
           });
         });
       },
@@ -397,63 +392,16 @@ export class WrfcController {
       'Quality gates',
     );
 
-    const gates = getEnabledWrfcGates(this.configManager);
-    if (gates.length === 0) {
-      logger.debug('WrfcController.runGates: no gates configured', { chainId: chain.id });
-      return [];
-    }
-
-    logger.debug('WrfcController.runGates', {
+    return runWrfcGateChecks({
+      configManager: this.configManager,
+      projectRoot: this.projectRoot,
+      runtimeBus: this.runtimeBus,
+      sessionId: this.sessionId,
       chainId: chain.id,
-      gateCount: gates.length,
-    });
-
-    const cwd = this.projectRoot;
-    const pkgScripts = await loadPackageScripts(cwd);
-    const results: QualityGateResult[] = [];
-
-    for (const gate of gates) {
-      const skipReason = getSkippedGateReason(gate.name, cwd, pkgScripts);
-      if (skipReason !== null) {
-        const result: QualityGateResult = {
-          gate: gate.name,
-          passed: true,
-          output: skipReason,
-          durationMs: 0,
-        };
-        results.push(result);
+      onResult: (results) => {
         chain.gateResults = results.slice();
-        emitWrfcGateResult(this.runtimeBus, this.sessionId, chain.id, gate.name, true);
-        logger.debug('WrfcController.gate-skipped', {
-          chainId: chain.id,
-          gate: gate.name,
-          reason: skipReason,
-        });
-        continue;
-      }
-
-      const startedAt = Date.now();
-      const { passed, output } = await executeGateCommand(gate.command);
-      const result: QualityGateResult = {
-        gate: gate.name,
-        passed,
-        output,
-        durationMs: Date.now() - startedAt,
-      };
-
-      results.push(result);
-      chain.gateResults = results.slice();
-      emitWrfcGateResult(this.runtimeBus, this.sessionId, chain.id, gate.name, passed);
-
-      logger.debug('WrfcController.gate-result', {
-        chainId: chain.id,
-        gate: gate.name,
-        passed,
-        durationMs: result.durationMs,
-      });
-    }
-
-    return results;
+      },
+    });
   }
 
   private async processGateResults(chain: WrfcChain, results: QualityGateResult[]): Promise<void> {
@@ -603,7 +551,7 @@ export class WrfcController {
       this.completeChainAsPassed(chain);
       logger.debug('WrfcController.autoCommit: success', { chainId: chain.id, agentId, merged });
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = summarizeError(error);
       logger.error('WrfcController.autoCommit: failed', { chainId: chain.id, error: reason });
       this.failChain(chain, `autoCommit failed: ${reason}`);
     } finally {
@@ -611,7 +559,7 @@ export class WrfcController {
         worktree.cleanup(id).catch((error) => {
           logger.debug('WrfcController.autoCommit: cleanup error (non-fatal)', {
             agentId: id,
-            error: String(error),
+            error: summarizeError(error),
           });
         });
       }
@@ -793,7 +741,7 @@ export class WrfcController {
 
   private safeDequeueNext(): void {
     this.dequeueNext().catch((error) => {
-      logger.error('WrfcController.dequeueNext unhandled error', { error: String(error) });
+      logger.error('WrfcController.dequeueNext unhandled error', { error: summarizeError(error) });
     });
   }
 }

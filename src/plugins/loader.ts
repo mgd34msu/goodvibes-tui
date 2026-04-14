@@ -12,6 +12,7 @@ import type { MemoryEmbeddingProviderRegistry } from '../state/index.ts';
 import type { VoiceProviderRegistry } from '../voice/index.ts';
 import type { MediaProviderRegistry } from '../media/index.ts';
 import type { WebSearchProviderRegistry } from '../web-search/index.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface PluginPathOptions {
   readonly cwd: string;
@@ -95,7 +96,7 @@ function scanPluginDirectory(rootDir: string): DiscoveredPlugin[] {
   try {
     entries = readdirSync(rootDir);
   } catch (err) {
-    logger.warn(`[plugins] Could not read plugins directory '${rootDir}': ${String(err)}`);
+    logger.warn(`[plugins] Could not read plugins directory '${rootDir}': ${summarizeError(err)}`);
     return [];
   }
 
@@ -133,7 +134,7 @@ function scanPluginDirectory(rootDir: string): DiscoveredPlugin[] {
 
       results.push({ pluginDir, manifest });
     } catch (err) {
-      logger.warn(`[plugins] ${entry}: failed to parse manifest — ${String(err)}`);
+      logger.warn(`[plugins] ${entry}: failed to parse manifest — ${summarizeError(err)}`);
     }
   }
 
@@ -271,7 +272,7 @@ export async function loadPlugin(
     logger.info(`[plugins] ${manifest.name} v${manifest.version} activated`);
     return loaded;
   } catch (err) {
-    logger.error(`[plugins] ${manifest.name}: load failed — ${String(err)}`);
+    logger.error(`[plugins] ${manifest.name}: load failed — ${summarizeError(err)}`);
     // Run cleanup for anything that was registered before the error
     for (const fn of loaded.cleanup) {
       try { fn(); } catch { /* best-effort */ }
@@ -291,7 +292,7 @@ export async function unloadPlugin(plugin: LoadedPlugin): Promise<void> {
       await plugin.entry.deactivate();
     }
   } catch (err) {
-    logger.warn(`[plugins] ${plugin.manifest.name}: deactivate threw — ${String(err)}`);
+    logger.warn(`[plugins] ${plugin.manifest.name}: deactivate threw — ${summarizeError(err)}`);
   }
 
   for (const fn of plugin.cleanup) {

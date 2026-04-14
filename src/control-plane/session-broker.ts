@@ -26,17 +26,18 @@ import {
   type SharedSessionMessageSender,
   type SharedSessionStoreSnapshot,
 } from './session-broker-internals.ts';
+import {
+  countPendingSessionInputs,
+  createSessionBrokerSnapshot,
+  loadSessionBrokerState,
+  sortInputs,
+  sortMessages,
+  sortSessions,
+  upsertSessionParticipant,
+} from './session-broker-state.ts';
 
 const MAX_PERSISTED_MESSAGES = 2_000;
 const MAX_CONTINUATION_MESSAGES = 16;
-
-function sortSessions(records: Iterable<SharedSessionRecord>): SharedSessionRecord[] {
-  return [...records].sort((a, b) => (b.updatedAt - a.updatedAt) || a.id.localeCompare(b.id));
-}
-
-function sortMessages(records: Iterable<SharedSessionMessage>): SharedSessionMessage[] {
-  return [...records].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
-}
 
 export class SharedSessionBroker {
   private readonly store: PersistentStore<SharedSessionStoreSnapshot>;
@@ -78,28 +79,18 @@ export class SharedSessionBroker {
   async start(): Promise<void> {
     if (this.loaded) return;
     await this.routeBindings.start();
-    const snapshot = await this.store.load();
+    const { sessions, messages, inputs } = loadSessionBrokerState(await this.store.load());
     this.sessions.clear();
     this.messages.clear();
     this.inputs.clear();
-    for (const session of snapshot?.sessions ?? []) {
+    for (const session of sessions.values()) {
       this.sessions.set(session.id, session);
     }
-    for (const message of snapshot?.messages ?? []) {
-      const bucket = this.messages.get(message.sessionId) ?? [];
-      bucket.push(message);
-      this.messages.set(message.sessionId, bucket);
+    for (const [sessionId, bucket] of messages.entries()) {
+      this.messages.set(sessionId, bucket);
     }
-    for (const input of snapshot?.inputs ?? []) {
-      const bucket = this.inputs.get(input.sessionId) ?? [];
-      bucket.push(input);
-      this.inputs.set(input.sessionId, bucket);
-    }
-    for (const [sessionId, bucket] of this.messages.entries()) {
-      this.messages.set(sessionId, sortMessages(bucket));
-    }
-    for (const [sessionId, bucket] of this.inputs.entries()) {
-      this.inputs.set(sessionId, [...bucket].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)));
+    for (const [sessionId, bucket] of inputs.entries()) {
+      this.inputs.set(sessionId, bucket);
     }
     this.loaded = true;
   }
@@ -414,11 +405,7 @@ export class SharedSessionBroker {
     const nextRouteIds = binding?.id
       ? [...new Set([...existing.routeIds, binding.id])]
       : [...existing.routeIds];
-    const participantId = `${input.surfaceKind}:${input.surfaceId}:${input.externalId ?? ''}:${input.userId ?? ''}`;
-    const participants = existing.participants.filter((participant) =>
-      `${participant.surfaceKind}:${participant.surfaceId}:${participant.externalId ?? ''}:${participant.userId ?? ''}` !== participantId,
-    );
-    participants.push({
+    const participants = upsertSessionParticipant(existing.participants, {
       surfaceKind: input.surfaceKind,
       surfaceId: input.surfaceId,
       externalId: input.externalId,
@@ -488,13 +475,11 @@ export class SharedSessionBroker {
   }
 
   private async persist(): Promise<void> {
-    await this.store.persist({
-      sessions: sortSessions(this.sessions.values()),
-      messages: sortMessages(this.messages.values().flatMap((bucket) => bucket)).slice(-MAX_PERSISTED_MESSAGES),
-      inputs: [...this.inputs.values()]
-        .flatMap((bucket) => bucket)
-        .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)),
-    });
+    await this.store.persist(createSessionBrokerSnapshot({
+      sessions: this.sessions,
+      messages: this.messages,
+      inputs: this.inputs,
+    }, MAX_PERSISTED_MESSAGES));
   }
 
   private publishUpdate(event: string, payload: unknown): void {
@@ -694,7 +679,7 @@ export class SharedSessionBroker {
     };
     const bucket = this.inputs.get(sessionId) ?? [];
     bucket.push(entry);
-    this.inputs.set(sessionId, bucket.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id)));
+    this.inputs.set(sessionId, sortInputs(bucket));
     this.refreshPendingInputCount(sessionId);
     return entry;
   }
@@ -785,9 +770,7 @@ export class SharedSessionBroker {
   private refreshPendingInputCount(sessionId: string): void {
     const session = this.sessions.get(sessionId);
     if (!session) return;
-    const pendingInputCount = (this.inputs.get(sessionId) ?? []).filter((entry) =>
-      entry.state === 'queued' || entry.state === 'delivered' || entry.state === 'spawned'
-    ).length;
+    const pendingInputCount = countPendingSessionInputs(this.inputs.get(sessionId) ?? []);
     this.sessions.set(sessionId, {
       ...session,
       pendingInputCount,

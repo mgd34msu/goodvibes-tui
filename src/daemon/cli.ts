@@ -7,6 +7,7 @@ import { DaemonServer } from './server.ts';
 import { HttpListener } from './http-listener.ts';
 import { logger } from '../utils/logger.ts';
 import { GlobalNetworkTransportInstaller } from '../runtime/network/index.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 type DaemonCliOwnership = {
   readonly workingDirectory: string;
@@ -81,7 +82,7 @@ async function main(): Promise<void> {
 
 void main().catch(async (error) => {
   logger.error('goodvibes daemon host failed', {
-    error: error instanceof Error ? error.message : String(error),
+    error: summarizeError(error),
   });
   process.exit(1);
 });

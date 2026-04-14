@@ -17,6 +17,7 @@ import type { AutomationJob } from './jobs.ts';
 import type { AutomationRouteBinding } from './routes.ts';
 import type { AutomationRun } from './runs.ts';
 import { classifyDeliveryError } from '../integrations/delivery.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -222,7 +223,7 @@ export class AutomationDeliveryManager {
           lastError = '';
           break;
         } catch (error) {
-          lastError = error instanceof Error ? error.message : String(error);
+          lastError = summarizeError(error);
           const retryable = classifyDeliveryError(error) === 'retryable';
           const lastTry = attemptIndex >= Math.max(1, retryPolicy.maxAttempts);
           if (!retryable || lastTry) {

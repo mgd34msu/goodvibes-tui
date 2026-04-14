@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface WorkmapEntry {
   ts: string;
@@ -34,7 +35,7 @@ export class WrfcWorkmap {
       }
       appendFileSync(this.filePath, JSON.stringify(entry) + '\n', 'utf-8');
     } catch (err) {
-      logger.debug('WrfcWorkmap: append failed', { error: String(err) });
+      logger.debug('WrfcWorkmap: append failed', { error: summarizeError(err) });
     }
   }
 

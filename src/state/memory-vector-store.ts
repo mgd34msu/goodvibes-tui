@@ -10,6 +10,7 @@ import {
   normalizeMemoryEmbeddingVector,
 } from './memory-embeddings.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // Keep this in sync with DEFAULT_MEMORY_EMBEDDING_DIMS in memory-embeddings.ts.
 // Duplicating the literal here avoids an initialization cycle when state/index.ts
@@ -122,7 +123,7 @@ export class SqliteVecMemoryIndex {
       this.close();
       this.available = false;
       this.enabled = false;
-      this.error = err instanceof Error ? err.message : String(err);
+      this.error = summarizeError(err);
       logger.warn('Memory vector index unavailable', { backend: 'sqlite-vec', error: this.error });
     }
   }

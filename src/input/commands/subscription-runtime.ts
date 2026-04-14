@@ -8,6 +8,7 @@ import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } fro
 import { inspectProviderAuth } from '../../runtime/auth/inspection.ts';
 import { openExternalUrl } from '../../utils/open-external.ts';
 import { requireSecretsManager, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 interface SubscriptionBundle {
   readonly version: 1;
@@ -240,7 +241,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
                   `  redirectUri: ${started.redirectUri}`,
                   `  browser: ${openBrowser ? (browserOpened ? 'opened' : 'open failed') : 'skipped'}`,
                   `  next: /subscription login ${provider} finish <code-or-url>`,
-                  `  listener: ${error instanceof Error ? error.message : String(error)}`,
+                  `  listener: ${summarizeError(error)}`,
                   '  authorizationUrl:',
                   `  ${started.authorizationUrl}`,
                 ].join('\n'));
@@ -316,7 +317,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
                 `  redirectUri: ${activeConfig.redirectUri}`,
                 `  browser: ${openBrowser ? (browserOpened ? 'opened' : 'open failed') : 'skipped'}`,
                 `  next: /subscription login ${provider} finish <code-or-url>`,
-                `  listener: ${error instanceof Error ? error.message : String(error)}`,
+                `  listener: ${summarizeError(error)}`,
                 '  authorizationUrl:',
                 `  ${started.authorizationUrl}`,
               ].join('\n'));

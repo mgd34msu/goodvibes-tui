@@ -5,6 +5,7 @@ import { DaemonServer } from '../daemon/server.ts';
 import { HttpListener } from '../daemon/http-listener.ts';
 import { logger } from '../utils/logger.ts';
 import net from 'node:net';
+import { summarizeError } from '../utils/error-display.ts';
 
 interface DaemonService {
   enable(config: { daemon: boolean }, token?: string): boolean;
@@ -92,7 +93,7 @@ async function startWithTimeout(
       logger.warn(`${label} startup timed out; continuing without it in this TUI instance`, { timeoutMs });
       if (cleanup) {
         void cleanup().catch((error) => {
-          logger.warn(`${label} cleanup after startup timeout failed`, { error: error instanceof Error ? error.message : String(error) });
+          logger.warn(`${label} cleanup after startup timeout failed`, { error: summarizeError(error) });
         });
         void startPromise.then(() => cleanup()).catch(() => {});
       }
@@ -142,7 +143,7 @@ export async function startExternalServices(
           daemonServer = null;
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = summarizeError(error);
         if (message.includes('EADDRINUSE') || message.includes('Address already in use')) {
           logger.warn('Daemon server port already in use; continuing without local daemon in this TUI instance', { error: message });
           daemonServer = null;
@@ -169,7 +170,7 @@ export async function startExternalServices(
           httpListener = null;
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = summarizeError(error);
         if (message.includes('EADDRINUSE') || message.includes('Address already in use')) {
           logger.warn('HTTP listener port already in use; continuing without local listener in this TUI instance', { error: message });
           httpListener = null;

@@ -19,6 +19,7 @@ import {
 import { PluginQuarantineEngine, type QuarantineRecord } from '../runtime/plugins/quarantine.ts';
 import { isHighRiskCapability, resolveCapabilityManifest } from '../runtime/plugins/manifest.ts';
 import type { PluginCapability, PluginManifestV2 } from '../runtime/plugins/types.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * PluginState — Persisted state for all plugins.
@@ -436,7 +437,7 @@ export class PluginManager {
         // quarantines take effect when plugins are loaded via PluginLifecycleManager.
       }
     } catch (err) {
-      logger.warn(`[plugins] Could not load state: ${String(err)}`);
+      logger.warn(`[plugins] Could not load state: ${summarizeError(err)}`);
     }
   }
 
@@ -445,7 +446,7 @@ export class PluginManager {
       mkdirSync(dirname(this.stateFilePath), { recursive: true });
       writeFileSync(this.stateFilePath, JSON.stringify(this.state, null, 2), 'utf-8');
     } catch (err) {
-      logger.warn(`[plugins] Could not save state: ${String(err)}`);
+      logger.warn(`[plugins] Could not save state: ${summarizeError(err)}`);
     }
   }
 
@@ -471,7 +472,7 @@ export class PluginManager {
         callback();
       } catch (err) {
         logger.debug('[plugins] subscriber callback failed', {
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
         });
       }
     }

@@ -1,6 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { GitService } from '../../git/service.ts';
 import { requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerGitRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -49,7 +50,7 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
             }
             ctx.print(lines.join('\n'));
           } catch (e) {
-            ctx.print(`Git status failed: ${(e as Error).message}`);
+            ctx.print(`Git status failed: ${summarizeError(e)}`);
           }
           break;
         }
@@ -58,7 +59,7 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
             const entries = await git.log(10);
             ctx.print([`Recent commits (${entries.length}):`, ...entries.map((entry) => `  ${entry.hash.slice(0, 7)}  ${entry.date.slice(0, 10)}  ${entry.message}`)].join('\n'));
           } catch (e) {
-            ctx.print(`Git log failed: ${(e as Error).message}`);
+            ctx.print(`Git log failed: ${summarizeError(e)}`);
           }
           break;
         }
@@ -68,7 +69,7 @@ export function registerGitRuntimeCommands(registry: CommandRegistry): void {
             if (!diffText.trim()) ctx.print('No unstaged changes.');
             else ctx.print(diffText.length > 4000 ? `${diffText.slice(0, 4000)}\n\n...(diff truncated)` : diffText);
           } catch (e) {
-            ctx.print(`Git diff failed: ${(e as Error).message}`);
+            ctx.print(`Git diff failed: ${summarizeError(e)}`);
           }
           break;
         }

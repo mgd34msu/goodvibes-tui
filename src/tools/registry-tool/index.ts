@@ -14,6 +14,7 @@ import type { Tool, ToolDefinition } from '../../types/tools.ts';
 import type { ToolRegistry } from '../registry.ts';
 import { REGISTRY_TOOL_SCHEMA } from './schema.ts';
 import type { RegistryInput } from './schema.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Frontmatter parser
@@ -216,7 +217,7 @@ export function createRegistryTool(toolRegistry: ToolRegistry, roots: RegistryTo
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = summarizeError(err);
       logger.debug('registry tool: unexpected error', { error: message });
       return { success: false, error: `Unexpected error: ${message}` };
     }
@@ -395,7 +396,7 @@ function runDependencies(
   } catch (err) {
     return Promise.resolve({
       success: false,
-      error: `Failed to read skill file: ${err instanceof Error ? err.message : String(err)}`,
+      error: `Failed to read skill file: ${summarizeError(err)}`,
     });
   }
 
@@ -441,7 +442,7 @@ function runPreview(
   } catch (err) {
     return Promise.resolve({
       success: false,
-      error: `Failed to preview file: ${err instanceof Error ? err.message : String(err)}`,
+      error: `Failed to preview file: ${summarizeError(err)}`,
     });
   }
 }

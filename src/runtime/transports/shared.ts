@@ -5,6 +5,7 @@ export interface TransportPaths {
   readonly baseUrl: string;
   readonly statusUrl: string;
   readonly controlPlaneUrl: string;
+  readonly controlPlaneAuthUrl: string;
   readonly controlPlaneEventsUrl: string;
   readonly controlPlaneMethodsUrl: string;
   readonly sessionsUrl: string;
@@ -13,6 +14,15 @@ export interface TransportPaths {
   readonly providersUrl: string;
   readonly accountsUrl: string;
   readonly localAuthUrl: string;
+  readonly telemetryUrl: string;
+  readonly telemetryEventsUrl: string;
+  readonly telemetryErrorsUrl: string;
+  readonly telemetryTracesUrl: string;
+  readonly telemetryMetricsUrl: string;
+  readonly telemetryStreamUrl: string;
+  readonly telemetryOtlpTracesUrl: string;
+  readonly telemetryOtlpLogsUrl: string;
+  readonly telemetryOtlpMetricsUrl: string;
   readonly remoteUrl: string;
   readonly remoteContractUrl: string;
   readonly peerRequestsUrl: string;
@@ -72,6 +82,7 @@ export function createTransportPaths(baseUrl: string): TransportPaths {
     baseUrl: normalized,
     statusUrl: buildUrl(normalized, '/status'),
     controlPlaneUrl: buildUrl(normalized, '/api/control-plane'),
+    controlPlaneAuthUrl: buildUrl(normalized, '/api/control-plane/auth'),
     controlPlaneEventsUrl: buildUrl(normalized, '/api/control-plane/events'),
     controlPlaneMethodsUrl: buildUrl(normalized, '/api/control-plane/methods'),
     sessionsUrl: buildUrl(normalized, '/api/sessions'),
@@ -80,6 +91,15 @@ export function createTransportPaths(baseUrl: string): TransportPaths {
     providersUrl: buildUrl(normalized, '/api/providers'),
     accountsUrl: buildUrl(normalized, '/api/accounts'),
     localAuthUrl: buildUrl(normalized, '/api/local-auth'),
+    telemetryUrl: buildUrl(normalized, '/api/v1/telemetry'),
+    telemetryEventsUrl: buildUrl(normalized, '/api/v1/telemetry/events'),
+    telemetryErrorsUrl: buildUrl(normalized, '/api/v1/telemetry/errors'),
+    telemetryTracesUrl: buildUrl(normalized, '/api/v1/telemetry/traces'),
+    telemetryMetricsUrl: buildUrl(normalized, '/api/v1/telemetry/metrics'),
+    telemetryStreamUrl: buildUrl(normalized, '/api/v1/telemetry/stream'),
+    telemetryOtlpTracesUrl: buildUrl(normalized, '/api/v1/telemetry/otlp/v1/traces'),
+    telemetryOtlpLogsUrl: buildUrl(normalized, '/api/v1/telemetry/otlp/v1/logs'),
+    telemetryOtlpMetricsUrl: buildUrl(normalized, '/api/v1/telemetry/otlp/v1/metrics'),
     remoteUrl: buildUrl(normalized, '/api/remote'),
     remoteContractUrl: buildUrl(normalized, '/api/remote/node-host/contract'),
     peerRequestsUrl: buildUrl(normalized, '/api/remote/pair/requests'),

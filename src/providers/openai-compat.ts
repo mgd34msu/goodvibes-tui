@@ -22,10 +22,203 @@ import { getCacheCapability } from './cache-capability.ts';
 import type { ProviderCacheCapability } from './cache-capability.ts';
 import type { CacheHitTracker } from './cache-strategy.ts';
 import { extractOpenAIStreamTextDelta } from './openai-stream-delta.ts';
+import { logger } from '../utils/logger.ts';
+import { summarizeError, toProviderError } from '../utils/error-display.ts';
 
 const NOOP_CACHE_HIT_TRACKER: Pick<CacheHitTracker, 'recordTurn'> = {
   recordTurn: () => {},
 };
+
+interface ChatRequestFingerprint {
+  readonly model: string;
+  readonly messageCount: number;
+  readonly userMessages: number;
+  readonly assistantMessages: number;
+  readonly toolMessages: number;
+  readonly contentChars: number;
+  readonly imageParts: number;
+  readonly toolCount: number;
+  readonly systemPromptChars: number;
+  readonly reasoningEffort: ChatRequest['reasoningEffort'] | null;
+  readonly reasoningSummary: boolean;
+  readonly maxTokens: number | null;
+}
+
+interface OpenAICompatErrorDiagnostic {
+  readonly status?: number;
+  readonly code?: string;
+  readonly type?: string;
+  readonly requestId?: string;
+  readonly detail?: string;
+  readonly rawMessage: string;
+}
+
+function summarizeContent(
+  content: ChatRequest['messages'][number]['content'],
+): { readonly textChars: number; readonly imageParts: number } {
+  if (typeof content === 'string') {
+    return { textChars: content.length, imageParts: 0 };
+  }
+
+  let textChars = 0;
+  let imageParts = 0;
+  for (const part of content) {
+    if (part.type === 'text') textChars += part.text.length;
+    if (part.type === 'image') imageParts += 1;
+  }
+  return { textChars, imageParts };
+}
+
+function buildChatRequestFingerprint(
+  request: ChatRequest,
+  model: string,
+): ChatRequestFingerprint {
+  let userMessages = 0;
+  let assistantMessages = 0;
+  let toolMessages = 0;
+  let contentChars = 0;
+  let imageParts = 0;
+
+  for (const message of request.messages) {
+    if (message.role === 'user') {
+      userMessages += 1;
+      const content = summarizeContent(message.content);
+      contentChars += content.textChars;
+      imageParts += content.imageParts;
+    } else if (message.role === 'assistant') {
+      assistantMessages += 1;
+      contentChars += message.content.length;
+    } else if (message.role === 'tool') {
+      toolMessages += 1;
+      contentChars += message.content.length;
+    }
+  }
+
+  return {
+    model,
+    messageCount: request.messages.length,
+    userMessages,
+    assistantMessages,
+    toolMessages,
+    contentChars,
+    imageParts,
+    toolCount: request.tools?.length ?? 0,
+    systemPromptChars: request.systemPrompt?.length ?? 0,
+    reasoningEffort: request.reasoningEffort ?? null,
+    reasoningSummary: Boolean(request.reasoningSummary),
+    maxTokens: request.maxTokens ?? null,
+  };
+}
+
+function truncateDetail(detail: string, max = 280): string {
+  if (detail.length <= max) return detail;
+  return `${detail.slice(0, max - 3)}...`;
+}
+
+function extractStringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function extractHeaderValue(headers: unknown, name: string): string | undefined {
+  if (!headers) return undefined;
+  if (headers instanceof Headers) return headers.get(name) ?? undefined;
+  if (Array.isArray(headers)) {
+    const loweredName = name.toLowerCase();
+    const match = headers.find((entry) =>
+      Array.isArray(entry) &&
+      entry.length >= 2 &&
+      typeof entry[0] === 'string' &&
+      entry[0].toLowerCase() === loweredName &&
+      typeof entry[1] === 'string');
+    return Array.isArray(match) ? match[1] : undefined;
+  }
+  if (typeof headers === 'object') {
+    const loweredName = name.toLowerCase();
+    for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
+      if (key.toLowerCase() !== loweredName) continue;
+      if (typeof value === 'string' && value.trim().length > 0) return value;
+      if (Array.isArray(value)) {
+        const parts = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+        if (parts.length > 0) return parts.join(', ');
+      }
+    }
+  }
+  return undefined;
+}
+
+function formatErrorBodyDetail(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim().length > 0) return truncateDetail(value.trim());
+  if (!value || typeof value !== 'object') return undefined;
+
+  const record = value as Record<string, unknown>;
+  const detailParts: string[] = [];
+  const message = extractStringField(record, 'message');
+  const code = extractStringField(record, 'code');
+  const type = extractStringField(record, 'type');
+  const param = extractStringField(record, 'param');
+
+  if (message) detailParts.push(message);
+  if (code && !detailParts.some((part) => part.includes(code))) detailParts.push(`code=${code}`);
+  if (type && !detailParts.some((part) => part.includes(type))) detailParts.push(`type=${type}`);
+  if (param && !detailParts.some((part) => part.includes(param))) detailParts.push(`param=${param}`);
+
+  if (detailParts.length > 0) return truncateDetail(detailParts.join(', '));
+
+  try {
+    return truncateDetail(JSON.stringify(record));
+  } catch {
+    return undefined;
+  }
+}
+
+function extractOpenAICompatErrorDiagnostic(err: unknown): OpenAICompatErrorDiagnostic {
+  const rawMessage = summarizeError(err);
+  const status = err && typeof err === 'object' && 'status' in err && typeof (err as { status?: unknown }).status === 'number'
+    ? (err as { status: number }).status
+    : undefined;
+
+  if (!err || typeof err !== 'object') {
+    return { status, rawMessage };
+  }
+
+  const record = err as Record<string, unknown>;
+  const detail = formatErrorBodyDetail(record.error) ?? (rawMessage.trim().length > 0 ? truncateDetail(rawMessage.trim()) : undefined);
+  return {
+    status,
+    code: extractStringField(record, 'code'),
+    type: extractStringField(record, 'type'),
+    requestId: extractStringField(record, 'requestID')
+      ?? extractHeaderValue(record.headers, 'x-request-id')
+      ?? extractHeaderValue(record.headers, 'request-id'),
+    detail,
+    rawMessage,
+  };
+}
+
+function buildOpenAICompatErrorMessage(
+  providerName: string,
+  phase: 'request' | 'stream',
+  diagnostic: OpenAICompatErrorDiagnostic,
+): string {
+  const prefix = `${providerName} chat ${phase} failed${diagnostic.status !== undefined ? ` ${diagnostic.status}` : ''}`;
+  const messageParts = [prefix];
+
+  if (diagnostic.detail && diagnostic.detail !== diagnostic.rawMessage) {
+    messageParts.push(diagnostic.detail);
+  } else if (diagnostic.rawMessage.trim().length > 0) {
+    messageParts.push(truncateDetail(diagnostic.rawMessage.trim()));
+  }
+
+  const metadata: string[] = [];
+  if (diagnostic.code && !messageParts.some((part) => part.includes(diagnostic.code!))) metadata.push(`code=${diagnostic.code}`);
+  if (diagnostic.type && !messageParts.some((part) => part.includes(diagnostic.type!))) metadata.push(`type=${diagnostic.type}`);
+  if (diagnostic.requestId) metadata.push(`request_id=${diagnostic.requestId}`);
+
+  return metadata.length > 0
+    ? `${messageParts.join(': ')} (${metadata.join(', ')})`
+    : messageParts.join(': ');
+}
 
 export interface OpenAICompatOptions {
   name: string;
@@ -87,6 +280,8 @@ export class OpenAICompatProvider implements LLMProvider {
   private readonly anonymousConfigured: boolean;
   private readonly anonymousDetail?: string;
   private readonly cacheHitTracker: Pick<CacheHitTracker, 'recordTurn'>;
+  private readonly baseURL: string;
+  private readonly endpointHost: string;
 
   constructor(opts: OpenAICompatOptions) {
     this.name = opts.name;
@@ -107,6 +302,14 @@ export class OpenAICompatProvider implements LLMProvider {
     this.anonymousConfigured = opts.anonymousConfigured ?? false;
     this.anonymousDetail = opts.anonymousDetail;
     this.cacheHitTracker = opts.cacheHitTracker ?? NOOP_CACHE_HIT_TRACKER;
+    this.baseURL = opts.baseURL;
+    this.endpointHost = (() => {
+      try {
+        return new URL(opts.baseURL).host;
+      } catch {
+        return opts.baseURL;
+      }
+    })();
     this.client = new OpenAI({
       apiKey: opts.apiKey,
       baseURL: opts.baseURL,
@@ -136,6 +339,8 @@ export class OpenAICompatProvider implements LLMProvider {
       let stopReason: ChatResponse['stopReason'] = 'end';
       let reasoningSummaryText: string | undefined;
       let rawToolCalls: OpenAIToolCall[] = [];
+      const selectedModel = model ?? this.defaultModel;
+      const requestFingerprint = buildChatRequestFingerprint(params, selectedModel);
 
       const openaiMessages = toOpenAIMessages(messages, systemPrompt);
       const openaiTools = tools && tools.length > 0 ? toOpenAITools(tools) : undefined;
@@ -164,10 +369,18 @@ export class OpenAICompatProvider implements LLMProvider {
         requestHeaders[this.cacheCapability.sessionAffinityHeader] = 'true';
       }
 
+      let streamOpened = false;
+      logger.debug('OpenAICompatProvider.chat request', {
+        provider: this.name,
+        endpointHost: this.endpointHost,
+        endpoint: this.baseURL,
+        request: requestFingerprint,
+      });
+
       try {
         const stream = await this.client.chat.completions.create(
           {
-            model: model ?? this.defaultModel,
+            model: selectedModel,
             messages: openaiMessages as Parameters<typeof this.client.chat.completions.create>[0]['messages'],
             ...(openaiTools ? { tools: openaiTools as Parameters<typeof this.client.chat.completions.create>[0]['tools'] } : {}),
             ...(maxTokens ? { max_tokens: maxTokens } : {}),
@@ -180,6 +393,14 @@ export class OpenAICompatProvider implements LLMProvider {
             ...(Object.keys(requestHeaders).length > 0 ? { headers: requestHeaders } : {}),
           },
         );
+        streamOpened = true;
+        logger.debug('OpenAICompatProvider.chat stream opened', {
+          provider: this.name,
+          endpointHost: this.endpointHost,
+          model: selectedModel,
+          messageCount: requestFingerprint.messageCount,
+          toolCount: requestFingerprint.toolCount,
+        });
 
         const accToolCalls: Map<number, { id: string; name: string; args: string }> = new Map();
 
@@ -245,12 +466,34 @@ export class OpenAICompatProvider implements LLMProvider {
           });
         }
       } catch (err: unknown) {
-        const { hasStatus } = await import('../utils/retry.ts');
-        const status = hasStatus(err) ? err.status : undefined;
-        throw new ProviderError(
-          err instanceof Error ? err.message : String(err),
-          status,
-        );
+        const diagnostic = extractOpenAICompatErrorDiagnostic(err);
+        const phase = streamOpened ? 'stream' : 'request';
+        const message = buildOpenAICompatErrorMessage(this.name, phase, diagnostic);
+        logger.error('OpenAICompatProvider.chat failed', {
+          provider: this.name,
+          endpointHost: this.endpointHost,
+          endpoint: this.baseURL,
+          phase,
+          requestAccepted: streamOpened,
+          request: requestFingerprint,
+          status: diagnostic.status,
+          code: diagnostic.code,
+          type: diagnostic.type,
+          requestId: diagnostic.requestId,
+          detail: diagnostic.detail,
+          rawMessage: diagnostic.rawMessage,
+        });
+        throw new ProviderError(message, {
+          statusCode: diagnostic.status,
+          provider: this.name,
+          operation: 'chat',
+          phase,
+          requestId: diagnostic.requestId,
+          providerCode: diagnostic.code,
+          providerType: diagnostic.type,
+          detail: diagnostic.detail,
+          rawMessage: diagnostic.rawMessage,
+        });
       }
 
       // Some models (e.g. kimi-k2-thinking via ollama-cloud) emit tool calls as
@@ -291,14 +534,23 @@ export class OpenAICompatProvider implements LLMProvider {
   }
 
   async embed(request: ProviderEmbeddingRequest): Promise<ProviderEmbeddingResult> {
-    const response = await this.client.embeddings.create(
-      {
-        model: request.model ?? this.embeddingModel,
-        input: request.text,
-        ...(request.dimensions ? { dimensions: request.dimensions } : {}),
-      },
-      request.signal ? { signal: request.signal } : undefined,
-    );
+    let response;
+    try {
+      response = await this.client.embeddings.create(
+        {
+          model: request.model ?? this.embeddingModel,
+          input: request.text,
+          ...(request.dimensions ? { dimensions: request.dimensions } : {}),
+        },
+        request.signal ? { signal: request.signal } : undefined,
+      );
+    } catch (error: unknown) {
+      throw toProviderError(error, {
+        provider: this.name,
+        operation: 'embed',
+        phase: 'request',
+      });
+    }
     const embedding = response.data[0]?.embedding ?? [];
     return {
       vector: Float32Array.from(embedding),

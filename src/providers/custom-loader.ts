@@ -7,6 +7,7 @@ import { OpenAICompatProvider } from './openai-compat.ts';
 import { AnthropicCompatProvider } from './anthropic-compat.ts';
 import type { LLMProvider } from './interface.ts';
 import type { ModelDefinition } from './registry.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   LocalContextIngestionService,
   resolveContextWindow,
@@ -172,7 +173,7 @@ async function ensureProvidersDir(providersDir: string): Promise<void> {
   } catch (err) {
     throw new Error(
       `[custom-loader] Failed to create providers directory '${providersDir}': ${
-        err instanceof Error ? err.message : String(err)
+        summarizeError(err)
       }`,
     );
   }
@@ -206,7 +207,7 @@ export async function loadCustomProviders(
   } catch (err) {
     warnings.push(
       `[custom-loader] Could not read providers directory: ${
-        err instanceof Error ? err.message : String(err)
+        summarizeError(err)
       }`,
     );
     return { providers, models, warnings };
@@ -224,7 +225,7 @@ export async function loadCustomProviders(
     } catch (err) {
       warnings.push(
         `[custom-loader] Could not read '${filename}': ${
-          err instanceof Error ? err.message : String(err)
+          summarizeError(err)
         }`,
       );
       continue;
@@ -236,7 +237,7 @@ export async function loadCustomProviders(
     } catch (err) {
       warnings.push(
         `[custom-loader] Invalid JSON in '${filename}': ${
-          err instanceof Error ? err.message : String(err)
+          summarizeError(err)
         }`,
       );
       continue;
@@ -280,7 +281,7 @@ export async function loadCustomProviders(
     } catch (err) {
       warnings.push(
         `[custom-loader] Failed to instantiate provider from '${filename}': ${
-          err instanceof Error ? err.message : String(err)
+          summarizeError(err)
         }`,
       );
       continue;
@@ -392,7 +393,7 @@ export function watchCustomProviders(
       });
     } catch (err) {
       if (closed) return;
-      emitWarning(`[custom-loader] Could not watch providers directory: ${err instanceof Error ? err.message : String(err)}`);
+      emitWarning(`[custom-loader] Could not watch providers directory: ${summarizeError(err)}`);
     }
   };
 
@@ -405,7 +406,7 @@ export function watchCustomProviders(
     })
     .catch((err) => {
       if (closed) return;
-      emitWarning(`[custom-loader] Could not create/watch providers directory: ${err instanceof Error ? err.message : String(err)}`);
+      emitWarning(`[custom-loader] Could not create/watch providers directory: ${summarizeError(err)}`);
     });
 
   return {

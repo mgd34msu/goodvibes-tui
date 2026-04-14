@@ -25,6 +25,7 @@ import {
   runUpgrade,
 } from './git-modes.ts';
 import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export type { AnalyzeInput } from './types.ts';
 
@@ -119,7 +120,7 @@ export function createAnalyzeTool(
       } catch (err) {
         return {
           success: false,
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
         };
       }
     },

@@ -24,6 +24,7 @@ import { logger } from '../utils/logger.ts';
 import type { SymbolInfo, OutlineEntry } from './tree-sitter/queries.ts';
 import type { Location, DocumentSymbol, Diagnostic, Hover } from './lsp/protocol.ts';
 import type { ShellPathService } from '../runtime/shell-paths.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // URI helpers
@@ -78,7 +79,7 @@ export class CodeIntelligence {
       try {
         await this.treeSitter.initialize();
       } catch (err) {
-        logger.debug('CodeIntelligence: TreeSitterService init error', { error: String(err) });
+        logger.debug('CodeIntelligence: TreeSitterService init error', { error: summarizeError(err) });
       }
       return;
     }
@@ -103,22 +104,22 @@ export class CodeIntelligence {
         }
       }
     } catch (err) {
-      logger.debug('CodeIntelligence: failed to load language configs', { error: String(err) });
+      logger.debug('CodeIntelligence: failed to load language configs', { error: summarizeError(err) });
     }
 
     // Initialize tree-sitter WASM loader.
     try {
       await this.treeSitter.initialize();
     } catch (err) {
-      logger.debug('CodeIntelligence: TreeSitterService init error', { error: String(err) });
+      logger.debug('CodeIntelligence: TreeSitterService init error', { error: summarizeError(err) });
     }
     // LspService has no async init; LSP servers are started on demand.
   }
 
   /** Shutdown all owned services for this facade instance. */
   async dispose(): Promise<void> {
-    try { await this.lsp?.shutdown(); } catch (err) { logger.debug('LSP shutdown error', { error: String(err) }); }
-    try { this.treeSitter.dispose(); } catch (err) { logger.debug('TreeSitter dispose error', { error: String(err) }); }
+    try { await this.lsp?.shutdown(); } catch (err) { logger.debug('LSP shutdown error', { error: summarizeError(err) }); }
+    try { this.treeSitter.dispose(); } catch (err) { logger.debug('TreeSitter dispose error', { error: summarizeError(err) }); }
   }
 
   // -------------------------------------------------------------------------
@@ -168,7 +169,7 @@ export class CodeIntelligence {
       if (!parsed) return [];
       return extractSymbols(parsed.tree, parsed.language, parsed.lang);
     } catch (err) {
-      logger.debug('CodeIntelligence.getSymbols error', { filePath, error: String(err) });
+      logger.debug('CodeIntelligence.getSymbols error', { filePath, error: summarizeError(err) });
       return [];
     }
   }
@@ -183,7 +184,7 @@ export class CodeIntelligence {
       if (!parsed) return [];
       return extractOutline(parsed.tree, parsed.language, parsed.lang);
     } catch (err) {
-      logger.debug('CodeIntelligence.getOutline error', { filePath, error: String(err) });
+      logger.debug('CodeIntelligence.getOutline error', { filePath, error: summarizeError(err) });
       return [];
     }
   }
@@ -202,7 +203,7 @@ export class CodeIntelligence {
       if (!parsed) return null;
       return findEnclosingScope(parsed.tree, parsed.language, parsed.lang, line);
     } catch (err) {
-      logger.debug('CodeIntelligence.getEnclosingScope error', { filePath, error: String(err) });
+      logger.debug('CodeIntelligence.getEnclosingScope error', { filePath, error: summarizeError(err) });
       return null;
     }
   }
@@ -218,7 +219,7 @@ export class CodeIntelligence {
     if (!lang) return false;
     try {
       return await this.lsp.isAvailable(lang);
-    } catch (err) { logger.debug('hasLsp error', { error: String(err) });
+    } catch (err) { logger.debug('hasLsp error', { error: summarizeError(err) });
       return false;
     }
   }
@@ -246,7 +247,7 @@ export class CodeIntelligence {
       if (Array.isArray(result)) return result[0] ?? null;
       return result;
     } catch (err) {
-      logger.debug('CodeIntelligence.getDefinition error', { filePath, error: String(err) });
+      logger.debug('CodeIntelligence.getDefinition error', { filePath, error: summarizeError(err) });
       return null;
     }
   }
@@ -273,7 +274,7 @@ export class CodeIntelligence {
       });
       return result ?? [];
     } catch (err) {
-      logger.debug('CodeIntelligence.getReferences error', { filePath, error: String(err) });
+      logger.debug('CodeIntelligence.getReferences error', { filePath, error: summarizeError(err) });
       return [];
     }
   }
@@ -300,7 +301,7 @@ export class CodeIntelligence {
           if (lspSymbols && lspSymbols.length > 0) return lspSymbols;
         }
       } catch (err) {
-        logger.debug('CodeIntelligence.getDocumentSymbols LSP error', { filePath, error: String(err) });
+        logger.debug('CodeIntelligence.getDocumentSymbols LSP error', { filePath, error: summarizeError(err) });
       }
     }
     // Fall back to tree-sitter
@@ -327,7 +328,7 @@ export class CodeIntelligence {
         position: { line, character: column },
       }) ?? null;
     } catch (err) {
-      logger.debug('CodeIntelligence.getHover error', { filePath, error: String(err) });
+      logger.debug('CodeIntelligence.getHover error', { filePath, error: summarizeError(err) });
       return null;
     }
   }
@@ -351,7 +352,7 @@ export class CodeIntelligence {
       );
       return result?.items ?? [];
     } catch (err) {
-      logger.debug('CodeIntelligence.getDiagnostics error', { filePath, error: String(err) });
+      logger.debug('CodeIntelligence.getDiagnostics error', { filePath, error: summarizeError(err) });
       return [];
     }
   }

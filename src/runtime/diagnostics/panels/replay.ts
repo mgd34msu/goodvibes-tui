@@ -9,6 +9,7 @@
  * The caller (or the /replay command handler) drives the engine.
  */
 import { logger } from '../../../utils/logger.ts';
+import { summarizeError } from '../../../utils/error-display.ts';
 import type {
   DeterministicReplayEngine,
   ReplayEngineSnapshot,
@@ -68,7 +69,7 @@ export class ReplayPanel {
         cb();
       } catch (err) {
         // Non-fatal: subscriber errors must not crash the panel.
-        logger.debug('[ReplayPanel] subscriber error', { err: String(err) });
+        logger.debug('[ReplayPanel] subscriber error', { err: summarizeError(err) });
       }
     }
   }

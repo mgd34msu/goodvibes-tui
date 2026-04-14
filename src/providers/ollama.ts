@@ -16,6 +16,7 @@ import type {
 } from './interface.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
 import { toOpenAITools } from './tool-formats.ts';
+import { summarizeError, toProviderError } from '../utils/error-display.ts';
 
 type NativeFetch = (
   input: RequestInfo | URL,
@@ -80,7 +81,7 @@ export class OllamaProvider implements LLMProvider {
           return await this.chatViaNativeOllama(params, model);
         } catch (err: unknown) {
           if (!shouldFallbackFromNative(err)) {
-            throw normalizeProviderError(err);
+            throw normalizeProviderError(err, this.name, 'chat', 'request');
           }
         }
       }
@@ -106,7 +107,7 @@ export class OllamaProvider implements LLMProvider {
       });
 
       if (!response.ok) {
-        throw await buildHttpError('Ollama native embeddings', response);
+        throw await buildHttpError('Ollama native embeddings', response, this.name, 'embed', 'request');
       }
 
       const body = await response.json() as { embeddings?: number[][]; embedding?: number[]; model?: string };
@@ -124,7 +125,7 @@ export class OllamaProvider implements LLMProvider {
       if (this.fallbackProvider.embed) {
         return this.fallbackProvider.embed(request);
       }
-      throw normalizeProviderError(err);
+      throw normalizeProviderError(err, this.name, 'embed', 'request');
     }
   }
 
@@ -199,14 +200,19 @@ export class OllamaProvider implements LLMProvider {
         signal: params.signal,
       });
     } catch (err: unknown) {
-      throw normalizeProviderError(err);
+      throw normalizeProviderError(err, this.name, 'chat', 'request');
     }
 
     if (!response.ok) {
-      throw await buildHttpError('Ollama native chat', response);
+      throw await buildHttpError('Ollama native chat', response, this.name, 'chat', 'request');
     }
     if (!response.body) {
-      throw new ProviderError('Ollama native chat returned no response body.', 502);
+      throw new ProviderError('Ollama native chat returned no response body.', {
+        statusCode: 502,
+        provider: this.name,
+        operation: 'chat',
+        phase: 'response',
+      });
     }
 
     let responseText = '';
@@ -391,7 +397,13 @@ async function consumeNDJSON(
   }
 }
 
-async function buildHttpError(prefix: string, response: Response): Promise<ProviderError> {
+async function buildHttpError(
+  prefix: string,
+  response: Response,
+  provider: string,
+  operation: string,
+  phase: string,
+): Promise<ProviderError> {
   const text = await response.text();
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
@@ -399,12 +411,22 @@ async function buildHttpError(prefix: string, response: Response): Promise<Provi
     if (Object.keys(error).length > 0) {
       const code = typeof error['code'] === 'string' ? `${error['code']}: ` : '';
       const message = typeof error['message'] === 'string' ? error['message'] : text;
-      return new ProviderError(`${prefix} error ${response.status}: ${code}${message}`, response.status);
+      return new ProviderError(`${prefix} error ${response.status}: ${code}${message}`, {
+        statusCode: response.status,
+        provider,
+        operation,
+        phase,
+      });
     }
   } catch {
     // fall through
   }
-  return new ProviderError(`${prefix} error ${response.status}: ${text || response.statusText}`, response.status);
+  return new ProviderError(`${prefix} error ${response.status}: ${text || response.statusText}`, {
+    statusCode: response.status,
+    provider,
+    operation,
+    phase,
+  });
 }
 
 function shouldFallbackFromNative(err: unknown): boolean {
@@ -425,12 +447,17 @@ function getErrorStatus(err: unknown): number | undefined {
 }
 
 function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  return summarizeError(err);
 }
 
-function normalizeProviderError(err: unknown): ProviderError {
-  if (err instanceof ProviderError) return err;
-  return new ProviderError(getErrorMessage(err), getErrorStatus(err));
+function normalizeProviderError(err: unknown, provider: string, operation: string, phase = 'request'): ProviderError {
+  const status = getErrorStatus(err);
+  return toProviderError(err, {
+    ...(status !== undefined ? { statusCode: status } : {}),
+    provider,
+    operation,
+    phase,
+  });
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

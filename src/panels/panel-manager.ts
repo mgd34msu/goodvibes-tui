@@ -13,12 +13,22 @@ export interface Pane {
   activeIndex: number;
 }
 
+export interface WorkspaceTab {
+  readonly id: string;
+  readonly name: string;
+  readonly icon: string;
+  readonly pane: 'top' | 'bottom';
+  readonly active: boolean;
+  readonly focused: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // PanelManager
 // ---------------------------------------------------------------------------
 
 export class PanelManager {
   private registry: PanelRegistration[] = [];
+  private retainedPanels = new Map<string, Panel>();
   private _visible: boolean = false;
   private _splitRatio: number = 0.6;
 
@@ -56,29 +66,36 @@ export class PanelManager {
     return map;
   }
 
+  prewarmRegistered(): void {
+    for (const registration of this.registry) {
+      if (!registration.preload) continue;
+      if (this.getPanel(registration.id) || this.retainedPanels.has(registration.id)) continue;
+      const panel = registration.factory();
+      this.retainedPanels.set(registration.id, panel);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Panel lifecycle — operates on a specific pane (defaults to focused)
   // -------------------------------------------------------------------------
 
   open(panelId: string, pane?: 'top' | 'bottom'): Panel {
+    const existingPane = this._findPaneOf(panelId);
+    if (existingPane) {
+      this._activateByIdInPane(panelId, existingPane);
+      this._visible = true;
+      this._focusedPane = existingPane;
+      if (existingPane === 'bottom') this._bottomPaneVisible = true;
+      return this._getPane(existingPane).panels[this._getPane(existingPane).activeIndex]!;
+    }
+
     const targetPane = pane ?? this._focusedPane;
     const p = this._getPane(targetPane);
-
-    const existing = p.panels.find(panel => panel.id === panelId);
-    if (existing) {
-      this._activateByIdInPane(panelId, targetPane);
-      return existing;
-    }
-
-    const registration = this.registry.find(r => r.id === panelId);
-    if (!registration) {
-      throw new Error(`No panel type registered with id: ${panelId}`);
-    }
 
     const oldPanel = p.panels[p.activeIndex];
     if (oldPanel) oldPanel.onDeactivate();
 
-    const panel = registration.factory();
+    const panel = this._obtainPanel(panelId);
     p.panels.push(panel);
     p.activeIndex = p.panels.length - 1;
     this._visible = true;
@@ -103,7 +120,11 @@ export class PanelManager {
       const panel = p.panels[index];
       const wasActive = index === p.activeIndex;
       if (wasActive) panel.onDeactivate();
-      panel.onDestroy();
+      if (this._shouldRetain(panelId)) {
+        this.retainedPanels.set(panelId, panel);
+      } else {
+        panel.onDestroy();
+      }
       p.panels.splice(index, 1);
 
       if (p.panels.length === 0) {
@@ -166,6 +187,14 @@ export class PanelManager {
     p.activeIndex = (p.activeIndex + 1) % p.panels.length;
     const newPanel = p.panels[p.activeIndex];
     if (newPanel) newPanel.onActivate();
+  }
+
+  nextWorkspaceTab(): void {
+    this._cycleWorkspaceTab(1);
+  }
+
+  prevWorkspaceTab(): void {
+    this._cycleWorkspaceTab(-1);
   }
 
   prevPanel(): void {
@@ -300,6 +329,36 @@ export class PanelManager {
     return this._findPaneOf(panelId);
   }
 
+  getWorkspaceTabs(): WorkspaceTab[] {
+    const focusedPanelId = this.getActivePanel()?.id;
+    const topTabs = this.topPane.panels.map((panel) => ({
+      id: panel.id,
+      name: panel.name,
+      icon: panel.icon,
+      pane: 'top' as const,
+      active: panel.id === focusedPanelId,
+      focused: panel.id === focusedPanelId,
+    }));
+    const bottomTabs = this.bottomPane.panels.map((panel) => ({
+      id: panel.id,
+      name: panel.name,
+      icon: panel.icon,
+      pane: 'bottom' as const,
+      active: panel.id === focusedPanelId,
+      focused: panel.id === focusedPanelId,
+    }));
+    return [...topTabs, ...bottomTabs];
+  }
+
+  activateWorkspaceIndex(index: number): void {
+    const tabs = this.getWorkspaceTabs();
+    if (index < 0 || index >= tabs.length) return;
+    const tab = tabs[index]!;
+    this._focusedPane = tab.pane;
+    if (tab.pane === 'bottom') this._bottomPaneVisible = true;
+    this._activateByIdInPane(tab.id, tab.pane);
+  }
+
   // -------------------------------------------------------------------------
   // Visibility
   // -------------------------------------------------------------------------
@@ -308,11 +367,8 @@ export class PanelManager {
     this._visible = !this._visible;
     // Auto-open a default panel if toggling visible with nothing open
     if (this._visible && this.topPane.panels.length === 0 && this.bottomPane.panels.length === 0) {
-      // Try to open the first registered panel type
-      const firstType = this.registry[0];
-      if (firstType) {
-        this.open(firstType.id);
-      }
+      const defaultPanel = this._getRegistration('panel-list') ?? this.registry[0];
+      if (defaultPanel) this.open(defaultPanel.id);
     }
   }
 
@@ -373,11 +429,12 @@ export class PanelManager {
   // -------------------------------------------------------------------------
 
   destroyAll(): void {
-    for (const panel of [...this.topPane.panels, ...this.bottomPane.panels]) {
+    for (const panel of [...this.topPane.panels, ...this.bottomPane.panels, ...this.retainedPanels.values()]) {
       panel.onDestroy();
     }
     this.topPane = { panels: [], activeIndex: 0 };
     this.bottomPane = { panels: [], activeIndex: 0 };
+    this.retainedPanels.clear();
     this.registry = [];
     this._focusedPane = 'top';
     this._bottomPaneVisible = false;
@@ -434,6 +491,37 @@ export class PanelManager {
       this._bottomPaneVisible = true;
     }
     this._focusedPane = dstPaneName;
+  }
+
+  private _cycleWorkspaceTab(direction: 1 | -1): void {
+    const tabs = this.getWorkspaceTabs();
+    if (tabs.length === 0) return;
+    const currentIndex = tabs.findIndex((tab) => tab.focused);
+    const nextIndex = currentIndex < 0
+      ? 0
+      : (currentIndex + direction + tabs.length) % tabs.length;
+    this.activateWorkspaceIndex(nextIndex);
+  }
+
+  private _obtainPanel(panelId: string): Panel {
+    const retained = this.retainedPanels.get(panelId);
+    if (retained) {
+      this.retainedPanels.delete(panelId);
+      return retained;
+    }
+    const registration = this._getRegistration(panelId);
+    if (!registration) {
+      throw new Error(`No panel type registered with id: ${panelId}`);
+    }
+    return registration.factory();
+  }
+
+  private _getRegistration(panelId: string): PanelRegistration | undefined {
+    return this.registry.find((registration) => registration.id === panelId);
+  }
+
+  private _shouldRetain(panelId: string): boolean {
+    return this._getRegistration(panelId)?.preload === true;
   }
 
   private _activateByIdInPane(panelId: string, which: 'top' | 'bottom'): void {

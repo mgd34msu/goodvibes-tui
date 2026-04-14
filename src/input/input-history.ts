@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * InputHistory — Persisted command history with arrow-key navigation.
@@ -242,7 +243,7 @@ export class InputHistory {
       mkdirSync(dirname(this.historyPath), { recursive: true });
       writeFileSync(this.historyPath, JSON.stringify(this.entries), 'utf-8');
     } catch (err) {
-      logger.debug('InputHistory save failed (non-fatal)', { error: String(err) });
+      logger.debug('InputHistory save failed (non-fatal)', { error: summarizeError(err) });
     }
   }
 
@@ -259,7 +260,7 @@ export class InputHistory {
         }
       }
     } catch (err) {
-      logger.debug('InputHistory load failed (non-fatal, using empty history)', { error: String(err) });
+      logger.debug('InputHistory load failed (non-fatal, using empty history)', { error: summarizeError(err) });
       this.entries = [];
     }
   }

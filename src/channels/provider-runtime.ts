@@ -17,6 +17,7 @@ import {
   handleSlackSurfacePayload,
 } from '../adapters/index.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export type ProviderRuntimeSurface = 'slack' | 'discord' | 'ntfy';
 
@@ -158,7 +159,7 @@ export class ChannelProviderRuntimeManager {
       this.markStarted('slack', { socketMode: true });
       return this.result('slack', true, 'Slack Socket Mode runtime started.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = summarizeError(error);
       this.markError('slack', message);
       return this.result('slack', false, message);
     }
@@ -188,7 +189,7 @@ export class ChannelProviderRuntimeManager {
       this.markStarted('discord', { gatewayUrl: gateway.url, shards: gateway.shards });
       return this.result('discord', true, 'Discord Gateway runtime started.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = summarizeError(error);
       this.markError('discord', message);
       return this.result('discord', false, message);
     }
@@ -215,7 +216,7 @@ export class ChannelProviderRuntimeManager {
       signal: abort.signal,
     }).catch((error: unknown) => {
       if (abort.signal.aborted) return;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = summarizeError(error);
       this.ntfyAbort = null;
       this.markError('ntfy', message);
       logger.warn('ChannelProviderRuntimeManager: ntfy stream failed', { error: message });
@@ -227,7 +228,7 @@ export class ChannelProviderRuntimeManager {
     if (!envelope.payload || typeof envelope.payload !== 'object') return;
     await handleSlackSurfacePayload(envelope.payload, this.deps.buildSurfaceAdapterContext(), slack).catch((error: unknown) => {
       logger.warn('ChannelProviderRuntimeManager: Slack Socket Mode payload failed', {
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
     });
   }
@@ -236,7 +237,7 @@ export class ChannelProviderRuntimeManager {
     await handleDiscordGatewayDispatchPayload(dispatch, this.deps.buildSurfaceAdapterContext(), discord).catch((error: unknown) => {
       logger.warn('ChannelProviderRuntimeManager: Discord Gateway dispatch failed', {
         eventType: dispatch.t,
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
     });
   }
@@ -245,7 +246,7 @@ export class ChannelProviderRuntimeManager {
     if (message.event !== 'message') return;
     await handleNtfySurfacePayload(message, this.deps.buildSurfaceAdapterContext()).catch((error: unknown) => {
       logger.warn('ChannelProviderRuntimeManager: ntfy message dispatch failed', {
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
     });
   }

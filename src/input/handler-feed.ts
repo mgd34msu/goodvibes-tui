@@ -121,6 +121,11 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   const keybindings = context.keybindingsManager;
 
   for (const token of tokens) {
+    if (token.type === 'key' && context.keybindingsManager.matches('clear-cancel', token)) {
+      context.handleCtrlC();
+      continue;
+    }
+
     const modalRoute = handleModalTokenRoutes({
       history,
       searchShortcutMatch: token.type === 'key' && keybindings.matches('search', token),
@@ -172,6 +177,46 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     context.nextImageId = modalRoute.nextImageId;
     if (modalRoute.handled) {
       continue;
+    }
+
+    if (token.type === 'key') {
+      const shortcutState = {
+        panelFocused: context.panelFocused,
+        prompt: context.prompt,
+        cursorPos: context.cursorPos,
+        commandMode: context.commandMode,
+        autocomplete: context.autocomplete,
+        historySearch: context.historySearch,
+        searchManager: context.searchManager,
+        conversationManager: context.conversationManager,
+        commandContext: context.commandContext,
+        contentWidth: context.contentWidth,
+        getScrollTop: context.getScrollTop,
+        getWrappedPromptInfo: context.getWrappedPromptInfo,
+        saveUndoState: context.saveUndoState,
+        requestRender: context.requestRender,
+        scroll: context.scroll,
+        ensureInputCursorVisible: () => context.ensureInputCursorVisible(),
+        handleCopy: context.handleCopy,
+        handleCtrlC: context.handleCtrlC,
+        handleBlockCopy: context.handleBlockCopy,
+        handleBookmark: context.handleBookmark,
+        handleBlockSave: context.handleBlockSave,
+        handleDiffApply: context.handleDiffApply,
+        handleUndo: context.handleUndo,
+        handleRedo: context.handleRedo,
+        handlePaste: context.handlePaste,
+        handleEscape: context.handleEscape,
+        cyclePanelTab: context.cyclePanelTab,
+        panelManager: context.panelManager,
+        keybindingsManager: context.keybindingsManager,
+      };
+      if (handleGlobalShortcutToken(shortcutState, token, viewportHeight)) {
+        context.prompt = shortcutState.prompt;
+        context.cursorPos = shortcutState.cursorPos;
+        context.commandMode = shortcutState.commandMode;
+        continue;
+      }
     }
 
     const panelRoute = handlePanelFocusToken({
@@ -229,43 +274,6 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     }
 
     if (token.type === 'key') {
-      const shortcutState = {
-        prompt: context.prompt,
-        cursorPos: context.cursorPos,
-        commandMode: context.commandMode,
-        autocomplete: context.autocomplete,
-        historySearch: context.historySearch,
-        searchManager: context.searchManager,
-        conversationManager: context.conversationManager,
-        commandContext: context.commandContext,
-        contentWidth: context.contentWidth,
-        getScrollTop: context.getScrollTop,
-        getWrappedPromptInfo: context.getWrappedPromptInfo,
-        saveUndoState: context.saveUndoState,
-        requestRender: context.requestRender,
-        scroll: context.scroll,
-        ensureInputCursorVisible: () => context.ensureInputCursorVisible(),
-        handleCopy: context.handleCopy,
-        handleCtrlC: context.handleCtrlC,
-        handleBlockCopy: context.handleBlockCopy,
-        handleBookmark: context.handleBookmark,
-        handleBlockSave: context.handleBlockSave,
-        handleDiffApply: context.handleDiffApply,
-        handleUndo: context.handleUndo,
-        handleRedo: context.handleRedo,
-        handlePaste: context.handlePaste,
-        handleEscape: context.handleEscape,
-        cyclePanelTab: context.cyclePanelTab,
-        panelManager: context.panelManager,
-        keybindingsManager: context.keybindingsManager,
-      };
-      if (handleGlobalShortcutToken(shortcutState, token, viewportHeight)) {
-        context.prompt = shortcutState.prompt;
-        context.cursorPos = shortcutState.cursorPos;
-        context.commandMode = shortcutState.commandMode;
-        continue;
-      }
-
       const commandState = {
         commandMode: context.commandMode,
         prompt: context.prompt,

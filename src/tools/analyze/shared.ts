@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { walkDir } from '../../utils/walk-dir.ts';
 import type { AnalyzeInput, JsonObject, DiffStatFile } from './types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export const BINARY_CHECK_BYTES = 8192;
 export const MAX_SCAN_FILES = 500;
@@ -53,7 +54,7 @@ export function validatePath(inputPath: string, root: string): string | { error:
     }
     return resolved;
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
+    return { error: summarizeError(err) };
   }
 }
 

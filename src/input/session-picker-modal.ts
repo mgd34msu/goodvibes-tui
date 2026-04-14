@@ -8,6 +8,7 @@
 import { unlinkSync } from 'node:fs';
 import type { SessionInfo, SessionManager } from '../sessions/manager.ts';
 import type { ConversationManager } from '../core/conversation.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // SessionPickerModal
@@ -84,7 +85,7 @@ export class SessionPickerModal {
       this.statusMessage = `Loaded: ${session.name} (${messages.length} messages)`;
       return true;
     } catch (e) {
-      this.statusMessage = `Error: ${(e as Error).message}`;
+      this.statusMessage = `Error: ${summarizeError(e)}`;
       return false;
     }
   }
@@ -117,7 +118,7 @@ export class SessionPickerModal {
       return true;
     } catch (e) {
       this.deleteConfirmationTarget = null;
-      this.statusMessage = `Error: ${(e as Error).message}`;
+      this.statusMessage = `Error: ${summarizeError(e)}`;
       return false;
     }
   }

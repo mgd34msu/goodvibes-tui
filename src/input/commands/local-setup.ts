@@ -16,6 +16,7 @@ import {
 } from './local-setup-transfer.ts';
 import { buildSetupReviewSnapshot, exportSetupSupportBundle, renderSetupSandboxReview } from './local-setup-review.ts';
 import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerLocalSetupCommands(registry: CommandRegistry): void {
   registry.register({
@@ -196,7 +197,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
             const bundle = JSON.parse(readFileSync(targetPath, 'utf-8')) as SetupTransferBundle;
             ctx.print(`${inspectSetupTransferBundle(bundle)}\n  path: ${targetPath}`);
           } catch (error) {
-            ctx.print(`Failed to inspect setup transfer bundle: ${(error as Error).message}`);
+            ctx.print(`Failed to inspect setup transfer bundle: ${summarizeError(error)}`);
           }
           return;
         }
@@ -225,7 +226,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
             }
             ctx.print(`Imported setup transfer bundle from ${targetPath}`);
           } catch (error) {
-            ctx.print(`Failed to import setup transfer bundle: ${(error as Error).message}`);
+            ctx.print(`Failed to import setup transfer bundle: ${summarizeError(error)}`);
           }
           return;
         }

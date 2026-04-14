@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -543,7 +544,7 @@ export class SlackSocketModeClient {
       envelope = JSON.parse(raw) as SlackSocketModeEnvelope;
     } catch (error) {
       logger.warn('SlackSocketModeClient: invalid JSON envelope', {
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
       return;
     }

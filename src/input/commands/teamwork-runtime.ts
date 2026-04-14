@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { AGENT_TEMPLATES } from '../../tools/agent/manager.ts';
 import { ArchetypeLoader, type AgentArchetype } from '../../agents/archetypes.ts';
 import { requireOpsApi, requireReadModels, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 type TeamworkModeId =
   | 'local-engineer'
@@ -252,7 +253,7 @@ export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void
           const taskId = createModeTask(mode, title, ctx);
           ctx.print(`Created teamwork task ${taskId} using mode ${mode.id}.`);
         } catch (error) {
-          ctx.print(String((error as Error).message ?? error));
+          ctx.print(String(summarizeError(error) ?? error));
         }
         return;
       }
@@ -362,7 +363,7 @@ export function registerTeamworkRuntimeCommands(registry: CommandRegistry): void
           const taskId = createResolvedModeTask(mode, title, ctx);
           ctx.print(`Created teamwork task ${taskId} using archetype ${mode.id}.`);
         } catch (error) {
-          ctx.print(String((error as Error).message ?? error));
+          ctx.print(String(summarizeError(error) ?? error));
         }
         return;
       }

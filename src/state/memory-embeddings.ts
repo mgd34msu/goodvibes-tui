@@ -1,6 +1,7 @@
 import { ConfigManager, getConfiguredEmbeddingProviderId } from '../config/index.ts';
 import { logger } from '../utils/logger.ts';
 import { createBuiltinMemoryEmbeddingProviders } from './memory-embedding-http.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export const DEFAULT_MEMORY_EMBEDDING_DIMS = 384;
 
@@ -171,7 +172,7 @@ export class MemoryEmbeddingProviderRegistry {
       } catch (error) {
         logger.warn('Memory embedding provider failed; falling back to hashed local embeddings', {
           providerId: provider.id,
-          error: error instanceof Error ? error.message : String(error),
+          error: summarizeError(error),
         });
       }
     }

@@ -18,6 +18,7 @@
  */
 
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -81,7 +82,7 @@ async function probe(
     if (name === 'AbortError') {
       logger.debug('[context-discovery] Probe timed out', { url });
     } else {
-      logger.debug('[context-discovery] Probe failed', { url, error: String(err) });
+      logger.debug('[context-discovery] Probe failed', { url, error: summarizeError(err) });
     }
     return null;
   } finally {

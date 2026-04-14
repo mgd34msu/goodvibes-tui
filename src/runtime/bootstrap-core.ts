@@ -9,6 +9,7 @@ import { WebhookNotifier } from '../integrations/webhooks.ts';
 import { Compositor } from '../renderer/compositor.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
+import type { ConversationFollowUpItem } from '../core/conversation-follow-ups.ts';
 import type { ControlPlaneRecentEvent } from '../control-plane/gateway.ts';
 import type { BootstrapOptions, MutableRuntimeState } from './context.ts';
 import { createFeatureFlagManager } from './feature-flags/index.ts';
@@ -45,6 +46,7 @@ export interface BootstrapCoreState {
   readonly agentStatusIntervalRef: { value: ReturnType<typeof setInterval> | null };
   readonly permissionPromptRef: { requestPermission: PermissionRequestHandler };
   readonly systemMessageRouterRef: { value: SystemMessageRouter | null };
+  readonly conversationFollowUpRef: { value: ((item: ConversationFollowUpItem) => void) | null };
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
@@ -231,10 +233,12 @@ export async function initializeBootstrapCore(
   void sharedSessionBroker.start();
   const runtimeSessionIdRef = { value: userSessionId };
   const systemMessageRouterRef: { value: SystemMessageRouter | null } = { value: null };
+  const conversationFollowUpRef: { value: ((item: ConversationFollowUpItem) => void) | null } = { value: null };
   const { unsubs: runtimeUnsubs, agentStatusIntervalRef } = registerBootstrapRuntimeEvents({
     runtimeBus,
     domainDispatch,
     getSystemMessageRouter: () => systemMessageRouterRef.value,
+    queueConversationFollowUp: (item) => conversationFollowUpRef.value?.(item),
     requestRender,
     configManager,
     agentManager: services.agentManager,
@@ -361,6 +365,7 @@ export async function initializeBootstrapCore(
     agentStatusIntervalRef,
     permissionPromptRef,
     systemMessageRouterRef,
+    conversationFollowUpRef,
     requestRender,
     setRenderRequest: (fn) => {
       renderRequestRef.value = fn;

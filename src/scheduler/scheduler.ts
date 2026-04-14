@@ -1,5 +1,6 @@
 import { PersistentStore } from '../state/persistent-store.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -476,7 +477,7 @@ export class TaskScheduler {
     };
 
     this.tasks.set(id, task);
-    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: String(err) }));
+    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: summarizeError(err) }));
 
     if (task.enabled && this.running) {
       this.scheduleNext(task);
@@ -490,7 +491,7 @@ export class TaskScheduler {
     if (!this.tasks.has(taskId)) return false;
     this.cancelTimer(taskId);
     this.tasks.delete(taskId);
-    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: String(err) }));
+    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: summarizeError(err) }));
     return true;
   }
 
@@ -506,7 +507,7 @@ export class TaskScheduler {
     } else {
       this.cancelTimer(taskId);
     }
-    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: String(err) }));
+    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: summarizeError(err) }));
     return true;
   }
 
@@ -549,8 +550,8 @@ export class TaskScheduler {
     if (!task) throw new Error(`Task not found: ${taskId}`);
     const result = await this.executeTask(task)
       .catch((err) => {
-        logger.error('Scheduled task failed (manual run)', { taskId, error: String(err) });
-        return `Failed: ${String(err)}`;
+        logger.error('Scheduled task failed (manual run)', { taskId, error: summarizeError(err) });
+        return `Failed: ${summarizeError(err)}`;
       });
     // Reschedule for next cron time after manual run
     if (task.enabled && this.running) {
@@ -570,7 +571,7 @@ export class TaskScheduler {
     try {
       nextDate = computeNextRun(task.cron, new Date(), task.timezone);
     } catch (err) {
-      logger.error('TaskScheduler: invalid cron, disabling task', { taskId: task.id, error: String(err) });
+      logger.error('TaskScheduler: invalid cron, disabling task', { taskId: task.id, error: summarizeError(err) });
       return;
     }
 
@@ -587,7 +588,7 @@ export class TaskScheduler {
       if (!task.enabled) return;
       this.executeTask(task)
         .catch((err) => {
-          logger.error('TaskScheduler: task execution failed', { taskId: task.id, error: String(err) });
+          logger.error('TaskScheduler: task execution failed', { taskId: task.id, error: summarizeError(err) });
         })
         .finally(() => {
           if (task.enabled && this.running) this.scheduleNext(task);
@@ -626,7 +627,7 @@ export class TaskScheduler {
         ...(task.template !== undefined ? { template: task.template } : {}),
       });
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
+      const errorMsg = summarizeError(err);
       logger.error('TaskScheduler: spawn failed', { taskId: task.id, error: errorMsg });
 
       const runRecord: TaskRunRecord = {
@@ -637,7 +638,7 @@ export class TaskScheduler {
         error: errorMsg,
       };
       this.pushHistory(runRecord);
-      void this.save().catch((e) => logger.warn('TaskScheduler: save failed', { error: String(e) }));
+      void this.save().catch((e) => logger.warn('TaskScheduler: save failed', { error: summarizeError(e) }));
       throw err;
     }
 
@@ -652,7 +653,7 @@ export class TaskScheduler {
       status: 'running',
     };
     this.pushHistory(runRecord);
-    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: String(err) }));
+    void this.save().catch((err) => logger.warn('TaskScheduler: save failed', { error: summarizeError(err) }));
 
     return agentId;
   }

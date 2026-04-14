@@ -7,6 +7,7 @@ import type { AgentMessageBus } from '../agents/message-bus.ts';
 import { formatDuration } from './modal-utils.ts';
 import { logger } from '../utils/logger.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -89,7 +90,7 @@ export class AgentDetailModal {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== 'ENOENT') {
-        logger.debug('AgentDetailModal: failed to load session log', { error: String(err) });
+        logger.debug('AgentDetailModal: failed to load session log', { error: summarizeError(err) });
       }
       this.logEntries = [];
       this.logTotal = 0;

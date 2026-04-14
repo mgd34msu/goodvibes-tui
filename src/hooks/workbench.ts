@@ -7,6 +7,7 @@ import { matchesEventPath, matchesMatcher } from './matcher.ts';
 import type { HookDispatcher } from './dispatcher.ts';
 import type { HookChain, HookDefinition, HookEvent, HookResult, HookType, HooksConfig } from './types.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface HookAuthoringAction {
   readonly kind: 'load' | 'save' | 'reload' | 'scaffold-hook' | 'scaffold-chain' | 'remove' | 'toggle' | 'simulate' | 'export' | 'import' | 'inspect';
@@ -127,7 +128,7 @@ export class HookWorkbench {
       this.managedConfig = ensureConfigShape(parsed);
       this.recordAction({ kind: 'load', target: path, timestamp: Date.now(), detail: `${this.listManagedHooks().length} hooks / ${this.listManagedChains().length} chains` });
     } catch (error) {
-      logger.debug('HookWorkbench.loadManagedConfig failed, using empty config', { path, error: String(error) });
+      logger.debug('HookWorkbench.loadManagedConfig failed, using empty config', { path, error: summarizeError(error) });
       this.managedConfig = cloneConfig(EMPTY_CONFIG);
       this.recordAction({ kind: 'load', target: path, timestamp: Date.now(), detail: 'invalid JSON; using empty config' });
     }

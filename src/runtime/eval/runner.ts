@@ -13,6 +13,7 @@
 import type { EvalScenario, EvalRawResult, EvalResult, EvalSuiteResult, EvalGateResult, EvalBaseline, RegressionEntry } from './types.ts';
 import { scoreScenario } from './scorecard.ts';
 import { createPerfMonitor } from '../perf/index.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ── EvalRunner ────────────────────────────────────────────────────────────────
 
@@ -152,7 +153,7 @@ export class EvalRunner {
       return raw;
     } catch (err) {
       const durationMs = Date.now() - t0;
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = summarizeError(err);
       return {
         completed: false,
         durationMs,

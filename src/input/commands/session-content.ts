@@ -6,6 +6,7 @@ import type { SelectionItem } from '../selection-modal.ts';
 import { exportToMarkdown } from '../../export/markdown.ts';
 import { TemplateManager, parseTemplateArgs } from '../../templates/manager.ts';
 import { requireSessionManager, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerSessionContentCommands(registry: CommandRegistry): void {
   registry.register({
@@ -75,7 +76,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         await writeFile(resolvedPath, fileContent, 'utf-8');
         ctx.print(`Exported ${msgs.length} messages to: ${resolvedPath}`);
       } catch (err) {
-        ctx.print(`Export failed: ${(err as Error).message}`);
+        ctx.print(`Export failed: ${summarizeError(err)}`);
       }
     },
   });
@@ -121,7 +122,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         const { filePath, sanitizedName } = sessionManager.save(rawName, messages, meta, agentRecords);
         ctx.print(`Session saved: ${rawName}${sanitizedName !== rawName ? ` (saved as "${sanitizedName}")` : ''}${agentRecords.length > 0 ? ` [${agentRecords.length} agent records]` : ''}\n  → ${filePath}`);
       } catch (e) {
-        ctx.print(`Failed to save session: ${(e as Error).message}`);
+        ctx.print(`Failed to save session: ${summarizeError(e)}`);
       }
     },
   });
@@ -153,7 +154,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
         ctx.renderRequest();
         ctx.print(`Session loaded: ${args[0]} (${messages.length} messages)${agentRecords.length > 0 ? ` [${agentRecords.length} agent records restored]` : ''}`);
       } catch (e) {
-        ctx.print(`Failed to load session: ${(e as Error).message}`);
+        ctx.print(`Failed to load session: ${summarizeError(e)}`);
       }
     },
   });
@@ -174,7 +175,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           const result = ctx.workspace.fileUndoManager.undo();
           ctx.print(result ? `File reverted: ${result.path} (${result.tool} tool). Use /redo file to re-apply.` : 'Nothing to undo. No file operations recorded.');
         } catch (err) {
-          ctx.print(`File undo failed: ${err instanceof Error ? err.message : String(err)}`);
+          ctx.print(`File undo failed: ${summarizeError(err)}`);
         }
         return;
       }
@@ -203,7 +204,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           const result = ctx.workspace.fileUndoManager.redo();
           ctx.print(result ? `File re-applied: ${result.path} (${result.tool} tool).` : 'Nothing to redo.');
         } catch (err) {
-          ctx.print(`File redo failed: ${err instanceof Error ? err.message : String(err)}`);
+          ctx.print(`File redo failed: ${summarizeError(err)}`);
         }
         return;
       }
@@ -255,7 +256,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
                 ctx.print(`Session deleted: ${result.item.id}`);
               }
             } catch (e) {
-              ctx.print(`Failed to delete session: ${(e as Error).message}`);
+              ctx.print(`Failed to delete session: ${summarizeError(e)}`);
             }
           } else {
             try {
@@ -267,7 +268,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
               ctx.renderRequest();
               ctx.print(`Session loaded: ${result.item.id} (${messages.length} messages)`);
             } catch (e) {
-              ctx.print(`Failed to load session: ${(e as Error).message}`);
+              ctx.print(`Failed to load session: ${summarizeError(e)}`);
             }
           }
         });
@@ -330,7 +331,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           templateManager.save(name, ctx.session.conversationManager.getLastUserMessage() || '# Template\n\nReplace this with your template content.\n');
           ctx.print(`Template saved: ${name}`);
         } catch (e) {
-          ctx.print(`Failed to save template: ${(e as Error).message}`);
+          ctx.print(`Failed to save template: ${summarizeError(e)}`);
         }
         return;
       }

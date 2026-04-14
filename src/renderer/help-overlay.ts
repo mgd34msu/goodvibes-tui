@@ -60,7 +60,7 @@ export function renderHelpOverlay(
     '  ' + '\u2500'.repeat(40),
     `  ${'?'.padEnd(20)}  Toggle help`,
     `  ${'/shortcuts'.padEnd(20)}  Full keyboard shortcuts`,
-    `  ${kb('panel-picker').padEnd(20)}  Open the panel picker`,
+    `  ${kb('panel-picker').padEnd(20)}  Open or focus the panel workspace`,
     '',
   ];
 
@@ -211,9 +211,10 @@ export function renderShortcutsOverlay(
     '',
     '  Panels',
     '  ' + '\u2500'.repeat(40),
-    row(kb('panel-picker'), 'Toggle panel sidebar'),
-    row(kb('panel-tab-next'), 'Next panel tab'),
-    row(kb('panel-tab-prev'), 'Previous panel tab'),
+    row('Tab', 'Swap focus between input and panel workspace'),
+    row(kb('panel-picker'), 'Open / focus / hide panel workspace'),
+    row(kb('panel-tab-next'), 'Next workspace panel tab'),
+    row(kb('panel-tab-prev'), 'Previous workspace panel tab'),
     '',
     `  Config: /keybindings to list and customize`,
   ];

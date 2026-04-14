@@ -16,6 +16,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Identifies a specific key press with modifiers. */
 export interface KeyCombo {
@@ -56,11 +57,11 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'copy-selection':        'Copy selected text to clipboard',
   'clear-cancel':          'Clear input / cancel generation / exit (double)',
   'screen-clear':          'Repaint the screen',
-  'panel-picker':          'Toggle panel sidebar',
+  'panel-picker':          'Open, focus, or hide the panel workspace',
   'panel-close':            'Close the currently active panel',
   'panel-close-all':         'Close all open panels',
-  'panel-tab-next':        'Next panel tab',
-  'panel-tab-prev':        'Previous panel tab',
+  'panel-tab-next':        'Next workspace panel tab',
+  'panel-tab-prev':        'Previous workspace panel tab',
   'history-search':        'Reverse input history search',
   'search':                'Toggle conversation search',
   'block-copy':            'Copy nearest block to clipboard',
@@ -85,11 +86,8 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-picker':          [{ key: 'p', ctrl: true }],
   'panel-close':            [{ key: 'x', ctrl: true }],
   'panel-close-all':         [{ key: 'x', ctrl: true, shift: true }],
-  'panel-tab-next':        [{ key: '}', ctrl: true }],
-  'panel-tab-prev':        [{ key: '~', ctrl: true }],
-  // NOTE: 'history-search' and 'replay-panel' share Ctrl+R by default.
-  // The input handler dispatches 'replay-panel' when in command mode and
-  // 'history-search' otherwise. Users may rebind either in keybindings.json.
+  'panel-tab-next':        [{ key: ']', ctrl: true }],
+  'panel-tab-prev':        [{ key: '[', ctrl: true }],
   'history-search':        [{ key: 'r', ctrl: true }],
   'search':                [{ key: 'f', ctrl: true }],
   'block-copy':            [{ key: 'y', ctrl: true }],
@@ -103,7 +101,7 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'undo':                  [{ key: 'z', ctrl: true }],
   'redo':                  [{ key: 'z', ctrl: true, shift: true }],
   'paste':                 [{ key: 'v', ctrl: true }],
-  'replay-panel':          [{ key: 'r', ctrl: true }],
+  'replay-panel':          [{ key: 'r', ctrl: true, shift: true }],
 };
 
 /** Resolved overrides type: each key can be a single combo or array. */
@@ -179,7 +177,7 @@ export class KeybindingsManager {
       }
       logger.debug('keybindings: loaded overrides from disk', { path: this.configPath });
     } catch (err) {
-      logger.debug('keybindings: failed to load config file', { path: this.configPath, err: String(err) });
+      logger.debug('keybindings: failed to load config file', { path: this.configPath, err: summarizeError(err) });
     }
   }
 

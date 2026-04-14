@@ -432,6 +432,61 @@ describe('Orchestrator', () => {
     });
   });
 
+  describe('conversation follow-ups', () => {
+    test('queued follow-ups emit a short assistant acknowledgement into the main conversation', async () => {
+      const mockModel = {
+        id: 'mock-model',
+        provider: 'mock',
+        registryKey: 'mock:mock-model',
+        displayName: 'Mock',
+        description: '',
+        capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+        contextWindow: 8192,
+        selectable: true,
+      };
+      const provider = new MockLLMProvider([{ content: 'WRFC passed and the engineer run is complete.' }]);
+      const { orch, cm } = await buildOrchestrator();
+
+      const reg = testManagers.providerRegistry;
+      const origGet = reg.get.bind(reg);
+      const origGetForModel = reg.getForModel.bind(reg);
+      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+      const origGetTokenLimitsForModel = reg.getTokenLimitsForModel.bind(reg);
+      reg.get = mock(() => provider);
+      reg.getForModel = mock(() => provider);
+      reg.getCurrentModel = mock(() => mockModel);
+      reg.getTokenLimitsForModel = mock(() => ({
+        maxOutputTokens: 512,
+        contextWindow: 8192,
+        maxToolResultTokens: 16384,
+        maxToolCalls: 32,
+        maxReasoningTokens: 0,
+      }));
+      try {
+        orch.enqueueConversationFollowUp({
+          key: 'wrfc:chain-1:passed',
+          summary: 'WRFC chain chain-1 passed all gates.',
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      } finally {
+        reg.get = origGet;
+        reg.getForModel = origGetForModel;
+        reg.getCurrentModel = origGetCurrentModel;
+        reg.getTokenLimitsForModel = origGetTokenLimitsForModel;
+      }
+
+      const snapshot = cm.getMessageSnapshot();
+      expect(snapshot.some((message) => (
+        message.role === 'assistant'
+        && message.content.includes('WRFC passed and the engineer run is complete.')
+      ))).toBe(true);
+      expect(provider.callLog).toHaveLength(1);
+      const lastMessage = provider.callLog[0]?.messages.at(-1);
+      expect(lastMessage?.role).toBe('user');
+      expect(String(lastMessage?.content ?? '')).toContain('WRFC chain chain-1 passed all gates.');
+    });
+  });
+
   describe('registerDelegateTool', () => {
     test('registers delegate tool into the ToolRegistry', async () => {
       const { orch } = await buildOrchestrator();

@@ -7,6 +7,7 @@
  */
 import type { Tree, Language, Node } from 'web-tree-sitter';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export interface SymbolInfo {
   name: string;
@@ -376,7 +377,7 @@ export function extractSymbols(
     logger.debug('extractSymbols: unsupported language', { langId });
     return [];
   } catch (err) {
-    logger.error('extractSymbols: failed', { langId, error: String(err) });
+    logger.error('extractSymbols: failed', { langId, error: summarizeError(err) });
     return [];
   }
 }
@@ -417,7 +418,7 @@ export function extractOutline(
 
     return toplevel;
   } catch (err) {
-    logger.error('extractOutline: failed', { langId, error: String(err) });
+    logger.error('extractOutline: failed', { langId, error: summarizeError(err) });
     return [];
   }
 }

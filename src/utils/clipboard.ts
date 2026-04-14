@@ -1,4 +1,5 @@
 import { logger } from './logger.ts';
+import { summarizeError } from './error-display.ts';
 
 export const MIN_IMAGE_BYTES = 100;
 
@@ -21,7 +22,7 @@ export function copyToClipboard(text: string) {
     process.stdout.write(sequence);
     logger.info('Clipboard: OSC 52 sequence written');
   } catch (err: unknown) {
-    logger.error('Clipboard: OSC 52 copy failed', { error: err instanceof Error ? err.message : String(err) });
+    logger.error('Clipboard: OSC 52 copy failed', { error: summarizeError(err) });
   }
 }
 
@@ -62,7 +63,7 @@ export function pasteFromClipboard(): string {
       }
     }
   } catch (err: unknown) {
-    logger.error('Clipboard: Paste failed', { error: err instanceof Error ? err.message : String(err) });
+    logger.error('Clipboard: Paste failed', { error: summarizeError(err) });
   }
   return '';
 }
@@ -142,7 +143,7 @@ export function pasteImageFromClipboard(): { data: string; mediaType: string } |
       }
     }
   } catch (err: unknown) {
-    logger.debug('Clipboard image access failed', { error: String(err) });
+    logger.debug('Clipboard image access failed', { error: summarizeError(err) });
   }
   return null;
 }

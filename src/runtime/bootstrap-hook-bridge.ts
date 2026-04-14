@@ -12,6 +12,7 @@ import type { SharedSessionBroker } from '../control-plane/index.ts';
 import type { SessionManager } from '../sessions/manager.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 interface FireHookOptions {
   readonly hookDispatcher: HookDispatcher;
@@ -34,7 +35,7 @@ function fireHook(
     sessionId: options.runtime.sessionId,
     timestamp: Date.now(),
     payload,
-  }).catch((err: unknown) => logger.debug('Hook bridge fire error', { path, error: String(err) }));
+  }).catch((err: unknown) => logger.debug('Hook bridge fire error', { path, error: summarizeError(err) }));
 }
 
 export interface ResumeSessionOptions {
@@ -120,7 +121,7 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       }
       fireHook(fireOptions, 'Lifecycle:session:load', 'Lifecycle', 'session', 'load', { sessionId });
     } catch (error) {
-      logger.debug('resumeSession failed', { error: String(error) });
+      logger.debug('resumeSession failed', { error: summarizeError(error) });
       options.conversation.log('Failed to resume session.', { fg: '#ef4444' });
     }
     options.requestRender();

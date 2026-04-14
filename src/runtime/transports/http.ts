@@ -8,6 +8,8 @@ import type {
 } from '../../control-plane/index.ts';
 import type { RuntimeTask } from '../store/domains/tasks.ts';
 import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../../providers/runtime-snapshot.ts';
+import type { TelemetryFilter, TelemetryListResponse, TelemetrySnapshot } from '../telemetry/api.ts';
+import type { ReadableSpan } from '../telemetry/types.ts';
 import type { DistributedNodeHostContract, DistributedPendingWork, DistributedPeerKind, DistributedPeerRecord, DistributedRuntimePairRequest } from '../remote/distributed-runtime-types.ts';
 import type { ControlPlaneClientRecord } from '../store/domains/control-plane.ts';
 import type { UiLocalAuthSnapshot, UiSessionSnapshot, UiTasksSnapshot, UiControlPlaneSnapshot } from '../ui-read-models.ts';
@@ -15,11 +17,29 @@ import type { UiRuntimeEvents } from '../ui-events.ts';
 import type { TransportPaths } from './shared.ts';
 import {
   createEventSourceConnector,
-  createJsonInit,
   createTransportPaths,
   createRemoteUiRuntimeEvents,
   requestJson,
 } from './shared.ts';
+import {
+  appendTelemetryQuery,
+  buildSessionEnsureBody,
+  buildSessionMessageBody,
+  buildSteerSessionMessageBody,
+  buildTaskSubmitBody,
+  buildTransportUrl,
+  connectTelemetryStream,
+  createFetch,
+  createJsonRequestInit,
+  isRecord,
+  maybeList,
+  normalizeBaseUrl,
+  normalizeTelemetryQuery,
+  readArrayResponse,
+  readControlPlaneSnapshot,
+  readNodeHostContract,
+  requestJsonWithFallback,
+} from './http-helpers.ts';
 import type {
   HttpPeerRecordSnapshot,
   HttpPeerSnapshot,
@@ -45,211 +65,11 @@ import type {
   HttpTransportOperatorClient,
   HttpTransportPeerClient,
   HttpTransportSnapshot,
+  HttpTransportTelemetryMetricsSnapshot,
   HttpTransportOptions,
+  HttpTransportTelemetryQuery,
+  HttpTransportTelemetryStreamHandlers,
 } from './http-types.ts';
-
-function normalizeBaseUrl(baseUrl: string): string {
-  const normalized = baseUrl.trim();
-  if (!normalized) {
-    throw new Error('Transport baseUrl is required');
-  }
-  return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
-}
-
-function createFetch(fetchImpl?: typeof fetch): typeof fetch {
-  return fetchImpl ?? globalThis.fetch.bind(globalThis);
-}
-
-function createJsonRequestInit(token: string | null | undefined, body?: unknown, method = 'GET'): RequestInit {
-  return createJsonInit(token, body, method);
-}
-
-function maybeList<T>(value: unknown, key: string): readonly T[] {
-  if (Array.isArray(value)) return value as readonly T[];
-  if (typeof value === 'object' && value !== null && Array.isArray((value as Record<string, unknown>)[key])) {
-    return (value as Record<string, unknown>)[key] as readonly T[];
-  }
-  return [];
-}
-
-function maybeObject<T extends object>(value: unknown): T | null {
-  return typeof value === 'object' && value !== null ? value as T : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function readArrayResponse<T>(body: unknown, key: string): readonly T[] {
-  if (Array.isArray(body)) return body as readonly T[];
-  if (isRecord(body)) {
-    const maybeEntries = body[key];
-    if (Array.isArray(maybeEntries)) return maybeEntries as readonly T[];
-  }
-  return [];
-}
-
-function readWrappedValue<T>(body: unknown, key: string): T | null {
-  if (!isRecord(body)) return null;
-  const value = body[key];
-  return value === undefined || value === null ? null : value as T;
-}
-
-function readControlPlaneClients(body: unknown): readonly ControlPlaneClientRecord[] {
-  if (!isRecord(body)) return [];
-  return Array.isArray(body.clients) ? body.clients as readonly ControlPlaneClientRecord[] : [];
-}
-
-function readControlPlaneEvents(body: unknown): readonly ControlPlaneRecentEvent[] {
-  if (!isRecord(body)) return [];
-  return Array.isArray(body.recentEvents) ? body.recentEvents as readonly ControlPlaneRecentEvent[] : [];
-}
-
-function readNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-function readString(value: unknown, fallback = ''): string {
-  return typeof value === 'string' ? value : fallback;
-}
-
-function readBoolean(value: unknown): boolean {
-  return value === true;
-}
-
-function readNodeHostContract(
-  body: { contract?: DistributedNodeHostContract } | DistributedNodeHostContract,
-): DistributedNodeHostContract {
-  if (isRecord(body) && 'contract' in body && body.contract) {
-    return body.contract;
-  }
-  return body as DistributedNodeHostContract;
-}
-
-async function readControlPlaneSnapshot(
-  fetchImpl: typeof fetch,
-  paths: TransportPaths,
-  token: string | null | undefined,
-): Promise<UiControlPlaneSnapshot> {
-  const approvalsUrl = new URL(paths.approvalsUrl);
-  approvalsUrl.searchParams.set('limit', '6');
-  const [gatewaySnapshot, approvals, sessions] = await Promise.all([
-    requestJson<Record<string, unknown>>(fetchImpl, paths.controlPlaneUrl, createJsonRequestInit(token)),
-    requestJson<readonly SharedApprovalRecord[] | { approvals?: SharedApprovalRecord[] }>(
-      fetchImpl,
-      approvalsUrl.toString(),
-      createJsonRequestInit(token),
-    ),
-    requestJson<readonly SharedSessionRecord[] | { sessions?: SharedSessionRecord[] } | { session?: SharedSessionRecord[] }>(
-      fetchImpl,
-      paths.sessionsUrl,
-      createJsonRequestInit(token),
-    ),
-  ]);
-  const server = maybeObject<Record<string, unknown>>(isRecord(gatewaySnapshot) ? gatewaySnapshot.server : null) ?? {};
-  const totals = maybeObject<Record<string, unknown>>(isRecord(gatewaySnapshot) ? gatewaySnapshot.totals : null) ?? {};
-  const clients = readControlPlaneClients(gatewaySnapshot);
-  const recentEvents = readControlPlaneEvents(gatewaySnapshot).slice(0, 6);
-  const sessionList = readArrayResponse<SharedSessionRecord>(sessions, 'sessions');
-  const approvalList = readArrayResponse<SharedApprovalRecord>(approvals, 'approvals');
-  return {
-    connectionState: readString(server.connectionState, 'unknown'),
-    activeClientIds: clients.filter((client) => readBoolean(client.connected)).map((client) => client.id),
-    requestCount: readNumber(totals.requests),
-    errorCount: readNumber(totals.errors),
-    host: readString(server.host, ''),
-    port: readNumber(server.port),
-    clients,
-    approvals: approvalList.slice(0, 6),
-    sessions: sessionList.length > 0
-      ? sessionList.slice(0, 6)
-      : readArrayResponse<SharedSessionRecord>(sessions, 'session').slice(0, 6),
-    recentEvents,
-  };
-}
-
-function buildSessionEnsureBody(input: HttpSessionEnsureInput = {}): Record<string, unknown> {
-  return {
-    ...(input.sessionId ? { id: input.sessionId } : {}),
-    ...(input.title ? { title: input.title } : {}),
-    ...(input.metadata ? { metadata: input.metadata } : {}),
-    ...(input.routeId ? { routeId: input.routeId } : {}),
-    ...(input.participant
-      ? {
-          surfaceKind: input.participant.surfaceKind,
-          surfaceId: input.participant.surfaceId,
-          ...(input.participant.externalId ? { externalId: input.participant.externalId } : {}),
-          ...(input.participant.userId ? { userId: input.participant.userId } : {}),
-          ...(input.participant.displayName ? { displayName: input.participant.displayName } : {}),
-        }
-      : {}),
-  };
-}
-
-function buildSessionMessageBody(input: HttpSessionMessageInput): Record<string, unknown> {
-  return {
-    body: input.body,
-    ...(input.surfaceKind ? { surfaceKind: input.surfaceKind } : {}),
-    ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
-    ...(input.externalId ? { externalId: input.externalId } : {}),
-    ...(input.threadId ? { threadId: input.threadId } : {}),
-    ...(input.userId ? { userId: input.userId } : {}),
-    ...(input.displayName ? { displayName: input.displayName } : {}),
-    ...(input.title ? { title: input.title } : {}),
-    ...(input.routeId ? { routeId: input.routeId } : {}),
-    ...(input.metadata ? { metadata: input.metadata } : {}),
-    ...(input.routing ? { routing: input.routing } : {}),
-  };
-}
-
-function buildSteerSessionMessageBody(input: HttpSteerSessionMessageInput): Record<string, unknown> {
-  return {
-    ...buildSessionMessageBody(input),
-    ...(input.allowSpawnFallback === true ? { allowSpawnFallback: true } : {}),
-  };
-}
-
-function buildTaskSubmitBody(input: HttpTaskSubmitInput): Record<string, unknown> {
-  return {
-    task: input.task,
-    ...(input.model ? { model: input.model } : {}),
-    ...(input.tools ? { tools: [...input.tools] } : {}),
-    ...(input.routing ? { routing: input.routing } : {}),
-    ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-    ...(input.routeId ? { routeId: input.routeId } : {}),
-    ...(input.surfaceKind ? { surfaceKind: input.surfaceKind } : {}),
-    ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
-    ...(input.externalId ? { externalId: input.externalId } : {}),
-    ...(input.threadId ? { threadId: input.threadId } : {}),
-    ...(input.userId ? { userId: input.userId } : {}),
-    ...(input.displayName ? { displayName: input.displayName } : {}),
-    ...(input.title ? { title: input.title } : {}),
-    ...(input.metadata ? { metadata: input.metadata } : {}),
-  };
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return Boolean(
-    typeof error === 'object'
-    && error !== null
-    && 'transport' in error
-    && typeof (error as { transport?: { readonly status?: number } }).transport?.status === 'number'
-    && (error as { transport?: { readonly status?: number } }).transport?.status === 404,
-  );
-}
-
-async function requestJsonWithFallback<T>(
-  fetchImpl: typeof fetch,
-  url: string,
-  init: RequestInit = {},
-): Promise<T | null> {
-  try {
-    return await requestJson<T>(fetchImpl, url, init);
-  } catch (error) {
-    if (isNotFoundError(error)) return null;
-    throw error;
-  }
-}
 
 function createOperatorClient(
   paths: TransportPaths,
@@ -411,11 +231,68 @@ function createOperatorClient(
     },
     controlPlane: {
       snapshot: async (): Promise<UiControlPlaneSnapshot> => await readControlPlaneSnapshot(fetchImpl, paths, token),
+      currentAuth: async (): Promise<import('./http-types.ts').HttpTransportControlPlaneAuthSnapshot> => await requestJson<import('./http-types.ts').HttpTransportControlPlaneAuthSnapshot>(fetchImpl, paths.controlPlaneAuthUrl, createJsonRequestInit(token)),
       recentEvents: async (limit = 6): Promise<readonly ControlPlaneRecentEvent[]> => {
         const url = new URL(paths.controlPlaneUrl + '/recent-events');
         url.searchParams.set('limit', String(Math.max(1, Math.floor(limit))));
         const body = await requestJson<readonly ControlPlaneRecentEvent[] | { events?: ControlPlaneRecentEvent[] }>(fetchImpl, url.toString(), createJsonRequestInit(token));
         return readArrayResponse<ControlPlaneRecentEvent>(body, 'events');
+      },
+    },
+    telemetry: {
+      snapshot: async (query: HttpTransportTelemetryQuery = 20): Promise<TelemetrySnapshot> => {
+        const normalized = normalizeTelemetryQuery(query, 20);
+        const url = new URL(paths.telemetryUrl);
+        appendTelemetryQuery(url, normalized);
+        return await requestJson<TelemetrySnapshot>(fetchImpl, url.toString(), createJsonRequestInit(token));
+      },
+      events: async (query: HttpTransportTelemetryQuery = 100): Promise<TelemetryListResponse<import('../telemetry/api.ts').TelemetryRecord>> => {
+        const normalized = normalizeTelemetryQuery(query, 100);
+        const url = new URL(paths.telemetryEventsUrl);
+        appendTelemetryQuery(url, normalized);
+        return await requestJson<TelemetryListResponse<import('../telemetry/api.ts').TelemetryRecord>>(fetchImpl, url.toString(), createJsonRequestInit(token));
+      },
+      errors: async (query: HttpTransportTelemetryQuery = 100): Promise<TelemetryListResponse<import('../telemetry/api.ts').TelemetryRecord>> => {
+        const normalized = normalizeTelemetryQuery(query, 100);
+        const url = new URL(paths.telemetryErrorsUrl);
+        appendTelemetryQuery(url, normalized);
+        return await requestJson<TelemetryListResponse<import('../telemetry/api.ts').TelemetryRecord>>(fetchImpl, url.toString(), createJsonRequestInit(token));
+      },
+      traces: async (query: HttpTransportTelemetryQuery = 100): Promise<TelemetryListResponse<ReadableSpan>> => {
+        const normalized = normalizeTelemetryQuery(query, 100);
+        const url = new URL(paths.telemetryTracesUrl);
+        appendTelemetryQuery(url, normalized);
+        return await requestJson<TelemetryListResponse<ReadableSpan>>(fetchImpl, url.toString(), createJsonRequestInit(token));
+      },
+      metrics: async (query: HttpTransportTelemetryQuery = 100): Promise<HttpTransportTelemetryMetricsSnapshot> => {
+        const normalized = normalizeTelemetryQuery(query, 100);
+        const url = new URL(paths.telemetryMetricsUrl);
+        appendTelemetryQuery(url, normalized);
+        return await requestJson<HttpTransportTelemetryMetricsSnapshot>(fetchImpl, url.toString(), createJsonRequestInit(token));
+      },
+      otlpTraces: async (query: HttpTransportTelemetryQuery = 100) => {
+        const normalized = normalizeTelemetryQuery(query, 100);
+        const url = new URL(paths.telemetryOtlpTracesUrl);
+        appendTelemetryQuery(url, normalized);
+        return await requestJson<Record<string, unknown>>(fetchImpl, url.toString(), createJsonRequestInit(token));
+      },
+      otlpLogs: async (query: HttpTransportTelemetryQuery = 100) => {
+        const normalized = normalizeTelemetryQuery(query, 100);
+        const url = new URL(paths.telemetryOtlpLogsUrl);
+        appendTelemetryQuery(url, normalized);
+        return await requestJson<Record<string, unknown>>(fetchImpl, url.toString(), createJsonRequestInit(token));
+      },
+      otlpMetrics: async (query: HttpTransportTelemetryQuery = 100) => {
+        const normalized = normalizeTelemetryQuery(query, 100);
+        const url = new URL(paths.telemetryOtlpMetricsUrl);
+        appendTelemetryQuery(url, normalized);
+        return await requestJson<Record<string, unknown>>(fetchImpl, url.toString(), createJsonRequestInit(token));
+      },
+      stream: async (handlers, query: HttpTransportTelemetryQuery = 100) => {
+        const normalized = normalizeTelemetryQuery(query, 100);
+        const url = new URL(paths.telemetryStreamUrl);
+        appendTelemetryQuery(url, normalized);
+        return await connectTelemetryStream(fetchImpl, url.toString(), token, handlers);
       },
     },
     events,
@@ -431,7 +308,7 @@ function createPeerClient(
   return {
     pairing: {
       listRequests: async (limit = 100): Promise<readonly DistributedRuntimePairRequest[]> => {
-        const body = await requestJson<readonly DistributedRuntimePairRequest[] | { requests?: DistributedRuntimePairRequest[] }>(fetchImpl, paths.peerRequestsUrl, createJsonInit(token));
+        const body = await requestJson<readonly DistributedRuntimePairRequest[] | { requests?: DistributedRuntimePairRequest[] }>(fetchImpl, paths.peerRequestsUrl, createJsonRequestInit(token));
         const requests = readArrayResponse<DistributedRuntimePairRequest>(body, 'requests');
         return requests.slice(0, Math.max(1, Math.floor(limit)));
       },
@@ -453,21 +330,21 @@ function createPeerClient(
         const url = new URL(paths.peerListUrl);
         if (kind) url.searchParams.set('kind', kind);
         url.searchParams.set('limit', String(Math.max(1, Math.floor(limit))));
-        const body = await requestJson<readonly DistributedPeerRecord[] | { peers?: DistributedPeerRecord[] }>(fetchImpl, url.toString(), createJsonInit(token));
+        const body = await requestJson<readonly DistributedPeerRecord[] | { peers?: DistributedPeerRecord[] }>(fetchImpl, url.toString(), createJsonRequestInit(token));
         const peers = readArrayResponse<DistributedPeerRecord>(body, 'peers');
         return peers.slice(0, Math.max(1, Math.floor(limit)));
       },
       get: async (peerId): Promise<DistributedPeerRecord | null> => {
-        const peers = await requestJson<readonly DistributedPeerRecord[] | { peers?: DistributedPeerRecord[] }>(fetchImpl, paths.peerListUrl, createJsonInit(token));
+        const peers = await requestJson<readonly DistributedPeerRecord[] | { peers?: DistributedPeerRecord[] }>(fetchImpl, paths.peerListUrl, createJsonRequestInit(token));
         const list = readArrayResponse<DistributedPeerRecord>(peers, 'peers');
         return list.find((peer) => peer.id === peerId) ?? null;
       },
       getSnapshot: async (peerId): Promise<HttpPeerRecordSnapshot | null> => {
         const [snapshot, contract] = await Promise.all([
-          requestJson<Record<string, unknown>>(fetchImpl, paths.remoteUrl, createJsonInit(token)),
-          requestJson<DistributedNodeHostContract>(fetchImpl, paths.remoteContractUrl, createJsonInit(token)),
+          requestJson<Record<string, unknown>>(fetchImpl, paths.remoteUrl, createJsonRequestInit(token)),
+          requestJson<DistributedNodeHostContract>(fetchImpl, paths.remoteContractUrl, createJsonRequestInit(token)),
         ]);
-        const peers = await requestJson<readonly DistributedPeerRecord[] | { peers?: DistributedPeerRecord[] }>(fetchImpl, paths.peerListUrl, createJsonInit(token));
+        const peers = await requestJson<readonly DistributedPeerRecord[] | { peers?: DistributedPeerRecord[] }>(fetchImpl, paths.peerListUrl, createJsonRequestInit(token));
         const list = readArrayResponse<DistributedPeerRecord>(peers, 'peers');
         const pairRequests = maybeList<DistributedRuntimePairRequest>(snapshot, 'pairRequests').filter((entry) => entry.peerId === peerId || entry.requestedId === peerId);
         const work = maybeList<DistributedPendingWork>(snapshot, 'work').filter((entry) => entry.peerId === peerId);
@@ -573,10 +450,6 @@ function createPeerClient(
       return readNodeHostContract(body);
     },
   };
-}
-
-function buildTransportUrl(baseUrl: string, path: string): string {
-  return new URL(path, `${normalizeBaseUrl(baseUrl)}/`).toString();
 }
 
 export function createHttpTransport(options: HttpTransportOptions): HttpTransport {

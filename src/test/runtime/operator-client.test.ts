@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { createOperatorClientServices } from '../../runtime/foundation-services.ts';
 import { createEventEnvelope, RuntimeEventBus } from '../../runtime/events/index.ts';
-import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createOperatorClient } from '../../runtime/operator-client.ts';
 import { createInitialTasksState, type RuntimeTask } from '../../runtime/store/domains/tasks.ts';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
@@ -20,13 +20,13 @@ async function waitFor<T>(fn: () => T | undefined | null, timeoutMs = 500, inter
 
 describe('operator client', () => {
   let runtimeServices: ReturnType<typeof getTestRuntimeServices>;
-  let uiServices: ReturnType<typeof createUiRuntimeServices>;
+  let operatorServices: ReturnType<typeof createOperatorClientServices>;
   let client: ReturnType<typeof createOperatorClient>;
 
   beforeEach(() => {
     resetTestRuntimeServices();
     runtimeServices = getTestRuntimeServices();
-    uiServices = createUiRuntimeServices(runtimeServices, {
+    operatorServices = createOperatorClientServices(runtimeServices, {
       getControlPlaneRecentEvents: () => [{
         id: 'evt-1',
         event: 'session-created',
@@ -34,7 +34,7 @@ describe('operator client', () => {
         payload: { sessionId: 'sess-1' },
       }],
     });
-    client = createOperatorClient(uiServices);
+    client = createOperatorClient(operatorServices);
   });
 
   afterEach(() => {
@@ -79,7 +79,7 @@ describe('operator client', () => {
     expect(controlPlane.sessions).toHaveLength(1);
     expect(controlPlane.approvals).toHaveLength(1);
     expect(client.controlPlane.recentEvents()).toHaveLength(1);
-    expect(client.sessions.current()).toEqual(uiServices.readModels.session.getSnapshot());
+    expect(client.sessions.current()).toEqual(operatorServices.readModels.session.getSnapshot());
     expect(client.sessions.get(session.id)?.title).toBe('Operator Session');
     expect(client.sessions.messages(session.id)).toHaveLength(0);
     expect(client.shellPaths.workingDirectory).toBe(runtimeServices.shellPaths.workingDirectory);
@@ -128,11 +128,11 @@ describe('operator client', () => {
 
   test('events are direct in-process feeds over the runtime bus', () => {
     const runtimeBus = new RuntimeEventBus();
-    const uiServices = createUiRuntimeServices({
+    const eventServices = createOperatorClientServices({
       ...runtimeServices,
       runtimeBus,
     });
-    const eventClient = createOperatorClient(uiServices);
+    const eventClient = createOperatorClient(eventServices);
     const seen: Array<{ type: 'PROVIDERS_CHANGED'; added: string[]; removed: string[]; updated: string[] }> = [];
 
     const unsubscribe = eventClient.events.providers.on('PROVIDERS_CHANGED', (event) => {

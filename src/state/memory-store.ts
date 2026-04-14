@@ -21,6 +21,7 @@ import {
   type MemoryEmbeddingDoctorReport,
 } from './memory-embeddings.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   clampConfidence,
   createSchema,
@@ -527,7 +528,7 @@ export class MemoryStore {
       );
     } catch (err) {
       logger.error('MemoryStore: link insert failed', {
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
       return null;
     }
@@ -721,7 +722,7 @@ export class MemoryStore {
 
   private persist(): void {
     void this.save().catch((err) => {
-      logger.debug('MemoryStore: autosave failed', { error: err instanceof Error ? err.message : String(err) });
+      logger.debug('MemoryStore: autosave failed', { error: summarizeError(err) });
     });
   }
 }

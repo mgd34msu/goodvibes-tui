@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -247,7 +248,7 @@ export class DiscordIntegration {
       return await crypto.subtle.verify('Ed25519', cryptoKey, sigBytes, message);
     } catch (err) {
       logger.warn('DiscordIntegration.verifySignature: verification error', {
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
       return false;
     }
@@ -547,7 +548,7 @@ export class DiscordGatewayClient {
       dispatch = JSON.parse(raw) as DiscordGatewayDispatch;
     } catch (error) {
       logger.warn('DiscordGatewayClient: invalid gateway payload', {
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
       return;
     }

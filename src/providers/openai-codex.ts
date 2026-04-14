@@ -13,8 +13,10 @@ import { withRetry } from '../utils/retry.ts';
 import { resolveSubscriptionAccessToken } from '../config/subscription-auth.ts';
 import { arch, platform, release } from 'node:os';
 import type { SubscriptionManager } from '../config/subscriptions.ts';
+import { toProviderError } from '../utils/error-display.ts';
 
 const OPENAI_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
+const OPENAI_CODEX_PROVIDER_NAME = 'openai-subscriber';
 
 function getOpenAICodexUserAgent(): string {
   return `pi (${platform()} ${release()}; ${arch()})`;
@@ -35,16 +37,31 @@ type ResponsesInputItem =
 function extractAccountId(accessToken: string): string {
   const parts = accessToken.split('.');
   if (parts.length < 2) {
-    throw new ProviderError('OpenAI subscription token is not a JWT.', 401);
+    throw new ProviderError('OpenAI subscription token is not a JWT.', {
+      statusCode: 401,
+      provider: OPENAI_CODEX_PROVIDER_NAME,
+      operation: 'chat',
+      phase: 'auth',
+    });
   }
   const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf-8')) as Record<string, unknown>;
   const auth = payload['https://api.openai.com/auth'];
   if (!auth || typeof auth !== 'object') {
-    throw new ProviderError('OpenAI subscription token does not include account metadata.', 401);
+    throw new ProviderError('OpenAI subscription token does not include account metadata.', {
+      statusCode: 401,
+      provider: OPENAI_CODEX_PROVIDER_NAME,
+      operation: 'chat',
+      phase: 'auth',
+    });
   }
   const accountId = (auth as Record<string, unknown>)['chatgpt_account_id'];
   if (typeof accountId !== 'string' || accountId.length === 0) {
-    throw new ProviderError('OpenAI subscription token does not include a ChatGPT account id.', 401);
+    throw new ProviderError('OpenAI subscription token does not include a ChatGPT account id.', {
+      statusCode: 401,
+      provider: OPENAI_CODEX_PROVIDER_NAME,
+      operation: 'chat',
+      phase: 'auth',
+    });
   }
   return accountId;
 }
@@ -165,72 +182,92 @@ export async function chatWithOpenAICodex(
           : {}),
       };
 
-      const response = await fetch(`${OPENAI_CODEX_BASE_URL}/codex/responses`, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          'chatgpt-account-id': accountId,
-          originator: 'pi',
-          'OpenAI-Beta': 'responses=experimental',
-          accept: 'text/event-stream',
-          'content-type': 'application/json',
-          'User-Agent': getOpenAICodexUserAgent(),
-          session_id: sessionId,
-        },
-        body: JSON.stringify(body),
-        signal: params.signal,
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${OPENAI_CODEX_BASE_URL}/codex/responses`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${accessToken}`,
+            'chatgpt-account-id': accountId,
+            originator: 'pi',
+            'OpenAI-Beta': 'responses=experimental',
+            accept: 'text/event-stream',
+            'content-type': 'application/json',
+            'User-Agent': getOpenAICodexUserAgent(),
+            session_id: sessionId,
+          },
+          body: JSON.stringify(body),
+          signal: params.signal,
+        });
+      } catch (error: unknown) {
+        throw toProviderError(error, {
+          provider: OPENAI_CODEX_PROVIDER_NAME,
+          operation: 'chat',
+          phase: 'request',
+        });
+      }
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new ProviderError(buildErrorMessage(response.status, errorBody), response.status);
+        throw new ProviderError(buildErrorMessage(response.status, errorBody), {
+          statusCode: response.status,
+          provider: OPENAI_CODEX_PROVIDER_NAME,
+          operation: 'chat',
+          phase: 'request',
+        });
       }
       if (!response.body) {
-        throw new ProviderError('OpenAI Codex API returned no response body.', 502);
+        throw new ProviderError('OpenAI Codex API returned no response body.', {
+          statusCode: 502,
+          provider: OPENAI_CODEX_PROVIDER_NAME,
+          operation: 'chat',
+          phase: 'response',
+        });
       }
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let text = '';
-      const toolStarts = new Map<string, PartialToolCall>();
-      const toolItemIds = new Map<string, string>();
-      const toolArgs = new Map<string, string>();
-      const toolCalls = new Map<string, ToolCall>();
-      let inputTokens = 0;
-      let outputTokens = 0;
-      let cacheReadTokens = 0;
-      let status = 'completed';
+      try {
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let text = '';
+        const toolStarts = new Map<string, PartialToolCall>();
+        const toolItemIds = new Map<string, string>();
+        const toolArgs = new Map<string, string>();
+        const toolCalls = new Map<string, ToolCall>();
+        let inputTokens = 0;
+        let outputTokens = 0;
+        let cacheReadTokens = 0;
+        let status = 'completed';
 
-      const handleDataPayload = (payload: string): void => {
-        const fragments = payload
-          .split(/\r?\ndata:\s+/)
-          .map((fragment) => fragment.trim())
-          .filter((fragment) => fragment.length > 0 && fragment !== '[DONE]');
-        for (const fragment of fragments) {
-          handleEvent(JSON.parse(fragment) as Record<string, unknown>);
-        }
-      };
-
-      const handleEvent = (event: Record<string, unknown>): void => {
-        const type = typeof event['type'] === 'string' ? event['type'] : '';
-        if (type === 'response.output_item.added') {
-          const item = event['item'];
-          if (item && typeof item === 'object' && (item as Record<string, unknown>)['type'] === 'function_call') {
-            const record = item as Record<string, unknown>;
-            const callId = typeof record['call_id'] === 'string' ? record['call_id'] : '';
-            const itemId = typeof record['id'] === 'string' ? record['id'] : '';
-            if (!callId) return;
-            const partial: PartialToolCall = {
-              index: toolStarts.size,
-              id: callId,
-              name: typeof record['name'] === 'string' ? record['name'] : undefined,
-            };
-            toolStarts.set(callId, partial);
-            if (itemId) toolItemIds.set(itemId, callId);
-            params.onDelta?.({ toolCalls: [partial] });
+        const handleDataPayload = (payload: string): void => {
+          const fragments = payload
+            .split(/\r?\ndata:\s+/)
+            .map((fragment) => fragment.trim())
+            .filter((fragment) => fragment.length > 0 && fragment !== '[DONE]');
+          for (const fragment of fragments) {
+            handleEvent(JSON.parse(fragment) as Record<string, unknown>);
           }
-          return;
-        }
+        };
+
+        const handleEvent = (event: Record<string, unknown>): void => {
+          const type = typeof event['type'] === 'string' ? event['type'] : '';
+          if (type === 'response.output_item.added') {
+            const item = event['item'];
+            if (item && typeof item === 'object' && (item as Record<string, unknown>)['type'] === 'function_call') {
+              const record = item as Record<string, unknown>;
+              const callId = typeof record['call_id'] === 'string' ? record['call_id'] : '';
+              const itemId = typeof record['id'] === 'string' ? record['id'] : '';
+              if (!callId) return;
+              const partial: PartialToolCall = {
+                index: toolStarts.size,
+                id: callId,
+                name: typeof record['name'] === 'string' ? record['name'] : undefined,
+              };
+              toolStarts.set(callId, partial);
+              if (itemId) toolItemIds.set(itemId, callId);
+              params.onDelta?.({ toolCalls: [partial] });
+            }
+            return;
+          }
 
         if (type === 'response.output_text.delta') {
           const delta = typeof event['delta'] === 'string' ? event['delta'] : '';
@@ -318,49 +355,65 @@ export async function chatWithOpenAICodex(
             const record = error as Record<string, unknown>;
             const code = typeof record['code'] === 'string' ? `${record['code']}: ` : '';
             const message = typeof record['message'] === 'string' ? record['message'] : 'Unknown failure';
-            throw new ProviderError(`OpenAI Codex API error: ${code}${message}`, 400);
+            throw new ProviderError(`OpenAI Codex API error: ${code}${message}`, {
+              statusCode: 400,
+              provider: OPENAI_CODEX_PROVIDER_NAME,
+              operation: 'chat',
+              phase: 'stream',
+            });
           }
-          throw new ProviderError('OpenAI Codex API returned a failed response.', 400);
+          throw new ProviderError('OpenAI Codex API returned a failed response.', {
+            statusCode: 400,
+            provider: OPENAI_CODEX_PROVIDER_NAME,
+            operation: 'chat',
+            phase: 'stream',
+          });
         }
-      };
+        };
 
-      for await (const chunk of response.body) {
-        buffer += decoder.decode(chunk, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() ?? '';
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (!data || data === '[DONE]') continue;
-          handleDataPayload(data);
+        for await (const chunk of response.body) {
+          buffer += decoder.decode(chunk, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() ?? '';
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (!data || data === '[DONE]') continue;
+            handleDataPayload(data);
+          }
         }
+        const trailing = buffer.trim();
+        if (trailing.startsWith('data: ')) {
+          const data = trailing.slice(6).trim();
+          if (data && data !== '[DONE]') {
+            handleDataPayload(data);
+          }
+        }
+
+        const resolvedToolCalls = [...toolCalls.values()];
+        return {
+          content: text,
+          toolCalls: resolvedToolCalls,
+          usage: {
+            inputTokens,
+            outputTokens,
+            ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
+          },
+          stopReason: mapStopReason(status, resolvedToolCalls),
+        };
+      } catch (error: unknown) {
+        throw toProviderError(error, {
+          provider: OPENAI_CODEX_PROVIDER_NAME,
+          operation: 'chat',
+          phase: 'stream',
+        });
       }
-
-      const trailing = buffer.trim();
-      if (trailing.startsWith('data: ')) {
-        const data = trailing.slice(6).trim();
-        if (data && data !== '[DONE]') {
-          handleDataPayload(data);
-        }
-      }
-
-      const resolvedToolCalls = [...toolCalls.values()];
-      return {
-        content: text,
-        toolCalls: resolvedToolCalls,
-        usage: {
-          inputTokens,
-          outputTokens,
-          ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
-        },
-        stopReason: mapStopReason(status, resolvedToolCalls),
-      };
     });
 }
 
 export class OpenAICodexProvider implements LLMProvider {
-  readonly name = 'openai-subscriber';
+  readonly name = OPENAI_CODEX_PROVIDER_NAME;
   readonly models: string[] = [];
 
   constructor(
@@ -370,7 +423,12 @@ export class OpenAICodexProvider implements LLMProvider {
   async chat(params: ChatRequest): Promise<ChatResponse> {
     const accessToken = await resolveSubscriptionAccessToken('openai', this.subscriptionManager);
     if (!accessToken) {
-      throw new ProviderError('No active OpenAI subscription token found. Run /subscription login openai start.', 401);
+      throw new ProviderError('No active OpenAI subscription token found. Run /subscription login openai start.', {
+        statusCode: 401,
+        provider: this.name,
+        operation: 'chat',
+        phase: 'auth',
+      });
     }
     return chatWithOpenAICodex(accessToken, params);
   }

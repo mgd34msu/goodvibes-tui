@@ -15,6 +15,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'T',
     category: 'ai',
     description: 'Stream model reasoning tokens in real-time with collapsible blocks per turn',
+    preload: true,
     factory: () => new ThinkingPanel(requireUiServices(deps).events.turns),
   });
 
@@ -24,6 +25,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'X',
     category: 'ai',
     description: 'Chronological tool call inspector with expandable args/results and filtering',
+    preload: true,
     factory: () => {
       const ui = requireUiServices(deps);
       return new ToolInspectorPanel(ui.events.tools, ui.events.turns);
@@ -36,6 +38,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'C',
     category: 'ai',
     description: 'Context window visualizer: stacked bar showing token usage per section',
+    preload: true,
     factory: () => new ContextVisualizerPanel(
       requireUiServices(deps).events.turns,
       deps.sessionMemoryStore,
@@ -51,6 +54,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'A',
     category: 'agent',
     description: 'View-only live session stream from running agents with per-agent switching',
+    preload: true,
     factory: () => {
       const ui = requireUiServices(deps);
       return new AgentLogsPanel(ui.events.agents, {
@@ -66,6 +70,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'W',
     category: 'agent',
     description: 'WRFC chain view: write, review, fix, and confirm cycle status',
+    preload: true,
     factory: () => {
       const ui = requireUiServices(deps);
       return new WrfcPanel(ui.events.workflows, { controller: ui.agents.wrfcController });

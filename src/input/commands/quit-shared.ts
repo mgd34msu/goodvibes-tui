@@ -2,6 +2,7 @@ import type { StatusResult } from 'simple-git';
 import { basename } from 'path';
 import type { CommandContext } from '../command-registry.ts';
 import { GitService } from '../../git/service.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 type GitLike = Pick<GitService, 'addAll' | 'status' | 'commit'>;
 
@@ -156,6 +157,6 @@ export async function executeWriteQuit(
     ctx.print(`[wq] Commit complete: ${shortHash} ${message}`);
     ctx.exit();
   } catch (error) {
-    ctx.print(`[wq] Commit failed: ${error instanceof Error ? error.message : String(error)}`);
+    ctx.print(`[wq] Commit failed: ${summarizeError(error)}`);
   }
 }

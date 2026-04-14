@@ -36,6 +36,7 @@ import {
 } from '../runtime/emitters/index.ts';
 import type { HookDispatcher } from '../hooks/index.ts';
 import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Shape of an agent_message_chunk session update that carries text content. */
 interface MessageChunkUpdate {
@@ -202,7 +203,7 @@ export class AcpConnection {
       this.emitTransportDisconnected('ACP session completed', false);
       return result;
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
+      const error = err instanceof Error ? err : new Error(summarizeError(err));
       this.info.status = 'error';
       if (this.runtimeBus) {
         emitAgentFailed(this.runtimeBus, this.emitterContext(), {
@@ -231,7 +232,7 @@ export class AcpConnection {
         await this.conn.cancel({ sessionId: this.sessionId });
       } catch (err) {
         // Best-effort — kill the child if cancel fails
-        logger.error('AcpConnection.cancel: failed to send cancel to subagent', { id: this.id, err: String(err) });
+        logger.error('AcpConnection.cancel: failed to send cancel to subagent', { id: this.id, err: summarizeError(err) });
       }
     }
     this.info.status = 'cancelled';
@@ -354,7 +355,7 @@ export class AcpConnection {
     try {
       this.childProcess?.kill();
     } catch (err) {
-      logger.error('AcpConnection.cleanup: failed to kill child process', { id: this.id, err: String(err) });
+      logger.error('AcpConnection.cleanup: failed to kill child process', { id: this.id, err: summarizeError(err) });
     }
     this.childProcess = null;
     this.conn = null;

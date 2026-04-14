@@ -5,6 +5,7 @@ import { FileUndoManager } from '../../state/file-undo.ts';
 import { logger } from '../../utils/logger.ts';
 import { resolveAndValidatePath } from '../../utils/path-safety.ts';
 import type { EditInput, JupyterNotebook, NotebookCell, NotebookOperation, NotebookOperationsInput, EditResult } from './types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function normalizeSource(source: string | string[]): string[] {
   if (Array.isArray(source)) return source;
@@ -68,7 +69,7 @@ export function readNotebookFile(
     }
     return { notebook: parsed, rawContent };
   } catch (err) {
-    return { error: `Failed to parse notebook JSON: ${err instanceof Error ? err.message : String(err)}` };
+    return { error: `Failed to parse notebook JSON: ${summarizeError(err)}` };
   }
 }
 
@@ -235,7 +236,7 @@ export function executeNotebookEdit(
   try {
     resolvedPath = resolveAndValidatePath(nbOps.path, env.cwd);
   } catch (err) {
-    return Promise.resolve({ success: false, error: `Path error: ${err instanceof Error ? err.message : String(err)}` });
+    return Promise.resolve({ success: false, error: `Path error: ${summarizeError(err)}` });
   }
 
   if (!isNotebookFile(resolvedPath)) {
@@ -262,7 +263,7 @@ export function executeNotebookEdit(
   try {
     writeFileSync(resolvedPath, newContent, 'utf-8');
   } catch (err) {
-    return Promise.resolve({ success: false, error: `Write failed for '${resolvedPath}': ${err instanceof Error ? err.message : String(err)}` });
+    return Promise.resolve({ success: false, error: `Write failed for '${resolvedPath}': ${summarizeError(err)}` });
   }
 
   env.fileCache.update(resolvedPath, newContent);

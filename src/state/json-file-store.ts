@@ -1,6 +1,7 @@
 import { promises as fs, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /**
  * JsonFileStore — generic JSON file persistence with atomic writes.
@@ -22,7 +23,7 @@ export class JsonFileStore<T> {
       const raw = await fs.readFile(this.filePath, 'utf-8');
       return JSON.parse(raw) as T;
     } catch (err) {
-      logger.debug('JsonFileStore: failed to load, starting fresh', { file: this.filePath, error: String(err) });
+      logger.debug('JsonFileStore: failed to load, starting fresh', { file: this.filePath, error: summarizeError(err) });
       return null;
     }
   }
@@ -36,7 +37,7 @@ export class JsonFileStore<T> {
       await fs.writeFile(tmpPath, content, 'utf-8');
       renameSync(tmpPath, this.filePath);
     } catch (err) {
-      logger.debug('JsonFileStore: save failed (non-fatal)', { file: this.filePath, error: String(err) });
+      logger.debug('JsonFileStore: save failed (non-fatal)', { file: this.filePath, error: summarizeError(err) });
     }
   }
 }

@@ -6,6 +6,7 @@ import type { IntegrationRecord } from './store/domains/integrations.ts';
 import { logger } from '../utils/logger.ts';
 import { loadSystemPrompt as _loadSystemPrompt } from '../utils/prompt-loader.ts';
 import { isAbsolute, resolve } from 'node:path';
+import { summarizeError } from '../utils/error-display.ts';
 
 function requireOwnedPromptRoot(path: string | null, name: 'workingDirectory' | 'homeDirectory'): string {
   const trimmed = path?.trim();
@@ -82,6 +83,6 @@ export function restoreSavedModel(
     runtime.model = key;
     runtime.provider = modelDef.provider;
   } catch (err) {
-    logger.debug('Model restore failed (non-fatal)', { error: String(err) });
+    logger.debug('Model restore failed (non-fatal)', { error: summarizeError(err) });
   }
 }

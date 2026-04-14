@@ -7,6 +7,7 @@ import type { MutableRuntimeState } from './context.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
 import type { ShellPathService } from './shell-paths.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 type BackgroundProviderRegistrationOptions = {
   configManager: ConfigManager;
@@ -43,7 +44,7 @@ export function startBackgroundProviderRegistration(
       requestRender();
     } catch (err) {
       logger.debug('[bootstrap] Non-fatal error during persisted provider registration', {
-        error: err instanceof Error ? err.message : String(err),
+        error: summarizeError(err),
       });
     }
   }
@@ -66,7 +67,7 @@ export function startBackgroundProviderRegistration(
         );
       } catch (err) {
         logger.debug('[bootstrap] Non-fatal error during scan provider registration', {
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
         });
       }
     }
@@ -93,7 +94,7 @@ export function startBackgroundProviderRegistration(
             runtime.provider = 'openrouter';
           } catch (err) {
             logger.debug('[bootstrap] Non-fatal error switching model after server removal', {
-              error: err instanceof Error ? err.message : String(err),
+              error: summarizeError(err),
             });
           }
           systemMessageRouter.high(
@@ -126,7 +127,7 @@ export function scheduleMcpAutodiscovery(options: McpAutodiscoveryOptions): void
   const { mcpRegistry, systemMessageRouter, requestRender, shellPaths } = options;
 
   mcpRegistry.connectAll(shellPaths).catch((err) => {
-    logger.debug('MCP auto-connect failed (non-fatal)', { error: String(err) });
+    logger.debug('MCP auto-connect failed (non-fatal)', { error: summarizeError(err) });
   });
 
   setTimeout(() => {
@@ -140,7 +141,7 @@ export function scheduleMcpAutodiscovery(options: McpAutodiscoveryOptions): void
       }
       requestRender();
     }).catch((err) => {
-      logger.debug('MCP auto-discovery scan failed (non-fatal)', { error: String(err) });
+      logger.debug('MCP auto-discovery scan failed (non-fatal)', { error: summarizeError(err) });
     });
   }, 2000);
 }

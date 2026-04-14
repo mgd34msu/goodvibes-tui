@@ -1,5 +1,6 @@
 import type { ToolDefinition } from '../types/tools.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Result of a tool call repair attempt. */
 export interface RepairResult {
@@ -122,7 +123,7 @@ export function repairToolCall(
     // Never let repair logic crash the caller
     logger.debug('repairToolCall: unexpected error (non-fatal)', {
       toolName,
-      error: String(err),
+      error: summarizeError(err),
     });
     return { repaired: false, original: args, fixed: args, repairs: [] };
   }

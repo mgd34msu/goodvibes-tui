@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { statSync } from 'node:fs';
 import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
 import { logger } from '../../utils/logger.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 /** Expected shape of a TypeScript hook module's default export */
 type TsHookHandler = (event: HookEvent) => Promise<HookResult> | HookResult;
@@ -42,7 +43,7 @@ export async function run(hook: HookDefinition, event: HookEvent, projectRoot: s
     const result = await handler(event);
     return result;
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     logger.error('ts hook error', { path, error: message });
     return { ok: false, error: message };
   }

@@ -12,6 +12,7 @@ import type { RuntimeEventDomain } from '../runtime/events/index.ts';
 import type { DistributedRuntimeManager } from '../runtime/remote/index.ts';
 import { extractForwardedClientIp } from '../runtime/network/index.ts';
 import { resolveGatewayPathTemplate } from './helpers.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   buildMissingScopeBody,
   resolveAuthenticatedPrincipal,
@@ -151,6 +152,8 @@ export class DaemonControlPlaneHelper {
     const scopes = new Set(this.context.gatewayMethods.getAllScopes({ includeWrite }));
     scopes.add('read:events');
     scopes.add('read:control-plane');
+    scopes.add('read:telemetry');
+    if (includeWrite) scopes.add('read:telemetry-sensitive');
     if (includeWrite) scopes.add('write:control-plane');
     return [...scopes].sort();
   }
@@ -485,7 +488,7 @@ export class DaemonControlPlaneHelper {
         return {
           status: 500,
           ok: false,
-          body: { error: error instanceof Error ? error.message : String(error) },
+          body: { error: summarizeError(error) },
         };
       }
     }

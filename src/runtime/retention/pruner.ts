@@ -13,6 +13,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { CheckpointRecord, PerClassPruneResult, PruneOptions, PruneResult, RetentionClass } from './types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // SnapshotPruner
@@ -168,5 +169,5 @@ function errorMessage(err: unknown): string {
   if (err instanceof Error) {
     return err.message;
   }
-  return String(err);
+  return summarizeError(err);
 }

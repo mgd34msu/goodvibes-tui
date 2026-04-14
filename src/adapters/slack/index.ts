@@ -1,6 +1,7 @@
 import { logger } from '../../utils/logger.ts';
 import { SlackIntegration } from '../../integrations/index.ts';
 import type { SurfaceAdapterContext } from '../types.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export async function handleSlackSurfaceWebhook(req: Request, context: SurfaceAdapterContext): Promise<Response> {
   const contentLength = parseInt(req.headers.get('content-length') ?? '0', 10);
@@ -186,7 +187,7 @@ export async function handleSlackSurfacePayload(
             }),
           }).catch((error: unknown) => {
             logger.warn('handleSlackSurfaceWebhook: follow-up post failed', {
-              error: error instanceof Error ? error.message : String(error),
+              error: summarizeError(error),
             });
           });
         }

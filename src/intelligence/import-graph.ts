@@ -14,6 +14,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,7 +111,7 @@ function collectSourceFiles(dir: string, results: string[] = []): string[] {
   try {
     entries = readdirSync(dir, { withFileTypes: true }) as unknown as Dirent[];
   } catch (err) {
-    logger.debug('[import-graph] Skipping unreadable directory', { dir, error: err instanceof Error ? err.message : String(err) });
+    logger.debug('[import-graph] Skipping unreadable directory', { dir, error: summarizeError(err) });
     return results;
   }
 
@@ -178,7 +179,7 @@ export class ImportGraph {
       try {
         content = readFileSync(filePath, 'utf-8');
       } catch (err) {
-        logger.debug('[import-graph] Skipping unreadable file', { file: filePath, error: err instanceof Error ? err.message : String(err) });
+        logger.debug('[import-graph] Skipping unreadable file', { file: filePath, error: summarizeError(err) });
         continue;
       }
 

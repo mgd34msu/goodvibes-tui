@@ -12,6 +12,7 @@ import type { ExecutionPlanManager } from './execution-plan.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitOpsContextWarning } from '../runtime/emitters/index.ts';
 import type { HookEvent, HookResult } from '../hooks/types.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 type HookDispatcherLike = {
   fire(event: HookEvent): Promise<HookResult>;
@@ -107,7 +108,7 @@ export async function checkContextWindowPreflight(
         timestamp: Date.now(),
         payload: { trigger: 'preflight', estimatedTokens, contextWindow },
       }).catch((err: unknown): HookResult => {
-        logger.debug('Pre:compact:preflight hook error', { error: String(err) });
+        logger.debug('Pre:compact:preflight hook error', { error: summarizeError(err) });
         return { ok: true };
       });
       if (preResult.decision === 'deny') {
@@ -142,7 +143,7 @@ export async function checkContextWindowPreflight(
           sessionId: deps.sessionId,
           timestamp: Date.now(),
           payload: { trigger: 'preflight', estimatedTokens, contextWindow },
-        }).catch((err: unknown) => { logger.debug('Post:compact:preflight hook error', { error: String(err) }); });
+        }).catch((err: unknown) => { logger.debug('Post:compact:preflight hook error', { error: summarizeError(err) }); });
       }
     } catch (compactErr) {
       const msg = compactErr instanceof Error ? compactErr.message : String(compactErr);
@@ -157,7 +158,7 @@ export async function checkContextWindowPreflight(
           sessionId: deps.sessionId,
           timestamp: Date.now(),
           payload: { trigger: 'preflight', estimatedTokens, contextWindow, error: msg },
-        }).catch((err: unknown) => { logger.debug('Fail:compact:preflight hook error', { error: String(err) }); });
+        }).catch((err: unknown) => { logger.debug('Fail:compact:preflight hook error', { error: summarizeError(err) }); });
       }
     } finally {
       deps.setIsCompacting(false);
@@ -294,7 +295,7 @@ export async function handlePostTurnContextMaintenance(
         timestamp: Date.now(),
         payload: { trigger: 'auto', usagePct, totalTokens, maxTokens },
       }).catch((err: unknown): HookResult => {
-        logger.debug('Pre:compact:auto hook error', { error: String(err) });
+        logger.debug('Pre:compact:auto hook error', { error: summarizeError(err) });
         return { ok: true };
       });
       if (preAutoResult.decision === 'deny') {
@@ -318,7 +319,7 @@ export async function handlePostTurnContextMaintenance(
           deps.requestRender();
         } catch (err: unknown) {
           deps.setIsCompacting(false);
-          const msg = err instanceof Error ? err.message : String(err);
+          const msg = summarizeError(err);
           logger.error('Orchestrator: small-window auto-compact failed', { error: msg });
           deps.conversation.addSystemMessage(`Auto-compact failed: ${msg}. Use /compact to retry manually.`);
           deps.requestRender();
@@ -358,11 +359,11 @@ export async function handlePostTurnContextMaintenance(
               sessionId: deps.sessionId,
               timestamp: Date.now(),
               payload: { trigger: 'auto', usagePct, totalTokens, maxTokens },
-            }).catch((err: unknown) => { logger.debug('Post:compact:auto hook error', { error: String(err) }); });
+            }).catch((err: unknown) => { logger.debug('Post:compact:auto hook error', { error: summarizeError(err) }); });
           }
         }).catch((err: unknown) => {
           deps.setIsCompacting(false);
-          const msg = err instanceof Error ? err.message : String(err);
+          const msg = summarizeError(err);
           logger.error('Orchestrator: auto-compact failed', { error: msg });
           deps.conversation.addSystemMessage(`Auto-compact failed: ${msg}. Use /compact to retry manually.`);
           deps.requestRender();
@@ -375,7 +376,7 @@ export async function handlePostTurnContextMaintenance(
               sessionId: deps.sessionId,
               timestamp: Date.now(),
               payload: { trigger: 'auto', usagePct, totalTokens, maxTokens, error: msg },
-            }).catch((err: unknown) => { logger.debug('Fail:compact:auto hook error', { error: String(err) }); });
+            }).catch((err: unknown) => { logger.debug('Fail:compact:auto hook error', { error: summarizeError(err) }); });
           }
         });
       }

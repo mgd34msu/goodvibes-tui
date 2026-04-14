@@ -1,6 +1,7 @@
 import type { Tool, ToolCall, ToolResult } from '../../../types/tools.ts';
 import type { ToolRuntimeContext } from '../context.ts';
 import type { ExecutorConfig, PhaseResult, ToolExecutionRecord } from '../types.ts';
+import { summarizeError } from '../../../utils/error-display.ts';
 
 /** Default per-call execution timeout (30 seconds). */
 const DEFAULT_EXECUTE_TIMEOUT_MS = 30_000;
@@ -56,7 +57,7 @@ export async function executePhase(
     };
   } catch (err) {
     clearTimeout(timer);
-    const message = err instanceof Error ? err.message : String(err);
+    const message = summarizeError(err);
     return {
       phase: 'executing',
       success: false,

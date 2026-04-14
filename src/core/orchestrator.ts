@@ -3,7 +3,7 @@ import type { ToolRegistry } from '../tools/registry.ts';
 import type { ToolCall, ToolResult } from '../types/tools.ts';
 import { PermissionError, ProviderError, ToolError, isNonTransientProviderFailure } from '../types/errors.ts';
 import type { HookEvent, HookResult } from '../hooks/types.ts';
-import { formatProviderError } from '../utils/error-display.ts';
+import { formatError, summarizeError } from '../utils/error-display.ts';
 import type { ModelDefinition } from '../providers/registry.ts';
 import type { ContentPart } from '../providers/interface.ts';
 import { notifyCompletion } from '../utils/notify.ts';
@@ -17,6 +17,10 @@ import { classifyIntent } from './intent-classifier.ts';
 import { estimateConversationTokens } from './context-compaction.ts';
 import { SessionLineageTracker } from './session-lineage.ts';
 import { EventReplayQueue } from './event-replay.ts';
+import {
+  type ConversationFollowUpItem,
+} from './conversation-follow-ups.ts';
+import { OrchestratorFollowUpRuntime } from './orchestrator-follow-up-runtime.ts';
 import type { SystemMessageRouter } from './system-message-router.ts';
 import { AgentManager } from '../tools/agent/index.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
@@ -158,6 +162,7 @@ export class Orchestrator {
   private _pendingToolCalls: ToolCall[] = [];
   private readonly requestRender: () => void;
   private systemMessageRouter: Pick<SystemMessageRouter, 'low'> | null = null;
+  private readonly followUpRuntime: OrchestratorFollowUpRuntime;
 
   constructor(
     private conversation: ConversationManager,
@@ -184,6 +189,29 @@ export class Orchestrator {
     this.runtimeBus = runtimeBus;
     this.agentManager = services.agentManager;
     this.wrfcController = services.wrfcController;
+    this.followUpRuntime = new OrchestratorFollowUpRuntime({
+      conversation: this.conversation,
+      getViewportHeight: () => this.getViewportHeight(),
+      scrollToEnd: (height) => this.scrollToEnd(height),
+      getSystemPrompt: () => this.getSystemPrompt(),
+      requestRender: () => this.requestRender(),
+      getThinkingState: () => ({ isThinking: this.isThinking, isCompacting: this.isCompacting }),
+      getQueuedUserMessageCount: () => this.messageQueue.length,
+      getProviderRegistry: () => requireProviderRegistry(this.coreServices),
+      getCurrentModel: () => requireProviderRegistry(this.coreServices).getCurrentModel(),
+      routeLowPriorityMessage: (message) => {
+        if (this.systemMessageRouter) this.systemMessageRouter.low(message);
+        else this.conversation.addSystemMessage(message);
+      },
+      applyUsage: (usage) => {
+        this.usage.input += usage.inputTokens;
+        this.usage.output += usage.outputTokens;
+        this.usage.cacheRead += usage.cacheReadTokens ?? 0;
+        this.usage.cacheWrite += usage.cacheWriteTokens ?? 0;
+        this.lastRequestInputTokens = usage.inputTokens;
+        this.lastInputTokens = usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
+      },
+    });
   }
 
   public setCoreServices(services: OrchestratorCoreServices): void {
@@ -271,6 +299,10 @@ export class Orchestrator {
     this.systemMessageRouter = router;
   }
 
+  public enqueueConversationFollowUp(item: ConversationFollowUpItem): void {
+    this.followUpRuntime.enqueue(item);
+  }
+
   /** Abort the current in-flight LLM request, if any. */
   public abort(): void {
     this.abortController?.abort();
@@ -327,6 +359,8 @@ export class Orchestrator {
       const next = this.messageQueue.shift()!;
       await this.runTurn(next.text, next.content);
     }
+
+    this.followUpRuntime.scheduleFlush();
   }
 
   private startThinking(estimatedInputTokens?: number): void {
@@ -512,8 +546,12 @@ export class Orchestrator {
         return;
       }
 
-      const error = err instanceof Error ? err : new Error(String(err));
-      const msg = error instanceof ProviderError ? formatProviderError(error) : `Error: ${error.message}`;
+      const error = err instanceof Error ? err : new Error(summarizeError(err));
+      const msg = formatError(error, {
+        ...(error instanceof ProviderError
+          ? { provider: providerRegistry.getCurrentModel().provider, source: 'provider' as const }
+          : {}),
+      });
       this.conversation.addSystemMessage(msg);
       this.requestRender();
       // Graceful degradation — suggest alternative when provider fails non-transiently
@@ -529,7 +567,7 @@ export class Orchestrator {
       if (this.runtimeBus) {
         emitTurnError(this.runtimeBus, createEmitterContext(this.sessionId, turnId), {
           turnId,
-          error: error.message,
+          error: summarizeError(error),
           stopReason: err instanceof ProviderError ? 'provider_error' : 'unexpected_error',
         });
       }
@@ -577,6 +615,7 @@ export class Orchestrator {
         }
         this.requestRender();
       }
+      this.followUpRuntime.scheduleFlush();
     }
   }
 

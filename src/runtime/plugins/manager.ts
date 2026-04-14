@@ -31,6 +31,7 @@ import { applyTransition, isOperational } from './lifecycle.ts';
 import { resolveCapabilityManifest } from './manifest.ts';
 import { PluginTrustStore, type PluginTrustTier } from './trust.ts';
 import { PluginQuarantineEngine } from './quarantine.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 import {
   emitPluginActive,
   emitPluginDegraded,
@@ -204,7 +205,7 @@ export class PluginLifecycleManager {
       logger.info(`[plugin-lifecycle] ${name}@${manifest.version}: active`);
       return true;
     } catch (err) {
-      const errorMsg = String(err);
+      const errorMsg = summarizeError(err);
       this.transition(name, 'error', errorMsg);
       this.updateRecord(name, { lastError: errorMsg, errorAt: Date.now() });
       this.emit({
@@ -467,7 +468,7 @@ export class PluginLifecycleManager {
           break;
       }
     } catch (err) {
-      logger.debug(`[plugin-lifecycle] runtime emit failed: ${String(err)}`);
+      logger.debug(`[plugin-lifecycle] runtime emit failed: ${summarizeError(err)}`);
     }
   }
 }

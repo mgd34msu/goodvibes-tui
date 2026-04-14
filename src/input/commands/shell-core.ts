@@ -4,6 +4,7 @@ import { EFFORT_DESCRIPTIONS } from '../../providers/effort-levels.ts';
 import { REASONING_BUDGET_MAP } from '../../providers/interface.ts';
 import { executeWriteQuit } from './quit-shared.ts';
 import { compactConversation, requireKeybindingsManager, requireProviderApi } from './runtime-services.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
@@ -35,7 +36,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           ctx.print(`Switched to model: ${selected.displayName} (${selected.providerId})`);
           void providerApi.recordModelUsage(selected.registryKey).catch(() => undefined);
         } catch (e) {
-          ctx.print(`Error: ${(e as Error).message}`);
+          ctx.print(`Error: ${summarizeError(e)}`);
         }
       }
     },

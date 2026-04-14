@@ -11,6 +11,7 @@
 import { appendFileSync, statSync, renameSync, writeFileSync, readFileSync, existsSync } from 'fs';
 import { logger } from '../../../utils/logger.ts';
 import type { ReadableSpan, SpanExporter } from '../types.ts';
+import { summarizeError } from '../../../utils/error-display.ts';
 
 /** Configuration for LocalLedgerExporter. */
 export interface LocalLedgerConfig {
@@ -105,7 +106,7 @@ export class LocalLedgerExporter implements SpanExporter {
         this._rotateIfNeeded();
         appendFileSync(this.filePath, lines, 'utf8');
       } catch (err) {
-        logger.debug(`[local-ledger] export failed: ${String(err)}`);
+        logger.debug(`[local-ledger] export failed: ${summarizeError(err)}`);
       }
     });
   }
@@ -131,7 +132,7 @@ export class LocalLedgerExporter implements SpanExporter {
       appendFileSync(this.ledgerFilePath, line, 'utf8');
     } catch (err) {
       // Non-fatal — ledger recording must not block the runtime.
-      logger.debug(`[local-ledger] ledger write failed: ${String(err)}`);
+      logger.debug(`[local-ledger] ledger write failed: ${summarizeError(err)}`);
     }
   }
 
@@ -152,7 +153,7 @@ export class LocalLedgerExporter implements SpanExporter {
     try {
       raw = readFileSync(this.ledgerFilePath, 'utf8');
     } catch (err) {
-      logger.debug(`[local-ledger] ledger read failed: ${String(err)}`);
+      logger.debug(`[local-ledger] ledger read failed: ${summarizeError(err)}`);
       return [];
     }
 
@@ -182,7 +183,7 @@ export class LocalLedgerExporter implements SpanExporter {
     try {
       raw = readFileSync(this.ledgerFilePath, 'utf8');
     } catch (err) {
-      logger.debug(`[local-ledger] ledger read failed: ${String(err)}`);
+      logger.debug(`[local-ledger] ledger read failed: ${summarizeError(err)}`);
       return [];
     }
 

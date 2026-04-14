@@ -8,6 +8,7 @@ import type { AutomationRun, AutomationRunContinuationMode } from './runs.ts';
 import type { AutomationSessionTarget } from './session-targets.ts';
 import type { AutomationRunTrigger } from './types.ts';
 import type { ConfigManager } from '../config/manager.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   buildAutomationExecutionIntent,
   buildAutomationExecutionContext,
@@ -175,7 +176,7 @@ export async function executeAutomationJob(
     context.emitRunStarted(updatedJob, runningRun);
     return runningRun;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = summarizeError(error);
     const failedRun: AutomationRun = {
       ...run,
       status: 'failed',

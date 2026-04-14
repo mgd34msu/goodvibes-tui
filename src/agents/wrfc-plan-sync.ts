@@ -1,5 +1,6 @@
 import type { ExecutionPlanManager } from '../core/execution-plan.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export function completePlanItemsForAgent(
   agentId: string,
@@ -20,7 +21,7 @@ export function completePlanItemsForAgent(
         planId: activePlan.id,
         itemId: item.id,
         agentId,
-        error: String(error),
+        error: summarizeError(error),
       });
     }
   }

@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { ModelDefinition, TokenLimits } from './registry.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 interface OpenRouterModelData {
   id: string;
@@ -58,7 +59,7 @@ function loadCachedLimits(cachePath: string): ModelLimitsCache | null {
     if (parsed.version !== 1) return null;
     return parsed;
   } catch (error) {
-    const message = String(error);
+    const message = summarizeError(error);
     if (message.includes('ENOENT') || message.includes('no such file')) {
       logger.debug('[model-limits] No cache file found (first run)');
     } else {
@@ -73,7 +74,7 @@ function saveCachedLimits(cache: ModelLimitsCache, cachePath: string): void {
     mkdirSync(dirname(cachePath), { recursive: true });
     writeFileSync(cachePath, JSON.stringify(cache, null, 2), 'utf-8');
   } catch (error) {
-    logger.debug('[model-limits] Cache write failed', { error: String(error) });
+    logger.debug('[model-limits] Cache write failed', { error: summarizeError(error) });
   }
 }
 
@@ -272,7 +273,7 @@ export class ModelLimitsService {
     this.cachedOrMap = this.cachedData ? buildOrMap(this.cachedData) : null;
     if (!this.cachedData || isCacheStale(this.cachedData)) {
       void this.refresh().catch((error) => {
-        logger.debug('[model-limits] Background refresh failed', { error: String(error) });
+        logger.debug('[model-limits] Background refresh failed', { error: summarizeError(error) });
       });
     }
   }

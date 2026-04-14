@@ -13,6 +13,7 @@ import { AutoHealer } from '../shared/auto-heal.ts';
 import { isNotebookFile } from '../../utils/notebook.ts';
 import { logger } from '../../utils/logger.ts';
 import type { SessionChangeTracker } from '../../sessions/change-tracker.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -112,7 +113,7 @@ function validateNotebookContent(
   try {
     parsed = JSON.parse(content);
   } catch (err) {
-    return { valid: false, error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}` };
+    return { valid: false, error: `Invalid JSON: ${summarizeError(err)}` };
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -196,7 +197,7 @@ function processSingleWrite(
   try {
     resolvedPath = resolveAndValidatePath(fileInput.path, projectRoot);
   } catch (err) {
-    return { ok: false, error: `Path error for '${fileInput.path}': ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, error: `Path error for '${fileInput.path}': ${summarizeError(err)}` };
   }
 
   const mode: WriteMode = fileInput.mode ?? 'fail_if_exists';
@@ -276,7 +277,7 @@ function processSingleWrite(
     } catch (err) {
       return {
         ok: false,
-        error: `Backup failed for '${fileInput.path}': ${err instanceof Error ? err.message : String(err)}`,
+        error: `Backup failed for '${fileInput.path}': ${summarizeError(err)}`,
       };
     }
   }
@@ -287,7 +288,7 @@ function processSingleWrite(
   } catch (err) {
     return {
       ok: false,
-      error: `Failed to create parent directories for '${fileInput.path}': ${err instanceof Error ? err.message : String(err)}`,
+      error: `Failed to create parent directories for '${fileInput.path}': ${summarizeError(err)}`,
     };
   }
 
@@ -297,7 +298,7 @@ function processSingleWrite(
   } catch (err) {
     return {
       ok: false,
-      error: `Write failed for '${fileInput.path}': ${err instanceof Error ? err.message : String(err)}`,
+      error: `Write failed for '${fileInput.path}': ${summarizeError(err)}`,
     };
   }
 
@@ -508,7 +509,7 @@ export function createWriteTool(options?: {
             } catch (err) {
               logger.debug('write tool: fileCache.update failed (non-fatal)', {
                 path: outcome.result.resolved_path,
-                error: String(err),
+                error: summarizeError(err),
               });
             }
           }
@@ -519,7 +520,7 @@ export function createWriteTool(options?: {
             } catch (err) {
               logger.debug('write tool: projectIndex.upsertFile failed (non-fatal)', {
                 path: outcome.result.resolved_path,
-                error: String(err),
+                error: summarizeError(err),
               });
             }
           }
@@ -536,7 +537,7 @@ export function createWriteTool(options?: {
             } catch (err) {
               logger.debug('write tool: fileUndoManager.snapshot failed (non-fatal)', {
                 path: outcome.result.resolved_path,
-                error: String(err),
+                error: summarizeError(err),
               });
             }
           }

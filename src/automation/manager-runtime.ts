@@ -68,6 +68,7 @@ import {
   syncAutomationRuntimeSnapshot,
 } from './manager-runtime-sync.ts';
 import { reconcileAutomationActiveRuns } from './manager-runtime-reconcile.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   createAutomationJobRecord,
   toggleAutomationJobEnabled,
@@ -340,7 +341,7 @@ export class AutomationManager {
       } catch (error) {
         failed.push({
           jobId: wake.jobId,
-          error: error instanceof Error ? error.message : String(error),
+          error: summarizeError(error),
         });
       }
     }

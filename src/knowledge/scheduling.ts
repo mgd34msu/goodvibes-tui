@@ -3,6 +3,7 @@ import type { KnowledgeStore } from './store.ts';
 import type { KnowledgeJobMode, KnowledgeJobRecord, KnowledgeJobRunRecord, KnowledgeScheduleRecord } from './types.ts';
 import { emitKnowledgeJobCompleted, emitKnowledgeJobFailed, emitKnowledgeJobQueued, emitKnowledgeJobStarted } from '../runtime/emitters/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface KnowledgeSchedulingContext {
   readonly store: KnowledgeStore;
@@ -268,7 +269,7 @@ export class KnowledgeScheduleService {
         requestedAt: run.requestedAt,
         startedAt,
         completedAt,
-        error: error instanceof Error ? error.message : String(error),
+        error: summarizeError(error),
       });
       this.context.emitIfReady((bus, ctx) => emitKnowledgeJobFailed(bus, ctx, {
         jobId: job.id,

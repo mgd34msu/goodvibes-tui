@@ -1,4 +1,5 @@
 import { DEFAULT_MEMORY_EMBEDDING_DIMS } from './memory-embeddings.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import type {
   MemoryEmbeddingProvider,
   MemoryEmbeddingProviderState,
@@ -553,7 +554,7 @@ async function readJsonResponse(response: Response, endpoint: string, providerId
   try {
     return JSON.parse(text);
   } catch (error) {
-    throw new Error(`${providerId} embeddings request to ${endpoint} returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(`${providerId} embeddings request to ${endpoint} returned invalid JSON: ${summarizeError(error)}`);
   }
 }
 

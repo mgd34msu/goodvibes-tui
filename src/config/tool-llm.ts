@@ -18,6 +18,7 @@ import type { ConfigManager } from './manager.ts';
 import type { LLMProvider } from '../providers/interface.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Resolved provider + model pair for tool-internal LLM calls. */
 export interface ResolvedToolLLM {
@@ -55,7 +56,7 @@ export function resolveToolLLM(deps: ToolLLMDeps): ResolvedToolLLM | null {
     const provider = deps.providerRegistry.getForModel(currentDef.id, currentDef.provider);
     return { provider, modelId: currentDef.id };
   } catch (err) {
-    logger.debug('resolveToolLLM: failed to resolve provider/model', { error: String(err) });
+    logger.debug('resolveToolLLM: failed to resolve provider/model', { error: summarizeError(err) });
     return null;
   }
 }
@@ -102,7 +103,7 @@ export class ToolLLM {
 
       return response.content ?? '';
     } catch (err) {
-      logger.debug('ToolLLM.chat: request failed (non-fatal)', { error: String(err) });
+      logger.debug('ToolLLM.chat: request failed (non-fatal)', { error: summarizeError(err) });
       return '';
     }
   }

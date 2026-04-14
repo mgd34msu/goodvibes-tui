@@ -21,6 +21,7 @@ import type { ConfigManager } from './manager.ts';
 import type { LLMProvider } from '../providers/interface.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 /** Tasks that can be routed to a helper model. */
 export type HelperTask =
@@ -128,7 +129,7 @@ export class HelperRouter {
       const mainProvider = this.deps.providerRegistry.getForModel(currentModel.id, currentModel.provider);
       return { provider: mainProvider, modelId: currentModel.id, isHelper: false };
     } catch (err) {
-      logger.debug('HelperRouter.resolve: failed', { task: _task, error: String(err) });
+      logger.debug('HelperRouter.resolve: failed', { task: _task, error: summarizeError(err) });
       return null;
     }
   }
@@ -176,7 +177,7 @@ export class HelperModel {
         this._usage.calls += 1;
         return response.content ?? '';
       } catch (err) {
-        logger.debug('HelperModel.chat: main model fallback failed (non-fatal)', { task, error: String(err) });
+        logger.debug('HelperModel.chat: main model fallback failed (non-fatal)', { task, error: summarizeError(err) });
         return '';
       }
     }
@@ -215,7 +216,7 @@ export class HelperModel {
 
       return response.content ?? '';
     } catch (err) {
-      logger.debug('HelperModel.chat: request failed (non-fatal)', { task, error: String(err) });
+      logger.debug('HelperModel.chat: request failed (non-fatal)', { task, error: summarizeError(err) });
       return '';
     }
   }

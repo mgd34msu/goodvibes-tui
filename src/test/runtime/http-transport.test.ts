@@ -111,6 +111,11 @@ describe('HttpTransport', () => {
     });
     expect(session.id).toBe('http-transport-session');
     expect((await transport.operator.sessions.list()).some((entry) => entry.id === session.id)).toBe(true);
+    const currentAuth = await transport.operator.controlPlane.currentAuth();
+    expect(currentAuth.authenticated).toBe(true);
+    expect(currentAuth.authMode).toBe('shared-token');
+    expect(currentAuth.scopes).toContain('read:control-plane');
+    expect(currentAuth.scopes).toContain('read:telemetry');
 
     const providers = await transport.operator.providers.snapshot();
     expect(providers.providerIds.length).toBeGreaterThanOrEqual(0);
@@ -136,9 +141,19 @@ describe('HttpTransport', () => {
     expect(invoked.work.id).toBeTruthy();
 
     const seen: Array<{ type: string; agentId: string }> = [];
+    const streamedTelemetry: string[] = [];
+    let telemetryReady = false;
     const unsubscribe = transport.operator.events.agents.on('AGENT_SPAWNING', (event: Extract<AgentEvent, { type: 'AGENT_SPAWNING' }>) => {
       seen.push({ type: event.type, agentId: event.agentId });
     });
+    const stopTelemetry = await transport.operator.telemetry.stream({
+      onReady: () => {
+        telemetryReady = true;
+      },
+      onRecord: (record) => {
+        streamedTelemetry.push(record.type);
+      },
+    }, { limit: 10 });
     const task = await transport.operator.tasks.submit({ task: 'cancel me over http transport' });
     expect(task.agentId ?? '').toBeTruthy();
     const taskRecord = await waitFor(async () => {
@@ -148,14 +163,26 @@ describe('HttpTransport', () => {
     expect(taskRecord).toBeTruthy();
     try {
       await waitFor(() => seen[0]);
+      await waitFor(() => telemetryReady ? streamedTelemetry[0] : null);
       await transport.operator.tasks.cancel(taskRecord!.id);
     } finally {
       unsubscribe();
+      stopTelemetry();
     }
 
     expect(seen[0]).toBeDefined();
     expect(seen[0]!.type).toBe('AGENT_SPAWNING');
     expect(seen[0]!.agentId).toBe(task.agentId ?? '');
+    expect(streamedTelemetry.length).toBeGreaterThan(0);
+    const telemetrySnapshot = await transport.operator.telemetry.snapshot(10);
+    expect(telemetrySnapshot.capabilities.signals.events).toBe(true);
+    const telemetryEvents = await transport.operator.telemetry.events(10);
+    expect(telemetryEvents.items.length).toBeGreaterThan(0);
+    expect(telemetryEvents.view).toBe('safe');
+    const telemetryMetrics = await transport.operator.telemetry.metrics();
+    expect(telemetryMetrics.aggregates.totalEvents).toBeGreaterThan(0);
+    const telemetryLogs = await transport.operator.telemetry.otlpLogs({ limit: 5, view: 'safe' });
+    expect(Array.isArray((telemetryLogs as { resourceLogs?: unknown[] }).resourceLogs)).toBe(true);
     const snapshot = await transport.snapshot();
     expect(snapshot.kind).toBe('http');
     expect(snapshot.operator.sessions.some((entry: { readonly id: string }) => entry.id === session.id)).toBe(true);

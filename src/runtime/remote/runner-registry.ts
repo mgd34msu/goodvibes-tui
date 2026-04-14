@@ -15,6 +15,7 @@ import type {
   RemoteSessionBundle,
 } from './types.ts';
 import type { RuntimeTask } from '../store/domains/tasks.ts';
+import { summarizeError } from '../../utils/error-display.ts';
 
 const DEFAULT_ARTIFACT_DIR = '.goodvibes/remote-artifacts';
 const DEFAULT_SESSION_BUNDLE_DIR = '.goodvibes/remote-sessions';
@@ -431,7 +432,7 @@ export async function importRemoteArtifact(
   try {
     return await registry.importArtifact(path);
   } catch (error) {
-    logger.debug('RemoteRunnerRegistry.importArtifact failed', { path, error: String(error) });
+    logger.debug('RemoteRunnerRegistry.importArtifact failed', { path, error: summarizeError(error) });
     throw error;
   }
 }

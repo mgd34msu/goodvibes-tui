@@ -35,4 +35,10 @@ export interface Panel {
 export interface PanelRegistration extends Pick<Panel, 'id' | 'name' | 'icon' | 'category'> {
   factory: () => Panel;
   description: string;
+  /**
+   * Instantiate this panel during bootstrap and retain the instance when it is
+   * closed so its background data continues to accumulate before the user
+   * actively opens the workspace.
+   */
+  preload?: boolean;
 }

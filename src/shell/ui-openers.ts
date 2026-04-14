@@ -116,7 +116,19 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     if (!panelManager.isVisible()) {
       if (panelManager.getAllOpen().length === 0) {
         try {
-          panelManager.open('docs');
+          panelManager.open('panel-list');
+        } catch {
+          // non-fatal
+        }
+      }
+      panelManager.show();
+      input.panelFocused = true;
+      conversation.setSplashSuppressed(true);
+      conversation.rebuildHistory();
+    } else if (!input.panelFocused) {
+      if (panelManager.getAllOpen().length === 0) {
+        try {
+          panelManager.open('panel-list');
         } catch {
           // non-fatal
         }

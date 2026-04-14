@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   collectMarkdownReferences,
   extractMarkdownPreview,
@@ -294,7 +295,7 @@ export class ArchetypeLoader {
       } catch (err) {
         logger.error('ArchetypeLoader: failed to parse agent file', {
           file,
-          error: err instanceof Error ? err.message : String(err),
+          error: summarizeError(err),
         });
       }
     }

@@ -20,6 +20,12 @@ export type ChatResponseWithReasoning = Awaited<ReturnType<LLMProvider['chat']>>
   reasoningSummary?: string;
 };
 
+const PROJECT_PRIMING_SIGNALS = new Set([
+  'parallelism_keywords',
+  'multi_sentence_actions',
+  'spec_plan_reference',
+]);
+
 export function maybeEmitAdaptivePlannerDecision(
   text: string,
   flagEnabled: boolean,
@@ -86,7 +92,11 @@ export function prepareConversationForTurn(
   const activePlan = planManager?.getActive(sessionId) ?? null;
   if (!activePlan) {
     const classification = classifyIntent(text);
-    if (classification.intent === 'project' && classification.confidence > 0.5) {
+    const hasProjectPrimingSignal = classification.signals.some((signal) => PROJECT_PRIMING_SIGNALS.has(signal));
+    const shouldPrimeProjectMode = classification.intent === 'project'
+      && classification.confidence > 0.5
+      && hasProjectPrimingSignal;
+    if (shouldPrimeProjectMode) {
       conversation.addSystemMessage(
         '[Project mode] This looks like a multi-step project task. ' +
         'Before executing, write a brief spec (goals, constraints, non-goals) ' +

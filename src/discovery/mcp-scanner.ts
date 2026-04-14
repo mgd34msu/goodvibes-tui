@@ -16,6 +16,7 @@ import { join } from 'path';
 import { logger } from '../utils/logger.ts';
 import type { McpServerConfig } from '../mcp/config.ts';
 import type { ShellPathService } from '../runtime/shell-paths.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface McpDiscoveryResult {
   /** Suggested server configs not currently registered */
@@ -118,7 +119,7 @@ function scanProjectMcpDir(roots: McpDiscoveryRoots, knownNames: Set<string>): M
       }
     }
   } catch (err) {
-    logger.debug('[mcp-scanner] Failed to read project .mcp/ directory', { error: String(err) });
+    logger.debug('[mcp-scanner] Failed to read project .mcp/ directory', { error: summarizeError(err) });
   }
 
   return suggestions;
@@ -167,7 +168,7 @@ function scanGoodvibesMcpDir(roots: McpDiscoveryRoots, knownNames: Set<string>):
       }
     }
   } catch (err) {
-    logger.debug('[mcp-scanner] Failed to read ~/.goodvibes/tui/mcp/', { error: String(err) });
+    logger.debug('[mcp-scanner] Failed to read ~/.goodvibes/tui/mcp/', { error: summarizeError(err) });
   }
 
   return suggestions;

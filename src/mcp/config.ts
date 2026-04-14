@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../utils/logger.ts';
 import type { ShellPathService } from '../runtime/shell-paths.ts';
+import { summarizeError } from '../utils/error-display.ts';
 
 export interface McpServerConfig {
   /** Unique server name, used as namespace prefix: mcp:<name>:<tool> */
@@ -88,7 +89,7 @@ export function loadMcpConfig(roots: McpConfigRoots): McpConfig {
         }
       }
     } catch (err) {
-      logger.warn(`[MCP] Failed to read ${path}`, { error: String(err) });
+      logger.warn(`[MCP] Failed to read ${path}`, { error: summarizeError(err) });
     }
   }
 

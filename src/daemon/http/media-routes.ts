@@ -8,6 +8,7 @@ import type { VoiceAudioArtifact, VoiceService } from '../../voice/index.ts';
 import type { WebSearchSafeSearch, WebSearchService, WebSearchTimeRange, WebSearchVerbosity } from '../../web-search/index.ts';
 import type { FetchExtractMode } from '../../tools/fetch/schema.ts';
 import { resolvePrivateHostFetchOptions } from '../http-policy.ts';
+import { jsonErrorResponse } from './error-response.ts';
 
 type JsonBody = Record<string, unknown>;
 
@@ -99,7 +100,7 @@ async function handleVoiceTts(context: DaemonMediaRouteContext, req: Request): P
     );
     return Response.json(result);
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    return jsonErrorResponse(error, { status: 404 });
   }
 }
 
@@ -122,7 +123,7 @@ async function handleVoiceStt(context: DaemonMediaRouteContext, req: Request): P
     );
     return Response.json(result);
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    return jsonErrorResponse(error, { status: 404 });
   }
 }
 
@@ -143,7 +144,7 @@ async function handleVoiceRealtimeSession(context: DaemonMediaRouteContext, req:
     );
     return Response.json(result, { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    return jsonErrorResponse(error, { status: 404 });
   }
 }
 
@@ -196,7 +197,7 @@ async function handleArtifactCreate(context: DaemonMediaRouteContext, req: Reque
     });
     return Response.json({ artifact }, { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -214,7 +215,7 @@ async function handleArtifactContent(context: DaemonMediaRouteContext, artifactI
     }
     return new Response(new Uint8Array(buffer), { status: 200, headers });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 404 });
+    return jsonErrorResponse(error, { status: 404 });
   }
 }
 
@@ -238,7 +239,7 @@ async function handleWebSearch(context: DaemonMediaRouteContext, req: Request): 
       ...(typeof body.evidenceExtract === 'string' ? { evidenceExtract: body.evidenceExtract as FetchExtractMode } : {}),
     }));
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -335,7 +336,7 @@ async function handleMultimodalAnalyze(context: DaemonMediaRouteContext, req: Re
       ...(writebackResult ? { writeback: writebackResult } : {}),
     }, { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }
 
@@ -375,6 +376,6 @@ async function handleMultimodalWriteback(context: DaemonMediaRouteContext, req: 
     );
     return Response.json({ writeback }, { status: 201 });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 400 });
+    return jsonErrorResponse(error, { status: 400 });
   }
 }

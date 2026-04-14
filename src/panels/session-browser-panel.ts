@@ -18,6 +18,7 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
+import { summarizeError } from '../utils/error-display.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -329,7 +330,7 @@ export class SessionBrowserPanel extends BasePanel {
       this.loadError = '';
       this.markDirty();
     } catch (e) {
-      logger.debug('SessionBrowserPanel._load failed', { error: String(e) });
+      logger.debug('SessionBrowserPanel._load failed', { error: summarizeError(e) });
       this.loadError = 'Failed to load sessions';
       this.markDirty();
     }
@@ -345,7 +346,7 @@ export class SessionBrowserPanel extends BasePanel {
         const names = new Set(results.map(r => r.session.name));
         this.filtered = this.sessions.filter(s => names.has(s.name));
       } catch (e) {
-        logger.debug('SessionBrowserPanel._filter search failed, falling back', { error: String(e) });
+        logger.debug('SessionBrowserPanel._filter search failed, falling back', { error: summarizeError(e) });
         this.filtered = this.sessions.filter(s =>
           (s.title || '').toLowerCase().includes(q) ||
           (s.model || '').toLowerCase().includes(q) ||
@@ -390,7 +391,7 @@ export class SessionBrowserPanel extends BasePanel {
       this.deleteError = '';
       this._load();
     } catch (e) {
-      logger.debug('SessionBrowserPanel._deleteConfirmed failed', { error: String(e) });
+      logger.debug('SessionBrowserPanel._deleteConfirmed failed', { error: summarizeError(e) });
       this.deleteError = `Delete failed: ${name}`;
     }
     this.markDirty();
