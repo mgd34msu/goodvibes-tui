@@ -14,13 +14,14 @@ import type { DistributedNodeHostContract, DistributedPendingWork, DistributedPe
 import type { ControlPlaneClientRecord } from '../store/domains/control-plane.ts';
 import type { UiLocalAuthSnapshot, UiSessionSnapshot, UiTasksSnapshot, UiControlPlaneSnapshot } from '../ui-read-models.ts';
 import type { UiRuntimeEvents } from '../ui-events.ts';
-import type { TransportPaths } from './shared.ts';
+import { createClientTransport } from './client-transport.ts';
+import { createHttpJsonTransport } from './http-json-transport.ts';
+import type { TransportPaths } from './transport-paths.ts';
 import {
   createEventSourceConnector,
-  createTransportPaths,
-  createRemoteUiRuntimeEvents,
   requestJson,
 } from './shared.ts';
+import { createRemoteUiRuntimeEvents } from './ui-runtime-events.ts';
 import {
   appendTelemetryQuery,
   buildSessionEnsureBody,
@@ -33,7 +34,6 @@ import {
   createJsonRequestInit,
   isRecord,
   maybeList,
-  normalizeBaseUrl,
   normalizeTelemetryQuery,
   readArrayResponse,
   readControlPlaneSnapshot,
@@ -453,23 +453,20 @@ function createPeerClient(
 }
 
 export function createHttpTransport(options: HttpTransportOptions): HttpTransport {
-  const baseUrl = normalizeBaseUrl(options.baseUrl);
-  const fetchImpl = createFetch(options.fetchImpl);
-  const paths = createTransportPaths(baseUrl);
-  const events = createRemoteUiRuntimeEvents(createEventSourceConnector(baseUrl, options.authToken, fetchImpl));
+  const httpClient = createHttpJsonTransport({
+    baseUrl: options.baseUrl,
+    authToken: options.authToken,
+    fetchImpl: options.fetchImpl,
+  });
+  const fetchImpl = httpClient.fetchImpl;
+  const paths = httpClient.paths;
+  const events = createRemoteUiRuntimeEvents(createEventSourceConnector(httpClient.baseUrl, options.authToken, fetchImpl));
   const operator = createOperatorClient(paths, options.authToken, fetchImpl, events);
   const peer = createPeerClient(paths, options.authToken, fetchImpl);
+  const transport = createClientTransport('http', operator, peer);
 
   return Object.freeze({
-    kind: 'http' as const,
-    operator,
-    peer,
-    getOperatorClient(): HttpTransportOperatorClient {
-      return operator;
-    },
-    getPeerClient(): HttpTransportPeerClient {
-      return peer;
-    },
+    ...transport,
     async snapshot(): Promise<HttpTransportSnapshot> {
       const [currentSession, tasks, approvals, sessions, controlPlane, providers, remoteSnapshot, nodeHostContract, peerSnapshot] = await Promise.all([
         operator.sessions.current(),

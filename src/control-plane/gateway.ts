@@ -102,11 +102,11 @@ interface LiveControlPlaneClient {
     | 'msteams'
     | 'bluebubbles'
     | 'mattermost'
-    | 'matrix'
-    | 'daemon';
+      | 'matrix'
+      | 'daemon';
   readonly surfaceId?: string;
   readonly routeId?: string;
-  readonly send: (event: string, payload: unknown) => void;
+  readonly send: (event: string, payload: unknown, id?: string) => void;
 }
 
 interface WebSocketControlPlaneClient {
@@ -231,14 +231,14 @@ export class ControlPlaneGateway {
     if (this.recentMessages.length > 200) {
       this.recentMessages.length = 200;
     }
+    const record = this.rememberEvent('surface-message', message);
     for (const client of this.liveClients.values()) {
       if (client.kind !== 'web') continue;
       if (message.clientId && client.clientId !== message.clientId) continue;
       if (message.routeId && client.routeId && client.routeId !== message.routeId) continue;
       if (message.surfaceId && client.surfaceId && client.surfaceId !== message.surfaceId) continue;
-      client.send('surface-message', message);
+      client.send('surface-message', message, record.id);
     }
-    this.rememberEvent('surface-message', message);
     return message;
   }
 
@@ -248,13 +248,13 @@ export class ControlPlaneGateway {
     readonly routeId?: string;
     readonly surfaceId?: string;
   }): void {
-    this.rememberEvent(event, payload);
+    const record = this.rememberEvent(event, payload);
     for (const client of this.liveClients.values()) {
       if (filter?.clientKind && client.kind !== filter.clientKind) continue;
       if (filter?.clientId && client.clientId !== filter.clientId) continue;
       if (filter?.routeId && client.routeId && client.routeId !== filter.routeId) continue;
       if (filter?.surfaceId && client.surfaceId && client.surfaceId !== filter.surfaceId) continue;
-      client.send(event, payload);
+      client.send(event, payload, record.id);
     }
   }
 
@@ -301,7 +301,7 @@ export class ControlPlaneGateway {
 
   openWebSocketClient(
     options: ControlPlaneEventStreamOptions,
-    send: (event: string, payload: unknown) => void,
+    send: (event: string, payload: unknown, id?: string) => void,
   ): { clientId: string; domains: readonly RuntimeEventDomain[] } {
     if (!this.runtimeBus) {
       throw new Error('Runtime event bus unavailable');
@@ -450,8 +450,8 @@ export class ControlPlaneGateway {
       const unsubscribe = this.runtimeBus.onDomain(domain, (envelope) => {
         this.touchWebSocketClient(clientId, { lastEventType: envelope.type });
         const serialized = serializeEnvelope(envelope);
-        this.rememberEvent(domain, serialized);
-        liveClient.send(domain, serialized);
+        const record = this.rememberEvent(domain, serialized);
+        liveClient.send(domain, serialized, record.id);
       });
       wsClient.unsubscribers.set(domain, unsubscribe);
       wsClient.domains.add(domain);
@@ -513,12 +513,16 @@ export class ControlPlaneGateway {
     }, 'control-plane.gateway.ws-disconnect');
   }
 
-  private replayRecentTraffic(send: (event: string, payload: unknown) => void): void {
-    for (const recentEvent of this.listRecentEvents(20).reverse()) {
-      send(recentEvent.event, recentEvent.payload);
-    }
-    for (const message of this.listSurfaceMessages(20).reverse()) {
-      send('surface-message', message);
+  private replayRecentTraffic(
+    send: (event: string, payload: unknown, id?: string) => void,
+    sinceId?: string,
+  ): void {
+    const sinceIndex = sinceId ? this.recentEvents.findIndex((event) => event.id === sinceId) : -1;
+    const recentEvents = sinceIndex >= 0
+      ? this.recentEvents.slice(0, sinceIndex).reverse()
+      : this.listRecentEvents(20).reverse();
+    for (const recentEvent of recentEvents) {
+      send(recentEvent.event, recentEvent.payload, recentEvent.id);
     }
   }
 
@@ -529,6 +533,7 @@ export class ControlPlaneGateway {
 
     const encoder = new TextEncoder();
     const selectedDomains = options.domains?.length ? [...options.domains] : [...DEFAULT_DOMAINS];
+    const lastEventId = request.headers.get('last-event-id')?.trim() || undefined;
     const clientId = options.clientId ?? `cp-${randomUUID().slice(0, 8)}`;
     const label = options.label ?? `${options.clientKind ?? 'web'}:${clientId}`;
     const now = Date.now();
@@ -596,8 +601,8 @@ export class ControlPlaneGateway {
     let teardown = (): void => {};
     const stream = new ReadableStream<Uint8Array>({
       start: (controller) => {
-        const send = (event: string, payload: unknown): void => {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
+        const send = (event: string, payload: unknown, id?: string): void => {
+          controller.enqueue(encoder.encode(`${id ? `id: ${id}\n` : ''}event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`));
         };
         const unsubs = selectedDomains.map((domain) => this.runtimeBus!.onDomain(domain, (envelope) => {
           const updated: ControlPlaneClientRecord = {
@@ -611,8 +616,8 @@ export class ControlPlaneGateway {
           this.clients.set(clientId, updated);
           this.dispatch?.syncControlPlaneClient(updated, 'control-plane.gateway.heartbeat');
           const serialized = serializeEnvelope(envelope);
-          this.rememberEvent(domain, serialized);
-          send(domain, serialized);
+          const record = this.rememberEvent(domain, serialized);
+          send(domain, serialized, record.id);
         }));
         this.liveClients.set(clientId, {
           clientId,
@@ -666,12 +671,7 @@ export class ControlPlaneGateway {
           controller.close();
         }, { once: true });
         send('ready', { clientId, domains: selectedDomains });
-        for (const recentEvent of this.listRecentEvents(20).reverse()) {
-          send(recentEvent.event, recentEvent.payload);
-        }
-        for (const message of this.listSurfaceMessages(20).reverse()) {
-          send('surface-message', message);
-        }
+        this.replayRecentTraffic(send, lastEventId);
       },
       cancel: () => {
         teardown();
@@ -691,7 +691,7 @@ export class ControlPlaneGateway {
     return renderControlPlaneGatewayWebUi(authTokenHint);
   }
 
-  private rememberEvent(event: string, payload: unknown): void {
+  private rememberEvent(event: string, payload: unknown): ControlPlaneRecentEvent {
     const record: ControlPlaneRecentEvent = {
       id: `cpe-${randomUUID().slice(0, 8)}`,
       event,
@@ -708,5 +708,6 @@ export class ControlPlaneGateway {
       lastRequestAt: this.lastRequestAt,
       lastEventAt: record.createdAt,
     }, 'control-plane.gateway.event');
+    return record;
   }
 }

@@ -30,6 +30,7 @@ export type { TransportEvent, TransportEventType } from './transport.ts';
 export type { CompactionEvent, CompactionEventType } from './compaction.ts';
 export type { UIEvent, UIEventType } from './ui.ts';
 export type { OpsEvent, OpsEventType } from './ops.ts';
+export { RUNTIME_EVENT_DOMAINS, isRuntimeEventDomain } from './domain-map.ts';
 export type { AnyRuntimeEvent, RuntimeEventPayload, RuntimeEventDomain, DomainEventMap } from './domain-map.ts';
 export type { AutomationEvent, AutomationEventType, AutomationScheduleKind, AutomationExecutionMode, AutomationRunOutcome } from './automation.ts';
 export { AUTOMATION_SCHEDULE_KINDS, AUTOMATION_RUN_OUTCOMES } from './automation.ts';

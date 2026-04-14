@@ -1,8 +1,22 @@
 import type { AutomationExternalContentSource, AutomationWakeMode } from '../automation/index.ts';
 import type { AutomationExecutionPolicy } from '../automation/index.ts';
-import type { ChannelAccountLifecycleAction, ChannelConversationKind } from '../channels/index.ts';
+import {
+  isJsonRecord,
+  missingScopes,
+  readChannelConversationKind,
+  readChannelLifecycleAction,
+  scopeMatches,
+  type JsonRecord,
+} from './http/route-helpers.ts';
 
-export type JsonRecord = Record<string, unknown>;
+export type { ChannelConversationKind, ChannelLifecycleAction, JsonRecord } from './http/route-helpers.ts';
+export {
+  isJsonRecord,
+  missingScopes,
+  readChannelConversationKind,
+  readChannelLifecycleAction,
+  scopeMatches,
+} from './http/route-helpers.ts';
 
 export function readStringList(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {
@@ -14,23 +28,6 @@ export function readStringList(value: unknown): string[] | undefined {
     return value.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
   }
   return undefined;
-}
-
-export function isJsonRecord(value: unknown): value is JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export function scopeMatches(granted: string, required: string): boolean {
-  if (granted === '*' || granted === required) return true;
-  if (granted.endsWith(':*')) {
-    return required.startsWith(granted.slice(0, -1));
-  }
-  return false;
-}
-
-export function missingScopes(grantedScopes: readonly string[] | undefined, requiredScopes: readonly string[]): string[] {
-  const granted = grantedScopes ?? [];
-  return requiredScopes.filter((required) => !granted.some((entry) => scopeMatches(entry, required)));
 }
 
 export function resolveGatewayPathTemplate(
@@ -74,25 +71,4 @@ export function readExternalContentSource(value: unknown): AutomationExternalCon
     return value as AutomationExternalContentSource;
   }
   return undefined;
-}
-
-export function readChannelLifecycleAction(value: unknown): ChannelAccountLifecycleAction | null {
-  return value === 'inspect'
-    || value === 'setup'
-    || value === 'retest'
-    || value === 'connect'
-    || value === 'disconnect'
-    || value === 'start'
-    || value === 'stop'
-    || value === 'login'
-    || value === 'logout'
-    || value === 'wait_login'
-    ? value
-    : null;
-}
-
-export function readChannelConversationKind(value: unknown): ChannelConversationKind | null {
-  return value === 'direct' || value === 'group' || value === 'channel' || value === 'thread' || value === 'service'
-    ? value
-    : null;
 }

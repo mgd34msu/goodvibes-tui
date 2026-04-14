@@ -1,46 +1,18 @@
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import type { JsonRecord } from '../helpers.ts';
-import { inspectInboundTls, inspectOutboundTls } from '../../runtime/network/index.ts';
-import { isValidConfigKey } from '../../config/schema.ts';
-import type { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
+import type { JsonRecord } from './route-helpers.ts';
 import { jsonErrorResponse } from './error-response.ts';
-
-interface SystemRouteContext {
-  readonly approvalBroker: import('../../control-plane/index.ts').ApprovalBroker;
-  readonly configManager: import('../../config/manager.ts').ConfigManager;
-  readonly integrationHelpers: IntegrationHelperService | null;
-  readonly parseJsonBody: (req: Request) => Promise<JsonRecord | Response>;
-  readonly parseOptionalJsonBody: (req: Request) => Promise<JsonRecord | null | Response>;
-  readonly platformServiceManager: import('../service-manager.ts').PlatformServiceManager;
-  readonly recordApiResponse: (
-    req: Request,
-    path: string,
-    response: Response,
-    clientKind?:
-      | 'web'
-      | 'slack'
-      | 'discord'
-      | 'ntfy'
-      | 'webhook'
-      | 'telegram'
-      | 'google-chat'
-      | 'signal'
-      | 'whatsapp'
-      | 'imessage'
-      | 'msteams'
-      | 'bluebubbles'
-      | 'mattermost'
-      | 'matrix'
-      | 'daemon',
-  ) => Response;
-  readonly requireAdmin: (req: Request) => Response | null;
-  readonly requireAuthenticatedSession: (req: Request) => { username: string; roles: readonly string[] } | null;
-  readonly routeBindings: import('../../channels/index.ts').RouteBindingManager;
-  readonly watcherRegistry: import('../../watchers/index.ts').WatcherRegistry;
-}
+import type {
+  AutomationDeliveryGuarantee,
+  AutomationRouteBindingKind,
+  AutomationSessionPolicy,
+  AutomationSurfaceKind,
+  AutomationThreadPolicy,
+  DaemonSystemRouteContext,
+  WatcherKind,
+} from './system-route-types.ts';
 
 export function createDaemonSystemRouteHandlers(
-  context: SystemRouteContext,
+  context: DaemonSystemRouteContext,
   request: Request,
 ): Pick<
   DaemonApiRouteHandlers,
@@ -92,9 +64,9 @@ export function createDaemonSystemRouteHandlers(
     getServiceStatus: () => Response.json({
       ...context.platformServiceManager.status(),
       network: {
-        controlPlane: inspectInboundTls(context.configManager, 'controlPlane'),
-        httpListener: inspectInboundTls(context.configManager, 'httpListener'),
-        outbound: inspectOutboundTls(context.configManager),
+        controlPlane: context.inspectInboundTls('controlPlane'),
+        httpListener: context.inspectInboundTls('httpListener'),
+        outbound: context.inspectOutboundTls(),
       },
     }),
     installService: () => {
@@ -137,13 +109,13 @@ export function createDaemonSystemRouteHandlers(
       }
       const binding = await context.routeBindings.upsertBinding({
         id: typeof body.id === 'string' ? body.id : undefined,
-        kind: kind as import('../../automation/routes.ts').AutomationRouteBinding['kind'],
-        surfaceKind: surfaceKind as import('../../automation/types.ts').AutomationSurfaceKind,
+        kind: kind as AutomationRouteBindingKind,
+        surfaceKind: surfaceKind as AutomationSurfaceKind,
         surfaceId,
         externalId,
-        sessionPolicy: typeof body.sessionPolicy === 'string' ? body.sessionPolicy as import('../../automation/types.ts').AutomationSessionPolicy : undefined,
-        threadPolicy: typeof body.threadPolicy === 'string' ? body.threadPolicy as import('../../automation/types.ts').AutomationThreadPolicy : undefined,
-        deliveryGuarantee: typeof body.deliveryGuarantee === 'string' ? body.deliveryGuarantee as import('../../automation/types.ts').AutomationDeliveryGuarantee : undefined,
+        sessionPolicy: typeof body.sessionPolicy === 'string' ? body.sessionPolicy as AutomationSessionPolicy : undefined,
+        threadPolicy: typeof body.threadPolicy === 'string' ? body.threadPolicy as AutomationThreadPolicy : undefined,
+        deliveryGuarantee: typeof body.deliveryGuarantee === 'string' ? body.deliveryGuarantee as AutomationDeliveryGuarantee : undefined,
         threadId: typeof body.threadId === 'string' ? body.threadId : undefined,
         channelId: typeof body.channelId === 'string' ? body.channelId : undefined,
         sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
@@ -160,9 +132,9 @@ export function createDaemonSystemRouteHandlers(
       const body = await context.parseJsonBody(req);
       if (body instanceof Response) return body;
       const updated = await context.routeBindings.patchBinding(bindingId, {
-        ...(body.sessionPolicy !== undefined ? { sessionPolicy: typeof body.sessionPolicy === 'string' ? body.sessionPolicy as import('../../automation/types.ts').AutomationSessionPolicy : undefined } : {}),
-        ...(body.threadPolicy !== undefined ? { threadPolicy: typeof body.threadPolicy === 'string' ? body.threadPolicy as import('../../automation/types.ts').AutomationThreadPolicy : undefined } : {}),
-        ...(body.deliveryGuarantee !== undefined ? { deliveryGuarantee: typeof body.deliveryGuarantee === 'string' ? body.deliveryGuarantee as import('../../automation/types.ts').AutomationDeliveryGuarantee : undefined } : {}),
+        ...(body.sessionPolicy !== undefined ? { sessionPolicy: typeof body.sessionPolicy === 'string' ? body.sessionPolicy as AutomationSessionPolicy : undefined } : {}),
+        ...(body.threadPolicy !== undefined ? { threadPolicy: typeof body.threadPolicy === 'string' ? body.threadPolicy as AutomationThreadPolicy : undefined } : {}),
+        ...(body.deliveryGuarantee !== undefined ? { deliveryGuarantee: typeof body.deliveryGuarantee === 'string' ? body.deliveryGuarantee as AutomationDeliveryGuarantee : undefined } : {}),
         ...(body.threadId !== undefined ? { threadId: typeof body.threadId === 'string' ? body.threadId : undefined } : {}),
         ...(body.channelId !== undefined ? { channelId: typeof body.channelId === 'string' ? body.channelId : undefined } : {}),
         ...(body.sessionId !== undefined ? { sessionId: body.sessionId === null ? null : typeof body.sessionId === 'string' ? body.sessionId : undefined } : {}),
@@ -204,7 +176,7 @@ export function createDaemonSystemRouteHandlers(
       if (!key || typeof key !== 'string') {
         return Response.json({ error: 'Missing or invalid key' }, { status: 400 });
       }
-      if (!isValidConfigKey(key)) {
+      if (!context.isValidConfigKey(key)) {
         return Response.json({ error: 'Invalid config key' }, { status: 400 });
       }
       try {
@@ -217,7 +189,7 @@ export function createDaemonSystemRouteHandlers(
   };
 }
 
-async function handleRegisterWatcher(context: SystemRouteContext, req: Request): Promise<Response> {
+async function handleRegisterWatcher(context: DaemonSystemRouteContext, req: Request): Promise<Response> {
   const body = await context.parseJsonBody(req);
   if (body instanceof Response) return body;
   const label = typeof body.label === 'string' && body.label.trim().length > 0 ? body.label.trim() : '';
@@ -227,7 +199,7 @@ async function handleRegisterWatcher(context: SystemRouteContext, req: Request):
       ? `watcher-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`
       : `watcher-${Date.now()}`;
   const kind = typeof body.kind === 'string'
-    ? body.kind as import('../../runtime/store/domains/watchers.ts').WatcherKind
+    ? body.kind as WatcherKind
     : typeof body.sourceKind === 'string'
       ? body.sourceKind === 'webhook'
         ? 'webhook'
@@ -281,7 +253,7 @@ async function handleRegisterWatcher(context: SystemRouteContext, req: Request):
   return Response.json(record, { status: 201 });
 }
 
-async function handleUpdateWatcher(context: SystemRouteContext, watcherId: string, req: Request): Promise<Response> {
+async function handleUpdateWatcher(context: DaemonSystemRouteContext, watcherId: string, req: Request): Promise<Response> {
   const body = await context.parseJsonBody(req);
   if (body instanceof Response) return body;
   const current = context.watcherRegistry.getWatcher(watcherId);
@@ -299,7 +271,7 @@ async function handleUpdateWatcher(context: SystemRouteContext, watcherId: strin
     id: watcherId,
     label: typeof body.label === 'string' ? body.label : current.label,
     kind: typeof body.kind === 'string'
-      ? body.kind as import('../../runtime/store/domains/watchers.ts').WatcherKind
+      ? body.kind as WatcherKind
       : current.kind,
     source: {
       ...current.source,
@@ -320,14 +292,14 @@ async function handleUpdateWatcher(context: SystemRouteContext, watcherId: strin
       },
       updatedAt: Date.now(),
     },
-    intervalMs: typeof body.intervalMs === 'number' ? body.intervalMs : current.intervalMs,
+    intervalMs: typeof body.intervalMs === 'number' ? body.intervalMs : (current.intervalMs ?? 60_000),
     metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : current.metadata,
   });
   return Response.json(updated);
 }
 
 async function handleWatcherAction(
-  context: SystemRouteContext,
+  context: DaemonSystemRouteContext,
   watcherId: string,
   action: 'start' | 'stop' | 'run',
 ): Promise<Response> {
@@ -350,7 +322,7 @@ async function handleWatcherAction(
 }
 
 async function handleApprovalAction(
-  context: SystemRouteContext,
+  context: DaemonSystemRouteContext,
   approvalId: string,
   action: 'claim' | 'approve' | 'deny' | 'cancel',
   req: Request,

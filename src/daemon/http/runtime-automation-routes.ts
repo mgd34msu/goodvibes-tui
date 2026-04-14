@@ -1,8 +1,3 @@
-import {
-  normalizeAtSchedule,
-  normalizeCronSchedule,
-  normalizeEverySchedule,
-} from '../../automation/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
 import type { DaemonRuntimeRouteContext } from './runtime-route-types.ts';
 import { jsonErrorResponse } from './error-response.ts';
@@ -75,10 +70,10 @@ async function handlePostSchedule(context: DaemonRuntimeRouteContext, req: Reque
       ? fallbackModelsSource.filter((value): value is string => typeof value === 'string')
       : undefined;
     const schedule = kind === 'every'
-      ? normalizeEverySchedule(every ?? '')
+      ? context.normalizeEverySchedule(every ?? '')
       : kind === 'at'
-        ? normalizeAtSchedule(typeof at === 'number' ? at : Date.parse(String(at)))
-        : normalizeCronSchedule(cron ?? '', timezone, body.staggerMs ?? body.stagger);
+        ? context.normalizeAtSchedule(typeof at === 'number' ? at : Date.parse(String(at)))
+        : context.normalizeCronSchedule(cron ?? '', timezone, body.staggerMs ?? body.stagger);
     const job = await context.automationManager.createJob({
       name: typeof body.name === 'string' ? body.name : prompt.slice(0, 40),
       prompt,

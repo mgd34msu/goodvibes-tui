@@ -1,27 +1,20 @@
-import type { ConfigManager } from '../../config/manager.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import type { ArtifactStore } from '../../artifacts/index.ts';
-import type { ArtifactKind } from '../../artifacts/index.ts';
-import type { MediaArtifact, MediaProviderRegistry } from '../../media/index.ts';
-import type { MultimodalAnalysisRequest, MultimodalAnalysisResult, MultimodalDetail, MultimodalService } from '../../multimodal/index.ts';
-import type { VoiceAudioArtifact, VoiceService } from '../../voice/index.ts';
-import type { WebSearchSafeSearch, WebSearchService, WebSearchTimeRange, WebSearchVerbosity } from '../../web-search/index.ts';
-import type { FetchExtractMode } from '../../tools/fetch/schema.ts';
 import { resolvePrivateHostFetchOptions } from '../http-policy.ts';
 import { jsonErrorResponse } from './error-response.ts';
+import type {
+  ArtifactKind,
+  DaemonMediaRouteContext,
+  FetchExtractMode,
+  MediaArtifact,
+  MultimodalAnalysisResult,
+  MultimodalDetail,
+  VoiceAudioArtifact,
+  WebSearchSafeSearch,
+  WebSearchTimeRange,
+  WebSearchVerbosity,
+} from './media-route-types.ts';
 
 type JsonBody = Record<string, unknown>;
-
-interface DaemonMediaRouteContext {
-  readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
-  readonly voiceService: VoiceService;
-  readonly configManager: ConfigManager;
-  readonly requireAdmin: (req: Request) => Response | null;
-  readonly webSearchService: WebSearchService;
-  readonly artifactStore: ArtifactStore;
-  readonly mediaProviders: MediaProviderRegistry;
-  readonly multimodalService: MultimodalService;
-}
 
 export function createDaemonMediaRouteHandlers(
   context: DaemonMediaRouteContext,
@@ -204,16 +197,17 @@ async function handleArtifactCreate(context: DaemonMediaRouteContext, req: Reque
 async function handleArtifactContent(context: DaemonMediaRouteContext, artifactId: string, req: Request): Promise<Response> {
   try {
     const { record, buffer } = await context.artifactStore.readContent(artifactId);
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
     const headers = new Headers({
       'Content-Type': record.mimeType,
-      'Content-Length': String(buffer.length),
+      'Content-Length': String(bytes.byteLength),
       'Cache-Control': 'private, max-age=60',
     });
     const download = new URL(req.url).searchParams.get('download');
     if (record.filename && download !== '0') {
       headers.set('Content-Disposition', `attachment; filename="${record.filename.replace(/"/g, '\\"')}"`);
     }
-    return new Response(new Uint8Array(buffer), { status: 200, headers });
+    return new Response(bytes as BodyInit, { status: 200, headers });
   } catch (error) {
     return jsonErrorResponse(error, { status: 404 });
   }
@@ -298,7 +292,7 @@ async function handleMultimodalAnalyze(context: DaemonMediaRouteContext, req: Re
       ...(typeof body.artifactId === 'string' ? { artifactId: body.artifactId } : {}),
       ...(requestedArtifact ? {
         artifact: {
-          ...(requestedArtifact as MultimodalAnalysisRequest['artifact']),
+          ...requestedArtifact,
           ...privateHostFetchOptions,
         },
       } : {}),

@@ -75,35 +75,47 @@ export type RuntimeEventPayload<T extends AnyRuntimeEvent['type']> = Extract<
 >;
 
 /**
+ * Domain labels for use with domain-scoped subscriptions.
+ *
+ * This is the source-of-truth vocabulary for runtime transport/event surfaces.
+ */
+export const RUNTIME_EVENT_DOMAINS = [
+  'session',
+  'turn',
+  'providers',
+  'tools',
+  'tasks',
+  'agents',
+  'workflows',
+  'orchestration',
+  'communication',
+  'planner',
+  'permissions',
+  'plugins',
+  'mcp',
+  'transport',
+  'compaction',
+  'ui',
+  'ops',
+  'forensics',
+  'security',
+  'automation',
+  'routes',
+  'control-plane',
+  'deliveries',
+  'watchers',
+  'surfaces',
+  'knowledge',
+] as const;
+
+/**
  * Domain label type for use with domain-scoped subscriptions.
  */
-export type RuntimeEventDomain =
-  | 'session'
-  | 'turn'
-  | 'providers'
-  | 'tools'
-  | 'tasks'
-  | 'agents'
-  | 'workflows'
-  | 'orchestration'
-  | 'communication'
-  | 'planner'
-  | 'permissions'
-  | 'plugins'
-  | 'mcp'
-  | 'transport'
-  | 'compaction'
-  | 'ui'
-  | 'ops'
-  | 'forensics'
-  | 'security'
-  | 'automation'
-  | 'routes'
-  | 'control-plane'
-  | 'deliveries'
-  | 'watchers'
-  | 'surfaces'
-  | 'knowledge';
+export type RuntimeEventDomain = typeof RUNTIME_EVENT_DOMAINS[number];
+
+export function isRuntimeEventDomain(value: string): value is RuntimeEventDomain {
+  return (RUNTIME_EVENT_DOMAINS as readonly string[]).includes(value);
+}
 
 /** Map from domain label to its event union type. */
 export type DomainEventMap = {

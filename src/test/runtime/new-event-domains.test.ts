@@ -17,11 +17,46 @@ import {
 import {
   CONTROL_PLANE_CLIENT_KINDS,
   CONTROL_PLANE_TRANSPORT_KINDS,
+  RUNTIME_EVENT_DOMAINS,
   ROUTE_SURFACE_KINDS,
   SURFACE_KINDS,
+  isRuntimeEventDomain,
 } from '../../runtime/events/index.ts';
 
 describe('new runtime event domains', () => {
+  test('exports the canonical runtime domain vocabulary', () => {
+    expect([...RUNTIME_EVENT_DOMAINS]).toEqual([
+      'session',
+      'turn',
+      'providers',
+      'tools',
+      'tasks',
+      'agents',
+      'workflows',
+      'orchestration',
+      'communication',
+      'planner',
+      'permissions',
+      'plugins',
+      'mcp',
+      'transport',
+      'compaction',
+      'ui',
+      'ops',
+      'forensics',
+      'security',
+      'automation',
+      'routes',
+      'control-plane',
+      'deliveries',
+      'watchers',
+      'surfaces',
+      'knowledge',
+    ]);
+    expect(isRuntimeEventDomain('agents')).toBe(true);
+    expect(isRuntimeEventDomain('not-a-domain')).toBe(false);
+  });
+
   test('registers and validates the new event contracts', () => {
     const samples = [
       { type: 'AUTOMATION_JOB_CREATED', jobId: 'job-1', name: 'nightly', scheduleKind: 'cron', enabled: true },

@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "0.18.2"
+    "version": "0.18.3"
   },
   "auth": {
     "modes": [
@@ -35940,6 +35940,68 @@
                       },
                       "requiredScope": {
                         "type": "string"
+                      },
+                      "inputSchema": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": {
+                                "$ref": "$.operator.methods[144].outputSchema.properties.contract.properties.endpoints.items.properties.inputSchema.additionalProperties"
+                              }
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "$ref": "$.operator.methods[144].outputSchema.properties.contract.properties.endpoints.items.properties.inputSchema.additionalProperties"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "outputSchema": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "object",
+                              "additionalProperties": {
+                                "$ref": "$.operator.methods[144].outputSchema.properties.contract.properties.endpoints.items.properties.outputSchema.additionalProperties"
+                              }
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "$ref": "$.operator.methods[144].outputSchema.properties.contract.properties.endpoints.items.properties.outputSchema.additionalProperties"
+                              }
+                            }
+                          ]
+                        }
                       }
                     },
                     "required": [

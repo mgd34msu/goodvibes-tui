@@ -13,6 +13,7 @@ import {
   CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
   CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
 } from './operator-contract-schemas.ts';
+import type { OperatorContractManifest } from '../types/foundation-contract.ts';
 import { VERSION } from '../version.ts';
 import { OPERATOR_SESSION_COOKIE_NAME } from '../security/http-auth.ts';
 
@@ -26,78 +27,7 @@ const OPERATOR_AUTH_CURRENT_ALIAS_PATHS = ['/api/control-plane/whoami'];
 const PEER_CONTRACT_PATH = '/api/remote/node-host/contract';
 const PEER_CONTRACT_ALIAS_PATHS = ['/api/remote/device/contract'];
 
-export interface OperatorContractManifest {
-  readonly version: number;
-  readonly product: {
-    readonly id: string;
-    readonly surface: string;
-    readonly version: string;
-  };
-  readonly auth: {
-    readonly modes: readonly string[];
-    readonly login: {
-      readonly method: string;
-      readonly path: string;
-      readonly requestSchema: Record<string, unknown>;
-      readonly responseSchema: Record<string, unknown>;
-    };
-    readonly current: {
-      readonly method: string;
-      readonly path: string;
-      readonly aliasPaths: readonly string[];
-      readonly responseSchema: Record<string, unknown>;
-    };
-    readonly sessionCookie: {
-      readonly name: string;
-      readonly httpOnly: boolean;
-      readonly sameSite: string;
-      readonly path: string;
-    };
-    readonly bearer: {
-      readonly header: string;
-      readonly queryParameters: readonly string[];
-    };
-  };
-  readonly transports: {
-    readonly http: {
-      readonly statusPath: string;
-      readonly methodsPath: string;
-      readonly eventsCatalogPath: string;
-    };
-    readonly sse: {
-      readonly path: string;
-      readonly query: {
-        readonly domains: string;
-      };
-    };
-    readonly websocket: {
-      readonly path: string;
-      readonly clientFrames: readonly { readonly type: string; readonly fields?: readonly string[] }[];
-      readonly serverFrames: readonly { readonly type: string; readonly fields?: readonly string[] }[];
-    };
-  };
-  readonly operator: {
-    readonly methods: readonly GatewayMethodDescriptor[];
-    readonly events: readonly GatewayEventDescriptor[];
-    readonly schemaCoverage: {
-      readonly methods: number;
-      readonly typedInputs: number;
-      readonly genericInputs: number;
-      readonly typedOutputs: number;
-      readonly genericOutputs: number;
-    };
-    readonly eventCoverage: {
-      readonly events: number;
-      readonly withDomains: number;
-      readonly withWireEvents: number;
-    };
-  };
-  readonly peer: {
-    readonly contractPath: string;
-    readonly aliasPaths: readonly string[];
-    readonly relationship: string;
-  };
-}
+export type { OperatorContractManifest } from '../types/foundation-contract.ts';
 
 interface OperatorSchemaCoverage {
   readonly methods: number;

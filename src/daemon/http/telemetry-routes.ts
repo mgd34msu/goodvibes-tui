@@ -1,14 +1,47 @@
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import { AppError } from '../../types/errors.ts';
-import { buildMissingScopeBody, resolveAuthenticatedPrincipal, type AuthenticatedPrincipal } from '../http-policy.ts';
-import type { RuntimeEventDomain } from '../../runtime/events/index.ts';
-import type { TelemetryApiService, TelemetryFilter, TelemetrySeverity, TelemetryViewMode } from '../../runtime/telemetry/api.ts';
-import { jsonErrorResponse } from './error-response.ts';
+import { buildMissingScopeBody, type AuthenticatedPrincipal } from '../http-policy.ts';
+import type { RuntimeEventDomain } from '../../types/foundation-contract.ts';
+
+type TelemetrySeverity = 'debug' | 'info' | 'warn' | 'error';
+type TelemetryViewMode = 'safe' | 'raw';
+
+interface TelemetryFilter {
+  readonly limit?: number;
+  readonly since?: number;
+  readonly until?: number;
+  readonly domains?: readonly RuntimeEventDomain[];
+  readonly eventTypes?: readonly string[];
+  readonly severity?: TelemetrySeverity;
+  readonly traceId?: string;
+  readonly sessionId?: string;
+  readonly turnId?: string;
+  readonly agentId?: string;
+  readonly taskId?: string;
+  readonly cursor?: string;
+  readonly view?: TelemetryViewMode;
+}
+
+interface TelemetryApiLike {
+  getSnapshot(filter: TelemetryFilter, view: TelemetryViewMode, rawAccessible: boolean): {
+    readonly generatedAt: number;
+    readonly view: TelemetryViewMode;
+    readonly rawAccessible: boolean;
+    readonly runtime: unknown;
+    readonly sessionMetrics: unknown;
+    readonly aggregates: unknown;
+  };
+  listEventPage(filter: TelemetryFilter, view: TelemetryViewMode, rawAccessible: boolean): unknown;
+  listErrorPage(filter: TelemetryFilter, view: TelemetryViewMode, rawAccessible: boolean): unknown;
+  listSpanPage(filter: TelemetryFilter, view: TelemetryViewMode, rawAccessible: boolean): unknown;
+  createStream(req: Request, filter: TelemetryFilter, view: TelemetryViewMode, rawAccessible: boolean): Response;
+  buildOtlpTraceDocument(filter: TelemetryFilter, view: TelemetryViewMode): unknown;
+  buildOtlpLogDocument(filter: TelemetryFilter, view: TelemetryViewMode): unknown;
+  buildOtlpMetricDocument(): unknown;
+}
 
 interface TelemetryRouteContext {
-  readonly telemetryApi: TelemetryApiService | null;
-  readonly extractAuthToken: (req: Request) => string;
-  readonly describeAuthenticatedPrincipal: (token: string) => AuthenticatedPrincipal | null;
+  readonly telemetryApi: TelemetryApiLike | null;
+  readonly resolveAuthenticatedPrincipal: (req: Request) => AuthenticatedPrincipal | null;
 }
 
 function parseNumber(value: string | null): number | undefined {
@@ -55,25 +88,27 @@ function buildFilter(url: URL): TelemetryFilter {
 }
 
 function unavailable(): Response {
-  return jsonErrorResponse(
-    new AppError('Telemetry API unavailable', 'TELEMETRY_UNAVAILABLE', true, {
-      category: 'service',
-      source: 'runtime',
-      guidance: 'Start the daemon runtime and ensure the runtime store is available before reading telemetry.',
-    }),
-    { status: 503 },
-  );
+  return Response.json({
+    error: 'Telemetry API unavailable',
+    code: 'TELEMETRY_UNAVAILABLE',
+    category: 'service',
+    source: 'runtime',
+    recoverable: true,
+    hint: 'Start the daemon runtime and ensure the runtime store is available before reading telemetry.',
+    status: 503,
+  }, { status: 503 });
 }
 
 function invalidCursor(error: unknown): Response {
-  return jsonErrorResponse(
-    new AppError(error instanceof Error ? error.message : 'Invalid telemetry cursor', 'INVALID_CURSOR', false, {
-      category: 'bad_request',
-      source: 'runtime',
-      guidance: 'Use the nextCursor returned by the previous telemetry page, or omit cursor to start from the newest records.',
-    }),
-    { status: 400 },
-  );
+  return Response.json({
+    error: error instanceof Error ? error.message : 'Invalid telemetry cursor',
+    code: 'INVALID_CURSOR',
+    category: 'bad_request',
+    source: 'runtime',
+    recoverable: false,
+    hint: 'Use the nextCursor returned by the previous telemetry page, or omit cursor to start from the newest records.',
+    status: 400,
+  }, { status: 400 });
 }
 
 function authenticateTelemetryRequest(
@@ -81,41 +116,44 @@ function authenticateTelemetryRequest(
   req: Request,
   requestedView: TelemetryViewMode,
 ): { principal: AuthenticatedPrincipal; view: TelemetryViewMode; rawAccessible: boolean } | Response {
-  const principal = resolveAuthenticatedPrincipal(req, context);
+  const principal = context.resolveAuthenticatedPrincipal(req);
   if (!principal) {
-    return jsonErrorResponse(
-      new AppError('Authentication required for telemetry access', 'AUTH_REQUIRED', false, {
-        category: 'authentication',
-        source: 'runtime',
-        guidance: 'Authenticate with the operator shared token or an authenticated user session before calling telemetry APIs.',
-      }),
-      { status: 401 },
-    );
+    return Response.json({
+      error: 'Authentication required for telemetry access',
+      code: 'AUTH_REQUIRED',
+      category: 'authentication',
+      source: 'runtime',
+      recoverable: false,
+      hint: 'Authenticate with the operator shared token or an authenticated user session before calling telemetry APIs.',
+      status: 401,
+    }, { status: 401 });
   }
 
   const missingRead = buildMissingScopeBody('telemetry access', ['read:telemetry'], principal.scopes);
   if (missingRead) {
-    return jsonErrorResponse(
-      new AppError(missingRead.error, 'MISSING_SCOPE', false, {
-        category: 'authorization',
-        source: 'permission',
-        detail: JSON.stringify(missingRead),
-        guidance: 'Use a token or session with the read:telemetry scope, or elevate to an admin/shared-token session.',
-      }),
-      { status: 403 },
-    );
+    return Response.json({
+      error: missingRead.error,
+      code: 'MISSING_SCOPE',
+      category: 'authorization',
+      source: 'permission',
+      recoverable: false,
+      hint: 'Use a token or session with the read:telemetry scope, or elevate to an admin/shared-token session.',
+      status: 403,
+      detail: JSON.stringify(missingRead),
+    }, { status: 403 });
   }
 
   const rawAccessible = principal.admin || principal.scopes.includes('read:telemetry-sensitive');
   if (requestedView === 'raw' && !rawAccessible) {
-    return jsonErrorResponse(
-      new AppError('Raw telemetry view requires elevated telemetry scope', 'MISSING_SCOPE', false, {
-        category: 'authorization',
-        source: 'permission',
-        guidance: 'Use an admin/shared-token session or a token granted read:telemetry-sensitive to access raw telemetry payloads.',
-      }),
-      { status: 403 },
-    );
+    return Response.json({
+      error: 'Raw telemetry view requires elevated telemetry scope',
+      code: 'MISSING_SCOPE',
+      category: 'authorization',
+      source: 'permission',
+      recoverable: false,
+      hint: 'Use an admin/shared-token session or a token granted read:telemetry-sensitive to access raw telemetry payloads.',
+      status: 403,
+    }, { status: 403 });
   }
 
   return {
@@ -137,7 +175,7 @@ export function createDaemonTelemetryRouteHandlers(
   | 'createTelemetryEventStream'
   | 'getTelemetryOtlpTraces'
   | 'getTelemetryOtlpLogs'
-  | 'getTelemetryOtlpMetrics'
+      | 'getTelemetryOtlpMetrics'
 > {
   return {
     getTelemetrySnapshot: (req) => {

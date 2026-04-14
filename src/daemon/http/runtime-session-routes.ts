@@ -1,5 +1,11 @@
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import type { DaemonRuntimeRouteContext, JsonBody } from './runtime-route-types.ts';
+import type {
+  AutomationSurfaceKind,
+  DaemonRuntimeRouteContext,
+  ExecutionIntent,
+  JsonBody,
+  SharedSessionRoutingIntent,
+} from './runtime-route-types.ts';
 
 type SharedSessionSubmission = Awaited<ReturnType<DaemonRuntimeRouteContext['sessionBroker']['submitMessage']>>;
 type SharedSessionSteerSubmission = Awaited<ReturnType<DaemonRuntimeRouteContext['sessionBroker']['steerMessage']>>;
@@ -57,7 +63,7 @@ async function handleCreateSharedSession(context: DaemonRuntimeRouteContext, req
     routeBinding,
     participant: typeof body.surfaceKind === 'string' && typeof body.surfaceId === 'string'
       ? {
-          surfaceKind: body.surfaceKind as import('../../automation/types.ts').AutomationSurfaceKind,
+          surfaceKind: body.surfaceKind as AutomationSurfaceKind,
           surfaceId: body.surfaceId,
           externalId: typeof body.externalId === 'string' ? body.externalId : undefined,
           userId: typeof body.userId === 'string' ? body.userId : undefined,
@@ -84,7 +90,7 @@ async function handlePostTask(context: DaemonRuntimeRouteContext, req: Request):
     const submission = await context.sessionBroker.submitMessage({
       sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
       routeId: typeof body.routeId === 'string' ? body.routeId : undefined,
-      surfaceKind: typeof body.surfaceKind === 'string' ? body.surfaceKind as import('../../automation/types.ts').AutomationSurfaceKind : 'web',
+      surfaceKind: typeof body.surfaceKind === 'string' ? body.surfaceKind as AutomationSurfaceKind : 'web',
       surfaceId: typeof body.surfaceId === 'string' ? body.surfaceId : 'surface:web',
       externalId: typeof body.externalId === 'string' ? body.externalId : undefined,
       threadId: typeof body.threadId === 'string' ? body.threadId : undefined,
@@ -93,7 +99,7 @@ async function handlePostTask(context: DaemonRuntimeRouteContext, req: Request):
       title: typeof body.title === 'string' ? body.title : undefined,
       body: task.trim(),
       metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata as Record<string, unknown> : {},
-      ...(typeof body.routing === 'object' && body.routing !== null ? { routing: body.routing as import('../../control-plane/index.ts').SharedSessionRoutingIntent } : {}),
+      ...(typeof body.routing === 'object' && body.routing !== null ? { routing: body.routing as SharedSessionRoutingIntent } : {}),
     });
 
     if (submission.mode === 'continued-live') {
@@ -158,7 +164,7 @@ async function handlePostTask(context: DaemonRuntimeRouteContext, req: Request):
       && (body.routing as { executionIntent?: unknown }).executionIntent !== null
       ? {
           executionIntent: (body.routing as {
-            executionIntent: import('../../runtime/execution-intents.ts').ExecutionIntent;
+            executionIntent: ExecutionIntent;
           }).executionIntent,
         }
       : {}),
@@ -310,7 +316,7 @@ function buildSharedSessionMessageInput(
   message: string,
 ): {
   sessionId: string;
-  surfaceKind: import('../../automation/types.ts').AutomationSurfaceKind;
+  surfaceKind: AutomationSurfaceKind;
   surfaceId: string;
   externalId?: string;
   threadId?: string;
@@ -320,11 +326,11 @@ function buildSharedSessionMessageInput(
   routeId?: string;
   body: string;
   metadata?: Record<string, unknown>;
-  routing?: import('../../control-plane/index.ts').SharedSessionRoutingIntent;
+  routing?: SharedSessionRoutingIntent;
 } {
   return {
     sessionId,
-    surfaceKind: typeof body.surfaceKind === 'string' ? body.surfaceKind as import('../../automation/types.ts').AutomationSurfaceKind : 'web',
+    surfaceKind: typeof body.surfaceKind === 'string' ? body.surfaceKind as AutomationSurfaceKind : 'web',
     surfaceId: typeof body.surfaceId === 'string' ? body.surfaceId : 'surface:web',
     ...(typeof body.externalId === 'string' ? { externalId: body.externalId } : {}),
     ...(typeof body.threadId === 'string' ? { threadId: body.threadId } : {}),
@@ -334,7 +340,7 @@ function buildSharedSessionMessageInput(
     ...(typeof body.routeId === 'string' ? { routeId: body.routeId } : {}),
     body: message,
     ...(typeof body.metadata === 'object' && body.metadata !== null ? { metadata: body.metadata as Record<string, unknown> } : {}),
-    ...(typeof body.routing === 'object' && body.routing !== null ? { routing: body.routing as import('../../control-plane/index.ts').SharedSessionRoutingIntent } : {}),
+    ...(typeof body.routing === 'object' && body.routing !== null ? { routing: body.routing as SharedSessionRoutingIntent } : {}),
   };
 }
 
@@ -350,7 +356,7 @@ async function respondToSessionSubmission(
     readonly model?: string;
     readonly provider?: string;
     readonly tools?: readonly string[];
-    readonly executionIntent?: import('../../runtime/execution-intents.ts').ExecutionIntent;
+    readonly executionIntent?: ExecutionIntent;
   } = {},
 ): Promise<Response> {
   if (submission.mode === 'continued-live' || submission.mode === 'queued-follow-up') {

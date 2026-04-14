@@ -1,22 +1,42 @@
-import { VERSION } from '../../version.ts';
-import type { ControlPlaneAuthSnapshot } from '../../control-plane/auth-snapshot.ts';
-import type { RuntimeEventDomain } from '../../runtime/events/index.ts';
 import type { DaemonApiRouteHandlers } from '../../control-plane/routes/context.ts';
-import { inspectInboundTls, inspectOutboundTls } from '../../runtime/network/index.ts';
-import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
-import { OPERATOR_SESSION_COOKIE_NAME } from '../../security/http-auth.ts';
-import {
-  resolveAuthenticatedPrincipal,
-  type AuthenticatedPrincipal,
-} from '../http-policy.ts';
+import type { RuntimeEventDomain } from '../../types/foundation-contract.ts';
+import type { AuthenticatedPrincipal } from '../http-policy.ts';
+import { serializableJsonResponse } from './route-helpers.ts';
+
+interface GatewayMethodDescriptorLike {
+  readonly dangerous?: boolean;
+  readonly access?: string;
+}
+
+interface GatewayMethodCatalogLike {
+  list(options?: Record<string, unknown>): unknown;
+  listEvents(options?: Record<string, unknown>): unknown;
+  get(methodId: string): GatewayMethodDescriptorLike | null | undefined;
+}
+
+interface ControlPlaneGatewayLike {
+  getSnapshot(): unknown;
+  renderWebUi(): Response;
+  listRecentEvents(limit: number): unknown;
+  listSurfaceMessages(): unknown;
+  listClients(): unknown;
+  createEventStream(
+    req: Request,
+    input: Record<string, unknown>,
+  ): Response | Promise<Response>;
+}
 
 interface ControlRouteContext {
   readonly authToken: string | null;
-  readonly configManager: import('../../config/manager.ts').ConfigManager;
-  readonly controlPlaneGateway: import('../../control-plane/index.ts').ControlPlaneGateway;
-  readonly describeAuthenticatedPrincipal: (token: string) => AuthenticatedPrincipal | null;
+  readonly version: string;
+  readonly sessionCookieName: string;
+  readonly controlPlaneGateway: ControlPlaneGatewayLike;
   readonly extractAuthToken: (req: Request) => string;
-  readonly gatewayMethods: import('../../control-plane/index.ts').GatewayMethodCatalog;
+  readonly resolveAuthenticatedPrincipal: (req: Request) => AuthenticatedPrincipal | null;
+  readonly gatewayMethods: GatewayMethodCatalogLike;
+  readonly getOperatorContract: () => unknown;
+  readonly inspectInboundTls: (surface: 'controlPlane' | 'httpListener') => unknown;
+  readonly inspectOutboundTls: () => unknown;
   readonly invokeGatewayMethodCall: (input: {
     readonly authToken: string;
     readonly methodId: string;
@@ -57,21 +77,21 @@ export function createDaemonControlRouteHandlers(
   const hasAuthorizationHeader = Boolean(request.headers.get('authorization')?.trim());
   const sessionCookiePresent = (request.headers.get('cookie') ?? '')
     .split(';')
-    .some((segment) => segment.trim().startsWith(`${OPERATOR_SESSION_COOKIE_NAME}=`));
+    .some((segment) => segment.trim().startsWith(`${context.sessionCookieName}=`));
 
   return {
     getStatus: () => Response.json({
       status: 'running',
-      version: VERSION,
+      version: context.version,
       network: {
-        controlPlane: inspectInboundTls(context.configManager, 'controlPlane'),
-        httpListener: inspectInboundTls(context.configManager, 'httpListener'),
-        outbound: inspectOutboundTls(context.configManager),
+        controlPlane: context.inspectInboundTls('controlPlane'),
+        httpListener: context.inspectInboundTls('httpListener'),
+        outbound: context.inspectOutboundTls(),
       },
     }),
     getCurrentAuth: (req) => {
       const token = context.extractAuthToken(req).trim();
-      const principal = resolveAuthenticatedPrincipal(req, context);
+      const principal = context.resolveAuthenticatedPrincipal(req);
       const session = principal?.principalKind === 'user'
         ? context.requireAuthenticatedSession(req)
         : null;
@@ -80,7 +100,7 @@ export function createDaemonControlRouteHandlers(
         : token.length > 0
           ? 'invalid'
           : 'anonymous';
-      const snapshot: ControlPlaneAuthSnapshot = {
+      const snapshot = {
         authenticated: principal !== null,
         authMode,
         tokenPresent: token.length > 0,
@@ -96,7 +116,7 @@ export function createDaemonControlRouteHandlers(
       return Response.json(snapshot);
     },
     getControlPlaneSnapshot: () => Response.json(context.controlPlaneGateway.getSnapshot()),
-    getOperatorContract: () => Response.json({ contract: buildOperatorContract(context.gatewayMethods) }),
+    getOperatorContract: () => serializableJsonResponse({ contract: context.getOperatorContract() }),
     getControlPlaneWeb: () => context.controlPlaneGateway.renderWebUi(),
     getControlPlaneRecentEvents: (limit) => Response.json({ events: context.controlPlaneGateway.listRecentEvents(limit) }),
     getControlPlaneMessages: () => Response.json({ messages: context.controlPlaneGateway.listSurfaceMessages() }),
@@ -104,7 +124,7 @@ export function createDaemonControlRouteHandlers(
     getGatewayMethods: (url) => {
       const category = url.searchParams.get('category') ?? undefined;
       const source = url.searchParams.get('source');
-      return Response.json({
+      return serializableJsonResponse({
         methods: context.gatewayMethods.list({
           ...(category ? { category } : {}),
           ...(source === 'builtin' || source === 'plugin' ? { source } : {}),
@@ -115,7 +135,7 @@ export function createDaemonControlRouteHandlers(
       const category = url.searchParams.get('category') ?? undefined;
       const source = url.searchParams.get('source');
       const domain = url.searchParams.get('domain') ?? undefined;
-      return Response.json({
+      return serializableJsonResponse({
         events: context.gatewayMethods.listEvents({
           ...(category ? { category } : {}),
           ...(source === 'builtin' || source === 'plugin' ? { source } : {}),
@@ -126,7 +146,7 @@ export function createDaemonControlRouteHandlers(
     getGatewayMethod: (methodId) => {
       const method = context.gatewayMethods.get(methodId);
       return method
-        ? Response.json({ method })
+        ? serializableJsonResponse({ method })
         : Response.json({ error: 'Unknown gateway method' }, { status: 404 });
     },
     invokeGatewayMethod: async (methodId, req) => {
@@ -136,7 +156,7 @@ export function createDaemonControlRouteHandlers(
         const admin = context.requireAdmin(req);
         if (admin) return admin;
       }
-      const principal = resolveAuthenticatedPrincipal(req, context);
+      const principal = context.resolveAuthenticatedPrincipal(req);
       const parsedBody = await context.parseOptionalJsonBody(req);
       if (parsedBody instanceof Response) return parsedBody;
       const payload = parsedBody ?? {};
@@ -159,7 +179,7 @@ export function createDaemonControlRouteHandlers(
       const url = new URL(req.url);
       const rawDomains = url.searchParams.get('domains');
       const domains = (rawDomains ? rawDomains.split(',').map((value) => value.trim()).filter(Boolean) : []) as RuntimeEventDomain[];
-      const principal = resolveAuthenticatedPrincipal(req, context);
+      const principal = context.resolveAuthenticatedPrincipal(req);
       return context.controlPlaneGateway.createEventStream(req, {
         clientKind: 'web',
         transport: 'sse',

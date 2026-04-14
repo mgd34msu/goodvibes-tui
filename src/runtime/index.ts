@@ -14,9 +14,13 @@ export * from './store/selectors/index.ts';
 
 // Events
 export { RuntimeEventBus } from './events/index.ts';
-export { createEventEnvelope } from './events/envelope.ts';
+export { createEventEnvelope } from './event-envelope.ts';
+export type { EventEnvelope, EventEnvelopeContext } from './event-envelope.ts';
 export type { RuntimeEventEnvelope, EnvelopeContext } from './events/envelope.ts';
+export { RUNTIME_EVENT_DOMAINS, isRuntimeEventDomain } from './events/domain-map.ts';
 export type { AnyRuntimeEvent, RuntimeEventDomain } from './events/domain-map.ts';
+export { createRuntimeEventFeed, createRuntimeEventFeeds } from './event-feeds.ts';
+export type { RuntimeEventFeed, RuntimeEventFeeds } from './event-feeds.ts';
 
 // Emitters
 export type { EmitterContext } from './emitters/index.ts';
@@ -100,7 +104,71 @@ export { createRuntimeMcpApi } from './runtime-mcp-api.ts';
 export { createRuntimeOpsApi } from './runtime-ops-api.ts';
 export type { OpsApi } from './ops-api.ts';
 export { createDirectTransport, createDirectTransportFromServices } from './transports/direct.ts';
+export { createRuntimeDirectTransport } from './transports/direct.ts';
 export type { DirectTransport } from './transports/direct.ts';
+export { createDirectClientTransport } from './transports/direct-client.ts';
+export type { DirectClientTransport } from './transports/direct-client.ts';
+export { createClientTransport } from './transports/client-transport.ts';
+export type { ClientTransport } from './transports/client-transport.ts';
+export { buildUrl, createTransportPaths, normalizeBaseUrl } from './transports/transport-paths.ts';
+export type { TransportPaths } from './transports/transport-paths.ts';
+export {
+  createFetch,
+  createHttpJsonTransport,
+  createJsonInit,
+  createJsonRequestInit,
+  readJsonBody,
+  requestJson,
+} from './transports/http-json-transport.ts';
+export type {
+  HttpJsonRequestOptions,
+  HttpJsonTransport,
+  HttpJsonTransportOptions,
+  JsonObject,
+  JsonValue,
+  ResolvedContractRequest,
+  TransportJsonError,
+} from './transports/http-json-transport.ts';
+export {
+  buildContractInput,
+  invokeContractRoute,
+  openContractRouteStream,
+  requireContractRoute,
+} from './transports/contract-http-client.ts';
+export type {
+  ContractInvokeOptions,
+  ContractRouteDefinition,
+  ContractRouteLike,
+  ContractStreamOptions,
+} from './transports/contract-http-client.ts';
+export { isAbortError, openServerSentEventStream } from './transports/sse-stream.ts';
+export type { ServerSentEventHandlers, ServerSentEventOptions } from './transports/sse-stream.ts';
+export { createOperatorRemoteClient } from './transports/operator-remote-client.ts';
+export type {
+  OperatorRemoteClient,
+  OperatorRemoteClientInvokeOptions,
+  OperatorRemoteClientStreamOptions,
+} from './transports/operator-remote-client.ts';
+export { createPeerRemoteClient } from './transports/peer-remote-client.ts';
+export type {
+  PeerRemoteClient,
+  PeerRemoteClientInvokeOptions,
+} from './transports/peer-remote-client.ts';
+export {
+  buildEventSourceUrl,
+  buildWebSocketUrl,
+  createEventSourceConnector,
+  createRemoteDomainEvents,
+  createRemoteRuntimeEvents,
+  createRemoteUiRuntimeEvents,
+  createWebSocketConnector,
+} from './transports/remote-events.ts';
+export type {
+  DomainEventConnector,
+  RemoteDomainEvents,
+  RemoteRuntimeEvents,
+  SerializedRuntimeEnvelope,
+} from './transports/remote-events.ts';
 
 // Network
 export * from './network/index.ts';

@@ -11,27 +11,9 @@ import type {
   TurnEvent,
   WorkflowEvent,
 } from './events/index.ts';
+import { createRuntimeEventFeed, type RuntimeEventFeed } from './event-feeds.ts';
 
-type EventForType<
-  TEvent extends AnyRuntimeEvent,
-  TType extends TEvent['type'],
-> = Extract<TEvent, { type: TType }>;
-
-type PayloadForType<
-  TEvent extends AnyRuntimeEvent,
-  TType extends TEvent['type'],
-> = EventForType<TEvent, TType>;
-
-export interface UiEventFeed<TEvent extends AnyRuntimeEvent> {
-  on<TType extends TEvent['type']>(
-    type: TType,
-    listener: (payload: PayloadForType<TEvent, TType>) => void,
-  ): () => void;
-  onEnvelope<TType extends TEvent['type']>(
-    type: TType,
-    listener: (envelope: RuntimeEventEnvelope<TType, PayloadForType<TEvent, TType>>) => void,
-  ): () => void;
-}
+export type UiEventFeed<TEvent extends AnyRuntimeEvent> = RuntimeEventFeed<TEvent>;
 
 export interface UiRuntimeEvents {
   readonly sessions: UiEventFeed<SessionEvent>;
@@ -45,24 +27,9 @@ export interface UiRuntimeEvents {
 }
 
 function createUiEventFeed<TEvent extends AnyRuntimeEvent>(runtimeBus: RuntimeEventBus): UiEventFeed<TEvent> {
-  return {
-    on<TType extends TEvent['type']>(
-      type: TType,
-      listener: (payload: PayloadForType<TEvent, TType>) => void,
-    ): () => void {
-      return runtimeBus.on(type as TEvent['type'], (envelope) => {
-        listener(envelope.payload as PayloadForType<TEvent, TType>);
-      });
-    },
-    onEnvelope<TType extends TEvent['type']>(
-      type: TType,
-      listener: (envelope: RuntimeEventEnvelope<TType, PayloadForType<TEvent, TType>>) => void,
-    ): () => void {
-      return runtimeBus.on(type as TEvent['type'], (envelope) => {
-        listener(envelope as RuntimeEventEnvelope<TType, PayloadForType<TEvent, TType>>);
-      });
-    },
-  };
+  return createRuntimeEventFeed<TEvent>((type, listener) => (
+    runtimeBus.on(type as TEvent['type'], listener as (envelope: RuntimeEventEnvelope<TEvent['type'], TEvent>) => void)
+  ));
 }
 
 export function createUiRuntimeEvents(runtimeBus: RuntimeEventBus): UiRuntimeEvents {

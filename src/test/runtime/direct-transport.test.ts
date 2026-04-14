@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createDirectTransportServices } from '../../runtime/foundation-services.ts';
 import {
+  createDirectClientTransport,
   createDirectTransport,
   createDirectTransportFromServices,
+  createRuntimeDirectTransport,
 } from '../../runtime/transports/direct.ts';
+import { createOperatorClient } from '../../runtime/operator-client.ts';
+import { createPeerClient } from '../../runtime/peer-client.ts';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 async function waitFor<T>(fn: () => T | undefined | null, timeoutMs = 500, intervalMs = 5): Promise<T> {
@@ -37,7 +41,7 @@ describe('DirectTransport', () => {
     runtimeServices.distributedRuntime.loaded = true;
     runtimeServices.remoteRunnerRegistry.clear();
 
-    const transport = createDirectTransport(runtimeServices);
+    const transport = createRuntimeDirectTransport(runtimeServices);
 
     const session = await transport.operator.sessions.ensureSession({
       sessionId: 'direct-transport-session',
@@ -105,10 +109,13 @@ describe('DirectTransport', () => {
 
     const transport = createDirectTransportFromServices(services);
     const legacy = createDirectTransport(runtimeServices);
+    const runtimeExplicit = createRuntimeDirectTransport(runtimeServices);
 
     expect(transport.kind).toBe('direct');
     expect(Object.keys(transport.operator).sort()).toEqual(Object.keys(legacy.operator).sort());
     expect(Object.keys(transport.peer).sort()).toEqual(Object.keys(legacy.peer).sort());
+    expect(Object.keys(runtimeExplicit.operator).sort()).toEqual(Object.keys(legacy.operator).sort());
+    expect(Object.keys(runtimeExplicit.peer).sort()).toEqual(Object.keys(legacy.peer).sort());
 
     const session = await transport.operator.sessions.ensureSession({
       sessionId: 'direct-transport-from-services',
@@ -116,5 +123,18 @@ describe('DirectTransport', () => {
     });
 
     expect(transport.operator.sessions.get(session.id)?.title).toBe('Direct Transport From Services');
+  });
+
+  test('exposes a generic direct client adapter for SDK extraction surfaces', () => {
+    const runtimeServices = getTestRuntimeServices();
+    const services = createDirectTransportServices(runtimeServices);
+    const operator = createOperatorClient(services.operator);
+    const peer = createPeerClient(services.peer);
+
+    const transport = createDirectClientTransport(operator, peer);
+
+    expect(transport.kind).toBe('direct');
+    expect(transport.getOperatorClient()).toBe(operator);
+    expect(transport.getPeerClient()).toBe(peer);
   });
 });
