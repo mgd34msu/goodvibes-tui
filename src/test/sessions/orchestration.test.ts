@@ -8,6 +8,10 @@ import {
 } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/registry';
 import type { CrossSessionTaskRef, SessionTaskGraphSnapshot } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/types';
 
+function graphPath(root: string): string {
+  return join(root, '.goodvibes', 'tui', 'sessions', 'task-graph.json');
+}
+
 // ── Test helpers ─────────────────────────────────────────────────────────────
 
 function makeRef(
@@ -302,7 +306,7 @@ describe('CrossSessionTaskRegistry', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'gv-session-orch-'));
-    registry = new CrossSessionTaskRegistry(dir);
+    registry = new CrossSessionTaskRegistry(graphPath(dir));
   });
 
   afterEach(() => {
@@ -328,7 +332,8 @@ describe('CrossSessionTaskRegistry lifecycle', () => {
   });
 
   test('dispose removes the process exit listener it installs', () => {
-    const registry = new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-')));
+    const root = mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-'));
+    const registry = new CrossSessionTaskRegistry(graphPath(root));
     expect(process.listenerCount('exit')).toBe(baseExitListeners + 1);
 
     registry.dispose();
@@ -337,8 +342,8 @@ describe('CrossSessionTaskRegistry lifecycle', () => {
   });
 
   test('separate instances each install and remove their own exit listeners', () => {
-    const first = new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-a-')));
-    const second = new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-b-')));
+    const first = new CrossSessionTaskRegistry(graphPath(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-a-'))));
+    const second = new CrossSessionTaskRegistry(graphPath(mkdtempSync(join(tmpdir(), 'gv-orchestration-listener-b-'))));
     expect(process.listenerCount('exit')).toBe(baseExitListeners + 2);
 
     first.dispose();
@@ -356,7 +361,7 @@ describe('CrossSessionTaskRegistry persistence', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orch-test-'));
-    registry = new CrossSessionTaskRegistry(tmpDir);
+    registry = new CrossSessionTaskRegistry(graphPath(tmpDir));
   });
 
   afterEach(() => {
@@ -367,8 +372,7 @@ describe('CrossSessionTaskRegistry persistence', () => {
     const ref = makeRef('s1', 't1');
     registry.linkTask(ref);
     registry.flush();
-    const graphPath = join(tmpDir, '.goodvibes', 'tui', 'sessions', 'task-graph.json');
-    expect(existsSync(graphPath)).toBe(true);
+    expect(existsSync(graphPath(tmpDir))).toBe(true);
   });
 
   test('new registry instance hydrates state from disk', () => {
@@ -376,7 +380,7 @@ describe('CrossSessionTaskRegistry persistence', () => {
     registry.linkTask(ref);
     registry.flush();
 
-    const registry2 = new CrossSessionTaskRegistry(tmpDir);
+    const registry2 = new CrossSessionTaskRegistry(graphPath(tmpDir));
     const loaded = registry2.getRef('s1', 't1');
     expect(loaded).toBeDefined();
     expect(loaded?.title).toBe('Persisted Task');
@@ -389,7 +393,7 @@ describe('CrossSessionTaskRegistry persistence', () => {
     registry.linkTask(refB, { sessionId: 's1', taskId: 'A' }, 'depends on A');
     registry.flush();
 
-    const registry2 = new CrossSessionTaskRegistry(tmpDir);
+    const registry2 = new CrossSessionTaskRegistry(graphPath(tmpDir));
     const deps = registry2.getDependencies('s1', 'B');
     expect(deps).toHaveLength(1);
     expect(deps[0]!.taskId).toBe('A');

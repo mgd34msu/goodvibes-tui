@@ -8,7 +8,7 @@ import {
   inspectSandboxQemuSetupManifest,
   loadSandboxQemuSetupManifest,
   scaffoldSandboxQemuSetupBundle,
-} from '../../runtime/sandbox/provisioning.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/provisioning';
 import { requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
@@ -26,7 +26,7 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       ctx.print('Usage: /sandbox qemu setup <directory>');
       return true;
     }
-    const bundle = scaffoldSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg);
+    const bundle = scaffoldSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg, { surfaceRoot: 'tui' });
     ctx.platform.configManager.setDynamic('sandbox.vmBackend', 'qemu');
     ctx.platform.configManager.setDynamic('sandbox.qemuExecWrapper', bundle.wrapperPath);
     ctx.platform.configManager.setDynamic('sandbox.qemuImagePath', bundle.imagePath);
@@ -61,7 +61,7 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       return true;
     }
     try {
-      const bundle = bootstrapSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg, sizeGb);
+      const bundle = bootstrapSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg, sizeGb, { surfaceRoot: 'tui' });
       ctx.print([
         `Bootstrapped QEMU sandbox in ${bundle.directory}`,
         `  wrapper: ${bundle.wrapperPath}`,

@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { getDisplayWidth, truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import { BasePanel } from './base-panel.ts';
 import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
@@ -182,6 +183,32 @@ function wordWrap(text: string, maxWidth: number): string[] {
   }
   if (line) lines.push(line);
   return lines.length > 0 ? lines : [''];
+}
+
+function truncatePathDisplay(path: string, width: number): string {
+  if (width <= 0) return '';
+  if (getDisplayWidth(path) <= width) return path;
+
+  const ellipsis = '…';
+  const ellipsisWidth = getDisplayWidth(ellipsis);
+  if (ellipsisWidth >= width) return truncateDisplay(path, width);
+
+  const available = width - ellipsisWidth;
+  const prefixBudget = Math.max(1, Math.floor(available * 0.35));
+  const suffixBudget = Math.max(1, available - prefixBudget);
+  const prefix = truncateDisplay(path, prefixBudget, '');
+
+  let suffix = '';
+  let suffixWidth = 0;
+  for (let index = path.length - 1; index >= 0; index -= 1) {
+    const char = path[index]!;
+    const charWidth = getDisplayWidth(char);
+    if (suffixWidth + charWidth > suffixBudget) break;
+    suffix = char + suffix;
+    suffixWidth += charWidth;
+  }
+
+  return `${prefix}${ellipsis}${suffix}`;
 }
 
 function originLabel(origin: SkillOrigin): string {
@@ -372,7 +399,7 @@ export class SkillsPanel extends BasePanel {
     if (selected) {
       detailLines.push(
         buildPanelLine(width, [['  Selected: ', C.label], [selected.name, C.value], ['  [', C.dim], [originLabel(selected.origin), originColor(selected.origin)], [']', C.dim]]),
-        buildPanelLine(width, [['  Path: ', C.label], [selected.path, C.path]]),
+        buildPanelLine(width, [['  Path: ', C.label], [truncatePathDisplay(selected.path, Math.max(1, width - 8)), C.path]]),
         buildPanelLine(width, [['  Desc: ', C.label], [selected.description || 'No description provided.', C.value]]),
         buildPanelLine(width, [['  Depends: ', C.label], [selected.dependencies.length > 0 ? selected.dependencies.join(', ') : 'none', C.dim]]),
         buildPanelLine(width, [['  Includes: ', C.label], [selected.includes.length > 0 ? selected.includes.join(', ') : 'none', C.dim]]),

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { randomUUID } from 'crypto';
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { RuntimeEventBus, createEventEnvelope } from '../../../runtime/events/index.ts';
@@ -37,8 +38,8 @@ describe('ops playbook runtime context', () => {
     const runtimeContext = {
       runtimeBus: bus,
       store,
-      recoveryFilePath: join('/tmp', 'missing-recovery.jsonl'),
-      lastSessionPointerPath: join('/tmp', 'missing-last-session.json'),
+      recoveryFilePath: join(tmpdir(), 'missing-recovery.jsonl'),
+      lastSessionPointerPath: join(tmpdir(), 'missing-last-session.json'),
       now: () => now,
       lastEventAt: now,
       sessionRecoveryFailedCount: 0,
@@ -61,8 +62,7 @@ describe('ops playbook runtime context', () => {
   });
 
   test('session-unrecoverable checks inspect live recovery state and recovery artifact', async () => {
-    const tmpDir = join('/tmp', `gv-playbook-${process.pid}-${randomUUID()}`);
-    mkdirSync(tmpDir, { recursive: true });
+    const tmpDir = mkdtempSync(join(tmpdir(), `gv-playbook-${randomUUID()}-`));
     const recoveryFilePath = join(tmpDir, 'recovery.jsonl');
     const lastSessionPointerPath = join(tmpDir, 'last-session.json');
 

@@ -323,26 +323,26 @@ describe('DeterministicReplayEngine', () => {
   // ── export path validation ─────────────────────────────────────────────────
 
   describe('export path validation', () => {
-    test('throws on path traversal outside cwd and /tmp', async () => {
+    test('throws on path traversal outside cwd and the active temp root', async () => {
       loadEngine(engine, [makeEntry(1, 'turn:start')]);
       await expect(engine.export('/etc/passwd')).rejects.toThrow(
-        'Export path must be within project directory or /tmp',
+        'Export path must be within project directory or the active temp root',
       );
     });
 
     test('throws when path resolves to parent directory', async () => {
       loadEngine(engine, [makeEntry(1, 'turn:start')]);
       await expect(engine.export('../../etc/evil.json')).rejects.toThrow(
-        'Export path must be within project directory or /tmp',
+        'Export path must be within project directory or the active temp root',
       );
     });
 
     test('returns without throwing when idle', async () => {
       // export() returns early (no throw) when idle.
-      await expect(engine.export('/tmp/test.json')).resolves.toBeUndefined();
+      await expect(engine.export(join(tmpdir(), 'replay-idle-test.json'))).resolves.toBeUndefined();
     });
 
-    test('accepts /tmp paths', async () => {
+    test('accepts paths inside the active temp root', async () => {
       loadEngine(engine, [makeEntry(1, 'turn:start')]);
       const path = join(tmpdir(), `replay-test-${Date.now()}.json`);
       await expect(engine.export(path)).resolves.toBeUndefined();

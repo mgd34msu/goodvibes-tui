@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
-import { join } from 'path';
+import { join, resolve } from 'path';
+import { tmpdir } from 'os';
 import { GitService } from '../../git/service.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
@@ -13,12 +14,19 @@ import { getTestGitService, resetTestGitServices } from '../helpers/runtime-serv
 
 /** Create an isolated temp git repo and return its path */
 function makeTempRepo(): string {
-  const tmpDir = join('/tmp', `git-test-${process.pid}-${Date.now()}`);
-  mkdirSync(tmpDir, { recursive: true });
+  const tmpDir = mkdtempSync(join(tmpdir(), 'git-test-'));
   execSync('git init', { cwd: tmpDir });
   execSync('git config user.email "test@test.com"', { cwd: tmpDir });
   execSync('git config user.name "Test"', { cwd: tmpDir });
   return tmpDir;
+}
+
+function makeTempPath(prefix: string): string {
+  return join(tmpdir(), `${prefix}-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+}
+
+function makeExternalDir(prefix: string): string {
+  return mkdtempSync(join(resolve(process.cwd(), '..'), `${prefix}-`));
 }
 
 /** Write a file into the repo and stage + commit it */
@@ -410,8 +418,7 @@ describe('GitService', () => {
     test('Fail:git:commit fires when commit fails', async () => {
       const spy = new SpyDispatcher();
       // Use a non-git directory to force simple-git to throw
-      const nonRepoDir = join('/tmp', `non-repo-${Date.now()}`);
-      mkdirSync(nonRepoDir, { recursive: true });
+      const nonRepoDir = makeExternalDir('non-repo');
       try {
         const spySvc = new GitService(nonRepoDir, spy);
         await expect(spySvc.commit('should fail')).rejects.toThrow();
@@ -507,8 +514,8 @@ describe('GitService', () => {
     test('Post:git:pull fires after successful pull', async () => {
       const spy = new SpyDispatcher();
       // Set up bare remote and clone to test a real pull
-      const bareDir = join('/tmp', `bare-${Date.now()}`);
-      const cloneDir = join('/tmp', `clone-${Date.now()}`);
+      const bareDir = makeTempPath('bare');
+      const cloneDir = makeTempPath('clone');
       try {
         mkdirSync(bareDir, { recursive: true });
         addCommit(tmpDir, 'remote-file.txt', 'content', 'remote commit');
@@ -534,7 +541,7 @@ describe('GitService', () => {
       const spy = new SpyDispatcher();
       const spySvc = new GitService(tmpDir, spy);
       addCommit(tmpDir, 'wt-hook-init.txt', 'x', 'wt-hook-init');
-      const wtPath = join('/tmp', `wt-hook-${Date.now()}`);
+      const wtPath = makeTempPath('wt-hook');
       try {
         await spySvc.worktreeAdd(wtPath, 'wt-hook-branch');
         const preEvents = spy.events.filter(
@@ -554,7 +561,7 @@ describe('GitService', () => {
       const spy = new SpyDispatcher();
       const spySvc = new GitService(tmpDir, spy);
       addCommit(tmpDir, 'wt-post-init.txt', 'x', 'wt-post-init');
-      const wtPath = join('/tmp', `wt-post-${Date.now()}`);
+      const wtPath = makeTempPath('wt-post');
       try {
         await spySvc.worktreeAdd(wtPath, 'wt-post-branch');
         const postEvents = spy.events.filter(
@@ -572,7 +579,7 @@ describe('GitService', () => {
       const spy = new SpyDispatcher();
       const spySvc = new GitService(tmpDir, spy);
       addCommit(tmpDir, 'wt-rm-init.txt', 'x', 'wt-rm-init');
-      const wtPath = join('/tmp', `wt-rm-${Date.now()}`);
+      const wtPath = makeTempPath('wt-rm');
       try {
         await spySvc.worktreeAdd(wtPath, 'wt-rm-branch');
         spy.events.length = 0; // clear add events
@@ -592,7 +599,7 @@ describe('GitService', () => {
       const spy = new SpyDispatcher();
       const spySvc = new GitService(tmpDir, spy);
       addCommit(tmpDir, 'wt-rm-post-init.txt', 'x', 'wt-rm-post-init');
-      const wtPath = join('/tmp', `wt-rm-post-${Date.now()}`);
+      const wtPath = makeTempPath('wt-rm-post');
       try {
         await spySvc.worktreeAdd(wtPath, 'wt-rm-post-branch');
         spy.events.length = 0; // clear add events
@@ -663,8 +670,7 @@ describe('GitService', () => {
     let nonRepoDir: string;
 
     beforeEach(() => {
-      nonRepoDir = join('/tmp', `non-repo-${process.pid}-${Date.now()}`);
-      mkdirSync(nonRepoDir, { recursive: true });
+      nonRepoDir = makeExternalDir('non-repo');
     });
 
     afterEach(() => {

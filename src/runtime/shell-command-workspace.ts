@@ -1,5 +1,5 @@
 import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
-import type { SandboxSessionRegistry } from './sandbox/session-registry.ts';
+import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type { WorktreeRegistry } from './worktree/registry.ts';
 

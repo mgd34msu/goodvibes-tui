@@ -3,8 +3,8 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTaskTool } from '@pellux/goodvibes-sdk/platform/tools/task/index';
-import { teamTool } from '@pellux/goodvibes-sdk/platform/tools/team/index';
-import { worklistTool } from '@pellux/goodvibes-sdk/platform/tools/worklist/index';
+import { createTeamTool } from '@pellux/goodvibes-sdk/platform/tools/team/index';
+import { createWorklistTool } from '@pellux/goodvibes-sdk/platform/tools/worklist/index';
 import { createPacketTool } from '@pellux/goodvibes-sdk/platform/tools/packet/index';
 import { createQueryTool } from '@pellux/goodvibes-sdk/platform/tools/query/index';
 import { createRemoteTool } from '../../tools/remote-trigger/index.ts';
@@ -16,11 +16,17 @@ describe('tool breadth additions', () => {
   const originalCwd = process.cwd();
   let root = '';
   let taskTool = createTaskTool(new CrossSessionTaskRegistry(mkdtempSync(join(tmpdir(), 'gv-tool-breadth-init-'))));
+  const teamTool = createTeamTool({ surfaceRoot: 'tui' });
+  const worklistTool = createWorklistTool({ surfaceRoot: 'tui' });
+
+  function taskGraphPath(baseRoot: string): string {
+    return join(baseRoot, '.goodvibes', 'tui', 'sessions', 'task-graph.json');
+  }
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-tool-breadth-'));
     process.chdir(root);
-    taskTool = createTaskTool(new CrossSessionTaskRegistry(root));
+    taskTool = createTaskTool(new CrossSessionTaskRegistry(taskGraphPath(root)));
   });
 
   afterEach(() => {

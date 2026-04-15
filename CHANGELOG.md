@@ -4,7 +4,46 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.8] — 2026-04-15
+
+### Canonical SDK Cutover Completion
+
+- Switched the TUI to the canonical published SDK line at `@pellux/goodvibes-sdk@0.18.21`
+- Removed the remaining local REPL and sandbox runtime implementations from the TUI and routed those flows through SDK-owned package imports instead
+- Rewired command, MCP, panel, and runtime call sites that were still holding local platform copies so the TUI now consumes the shared SDK surface instead of carrying duplicate implementations
+
+### TUI-Owned Configuration Boundary Fixes
+
+- Kept product-owned storage and runtime identity at `.goodvibes/tui/...` by making the TUI pass explicit host configuration into SDK-owned services instead of inheriting SDK defaults
+- Wired cross-session task graphs to the TUI-owned path under `.goodvibes/tui/sessions/task-graph.json`
+- Instantiated the team and worklist tools with explicit `surfaceRoot: 'tui'` host configuration instead of relying on SDK defaults
+- Aligned language-override and secret-store tests with the real TUI-owned configuration boundary
+
+### Release-Path And Test Hardening
+
+- Added per-file repo-local temp roots in `scripts/run-tests.ts` so the full TUI test suite no longer collides on shared temp filesystems
+- Reworked tests that still wrote to `/tmp` or shared temp roots so they now use the active temp root or an explicit external directory when validating escape behavior
+- Fixed the intelligence test helper to lazily initialize its runtime singletons, eliminating the module-init cycle that surfaced after the SDK cutover
+- Improved the Skills panel detail path rendering so long skill origins keep the useful suffix visible instead of clipping away the selected file
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Full test runner passes locally: `bun run test`
+- Architecture gate passes: `bun run architecture:check`
+- Performance gate passes: `bun run perf:check`
+- Eval gate passes: `bun run eval:gate`
+- Foundation artifacts export passes: `bun run foundation:artifacts`
+- Build passes: `bun run build`
+- Publish packaging check passes: `bun run publish:check`
+- Staged npm package rehearsal passes: `bun run publish:dry-run`
+- Staged GitHub Packages rehearsal passes: `bun run publish:dry-run:github`
+- Local package install smoke passes through `postinstall` with staged release artifacts
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.7] — 2026-04-14
+
+Superseded before successful public registry release. The release workflow got past the package-install fix, but the REPL tool and REPL test harness were still allocating temp state under constrained temp filesystems, which failed the test phase before publish. The corrected release shipped in `0.18.8`.
 
 ### Release Workflow Install Fix
 

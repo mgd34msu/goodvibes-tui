@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import type { CommandContext } from '../command-registry.ts';
-import { inspectSandboxSessionArtifact, listSandboxProfiles, renderSandboxSessions } from '../../runtime/sandbox/manager.ts';
+import { inspectSandboxSessionArtifact, listSandboxProfiles, renderSandboxSessions } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
 import { requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

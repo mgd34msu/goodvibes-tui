@@ -20,7 +20,7 @@ import type { SessionSnapshot } from './session-persistence.ts';
 import type { RuntimeServices } from './services.ts';
 import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import type { WorktreeRegistry } from './worktree/registry.ts';
-import type { SandboxSessionRegistry } from './sandbox/session-registry.ts';
+import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 
 /**
  * Mutable runtime state that may be changed by slash commands or model-picker events.

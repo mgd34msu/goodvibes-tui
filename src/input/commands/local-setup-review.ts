@@ -2,7 +2,7 @@ import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { CommandContext } from '../command-registry.ts';
 import { discoverSkills } from '../../panels/skills-panel.ts';
-import { buildSandboxReview, isRunningInWsl } from '../../runtime/sandbox/manager.ts';
+import { buildSandboxReview, isRunningInWsl } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
 import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
 import { getPluginDirectories } from '../../plugins/loader.ts';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';

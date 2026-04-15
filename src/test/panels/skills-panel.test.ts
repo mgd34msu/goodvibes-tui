@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { SkillsPanel, discoverSkills } from '../../panels/skills-panel.ts';
@@ -32,13 +31,19 @@ function makeShellPaths(workingDirectory: string, homeDirectory: string): Pick<S
   return { workingDirectory, homeDirectory };
 }
 
+function makeTestTempDir(prefix: string): string {
+  const base = join(process.cwd(), '.test-tmp', 'skills-panel');
+  mkdirSync(base, { recursive: true });
+  return mkdtempSync(join(base, prefix));
+}
+
 describe('SkillsPanel', () => {
   let cwd: string;
   let homeDir: string;
 
   beforeEach(() => {
-    cwd = mkdtempSync(join(tmpdir(), 'gv-skills-cwd-'));
-    homeDir = mkdtempSync(join(tmpdir(), 'gv-skills-home-'));
+    cwd = makeTestTempDir('gv-skills-cwd-');
+    homeDir = makeTestTempDir('gv-skills-home-');
   });
 
   afterEach(() => {
@@ -133,7 +138,7 @@ describe('SkillsPanel', () => {
     expect(text).toContain('Skills - discover project-local and global skill packs');
     expect(text).toContain('alpha');
     expect(text).toContain('Project-local alpha skill');
-    expect(text).toContain(projectPath);
+    expect(text).toContain('.goodvibes/skills/alpha.md');
     expect(text).toContain('Depends: core, utils');
     expect(text).toContain('Includes: include-alpha');
   });

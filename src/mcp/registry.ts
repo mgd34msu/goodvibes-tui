@@ -27,11 +27,9 @@ import {
 } from '../runtime/emitters/mcp.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import type { McpConfigRoots } from '@pellux/goodvibes-sdk/platform/mcp/config';
-import { getSandboxConfigSnapshot } from '../runtime/sandbox/manager.ts';
-import {
-  type SandboxSessionRegistry,
-} from '../runtime/sandbox/session-registry.ts';
-import { resolveSandboxCommandPlan } from '../runtime/sandbox/backend.ts';
+import { getSandboxConfigSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
+import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
+import { resolveSandboxCommandPlan } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/backend';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 function compactEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {

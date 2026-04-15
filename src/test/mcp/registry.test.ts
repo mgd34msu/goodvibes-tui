@@ -4,7 +4,7 @@ import type { McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config'
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
-import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
+import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import { createHookDispatcher } from '../../hooks/index.ts';
 
 // Minimal stub MCP server script for registry tests

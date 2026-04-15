@@ -13,9 +13,9 @@ import {
   renderSandboxRecommendation,
   renderSandboxReview,
   renderSandboxSessions,
-} from '../../runtime/sandbox/manager.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
 import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
-import { buildSandboxLaunchPlan, executeSandboxManagedCommand, probeSandboxBackends } from '../../runtime/sandbox/backend.ts';
+import { buildSandboxLaunchPlan, executeSandboxManagedCommand, probeSandboxBackends } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/backend';
 import type { SandboxBundle, SandboxProbe } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import {
   exportSandboxGuestBundle,
@@ -23,7 +23,7 @@ import {
   renderSandboxDoctor,
   scaffoldSandboxQemuInitBundle,
   type SandboxGuestBundle,
-} from '../../runtime/sandbox/provisioning.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/provisioning';
 import { handleSandboxQemuCommand } from './platform-sandbox-qemu.ts';
 import { handleSandboxSessionCommand } from './platform-sandbox-session.ts';
 
@@ -199,7 +199,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
           ctx.print('Usage: /sandbox init-qemu <directory>');
           return;
         }
-        const bundle = scaffoldSandboxQemuInitBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg);
+        const bundle = scaffoldSandboxQemuInitBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg, { surfaceRoot: 'tui' });
         ctx.print([
           `Initialized QEMU sandbox bundle in ${bundle.directory}`,
           `  wrapper: ${bundle.wrapperPath}`,
@@ -251,7 +251,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
         }
         const targetPath = shellPaths.resolveWorkspacePath(pathArg);
         if (mode === 'export') {
-          const exported = exportSandboxGuestBundle(ctx.platform.configManager, shellPaths.workingDirectory, targetPath);
+          const exported = exportSandboxGuestBundle(ctx.platform.configManager, shellPaths.workingDirectory, targetPath, { surfaceRoot: 'tui' });
           ctx.print(`Sandbox guest bundle exported to ${exported.path}`);
           return;
         }

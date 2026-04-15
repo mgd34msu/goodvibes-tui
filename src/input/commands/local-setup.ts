@@ -4,7 +4,7 @@ import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import { listHookPointContracts } from '../../hooks/index.ts';
-import { isRunningInWsl } from '../../runtime/sandbox/manager.ts';
+import { isRunningInWsl } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
 import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
 import type { SetupTransferBundle } from './local-setup-transfer.ts';
 import {
