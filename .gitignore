@@ -6,6 +6,7 @@ __pycache__/
 
 # Build output
 dist/
+vendor/
 
 # Environment & secrets
 .env

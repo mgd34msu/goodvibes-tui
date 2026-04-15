@@ -3,7 +3,12 @@
 `goodvibes-tui` has two release distributions:
 
 - GitHub Releases with compiled platform binaries
-- an npm package that downloads the matching prebuilt binary during install
+- an npm package that bundles the platform binaries directly
+
+It also mirrors the npm package to GitHub Packages:
+
+- npmjs: `@pellux/goodvibes-tui`
+- GitHub Packages: `@mgd34msu/goodvibes-tui`
 
 The binary release is the primary distribution channel.
 
@@ -46,7 +51,9 @@ Release workflow behavior:
 
 - tag pushes matching `v*` create compiled binary artifacts
 - the release workflow re-runs the same core validation gates used for normal CI before building release assets
-- a GitHub Release is created from `docs/releases/<version>.md` when present, otherwise it falls back to the matching `CHANGELOG.md` section
+- npm publish targets `@pellux/goodvibes-tui`
+- GitHub Packages publish targets `@mgd34msu/goodvibes-tui`
+- the GitHub Release is created from `docs/releases/<version>.md` when present, otherwise it falls back to the matching `CHANGELOG.md` section
 - npm publishing is optional and stays disabled unless explicitly enabled in repo configuration
 
 ## npm Distribution
@@ -59,9 +66,9 @@ The npm package is intended to be directly installable:
 
 Install behavior:
 
-- on Linux and macOS, `postinstall` downloads the matching prebuilt binary from the GitHub release for the package version
+- on Linux and macOS, the published package already contains the matching bundled binaries
 - on Windows, native execution is not supported; users should use WSL so the Linux binary path applies
-- if Bun is already available and no vendored binary is present, the launcher can still fall back to Bun + source
+- if Bun is already available and no vendored binary is present, the launchers can still fall back to Bun + source
 
 Local npm packaging checks:
 
@@ -77,12 +84,13 @@ What `publish:check` verifies:
 - the publish bin is executable
 - the tarball does not accidentally include CI/workflow or test-only paths
 - the tarball includes the required runtime and bootstrap files
-- the tarball does not accidentally ship a stale vendored binary
+- the tarball includes the vendored TUI and standalone daemon binaries plus checksums
 
 If npm publishing is enabled in GitHub Actions, the workflow expects:
 
 - repository variable `PUBLISH_NPM=true`
 - repository secret `NPM_TOKEN`
+- built-in `GITHUB_TOKEN` package permissions for the GitHub Packages mirror
 
 The release workflow also needs the release assets to exist before npm publishing:
 
@@ -90,6 +98,10 @@ The release workflow also needs the release assets to exist before npm publishin
 - `goodvibes-linux-arm64`
 - `goodvibes-macos-x64`
 - `goodvibes-macos-arm64`
+- `goodvibes-daemon-linux-x64`
+- `goodvibes-daemon-linux-arm64`
+- `goodvibes-daemon-macos-x64`
+- `goodvibes-daemon-macos-arm64`
 - `SHA256SUMS.txt`
 
 For normal users who just want the executable, GitHub Releases remain the simplest path.

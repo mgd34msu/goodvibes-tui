@@ -64,16 +64,20 @@ jobs:
         include:
           - target: linux-x64
             bun_target: bun-linux-x64
-            artifact: goodvibes-linux-x64
+            app_artifact: goodvibes-linux-x64
+            daemon_artifact: goodvibes-daemon-linux-x64
           - target: linux-arm64
             bun_target: bun-linux-arm64
-            artifact: goodvibes-linux-arm64
+            app_artifact: goodvibes-linux-arm64
+            daemon_artifact: goodvibes-daemon-linux-arm64
           - target: darwin-x64
             bun_target: bun-darwin-x64
-            artifact: goodvibes-macos-x64
+            app_artifact: goodvibes-macos-x64
+            daemon_artifact: goodvibes-daemon-macos-x64
           - target: darwin-arm64
             bun_target: bun-darwin-arm64
-            artifact: goodvibes-macos-arm64
+            app_artifact: goodvibes-macos-arm64
+            daemon_artifact: goodvibes-daemon-macos-arm64
 
     steps:
       - name: Checkout
@@ -92,20 +96,160 @@ jobs:
           bun build src/main.ts \
             --compile \
             --target=${{ matrix.bun_target }} \
-            --outfile dist/${{ matrix.artifact }}
+            --outfile dist/${{ matrix.app_artifact }}
+          bun build src/daemon/cli.ts \
+            --compile \
+            --target=${{ matrix.bun_target }} \
+            --outfile dist/${{ matrix.daemon_artifact }}
       - name: Report binary size
-        run: ls -lh dist/${{ matrix.artifact }}
+        run: ls -lh dist/${{ matrix.app_artifact }} dist/${{ matrix.daemon_artifact }}
       - name: Upload artifact
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
         with:
-          name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}
+          name: ${{ matrix.target }}-binaries
+          path: |
+            dist/${{ matrix.app_artifact }}
+            dist/${{ matrix.daemon_artifact }}
           retention-days: 1
+
+  install-smoke:
+    name: npm install smoke
+    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8
+        with:
+          node-version: "22"
+      - name: Download all artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          path: dist/
+          merge-multiple: true
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: "1.3.10"
+      - name: Stage vendored binaries
+        run: bun run vendor:stage --clean
+      - name: Pack npm tarball
+        run: npm pack
+      - name: Install tarball in clean temp project
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            TAG="${{ github.event.inputs.ref }}"
+            TAG="${TAG#refs/tags/}"
+            VERSION="${TAG#v}"
+          fi
+          TMPDIR="$(mktemp -d)"
+          cd "$TMPDIR"
+          npm init -y
+          npm install "${GITHUB_WORKSPACE}/pellux-goodvibes-tui-${VERSION}.tgz"
+          test -x node_modules/.bin/goodvibes
+          test -x node_modules/.bin/goodvibes-daemon
+          test -x node_modules/@pellux/goodvibes-tui/vendor/goodvibes-linux-x64
+          test -x node_modules/@pellux/goodvibes-tui/vendor/goodvibes-daemon-linux-x64
+          test -f node_modules/@pellux/goodvibes-tui/vendor/SHA256SUMS.txt
+
+  publish-npm:
+    name: Publish to npm
+    if: (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) && vars.PUBLISH_NPM == 'true'
+    needs: install-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: "1.3.10"
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Download all artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          path: dist/
+          merge-multiple: true
+      - name: Install dependencies
+        run: bun install
+      - name: Stage vendored binaries
+        run: bun run vendor:stage --clean
+      - name: Publish package check
+        run: GOODVIBES_REQUIRE_VENDOR=1 bun run publish:check
+      - name: Publish to npm
+        run: bun run publish:package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-github-packages:
+    name: Publish to GitHub Packages
+    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
+    needs: install-smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      GOODVIBES_PUBLIC_PACKAGE_NAME: ${{ format('@{0}/goodvibes-tui', github.repository_owner) }}
+      GOODVIBES_PUBLISH_REGISTRY: https://npm.pkg.github.com
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: "1.3.10"
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8
+        with:
+          node-version: "22"
+          registry-url: "https://npm.pkg.github.com"
+      - name: Download all artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          path: dist/
+          merge-multiple: true
+      - name: Install dependencies
+        run: bun install
+      - name: Stage vendored binaries
+        run: bun run vendor:stage --clean
+      - name: Publish package check
+        run: GOODVIBES_REQUIRE_VENDOR=1 bun run publish:check
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun run publish:package
+      - name: Verify GitHub Packages publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            TAG="${{ github.event.inputs.ref }}"
+            TAG="${TAG#refs/tags/}"
+            VERSION="${TAG#v}"
+          fi
+          npm view "@${{ github.repository_owner }}/goodvibes-tui@${VERSION}" version --registry=https://npm.pkg.github.com
 
   release:
     name: Create GitHub Release
-    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
-    needs: build
+    if: (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) && (needs.publish-npm.result == 'success' || needs.publish-npm.result == 'skipped') && needs.publish-github-packages.result == 'success'
+    needs: [build, publish-npm, publish-github-packages]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -120,7 +264,16 @@ jobs:
       - name: Generate release checksums
         run: |
           cd dist
-          sha256sum goodvibes-linux-x64 goodvibes-linux-arm64 goodvibes-macos-x64 goodvibes-macos-arm64 > SHA256SUMS.txt
+          sha256sum \
+            goodvibes-linux-x64 \
+            goodvibes-linux-arm64 \
+            goodvibes-macos-x64 \
+            goodvibes-macos-arm64 \
+            goodvibes-daemon-linux-x64 \
+            goodvibes-daemon-linux-arm64 \
+            goodvibes-daemon-macos-x64 \
+            goodvibes-daemon-macos-arm64 \
+            > SHA256SUMS.txt
       - name: Extract version
         id: version
         run: |
@@ -163,65 +316,8 @@ jobs:
             dist/goodvibes-linux-arm64
             dist/goodvibes-macos-x64
             dist/goodvibes-macos-arm64
+            dist/goodvibes-daemon-linux-x64
+            dist/goodvibes-daemon-linux-arm64
+            dist/goodvibes-daemon-macos-x64
+            dist/goodvibes-daemon-macos-arm64
             dist/SHA256SUMS.txt
-
-  install-smoke:
-    name: npm install smoke
-    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
-    needs: release
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-        with:
-          ref: ${{ github.ref }}
-      - name: Setup Node
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8
-        with:
-          node-version: "22"
-      - name: Pack npm tarball
-        run: npm pack
-      - name: Install tarball in clean temp project
-        run: |
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            TAG="${{ github.event.inputs.ref }}"
-            TAG="${TAG#refs/tags/}"
-            VERSION="${TAG#v}"
-          fi
-          TMPDIR="$(mktemp -d)"
-          cd "$TMPDIR"
-          npm init -y
-          npm install "${GITHUB_WORKSPACE}/pellux-goodvibes-tui-${VERSION}.tgz"
-          test -x node_modules/.bin/goodvibes
-          test -x node_modules/@pellux/goodvibes-tui/vendor/goodvibes-linux-x64
-          test -f node_modules/@pellux/goodvibes-tui/vendor/SHA256SUMS.txt
-
-  publish-npm:
-    name: Publish to npm
-    if: (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) && vars.PUBLISH_NPM == 'true'
-    needs: install-smoke
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
-        with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        with:
-          bun-version: "1.3.10"
-      - name: Setup Node
-        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
-      - name: Install dependencies
-        run: bun install
-      - name: Publish package check
-        run: bun run publish:check
-      - name: Publish to npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

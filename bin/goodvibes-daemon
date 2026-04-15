@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+import { accessSync, constants } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageRoot = join(__dirname, '..');
+
+if (process.platform === 'win32') {
+  console.error('goodvibes-daemon: native Windows is not supported.');
+  console.error('Use WSL so the Linux release binary path applies.');
+  process.exit(1);
+}
+
+function resolveArtifactName(platform, arch) {
+  if (platform === 'linux' && arch === 'x64') return 'goodvibes-daemon-linux-x64';
+  if (platform === 'linux' && arch === 'arm64') return 'goodvibes-daemon-linux-arm64';
+  if (platform === 'darwin' && arch === 'x64') return 'goodvibes-daemon-macos-x64';
+  if (platform === 'darwin' && arch === 'arm64') return 'goodvibes-daemon-macos-arm64';
+  return null;
+}
+
+function isExecutable(path) {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function run(command, args) {
+  const child = spawnSync(command, args, { stdio: 'inherit' });
+  if (child.error) {
+    throw child.error;
+  }
+  process.exit(child.status ?? 1);
+}
+
+const artifactName = resolveArtifactName(process.platform, process.arch);
+const vendoredBinary = artifactName ? join(packageRoot, 'vendor', artifactName) : null;
+
+if (vendoredBinary && isExecutable(vendoredBinary)) {
+  run(vendoredBinary, process.argv.slice(2));
+}
+
+const bunProbe = spawnSync('bun', ['--version'], { stdio: 'ignore' });
+if (bunProbe.status === 0) {
+  run('bun', [join(packageRoot, 'src', 'daemon', 'cli.ts'), ...process.argv.slice(2)]);
+}
+
+const supported = [
+  'linux-x64',
+  'linux-arm64',
+  'darwin-x64',
+  'darwin-arm64',
+].join(', ');
+
+console.error('goodvibes-daemon: no runnable binary is available.');
+console.error(`platform: ${process.platform}-${process.arch}`);
+console.error(`supported prebuilt targets: ${supported}`);
+console.error('Either:');
+console.error('  1. install Bun and re-run the command, or');
+console.error('  2. reinstall a package version that includes bundled daemon binaries.');
+process.exit(1);

@@ -39,7 +39,7 @@ Common entrypoints:
 Release distribution:
 
 - GitHub Releases are the primary distribution path for compiled binaries
-- `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL by downloading the matching prebuilt release binary during install
+- `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL with bundled prebuilt TUI and daemon binaries already inside the package
 - native Windows is not supported; use WSL on Windows
 
 Common paths:

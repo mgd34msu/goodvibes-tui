@@ -16,7 +16,7 @@ npm install -g @pellux/goodvibes-tui
 goodvibes
 ```
 
-The npm package downloads the matching prebuilt release binary during install.
+The npm package already contains the matching prebuilt TUI and daemon binaries for Linux and macOS.
 
 Native Windows is not supported. Use WSL on Windows.
 
