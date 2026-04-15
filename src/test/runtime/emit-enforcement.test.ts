@@ -6,9 +6,12 @@
  * that invoke the raw RuntimeEventBus emit method) appear ONLY within the
  * approved allowlist of files.
  *
- * The allowlist contains:
- * - src/runtime/emitters/**  — the typed wrapper modules (these ARE allowed
- *   to call bus.emit directly; that is their sole purpose)
+ * If local typed wrapper modules still exist under src/runtime/emitters/,
+ * they are the only approved place for raw RuntimeEventBus.emit() calls.
+ *
+ * After the SDK cutover, the TUI may no longer have any local emitters at all.
+ * In that case the correct state is zero local raw emit() calls and no local
+ * emitter wrapper directory.
  * Any other file calling bus.emit on a RuntimeEventBus instance is a violation
  * of the typed emission contract and must be migrated to a wrapper function.
  *
@@ -34,10 +37,7 @@ import { join, relative } from 'node:path';
  * path to this list temporarily and open a tracking issue. Remove entries as
  * migrations are completed.
  */
-const EMIT_ALLOWLIST: readonly string[] = [
-  // Typed emitter wrappers — the ONLY approved place for raw RuntimeEventBus.emit()
-  'src/runtime/emitters/',
-];
+const LOCAL_EMITTERS_PATH = 'src/runtime/emitters';
 
 // ---------------------------------------------------------------------------
 // File system scanner
@@ -58,9 +58,7 @@ function walkTs(dir: string, files: string[] = []): string[] {
 }
 
 function isAllowlisted(relPath: string): boolean {
-  return EMIT_ALLOWLIST.some((allowed) =>
-    relPath === allowed || relPath.startsWith(allowed)
-  );
+  return relPath === LOCAL_EMITTERS_PATH || relPath.startsWith(`${LOCAL_EMITTERS_PATH}/`);
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +98,11 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
   const projectRoot = join(import.meta.dir, '../../..');
   const srcDir = join(projectRoot, 'src');
   const allFiles = walkTs(srcDir);
+  const emittersDir = join(srcDir, 'runtime', 'emitters');
+  const localEmitterFiles = existsSync(emittersDir)
+    ? readdirSync(emittersDir).filter((f) => f.endsWith('.ts') && f !== 'index.ts')
+    : [];
+  const hasLocalEmitters = localEmitterFiles.length > 0;
 
   test('zero raw RuntimeEventBus.emit() calls outside the allowlist', () => {
     const violations: string[] = [];
@@ -127,8 +130,10 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
     if (violations.length > 0) {
       const msg = [
         'GC-ARCH-002 violation: raw RuntimeEventBus.emit() call(s) detected outside allowlist.',
-        'Migrate these call sites to typed emitter wrapper functions in src/runtime/emitters/.',
-        'If migration is incomplete, add the file to EMIT_ALLOWLIST in',
+        hasLocalEmitters
+          ? 'Migrate these call sites to typed emitter wrapper functions in src/runtime/emitters/.'
+          : 'Migrate these call sites onto the SDK-owned typed emitter/runtime surface.',
+        'If migration is incomplete, update the local enforcement boundary in',
         'src/test/runtime/emit-enforcement.test.ts as a temporary suppression.',
         '',
         'Violations:',
@@ -140,37 +145,28 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
     expect(violations).toHaveLength(0);
   });
 
-  test('allowlist entries are valid paths or prefixes', () => {
-    // Sanity check: every allowlist entry must either be an existing file
-    // or an existing directory prefix (to prevent stale suppression entries)
-    const staleEntries: string[] = [];
+  test('local emitter wrapper boundary matches the live tree', () => {
+    const legacyEmitterFiles = allFiles
+      .map((absPath) => relative(projectRoot, absPath))
+      .filter((relPath) => relPath.startsWith(`${LOCAL_EMITTERS_PATH}/`));
 
-    for (const entry of EMIT_ALLOWLIST) {
-      const absEntry = join(projectRoot, entry);
-      // Entry is either a file or a directory (strip trailing slash for check)
-      const toCheck = entry.endsWith('/') ? absEntry.slice(0, -1) : absEntry;
-      if (!existsSync(toCheck)) {
-        staleEntries.push(entry);
-      }
+    if (!hasLocalEmitters) {
+      expect(legacyEmitterFiles).toHaveLength(0);
+      return;
     }
 
-    if (staleEntries.length > 0) {
-      throw new Error(
-        `Stale EMIT_ALLOWLIST entries (paths no longer exist):\n${staleEntries.map((e) => `  - ${e}`).join('\n')}\nRemove them from the allowlist.`
-      );
-    }
-
-    expect(staleEntries).toHaveLength(0);
+    expect(legacyEmitterFiles.length).toBeGreaterThan(0);
   });
 
   test('every emitter in src/runtime/emitters/ exports typed wrapper functions', () => {
-    const emittersDir = join(srcDir, 'runtime', 'emitters');
-    const emitterFiles = readdirSync(emittersDir)
-      .filter((f) => f.endsWith('.ts') && f !== 'index.ts');
+    if (!hasLocalEmitters) {
+      expect(hasLocalEmitters).toBeFalse();
+      return;
+    }
 
     const missingExports: string[] = [];
 
-    for (const file of emitterFiles) {
+    for (const file of localEmitterFiles) {
       const content = readFileSync(join(emittersDir, file), 'utf8');
       // Each emitter file must export at least one function named emit*
       if (!/export function emit/.test(content)) {
