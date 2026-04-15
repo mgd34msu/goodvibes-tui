@@ -6,6 +6,24 @@ All notable changes to GoodVibes TUI.
 
 ## [0.18.4] — 2026-04-14
 
+### First Public Distribution And Delivery
+
+- Published the TUI under the Pellux scope as `@pellux/goodvibes-tui` while keeping the installed CLI commands as `goodvibes` and `goodvibes-daemon`
+- Added a GitHub Packages mirror as `@mgd34msu/goodvibes-tui`
+- Bundled the compiled TUI and standalone daemon binaries directly into the npm package instead of relying on install-time downloads
+- Added both `goodvibes` and `goodvibes-daemon` launcher bins to the package so global npm installs expose both commands on the user path
+- Expanded the release asset set to ship compiled binaries for:
+  - Linux x64
+  - Linux arm64
+  - macOS x64
+  - macOS arm64
+- Expanded the release asset set to ship standalone daemon binaries for:
+  - Linux x64
+  - Linux arm64
+  - macOS x64
+  - macOS arm64
+- Added `SHA256SUMS.txt` checksums for the published release binaries
+
 ### Canonical SDK Cutover
 
 - Switched `goodvibes-tui` from the temporary beta line to the canonical `@pellux/goodvibes-sdk@0.18.14` package and rewired imports to the canonical SDK entrypoints
@@ -17,6 +35,9 @@ All notable changes to GoodVibes TUI.
 - Fixed the TUI eval gate to use the SDK-backed eval baseline, formatting, and scorecard exports after the platform extraction removed the old local files
 - Fixed the TUI performance gate to build CI snapshots against the SDK-backed `surfacePerf` domain shape instead of the pre-extraction local `uiPerf` shape
 - Fixed the architecture check so it tolerates removed migration targets on clean checkouts instead of crashing when extracted directories no longer exist
+- Fixed the package publish path so release packaging stages vendored binaries deterministically instead of depending on install-time binary download behavior
+- Fixed the release workflow to publish both npmjs and GitHub Packages distributions from the same bundled-binary package shape
+- Fixed the staged publish rehearsal so it packs the final publishable package locally without tripping registry version conflicts or `/tmp` quota issues
 
 ### Verification
 
@@ -27,7 +48,10 @@ All notable changes to GoodVibes TUI.
 - Full test runner passes: `bun run test`
 - Build passes: `bun run build`
 - Foundation artifact export passes: `bun run foundation:artifacts`
+- Vendored binary staging passes: `bun run vendor:stage --clean`
 - Publish packaging check passes: `bun run publish:check`
+- Staged npm package rehearsal passes: `bun run publish:dry-run`
+- Staged GitHub Packages rehearsal passes: `bun run publish:dry-run:github`
 - Diff hygiene passes: `git diff --check`
 
 ## [0.18.3] — 2026-04-14
