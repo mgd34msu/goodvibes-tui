@@ -25,7 +25,7 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Release and publishing](release-and-publishing.md)
   Release validation, GitHub CD, compiled binary releases, and optional Bun-oriented npm distribution.
 
-- [Release notes](releases/0.18.4.md)
+- [Release notes](releases/0.18.5.md)
   Version-specific release notes for shipped TUI releases.
 
 - [Foundation artifacts](foundation-artifacts/README.md)

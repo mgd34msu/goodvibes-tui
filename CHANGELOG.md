@@ -4,6 +4,53 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.5] — 2026-04-14
+
+### Public Package And Release Correction
+
+- Corrected the public packaged release path after the initial `0.18.4` cutover so the shipped npm distribution now matches the actual intended install model
+- Published the TUI on npm as `@pellux/goodvibes-tui` and mirrored the same release to GitHub Packages as `@mgd34msu/goodvibes-tui`
+- Kept the installed CLI surface as `goodvibes` and `goodvibes-daemon` while moving the package identity to the scoped release names
+- Added both launcher bins to the packaged distribution so global installs expose the interactive TUI and the standalone daemon directly on the user path
+
+### Bundled Binary Delivery
+
+- Bundled the compiled TUI binaries directly into the npm package for:
+  - Linux x64
+  - Linux arm64
+  - macOS x64
+  - macOS arm64
+- Bundled the standalone daemon binaries directly into the npm package for:
+  - Linux x64
+  - Linux arm64
+  - macOS x64
+  - macOS arm64
+- Removed the prior install-time binary download behavior so npm installs now use the packaged binaries already present in `vendor/`
+- Added packaged release checksums through `vendor/SHA256SUMS.txt` and release-asset `SHA256SUMS.txt`
+
+### Release Automation And Publish Path Hardening
+
+- Added staged vendor-binary packaging so npm and GitHub Packages publishes are built from the same explicit bundled-binary package shape
+- Added a dedicated publish-packaging path for registry release publishing instead of depending on raw repo copies during publish
+- Added a GitHub Packages publish job alongside the npmjs publish job in the release workflow
+- Fixed staged publish rehearsal so local dry-runs validate the real publishable package shape without tripping registry version conflicts or temporary-filesystem quota failures
+- Extended release validation and install smoke coverage to require both launcher bins and both bundled binary families
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Performance gate passes: `bun run perf:check`
+- Eval gate passes: `bun run eval:gate`
+- Full test runner passes: `bun run test`
+- Build passes: `bun run build`
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Vendored binary staging passes: `bun run vendor:stage --clean`
+- Publish packaging check passes: `bun run publish:check`
+- Staged npm package rehearsal passes: `bun run publish:dry-run`
+- Staged GitHub Packages rehearsal passes: `bun run publish:dry-run:github`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.4] — 2026-04-14
 
 ### First Public Distribution And Delivery
