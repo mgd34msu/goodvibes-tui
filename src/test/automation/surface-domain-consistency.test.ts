@@ -2,18 +2,18 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AutomationDeliveryManager } from '../../automation/delivery-manager.ts';
+import { AutomationDeliveryManager } from '@pellux/goodvibes-sdk/platform/automation/delivery-manager';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
 import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
 import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
-import { RouteBindingManager } from '../../channels/route-manager.ts';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { DeliveryEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/deliveries';
 import type { RouteEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
 
@@ -68,7 +68,7 @@ describe('surface domain consistency', () => {
       store: new AutomationRouteStore(join(root, 'delivery-routes.json')),
     });
     const manager = new AutomationDeliveryManager({
-      configManager: new ConfigManager({ configDir: root }),
+      configManager: new ConfigManager({ surfaceRoot: 'tui',  configDir: root }),
       serviceRegistry: new ServiceRegistry(join(root, 'services.json'), {
         secretsManager: new SecretsManager({ projectRoot: root, globalHome: root }),
         subscriptionManager: new SubscriptionManager(join(root, 'subscriptions.json')),

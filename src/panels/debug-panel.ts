@@ -1,8 +1,8 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { TurnEvent } from '../runtime/events/index.ts';
-import type { UiEventFeed } from '../runtime/ui-events.ts';
-import type { Orchestrator } from '../core/orchestrator.ts';
+import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import type { Orchestrator } from '../core/orchestrator';
 import {
   buildEmptyState,
   buildPanelLine,

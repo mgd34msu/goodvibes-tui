@@ -1,13 +1,13 @@
 import type { RuntimeServices } from './services.ts';
 import type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
-import { createStoreBackedReadModel } from './ui-read-model-helpers.ts';
+import { createStoreBackedReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-model-helpers';
 import type {
   ContinuitySnapshot as IntegrationContinuitySnapshot,
   SettingsSnapshot as IntegrationSettingsSnapshot,
   WorktreeSnapshot as IntegrationWorktreeSnapshot,
-} from './integration/helpers.ts';
-import type { SessionReturnContextSummary } from './session-return-context.ts';
-import type { ManagedWorktreeMeta } from './worktree/registry.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
+import type { SessionReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
+import type { ManagedWorktreeMeta } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 
 export interface UiSettingsSnapshot {
   readonly available: boolean;

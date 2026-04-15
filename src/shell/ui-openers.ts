@@ -1,12 +1,12 @@
 import type { ConfigManager } from '../config/index.ts';
-import type { ConversationManager } from '../core/conversation.ts';
+import type { ConversationManager } from '../core/conversation';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { MutableRuntimeState } from '../runtime/context.ts';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import type { McpRegistry } from '../mcp/registry.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 

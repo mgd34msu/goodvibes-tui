@@ -1,7 +1,7 @@
 import type { RuntimeServices } from './services.ts';
 import type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
-import { createStoreBackedReadModel } from './ui-read-model-helpers.ts';
-import type { RemoteSupervisorSnapshot } from './remote/supervisor.ts';
+import { createStoreBackedReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-model-helpers';
+import type { RemoteSupervisorSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
 import type { DistributedPendingWork, DistributedPeerRecord, DistributedRuntimePairRequest } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-types';
 
 export interface UiRemoteSnapshot {

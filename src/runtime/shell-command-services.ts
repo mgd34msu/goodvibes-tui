@@ -1,21 +1,21 @@
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
-import type { ForensicsRegistry } from './forensics/index.ts';
-import type { IntegrationHelperService } from './integration/helpers.ts';
-import type { HookWorkbench } from '../hooks/workbench.ts';
-import type { KnowledgeService } from '../knowledge/index.ts';
-import type { PluginManager } from '../plugins/manager.ts';
-import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
+import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
+import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
+import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import type { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins/manager';
+import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import type { WorktreeRegistry } from './worktree/registry.ts';
+import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
-import { createShellExtensionServices, type CommandExtensionShellServices } from './shell-command-extensions.ts';
-import { createShellOpsServices, createShellPlanRuntime, createShellRemoteCommandService, type CommandOpsShellServices, type PlanRuntimeService, type RemoteCommandService } from './shell-command-ops.ts';
-import { createShellPlatformServices, type CommandPlatformShellServices } from './shell-command-platform.ts';
-import { createShellWorkspaceServices, type CommandWorkspaceShellServices } from './shell-command-workspace.ts';
+import { createShellExtensionServices, type CommandExtensionShellServices } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-extensions';
+import { createShellOpsServices, createShellPlanRuntime, createShellRemoteCommandService, type CommandOpsShellServices, type PlanRuntimeService, type RemoteCommandService } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
+import { createShellPlatformServices, type CommandPlatformShellServices } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-platform';
+import { createShellWorkspaceServices, type CommandWorkspaceShellServices } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-workspace';
 
-export type { CommandWorkspaceShellServices } from './shell-command-workspace.ts';
-export type { CommandPlatformShellServices } from './shell-command-platform.ts';
+export type { CommandWorkspaceShellServices } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-workspace';
+export type { CommandPlatformShellServices } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-platform';
 export type {
   ShellAgentManagerService,
   ShellAcpManagerService,
@@ -24,9 +24,9 @@ export type {
   ShellModeManagerService,
   ShellPlanManagerService,
   ShellSessionOrchestrationService,
-} from './shell-command-ops.ts';
-export type { CommandOpsShellServices, PlanRuntimeService, RemoteCommandService } from './shell-command-ops.ts';
-export type { CommandExtensionShellServices } from './shell-command-extensions.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
+export type { CommandOpsShellServices, PlanRuntimeService, RemoteCommandService } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
+export type { CommandExtensionShellServices } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-extensions';
 
 export interface BootstrapCommandShellServices {
   readonly workspace: CommandWorkspaceShellServices;
@@ -140,4 +140,4 @@ export function createBootstrapCommandShellServices(
   };
 }
 
-export { createShellRemoteCommandService, createShellPlanRuntime } from './shell-command-ops.ts';
+export { createShellRemoteCommandService, createShellPlanRuntime } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';

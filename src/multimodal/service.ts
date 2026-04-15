@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import type { ArtifactDescriptor, ArtifactRecord } from '@pellux/goodvibes-sdk/platform/artifacts/types';
-import { MediaProviderRegistry } from '../media/index.ts';
+import { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/index';
 import { extractKnowledgeArtifact } from '@pellux/goodvibes-sdk/platform/knowledge/extractors';
-import { KnowledgeService } from '../knowledge/index.ts';
+import { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
 import type { VoiceAudioArtifact } from '@pellux/goodvibes-sdk/platform/voice/index';
 import type {

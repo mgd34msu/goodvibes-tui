@@ -1,7 +1,13 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { defaultExportPath, exportToHTML, exportToJSON, exportToMarkdownExtended } from '../../export/session-export.ts';
+import {
+  type ExportMessage,
+  defaultExportPath,
+  exportToHTML,
+  exportToJSON,
+  exportToMarkdownExtended,
+} from '@pellux/goodvibes-sdk/platform/export/session-export';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
@@ -63,9 +69,8 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
-      type ExportMsg = import('../../export/session-export.ts').ExportMessage;
-      const messages: ExportMsg[] = convData.messages.map(m => ({
-        role: m.role as ExportMsg['role'],
+      const messages: ExportMessage[] = convData.messages.map(m => ({
+        role: m.role as ExportMessage['role'],
         content: m.content as string,
         toolCalls: m.toolCalls,
         callId: m.callId,

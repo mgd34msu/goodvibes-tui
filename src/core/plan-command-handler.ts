@@ -13,8 +13,8 @@
 import { AdaptivePlanner, VALID_STRATEGIES } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import type { ExecutionStrategy } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { emitPlanStrategyOverridden } from '../runtime/emitters/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { emitPlanStrategyOverridden } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import type { AdaptivePlanner as AdaptivePlannerType } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 
 export interface PlanCommandResult {

@@ -1,8 +1,8 @@
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
 import { resolveApiKeys } from '../../config/index.ts';
 import type { SecretsManager } from '../../config/secrets.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
-import type { ProviderRuntimeMetadata } from '../../providers/interface.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ProviderRuntimeMetadata } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { decodeJwtPayload } from '@pellux/goodvibes-sdk/platform/runtime/auth/oauth-core';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';

@@ -18,11 +18,11 @@
  * ```
  */
 import type { RuntimeTracer } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/tracer';
-import type { RuntimeEventBus } from '../../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { CascadeAppliedEvent } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
-import { DomainBridge } from './domain-bridge.ts';
+import { DomainBridge } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/domain-bridge';
 
-export { DomainBridge } from './domain-bridge.ts';
+export { DomainBridge } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/domain-bridge';
 
 /** Handle returned by `createInstrumentation()`. */
 export interface InstrumentationHandle {

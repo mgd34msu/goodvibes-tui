@@ -1,10 +1,10 @@
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { ControlPlaneGateway } from '../../control-plane/gateway.ts';
-import { DiscordIntegration, NtfyIntegration, SlackIntegration } from '../../integrations/index.ts';
+import { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
+import { DiscordIntegration, NtfyIntegration, SlackIntegration } from '@pellux/goodvibes-sdk/platform/integrations/index';
 import { validatePublicWebhookUrl } from '@pellux/goodvibes-sdk/platform/utils/url-safety';
-import type { ChannelDeliveryStrategy } from './types.ts';
+import type { ChannelDeliveryStrategy } from '@pellux/goodvibes-sdk/platform/channels/delivery/types';
 import {
   appendAttachmentSummary,
   extractResponseId,
@@ -15,7 +15,7 @@ import {
   success,
   titleFromBody,
   trimForSurface,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery/shared';
 
 export function createWebhookDeliveryStrategy(configManager: ConfigManager, artifactStore: ArtifactStore): ChannelDeliveryStrategy {
   return {

@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:
 import { mkdirSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import {
   applyOutboundTlsToFetchInit,
   createNetworkFetch,
   inspectOutboundTls,
-} from '../../../runtime/network/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 describe('runtime/network outbound TLS', () => {
@@ -25,7 +25,7 @@ describe('runtime/network outbound TLS', () => {
   });
 
   test('defaults to Bun bundled trust roots', () => {
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     const snapshot = inspectOutboundTls(config);
     expect(snapshot.mode).toBe('bundled');
     expect(snapshot.effectiveCaStrategy).toBe('bun-default');
@@ -37,7 +37,7 @@ describe('runtime/network outbound TLS', () => {
     mkdirSync(certDir, { recursive: true });
     const caPath = join(certDir, 'corp-root.pem');
     writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\ncorp\n-----END CERTIFICATE-----\n', 'utf-8');
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     config.set('network.outboundTls.mode', 'bundled+custom');
     config.set('network.outboundTls.customCaFile', caPath);
 
@@ -49,14 +49,14 @@ describe('runtime/network outbound TLS', () => {
   });
 
   test('throws when custom-only trust is enabled without any CA material', () => {
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     config.set('network.outboundTls.mode', 'custom');
 
     expect(() => applyOutboundTlsToFetchInit('https://api.example.test', {}, config)).toThrow(/custom CA/i);
   });
 
   test('allows insecure localhost only for loopback HTTPS targets', () => {
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     config.set('network.outboundTls.allowInsecureLocalhost', true);
 
     const localInit = applyOutboundTlsToFetchInit('https://127.0.0.1:8443', {}, config);
@@ -71,7 +71,7 @@ describe('runtime/network outbound TLS', () => {
     mkdirSync(certDir, { recursive: true });
     const caPath = join(certDir, 'internal.pem');
     writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\ncorp\n-----END CERTIFICATE-----\n', 'utf-8');
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     config.set('network.outboundTls.mode', 'custom');
     config.set('network.outboundTls.customCaFile', caPath);
     const calls: Array<RequestInit & { tls?: { ca?: unknown } }> = [];
@@ -89,7 +89,7 @@ describe('runtime/network outbound TLS', () => {
   });
 
   test('emits provider egress trace for chat completions', async () => {
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     const debugSpy = spyOn(logger, 'debug');
     const fetchImpl = mock(async () => new Response('ok', {
       status: 200,

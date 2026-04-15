@@ -1,4 +1,4 @@
-import type { RuntimeEventBus, RuntimeEventEnvelope, AnyRuntimeEvent } from '../runtime/events/index.ts';
+import type { RuntimeEventBus, RuntimeEventEnvelope, AnyRuntimeEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type {
   ChannelRenderEvent,
   ChannelRenderPhase,
@@ -8,8 +8,8 @@ import type {
   ChannelReasoningVisibility,
   ChannelSurface,
 } from '@pellux/goodvibes-sdk/platform/channels/types';
-import type { ChannelPluginRegistry } from './plugin-registry.ts';
-import type { RouteBindingManager } from './route-manager.ts';
+import type { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/plugin-registry';
+import type { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
 
 const MAX_BUFFERED_EVENTS = 64;
 const DEFAULT_PROGRESS_INTERVAL_MS = 7_500;

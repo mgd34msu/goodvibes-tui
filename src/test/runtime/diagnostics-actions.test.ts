@@ -27,11 +27,11 @@ import {
   diagnosticFromAgentFailure,
   diagnosticFromToolContractViolation,
   diagnosticFromForensicsRun,
-} from '../../runtime/diagnostics/actions.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/actions';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { createTaskManager } from '../../runtime/tasks/index.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { OpsControlPlane } from '../../runtime/ops/control-plane.ts';
+import { createTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/index';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { OpsControlPlane } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
 import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core/deterministic-replay';
 
 // ---------------------------------------------------------------------------

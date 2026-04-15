@@ -1,5 +1,5 @@
 import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ToolRuntimeContext } from '../context.ts';
+import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
 import type { BudgetExceedReason, PhaseResult, ToolExecutionPhase, ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 
 /**

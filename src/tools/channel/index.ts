@@ -1,6 +1,6 @@
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ChannelPluginRegistry } from '../../channels/index.ts';
-import type { ChannelAccountLifecycleAction, ChannelConversationKind } from '../../channels/index.ts';
+import type { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
+import type { ChannelAccountLifecycleAction, ChannelConversationKind } from '@pellux/goodvibes-sdk/platform/channels/index';
 
 function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);

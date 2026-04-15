@@ -1,4 +1,4 @@
-import { executeFetchInput, type FetchOutput } from '../../tools/fetch/index.ts';
+import { executeFetchInput, type FetchOutput } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
 import type { FetchInput } from '@pellux/goodvibes-sdk/platform/tools/fetch/schema';
 import type {
   WebSearchInstantAnswer,

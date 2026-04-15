@@ -6,7 +6,7 @@ import {
   resultFromRecord,
   withInlineApiKey,
   type SearchProviderContext,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
 
 const EXA_DEFAULT_BASE_URL = 'https://api.exa.ai';
 const EXA_ENV_KEYS = ['EXA_API_KEY'] as const;

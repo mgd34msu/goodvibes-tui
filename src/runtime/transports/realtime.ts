@@ -1,8 +1,8 @@
-import { createHttpTransport } from './http.ts';
+import { createHttpTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http';
 import { createClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/client-transport';
-import type { HttpTransportOptions, HttpTransportPeerClient, HttpTransportOperatorClient, HttpTransportSnapshot } from './http-types.ts';
-import { createWebSocketConnector } from './shared.ts';
-import { createRemoteUiRuntimeEvents } from './ui-runtime-events.ts';
+import type { HttpTransportOptions, HttpTransportPeerClient, HttpTransportOperatorClient, HttpTransportSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-types';
+import { createWebSocketConnector } from '@pellux/goodvibes-sdk/platform/runtime/transports/shared';
+import { createRemoteUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/transports/ui-runtime-events';
 
 export interface RealtimeTransportOptions extends HttpTransportOptions {
   readonly webSocketImpl?: typeof WebSocket;

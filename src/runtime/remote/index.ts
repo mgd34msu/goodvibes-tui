@@ -156,15 +156,15 @@ export type {
 } from '@pellux/goodvibes-sdk/platform/runtime/remote/session-state';
 export {
   RemoteSupervisor,
-} from './supervisor.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
 export type {
   RemoteSupervisorSnapshot,
-} from './supervisor.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
 export {
   RemoteRunnerRegistry,
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
-} from './runner-registry.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
 export type {
   DistributedPeerKind,
   DistributedPairRequestStatus,

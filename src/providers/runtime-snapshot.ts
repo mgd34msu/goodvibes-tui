@@ -1,6 +1,6 @@
-import type { ProviderRuntimeMetadata } from './interface.ts';
-import type { ModelDefinition, ProviderRegistry } from './registry.ts';
-import type { LLMProvider } from './interface.ts';
+import type { ProviderRuntimeMetadata } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 export interface ProviderModelSnapshot {
   readonly id: string;

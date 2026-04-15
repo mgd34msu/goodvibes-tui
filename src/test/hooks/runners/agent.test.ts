@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { run } from '../../../hooks/runners/agent.ts';
-import { AgentManager } from '../../../tools/agent/index.ts';
-import { ConfigManager } from '../../../config/manager.ts';
+import { run } from '@pellux/goodvibes-sdk/platform/hooks/runners/agent';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { HookDefinition, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 
 const testAgentExecutor = {
@@ -46,7 +46,7 @@ beforeEach(() => {
   const configDir = join(tmpdir(), `gv-agent-runner-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   agentManager = new AgentManager({
     executor: testAgentExecutor,
-    configManager: new ConfigManager({ configDir }),
+    configManager: new ConfigManager({ surfaceRoot: 'tui',  configDir }),
   });
 });
 

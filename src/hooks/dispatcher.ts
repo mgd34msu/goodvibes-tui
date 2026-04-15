@@ -6,11 +6,11 @@ import { getHookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contr
 import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { HooksConfig } from '@pellux/goodvibes-sdk/platform/hooks/types';
-import type { AgentManager } from '../tools/agent/index.ts';
-import type { ToolLLM } from '../config/tool-llm.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
 import * as commandRunner from '@pellux/goodvibes-sdk/platform/hooks/runners/command';
-import * as promptRunner from './runners/prompt.ts';
-import * as agentRunner from './runners/agent.ts';
+import * as promptRunner from '@pellux/goodvibes-sdk/platform/hooks/runners/prompt';
+import * as agentRunner from '@pellux/goodvibes-sdk/platform/hooks/runners/agent';
 import * as httpRunner from '@pellux/goodvibes-sdk/platform/hooks/runners/http';
 import * as tsRunner from '@pellux/goodvibes-sdk/platform/hooks/runners/typescript';
 import { fireTriggers } from '@pellux/goodvibes-sdk/platform/workflow/trigger-executor';

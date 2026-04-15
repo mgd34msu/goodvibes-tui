@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
-import type { ConfigManager } from '../config/manager.ts';
-import type { SessionMaintenanceStatus } from './session-maintenance.ts';
-import type { EcosystemRecommendation } from './ecosystem/recommendations.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { SessionMaintenanceStatus } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
+import type { EcosystemRecommendation } from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/recommendations';
 
 export type GuidanceMode = 'off' | 'minimal' | 'guided';
 export type GuidanceCategory = 'onboarding' | 'operational' | 'recovery' | 'optimization';

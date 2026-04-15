@@ -10,9 +10,9 @@ import {
   fromGeminiParts,
   toGeminiContents,
   extractTextToolCalls,
-} from '../../providers/tool-formats.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
 import type { ToolDefinition, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ProviderMessage } from '../../providers/interface.ts';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 const sampleTool: ToolDefinition = {
   name: 'read',

@@ -15,11 +15,11 @@ import {
   computeQualityScore,
   escalateStrategy,
   LOW_QUALITY_THRESHOLD,
-} from '../../runtime/compaction/quality-score.ts';
-import { SloCollector } from '../../runtime/perf/slo-collector.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/compaction/quality-score';
+import { SloCollector } from '@pellux/goodvibes-sdk/platform/runtime/perf/slo-collector';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { FEATURE_FLAGS } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/flags';
-import type { ProviderMessage } from '../../providers/interface.ts';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 // ---------------------------------------------------------------------------
 // Helpers

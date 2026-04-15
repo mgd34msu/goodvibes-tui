@@ -17,7 +17,7 @@ import {
   reviewEcosystemCatalogEntry,
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
-} from '../runtime/ecosystem/catalog.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
 import type { UiMarketplaceSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 
 const C = {

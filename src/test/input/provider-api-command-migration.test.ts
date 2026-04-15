@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/index';
-import { HelperModel } from '../../config/helper-model.ts';
+import { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerLocalProviderRuntimeCommands } from '../../input/commands/local-provider-runtime.ts';
@@ -16,7 +16,7 @@ import type {
   ProviderApiModelRecord,
   ProviderApiRuntimeQuery,
   ProviderApiRuntimeQueryResult,
-} from '../../providers/provider-api.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/provider-api';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 
 function failOnAccess(label: string): never {

@@ -16,8 +16,8 @@
 import type { HealthDomain, HealthStatus } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
 import type { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
 import type { CascadeEngine } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-engine';
-import type { RuntimeEventBus } from '../events/index.ts';
-import { handleCascadeEffect } from './effect-handlers.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { handleCascadeEffect } from '@pellux/goodvibes-sdk/platform/runtime/health/effect-handlers';
 
 /**
  * Wires the health aggregator, cascade engine, and event bus together.

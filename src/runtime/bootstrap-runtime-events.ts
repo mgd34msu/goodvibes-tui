@@ -1,10 +1,10 @@
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
-import type { AgentEvent, ProviderEvent, RuntimeEventBus, WorkflowEvent } from './events/index.ts';
+import type { AgentEvent, ProviderEvent, RuntimeEventBus, WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { createDomainDispatch } from './store/index.ts';
-import type { WrfcController } from '../agents/wrfc-controller.ts';
-import type { AgentManager } from '../tools/agent/index.ts';
+import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 const AGENT_STATUS_INTERVAL_MS = 30_000;
 

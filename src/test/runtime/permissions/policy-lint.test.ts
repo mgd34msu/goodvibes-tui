@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { lintPolicyConfig } from '../../../runtime/permissions/index.ts';
+import { lintPolicyConfig } from '@pellux/goodvibes-sdk/platform/runtime/permissions/index';
 import type { PermissionsConfig } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
 
 describe('lintPolicyConfig', () => {

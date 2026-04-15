@@ -2,23 +2,23 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
-import { AutomationManager } from '../../automation/manager.ts';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/manager';
 import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
 import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
 import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
-import { RouteBindingManager } from '../../channels/route-manager.ts';
-import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
 import {
   DEFAULT_TOP_OF_HOUR_STAGGER_MS,
   normalizeCronSchedule,
   normalizeEverySchedule,
   resolveStableAutomationCronOffsetMs,
 } from '@pellux/goodvibes-sdk/platform/automation/schedules';
-import type { SpawnAutomationTaskInput } from '../../automation/manager-runtime.ts';
+import type { SpawnAutomationTaskInput } from '@pellux/goodvibes-sdk/platform/automation/manager-runtime';
 import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 const testAgentExecutor = {
   async runAgent() {
@@ -41,7 +41,7 @@ describe('AutomationManager', () => {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, `routes-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)),
     });
-    const configManager = config.configManager ?? new ConfigManager({
+    const configManager = config.configManager ?? new ConfigManager({ surfaceRoot: 'tui',
       workingDir: root,
       configDir: join(root, '.goodvibes', 'tui'),
     });
@@ -166,7 +166,7 @@ describe('AutomationManager', () => {
   });
 
   test('applies config defaults and prunes run history by job', async () => {
-    const configManager = new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',  workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
     configManager.set('automation.defaultTimeoutMs', 1234);
     configManager.set('automation.deleteAfterRun', true);
     configManager.set('automation.runHistoryLimit', 2);
@@ -202,7 +202,7 @@ describe('AutomationManager', () => {
   test('persists local agent usage telemetry onto completed runs', async () => {
     const agentManager = new AgentManager({
       executor: testAgentExecutor,
-      configManager: new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') }),
+      configManager: new ConfigManager({ surfaceRoot: 'tui',  workingDir: root, configDir: join(root, '.goodvibes', 'tui') }),
     });
     const manager = createManager({
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),

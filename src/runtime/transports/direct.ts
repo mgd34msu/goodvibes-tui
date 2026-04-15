@@ -1,10 +1,10 @@
-import type { SharedApprovalRecord, SharedSessionRecord } from '../../control-plane/index.ts';
+import type { SharedApprovalRecord, SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import {
   createDirectTransportServices,
   type DirectTransportServices,
-} from '../foundation-services.ts';
-import { createOperatorClient, type OperatorClient, type OperatorControlPlaneSnapshot, type OperatorProvidersSnapshot } from '../operator-client.ts';
-import { createPeerClient, type PeerClient, type PeerClientSnapshot } from '../peer-client.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
+import { createOperatorClient, type OperatorClient, type OperatorControlPlaneSnapshot, type OperatorProvidersSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+import { createPeerClient, type PeerClient, type PeerClientSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import type { RuntimeServices } from '../services.ts';
 import type { UiSessionSnapshot, UiTasksSnapshot } from '../ui-read-models.ts';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';

@@ -1,11 +1,11 @@
-import type { ForensicsRegistry } from './forensics/index.ts';
+import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
 import type { PolicyRegistry } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-registry';
-import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
-import type { MemoryRegistry } from '../state/memory-store.ts';
-import type { IntegrationHelperService } from './integration/helpers.ts';
-import type { KnowledgeService } from '../knowledge/index.ts';
-import type { PluginManager } from '../plugins/manager.ts';
-import type { HookWorkbench } from '../hooks/workbench.ts';
+import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import type { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins/manager';
+import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
 
 export interface CommandExtensionShellServices {
   readonly forensicsRegistry?: ForensicsRegistry;

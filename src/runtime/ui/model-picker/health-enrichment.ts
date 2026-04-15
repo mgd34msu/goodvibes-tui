@@ -5,8 +5,8 @@
  * telemetry from ProviderHealthDomainState to produce enriched
  * ModelPickerEntry objects ready for UI consumption.
  */
-import type { ModelDefinition } from '../../../providers/registry.ts';
-import type { ProviderRegistry } from '../../../providers/registry.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { ProviderHealthDomainState, ProviderHealthRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
@@ -18,7 +18,7 @@ import type {
   ProviderHealthContext,
   CapabilityFlags,
   ProviderLatencyStats,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/types';
 
 /** Status sort priority (lower = shown first). */
 const STATUS_ORDER: Record<string, number> = {

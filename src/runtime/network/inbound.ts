@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import type { ConfigManager } from '../../config/manager.ts';
-import { getDefaultInboundCertPaths, inspectPrivateKeyPermissions, resolvePathFromGoodVibesRoot } from './shared.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { getDefaultInboundCertPaths, inspectPrivateKeyPermissions, resolvePathFromGoodVibesRoot } from '@pellux/goodvibes-sdk/platform/runtime/network/shared';
 
 export type InboundTlsMode = 'off' | 'proxy' | 'direct';
 export type InboundServerSurface = 'controlPlane' | 'httpListener';

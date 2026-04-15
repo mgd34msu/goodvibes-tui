@@ -5,21 +5,21 @@
  * and terminal lifecycle. The bootstrap owns initialization; main.ts owns
  * the runtime loop.
  */
-import type { ConversationManager } from '../core/conversation.ts';
-import type { Orchestrator } from '../core/orchestrator.ts';
+import type { ConversationManager } from '../core/conversation';
+import type { Orchestrator } from '../core/orchestrator';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { PermissionManager } from '../permissions/manager.ts';
-import type { HookDispatcher } from '../hooks/dispatcher.ts';
+import type { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import type { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { RuntimeStore } from './store/index.ts';
-import type { RuntimeEventBus } from './events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import type { SessionSnapshot } from './session-persistence.ts';
+import type { SessionSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import type { RuntimeServices } from './services.ts';
 import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
-import type { WorktreeRegistry } from './worktree/registry.ts';
+import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 
 /**
@@ -48,7 +48,7 @@ export interface BootstrapOptions {
   /** App-owned home directory for this runtime instance. */
   homeDirectory: string;
   /** Explicit app-owned config manager for this runtime instance. */
-  configManager: import('../config/manager.ts').ConfigManager;
+  configManager: import('@pellux/goodvibes-sdk/platform/config/manager').ConfigManager;
   /**
    * Callback invoked when the app should exit.
    * If provided, commandContext.exit is wired during bootstrap.

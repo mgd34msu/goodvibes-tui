@@ -1,4 +1,4 @@
-import type { ModelDefinition } from './registry-types.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry-types';
 
 export function withRegistryKey(model: ModelDefinition): ModelDefinition {
   return model.registryKey ? model : { ...model, registryKey: `${model.provider}:${model.id}` };

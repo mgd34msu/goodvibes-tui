@@ -1,5 +1,5 @@
 import type { HookChain, HookEvent, HookResult, ChainStep } from '@pellux/goodvibes-sdk/platform/hooks/types';
-import type { HookDispatcher } from './dispatcher.ts';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import { matchesEventPath } from '@pellux/goodvibes-sdk/platform/hooks/matcher';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

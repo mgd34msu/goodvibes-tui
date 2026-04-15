@@ -1,7 +1,7 @@
 import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import type { PermissionCategory, PermissionRequestAnalysis } from '@pellux/goodvibes-sdk/platform/permissions/types';
-import { buildPermissionApprovalBrief, getDisplayArg } from './briefs/build.ts';
+import { buildPermissionApprovalBrief, getDisplayArg } from '@pellux/goodvibes-sdk/platform/permissions/briefs/build';
 
 export interface PermissionPromptRequest {
   callId: string;

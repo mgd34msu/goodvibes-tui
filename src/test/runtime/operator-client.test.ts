@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createOperatorClientServices } from '../../runtime/foundation-services.ts';
-import { createEventEnvelope, RuntimeEventBus } from '../../runtime/events/index.ts';
-import { createOperatorClient } from '../../runtime/operator-client.ts';
+import { createOperatorClientServices } from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
+import { createEventEnvelope, RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createOperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
 import { createInitialTasksState, type RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 

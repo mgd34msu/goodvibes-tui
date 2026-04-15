@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import type { PeerClient } from '../../runtime/peer-client.ts';
+import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import {

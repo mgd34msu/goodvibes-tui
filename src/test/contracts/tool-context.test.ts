@@ -3,8 +3,8 @@ import type {
   ToolRuntimeContext,
   TaskHooks,
   RuntimeStoreAccess,
-} from '../../runtime/tools/context.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { PhaseResult, ToolExecutionPhase } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 
 // ---------------------------------------------------------------------------

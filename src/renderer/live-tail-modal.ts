@@ -1,7 +1,7 @@
 import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ModalFactory } from './modal-factory.ts';
 import type { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
-import type { AgentManager } from '../tools/agent/index.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { ProcessEntry } from './process-modal.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 

@@ -5,8 +5,8 @@
  * entry with the reason code, as required by the Operator Control Plane spec.
  */
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import type { RuntimeEventBus } from '../events/index.ts';
-import type { EmitterContext } from './index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import type { OpsInterventionReason } from '@pellux/goodvibes-sdk/platform/runtime/events/ops';
 
 /** Emit OPS_CONTEXT_WARNING when context usage crosses a warning threshold. */

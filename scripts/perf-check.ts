@@ -14,7 +14,7 @@
  *   1 — one or more budgets exceeded tolerance
  */
 
-import { createPerfMonitor, formatReport, exitCode } from '../src/runtime/perf/index.ts';
+import { createPerfMonitor, formatReport, exitCode } from '@pellux/goodvibes-sdk/platform/runtime/perf/index';
 import { createInitialSurfacePerfState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surface-perf';
 import type { PerfSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
 

@@ -1,41 +1,41 @@
-import type { McpRegistry } from '../mcp/registry.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
-import type { ConversationManager } from '../core/conversation.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ConversationManager } from '../core/conversation';
 import type { ConfigManager } from '../config/index.ts';
 import type { DeepReadonly, GoodVibesConfig } from '../config/index.ts';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { PermissionRequestHandler } from '../permissions/prompt.ts';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
-import type { KnowledgeApi } from '../knowledge/knowledge-api.ts';
-import type { HookApi } from '../hooks/hook-api.ts';
-import type { McpApi } from '../mcp/mcp-api.ts';
-import type { ProviderApi } from '../providers/provider-api.ts';
-import type { OpsApi } from '../runtime/ops-api.ts';
-import type { OperatorClient } from '../runtime/operator-client.ts';
-import type { PeerClient } from '../runtime/peer-client.ts';
-import type { DirectTransport } from '../runtime/transports/direct.ts';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
+import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks/hook-api';
+import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp/mcp-api';
+import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
+import type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
+import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
+import type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
 import type {
   CommandWorkspaceShellServices,
-} from '../runtime/shell-command-workspace.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-workspace';
 import type {
   CommandPlatformShellServices,
-} from '../runtime/shell-command-platform.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-platform';
 import type {
   CommandExtensionShellServices,
-} from '../runtime/shell-command-extensions.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-extensions';
 import type {
   CommandOpsShellServices,
   RemoteCommandService,
   PlanRuntimeService,
-} from '../runtime/shell-command-ops.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
 
 export type {
   RemoteCommandService,
   PlanRuntimeService,
-} from '../runtime/shell-command-ops.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
 
 export interface CommandRuntimeState {
   model: string;
@@ -241,6 +241,13 @@ export class CommandRegistry {
   /** All registered commands. */
   getAll(): SlashCommand[] {
     return Array.from(this.commands.values());
+  }
+
+  /**
+   * list - Compatibility alias for the simpler SDK registry surface.
+   */
+  list(): SlashCommand[] {
+    return this.getAll();
   }
 
   /**

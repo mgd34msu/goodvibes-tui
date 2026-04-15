@@ -1,7 +1,7 @@
 import { dirname, resolve } from 'path';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { CommandRegistry } from '../command-registry.ts';
-import { buildIncidentMemoryAddOptions } from '../../state/memory-ingest.ts';
+import { buildIncidentMemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state/memory-ingest';
 import { requireShellPaths } from './runtime-services.ts';
 import { getMemoryApi } from './recall-query.ts';
 

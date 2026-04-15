@@ -1,5 +1,5 @@
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk';
-import { AnthropicSdkProvider } from './anthropic-sdk-provider.ts';
+import { AnthropicSdkProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-sdk-provider';
 
 const VERTEX_MODELS = [
   'claude-sonnet-4-6',

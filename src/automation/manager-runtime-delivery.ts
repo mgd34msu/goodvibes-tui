@@ -1,5 +1,5 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { AutomationDeliveryManager } from './delivery-manager.ts';
+import type { AutomationDeliveryManager } from '@pellux/goodvibes-sdk/platform/automation/delivery-manager';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

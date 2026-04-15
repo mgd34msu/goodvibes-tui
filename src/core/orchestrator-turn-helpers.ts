@@ -1,18 +1,18 @@
 import type { ConversationManager } from './conversation.ts';
-import type { ConfigManager } from '../config/manager.ts';
-import type { ContentPart, LLMProvider } from '../providers/interface.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ContentPart, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { classifyIntent } from '@pellux/goodvibes-sdk/platform/core/intent-classifier';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import type { ExecutionPlan, PlanItem } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { emitPlanStrategySelected, emitToolReconciled, emitTurnCompleted } from '../runtime/emitters/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { emitPlanStrategySelected, emitToolReconciled, emitTurnCompleted } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import { buildSyntheticResult } from '@pellux/goodvibes-sdk/platform/core/tool-reconciliation';
-import { autoSpawnPendingItems } from './orchestrator-tool-runtime.ts';
+import { autoSpawnPendingItems } from './orchestrator-tool-runtime';
 import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { AgentManager } from '../tools/agent/index.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 type EmitterContextFactory = (turnId: string) => import('../runtime/emitters/index.ts').EmitterContext;
 export type ChatResponseWithReasoning = Awaited<ReturnType<LLMProvider['chat']>> & {

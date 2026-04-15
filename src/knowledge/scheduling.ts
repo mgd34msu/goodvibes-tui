@@ -1,8 +1,8 @@
 import { getNextAutomationOccurrence, normalizeCronSchedule, normalizeEverySchedule, type AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation/schedules';
 import type { KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/store';
 import type { KnowledgeJobMode, KnowledgeJobRecord, KnowledgeJobRunRecord, KnowledgeScheduleRecord } from '@pellux/goodvibes-sdk/platform/knowledge/types';
-import { emitKnowledgeJobCompleted, emitKnowledgeJobFailed, emitKnowledgeJobQueued, emitKnowledgeJobStarted } from '../runtime/emitters/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitKnowledgeJobCompleted, emitKnowledgeJobFailed, emitKnowledgeJobQueued, emitKnowledgeJobStarted } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface KnowledgeSchedulingContext {

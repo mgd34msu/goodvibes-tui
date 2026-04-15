@@ -6,7 +6,7 @@
  * MCP stub server embedded via bun's inline script capabilities.
  */
 import { describe, test, expect } from 'bun:test';
-import { McpClient } from '../../mcp/client.ts';
+import { McpClient } from '@pellux/goodvibes-sdk/platform/mcp/client';
 import type { McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
 
 // ---------------------------------------------------------------------------

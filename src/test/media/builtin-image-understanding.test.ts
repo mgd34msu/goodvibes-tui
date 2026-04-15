@@ -7,9 +7,9 @@ import {
   createBuiltinImageUnderstandingProvider,
   createLocalImageUnderstandingProvider,
   createOpenAIImageUnderstandingProvider,
-} from '../../media/builtin-image-understanding.ts';
-import type { LLMProvider, ProviderMessage, ProviderRuntimeMetadataDeps } from '../../providers/interface.ts';
-import type { ModelDefinition, ProviderRegistry } from '../../providers/registry.ts';
+} from '@pellux/goodvibes-sdk/platform/media/builtin-image-understanding';
+import type { LLMProvider, ProviderMessage, ProviderRuntimeMetadataDeps } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 
 type ImageModelRegistry = Pick<ProviderRegistry, 'describeRuntime' | 'getCurrentModel' | 'getForModel' | 'listModels'>;
 

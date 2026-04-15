@@ -11,9 +11,9 @@
 import type { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
 import type { CompositeHealth, HealthDomain, HealthStatus } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
 import type { HealthDashboardData, DomainHealthSummary, SloRow, SloGateStatus, RemediationAction } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
-import type { SloCollector } from '../../perf/slo-collector.ts';
+import type { SloCollector } from '@pellux/goodvibes-sdk/platform/runtime/perf/slo-collector';
 import type { CascadeTimer } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-timing';
-import { SLO_METRICS } from '../../perf/slo-collector.ts';
+import { SLO_METRICS } from '@pellux/goodvibes-sdk/platform/runtime/perf/slo-collector';
 import { DEFAULT_BUDGETS } from '@pellux/goodvibes-sdk/platform/runtime/perf/budgets';
 
 /**

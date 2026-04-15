@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { handleSelectionModalToken, handleSettingsModalToken } from '../../input/handler-modal-routes.ts';
 import { SettingsModal } from '../../input/settings-modal.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
@@ -233,7 +233,7 @@ describe('modal space actions', () => {
     const dir = join(tmpdir(), `gv-settings-space-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(dir, { recursive: true });
     try {
-      const cm = new ConfigManager({ workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
+      const cm = new ConfigManager({ surfaceRoot: 'tui',  workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
       const subscriptionManager = new SubscriptionManager(join(dir, '.goodvibes', 'tui', 'subscriptions.json'));
       const serviceRegistry = new ServiceRegistry(join(dir, '.goodvibes', 'tui', 'services.json'), {
         secretsManager: new SecretsManager({ projectRoot: dir, globalHome: dir, configManager: cm }),
@@ -290,7 +290,7 @@ describe('modal space actions', () => {
     const dir = join(tmpdir(), `gv-settings-adjust-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(dir, { recursive: true });
     try {
-      const cm = new ConfigManager({ workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
+      const cm = new ConfigManager({ surfaceRoot: 'tui',  workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
       const subscriptionManager = new SubscriptionManager(join(dir, '.goodvibes', 'tui', 'subscriptions.json'));
       const serviceRegistry = new ServiceRegistry(join(dir, '.goodvibes', 'tui', 'services.json'), {
         secretsManager: new SecretsManager({ projectRoot: dir, globalHome: dir, configManager: cm }),

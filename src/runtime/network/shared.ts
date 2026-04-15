@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
-import type { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 const PEM_EXTENSIONS = new Set(['.pem', '.crt', '.cer']);
 

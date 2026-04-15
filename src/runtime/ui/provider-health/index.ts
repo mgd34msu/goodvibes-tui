@@ -13,15 +13,15 @@ export type {
   FallbackChainNode,
   FallbackChainData,
   ProviderHealthData,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/types';
 
-export { ProviderHealthDataProvider } from './data-provider.ts';
-export { buildFallbackChainData } from './fallback-visualizer.ts';
+export { ProviderHealthDataProvider } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/data-provider';
+export { buildFallbackChainData } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/fallback-visualizer';
 
 import type { ProviderHealthDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import { ProviderHealthDataProvider } from './data-provider.ts';
-import type { ProviderHealthData } from './types.ts';
+import { ProviderHealthDataProvider } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/data-provider';
+import type { ProviderHealthData } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/types';
 
 /**
  * Produce a one-shot ProviderHealthData snapshot without creating a long-lived provider.

@@ -3,11 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '../../config/manager.ts';
-import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
-import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/index';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -50,7 +50,7 @@ describe('KnowledgeService', () => {
 
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-'));
-    configManager = new ConfigManager({ configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     configManager.set('network.remoteFetch.allowPrivateHosts', true);
     artifactStore = new ArtifactStore({
       rootDir: join(root, 'artifacts'),

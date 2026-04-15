@@ -4,10 +4,10 @@
  * Shared types for the prompt compaction engine.
  */
 
-import type { ProviderMessage } from '../providers/interface.ts';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { SessionMemory } from '@pellux/goodvibes-sdk/platform/core/session-memory';
-import type { AgentRecord } from '../tools/agent/index.ts';
-import type { WrfcChain } from '../agents/wrfc-types.ts';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { WrfcChain } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
 import type { ExecutionPlan } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 
 // ---------------------------------------------------------------------------

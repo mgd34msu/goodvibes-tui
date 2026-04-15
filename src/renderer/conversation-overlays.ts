@@ -1,5 +1,5 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { ConversationManager } from '../core/conversation.ts';
+import type { ConversationManager } from '../core/conversation';
 import type { CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';

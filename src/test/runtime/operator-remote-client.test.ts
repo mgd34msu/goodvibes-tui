@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { GatewayMethodCatalog } from '../../control-plane/method-catalog.ts';
-import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
 import { createHttpJsonTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-json-transport';
 import { createOperatorRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/operator-remote-client';
 

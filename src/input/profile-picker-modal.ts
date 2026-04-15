@@ -7,7 +7,7 @@
 
 import type { ProfileInfo, ProfileData, ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

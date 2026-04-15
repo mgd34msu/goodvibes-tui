@@ -10,7 +10,7 @@ import type {
   ToolEvent,
   TurnEvent,
   WorkflowEvent,
-} from './events/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeEventFeed, type RuntimeEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/event-feeds';
 
 export type UiEventFeed<TEvent extends AnyRuntimeEvent> = RuntimeEventFeed<TEvent>;

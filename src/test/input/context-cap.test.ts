@@ -10,13 +10,13 @@ import { ModelPickerModal } from '../../input/model-picker.ts';
 import {
   type ModelDefinition,
   ProviderRegistry,
-} from '../../providers/registry.ts';
-import { ConfigManager } from '../../config/manager.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
@@ -89,7 +89,7 @@ function createPickerHarness(): PickerHarness {
   benchmarkStore.initBenchmarks();
 
   const providerRegistry = new ProviderRegistry({
-    configManager: new ConfigManager({
+    configManager: new ConfigManager({ surfaceRoot: 'tui',
       configDir,
       workingDir: rootDir,
       homeDir: rootDir,

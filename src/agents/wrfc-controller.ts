@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { AgentMessageBus } from './message-bus.ts';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
 import { type CompletionReport, type ReviewerReport } from '@pellux/goodvibes-sdk/platform/agents/completion-report';
 import {
   buildGateFailureTask,
@@ -8,28 +8,28 @@ import {
   buildReviewTask,
   parseEngineerCompletionReport,
   parseReviewerCompletionReport,
-} from './wrfc-reporting.ts';
-import type { QualityGateResult, QueuedChain, WrfcChain, WrfcState } from './wrfc-types.ts';
+} from '@pellux/goodvibes-sdk/platform/agents/wrfc-reporting';
+import type { QualityGateResult, QueuedChain, WrfcChain, WrfcState } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
 import { WrfcWorkmap } from '@pellux/goodvibes-sdk/platform/agents/wrfc-workmap';
-import { AgentWorktree } from './worktree.ts';
+import { AgentWorktree } from '@pellux/goodvibes-sdk/platform/agents/worktree';
 import { completePlanItemsForAgent } from '@pellux/goodvibes-sdk/platform/agents/wrfc-plan-sync';
-import type { ConfigManager } from '../config/manager.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
-import type { AgentEvent, RuntimeEventBus } from '../runtime/events/index.ts';
+import type { AgentEvent, RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import {
   emitWorkflowChainFailed,
   emitWorkflowFixAttempted,
   emitWorkflowReviewCompleted,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import {
   getWrfcAutoCommit,
   getWrfcMaxFixAttempts,
   getWrfcScoreThreshold,
   type AgentManagerLike,
-} from './wrfc-config.ts';
+} from '@pellux/goodvibes-sdk/platform/agents/wrfc-config';
 import {
   completeWrfcOrchestrationNode,
   createWrfcWorkflowContext,
@@ -41,10 +41,10 @@ import {
   emitWrfcStateChanged,
   failWrfcOrchestrationNode,
   startWrfcOrchestrationNode,
-} from './wrfc-runtime-events.ts';
-import { runWrfcGateChecks } from './wrfc-gate-runtime.ts';
+} from '@pellux/goodvibes-sdk/platform/agents/wrfc-runtime-events';
+import { runWrfcGateChecks } from '@pellux/goodvibes-sdk/platform/agents/wrfc-gate-runtime';
 
-export { extractScoreFromText, extractPassedFromText, extractIssuesFromText } from './wrfc-reporting.ts';
+export { extractScoreFromText, extractPassedFromText, extractIssuesFromText } from '@pellux/goodvibes-sdk/platform/agents/wrfc-reporting';
 
 const VALID_TRANSITIONS: Partial<Record<WrfcState, WrfcState[]>> = {
   pending: ['engineering'],

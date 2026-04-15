@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { createEditTool } from '../../tools/edit/index.ts';
+import { createEditTool } from '@pellux/goodvibes-sdk/platform/tools/edit/index';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 
 // ---------------------------------------------------------------------------

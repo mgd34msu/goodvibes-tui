@@ -10,14 +10,14 @@ import type {
   DistributedRuntimePairRequest,
   DistributedWorkPriority,
   DistributedWorkType,
-} from './remote/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
 import type {
   RemoteExecutionArtifact,
   RemoteRunnerContract,
   RemoteRunnerPool,
 } from '@pellux/goodvibes-sdk/platform/runtime/remote/types';
-import type { RemoteRunnerRegistry } from './remote/runner-registry.ts';
-import type { RemoteSupervisor, RemoteSupervisorSnapshot } from './remote/supervisor.ts';
+import type { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
+import type { RemoteSupervisor, RemoteSupervisorSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
 import type { RemoteSessionStateSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/session-state';
 
 export interface PeerClientDependencies {

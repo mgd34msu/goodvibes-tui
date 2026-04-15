@@ -11,10 +11,10 @@
  */
 
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { PluginLoaderDeps } from '../../plugins/loader.ts';
-import type { LoadedPlugin } from '../../plugins/loader.ts';
-import type { PluginHealthCheckResult, PluginManifestV2 } from './types.ts';
-import type { PluginLifecycleManager } from './manager.ts';
+import type { PluginLoaderDeps } from '../../plugins/loader';
+import type { LoadedPlugin } from '../../plugins/loader';
+import type { PluginHealthCheckResult, PluginManifestV2 } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
+import type { PluginLifecycleManager } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manager';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /**

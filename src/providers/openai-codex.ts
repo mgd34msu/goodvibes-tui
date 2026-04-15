@@ -6,11 +6,11 @@ import type {
   ProviderMessage,
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
-} from './interface.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { ToolCall, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
-import { resolveSubscriptionAccessToken } from '../config/subscription-auth.ts';
+import { resolveSubscriptionAccessToken } from '@pellux/goodvibes-sdk/platform/config/subscription-auth';
 import { arch, platform, release } from 'node:os';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

@@ -4,9 +4,9 @@
 
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { KnowledgeEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/knowledge';
-import type { EmitterContext } from './index.ts';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 
 function knowledgeEvent<T extends KnowledgeEvent['type']>(
   type: T,

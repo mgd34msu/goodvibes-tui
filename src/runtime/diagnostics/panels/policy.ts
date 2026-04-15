@@ -15,10 +15,10 @@ import type { DivergenceDashboardSnapshot } from '@pellux/goodvibes-sdk/platform
 import type { DivergencePanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/divergence';
 import type { PanelConfig } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 import { DEFAULT_PANEL_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
-import type { PermissionAuditEntry } from '../../permissions/policy-runtime.ts';
+import type { PermissionAuditEntry } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import type { PolicyLintFinding } from '@pellux/goodvibes-sdk/platform/runtime/permissions/lint';
 import type { PolicySimulationSummary } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation-scenarios';
-import type { PolicyPreflightReview } from '../../permissions/preflight.ts';
+import type { PolicyPreflightReview } from '@pellux/goodvibes-sdk/platform/runtime/permissions/preflight';
 
 /**
  * A point-in-time snapshot of policy state for diagnostics rendering.

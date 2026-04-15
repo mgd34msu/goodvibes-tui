@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { recallCommand } from '../../input/commands/memory.ts';
-import { MemoryRegistry } from '../../state/memory-store.ts';
-import type { MemoryAddOptions, MemoryBundle } from '../../state/memory-store.ts';
-import { createMemoryApi } from '../../knowledge/knowledge-api.ts';
+import { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { MemoryAddOptions, MemoryBundle } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
 import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

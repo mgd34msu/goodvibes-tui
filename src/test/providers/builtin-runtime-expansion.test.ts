@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderRegistry } from '../../providers/registry.ts';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 
 const CLEAN_ENV_KEYS = [
   'AWS_BEARER_TOKEN_BEDROCK',
@@ -41,7 +41,7 @@ describe('provider runtime expansion', () => {
       originalEnv.set(key, process.env[key]);
       delete process.env[key];
     }
-    const configManager = new ConfigManager({ configDir: join(tempHome, '.goodvibes', 'tui') });
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(tempHome, '.goodvibes', 'tui') });
     const subscriptionManager = new SubscriptionManager(join(tempHome, '.goodvibes', 'tui', 'subscriptions.json'));
     const secretsManager = new SecretsManager({ projectRoot: tempHome, globalHome: tempHome });
     const serviceRegistry = new ServiceRegistry(join(tempHome, '.goodvibes', 'tui', 'services.json'), {

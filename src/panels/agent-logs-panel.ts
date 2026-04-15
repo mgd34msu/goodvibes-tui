@@ -2,9 +2,9 @@ import { readFileSync, existsSync, watch, type FSWatcher } from 'fs';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
-import type { AgentManager, AgentRecord } from '../tools/agent/index.ts';
-import type { AgentEvent } from '../runtime/events/index.ts';
-import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import {
   buildEmptyState,
   buildPanelLine,

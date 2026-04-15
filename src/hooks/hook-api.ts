@@ -4,7 +4,7 @@ import type {
   HookAuthoringAction,
   HookConfigInspection,
   HookSimulationResult,
-} from './workbench.ts';
+} from '@pellux/goodvibes-sdk/platform/hooks/workbench';
 
 export interface HookContractRecord extends HookPointContract {}
 

@@ -7,10 +7,10 @@ import { createTeamTool } from '@pellux/goodvibes-sdk/platform/tools/team/index'
 import { createWorklistTool } from '@pellux/goodvibes-sdk/platform/tools/worklist/index';
 import { createPacketTool } from '@pellux/goodvibes-sdk/platform/tools/packet/index';
 import { createQueryTool } from '@pellux/goodvibes-sdk/platform/tools/query/index';
-import { createRemoteTool } from '../../tools/remote-trigger/index.ts';
-import { controlTool } from '../../tools/control/index.ts';
+import { createRemoteTool } from '@pellux/goodvibes-sdk/platform/tools/remote-trigger/index';
+import { controlTool } from '@pellux/goodvibes-sdk/platform/tools/control/index';
 import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
-import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
+import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
 
 describe('tool breadth additions', () => {
   const originalCwd = process.cwd();

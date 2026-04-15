@@ -5,7 +5,7 @@ import {
   resultFromRecord,
   withInlineBearer,
   type SearchProviderContext,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
 
 const PERPLEXITY_BASE_URL = 'https://api.perplexity.ai';
 const PERPLEXITY_ENV_KEYS = ['PERPLEXITY_API_KEY'] as const;

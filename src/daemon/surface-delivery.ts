@@ -1,14 +1,14 @@
 import { createHmac } from 'crypto';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { ServiceRegistry } from '../config/service-registry.ts';
-import type { AgentManager } from '../tools/agent/index.ts';
-import type { SharedSessionBroker } from '../control-plane/index.ts';
-import type { ChannelPluginRegistry, ChannelReplyPipeline, RouteBindingManager } from '../channels/index.ts';
-import type { ChannelSurface } from '../channels/index.ts';
-import { SlackIntegration, DiscordIntegration, NtfyIntegration } from '../integrations/index.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { ChannelPluginRegistry, ChannelReplyPipeline, RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/index';
+import type { ChannelSurface } from '@pellux/goodvibes-sdk/platform/channels/index';
+import { SlackIntegration, DiscordIntegration, NtfyIntegration } from '@pellux/goodvibes-sdk/platform/integrations/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { validatePublicWebhookUrl } from '@pellux/goodvibes-sdk/platform/utils/url-safety';
-import type { SharedApprovalRecord } from '../control-plane/index.ts';
+import type { SharedApprovalRecord } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type { PendingSurfaceReply } from './types.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

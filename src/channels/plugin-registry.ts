@@ -1,5 +1,5 @@
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
-import type { SharedApprovalRecord } from '../control-plane/index.ts';
+import type { SharedApprovalRecord } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type {
   ChannelAdapterDescriptor,

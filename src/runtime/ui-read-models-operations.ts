@@ -1,4 +1,4 @@
-import type { ControlPlaneRecentEvent, SharedApprovalRecord, SharedSessionRecord } from '../control-plane/index.ts';
+import type { ControlPlaneRecentEvent, SharedApprovalRecord, SharedSessionRecord } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type { RuntimeServices } from './services.ts';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
@@ -8,7 +8,7 @@ import type { OrchestrationGraphRecord } from '@pellux/goodvibes-sdk/platform/ru
 import type { RuntimeCommunicationRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/communication';
 import type { ControlPlaneClientRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/control-plane';
 import type { AcpConnection } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/acp';
-import { combineSubscriptions, createStoreBackedReadModel } from './ui-read-model-helpers.ts';
+import { combineSubscriptions, createStoreBackedReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-model-helpers';
 import type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
 
 export interface UiAutomationSnapshot {

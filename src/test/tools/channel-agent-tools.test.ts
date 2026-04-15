@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { ChannelPluginRegistry } from '../../channels/index.ts';
-import { registerChannelAgentTools } from '../../tools/channel/agent-tools.ts';
+import { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
+import { registerChannelAgentTools } from '@pellux/goodvibes-sdk/platform/tools/channel/agent-tools';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 
 describe('channel agent tools', () => {

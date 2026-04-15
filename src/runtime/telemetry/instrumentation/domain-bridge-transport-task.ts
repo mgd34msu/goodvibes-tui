@@ -2,7 +2,7 @@ import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/ta
 import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
 import { endTaskSpan, recordTaskPhase, startTaskSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/task';
 import { endTransportSpan, recordTransportPhase, startTransportSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/transport';
-import type { DomainBridgeAttachmentInput, Env, SpanMap } from './domain-bridge-shared.ts';
+import type { DomainBridgeAttachmentInput, Env, SpanMap } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/domain-bridge-shared';
 
 export function attachTransportDomain(
   { bus, helpers }: DomainBridgeAttachmentInput,

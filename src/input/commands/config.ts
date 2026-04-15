@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
-import { configSnapshotToProfileData, profileDataToConfigSnapshot } from '../../profiles/shape.ts';
+import { configSnapshotToProfileData, profileDataToConfigSnapshot } from '@pellux/goodvibes-sdk/platform/profiles/shape';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { requireProfileManager, requireProviderApi, requireShellPaths } from './runtime-services.ts';

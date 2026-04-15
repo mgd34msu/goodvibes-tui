@@ -3,21 +3,21 @@ export type {
   InboundTlsMode,
   InboundTlsSnapshot,
   ResolvedInboundTlsContext,
-} from './inbound.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/network/inbound';
 export {
   inspectInboundTls,
   resolveInboundTlsContext,
-} from './inbound.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/network/inbound';
 export type {
   OutboundTlsSnapshot,
   OutboundTrustMode,
-} from './outbound.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/network/outbound';
 export {
   applyOutboundTlsToFetchInit,
   createNetworkFetch,
   GlobalNetworkTransportInstaller,
   inspectOutboundTls,
-} from './outbound.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/network/outbound';
 export {
   extractForwardedClientIp,
   getDefaultCertDirectory,
@@ -27,4 +27,4 @@ export {
   isLocalHostname,
   readPemEntriesFromDirectory,
   resolvePathFromGoodVibesRoot,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/network/shared';

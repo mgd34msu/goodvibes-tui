@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { handleCommandModeToken } from '../../input/handler-command-route.ts';
 import { handlePromptTextToken } from '../../input/handler-feed-routes.ts';
 import { InputHandler } from '../../input/handler.ts';
@@ -315,7 +315,7 @@ describe('command modal handoff', () => {
 
       const registry = new CommandRegistry();
       registerConfigCommand(registry);
-      const configManager = new ConfigManager({
+      const configManager = new ConfigManager({ surfaceRoot: 'tui',
         workingDir: dir,
         configDir: join(dir, '.goodvibes', 'tui'),
       });

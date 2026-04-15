@@ -1,7 +1,7 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
-import type { McpRegistry } from '../mcp/registry.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import type { McpDecisionRecord } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 import { truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import {

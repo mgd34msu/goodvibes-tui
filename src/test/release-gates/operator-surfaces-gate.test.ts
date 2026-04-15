@@ -5,25 +5,25 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
-import { ConfigManager } from '../../config/manager.ts';
-import { ConversationManager } from '../../core/conversation.ts';
-import { createOperatorClientServices } from '../../runtime/foundation-services.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConversationManager } from '../../core/conversation';
+import { createOperatorClientServices } from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
-import { createRuntimeHookApi } from '../../runtime/runtime-hook-api.ts';
-import { createRuntimeKnowledgeApi } from '../../runtime/runtime-knowledge-api.ts';
-import { createRuntimeMcpApi } from '../../runtime/runtime-mcp-api.ts';
-import { createRuntimeProviderApi } from '../../runtime/runtime-provider-api.ts';
-import { createOperatorClient } from '../../runtime/operator-client.ts';
-import { createPeerClient } from '../../runtime/peer-client.ts';
+import { createRuntimeHookApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-hook-api';
+import { createRuntimeKnowledgeApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-knowledge-api';
+import { createRuntimeMcpApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-mcp-api';
+import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
+import { createOperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+import { createPeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
 import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
@@ -39,7 +39,7 @@ type CommandContextOverrides =
     ops?: Partial<CommandContext['ops']>;
     extensions?: Partial<CommandContext['extensions']>;
   };
-import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 
 describe('operator surfaces gate', () => {
   let configManager: ConfigManager;
@@ -48,7 +48,7 @@ describe('operator surfaces gate', () => {
 
   beforeEach(() => {
     policyRuntimeState = new PolicyRuntimeState();
-    configManager = new ConfigManager({ configDir: join(tmpdir(), `gv-operator-surfaces-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(tmpdir(), `gv-operator-surfaces-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
     configManager.set('orchestration.maxActiveAgents', 8);
     configManager.set('orchestration.maxDepth', 1);
     configManager.set('orchestration.recursionEnabled', true);

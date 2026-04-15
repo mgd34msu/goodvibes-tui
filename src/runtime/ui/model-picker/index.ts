@@ -11,20 +11,20 @@ export type {
   ModelPickerEntry,
   ModelPickerGroup,
   ModelPickerData,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/types';
 // ProviderStatus re-exported from types for convenience
-export type { ProviderStatus } from './types.ts';
+export type { ProviderStatus } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/types';
 
-export { ModelPickerDataProvider } from './data-provider.ts';
-export type { ModelPickerDataProviderOptions } from './data-provider.ts';
+export { ModelPickerDataProvider } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/data-provider';
+export type { ModelPickerDataProviderOptions } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/data-provider';
 
-import type { ModelDefinition } from '../../../providers/registry.ts';
-import type { ProviderRegistry } from '../../../providers/registry.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { ProviderHealthDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import type { ModelPickerData } from './types.ts';
-import { ModelPickerDataProvider } from './data-provider.ts';
+import type { ModelPickerData } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/types';
+import { ModelPickerDataProvider } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/data-provider';
 
 /**
  * Produce a one-shot ModelPickerData snapshot without creating a long-lived provider.

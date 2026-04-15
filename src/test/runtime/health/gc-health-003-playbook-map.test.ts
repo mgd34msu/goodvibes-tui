@@ -19,7 +19,7 @@ import {
   exportRecoveryPlaybook,
   sessionUnrecoverablePlaybook,
   compactionFailurePlaybook,
-} from '../../../runtime/ops/playbooks/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/index';
 
 // Build the set of all known playbook IDs from the registry
 const ALL_KNOWN_PLAYBOOKS = new Map([

@@ -26,8 +26,8 @@ export type {
   TurnUsage,
   StreamProgress,
   ConversationDomainState,
-} from './conversation.ts';
-export { createInitialConversationState } from './conversation.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
+export { createInitialConversationState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
 
 export type {
   OverlayId,
@@ -52,8 +52,8 @@ export type {
   PermissionDecisionReason,
   PermissionDecision,
   PermissionDomainState,
-} from './permissions.ts';
-export { createInitialPermissionsState } from './permissions.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/store/domains/permissions';
+export { createInitialPermissionsState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/permissions';
 
 export type {
   TaskLifecycleState,

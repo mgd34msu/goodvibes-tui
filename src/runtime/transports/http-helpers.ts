@@ -2,9 +2,9 @@ import type {
   ControlPlaneRecentEvent,
   SharedApprovalRecord,
   SharedSessionRecord,
-} from '../../control-plane/index.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type { ControlPlaneClientRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/control-plane';
-import type { TelemetryFilter, TelemetryRecord } from '../telemetry/api.ts';
+import type { TelemetryFilter, TelemetryRecord } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
 import type { UiControlPlaneSnapshot } from '../ui-read-models.ts';
 import type { TransportPaths } from '@pellux/goodvibes-sdk/platform/runtime/transports/transport-paths';
 import { buildUrl } from '@pellux/goodvibes-sdk/platform/runtime/transports/transport-paths';
@@ -18,7 +18,7 @@ import type {
   HttpTransportTelemetryQuery,
   HttpTransportTelemetryStreamHandlers,
   HttpTransportTelemetryStreamReady,
-} from './http-types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/http-types';
 
 export function createJsonRequestInit(token: string | null | undefined, body?: unknown, method = 'GET'): RequestInit {
   return createJsonInit(token, body, method);

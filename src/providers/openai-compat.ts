@@ -7,8 +7,8 @@ import type {
   ProviderEmbeddingResult,
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
-} from './interface.ts';
-import type { ProviderCapability } from './capabilities.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderCapability } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
 import {
@@ -16,8 +16,8 @@ import {
   toOpenAIMessages,
   fromOpenAIToolCalls,
   extractTextToolCalls,
-} from './tool-formats.ts';
-import type { OpenAIToolCall } from './tool-formats.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
+import type { OpenAIToolCall } from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
 import { getCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
 import type { ProviderCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
 import type { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';

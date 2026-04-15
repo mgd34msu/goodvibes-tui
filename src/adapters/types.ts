@@ -1,9 +1,9 @@
-import type { AgentManager } from '../tools/agent/index.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
 import type { AutomationSurfaceKind } from '@pellux/goodvibes-sdk/platform/automation/types';
-import type { ChannelConversationKind, ChannelPolicyDecision, RouteBindingManager } from '../channels/index.ts';
-import type { SharedSessionBroker } from '../control-plane/index.ts';
+import type { ChannelConversationKind, ChannelPolicyDecision, RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/index';
+import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type { ServiceRegistry } from '../config/service-registry.ts';
 
 export interface SurfaceControlCommand {

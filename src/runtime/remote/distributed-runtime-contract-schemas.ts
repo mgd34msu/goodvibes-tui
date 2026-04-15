@@ -4,15 +4,15 @@ import {
   STRING_SCHEMA,
   arraySchema,
   objectSchema,
-} from '../../control-plane/method-catalog-shared.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog-shared';
 import {
   JSON_VALUE_SCHEMA,
   METADATA_SCHEMA,
   STRING_LIST_SCHEMA,
   enumSchema,
   recordSchema,
-} from '../../control-plane/operator-contract-schemas-shared.ts';
-import { AUTOMATION_RUN_TELEMETRY_SCHEMA } from '../../control-plane/operator-contract-schemas-admin.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract-schemas-shared';
+import { AUTOMATION_RUN_TELEMETRY_SCHEMA } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract-schemas-admin';
 
 export const DISTRIBUTED_PEER_KIND_SCHEMA = enumSchema(['node', 'device']);
 export const DISTRIBUTED_PEER_STATUS_SCHEMA = enumSchema(['paired', 'connected', 'idle', 'disconnected', 'revoked']);

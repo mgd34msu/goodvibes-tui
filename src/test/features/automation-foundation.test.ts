@@ -2,7 +2,7 @@ import { describe, test, expect } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { CONFIG_SCHEMA, DEFAULT_CONFIG, isValidConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
 import { FEATURE_FLAGS } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/flags';
 
@@ -16,7 +16,7 @@ describe('automation foundation config surface', () => {
   test('defaults include automation, control plane, web, surfaces, watchers, and service categories', () => {
     const tmpDir = makeTmpDir();
     const configDir = join(tmpDir, '.goodvibes', 'tui');
-    const mgr = new ConfigManager({ workingDir: tmpDir, configDir });
+    const mgr = new ConfigManager({ surfaceRoot: 'tui',  workingDir: tmpDir, configDir });
 
     expect(mgr.get('automation.enabled')).toBe(false);
     expect(mgr.get('automation.maxConcurrentRuns')).toBe(DEFAULT_CONFIG.automation.maxConcurrentRuns);
@@ -36,7 +36,7 @@ describe('automation foundation config surface', () => {
   test('representative automation keys round-trip through ConfigManager', () => {
     const tmpDir = makeTmpDir();
     const configDir = join(tmpDir, '.goodvibes', 'tui');
-    const mgr = new ConfigManager({ workingDir: tmpDir, configDir });
+    const mgr = new ConfigManager({ surfaceRoot: 'tui',  workingDir: tmpDir, configDir });
 
     mgr.set('automation.enabled', true);
     mgr.set('automation.maxConcurrentRuns', 12);
@@ -47,7 +47,7 @@ describe('automation foundation config surface', () => {
     mgr.set('watchers.pollIntervalMs', 30_000);
     mgr.set('service.platform', 'manual');
 
-    const reloaded = new ConfigManager({ workingDir: tmpDir, configDir });
+    const reloaded = new ConfigManager({ surfaceRoot: 'tui',  workingDir: tmpDir, configDir });
     expect(reloaded.get('automation.enabled')).toBe(true);
     expect(reloaded.get('automation.maxConcurrentRuns')).toBe(12);
     expect(reloaded.get('controlPlane.port')).toBe(4521);
@@ -76,7 +76,7 @@ describe('automation foundation config surface', () => {
       'utf-8',
     );
 
-    const mgr = new ConfigManager({ workingDir: tmpDir, configDir: settingsDir });
+    const mgr = new ConfigManager({ surfaceRoot: 'tui',  workingDir: tmpDir, configDir: settingsDir });
     expect(mgr.get('automation.maxConcurrentRuns')).toBe(2);
     expect(mgr.get('controlPlane.enabled')).toBe(true);
     expect(mgr.get('controlPlane.port')).toBe(5123);

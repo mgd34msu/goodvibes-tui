@@ -1,30 +1,30 @@
 import { getConfigSnapshot } from '../config/index.ts';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
-import type { ConversationManager } from '../core/conversation.ts';
-import type { KnowledgeApi } from '../knowledge/knowledge-api.ts';
-import type { HookApi } from '../hooks/hook-api.ts';
-import type { McpApi } from '../mcp/mcp-api.ts';
+import type { ConversationManager } from '../core/conversation';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
+import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks/hook-api';
+import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp/mcp-api';
 import type { PanelManager } from '../panels/panel-manager.ts';
-import type { ProviderApi } from '../providers/provider-api.ts';
-import type { OpsApi } from './ops-api.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
+import type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { MutableRuntimeState } from './context.ts';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';
-import type { PermissionRequestHandler } from '../permissions/prompt.ts';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { ForensicsRegistry } from './forensics/index.ts';
-import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
+import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
+import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
-import type { McpRegistry } from '../mcp/registry.ts';
-import type { MemoryRegistry } from '../state/memory-store.ts';
-import type { IntegrationHelperService } from './integration/helpers.ts';
-import type { KnowledgeService } from '../knowledge/index.ts';
-import type { PluginManager } from '../plugins/manager.ts';
-import type { HookWorkbench } from '../hooks/workbench.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
+import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import type { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins/manager';
+import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
 import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
-import type { WorktreeRegistry } from './worktree/registry.ts';
+import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import type { UiReadModels } from './ui-read-models.ts';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
@@ -36,11 +36,11 @@ import type {
   ShellSessionOrchestrationService,
   RemoteCommandService,
   PlanRuntimeService,
-} from './shell-command-ops.ts';
-import type { BootstrapCommandShellServices } from './shell-command-services.ts';
-import type { OperatorClient } from './operator-client.ts';
-import type { PeerClient } from './peer-client.ts';
-import type { DirectTransport } from './transports/direct.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
+import type { BootstrapCommandShellServices } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-services';
+import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
+import type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export type BootstrapCommandSessionSection = CommandContext['session'];

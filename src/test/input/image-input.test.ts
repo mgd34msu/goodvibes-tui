@@ -5,13 +5,13 @@ import { join } from 'node:path';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
-import { ConfigManager } from '../../config/manager.ts';
-import { createPermissionConfigReader, PermissionManager } from '../../permissions/manager.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { getTestProviderRegistry } from '../helpers/runtime-services.ts';
-import type { ContentPart } from '../../providers/interface.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 type InputHandlerImageTestAccess = {
   pasteRegistry: Map<string, string>;
@@ -30,7 +30,7 @@ function makeInput(): InputHandler {
 
 function createConfigManager(): ConfigManager {
   const root = mkdtempSync(join(tmpdir(), 'gv-image-input-'));
-  return new ConfigManager({
+  return new ConfigManager({ surfaceRoot: 'tui',
     workingDir: root,
     homeDir: root,
     configDir: join(root, '.goodvibes', 'global-tui'),
@@ -215,7 +215,7 @@ describe('Orchestrator capability check for non-multimodal models', () => {
     const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools/registry');
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { RuntimeEventBus } = await import('../../runtime/events/index.ts');
+    const { RuntimeEventBus } = await import('@pellux/goodvibes-sdk/platform/runtime/events/index');
 
     const runtimeBus = new RuntimeEventBus();
     const toolRegistry = new ToolRegistry();

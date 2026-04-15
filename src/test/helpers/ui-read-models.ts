@@ -1,4 +1,4 @@
-import type { SharedApprovalRecord, SharedSessionRecord, ControlPlaneRecentEvent } from '../../control-plane/index.ts';
+import type { SharedApprovalRecord, SharedSessionRecord, ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type {
   UiAutomationSnapshot,
   UiCockpitSnapshot,

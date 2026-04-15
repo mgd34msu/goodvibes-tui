@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { RuntimeTask, TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
-import { reviewWorktreeAttachments } from '../../runtime/worktree/registry.ts';
+import { reviewWorktreeAttachments } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import { requireOperatorClient, requireOpsApi, requirePanelManager, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

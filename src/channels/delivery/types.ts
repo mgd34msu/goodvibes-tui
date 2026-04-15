@@ -1,8 +1,8 @@
 import type { ArtifactReference } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import type { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
 import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import type { ControlPlaneGateway } from '../../control-plane/gateway.ts';
+import type { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
 import type { RouteSurfaceKind } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
 
 export type ChannelDeliverySurfaceKind = RouteSurfaceKind;

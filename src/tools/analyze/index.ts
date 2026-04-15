@@ -1,6 +1,6 @@
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import { resolve } from 'node:path';
-import type { ToolLLM } from '../../config/tool-llm.ts';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
 import { analyzeSchema } from '@pellux/goodvibes-sdk/platform/tools/analyze/schema';
 import { appendSchemaFingerprint } from '@pellux/goodvibes-sdk/platform/tools/shared/schema-fingerprint';
 import type { AnalyzeInput } from '@pellux/goodvibes-sdk/platform/tools/analyze/types';
@@ -23,7 +23,7 @@ import {
   runDiff,
   runSemanticDiff,
   runUpgrade,
-} from './git-modes.ts';
+} from '@pellux/goodvibes-sdk/platform/tools/analyze/git-modes';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

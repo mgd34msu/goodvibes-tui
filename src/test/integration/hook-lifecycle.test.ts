@@ -5,7 +5,7 @@
  * through the full Pre/Post/Fail lifecycle.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { HookEvent, HookDefinition } from '@pellux/goodvibes-sdk/platform/hooks/types';
 
 // ---------------------------------------------------------------------------

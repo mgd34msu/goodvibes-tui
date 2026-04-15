@@ -1,16 +1,16 @@
 import type { ConversationManager } from './conversation.ts';
-import type { ConfigManager } from '../config/manager.ts';
-import type { ModelDefinition, ProviderRegistry } from '../providers/registry.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { estimateConversationTokens, COMPACTION_BUFFER_TOKENS, SMALL_WINDOW_THRESHOLD, compactSmallWindow, shouldAutoCompact } from './context-compaction.ts';
-import type { CompactionContext } from './context-compaction.ts';
+import { estimateConversationTokens, COMPACTION_BUFFER_TOKENS, SMALL_WINDOW_THRESHOLD, compactSmallWindow, shouldAutoCompact } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
+import type { CompactionContext } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
 import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
 import type { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
-import type { AgentManager } from '../tools/agent/index.ts';
-import type { WrfcController } from '../agents/wrfc-controller.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
 import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { emitOpsContextWarning } from '../runtime/emitters/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { emitOpsContextWarning } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

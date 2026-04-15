@@ -14,9 +14,9 @@
 import type { CascadeEffect, CascadeResult } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
 import { createCascadeAppliedEvent } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
 import type { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
-import type { RuntimeEventBus, RuntimeEventEnvelope } from '../events/index.ts';
-import { createEventEnvelope } from '../events/index.ts';
-import type { AnyRuntimeEvent } from '../events/index.ts';
+import type { RuntimeEventBus, RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { AnyRuntimeEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 
 /**
  * Emits a synthetic health event on the bus.

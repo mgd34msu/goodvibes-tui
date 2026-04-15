@@ -7,17 +7,17 @@ import type {
   SharedSessionSubmission,
   SteerSharedSessionMessageInput,
   SubmitSharedSessionMessageInput,
-} from '../control-plane/index.ts';
-import type { RequestSharedApprovalInput } from '../control-plane/index.ts';
-import type { PermissionPromptDecision } from '../permissions/prompt.ts';
-import { buildAuthInspectionSnapshot, type AuthInspectionSnapshot } from './auth/inspection.ts';
-import { buildProviderAccountSnapshot, type ProviderAccountSnapshot } from './provider-accounts/registry.ts';
-import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../providers/runtime-snapshot.ts';
-import { getProviderRuntimeSnapshot, getProviderUsageSnapshot, listProviderRuntimeSnapshots } from '../providers/runtime-snapshot.ts';
-import type { OperatorClientServices } from './foundation-services.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { RequestSharedApprovalInput } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { PermissionPromptDecision } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
+import { buildAuthInspectionSnapshot, type AuthInspectionSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/auth/inspection';
+import { buildProviderAccountSnapshot, type ProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
+import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
+import { getProviderRuntimeSnapshot, getProviderUsageSnapshot, listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
+import type { OperatorClientServices } from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
 import type { RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import type { UiControlPlaneSnapshot, UiSessionSnapshot, UiTasksSnapshot } from './ui-read-models.ts';
-import type { UiRuntimeEvents } from './ui-events.ts';
+import type { UiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 
 export interface OperatorControlPlaneSnapshot extends UiControlPlaneSnapshot {}

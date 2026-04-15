@@ -1,6 +1,6 @@
-import type { ConversationManager } from '../core/conversation.ts';
-import type { PermissionRequest } from '../permissions/prompt.ts';
-import type { SessionSnapshot } from '../runtime/session-persistence.ts';
+import type { ConversationManager } from '../core/conversation';
+import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
+import type { SessionSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 
 export type PendingPermissionState = PermissionRequest & {

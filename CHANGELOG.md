@@ -4,6 +4,42 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.9] — 2026-04-15
+
+### SDK `0.18.24` Host-Boundary Cutover
+
+- Updated `goodvibes-tui` to consume the published canonical SDK line at `@pellux/goodvibes-sdk@0.18.24`
+- Fixed the TUI host/runtime boundary so SDK-owned services receive explicit TUI configuration instead of inheriting shared defaults
+- Passed TUI-owned ecosystem catalog roots into SDK marketplace, skills, integration, and product surfaces so curated catalogs and receipts stay under `.goodvibes/tui/ecosystem/...`
+- Passed `surfaceRoot: 'tui'` into the daemon service manager and `defaultSurfaceKind: 'tui'` into automation runtime setup so service files and automation target semantics stay product-owned
+- Allowed the TUI runtime host to inject its own `localUserAuthManager` instead of letting the SDK bootstrap local auth storage implicitly
+
+### Removed Remaining Local Ecosystem Duplication
+
+- Removed the dead local `src/runtime/ecosystem/catalog.ts` implementation from the TUI
+- Kept the TUI on package imports for ecosystem catalog/recommendation behavior instead of carrying a second local implementation beside the SDK
+- Fixed the marketplace panel test and the built-in marketplace panel factory so they both use the same explicit TUI catalog-root wiring as the command/runtime host
+
+### Foundation And Release-Path Corrections
+
+- Regenerated checked-in foundation artifacts after the SDK `0.18.24` control-plane and contract updates so the TUI release gates stay aligned with the canonical runtime builders
+- Cleared the remaining temp-root failure in the marketplace panel test by moving it onto the repo-local `.tmp-tests` path
+- Revalidated the TUI end to end after the SDK boundary fixes instead of shipping on targeted checks alone
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Full test runner passes: `bun run test`
+- Architecture gate passes: `bun run architecture:check`
+- Performance gate passes: `bun run perf:check`
+- Eval gate passes: `bun run eval:gate`
+- Foundation artifacts export passes: `bun run foundation:artifacts`
+- Build passes: `bun run build`
+- Publish packaging check passes: `bun run publish:check`
+- Staged npm package rehearsal passes: `bun run publish:dry-run`
+- Staged GitHub Packages rehearsal passes: `bun run publish:dry-run:github`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.8] — 2026-04-15
 
 ### Canonical SDK Cutover Completion

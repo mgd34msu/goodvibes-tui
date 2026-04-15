@@ -8,13 +8,13 @@
  * This class is a data provider only — it contains no rendering logic.
  * Subscribe to change notifications and call getSnapshot() to render.
  */
-import type { ModelDefinition } from '../../../providers/registry.ts';
-import type { ProviderRegistry } from '../../../providers/registry.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { ProviderHealthDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import { enrichModelEntries, groupEntriesByProvider } from './health-enrichment.ts';
-import type { ModelPickerData, ModelPickerEntry } from './types.ts';
+import { enrichModelEntries, groupEntriesByProvider } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/health-enrichment';
+import type { ModelPickerData, ModelPickerEntry } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/types';
 
 /** Options for constructing a ModelPickerDataProvider. */
 export interface ModelPickerDataProviderOptions {

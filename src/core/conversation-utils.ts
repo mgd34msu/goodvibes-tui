@@ -1,5 +1,5 @@
-import type { ContentPart, ProviderMessage } from '../providers/interface.ts';
-import type { ConversationMessageSnapshot } from './conversation.ts';
+import type { ContentPart, ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ConversationMessageSnapshot } from './conversation';
 
 type Message = ConversationMessageSnapshot;
 

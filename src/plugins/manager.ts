@@ -9,16 +9,16 @@ import {
   type LoadedPlugin,
   type PluginLoaderDeps,
   type PluginPathOptions,
-} from './loader.ts';
+} from './loader';
 import {
   PluginTrustStore,
   type PluginTrustTier,
   type PluginTrustRecord,
   type SignatureValidationResult,
-} from '../runtime/plugins/trust.ts';
-import { PluginQuarantineEngine, type QuarantineRecord } from '../runtime/plugins/quarantine.ts';
-import { isHighRiskCapability, resolveCapabilityManifest } from '../runtime/plugins/manifest.ts';
-import type { PluginCapability, PluginManifestV2 } from '../runtime/plugins/types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/plugins/trust';
+import { PluginQuarantineEngine, type QuarantineRecord } from '@pellux/goodvibes-sdk/platform/runtime/plugins/quarantine';
+import { isHighRiskCapability, resolveCapabilityManifest } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manifest';
+import type { PluginCapability, PluginManifestV2 } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /**

@@ -19,7 +19,7 @@ import {
   buildRetryTaskAction,
   buildCancelTaskAction,
   buildCancelAgentAction,
-} from '../../runtime/diagnostics/actions.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/actions';
 import {
   classifyFailure,
   summariseFailure,

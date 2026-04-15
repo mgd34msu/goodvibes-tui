@@ -1,4 +1,4 @@
-export type { DomainEventConnector, SerializedRuntimeEnvelope } from './remote-events.ts';
+export type { DomainEventConnector, SerializedRuntimeEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/transports/remote-events';
 export {
   buildEventSourceUrl,
   buildWebSocketUrl,
@@ -6,7 +6,7 @@ export {
   createRemoteRuntimeEvents,
   createRemoteUiRuntimeEvents,
   createWebSocketConnector,
-} from './remote-events.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/remote-events';
 export type { TransportPaths } from '@pellux/goodvibes-sdk/platform/runtime/transports/transport-paths';
 export { buildUrl, createTransportPaths, normalizeBaseUrl } from '@pellux/goodvibes-sdk/platform/runtime/transports/transport-paths';
 export type { BackoffPolicy, ResolvedBackoffPolicy } from '@pellux/goodvibes-sdk/platform/runtime/transports/backoff';

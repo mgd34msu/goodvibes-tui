@@ -1,6 +1,6 @@
 import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 import { repairToolCall } from '@pellux/goodvibes-sdk/platform/tools/auto-repair';
-import type { ToolRuntimeContext } from '../context.ts';
+import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
 import type { PhaseResult, ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 import type { PhasedTool } from '@pellux/goodvibes-sdk/platform/runtime/tools/adapter';
 import type { ToolClass } from '@pellux/goodvibes-sdk/platform/runtime/tools/output-policy';

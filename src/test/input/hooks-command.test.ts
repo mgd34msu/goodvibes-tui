@@ -5,15 +5,15 @@ import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
-import { ConfigManager } from '../../config/manager.ts';
-import { listHookPointContracts } from '../../hooks/index.ts';
-import { HookWorkbench } from '../../hooks/workbench.ts';
-import { createRuntimeHookApi } from '../../runtime/runtime-hook-api.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
+import { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
+import { createRuntimeHookApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-hook-api';
 import {
   getTestHookDispatcher,
 } from '../helpers/runtime-services.ts';
 
-const configManager = new ConfigManager({
+const configManager = new ConfigManager({ surfaceRoot: 'tui',
   configDir: join(tmpdir(), `gv-hooks-config-${Date.now()}-${Math.random().toString(36).slice(2)}`),
 });
 

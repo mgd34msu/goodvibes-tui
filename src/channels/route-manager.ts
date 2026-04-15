@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RouteSurfaceKind } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
 import {
   emitRouteBindingCreated,
@@ -9,7 +9,7 @@ import {
   emitRouteBindingResolved,
   emitRouteBindingUpdated,
   emitRouteReplyTargetCaptured,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
 import type { AutomationSurfaceKind } from '@pellux/goodvibes-sdk/platform/automation/types';
 import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';

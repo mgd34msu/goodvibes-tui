@@ -18,7 +18,7 @@ import {
   PolicySignatureError,
 } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import { signBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-signer';
-import { createPermissionEvaluator } from '../../../runtime/permissions/index.ts';
+import { createPermissionEvaluator } from '@pellux/goodvibes-sdk/platform/runtime/permissions/index';
 import type { PolicyBundlePayload, BundleProvenance } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import type { SignedPolicyBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-signer';
 

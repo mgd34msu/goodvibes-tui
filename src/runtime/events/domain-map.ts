@@ -5,12 +5,12 @@
  * discriminated union members into a single flat map keyed by the type string.
  */
 import type { SessionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/session';
-import type { TurnEvent } from './turn.ts';
+import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/turn';
 import type { ProviderEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/providers';
 import type { ToolEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tools';
 import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tasks';
 import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/agents';
-import type { WorkflowEvent } from './workflows.ts';
+import type { WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/workflows';
 import type { OrchestrationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/orchestration';
 import type { CommunicationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/communication';
 import type { PlannerEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/planner';

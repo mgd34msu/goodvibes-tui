@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { FileWatcher } from '../../state/file-watcher.ts';
+import { FileWatcher } from '@pellux/goodvibes-sdk/platform/state/file-watcher';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

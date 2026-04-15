@@ -3,8 +3,8 @@ import {
   type AutomationScheduleDefinition,
 } from '@pellux/goodvibes-sdk/platform/automation/schedules';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import type { MemoryRegistry } from '../state/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createDefaultKnowledgeConnectorRegistry, KnowledgeConnectorRegistry } from '@pellux/goodvibes-sdk/platform/knowledge/connectors';
 import { KnowledgeProjectionService } from '@pellux/goodvibes-sdk/platform/knowledge/projections';
 import { KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/store';
@@ -42,7 +42,7 @@ import {
   buildKnowledgePromptPacket,
   buildKnowledgePromptPacketSync,
   searchKnowledge,
-} from './packet.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/packet';
 import {
   ingestKnowledgeArtifact,
   ingestKnowledgeBookmarkSeeds,
@@ -54,14 +54,14 @@ import {
   refreshKnowledgeSources,
   pickKnowledgeRefreshCandidates,
   recompileKnowledgeSource,
-} from './ingest.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/ingest';
 import {
   decideKnowledgeConsolidationCandidate,
   runKnowledgeConsolidation,
-} from './consolidation.ts';
-import { KnowledgeScheduleService } from './scheduling.ts';
-import { lintKnowledgeStore } from './lint.ts';
-import { syncKnowledgeMemoryNodes } from './memory-sync.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/consolidation';
+import { KnowledgeScheduleService } from '@pellux/goodvibes-sdk/platform/knowledge/scheduling';
+import { lintKnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/lint';
+import { syncKnowledgeMemoryNodes } from '@pellux/goodvibes-sdk/platform/knowledge/memory-sync';
 import {
   emitKnowledgeExtractionCompleted,
   emitKnowledgeExtractionFailed,
@@ -71,7 +71,7 @@ import {
   emitKnowledgePacketBuilt,
   emitKnowledgeProjectionMaterialized,
   emitKnowledgeProjectionRendered,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import { extractKnowledgeArtifact } from '@pellux/goodvibes-sdk/platform/knowledge/extractors';
 import {
   canonicalizeUri as internalCanonicalizeUri,
@@ -80,7 +80,7 @@ import {
   isHttpUri as internalIsHttpUri,
   isSourcePastRefreshWindow as internalIsSourcePastRefreshWindow,
   tokenize as internalTokenize,
-} from './internal.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/internal';
 
 const DEFAULT_PACKET_LIMIT = internalDefaultPacketLimit;
 const DEFAULT_PACKET_BUDGET = internalDefaultPacketBudget;

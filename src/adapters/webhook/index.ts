@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import type { GenericWebhookAdapterContext } from '../types.ts';
+import type { GenericWebhookAdapterContext } from '@pellux/goodvibes-sdk/platform/adapters/types';
 import { validatePublicWebhookUrl } from '@pellux/goodvibes-sdk/platform/utils/url-safety';
 
 function parseJsonRecord(rawBody: string): Record<string, unknown> | Response {

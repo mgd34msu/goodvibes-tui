@@ -10,12 +10,12 @@
  * provider instances for each endpoint, routed by the model's native API format.
  */
 
-import { OpenAICompatProvider } from './openai-compat.ts';
-import { AnthropicCompatProvider } from './anthropic-compat.ts';
-import type { LLMProvider } from './interface.ts';
-import type { ProviderRegistry } from './registry.ts';
-import { hasKeyForProvider } from './model-catalog.ts';
-import type { CatalogProvider } from './model-catalog.ts';
+import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import { AnthropicCompatProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-compat';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { hasKeyForProvider } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
+import type { CatalogProvider } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

@@ -1,5 +1,5 @@
 import { deriveComposerState } from '../../core/composer-state.ts';
-import type { TranscriptEventKind } from '../../core/transcript-events/index.ts';
+import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { requireReadModels } from './runtime-services.ts';
 

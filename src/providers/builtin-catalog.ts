@@ -1,5 +1,5 @@
-import type { OpenAICompatOptions } from './openai-compat.ts';
-import type { AnthropicCompatOptions } from './anthropic-compat.ts';
+import type { OpenAICompatOptions } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import type { AnthropicCompatOptions } from '@pellux/goodvibes-sdk/platform/providers/anthropic-compat';
 
 export interface BuiltinProviderDefinition {
   readonly id: string;

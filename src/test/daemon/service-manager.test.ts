@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
-import { PlatformServiceManager } from '../../daemon/service-manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon/service-manager';
 
 describe('PlatformServiceManager', () => {
   let root = '';
+  const testTmpRoot = join(import.meta.dir, '../../../.tmp-tests');
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-service-manager-'));
+    mkdirSync(testTmpRoot, { recursive: true });
+    root = mkdtempSync(join(testTmpRoot, 'gv-service-manager-'));
   });
 
   afterEach(() => {
@@ -17,7 +18,7 @@ describe('PlatformServiceManager', () => {
   });
 
   test('installs and uninstalls manual service definitions in the workspace', () => {
-    const config = new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
     config.set('service.platform', 'manual');
     config.set('service.autostart', true);
     config.set('service.restartOnFailure', true);
@@ -27,6 +28,7 @@ describe('PlatformServiceManager', () => {
     const manager = new PlatformServiceManager(config, {
       workingDirectory: root,
       homeDirectory: root,
+      surfaceRoot: 'tui',
     });
     const initial = manager.status();
     expect(initial.platform).toBe('manual');
@@ -44,13 +46,14 @@ describe('PlatformServiceManager', () => {
   });
 
   test('starts, reports, restarts, and stops manual service processes', async () => {
-    const config = new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
     config.set('service.platform', 'manual');
     config.set('service.logPath', join(root, '.goodvibes', 'tui', 'service', 'manual.log'));
 
     const manager = new PlatformServiceManager(config, {
       workingDirectory: root,
       homeDirectory: root,
+      surfaceRoot: 'tui',
       definitionOverride: {
         name: 'test-daemon',
         description: 'test daemon',
@@ -79,7 +82,7 @@ describe('PlatformServiceManager', () => {
 
   test('renders and runs platform commands using the configured service name', () => {
     const calls: Array<{ command: string; args: readonly string[] }> = [];
-    const config = new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
     config.set('service.platform', 'systemd');
     config.set('service.serviceName', 'gv-ops');
     config.set('service.restartOnFailure', false);
@@ -89,6 +92,7 @@ describe('PlatformServiceManager', () => {
     const manager = new PlatformServiceManager(config, {
       workingDirectory: root,
       homeDirectory: root,
+      surfaceRoot: 'tui',
       actionRunner: (command, args) => {
         calls.push({ command, args });
         return { status: 0, stdout: '', stderr: '' };
@@ -114,12 +118,13 @@ describe('PlatformServiceManager', () => {
 
   test('renders launchd and windows service artifacts with the configured service name', () => {
     const launchdCalls: Array<{ command: string; args: readonly string[] }> = [];
-    const launchdConfig = new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    const launchdConfig = new ConfigManager({ surfaceRoot: 'tui',  workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
     launchdConfig.set('service.platform', 'launchd');
     launchdConfig.set('service.serviceName', 'dev.goodvibes.launchd');
     const launchdManager = new PlatformServiceManager(launchdConfig, {
       workingDirectory: root,
       homeDirectory: root,
+      surfaceRoot: 'tui',
       actionRunner: (command, args) => {
         launchdCalls.push({ command, args });
         return { status: 0, stdout: '', stderr: '' };
@@ -139,12 +144,13 @@ describe('PlatformServiceManager', () => {
     ]);
 
     const windowsCalls: Array<{ command: string; args: readonly string[] }> = [];
-    const windowsConfig = new ConfigManager({ workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
+    const windowsConfig = new ConfigManager({ surfaceRoot: 'tui',  workingDir: root, configDir: join(root, '.goodvibes', 'tui') });
     windowsConfig.set('service.platform', 'windows');
     windowsConfig.set('service.serviceName', 'GoodVibesTask');
     const windowsManager = new PlatformServiceManager(windowsConfig, {
       workingDirectory: root,
       homeDirectory: root,
+      surfaceRoot: 'tui',
       actionRunner: (command, args) => {
         windowsCalls.push({ command, args });
         return { status: 0, stdout: '', stderr: '' };

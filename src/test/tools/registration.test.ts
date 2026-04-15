@@ -3,13 +3,13 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { registerAllTools } from '../../tools/index.ts';
+import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
 import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
-import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
-import { AgentMessageBus } from '../../agents/message-bus.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
 import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
@@ -30,6 +30,7 @@ function registerTools(registry: ToolRegistry): void {
   const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
   const agentMessageBus = new AgentMessageBus();
   registerAllTools(registry, {
+    surfaceRoot: 'tui',
     fileUndoManager: new FileUndoManager(),
     modeManager: new ModeManager(),
     processManager: new ProcessManager(),

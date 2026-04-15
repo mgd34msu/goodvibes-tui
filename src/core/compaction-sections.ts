@@ -10,12 +10,12 @@
  * Empty sections return null — the orchestrator omits them entirely (no header).
  */
 
-import type { ProviderMessage, ContentPart } from '../providers/interface.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
-import type { WrfcChain } from '../agents/wrfc-types.ts';
+import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { WrfcChain } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
 import type { ExecutionPlan, PlanItem } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
-import type { CompactionSection, CompactionConfig, SessionMemory } from './compaction-types.ts';
-import { estimateTokens } from './compaction-types.ts';
+import type { CompactionSection, CompactionConfig, SessionMemory } from '@pellux/goodvibes-sdk/platform/core/compaction-types';
+import { estimateTokens } from '@pellux/goodvibes-sdk/platform/core/compaction-types';
 
 // ---------------------------------------------------------------------------
 // Internal helpers

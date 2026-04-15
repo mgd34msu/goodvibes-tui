@@ -37,13 +37,13 @@ export {
   TaskTransitionError,
   TaskNotFoundError,
   TaskNotCancellableError,
-} from './manager.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tasks/manager';
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 import type { RuntimeStore } from '../store/index.ts';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { TaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
-import { UnifiedTaskManager } from './manager.ts';
+import { UnifiedTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/manager';
 
 /**
  * Creates a fully initialized UnifiedTaskManager bound to the given

@@ -6,12 +6,12 @@ import {
   type KnowledgeInjectionRetention,
   type KnowledgeInjectionTrustTier,
   type KnowledgeInjectionUseAs,
-} from '../knowledge/internal.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/internal';
 import type {
   MemoryRecord,
   MemoryRegistry,
   MemorySemanticSearchResult,
-} from './memory-store.ts';
+} from '@pellux/goodvibes-sdk/platform/state/memory-store';
 
 export interface KnowledgeInjection {
   readonly id: string;

@@ -8,8 +8,8 @@ import type {
   ToolEvent,
   TurnEvent,
   WorkflowEvent,
-} from '../events/index.ts';
-import type { UiEventFeed, UiRuntimeEvents } from '../ui-events.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { UiEventFeed, UiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import type { DomainEventConnector } from '@pellux/goodvibes-sdk/platform/runtime/transports/domain-events';
 import { createRemoteRuntimeEvents, type RemoteRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/transports/runtime-events-client';
 

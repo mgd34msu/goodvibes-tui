@@ -3,12 +3,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { knowledgeCommand } from '../../input/commands/knowledge.ts';
-import { createKnowledgeApi, KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
-import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
-import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { createKnowledgeApi, KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/index';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
@@ -86,7 +86,7 @@ describe('knowledgeCommand', () => {
   beforeEach(() => {
     printed = [];
     root = mkdtempSync(join(tmpdir(), 'gv-knowledge-command-'));
-    configManager = new ConfigManager({ configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     memoryStore = new MemoryStore(join(root, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
     });

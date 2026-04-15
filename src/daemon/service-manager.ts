@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync, spawn, type SpawnOptions } from 'node:child_process';
-import { ConfigManager } from '../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 export type ManagedServicePlatform = 'systemd' | 'launchd' | 'windows' | 'manual';
 

@@ -10,7 +10,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { TaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createDomainDispatch } from '../store/index.ts';
 import type { RuntimeStore, DomainDispatch } from '../store/index.ts';
 import type { TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
@@ -22,7 +22,7 @@ import {
   emitOpsTaskResumed,
   emitOpsTaskRetried,
   emitOpsAgentCancelled,
-} from '../emitters/ops.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/ops';
 import type { OpsInterventionReason } from '@pellux/goodvibes-sdk/platform/runtime/events/ops';
 
 // ---------------------------------------------------------------------------

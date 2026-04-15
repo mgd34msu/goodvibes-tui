@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, mock } from 'bun:test';
-import type { AgentManager } from '../../tools/agent/manager.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/manager';
 import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 describe('Agent lifecycle integration', () => {

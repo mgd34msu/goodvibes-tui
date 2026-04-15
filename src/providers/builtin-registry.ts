@@ -1,20 +1,20 @@
-import type { LLMProvider } from './interface.ts';
-import { OpenAIProvider } from './openai.ts';
-import { OpenAICompatProvider } from './openai-compat.ts';
-import { AnthropicProvider } from './anthropic.ts';
-import { AnthropicCompatProvider } from './anthropic-compat.ts';
-import { OpenAICodexProvider } from './openai-codex.ts';
-import { GeminiProvider } from './gemini.ts';
-import { AmazonBedrockProvider } from './amazon-bedrock.ts';
-import { AmazonBedrockMantleProvider } from './amazon-bedrock-mantle.ts';
-import { AnthropicVertexProvider } from './anthropic-vertex.ts';
-import { GitHubCopilotProvider } from './github-copilot.ts';
-import { BUILTIN_COMPAT_PROVIDERS, type BuiltinCompatDefinition } from './builtin-catalog.ts';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { OpenAIProvider } from '@pellux/goodvibes-sdk/platform/providers/openai';
+import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import { AnthropicProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic';
+import { AnthropicCompatProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-compat';
+import { OpenAICodexProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-codex';
+import { GeminiProvider } from '@pellux/goodvibes-sdk/platform/providers/gemini';
+import { AmazonBedrockProvider } from '@pellux/goodvibes-sdk/platform/providers/amazon-bedrock';
+import { AmazonBedrockMantleProvider } from '@pellux/goodvibes-sdk/platform/providers/amazon-bedrock-mantle';
+import { AnthropicVertexProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-vertex';
+import { GitHubCopilotProvider } from '@pellux/goodvibes-sdk/platform/providers/github-copilot';
+import { BUILTIN_COMPAT_PROVIDERS, type BuiltinCompatDefinition } from '@pellux/goodvibes-sdk/platform/providers/builtin-catalog';
 import { normalizeFoundryEndpoint } from '@pellux/goodvibes-sdk/platform/providers/microsoft-foundry-shared';
-import { SyntheticProvider } from './synthetic.ts';
+import { SyntheticProvider } from '@pellux/goodvibes-sdk/platform/providers/synthetic';
 import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import type { CanonicalModel } from './synthetic.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { CanonicalModel } from '@pellux/goodvibes-sdk/platform/providers/synthetic';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 export interface ProviderRegistrar {

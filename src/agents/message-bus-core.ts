@@ -1,7 +1,7 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { CommunicationKind, CommunicationScope } from '@pellux/goodvibes-sdk/platform/runtime/events/communication';
-import { emitCommunicationBlocked, emitCommunicationDelivered, emitCommunicationSent } from '../runtime/emitters/index.ts';
+import { emitCommunicationBlocked, emitCommunicationDelivered, emitCommunicationSent } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   communicationRoleForTemplate,

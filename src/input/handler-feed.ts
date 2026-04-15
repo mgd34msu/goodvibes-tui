@@ -8,7 +8,7 @@ import { SelectionModal } from './selection-modal.ts';
 import type { SelectionResult } from './selection-modal.ts';
 import { SearchManager } from './search.ts';
 import type { InputHistory, HistorySearch } from './input-history.ts';
-import type { BlockMeta, ConversationManager } from '../core/conversation.ts';
+import type { BlockMeta, ConversationManager } from '../core/conversation';
 import { ProcessModal } from '../renderer/process-modal.ts';
 import { LiveTailModal } from '../renderer/live-tail-modal.ts';
 import { BlockActionsMenu } from '../renderer/block-actions.ts';

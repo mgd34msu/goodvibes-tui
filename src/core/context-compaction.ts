@@ -23,8 +23,8 @@
  *   getLastCompactionEvent()               — return most recent compaction event
  */
 
-import type { ProviderMessage, ContentPart, LLMProvider } from '../providers/interface.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderMessage, ContentPart, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type {
   CompactionSection,
@@ -32,8 +32,8 @@ import type {
   CompactionResult,
   CompactionEvent,
   CompactionConfig,
-} from './compaction-types.ts';
-import { DEFAULT_COMPACTION_CONFIG, estimateTokens } from './compaction-types.ts';
+} from '@pellux/goodvibes-sdk/platform/core/compaction-types';
+import { DEFAULT_COMPACTION_CONFIG, estimateTokens } from '@pellux/goodvibes-sdk/platform/core/compaction-types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   buildHandoffHeader,
@@ -48,9 +48,9 @@ import {
   buildResolvedProblemsPrompt,
   buildPlanProgress,
   buildSessionLineage,
-} from './compaction-sections.ts';
+} from '@pellux/goodvibes-sdk/platform/core/compaction-sections';
 
-export type { CompactionEvent, CompactionResult, CompactionContext } from './compaction-types.ts';
+export type { CompactionEvent, CompactionResult, CompactionContext } from '@pellux/goodvibes-sdk/platform/core/compaction-types';
 
 export interface AutoCompactOptions {
   /** Current input token count from last LLM response. */
@@ -115,7 +115,7 @@ export function estimateConversationTokens(messages: ProviderMessage[]): number 
   return total;
 }
 
-export { estimateTokens } from './compaction-types.ts';
+export { estimateTokens } from '@pellux/goodvibes-sdk/platform/core/compaction-types';
 
 // ---------------------------------------------------------------------------
 // Should compact?

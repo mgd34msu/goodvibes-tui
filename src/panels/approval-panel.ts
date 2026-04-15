@@ -10,8 +10,8 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import type { PolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
-import { buildPermissionRuleSuggestions } from '../runtime/permissions/rule-suggestions.ts';
+import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { buildPermissionRuleSuggestions } from '@pellux/goodvibes-sdk/platform/runtime/permissions/rule-suggestions';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,

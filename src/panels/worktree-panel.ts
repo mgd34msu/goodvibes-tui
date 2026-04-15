@@ -2,7 +2,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
 import { buildKeyValueLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, resolvePrimaryScrollableSection, type PanelWorkspaceSection } from './polish.ts';
-import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '../runtime/worktree/registry.ts';
+import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,

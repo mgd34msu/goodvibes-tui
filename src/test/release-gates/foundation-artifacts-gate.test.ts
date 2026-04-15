@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { GatewayMethodCatalog } from '../../control-plane/method-catalog.ts';
-import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
-import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '../../knowledge/index.ts';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
+import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
 import { renderFoundationClientTypes } from '../../../scripts/foundation-typegen.ts';
 

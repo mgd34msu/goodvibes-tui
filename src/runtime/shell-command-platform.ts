@@ -4,7 +4,7 @@ import type { SecretsManager } from '../config/secrets.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
-import type { WebhookNotifier } from '../integrations/webhooks.ts';
+import type { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations/webhooks';
 import type { UiReadModels } from './ui-read-models.ts';
 
 export interface CommandPlatformShellServices {

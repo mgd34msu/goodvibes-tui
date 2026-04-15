@@ -1,4 +1,4 @@
-import type { BlockMeta } from './conversation.ts';
+import type { BlockMeta } from './conversation';
 
 export function parseDiffForApply(diffText: string): Pick<BlockMeta, 'filePath' | 'diffOriginal' | 'diffUpdated'> {
   const lines = diffText.split('\n');

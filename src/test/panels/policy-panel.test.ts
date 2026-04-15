@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { createPermissionSimulator, DivergenceDashboard } from '../../runtime/permissions/index.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { createPermissionSimulator, DivergenceDashboard } from '@pellux/goodvibes-sdk/platform/runtime/permissions/index';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import { PolicyPanel } from '../../panels/policy-panel.ts';

@@ -6,7 +6,7 @@ import type {
   RuntimeEventBus,
   RuntimeEventDomain,
   RuntimeEventEnvelope,
-} from '../events/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RuntimeStore } from '../store/index.ts';
 import type { TelemetryDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/telemetry';
 import type {
@@ -47,7 +47,7 @@ import {
   summarizePayload,
   toAttributeValue,
   toObjectMap,
-} from './api-helpers.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api-helpers';
 
 export type TelemetrySeverity = 'debug' | 'info' | 'warn' | 'error';
 export type TelemetryViewMode = 'safe' | 'raw';

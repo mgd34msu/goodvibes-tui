@@ -1,9 +1,9 @@
 import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
-import { AgentOrchestrator } from '../../agents/orchestrator.ts';
-import { AgentMessageBus } from '../../agents/message-bus.ts';
-import { WrfcController } from '../../agents/wrfc-controller.ts';
-import type { ConfigManager } from '../../config/manager.ts';
-import type { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents/orchestrator';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import {
   emitAgentSpawning,
   emitOrchestrationGraphCreated,
@@ -11,9 +11,9 @@ import {
   emitOrchestrationNodeCancelled,
   emitOrchestrationRecursionGuardTriggered,
   emitOrchestrationNodeStarted,
-} from '../../runtime/emitters/index.ts';
-import type { OrchestrationTaskContract } from '../../runtime/events/index.ts';
-import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-policy.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import type { OrchestrationTaskContract } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { evaluateOrchestrationSpawn } from '@pellux/goodvibes-sdk/platform/runtime/orchestration/spawn-policy';
 import type { ExecutionIntent } from '@pellux/goodvibes-sdk/platform/runtime/execution-intents';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { AgentInput } from '@pellux/goodvibes-sdk/platform/tools/agent/schema';

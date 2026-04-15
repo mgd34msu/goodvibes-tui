@@ -14,7 +14,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { AdaptivePlanner, VALID_STRATEGIES } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import type { PlannerInputs } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
-import { handlePlanCommand } from '../../core/plan-command-handler.ts';
+import { handlePlanCommand } from '@pellux/goodvibes-sdk/platform/core/plan-command-handler';
 
 // ---------------------------------------------------------------------------
 // Helpers

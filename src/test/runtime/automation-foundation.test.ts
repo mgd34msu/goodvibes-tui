@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 
@@ -34,7 +34,7 @@ describe('automation/control-plane foundation', () => {
   });
 
   test('config manager supports deep surface settings and reset for nested keys', () => {
-    const config = new ConfigManager({ configDir });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir });
 
     expect(config.get('surfaces.slack.enabled')).toBe(false);
     expect(config.get('automation.maxConcurrentRuns')).toBe(4);

@@ -1,5 +1,5 @@
-export { updateDomainMetadata } from './reducers/shared.ts';
-export { updateConversationState } from './reducers/conversation.ts';
+export { updateDomainMetadata } from '@pellux/goodvibes-sdk/platform/runtime/store/helpers/reducers/shared';
+export { updateConversationState } from '@pellux/goodvibes-sdk/platform/runtime/store/helpers/reducers/conversation';
 export {
   updateSessionState,
   updatePermissionState,
@@ -9,7 +9,7 @@ export {
   transitionTaskDomainRecord,
   updateTaskDomainFromRecord,
   transitionAgentDomainRecord,
-} from './reducers/lifecycle.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/store/helpers/reducers/lifecycle';
 export {
   updateCommunicationState,
   updatePluginState,
@@ -27,4 +27,4 @@ export {
   updateSurfaceDomainFromRecord,
   updateWatcherDomainFromRecord,
   syncSessionStatePatch,
-} from './reducers/sync.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/store/helpers/reducers/sync';

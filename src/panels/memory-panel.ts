@@ -3,8 +3,8 @@
  */
 
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { MemoryRegistry } from '../state/memory-store.ts';
-import type { MemoryRecord, MemoryClass } from '../state/memory-store.ts';
+import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { MemoryRecord, MemoryClass } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import { BasePanel } from './base-panel.ts';
 import {
   buildBodyText,

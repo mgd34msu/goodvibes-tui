@@ -14,7 +14,7 @@
  *   - Delegate schema freshness to McpSchemaFreshnessTracker
  */
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { McpClient } from '../../mcp/client.ts';
+import { McpClient } from '@pellux/goodvibes-sdk/platform/mcp/client';
 import type { McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
 import type { McpEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/mcp';
 import {

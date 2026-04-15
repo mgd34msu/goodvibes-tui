@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { ConversationManager } from '../core/conversation.ts';
+import { ConversationManager } from '../core/conversation';
 import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

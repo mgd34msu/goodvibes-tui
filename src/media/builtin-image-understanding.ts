@@ -1,6 +1,6 @@
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import type { ContentPart, LLMProvider, ProviderMessage } from '../providers/interface.ts';
-import type { ModelDefinition, ProviderRegistry } from '../providers/registry.ts';
+import type { ContentPart, LLMProvider, ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type {
   MediaAnalysisRequest,
   MediaAnalysisResult,

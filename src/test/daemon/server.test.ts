@@ -4,18 +4,18 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { DaemonServer } from '../../daemon/server.ts';
-import { HttpListener } from '../../daemon/http-listener.ts';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
+import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
-import { MultimodalService } from '../../multimodal/index.ts';
-import { ConfigManager } from '../../config/manager.ts';
-import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
+import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
-import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -82,7 +82,7 @@ describe('DaemonServer', () => {
   let homeDir: string;
   let configDir: string;
   let runtimeServices: ReturnType<typeof createRuntimeServices>;
-  const makeConfig = () => new ConfigManager({ configDir, workingDir, homeDir });
+  const makeConfig = () => new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
   const makeUserAuth = () => new UserAuthManager({
     bootstrapFilePath: join(homeDir, 'auth-users.json'),
     bootstrapCredentialPath: join(homeDir, 'auth-bootstrap.txt'),
@@ -2889,7 +2889,7 @@ describe('HttpListener', () => {
   let workingDir: string;
   let homeDir: string;
   let configDir: string;
-  const makeConfig = () => new ConfigManager({ configDir, workingDir, homeDir });
+  const makeConfig = () => new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
   const createTestListener = (options: {
     readonly configManager?: ConfigManager;
     readonly userAuth?: UserAuthManager;

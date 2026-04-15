@@ -10,7 +10,7 @@
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { Orchestrator } from '../../core/orchestrator.ts';
+import type { Orchestrator } from '../../core/orchestrator';
 const TEST_ROOT = '/tmp/goodvibes-test';
 
 // ---------------------------------------------------------------------------

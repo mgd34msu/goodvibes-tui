@@ -1,4 +1,4 @@
-import { createHttpTransport } from '../../src/runtime/transports/http.ts';
+import { createHttpTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http';
 
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();

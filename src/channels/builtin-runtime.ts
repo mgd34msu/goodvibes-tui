@@ -17,9 +17,9 @@ import type {
   ChannelTargetResolveOptions,
   ChannelToolDescriptor,
 } from '@pellux/goodvibes-sdk/platform/channels/types';
-import type { ChannelPlugin } from './plugin-registry.ts';
-import type { ProviderRuntimeSurface } from './provider-runtime.ts';
-import { buildBuiltinAccount, resolveBuiltinAccount } from './builtin/accounts.ts';
+import type { ChannelPlugin } from '@pellux/goodvibes-sdk/platform/channels/plugin-registry';
+import type { ProviderRuntimeSurface } from '@pellux/goodvibes-sdk/platform/channels/provider-runtime';
+import { buildBuiltinAccount, resolveBuiltinAccount } from '@pellux/goodvibes-sdk/platform/channels/builtin/accounts';
 import {
   buildBuiltinContractHooks,
   editBuiltinAllowlist,
@@ -28,20 +28,20 @@ import {
   listBuiltinRepairActions,
   migrateBuiltinLifecycle,
   resolveBuiltinAllowlist,
-} from './builtin/contracts.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/contracts';
 import {
   listBuiltinCapabilities,
   listBuiltinOperatorActions,
   listBuiltinTools,
 } from '@pellux/goodvibes-sdk/platform/channels/builtin/descriptors';
-import { getBuiltinSetupSchema } from './builtin/setup-schema.ts';
-import { registerBuiltinChannelPlugins } from './builtin/plugins.ts';
-import type { BuiltinChannelRuntimeDeps, ManagedSurface } from './builtin/shared.ts';
+import { getBuiltinSetupSchema } from '@pellux/goodvibes-sdk/platform/channels/builtin/setup-schema';
+import { registerBuiltinChannelPlugins } from '@pellux/goodvibes-sdk/platform/channels/builtin/plugins';
+import type { BuiltinChannelRuntimeDeps, ManagedSurface } from '@pellux/goodvibes-sdk/platform/channels/builtin/shared';
 import {
   authorizeBuiltinActorAction,
   runBuiltinAccountAction,
   runBuiltinProviderApi,
-} from './builtin/account-actions.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/account-actions';
 import {
   readConversationKind,
   readDirectoryScope,
@@ -51,8 +51,8 @@ import {
   listBuiltinAgentTools,
   notifyBuiltinApprovalViaRouter,
   renderBuiltinChannelEvent,
-} from './builtin/rendering.ts';
-import { providerRuntimeStatus as providerRuntimeStatusForSurface } from './builtin/surfaces.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/rendering';
+import { providerRuntimeStatus as providerRuntimeStatusForSurface } from '@pellux/goodvibes-sdk/platform/channels/builtin/surfaces';
 import {
   inferBuiltinTargetConversationKind,
   lookupBuiltinDirectory,
@@ -60,7 +60,7 @@ import {
   resolveBuiltinParentConversationCandidates,
   resolveBuiltinSessionTarget,
   resolveBuiltinTarget,
-} from './builtin/targets.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/targets';
 
 export class BuiltinChannelRuntime {
   constructor(private readonly deps: BuiltinChannelRuntimeDeps) {}

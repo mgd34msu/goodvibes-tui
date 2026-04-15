@@ -20,7 +20,7 @@ import {
 import type {
   ConversationDomainState,
   ActiveToolCall,
-} from '../../runtime/store/domains/conversation.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
 import type { AgentDomainState, RuntimeAgent } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
 import type { TaskDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 

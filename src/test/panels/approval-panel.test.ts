@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { ApprovalPanel } from '../../panels/approval-panel.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 
 describe('ApprovalPanel', () => {
   test('renders action-specific approval workspace guidance', () => {

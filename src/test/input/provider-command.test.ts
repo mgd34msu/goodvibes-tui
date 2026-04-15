@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { providerCommand } from '../../input/commands/provider.ts';
-import { createRuntimeProviderApi } from '../../runtime/runtime-provider-api.ts';
+import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
 import {
   getTestRuntimeServices,
   resetTestRuntimeServices,

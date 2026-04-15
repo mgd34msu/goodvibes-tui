@@ -3,11 +3,11 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '../../config/manager.ts';
-import { KnowledgeService, KnowledgeStore } from '../../knowledge/index.ts';
-import { MultimodalService } from '../../multimodal/index.ts';
-import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
-import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/index';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/index';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 
 describe('MultimodalService', () => {
   let root: string;
@@ -20,7 +20,7 @@ describe('MultimodalService', () => {
 
   beforeEach(async () => {
     root = mkdtempSync(join(tmpdir(), 'gv-multimodal-'));
-    configManager = new ConfigManager({ configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui'), workingDir: root });
     artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
     knowledgeStore = new KnowledgeStore({ dbPath: join(root, 'knowledge.sqlite') });
     memoryStore = new MemoryStore(join(root, 'memory.sqlite'), {

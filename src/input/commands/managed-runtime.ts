@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { profileDataToConfigSnapshot } from '../../profiles/shape.ts';
+import { profileDataToConfigSnapshot } from '@pellux/goodvibes-sdk/platform/profiles/shape';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
 import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { ManagedSettingsBundle } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
@@ -16,7 +16,7 @@ import {
   rollbackManagedApply,
   setManagedSettingLock,
   stageManagedSettingsBundle,
-} from '../../runtime/settings/control-plane.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
 import { requireProfileManager, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

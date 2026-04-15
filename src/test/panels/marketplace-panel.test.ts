@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MarketplacePanel } from '../../panels/marketplace-panel.ts';
 
@@ -10,7 +9,9 @@ describe('MarketplacePanel', () => {
   const originalHome = process.env.HOME;
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-marketplace-panel-'));
+    const tempRoot = join(process.cwd(), '.tmp-tests');
+    mkdirSync(tempRoot, { recursive: true });
+    root = mkdtempSync(join(tempRoot, 'gv-marketplace-panel-'));
     process.chdir(root);
     process.env.HOME = root;
     mkdirSync(join(root, '.goodvibes', 'tui', 'ecosystem'), { recursive: true });
@@ -43,10 +44,16 @@ describe('MarketplacePanel', () => {
     process.chdir(originalCwd);
     if (originalHome === undefined) delete process.env.HOME;
     else process.env.HOME = originalHome;
+    rmSync(root, { recursive: true, force: true });
   });
 
   test('renders curated marketplace entries and provenance hints', () => {
-    const panel = new MarketplacePanel(undefined, { cwd: root, homeDir: root });
+    const panel = new MarketplacePanel(undefined, {
+      cwd: root,
+      homeDir: root,
+      projectCatalogRoot: join(root, '.goodvibes', 'tui', 'ecosystem'),
+      userCatalogRoot: join(root, '.goodvibes', 'tui', 'ecosystem'),
+    });
     panel.onActivate();
     const text = panel.render(90, 16).flat().map((cell) => cell.char).join('');
     expect(text).toContain('Marketplace Control Room');

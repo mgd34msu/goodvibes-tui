@@ -1,8 +1,8 @@
-import type { ProviderMessage } from '../providers/interface.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { compactMessages } from './context-compaction.ts';
-import type { CompactionContext } from './context-compaction.ts';
+import { compactMessages } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
+import type { CompactionContext } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
 import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
 import type { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

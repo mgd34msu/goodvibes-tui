@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
-import { createDiscoveredProvider } from '../../providers/discovered-factory.ts';
-import { LocalAIProvider, TGIProvider, VLLMProvider } from '../../providers/discovered-compat.ts';
-import { LlamaCppProvider } from '../../providers/llama-cpp.ts';
-import { LMStudioProvider } from '../../providers/lm-studio.ts';
-import { OpenAICompatProvider } from '../../providers/openai-compat.ts';
-import { OllamaProvider } from '../../providers/ollama.ts';
+import { LocalAIProvider, TGIProvider, VLLMProvider } from '@pellux/goodvibes-sdk/platform/providers/discovered-compat';
+import { createDiscoveredProvider } from '@pellux/goodvibes-sdk/platform/providers/discovered-factory';
+import { LlamaCppProvider } from '@pellux/goodvibes-sdk/platform/providers/llama-cpp';
+import { LMStudioProvider } from '@pellux/goodvibes-sdk/platform/providers/lm-studio';
+import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import { OllamaProvider } from '@pellux/goodvibes-sdk/platform/providers/ollama';
 
 describe('createDiscoveredProvider', () => {
   test('uses LMStudioProvider for detected LM Studio servers', () => {

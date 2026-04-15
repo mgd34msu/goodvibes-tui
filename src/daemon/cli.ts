@@ -1,12 +1,12 @@
 import { homedir } from 'node:os';
-import { ConfigManager } from '../config/manager.ts';
-import { RuntimeEventBus } from '../runtime/events/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
-import { DaemonServer } from './server.ts';
-import { HttpListener } from './http-listener.ts';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
+import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { GlobalNetworkTransportInstaller } from '../runtime/network/index.ts';
+import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type DaemonCliOwnership = {
@@ -36,7 +36,7 @@ function readDaemonCliTokens(env: NodeJS.ProcessEnv): DaemonCliTokens {
 
 async function main(): Promise<void> {
   const { workingDirectory: workingDir, homeDirectory } = resolveDaemonCliOwnership();
-  const config = new ConfigManager({ workingDir, homeDir: homeDirectory });
+  const config = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
   new GlobalNetworkTransportInstaller().install(config);
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();

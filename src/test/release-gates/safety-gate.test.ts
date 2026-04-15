@@ -10,12 +10,12 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { permissionPhase } from '../../runtime/tools/phases/permission.ts';
+import { permissionPhase } from '@pellux/goodvibes-sdk/platform/runtime/tools/phases/permission';
 import { guardExecCommand, formatDenialResponse } from '@pellux/goodvibes-sdk/platform/tools/exec/ast-guard';
 import { applySanitizer, resolveSanitizeMode } from '@pellux/goodvibes-sdk/platform/tools/fetch/sanitizer';
-import { PhasedToolExecutor } from '../../runtime/tools/phased-executor.ts';
+import { PhasedToolExecutor } from '@pellux/goodvibes-sdk/platform/runtime/tools/phased-executor';
 import type { ToolCall, Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ToolRuntimeContext } from '../../runtime/tools/context.ts';
+import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
 import type { ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 
 // ---------------------------------------------------------------------------

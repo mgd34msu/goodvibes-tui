@@ -1,15 +1,15 @@
 import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
 import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { SplashOptions } from '../utils/splash-lines.ts';
+import type { SplashOptions } from '@pellux/goodvibes-sdk/platform/utils/splash-lines';
 import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ProviderMessage, ContentPart } from '../providers/interface.ts';
+import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
 import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
-import { buildTranscriptEventIndex } from './transcript-events/index.ts';
-import type { TranscriptEventKind } from './transcript-events/index.ts';
-import { compactConversation } from './conversation-compaction.ts';
+import { buildTranscriptEventIndex } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
+import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
+import { compactConversation } from './conversation-compaction';
 import {
   addConversationSplashScreen,
   appendConversationMessages,
@@ -27,8 +27,8 @@ import {
   deriveConversationTitle,
   messagesToInternal,
   restoreBranchMap,
-} from './conversation-utils.ts';
-import { applyDiffContent, parseDiffForApply } from './conversation-diff.ts';
+} from './conversation-utils';
+import { applyDiffContent, parseDiffForApply } from './conversation-diff';
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
@@ -658,7 +658,7 @@ export class ConversationManager {
    * @param context - Structured compaction context
   */
   public async compact(
-    registry: import('../providers/registry.ts').ProviderRegistry,
+    registry: import('@pellux/goodvibes-sdk/platform/providers/registry').ProviderRegistry,
     modelId: string,
     trigger: 'auto' | 'manual' = 'manual',
     provider?: string,
@@ -772,4 +772,4 @@ export class ConversationManager {
     this.dirty = true;
   }
 }
-export { parseDiffForApply, applyDiffContent } from './conversation-diff.ts';
+export { parseDiffForApply, applyDiffContent } from './conversation-diff';

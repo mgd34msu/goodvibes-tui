@@ -10,21 +10,21 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { ConfigManager } from '../../config/manager.ts';
-import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
-import type { SessionEvent } from '../../runtime/events/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { SessionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { CommandRegistry, SlashCommand } from '../../input/command-registry.ts';
-import type { ModelDefinition, ProviderRegistry } from '../../providers/registry.ts';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { LoadedPlugin, PluginLoaderDeps } from '../../plugins/loader.ts';
-import type { PluginAPIContext } from '../../plugins/api.ts';
-import { ChannelDeliveryRouter, ChannelPluginRegistry } from '../../channels/index.ts';
-import { GatewayMethodCatalog } from '../../control-plane/index.ts';
-import { MediaProviderRegistry } from '../../media/index.ts';
-import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import type { LoadedPlugin, PluginLoaderDeps } from '../../plugins/loader';
+import type { PluginAPIContext } from '../../plugins/api';
+import { ChannelDeliveryRouter, ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/index';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 import { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/index';
-import { WebSearchProviderRegistry } from '../../web-search/index.ts';
-import type { SearchProviderContext } from '../../web-search/providers/shared.ts';
+import { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search/index';
+import type { SearchProviderContext } from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ const TEST_SEARCH_CONTEXT: SearchProviderContext = {
 
 function makeFakeDeps(): PluginLoaderDeps {
   const configRoot = makeTempDir();
-  const configManager = new ConfigManager({ workingDir: configRoot, configDir: join(configRoot, '.goodvibes', 'tui') });
+  const configManager = new ConfigManager({ surfaceRoot: 'tui',  workingDir: configRoot, configDir: join(configRoot, '.goodvibes', 'tui') });
   return {
     runtimeBus: makeFakeRuntimeBus(),
     commandRegistry: makeFakeCommandRegistry() as unknown as CommandRegistry,
@@ -648,7 +648,7 @@ describe('createPluginAPI', () => {
     const { createPluginAPI } = await import('../../plugins/api.ts');
     const gatewayMethods = new GatewayMethodCatalog({ includeBuiltins: false });
     const configRoot = makeTempDir();
-    const configManager = new ConfigManager({ workingDir: configRoot, configDir: join(configRoot, '.goodvibes', 'tui') });
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',  workingDir: configRoot, configDir: join(configRoot, '.goodvibes', 'tui') });
     const memoryEmbeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
     const voiceProviderRegistry = new VoiceProviderRegistry();
     const mediaProviderRegistry = new MediaProviderRegistry();

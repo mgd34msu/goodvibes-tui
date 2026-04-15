@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import type { CatalogModel, PricingCatalog } from '../../providers/model-catalog.ts';
+import type { CatalogModel, PricingCatalog } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { createProviderCacheFixture, writeModelCatalogCache } from '../helpers/provider-cache.ts';
 

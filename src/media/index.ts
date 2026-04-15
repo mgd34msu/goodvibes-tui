@@ -1,7 +1,7 @@
 export {
   MediaProviderRegistry,
 } from '@pellux/goodvibes-sdk/platform/media/provider-registry';
-export { ensureBuiltinMediaProviders } from './builtin-providers.ts';
+export { ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media/builtin-providers';
 export type {
   MediaAnalysisRequest,
   MediaAnalysisResult,

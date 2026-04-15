@@ -1,5 +1,5 @@
 import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { KnowledgeConnectorRegistry } from '@pellux/goodvibes-sdk/platform/knowledge/connectors';
 import type { KnowledgeConnector, KnowledgeIssueRecord } from '@pellux/goodvibes-sdk/platform/knowledge/types';
 import type { KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/store';

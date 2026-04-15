@@ -4,15 +4,15 @@ import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
 import { renderSystemMessage } from '../renderer/system-message.ts';
 import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
+import { getSplashLines, type SplashOptions } from '@pellux/goodvibes-sdk/platform/utils/splash-lines';
 import { interpolateColor, getDisplayWidth, wrapText } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import { LAYOUT } from '../renderer/layout.ts';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
-import type { BlockMeta, ConversationMessageSnapshot } from './conversation.ts';
-import { parseDiffForApply } from './conversation-diff.ts';
-import { extractUserDisplayText } from './conversation-utils.ts';
+import type { BlockMeta, ConversationMessageSnapshot } from './conversation';
+import { parseDiffForApply } from './conversation-diff';
+import { extractUserDisplayText } from './conversation-utils';
 
 type Message = ConversationMessageSnapshot;
 

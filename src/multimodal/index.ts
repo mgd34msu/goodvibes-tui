@@ -1,4 +1,4 @@
-export { MultimodalService } from './service.ts';
+export { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/service';
 export type {
   MultimodalAnalysisRequest,
   MultimodalAnalysisResult,

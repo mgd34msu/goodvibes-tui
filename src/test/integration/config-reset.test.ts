@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 // Use a fresh ConfigManager instance for each test to avoid pollution from
 // leaked module state in other test files that used to replace shared config helpers.
@@ -12,7 +12,7 @@ describe('ConfigManager reset functionality', () => {
 
   beforeEach(() => {
     configDir = mkdtempSync(join(tmpdir(), 'goodvibes-config-reset-'));
-    mgr = new ConfigManager({ configDir });
+    mgr = new ConfigManager({ surfaceRoot: 'tui',  configDir });
   });
 
   afterEach(() => {
@@ -20,7 +20,7 @@ describe('ConfigManager reset functionality', () => {
   });
 
   test('reset a specific key restores default value', () => {
-    const defaults = new ConfigManager({ configDir }).getRaw();
+    const defaults = new ConfigManager({ surfaceRoot: 'tui',  configDir }).getRaw();
 
     // Change a config value
     mgr.set('behavior.autoApprove', true);
@@ -31,7 +31,7 @@ describe('ConfigManager reset functionality', () => {
   });
 
   test('reset without key restores all defaults', () => {
-    const defaults = new ConfigManager({ configDir }).getRaw();
+    const defaults = new ConfigManager({ surfaceRoot: 'tui',  configDir }).getRaw();
 
     // Change multiple config values
     mgr.set('behavior.autoApprove', true);

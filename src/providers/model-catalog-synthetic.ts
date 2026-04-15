@@ -1,8 +1,8 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import { compositeScore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { CatalogModel } from './model-catalog.ts';
-import type { SyntheticBackend, CanonicalModel, SyntheticTier } from './synthetic.ts';
+import type { CatalogModel } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
+import type { SyntheticBackend, CanonicalModel, SyntheticTier } from '@pellux/goodvibes-sdk/platform/providers/synthetic';
 
 export interface MinimalModelDefinition {
   id: string;

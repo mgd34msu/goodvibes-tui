@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
 import type { CommandRegistry } from '../command-registry.ts';
 import { fetchModelContextWindows } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
-import type { CustomProviderConfig } from '../../providers/custom-loader.ts';
+import type { CustomProviderConfig } from '@pellux/goodvibes-sdk/platform/providers/custom-loader';
 import { requireProviderApi, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

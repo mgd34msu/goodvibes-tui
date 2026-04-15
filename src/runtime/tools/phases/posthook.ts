@@ -1,5 +1,5 @@
 import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ToolRuntimeContext } from '../context.ts';
+import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
 import type { PhaseResult, ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

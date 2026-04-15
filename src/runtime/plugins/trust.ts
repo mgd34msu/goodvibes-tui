@@ -13,8 +13,8 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { PluginCapability } from './types.ts';
-import { isHighRiskCapability } from './manifest.ts';
+import type { PluginCapability } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
+import { isHighRiskCapability } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manifest';
 
 // ── Trust Tier ────────────────────────────────────────────────────────────────
 

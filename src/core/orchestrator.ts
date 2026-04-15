@@ -4,50 +4,50 @@ import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/
 import { PermissionError, ProviderError, ToolError, isNonTransientProviderFailure } from '@pellux/goodvibes-sdk/platform/types/errors';
 import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { formatError, summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-import type { ModelDefinition } from '../providers/registry.ts';
-import type { ContentPart } from '../providers/interface.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { notifyCompletion } from '@pellux/goodvibes-sdk/platform/utils/notify';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { PermissionManager } from '../permissions/manager.ts';
-import type { AcpManager } from '../acp/manager.ts';
+import type { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import type { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
 import type { SubagentTask } from '@pellux/goodvibes-sdk/platform/acp/protocol';
 import { ConsecutiveErrorBreaker } from '@pellux/goodvibes-sdk/platform/core/circuit-breaker';
 import type { ExecutionPlan, PlanItem } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import { classifyIntent } from '@pellux/goodvibes-sdk/platform/core/intent-classifier';
-import { estimateConversationTokens } from './context-compaction.ts';
+import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
 import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
-import { EventReplayQueue } from './event-replay.ts';
+import { EventReplayQueue } from '@pellux/goodvibes-sdk/platform/core/event-replay';
 import {
   type ConversationFollowUpItem,
 } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
-import { OrchestratorFollowUpRuntime } from './orchestrator-follow-up-runtime.ts';
+import { OrchestratorFollowUpRuntime } from './orchestrator-follow-up-runtime';
 import type { SystemMessageRouter } from './system-message-router.ts';
-import { AgentManager } from '../tools/agent/index.ts';
-import { WrfcController } from '../agents/wrfc-controller.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
 import { THINKING_SPINNER_FRAMES } from '../renderer/progress.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import { IdempotencyStore } from '@pellux/goodvibes-sdk/platform/runtime/idempotency/index';
 import { type ReconciliationReason } from '@pellux/goodvibes-sdk/platform/core/tool-reconciliation';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { HelperModel } from '../config/helper-model.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model';
 import {
   emitStreamEnd,
   emitTurnCancel,
   emitTurnError,
   emitTurnSubmitted,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import {
   autoSpawnPendingItems,
   executeToolCalls,
   reconcileUnresolvedToolCalls,
-} from './orchestrator-tool-runtime.ts';
+} from './orchestrator-tool-runtime';
 import {
   checkContextWindowPreflight,
   emitContextOverflowError,
   handlePostTurnContextMaintenance,
-} from './orchestrator-context-runtime.ts';
+} from './orchestrator-context-runtime';
 import {
   createEmitterContext,
   estimateFreshTurnInputTokens,
@@ -58,13 +58,13 @@ import {
   requireConfigManager,
   requireProviderRegistry,
   type OrchestratorCoreServices,
-} from './orchestrator-runtime.ts';
+} from './orchestrator-runtime';
 import {
   type ChatResponseWithReasoning,
   maybeEmitAdaptivePlannerDecision,
   prepareConversationForTurn,
-} from './orchestrator-turn-helpers.ts';
-import { executeOrchestratorTurnLoop } from './orchestrator-turn-loop.ts';
+} from './orchestrator-turn-helpers';
+import { executeOrchestratorTurnLoop } from './orchestrator-turn-loop';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {

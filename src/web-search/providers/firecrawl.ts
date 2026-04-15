@@ -6,7 +6,7 @@ import {
   resultFromRecord,
   withInlineBearer,
   type SearchProviderContext,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
 
 const FIRECRAWL_DEFAULT_BASE_URL = 'https://api.firecrawl.dev';
 const FIRECRAWL_ENV_KEYS = ['FIRECRAWL_API_KEY'] as const;

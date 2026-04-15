@@ -1,6 +1,6 @@
 import type { HookDefinition, HookResult, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { AgentManager } from '../../tools/agent/index.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /**

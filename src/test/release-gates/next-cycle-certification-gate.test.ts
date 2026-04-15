@@ -1,8 +1,8 @@
 import { describe, expect, mock, test } from 'bun:test';
 
-import type { AgentRecord } from '../../tools/agent/index.ts';
-import { buildKnowledgeInjectionPrompt } from '../../state/index.ts';
-import { buildMcpAttackPathReview } from '../../runtime/mcp/index.ts';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { buildKnowledgeInjectionPrompt } from '@pellux/goodvibes-sdk/platform/state/index';
+import { buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/index';
 import { handleRemoteCancelCommand } from '../../input/commands/remote-runtime.ts';
 
 function makeRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {

@@ -16,10 +16,10 @@ export type {
   ModelPickerEntry,
   ModelPickerGroup,
   ModelPickerData,
-} from './model-picker/index.ts';
-export type { ProviderStatus as ModelPickerProviderStatus } from './model-picker/index.ts';
-export { ModelPickerDataProvider, createModelPickerData } from './model-picker/index.ts';
-export type { ModelPickerDataProviderOptions } from './model-picker/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/index';
+export type { ProviderStatus as ModelPickerProviderStatus } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/index';
+export { ModelPickerDataProvider, createModelPickerData } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/index';
+export type { ModelPickerDataProviderOptions } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/index';
 
 // ── Provider health ───────────────────────────────────────────────────────────
 export type {
@@ -30,10 +30,10 @@ export type {
   FallbackChainData,
   ProviderHealthData,
   CompositeHealthStatus,
-} from './provider-health/index.ts';
-export type { ProviderStatus } from './provider-health/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/index';
+export type { ProviderStatus } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/index';
 export {
   ProviderHealthDataProvider,
   buildFallbackChainData,
   createProviderHealthData,
-} from './provider-health/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/index';

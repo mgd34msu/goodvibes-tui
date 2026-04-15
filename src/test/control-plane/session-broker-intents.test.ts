@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RouteBindingManager } from '../../channels/route-manager.ts';
-import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
 import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 

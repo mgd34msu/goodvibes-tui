@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { AgentMessageBus } from '../../agents/message-bus.ts';
-import type { AgentMessage } from '../../agents/message-bus.ts';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import type { AgentMessage } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
 import { getTestAgentMessageBus, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 beforeEach(() => {

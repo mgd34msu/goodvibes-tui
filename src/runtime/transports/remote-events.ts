@@ -13,4 +13,4 @@ export {
   createRemoteRuntimeEvents,
   createWebSocketConnector,
 } from '@pellux/goodvibes-sdk/transport-realtime';
-export { createRemoteUiRuntimeEvents } from './ui-runtime-events.ts';
+export { createRemoteUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/transports/ui-runtime-events';

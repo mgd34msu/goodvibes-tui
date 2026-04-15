@@ -8,12 +8,12 @@
  * Controls are only shown when the OpsControlPlane reports the action is legal
  * (state machine allows it), satisfying requirement: "No illegal action appears in UI".
  */
-import type { RuntimeEventEnvelope } from '../../events/index.ts';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { PanelConfig } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 import { DEFAULT_PANEL_CONFIG, appendBounded, applyFilter } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 import type { DiagnosticFilter } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 import type { OpsInterventionReason, OpsEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/ops';
-import type { UiEventFeed } from '../../ui-events.ts';
+import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 
 // ---------------------------------------------------------------------------
 // Audit entry

@@ -1,6 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { AutomationManager } from '../automation/index.ts';
+import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/index';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
 import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation/schedules';

@@ -36,7 +36,7 @@ import {
   createEnvironmentVariableQuery,
   createProviderRuntimeInspectionQuery,
 } from '../../runtime/ui-service-queries.ts';
-import { createRuntimeProviderApi } from '../../runtime/runtime-provider-api.ts';
+import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requireMcpRegistry, requirePluginManager, requireUiServices } from './shared.ts';
 
@@ -235,6 +235,8 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       return new MarketplacePanel(ui.readModels.marketplace, {
         cwd: ui.environment.shellPaths.workingDirectory,
         homeDir: ui.environment.shellPaths.homeDirectory,
+        projectCatalogRoot: ui.environment.shellPaths.resolveProjectPath('tui', 'ecosystem'),
+        userCatalogRoot: ui.environment.shellPaths.resolveUserPath('tui', 'ecosystem'),
       });
     },
   });

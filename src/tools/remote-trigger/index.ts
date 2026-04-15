@@ -1,5 +1,5 @@
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
-import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
+import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
 import { REMOTE_TRIGGER_TOOL_SCHEMA, type RemoteTriggerToolInput } from '@pellux/goodvibes-sdk/platform/tools/remote-trigger/schema';
 
 function summarizePool(pool: ReturnType<RemoteRunnerRegistry['listPools']>[number]) {

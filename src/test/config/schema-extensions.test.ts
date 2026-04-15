@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config/schema';
 
 // ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@ function makeTmpDir(): string {
 }
 
 function createConfigManager(workingDir: string): ConfigManager {
-  return new ConfigManager({
+  return new ConfigManager({ surfaceRoot: 'tui',
     workingDir,
     homeDir: workingDir,
     configDir: join(workingDir, '.goodvibes', 'global-tui'),

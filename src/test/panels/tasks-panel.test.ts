@@ -9,7 +9,7 @@ import { PanelManager } from '../../panels/panel-manager.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { UiWorktreeSnapshot } from '../../runtime/ui-read-models.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
@@ -36,7 +36,7 @@ describe('TasksPanel', () => {
   });
 
   function createConfigManager(): ConfigManager {
-    return new ConfigManager({
+    return new ConfigManager({ surfaceRoot: 'tui',
       workingDir: root,
       homeDir: root,
       configDir: join(root, '.goodvibes', 'global-tui'),

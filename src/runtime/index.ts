@@ -13,23 +13,23 @@ export type { RuntimeState } from './store/state.ts';
 export * from './store/selectors/index.ts';
 
 // Events
-export { RuntimeEventBus } from './events/index.ts';
+export { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 export { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/event-envelope';
 export type { EventEnvelope, EventEnvelopeContext } from '@pellux/goodvibes-sdk/platform/runtime/event-envelope';
 export type { RuntimeEventEnvelope, EnvelopeContext } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-export { RUNTIME_EVENT_DOMAINS, isRuntimeEventDomain } from './events/domain-map.ts';
-export type { AnyRuntimeEvent, RuntimeEventDomain } from './events/domain-map.ts';
+export { RUNTIME_EVENT_DOMAINS, isRuntimeEventDomain } from '@pellux/goodvibes-sdk/platform/runtime/events/domain-map';
+export type { AnyRuntimeEvent, RuntimeEventDomain } from '@pellux/goodvibes-sdk/platform/runtime/events/domain-map';
 export { createRuntimeEventFeed, createRuntimeEventFeeds } from '@pellux/goodvibes-sdk/platform/runtime/event-feeds';
 export type { RuntimeEventFeed, RuntimeEventFeeds } from '@pellux/goodvibes-sdk/platform/runtime/event-feeds';
 
 // Emitters
-export type { EmitterContext } from './emitters/index.ts';
+export type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 
 // Health
 export { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
 export { CascadeEngine } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-engine';
 export { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
-export { createHealthSystem } from './health/index.ts';
+export { createHealthSystem } from '@pellux/goodvibes-sdk/platform/runtime/health/index';
 export type {
   HealthStatus,
   HealthDomain as RuntimeHealthDomain,
@@ -47,9 +47,9 @@ export { NotificationRouter, createNotificationRouter } from '@pellux/goodvibes-
 export type { Notification, NotificationLevel, NotificationTarget, DomainVerbosity, RoutingDecision } from '@pellux/goodvibes-sdk/platform/runtime/notifications/types';
 
 // UI surfaces
-export { createModelPickerData, ModelPickerDataProvider } from './ui/model-picker/index.ts';
-export type { ModelPickerDataProviderOptions } from './ui/model-picker/index.ts';
-export { createProviderHealthData, ProviderHealthDataProvider } from './ui/provider-health/index.ts';
+export { createModelPickerData, ModelPickerDataProvider } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/index';
+export type { ModelPickerDataProviderOptions } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/index';
+export { createProviderHealthData, ProviderHealthDataProvider } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/index';
 
 // Retention
 export {
@@ -73,39 +73,39 @@ export type {
 export { bootstrapRuntime } from './bootstrap.ts';
 export type { RuntimeContext, BootstrapOptions } from './context.ts';
 export type { BootstrapContext } from './bootstrap.ts';
-export { shutdownRuntime } from './lifecycle.ts';
+export { shutdownRuntime } from '@pellux/goodvibes-sdk/platform/runtime/lifecycle';
 export { createUiRuntimeServices } from './ui-services.ts';
 export type { UiRuntimeServices } from './ui-services.ts';
 export {
   createDirectTransportServices,
   createOperatorClientServices,
   createPeerClientDependencies,
-} from './foundation-services.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
 export type {
   DirectTransportServicesOptions,
   DirectTransportServices,
   OperatorClientServicesOptions,
   OperatorClientServices,
   OperatorClientReadModels,
-} from './foundation-services.ts';
-export { createRuntimeFoundationClients } from './foundation-clients.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
+export { createRuntimeFoundationClients } from '@pellux/goodvibes-sdk/platform/runtime/foundation-clients';
 export type {
   RuntimeFoundationClients,
   RuntimeFoundationClientsOptions,
-} from './foundation-clients.ts';
-export { createOperatorClient } from './operator-client.ts';
-export type { OperatorClient } from './operator-client.ts';
-export { createPeerClient } from './peer-client.ts';
-export type { PeerClient } from './peer-client.ts';
-export { createRuntimeProviderApi } from './runtime-provider-api.ts';
-export { createRuntimeKnowledgeApi } from './runtime-knowledge-api.ts';
-export { createRuntimeHookApi } from './runtime-hook-api.ts';
-export { createRuntimeMcpApi } from './runtime-mcp-api.ts';
-export { createRuntimeOpsApi } from './runtime-ops-api.ts';
-export type { OpsApi } from './ops-api.ts';
-export { createDirectTransport, createDirectTransportFromServices } from './transports/direct.ts';
-export { createRuntimeDirectTransport } from './transports/direct.ts';
-export type { DirectTransport } from './transports/direct.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/foundation-clients';
+export { createOperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+export type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+export { createPeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
+export type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
+export { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
+export { createRuntimeKnowledgeApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-knowledge-api';
+export { createRuntimeHookApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-hook-api';
+export { createRuntimeMcpApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-mcp-api';
+export { createRuntimeOpsApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-ops-api';
+export type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
+export { createDirectTransport, createDirectTransportFromServices } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
+export { createRuntimeDirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
+export type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
 export { createDirectClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct-client';
 export type { DirectClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct-client';
 export { createClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/client-transport';
@@ -162,13 +162,13 @@ export {
   createRemoteRuntimeEvents,
   createRemoteUiRuntimeEvents,
   createWebSocketConnector,
-} from './transports/remote-events.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/remote-events';
 export type {
   DomainEventConnector,
   RemoteDomainEvents,
   RemoteRuntimeEvents,
   SerializedRuntimeEnvelope,
-} from './transports/remote-events.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/remote-events';
 
 // Network
-export * from './network/index.ts';
+export * from '@pellux/goodvibes-sdk/platform/runtime/network/index';

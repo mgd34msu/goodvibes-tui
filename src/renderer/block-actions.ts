@@ -1,4 +1,4 @@
-import type { BlockMeta } from '../core/conversation.ts';
+import type { BlockMeta } from '../core/conversation';
 
 export type BlockActionId = 'copy' | 'bookmark' | 'toggle' | 'apply' | 'rerun';
 

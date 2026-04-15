@@ -1,4 +1,4 @@
-import { createProviderApi, type ProviderApi } from '../providers/provider-api.ts';
+import { createProviderApi, type ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
 import type { RuntimeServices } from './services.ts';
 
 export interface RuntimeProviderApiServices extends Pick<

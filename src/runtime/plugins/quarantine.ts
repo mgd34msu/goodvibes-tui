@@ -16,8 +16,8 @@
  */
 
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { PluginCapability, PluginCapabilityManifest } from './types.ts';
-import { isHighRiskCapability } from './manifest.ts';
+import type { PluginCapability, PluginCapabilityManifest } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
+import { isHighRiskCapability } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manifest';
 
 // ── Quarantine Record ─────────────────────────────────────────────────────────
 

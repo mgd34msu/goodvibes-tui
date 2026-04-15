@@ -1,6 +1,6 @@
-import { FetchRuntimeService, type FetchRuntimeDeps } from '../tools/fetch/index.ts';
+import { FetchRuntimeService, type FetchRuntimeDeps } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
 import type { FetchExtractMode } from '@pellux/goodvibes-sdk/platform/tools/fetch/schema';
-import { WebSearchProviderRegistry } from './provider-registry.ts';
+import { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search/provider-registry';
 import type {
   WebSearchEvidence,
   WebSearchProvider,

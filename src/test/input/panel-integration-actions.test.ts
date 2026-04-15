@@ -7,7 +7,7 @@ import { FileExplorerPanel } from '../../panels/file-explorer-panel.ts';
 import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { SymbolOutlinePanel } from '../../panels/symbol-outline-panel.ts';
 import { ApprovalPanel } from '../../panels/approval-panel.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 let panelManager = createTestManagers().panelManager;

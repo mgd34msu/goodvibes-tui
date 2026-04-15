@@ -1,4 +1,4 @@
-import type { MemoryClass, MemoryRegistry, MemoryScope } from '../state/index.ts';
+import type { MemoryClass, MemoryRegistry, MemoryScope } from '@pellux/goodvibes-sdk/platform/state/index';
 import type { KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/store';
 import type {
   KnowledgeConsolidationCandidateRecord,
@@ -16,7 +16,7 @@ import {
   summarizeCompact,
   topKeywords,
   usageWindowCutoff,
-} from './internal.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/internal';
 
 export interface KnowledgeConsolidationContext {
   readonly store: KnowledgeStore;

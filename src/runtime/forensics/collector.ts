@@ -13,9 +13,9 @@
  * event is emitted so the panel can refresh.
  */
 import { randomUUID } from 'node:crypto';
-import type { RuntimeEventBus, RuntimeEventEnvelope } from '../events/index.ts';
-import { createEventEnvelope } from '../events/index.ts';
-import type { AnyRuntimeEvent } from '../events/domain-map.ts';
+import type { RuntimeEventBus, RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { AnyRuntimeEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/domain-map';
 import type {
   FailureReport,
   PhaseTimingEntry,
@@ -28,7 +28,7 @@ import type {
 } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
 import { classifyFailure, summariseFailure } from '@pellux/goodvibes-sdk/platform/runtime/forensics/classifier';
 import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import { emitForensicsReportCreated } from '../emitters/forensics.ts';
+import { emitForensicsReportCreated } from '@pellux/goodvibes-sdk/platform/runtime/emitters/forensics';
 
 // ---------------------------------------------------------------------------
 // Internal turn/task tracking

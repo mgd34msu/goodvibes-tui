@@ -1,13 +1,13 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { HookDispatcher } from '../hooks/dispatcher.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import {
   authenticateOperatorRequest,
   buildOperatorSessionCookie,
 } from '@pellux/goodvibes-sdk/platform/security/http-auth';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { ConfigManager } from '../config/manager.ts';
-import { extractForwardedClientIp, resolveInboundTlsContext, type ResolvedInboundTlsContext } from '../runtime/network/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { extractForwardedClientIp, resolveInboundTlsContext, type ResolvedInboundTlsContext } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------

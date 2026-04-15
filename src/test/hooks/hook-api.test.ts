@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
-import { createHookApi, HookWorkbench, listHookPointContracts } from '../../hooks/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { createHookApi, HookWorkbench, listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
 import { getTestHookDispatcher } from '../helpers/runtime-services.ts';
 
 describe('HookApi', () => {
-  const configManager = new ConfigManager({
+  const configManager = new ConfigManager({ surfaceRoot: 'tui',
     configDir: join(tmpdir(), `gv-hook-api-config-${Date.now()}-${Math.random().toString(36).slice(2)}`),
   });
   let originalHooksFile: string;

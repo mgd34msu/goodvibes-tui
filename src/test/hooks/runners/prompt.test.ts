@@ -1,6 +1,6 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
 import type { HookDefinition, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
-import { run } from '../../../hooks/runners/prompt.ts';
+import { run } from '@pellux/goodvibes-sdk/platform/hooks/runners/prompt';
 
 const mockChat = mock(async (_prompt: string): Promise<string> => '');
 const toolLLM = { chat: mockChat };

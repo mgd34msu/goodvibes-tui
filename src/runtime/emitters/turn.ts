@@ -4,9 +4,9 @@
  * Import and call these instead of emitting raw strings.
  */
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import type { RuntimeEventBus } from '../events/index.ts';
-import type { EmitterContext } from './index.ts';
-import type { PartialToolCall } from '../../providers/interface.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import type { PartialToolCall } from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 /** Emit TURN_SUBMITTED when a user prompt is submitted. */
 export function emitTurnSubmitted(

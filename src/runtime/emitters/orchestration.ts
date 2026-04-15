@@ -2,9 +2,9 @@
  * Orchestration emitters — typed emission wrappers for OrchestrationEvent domain.
  */
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { OrchestrationTaskContract } from '@pellux/goodvibes-sdk/platform/runtime/events/orchestration';
-import type { EmitterContext } from './index.ts';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 
 export function emitOrchestrationGraphCreated(
   bus: RuntimeEventBus,

@@ -1,15 +1,15 @@
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { AGENT_TOOL_SCHEMA } from '@pellux/goodvibes-sdk/platform/tools/agent/schema';
 import type { AgentInput } from '@pellux/goodvibes-sdk/platform/tools/agent/schema';
 import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
-import { AgentMessageBus } from '../../agents/message-bus.ts';
-import type { WrfcController } from '../../agents/wrfc-controller.ts';
-import { AGENT_TEMPLATES, AgentManager } from './manager.ts';
-import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-policy.ts';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
+import { AGENT_TEMPLATES, AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/manager';
+import { evaluateOrchestrationSpawn } from '@pellux/goodvibes-sdk/platform/runtime/orchestration/spawn-policy';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-export type { AgentRecord } from './manager.ts';
-export { AGENT_TEMPLATES, AgentManager } from './manager.ts';
+export type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/manager';
+export { AGENT_TEMPLATES, AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/manager';
 
 // ---------------------------------------------------------------------------
 // Tool implementation

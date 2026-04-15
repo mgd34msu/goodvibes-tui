@@ -19,7 +19,7 @@ describe('Config persistence — set/get roundtrip', () => {
 
   beforeEach(() => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
-    configManager = new ConfigManager({
+    configManager = new ConfigManager({ surfaceRoot: 'tui',
       workingDir: tempRoot,
       configDir: join(tempRoot, '.config-override'),
     });
@@ -73,7 +73,7 @@ describe('Config persistence — typed path access', () => {
 
   beforeEach(() => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
-    configManager = new ConfigManager({
+    configManager = new ConfigManager({ surfaceRoot: 'tui',
       workingDir: tempRoot,
       configDir: join(tempRoot, '.config-override'),
     });
@@ -117,7 +117,7 @@ describe('Config persistence — provider fields', () => {
 
   beforeEach(() => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
-    configManager = new ConfigManager({
+    configManager = new ConfigManager({ surfaceRoot: 'tui',
       workingDir: tempRoot,
       configDir: join(tempRoot, '.config-override'),
     });
@@ -150,7 +150,7 @@ describe('Config persistence — display fields', () => {
 
   beforeEach(() => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
-    configManager = new ConfigManager({
+    configManager = new ConfigManager({ surfaceRoot: 'tui',
       workingDir: tempRoot,
       configDir: join(tempRoot, '.config-override'),
     });
@@ -182,7 +182,7 @@ describe('Config persistence — isolation between tests', () => {
 
   beforeEach(() => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-persistence-'));
-    configManager = new ConfigManager({
+    configManager = new ConfigManager({ surfaceRoot: 'tui',
       workingDir: tempRoot,
       configDir: join(tempRoot, '.config-override'),
     });

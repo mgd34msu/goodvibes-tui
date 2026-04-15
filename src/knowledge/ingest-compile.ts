@@ -2,7 +2,7 @@ import {
   emitKnowledgeCompileCompleted,
   emitKnowledgeExtractionCompleted,
   emitKnowledgeExtractionFailed,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import { extractKnowledgeArtifact } from '@pellux/goodvibes-sdk/platform/knowledge/extractors';
 import {
@@ -12,8 +12,8 @@ import {
   readMetadataStrings,
   slugify,
   topKeywords,
-} from './internal.ts';
-import type { KnowledgeIngestContext } from './ingest-context.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/internal';
+import type { KnowledgeIngestContext } from '@pellux/goodvibes-sdk/platform/knowledge/ingest-context';
 import type {
   KnowledgeExtractionRecord,
   KnowledgeNodeRecord,

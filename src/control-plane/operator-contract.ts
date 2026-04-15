@@ -1,6 +1,8 @@
-import type { GatewayEventDescriptor, GatewayMethodCatalog, GatewayMethodDescriptor } from './method-catalog.ts';
 import { getOperatorContract } from '@pellux/goodvibes-sdk/contracts';
+import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
 import {
+  type GatewayEventDescriptor,
+  type GatewayMethodDescriptor,
   BOOLEAN_SCHEMA,
   METHOD_DESCRIPTOR_SCHEMA,
   EVENT_DESCRIPTOR_SCHEMA,
@@ -8,12 +10,12 @@ import {
   STRING_SCHEMA,
   arraySchema,
   objectSchema,
-} from './method-catalog-shared.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog-shared';
 import {
   CONTROL_AUTH_CURRENT_RESPONSE_SCHEMA,
   CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
   CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
-} from './operator-contract-schemas.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract-schemas';
 import type { OperatorContractManifest } from '@pellux/goodvibes-sdk/platform/types/foundation-contract';
 import { VERSION } from '../version.ts';
 import { OPERATOR_SESSION_COOKIE_NAME } from '@pellux/goodvibes-sdk/platform/security/http-auth';

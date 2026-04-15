@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
+import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { TelemetryApiService } from '../../runtime/telemetry/api.ts';
+import { TelemetryApiService } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
 
 describe('TelemetryApiService', () => {
   let service: TelemetryApiService | null = null;

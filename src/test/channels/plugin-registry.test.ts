@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ChannelPluginRegistry } from '../../channels/index.ts';
+import { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
 
 describe('ChannelPluginRegistry', () => {
   test('aggregates capabilities, tools, and actions across registered plugins', async () => {

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
@@ -11,10 +11,10 @@ import { handleModelPickerToken } from '../../input/handler-picker-routes.ts';
 import { SelectionModal } from '../../input/selection-modal.ts';
 import { ModelPickerModal } from '../../input/model-picker.ts';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import { ProviderRegistry } from '../../providers/registry.ts';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 
 interface PickerHarness {
   readonly favoritesStore: FavoritesStore;
@@ -48,7 +48,7 @@ function createPickerHarness(): PickerHarness {
   benchmarkStore.initBenchmarks();
 
   const providerRegistry = new ProviderRegistry({
-    configManager: new ConfigManager({
+    configManager: new ConfigManager({ surfaceRoot: 'tui',
       configDir,
       workingDir: rootDir,
       homeDir: rootDir,

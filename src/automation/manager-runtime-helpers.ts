@@ -1,5 +1,5 @@
-import { ConfigManager } from '../config/manager.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { ExecutionIntent } from '@pellux/goodvibes-sdk/platform/runtime/execution-intents';
 import type { AutomationDeliveryPolicy } from '@pellux/goodvibes-sdk/platform/automation/delivery';
 import type { AutomationFailurePolicy } from '@pellux/goodvibes-sdk/platform/automation/failures';

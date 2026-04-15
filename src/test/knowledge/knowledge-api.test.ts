@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { createKnowledgeApi } from '../../knowledge/index.ts';
+import { createKnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { resetTestRuntimeServices, getTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 describe('KnowledgeApi', () => {

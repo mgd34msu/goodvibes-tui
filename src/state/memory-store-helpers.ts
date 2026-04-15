@@ -1,4 +1,4 @@
-import type { MemoryDoctorReport, MemoryLink, MemoryRecord, MemoryReviewState, MemoryScope, MemorySearchFilter } from './memory-store.ts';
+import type { MemoryDoctorReport, MemoryLink, MemoryRecord, MemoryReviewState, MemoryScope, MemorySearchFilter } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 
 export function createSchema(db: { run(sql: string): void; exec(sql: string, params?: (string | number)[]): Array<{ columns: string[]; values: unknown[][] }> }): void {
   db.run('PRAGMA foreign_keys = ON');

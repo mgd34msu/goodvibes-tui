@@ -1,14 +1,14 @@
-import { handlePlanCommand } from '../core/plan-command-handler.ts';
+import { handlePlanCommand } from '@pellux/goodvibes-sdk/platform/core/plan-command-handler';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import type { SubagentTask } from '@pellux/goodvibes-sdk/platform/acp/protocol';
-import { exportRemoteArtifactForAgent } from './remote/runner-registry.ts';
-import type { RuntimeEventBus } from './events/index.ts';
+import { exportRemoteArtifactForAgent } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RuntimeStore } from './store/index.ts';
 import type { AgentInput } from '@pellux/goodvibes-sdk/platform/tools/agent/schema';
-import type { AgentRecord } from '../tools/agent/manager.ts';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/manager';
 import type { AcpConnection } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/acp';
 import type { UiRemoteSnapshot } from './ui-read-models.ts';
-import type { RemoteRunnerRegistry } from './remote/index.ts';
+import type { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
 import type {
   RemoteExecutionArtifact,
   RemoteRunnerContract,
@@ -20,7 +20,7 @@ import type {
   AutomationRun,
   CreateAutomationJobInput,
   AutomationManager,
-} from '../automation/index.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/index';
 import type {
   CancellationRequest,
   CancellationResult,

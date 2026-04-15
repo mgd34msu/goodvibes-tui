@@ -1,25 +1,25 @@
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
-import { ConfigManager } from '../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import type { AgentManager } from '../tools/agent/index.ts';
-import { AgentMessageBus } from '../agents/message-bus.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
 import { migrateLegacySchedules, type LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
 import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
 import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
 import { resolveAutomationStorePath } from '@pellux/goodvibes-sdk/platform/automation/store/paths';
-import { AutomationDeliveryManager } from './delivery-manager.ts';
-import { RouteBindingManager } from '../channels/index.ts';
+import { AutomationDeliveryManager } from '@pellux/goodvibes-sdk/platform/automation/delivery-manager';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/index';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRun, AutomationRunContinuationMode, AutomationRunTelemetry } from '@pellux/goodvibes-sdk/platform/automation/runs';
 import type { AutomationRunTrigger } from '@pellux/goodvibes-sdk/platform/automation/types';
-import { SharedSessionBroker } from '../control-plane/index.ts';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type {
   CreateAutomationJobInput,
   SpawnAutomationTaskInput,
   UpdateAutomationJobInput,
-} from './manager-runtime-helpers.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-helpers';
 import {
   applyFailureToJob as applyAutomationFailureToJob,
   executeAutomationJob,
@@ -28,7 +28,7 @@ import {
   resolveSharedSessionExecution as resolveAutomationSharedSessionExecution,
   syncExecutionRoute as syncAutomationExecutionRoute,
   toResolvedExecution as toAutomationResolvedExecution,
-} from './manager-runtime-execution.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-execution';
 import {
   formatExternalContentSource,
   normalizeExternalTelemetry,
@@ -38,7 +38,7 @@ import {
   normalizeSourceRecord,
   sortJobs,
   sortRuns,
-} from './manager-runtime-helpers.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-helpers';
 import {
   advanceScheduledHeartbeatAutomationJob,
   cancelAutomationTimer,
@@ -46,12 +46,12 @@ import {
   queueHeartbeatWake,
   scheduleAutomationJob,
   type AutomationHeartbeatWake,
-} from './manager-runtime-scheduling.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-scheduling';
 import {
   maybeDeliverAutomationFailureNotice,
   maybeDeliverAutomationRun,
   scheduleAutomationFailureFollowUp,
-} from './manager-runtime-delivery.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-delivery';
 import {
   emitAutomationManagerJobAutoDisabled,
   emitAutomationManagerJobCreated,
@@ -60,27 +60,27 @@ import {
   emitAutomationManagerRunFailed,
   emitAutomationManagerRunQueued,
   emitAutomationManagerRunStarted,
-} from './manager-runtime-events.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-events';
 import {
   collectAutomationSources,
   syncAutomationJobToRuntime,
   syncAutomationRunToRuntime,
   syncAutomationRuntimeSnapshot,
-} from './manager-runtime-sync.ts';
-import { reconcileAutomationActiveRuns } from './manager-runtime-reconcile.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-sync';
+import { reconcileAutomationActiveRuns } from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-reconcile';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   createAutomationJobRecord,
   toggleAutomationJobEnabled,
   updateAutomationJobRecord,
-} from './manager-runtime-job-mutations.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-job-mutations';
 
 export type {
   CreateAutomationJobInput,
   UpdateAutomationJobInput,
   SpawnAutomationTaskInput,
-} from './manager-runtime-helpers.ts';
-export type { AutomationHeartbeatWake } from './manager-runtime-scheduling.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-helpers';
+export type { AutomationHeartbeatWake } from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-scheduling';
 
 interface AutomationManagerConfig {
   readonly jobStore?: AutomationJobStore;

@@ -7,10 +7,10 @@ import type {
   SharedSessionMessage,
   SharedSessionRecord,
   SharedSessionSubmission,
-} from '../../control-plane/index.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type { RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
-import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../../providers/runtime-snapshot.ts';
-import type { TelemetryFilter, TelemetryListResponse, TelemetryRecord, TelemetrySnapshot } from '../telemetry/api.ts';
+import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
+import type { TelemetryFilter, TelemetryListResponse, TelemetryRecord, TelemetrySnapshot } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
 import type { ReadableSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/types';
 import type {
   DistributedNodeHostContract,
@@ -25,7 +25,7 @@ import type {
   UiSessionSnapshot,
   UiTasksSnapshot,
 } from '../ui-read-models.ts';
-import type { UiRuntimeEvents } from '../ui-events.ts';
+import type { UiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import { createClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/client-transport';
 import { createHttpJsonTransport, type HttpJsonTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-json-transport';
 import {
@@ -39,13 +39,13 @@ import {
   createJsonRequestInit,
   normalizeTelemetryQuery,
   readControlPlaneSnapshot,
-} from './http-helpers.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/http-helpers';
 import { createOperatorRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/operator-remote-client';
 import { createPeerRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/peer-remote-client';
 import {
   createEventSourceConnector,
   requestJson,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/shared';
 import type { TransportPaths } from '@pellux/goodvibes-sdk/platform/runtime/transports/transport-paths';
 import type {
   HttpPeerRecordSnapshot,
@@ -74,8 +74,8 @@ import type {
   HttpTransportSnapshot,
   HttpTransportTelemetryMetricsSnapshot,
   HttpTransportTelemetryQuery,
-} from './http-types.ts';
-import { createRemoteUiRuntimeEvents } from './ui-runtime-events.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/http-types';
+import { createRemoteUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/transports/ui-runtime-events';
 
 type SdkTelemetryQuery = {
   readonly limit?: number;

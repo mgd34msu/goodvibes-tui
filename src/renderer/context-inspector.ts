@@ -1,6 +1,6 @@
 import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ModalFactory } from './modal-factory.ts';
-import type { ConversationManager } from '../core/conversation.ts';
+import type { ConversationManager } from '../core/conversation';
 import { getOverlayContentBudget, getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ─── ContextInspectorModal ────────────────────────────────────────────────────

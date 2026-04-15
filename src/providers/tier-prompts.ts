@@ -6,7 +6,7 @@
  * only the verbosity of the guidance changes.
  */
 
-import type { ModelTier } from './registry.ts';
+import type { ModelTier } from '@pellux/goodvibes-sdk/platform/providers/registry';
 export type { ModelTier };
 
 /**

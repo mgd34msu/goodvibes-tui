@@ -1,5 +1,5 @@
-import type { PartialToolCall } from '../../../../providers/interface.ts';
-import type { ConversationDomainState } from '../../domains/conversation.ts';
+import type { PartialToolCall } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ConversationDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
 
 export function uniq<T>(items: T[]): T[] {
   return [...new Set(items)];

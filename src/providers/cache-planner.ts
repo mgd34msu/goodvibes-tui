@@ -21,8 +21,8 @@ import type {
 import { getDefaultStrategy } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import { getCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
 import type { ProviderCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
-import type { ConfigManager } from '../config/manager.ts';
-import type { HelperModel } from '../config/helper-model.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

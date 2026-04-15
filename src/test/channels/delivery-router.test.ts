@@ -3,13 +3,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ChannelDeliveryRouter } from '../../channels/index.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { ControlPlaneGateway } from '../../control-plane/index.ts';
-import type { ChannelDeliveryRequest } from '../../channels/index.ts';
+import { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { ChannelDeliveryRequest } from '@pellux/goodvibes-sdk/platform/channels/index';
 
 function serviceRequest(): ChannelDeliveryRequest {
   return {
@@ -28,7 +28,7 @@ function createDefaultRouter(root?: string, overrides: {
   readonly controlPlaneGateway?: ControlPlaneGateway | null;
 } = {}): ChannelDeliveryRouter {
   const configRoot = root ?? mkdtempSync(join(tmpdir(), 'gv-delivery-router-'));
-  const configManager = overrides.configManager ?? new ConfigManager({ configDir: configRoot });
+  const configManager = overrides.configManager ?? new ConfigManager({ surfaceRoot: 'tui',  configDir: configRoot });
   const serviceRegistry = new ServiceRegistry(join(configRoot, 'services.json'), {
     secretsManager: new SecretsManager({ projectRoot: configRoot, globalHome: configRoot }),
     subscriptionManager: new SubscriptionManager(join(configRoot, 'subscriptions.json')),
@@ -119,7 +119,7 @@ describe('ChannelDeliveryRouter', () => {
 
   test('publishes attachments to web control-plane deliveries as structured attachments', async () => {
     const root = mkdtempSync(join(tmpdir(), 'gv-delivery-artifacts-'));
-    const config = new ConfigManager({ configDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir: root });
     const artifactStore = new ArtifactStore({ rootDir: join(root, 'artifacts') });
     const artifact = await artifactStore.create({
       filename: 'summary.md',
@@ -211,7 +211,7 @@ describe('ChannelDeliveryRouter', () => {
     const originalWhatsAppToken = process.env.WHATSAPP_ACCESS_TOKEN;
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const root = mkdtempSync(join(tmpdir(), 'gv-delivery-config-'));
-    const config = new ConfigManager({ configDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir: root });
     process.env.WHATSAPP_ACCESS_TOKEN = 'wa-token';
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ url: String(input), init });
@@ -281,7 +281,7 @@ describe('ChannelDeliveryRouter', () => {
     const originalFetch = globalThis.fetch;
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     const root = mkdtempSync(join(tmpdir(), 'gv-delivery-extended-config-'));
-    const config = new ConfigManager({ configDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir: root });
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       calls.push({ url, init });

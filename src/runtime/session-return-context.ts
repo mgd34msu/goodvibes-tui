@@ -1,6 +1,6 @@
-import type { ConversationMessageSnapshot, ConversationTitleSource } from '../core/conversation.ts';
-import type { HelperModel } from '../config/helper-model.ts';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConversationMessageSnapshot, ConversationTitleSource } from '../core/conversation';
+import type { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 export type ReturnContextMode = 'off' | 'local' | 'assisted';
 

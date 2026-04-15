@@ -1,4 +1,4 @@
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 type SurfaceDeliveryTarget =
   | 'slack'

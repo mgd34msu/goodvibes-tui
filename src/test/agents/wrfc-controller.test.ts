@@ -1,8 +1,8 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
 import { join } from 'node:path';
-import { WrfcController } from '../../agents/wrfc-controller.ts';
-import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
-import type { AgentRecord } from '../../tools/agent/index.ts';
+import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
+import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
 

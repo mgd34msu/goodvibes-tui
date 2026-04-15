@@ -9,15 +9,15 @@
 
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { PluginEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/plugins';
-import { RuntimeEventBus } from '../events/index.ts';
-import type { RuntimeEventBus as RuntimeEventBusContract } from '../events/index.ts';
-import type { PluginLoaderDeps, LoadedPlugin } from '../../plugins/loader.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { RuntimeEventBus as RuntimeEventBusContract } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { PluginLoaderDeps, LoadedPlugin } from '../../plugins/loader';
 import {
   discoverPlugins,
   loadPlugin,
   unloadPlugin,
   type PluginPathOptions,
-} from '../../plugins/loader.ts';
+} from '../../plugins/loader';
 import type { PluginLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/plugins';
 import {
   type PluginCapability,
@@ -26,11 +26,11 @@ import {
   type PluginManifestV2,
   type PluginTransition,
   MAX_TRANSITION_HISTORY,
-} from './types.ts';
-import { applyTransition, isOperational } from './lifecycle.ts';
-import { resolveCapabilityManifest } from './manifest.ts';
-import { PluginTrustStore, type PluginTrustTier } from './trust.ts';
-import { PluginQuarantineEngine } from './quarantine.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
+import { applyTransition, isOperational } from '@pellux/goodvibes-sdk/platform/runtime/plugins/lifecycle';
+import { resolveCapabilityManifest } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manifest';
+import { PluginTrustStore, type PluginTrustTier } from '@pellux/goodvibes-sdk/platform/runtime/plugins/trust';
+import { PluginQuarantineEngine } from '@pellux/goodvibes-sdk/platform/runtime/plugins/quarantine';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   emitPluginActive,
@@ -41,7 +41,7 @@ import {
   emitPluginLoaded,
   emitPluginLoading,
   emitPluginUnloading,
-} from '../emitters/plugins.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/plugins';
 
 /** Source label for emitted events. */
 const EVENT_SOURCE = 'plugin-lifecycle-manager';

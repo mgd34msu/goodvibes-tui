@@ -5,7 +5,7 @@
  * the PhasedTool metadata required by the phased executor.
  */
 import { asPhasedTool } from '@pellux/goodvibes-sdk/platform/runtime/tools/adapter';
-import { createWriteTool } from './index.ts';
+import { createWriteTool } from '@pellux/goodvibes-sdk/platform/tools/write/index';
 import type { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import type { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';

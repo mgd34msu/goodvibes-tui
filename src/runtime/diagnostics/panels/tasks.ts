@@ -7,8 +7,8 @@
  *
  * Covers all task kinds: exec, agent, acp, scheduler, daemon, mcp, plugin, integration.
  */
-import type { RuntimeEventBus, EnvelopeListener } from '../../events/index.ts';
-import type { AnyRuntimeEvent } from '../../events/domain-map.ts';
+import type { RuntimeEventBus, EnvelopeListener } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { AnyRuntimeEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/domain-map';
 import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import {
   type TaskEntry,

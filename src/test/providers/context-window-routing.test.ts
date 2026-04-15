@@ -8,8 +8,8 @@ import { afterEach, describe, test, expect } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ModelDefinition } from '../../providers/registry.ts';
-import { ModelLimitsService } from '../../providers/model-limits.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { ModelLimitsService } from '@pellux/goodvibes-sdk/platform/providers/model-limits';
 import { resolveContextWindow } from '@pellux/goodvibes-sdk/platform/providers/local-context-ingestion';
 
 // ---------------------------------------------------------------------------

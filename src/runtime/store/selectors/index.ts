@@ -11,10 +11,10 @@
 import type { RuntimeState } from '../state.ts';
 import type { SessionDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/session';
 import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import type { ConversationDomainState, TurnState } from '../domains/conversation.ts';
+import type { ConversationDomainState, TurnState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
 import type { OverlayDomainState, OverlayId } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/overlays';
 import type { PanelDomainState, PanelState } from '../domains/panels.ts';
-import type { PermissionDomainState, PermissionMode } from '../domains/permissions.ts';
+import type { PermissionDomainState, PermissionMode } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/permissions';
 import type { TaskDomainState, RuntimeTask, TaskKind } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import type { AgentDomainState, RuntimeAgent } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
 import type { ProviderHealthDomainState, CompositeHealthStatus } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';

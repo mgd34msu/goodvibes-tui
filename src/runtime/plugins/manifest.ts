@@ -15,8 +15,8 @@ import {
   type PluginCapability,
   type PluginCapabilityManifest,
   type PluginManifestV2,
-} from './types.ts';
-import { type PluginTrustTier, filterCapabilitiesByTrust } from './trust.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
+import { type PluginTrustTier, filterCapabilitiesByTrust } from '@pellux/goodvibes-sdk/platform/runtime/plugins/trust';
 
 /**
  * Default capability policy: grant all valid capabilities.

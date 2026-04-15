@@ -2,8 +2,8 @@ import { ToolError, PermissionError } from '@pellux/goodvibes-sdk/platform/types
 import type { HookEvent, HookEventPath, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { PermissionManager } from '../permissions/manager.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import {
   emitOrchestrationGraphCreated,
   emitOrchestrationNodeAdded,
@@ -15,15 +15,15 @@ import {
   emitToolReconciled,
   emitToolReceived,
   emitToolSucceeded,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import { buildSyntheticResult, detectUnresolvedToolCalls, type ReconciliationReason } from '@pellux/goodvibes-sdk/platform/core/tool-reconciliation';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { ConfigManager } from '../config/manager.ts';
-import type { AgentManager } from '../tools/agent/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { AgentInput } from '@pellux/goodvibes-sdk/platform/tools/agent/schema';
 import type { ExecutionPlan, ExecutionPlanManager, PlanItem } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
-import type { ProviderRegistry } from '../providers/registry.ts';
-import { evaluateOrchestrationSpawn } from '../runtime/orchestration/spawn-policy.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { evaluateOrchestrationSpawn } from '@pellux/goodvibes-sdk/platform/runtime/orchestration/spawn-policy';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type HookDispatcherLike = {

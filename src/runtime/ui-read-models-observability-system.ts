@@ -1,15 +1,15 @@
-import { buildEcosystemRecommendations, type EcosystemRecommendation } from './ecosystem/recommendations.ts';
+import { buildEcosystemRecommendations, type EcosystemRecommendation } from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/recommendations';
 import type { RuntimeServices } from './services.ts';
 import type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
-import { combineSubscriptions, createStoreBackedReadModel } from './ui-read-model-helpers.ts';
+import { combineSubscriptions, createStoreBackedReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-model-helpers';
 import type {
   ContinuitySnapshot as IntegrationContinuitySnapshot,
   SettingsSnapshot as IntegrationSettingsSnapshot,
   WorktreeSnapshot as IntegrationWorktreeSnapshot,
-} from './integration/helpers.ts';
-import type { SessionReturnContextSummary } from './session-return-context.ts';
-import type { ManagedWorktreeMeta } from './worktree/registry.ts';
-import type { PluginStatus } from '../plugins/manager.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
+import type { SessionReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
+import type { ManagedWorktreeMeta } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
+import type { PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins/manager';
 
 export interface UiIntelligenceSnapshot {
   readonly diagnosticsStatus: string;

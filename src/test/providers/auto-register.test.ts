@@ -11,11 +11,11 @@ import {
   resolveApiKey,
   createProviderFromEntry,
   AUTO_REGISTER_CATALOG,
-} from '../../providers/auto-register.ts';
-import type { AutoRegisterEntry } from '../../providers/auto-register.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
-import { OpenAICompatProvider } from '../../providers/openai-compat.ts';
-import { AnthropicCompatProvider } from '../../providers/anthropic-compat.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/auto-register';
+import type { AutoRegisterEntry } from '@pellux/goodvibes-sdk/platform/providers/auto-register';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import { AnthropicCompatProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-compat';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 

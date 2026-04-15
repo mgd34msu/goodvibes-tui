@@ -1,10 +1,10 @@
 export {
   AutomationManager,
-} from './manager-runtime.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime';
 
 export type {
   CreateAutomationJobInput,
   UpdateAutomationJobInput,
   AutomationHeartbeatResult,
   AutomationHeartbeatWake,
-} from './manager-runtime.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime';

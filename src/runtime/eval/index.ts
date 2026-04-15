@@ -29,12 +29,12 @@ export type {
   BaselineSuiteSummary,
 } from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
 
-export { EvalRunner } from './runner.ts';
-export type { EvalRunnerOptions } from './runner.ts';
+export { EvalRunner } from '@pellux/goodvibes-sdk/platform/runtime/eval/runner';
+export type { EvalRunnerOptions } from '@pellux/goodvibes-sdk/platform/runtime/eval/runner';
 
 export { scoreScenario, formatScorecard, DIMENSION_FLOOR } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
 
-export { BUILTIN_SUITES, ALL_SCENARIOS } from './suites.ts';
+export { BUILTIN_SUITES, ALL_SCENARIOS } from '@pellux/goodvibes-sdk/platform/runtime/eval/suites';
 
 export {
   captureBaseline,

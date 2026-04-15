@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { WatcherRegistry } from '../../watchers/index.ts';
+import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers/index';
 import { loadWatcherSnapshotFromPath, resolveWatcherStorePath, saveWatcherSnapshotToPath } from '@pellux/goodvibes-sdk/platform/watchers/store';
 
 function createTempWatcherStore(): { readonly root: string; readonly storePath: string } {

@@ -2,14 +2,14 @@ import type { ConversationManager } from './conversation.ts';
 import type { ExecutionPlan } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import { ConsecutiveErrorBreaker } from '@pellux/goodvibes-sdk/platform/core/circuit-breaker';
 import type { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import type { ConfigManager } from '../config/manager.ts';
-import { estimateConversationTokens, estimateTokens } from './context-compaction.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { estimateConversationTokens, estimateTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
 import { ProviderError, isNonTransientProviderFailure } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { formatProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ContentPart, LLMProvider, StreamDelta } from '../providers/interface.ts';
+import type { ContentPart, LLMProvider, StreamDelta } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import {
   emitOpsCacheMetrics,
@@ -21,20 +21,20 @@ import {
   emitStreamEnd,
   emitStreamStart,
   emitTurnError,
-} from '../runtime/emitters/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { HelperModel } from '../config/helper-model.ts';
-import type { ModelDefinition } from '../providers/registry.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { AgentManager } from '../tools/agent/index.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import {
   emitMalformedToolUseWarning,
   handleFinalResponseOutcome,
   handleToolResponseOutcome,
   type ChatResponseWithReasoning,
-} from './orchestrator-turn-helpers.ts';
+} from './orchestrator-turn-helpers';
 
 const AUTO_SPAWN_FALLBACK_DELAY_MS = 5_000;
 

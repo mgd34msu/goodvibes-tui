@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { ChatResponse, LLMProvider } from '../../providers/interface.ts';
-import { LMStudioProvider } from '../../providers/lm-studio.ts';
+import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { LMStudioProvider } from '@pellux/goodvibes-sdk/platform/providers/lm-studio';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';

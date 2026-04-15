@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ConversationManager } from '../../core/conversation.ts';
+import { ConversationManager } from '../../core/conversation';
 
 describe('ConversationManager — undo/redo/getLastUserMessage', () => {
   let cm: ConversationManager;

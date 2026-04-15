@@ -3,12 +3,12 @@ import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import { load as loadSqliteVec } from 'sqlite-vec';
-import type { MemoryClass, MemoryRecord, MemoryReviewState, MemoryScope } from './memory-store.ts';
+import type { MemoryClass, MemoryRecord, MemoryReviewState, MemoryScope } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import {
   MemoryEmbeddingProviderRegistry,
   embedMemoryText,
   normalizeMemoryEmbeddingVector,
-} from './memory-embeddings.ts';
+} from '@pellux/goodvibes-sdk/platform/state/memory-embeddings';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
@@ -16,7 +16,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-displ
 // Duplicating the literal here avoids an initialization cycle when state/index.ts
 // re-exports both modules during targeted test imports.
 export const MEMORY_VECTOR_DIMS = 384;
-export { embedMemoryText } from './memory-embeddings.ts';
+export { embedMemoryText } from '@pellux/goodvibes-sdk/platform/state/memory-embeddings';
 
 export interface MemoryVectorSearchFilter {
   scope?: MemoryScope;

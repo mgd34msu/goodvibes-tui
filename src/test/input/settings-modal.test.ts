@@ -6,13 +6,13 @@ import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { McpRegistry } from '../../mcp/registry.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -25,7 +25,7 @@ function makeTmpDir(): string {
 }
 
 function createConfigManager(root: string): ConfigManager {
-  return new ConfigManager({
+  return new ConfigManager({ surfaceRoot: 'tui',
     workingDir: root,
     homeDir: root,
     configDir: join(root, '.goodvibes', 'global-tui'),

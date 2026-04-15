@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { ChatResponse, LLMProvider } from '../../providers/interface.ts';
-import { OllamaProvider } from '../../providers/ollama.ts';
+import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { OllamaProvider } from '@pellux/goodvibes-sdk/platform/providers/ollama';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 
 function ndjson(lines: Record<string, unknown>[]): string {

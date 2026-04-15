@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildReviewTask } from '../../agents/wrfc-reporting.ts';
+import { buildReviewTask } from '@pellux/goodvibes-sdk/platform/agents/wrfc-reporting';
 import type { EngineerReport } from '@pellux/goodvibes-sdk/platform/agents/completion-report';
 
 function makeEngineerReport(overrides?: Partial<EngineerReport>): EngineerReport {

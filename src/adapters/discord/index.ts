@@ -1,6 +1,6 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { DiscordIntegration, DiscordInteractionResponseType, DiscordInteractionType } from '../../integrations/index.ts';
-import type { SurfaceAdapterContext } from '../types.ts';
+import { DiscordIntegration, DiscordInteractionResponseType, DiscordInteractionType } from '@pellux/goodvibes-sdk/platform/integrations/index';
+import type { SurfaceAdapterContext } from '@pellux/goodvibes-sdk/platform/adapters/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export async function handleDiscordSurfaceWebhook(req: Request, context: SurfaceAdapterContext): Promise<Response> {

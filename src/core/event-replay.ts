@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '../runtime/events/index.ts';
+import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 export type ReplayTrackedEventName =

@@ -8,10 +8,10 @@
 
 import type { SessionDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/session';
 import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import type { ConversationDomainState } from './domains/conversation.ts';
+import type { ConversationDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
 import type { OverlayDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/overlays';
 import type { PanelDomainState } from './domains/panels.ts';
-import type { PermissionDomainState } from './domains/permissions.ts';
+import type { PermissionDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/permissions';
 import type { TaskDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import type { AgentDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
 import type { OrchestrationDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';
@@ -36,10 +36,10 @@ import type { UiPerfDomainState } from './domains/ui-perf.ts';
 
 import { createInitialSessionState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/session';
 import { createInitialModelState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import { createInitialConversationState } from './domains/conversation.ts';
+import { createInitialConversationState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
 import { createInitialOverlaysState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/overlays';
 import { createInitialPanelsState } from './domains/panels.ts';
-import { createInitialPermissionsState } from './domains/permissions.ts';
+import { createInitialPermissionsState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/permissions';
 import { createInitialTasksState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import { createInitialAgentsState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
 import { createInitialOrchestrationState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';

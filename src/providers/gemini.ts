@@ -6,8 +6,8 @@ import type {
   ProviderEmbeddingResult,
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
-} from './interface.ts';
-import { REASONING_BUDGET_MAP } from './interface.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
@@ -15,8 +15,8 @@ import {
   toGeminiFunctionDeclarations,
   toGeminiContents,
   fromGeminiParts,
-} from './tool-formats.ts';
-import type { GeminiPart } from './tool-formats.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
+import type { GeminiPart } from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
 import type { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import { summarizeError, toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

@@ -24,10 +24,10 @@ import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { ReconciliationEvent } from '@pellux/goodvibes-sdk/platform/core/tool-reconciliation';
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import { RuntimeEventBus, type ToolEvent } from '../../runtime/events/index.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { RuntimeEventBus, type ToolEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 // ---------------------------------------------------------------------------
 // Unit tests for reconciliation helpers

@@ -3,7 +3,7 @@
  * message buffer, streaming deltas, and tool dispatch state.
  */
 
-import type { TurnStopReason } from '../../events/turn.ts';
+import type { TurnStopReason } from '@pellux/goodvibes-sdk/platform/runtime/events/turn';
 
 /** States for the turn lifecycle machine. */
 export type TurnState =

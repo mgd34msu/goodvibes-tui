@@ -1,10 +1,10 @@
-import type { ConfigManager } from '../config/manager.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
-import type { ContentPart, LLMProvider } from '../providers/interface.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ContentPart, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import type { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
 import type { IdempotencyStore } from '@pellux/goodvibes-sdk/platform/runtime/idempotency/index';
-import { estimateTokens } from './context-compaction.ts';
+import { estimateTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';

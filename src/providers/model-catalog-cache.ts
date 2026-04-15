@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { CatalogModel } from './model-catalog.ts';
+import type { CatalogModel } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 interface CatalogModelPricing {

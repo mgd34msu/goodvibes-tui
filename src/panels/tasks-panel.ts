@@ -2,7 +2,7 @@ import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
 import type { RuntimeTask, TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
-import type { ManagedWorktreeMeta } from '../runtime/worktree/registry.ts';
+import type { ManagedWorktreeMeta } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import type { UiReadModel, UiTasksSnapshot, UiWorktreeSnapshot } from '../runtime/ui-read-models.ts';
 import {
   buildDetailBlock,

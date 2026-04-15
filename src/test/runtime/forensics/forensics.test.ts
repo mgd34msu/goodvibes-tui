@@ -12,9 +12,9 @@
 import { describe, test, expect, mock } from 'bun:test';
 import { classifyFailure, summariseFailure } from '@pellux/goodvibes-sdk/platform/runtime/forensics/classifier';
 import { ForensicsRegistry, DEFAULT_REGISTRY_LIMIT } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import { ForensicsCollector } from '../../../runtime/forensics/collector.ts';
-import { RuntimeEventBus } from '../../../runtime/events/index.ts';
-import { createEventEnvelope } from '../../../runtime/events/index.ts';
+import { ForensicsCollector } from '@pellux/goodvibes-sdk/platform/runtime/forensics/collector';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
 
 // ---------------------------------------------------------------------------

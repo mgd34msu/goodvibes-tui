@@ -1,6 +1,6 @@
 import type { RuntimeStore } from '../store/index.ts';
 import type { AcpConnection } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/acp';
-import { RemoteRunnerRegistry } from './runner-registry.ts';
+import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
 import type { RemoteRunnerContract, RemoteRunnerPool } from '@pellux/goodvibes-sdk/platform/runtime/remote/types';
 import { deriveRemoteCapabilities, type RemoteCapabilitySnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/capabilities';
 import { deriveRemoteHeartbeat, type RemoteHeartbeatSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/heartbeat';

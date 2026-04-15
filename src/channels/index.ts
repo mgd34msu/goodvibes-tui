@@ -54,17 +54,17 @@ export type {
   ChannelRenderRequest,
   ChannelRenderResult,
 } from '@pellux/goodvibes-sdk/platform/channels/types';
-export type { UpsertRouteBindingInput } from './route-manager.ts';
-export { RouteBindingManager } from './route-manager.ts';
-export { SurfaceRegistry } from './surface-registry.ts';
-export type { ChannelPlugin } from './plugin-registry.ts';
-export { ChannelPluginRegistry } from './plugin-registry.ts';
+export type { UpsertRouteBindingInput } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
+export { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
+export { SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels/surface-registry';
+export type { ChannelPlugin } from '@pellux/goodvibes-sdk/platform/channels/plugin-registry';
+export { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/plugin-registry';
 export { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels/policy-manager';
-export { BuiltinChannelRuntime } from './builtin-runtime.ts';
-export { ChannelReplyPipeline, normalizeChannelRenderEventFromRuntime } from './reply-pipeline.ts';
-export { ChannelProviderRuntimeManager } from './provider-runtime.ts';
-export type { ProviderRuntimeActionResult, ProviderRuntimeStatus, ProviderRuntimeSurface } from './provider-runtime.ts';
-export { ChannelDeliveryRouter, createDefaultChannelDeliveryStrategies, resolveChannelDeliverySurfaceKind } from './delivery-router.ts';
+export { BuiltinChannelRuntime } from '@pellux/goodvibes-sdk/platform/channels/builtin-runtime';
+export { ChannelReplyPipeline, normalizeChannelRenderEventFromRuntime } from '@pellux/goodvibes-sdk/platform/channels/reply-pipeline';
+export { ChannelProviderRuntimeManager } from '@pellux/goodvibes-sdk/platform/channels/provider-runtime';
+export type { ProviderRuntimeActionResult, ProviderRuntimeStatus, ProviderRuntimeSurface } from '@pellux/goodvibes-sdk/platform/channels/provider-runtime';
+export { ChannelDeliveryRouter, createDefaultChannelDeliveryStrategies, resolveChannelDeliverySurfaceKind } from '@pellux/goodvibes-sdk/platform/channels/delivery-router';
 export type {
   ChannelDeliveryResult,
   ChannelDeliveryRouteBinding,
@@ -73,5 +73,5 @@ export type {
   ChannelDeliverySurfaceKind,
   ChannelDeliveryTarget,
   ChannelDeliveryTargetKind,
-} from './delivery-router.ts';
-export type { ChannelDeliveryRequest } from './delivery/types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery-router';
+export type { ChannelDeliveryRequest } from '@pellux/goodvibes-sdk/platform/channels/delivery/types';

@@ -4,9 +4,9 @@
 
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { ControlPlaneClientKind, ControlPlaneEvent, ControlPlanePrincipalKind, ControlPlaneTransportKind } from '@pellux/goodvibes-sdk/platform/runtime/events/control-plane';
-import type { EmitterContext } from './index.ts';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 
 function controlPlaneEvent<T extends ControlPlaneEvent['type']>(
   type: T,

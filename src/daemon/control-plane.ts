@@ -1,4 +1,4 @@
-import type { AgentManager } from '../tools/agent/index.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import {
   authenticateOperatorRequest,
@@ -6,12 +6,12 @@ import {
   extractOperatorAuthToken,
   isOperatorAdmin,
 } from '@pellux/goodvibes-sdk/platform/security/http-auth';
-import type { ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
-import type { GatewayMethodCatalog, GatewayMethodDescriptor } from '../control-plane/index.ts';
-import type { RuntimeEventDomain } from '../runtime/events/index.ts';
-import type { DistributedRuntimeManager } from '../runtime/remote/index.ts';
-import { extractForwardedClientIp } from '../runtime/network/index.ts';
-import { resolveGatewayPathTemplate } from './helpers.ts';
+import type { ControlPlaneGateway, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { GatewayMethodCatalog, GatewayMethodDescriptor } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { RuntimeEventDomain } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { DistributedRuntimeManager } from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
+import { extractForwardedClientIp } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
+import { resolveGatewayPathTemplate } from '@pellux/goodvibes-sdk/platform/daemon/helpers';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   buildMissingScopeBody,

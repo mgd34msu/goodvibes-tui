@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { summarizeWorktreeOwnership, type ManagedWorktreeMeta } from '../../runtime/worktree/registry.ts';
+import { summarizeWorktreeOwnership, type ManagedWorktreeMeta } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 
 describe('runtime/worktree/registry', () => {
   test('summarizes ownership and lifecycle posture', () => {

@@ -3,14 +3,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SchedulePanel } from '../../panels/schedule-panel.ts';
-import { AutomationManager } from '../../automation/index.ts';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/index';
 import { normalizeCronSchedule } from '@pellux/goodvibes-sdk/platform/automation/schedules';
 import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
 import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
 import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
-import { RouteBindingManager } from '../../channels/route-manager.ts';
-import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
@@ -31,7 +31,7 @@ describe('SchedulePanel', () => {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, 'routes.json')),
     });
-    const configManager = new ConfigManager({
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',
       workingDir: root,
       configDir: join(root, '.goodvibes', 'tui'),
     });

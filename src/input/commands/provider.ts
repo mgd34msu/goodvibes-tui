@@ -13,9 +13,9 @@
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
-import type { RouteExplanation } from '../../providers/capabilities.ts';
-import type { FallbackTestResult, FallbackTransition } from '../../providers/optimizer.ts';
-import type { ProviderApiModelRecord } from '../../providers/provider-api.ts';
+import type { RouteExplanation } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
+import type { FallbackTestResult, FallbackTransition } from '@pellux/goodvibes-sdk/platform/providers/optimizer';
+import type { ProviderApiModelRecord } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
 import { requireProviderApi } from './runtime-services.ts';
 
 // ---------------------------------------------------------------------------

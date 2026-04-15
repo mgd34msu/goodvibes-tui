@@ -26,7 +26,7 @@ export type {
   DiscordOAuthAuthorizeOptions,
 } from '@pellux/goodvibes-sdk/platform/integrations/discord';
 export { DiscordInteractionType, DiscordInteractionResponseType } from '@pellux/goodvibes-sdk/platform/integrations/discord';
-export { Notifier } from './notifier.ts';
+export { Notifier } from '@pellux/goodvibes-sdk/platform/integrations/notifier';
 export { GitHubIntegration } from '@pellux/goodvibes-sdk/platform/integrations/github';
 export type { GitHubWebhookEvent } from '@pellux/goodvibes-sdk/platform/integrations/github';
 export { DeliveryQueue, DeliveryError, classifyDeliveryError, snapshotQueueStatus } from '@pellux/goodvibes-sdk/platform/integrations/delivery';

@@ -6,7 +6,7 @@
  */
 
 import type { PluginLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/plugins';
-import type { PluginManifest } from '../../plugins/loader.ts';
+import type { PluginManifest } from '../../plugins/loader';
 
 // Re-export so consumers only need to import from this module.
 export type { PluginLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/plugins';

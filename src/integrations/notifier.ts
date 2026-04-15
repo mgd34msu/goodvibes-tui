@@ -1,5 +1,5 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '../runtime/events/index.ts';
+import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { SlackIntegration } from '@pellux/goodvibes-sdk/platform/integrations/slack';
 import { DiscordIntegration } from '@pellux/goodvibes-sdk/platform/integrations/discord';
 import { DeliveryQueue } from '@pellux/goodvibes-sdk/platform/integrations/delivery';

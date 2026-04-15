@@ -1,18 +1,17 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { AutomationManager } from '../../automation/manager.ts';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/manager';
 import { normalizeEverySchedule } from '@pellux/goodvibes-sdk/platform/automation/schedules';
 import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
 import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
 import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
-import { RouteBindingManager } from '../../channels/route-manager.ts';
-import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 const testAgentExecutor = {
   async runAgent() {
@@ -22,14 +21,16 @@ const testAgentExecutor = {
 
 describe('AutomationManager target semantics', () => {
   let root = '';
+  const testTmpRoot = join(import.meta.dir, '../../../.tmp-tests');
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-automation-targets-'));
+    mkdirSync(testTmpRoot, { recursive: true });
+    root = mkdtempSync(join(testTmpRoot, 'gv-automation-targets-'));
   });
 
   function buildManager(spawnTask?: (prompt: string) => string) {
     const liveAgents = new Map<string, 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'>();
-    const configManager = new ConfigManager({
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',
       workingDir: root,
       configDir: join(root, '.goodvibes', 'tui'),
     });
@@ -57,6 +58,7 @@ describe('AutomationManager target semantics', () => {
     });
     const manager = new AutomationManager({
       configManager,
+      defaultSurfaceKind: 'tui',
       jobStore: new AutomationJobStore(join(root, 'automation-jobs.json')),
       runStore: new AutomationRunStore(join(root, 'automation-runs.json')),
       legacyStore: new PersistentStore<LegacySchedulerSnapshot>(join(root, 'legacy.json')),

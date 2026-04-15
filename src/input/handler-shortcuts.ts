@@ -2,7 +2,7 @@ import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import type { CommandContext } from './command-registry.ts';
 import type { SearchManager } from './search.ts';
 import type { HistorySearch } from './input-history.ts';
-import type { ConversationManager } from '../core/conversation.ts';
+import type { ConversationManager } from '../core/conversation';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';

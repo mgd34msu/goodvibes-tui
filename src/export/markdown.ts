@@ -1,5 +1,5 @@
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ContentPart } from '../providers/interface.ts';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 /**
  * Represents a single message as stored in ConversationManager.

@@ -1,10 +1,10 @@
-import type { KnowledgeService } from './service.ts';
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/service';
 import type { ArtifactFetchMode } from '@pellux/goodvibes-sdk/platform/artifacts/types';
 import {
   buildKnowledgeInjectionPrompt,
   selectKnowledgeForTask,
   type KnowledgeInjection,
-} from '../state/knowledge-injection.ts';
+} from '@pellux/goodvibes-sdk/platform/state/knowledge-injection';
 import type {
   MemoryAddOptions,
   MemoryBundle,
@@ -16,20 +16,20 @@ import type {
   MemoryScope,
   MemorySearchFilter,
   MemorySemanticSearchResult,
-} from '../state/memory-store.ts';
-import type { MemoryVectorStats } from '../state/memory-vector-store.ts';
-import type { MemoryRegistry } from '../state/memory-registry.ts';
+} from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { MemoryVectorStats } from '@pellux/goodvibes-sdk/platform/state/memory-vector-store';
+import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-registry';
 export type { ArtifactFetchMode } from '@pellux/goodvibes-sdk/platform/artifacts/types';
 export type {
   KnowledgeInjection,
-} from '../state/knowledge-injection.ts';
+} from '@pellux/goodvibes-sdk/platform/state/knowledge-injection';
 export type {
   KnowledgeInjectionIngestMode,
   KnowledgeInjectionProvenance,
   KnowledgeInjectionRetention,
   KnowledgeInjectionTrustTier,
   KnowledgeInjectionUseAs,
-} from './internal.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/internal';
 
 type UsageListInput = Parameters<KnowledgeService['listUsageRecords']>[1];
 type SourceQueryInput = Parameters<KnowledgeService['querySources']>[0];

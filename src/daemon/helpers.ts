@@ -1,5 +1,5 @@
-import type { AutomationExternalContentSource, AutomationWakeMode } from '../automation/index.ts';
-import type { AutomationExecutionPolicy } from '../automation/index.ts';
+import type { AutomationExternalContentSource, AutomationWakeMode } from '@pellux/goodvibes-sdk/platform/automation/index';
+import type { AutomationExecutionPolicy } from '@pellux/goodvibes-sdk/platform/automation/index';
 import {
   isJsonRecord,
   missingScopes,

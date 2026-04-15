@@ -3,7 +3,7 @@
  * Kept in a separate file to avoid growing fetch.test.ts further.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { createFetchTool } from '../../tools/fetch/index.ts';
+import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';

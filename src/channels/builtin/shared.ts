@@ -1,15 +1,15 @@
-import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '../../adapters/index.ts';
+import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '@pellux/goodvibes-sdk/platform/adapters/index';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
-import type { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SurfacesConfig } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { SecretsManager } from '../../config/secrets.ts';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
-import type { SharedApprovalRecord } from '../../control-plane/index.ts';
-import type { ChannelDeliveryRouter } from '../delivery-router.ts';
+import type { SharedApprovalRecord } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels/delivery-router';
 import type { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels/policy-manager';
-import type { ChannelPluginRegistry } from '../plugin-registry.ts';
-import type { ChannelProviderRuntimeManager } from '../provider-runtime.ts';
-import type { RouteBindingManager } from '../route-manager.ts';
+import type { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/plugin-registry';
+import type { ChannelProviderRuntimeManager } from '@pellux/goodvibes-sdk/platform/channels/provider-runtime';
+import type { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
 
 export type ManagedSurface =
   | 'slack'
