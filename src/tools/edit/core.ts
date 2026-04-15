@@ -452,7 +452,7 @@ async function executeTextEdits(
 
     let editResult: { newContent: string; occurrencesReplaced: number; warning?: string } | { error: string; hint?: string };
     if (matchMode === 'ast_pattern') {
-      editResult = computeAstPatternEdit(currentContent, item, resolvedPath);
+      editResult = await computeAstPatternEdit(currentContent, item, resolvedPath);
     } else if (matchMode === 'ast') {
       editResult = await computeAstEdit(currentContent, item, resolvedPath);
     } else {

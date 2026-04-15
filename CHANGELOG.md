@@ -4,6 +4,35 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.10] — 2026-04-15
+
+### SDK `0.18.25` Startup Crash Fix
+
+- Updated `goodvibes-tui` to consume the published canonical SDK line at `@pellux/goodvibes-sdk@0.18.25`
+- Pulled in the SDK fix that removes startup-time top-level `@ast-grep/napi` imports from shared structural-find and `ast_pattern` edit paths
+- Closed the compiled-binary startup regression where `./dist/goodvibes` could crash before any AST-backed tool was used simply because the full tool surface is registered during host boot
+
+### Compiled Binary Revalidation
+
+- Rebuilt the compiled TUI entrypoint against the published `0.18.25` SDK package instead of local SDK source
+- Verified that `bun run build` followed by `./dist/goodvibes` now reaches a live running TUI session instead of dying during module initialization
+- Kept the fix at the SDK boundary rather than adding a TUI-local workaround, so package consumers and future hosts get the same corrected startup behavior
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Full test runner passes: `bun run test`
+- Architecture gate passes: `bun run architecture:check`
+- Performance gate passes: `bun run perf:check`
+- Eval gate passes: `bun run eval:gate`
+- Foundation artifacts export passes: `bun run foundation:artifacts`
+- Build passes: `bun run build`
+- Compiled binary startup passes: `./dist/goodvibes`
+- Publish packaging check passes: `bun run publish:check`
+- Staged npm package rehearsal passes: `bun run publish:dry-run`
+- Staged GitHub Packages rehearsal passes: `bun run publish:dry-run:github`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.9] — 2026-04-15
 
 ### SDK `0.18.24` Host-Boundary Cutover
