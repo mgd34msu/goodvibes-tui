@@ -16,9 +16,14 @@
 
 import { EvalRunner } from '../src/runtime/eval/runner.ts';
 import { BUILTIN_SUITES } from '../src/runtime/eval/suites.ts';
-import { loadBaseline, captureBaseline, writeBaseline } from '../src/runtime/eval/baseline.ts';
-import { formatSuiteResult, formatGateResult } from '../src/runtime/eval/format.ts';
-import { formatScorecard } from '../src/runtime/eval/scorecard.ts';
+import {
+  loadBaseline,
+  captureBaseline,
+  writeBaseline,
+  formatSuiteResult,
+  formatGateResult,
+  formatScorecard,
+} from '../src/runtime/eval/index.ts';
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 

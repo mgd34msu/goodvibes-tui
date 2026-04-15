@@ -15,7 +15,7 @@
  */
 
 import { createPerfMonitor, formatReport, exitCode } from '../src/runtime/perf/index.ts';
-import { createInitialUiPerfState } from '../src/runtime/store/domains/ui-perf.ts';
+import { createInitialSurfacePerfState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surface-perf';
 import type { PerfSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
 
 /**
@@ -30,7 +30,7 @@ import type { PerfSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/perf/m
  * a loader that reads a captured metrics JSON file.
  */
 function buildCiSnapshot(): PerfSnapshot {
-  const uiPerf = createInitialUiPerfState();
+  const surfacePerf = createInitialSurfacePerfState();
 
   // Simulate a minimal set of extra metrics that are not yet captured
   // by the UiPerfDomainState but must be present for full budget evaluation.
@@ -48,7 +48,7 @@ function buildCiSnapshot(): PerfSnapshot {
     'slo.integration.dlq_depth': 0,
   };
 
-  return { uiPerf, extraMetrics };
+  return { surfacePerf, extraMetrics };
 }
 
 /**
