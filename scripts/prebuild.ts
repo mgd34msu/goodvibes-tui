@@ -1,47 +1,14 @@
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { withWorkspaceLock } from './workspace-lock.ts';
+import { syncProjectSurfaces } from './project-surfaces.ts';
 
 /**
- * Prebuild script — reads version from package.json and updates:
- *   1. src/version.ts (VERSION export used by splash, header, daemon)
- *   2. README.md (shields.io version badge)
- *
- * package.json is the single source of truth for the version number.
- * Run via: bun run prebuild (automatically runs before bun run build)
+ * Prebuild script — syncs versioned surfaces and foundation artifacts before
+ * compilation or staging so release assets cannot race stale source files.
  */
 try {
-  const root = process.cwd();
-  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  const version = pkg.version;
-
-  // 1. src/version.ts — update the fallback version for compiled binaries
-  const versionTsPath = join(root, 'src/version.ts');
-  try {
-    let versionTs = readFileSync(versionTsPath, 'utf8');
-    versionTs = versionTs.replace(/let _version = '[^']*'/, `let _version = '${version}'`);
-    writeFileSync(versionTsPath, versionTs);
-    console.log(`prebuild: src/version.ts fallback → ${version}`);
-  } catch {
-    console.log('prebuild: src/version.ts — not found, skipping');
-  }
-
-  // 2. README.md — update the shields.io version badge
-  const readmePath = join(root, 'README.md');
-  try {
-    let readme = readFileSync(readmePath, 'utf8');
-    const versionRe = /version-[0-9]+\.[0-9]+\.[0-9]+-blue\.svg/;
-    if (versionRe.test(readme)) {
-      readme = readme.replace(versionRe, `version-${version}-blue.svg`);
-      writeFileSync(readmePath, readme);
-      console.log(`prebuild: README.md → ${version}`);
-    } else {
-      console.log('prebuild: README.md — no version badge found, skipping');
-    }
-  } catch {
-    console.log('prebuild: README.md — not found, skipping');
-  }
-
-  console.log(`prebuild: done (v${version})`);
+  withWorkspaceLock('sync project surfaces', () => {
+    syncProjectSurfaces(process.cwd());
+  });
 } catch (error) {
   console.error('prebuild: failed —', error);
   process.exit(1);

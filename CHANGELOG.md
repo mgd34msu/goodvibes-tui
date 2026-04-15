@@ -4,6 +4,40 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.11] — 2026-04-15
+
+### Version Boundary Cleanup
+
+- Fixed the TUI foundation artifact export path so `docs/foundation-artifacts/operator-contract.json` is now built through the TUI contract wrapper instead of the raw SDK builder
+- That keeps the checked-in operator artifact on the TUI product version instead of leaking the SDK package version into TUI-owned release artifacts
+- Updated the release gate to enforce the same boundary, so future foundation artifact checks compare against the TUI contract surface instead of silently accepting SDK-version drift
+- Moved the TUI version-surface sync and foundation-artifact generation behind a shared workspace lock so `prebuild`, artifact export, and package staging cannot race each other over release-owned files
+- Made `publish:package` resync those surfaces before staging, so tarballs are built from the current TUI product version and current foundation artifacts instead of whatever happened to be on disk first
+- Updated the release build job to run the same surface sync before compiling binaries, so fresh CI checkouts cannot embed stale contract/version files into release assets
+
+### SDK `0.18.26` Update
+
+- Updated `goodvibes-tui` to consume `@pellux/goodvibes-sdk@0.18.26`
+- Pulled in the SDK fix that syncs the baked runtime version fallback from the package version and adds a workspace lock around build and staging so concurrent validate/release flows stop racing over `dist`
+- This removes the stale embedded `0.18.14` SDK fallback string from rebuilt downstream binaries and closes the recurring pack/release race that was still showing up during SDK release validation
+- Rebuilt the TUI against that SDK patch and confirmed the startup header now shows `v0.18.11` while the stale `0.18.14` leak is gone from the compiled binary
+
+### Verification
+
+- Foundation artifacts export passes: `bun run foundation:artifacts`
+- Foundation artifact release gate passes
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Full test runner passes: `bun run test`
+- Architecture gate passes: `bun run architecture:check`
+- Performance gate passes: `bun run perf:check`
+- Eval gate passes: `bun run eval:gate`
+- Build passes: `bun run build`
+- Compiled binary startup passes: `./dist/goodvibes`
+- Publish packaging check passes: `bun run publish:check`
+- Staged npm package rehearsal passes: `bun run publish:dry-run`
+- Staged GitHub Packages rehearsal passes: `bun run publish:dry-run:github`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.10] — 2026-04-15
 
 ### SDK `0.18.25` Startup Crash Fix

@@ -2,6 +2,8 @@
 import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { syncProjectSurfaces } from './project-surfaces.ts';
+import { withWorkspaceLock } from './workspace-lock.ts';
 
 const root = process.cwd();
 const dryRun = process.argv.includes('--dry-run');
@@ -50,27 +52,31 @@ function copyEntry(relativePath: string) {
 }
 
 try {
-  mkdirSync(stageDir, { recursive: true });
+  withWorkspaceLock('stage publish package', () => {
+    syncProjectSurfaces(root);
 
-  for (const entry of stagedEntries) {
-    copyEntry(entry);
-  }
+    mkdirSync(stageDir, { recursive: true });
 
-  if (packageNameOverride) {
-    const pkgPath = join(stageDir, 'package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-    pkg.name = packageNameOverride;
-    writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-  }
+    for (const entry of stagedEntries) {
+      copyEntry(entry);
+    }
 
-  const args = dryRun
-    ? ['pack', '--json']
-    : ['publish', '--access', 'public', '--registry', registry];
+    if (packageNameOverride) {
+      const pkgPath = join(stageDir, 'package.json');
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+      pkg.name = packageNameOverride;
+      writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+    }
 
-  execFileSync('npm', args, {
-    cwd: stageDir,
-    stdio: 'inherit',
-    env: process.env,
+    const args = dryRun
+      ? ['pack', '--json']
+      : ['publish', '--access', 'public', '--registry', registry];
+
+    execFileSync('npm', args, {
+      cwd: stageDir,
+      stdio: 'inherit',
+      env: process.env,
+    });
   });
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });
