@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref to release"
+        description: "Git ref to release (branch for dry run or tag for full release)"
         required: false
         default: "main"
   push:
@@ -57,25 +57,21 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     needs: validate-release
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: linux-x64
-            runner: ubuntu-latest
             bun_target: bun-linux-x64
             artifact: goodvibes-linux-x64
           - target: linux-arm64
-            runner: ubuntu-latest
             bun_target: bun-linux-arm64
             artifact: goodvibes-linux-arm64
           - target: darwin-x64
-            runner: macos-13
             bun_target: bun-darwin-x64
             artifact: goodvibes-macos-x64
           - target: darwin-arm64
-            runner: macos-latest
             bun_target: bun-darwin-arm64
             artifact: goodvibes-macos-arm64
 
@@ -108,7 +104,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -127,7 +123,15 @@ jobs:
           sha256sum goodvibes-linux-x64 goodvibes-linux-arm64 goodvibes-macos-x64 goodvibes-macos-arm64 > SHA256SUMS.txt
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${{ github.event.inputs.ref }}"
+            TAG="${TAG#refs/tags/}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
       - name: Extract changelog excerpt
         id: changelog
         run: |
@@ -141,8 +145,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
           body_path: ${{ steps.changelog.outputs.excerpt_file }}
           draft: false
           prerelease: false
@@ -155,7 +159,7 @@ jobs:
 
   install-smoke:
     name: npm install smoke
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')
     needs: release
     runs-on: ubuntu-latest
     steps:
@@ -171,7 +175,13 @@ jobs:
         run: npm pack
       - name: Install tarball in clean temp project
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            TAG="${{ github.event.inputs.ref }}"
+            TAG="${TAG#refs/tags/}"
+            VERSION="${TAG#v}"
+          fi
           TMPDIR="$(mktemp -d)"
           cd "$TMPDIR"
           npm init -y
@@ -182,7 +192,7 @@ jobs:
 
   publish-npm:
     name: Publish to npm
-    if: github.event_name == 'push' && vars.PUBLISH_NPM == 'true'
+    if: (github.event_name == 'push' || startsWith(github.event.inputs.ref, 'v') || startsWith(github.event.inputs.ref, 'refs/tags/v')) && vars.PUBLISH_NPM == 'true'
     needs: install-smoke
     runs-on: ubuntu-latest
     steps:
