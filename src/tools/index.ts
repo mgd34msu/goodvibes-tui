@@ -67,7 +67,7 @@ export function registerAllTools(
     channelRegistry?: ChannelPluginRegistry | null;
     remoteRunnerRegistry?: RemoteRunnerRegistry;
     workflowServices: ReturnType<typeof createWorkflowServices>;
-    mcpRegistry?: import('../mcp/registry.ts').McpRegistry;
+    mcpRegistry?: import('@pellux/goodvibes-sdk/platform/mcp/registry').McpRegistry;
     sessionOrchestration?: CrossSessionTaskRegistry;
     sandboxSessionRegistry?: SandboxSessionRegistry;
     workingDirectory: string;

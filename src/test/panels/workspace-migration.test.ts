@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ProviderStatsPanel } from '../../panels/provider-stats-panel.ts';
 import { ToolInspectorPanel } from '../../panels/tool-inspector-panel.ts';
@@ -18,7 +19,7 @@ import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { OpsStrategyPanel } from '../../panels/ops-strategy-panel.ts';
 import { AgentLogsPanel } from '../../panels/agent-logs-panel.ts';
 import { AgentInspectorPanel } from '../../panels/agent-inspector-panel.ts';
-import { SessionManager } from '../../sessions/manager.ts';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
 import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import { createTestProviderRegistry } from '../helpers/test-managers.ts';
@@ -95,7 +96,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('SessionBrowserPanel renders shared workspace empty state cleanly', () => {
-    const panel = new SessionBrowserPanel(new SessionManager(join(tmpdir(), 'gv-workspace-migration')));
+    const panel = new SessionBrowserPanel(new SessionManager(join(tmpdir(), 'gv-workspace-migration'), { surfaceRoot: 'tui' }));
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);
@@ -104,7 +105,7 @@ describe('workspace panel migrations', () => {
   });
 
   test('SessionBrowserPanel supports explicit search focus from top navigation', () => {
-    const panel = new SessionBrowserPanel(new SessionManager(join(tmpdir(), 'gv-workspace-migration')));
+    const panel = new SessionBrowserPanel(new SessionManager(join(tmpdir(), 'gv-workspace-migration'), { surfaceRoot: 'tui' }));
     panel.handleInput('up');
     panel.handleInput('r');
     const text = linesText(panel.render(80, 20));
@@ -122,7 +123,11 @@ describe('workspace panel migrations', () => {
   });
 
   test('ContextVisualizerPanel renders shared workspace empty state cleanly', () => {
-    const panel = new ContextVisualizerPanel(createUiRuntimeEvents(runtimeBus).turns, new SessionMemoryStore());
+    const panel = new ContextVisualizerPanel(
+      createUiRuntimeEvents(runtimeBus).turns,
+      new SessionMemoryStore(),
+      new ConfigManager({ surfaceRoot: 'tui', homeDir: '/tmp', workingDir: '/tmp' }),
+    );
     const lines = panel.render(80, 20);
     expect(lines).toHaveLength(20);
     expect(lines.every((line) => line.length === 80)).toBe(true);

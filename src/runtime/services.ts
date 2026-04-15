@@ -37,7 +37,7 @@ import { HookDispatcher, createHookWorkbench, type HookWorkbench } from '@pellux
 import { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins/manager';
 import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
-import { SessionManager } from '../sessions/manager.ts';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
 import { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
@@ -234,7 +234,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   });
   const profileManager = new ProfileManager(shellPaths.resolveUserPath('tui', 'profiles'));
   const bookmarkManager = new BookmarkManager(shellPaths.resolveUserPath('tui', 'bookmarks'));
-  const sessionManager = new SessionManager(workingDirectory);
+  const sessionManager = new SessionManager(workingDirectory, { surfaceRoot: 'tui' });
   const sessionOrchestration = new CrossSessionTaskRegistry(
     shellPaths.resolveProjectPath('tui', 'sessions', 'task-graph.json'),
   );

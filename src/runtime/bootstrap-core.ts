@@ -19,9 +19,9 @@ import { ForensicsCollector, ForensicsRegistry } from '@pellux/goodvibes-sdk/pla
 import {
   generateUserSessionId,
 } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
-import { loadBootstrapSystemPrompt, syncConfiguredServices } from './bootstrap-helpers.ts';
+import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
 import { registerBootstrapHookBridge } from './bootstrap-hook-bridge.ts';
-import { registerBootstrapRuntimeEvents } from './bootstrap-runtime-events.ts';
+import { registerBootstrapRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-runtime-events';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
 

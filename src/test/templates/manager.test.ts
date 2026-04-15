@@ -1,14 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, existsSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { TemplateManager, parseTemplateArgs } from '../../templates/manager.ts';
+import { rmSync, existsSync } from 'fs';
+import { TemplateManager, parseTemplateArgs } from '@pellux/goodvibes-sdk/platform/templates/manager';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /** Create an isolated temp directory for each test run. */
 function createTempDir(): string {
-  const dir = join(tmpdir(), `gv-tmpl-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+  return makeProjectTempDir('gv-tmpl-test');
 }
 
 describe('TemplateManager', () => {

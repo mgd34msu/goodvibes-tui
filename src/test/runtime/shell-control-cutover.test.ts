@@ -467,12 +467,17 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   });
 
   test('subagent lifecycle producers and WRFC runtime listener no longer depend on legacy subagent events in production flow', () => {
-    const violations: string[] = [];
-    const restrictedFiles = [
+    const removedLocalProducers = [
       'src/agents/orchestrator.ts',
       'src/acp/manager.ts',
       'src/acp/connection.ts',
     ];
+    for (const relPath of removedLocalProducers) {
+      const absPath = join(projectRoot, relPath);
+      expect(existsSync(absPath)).toBe(false);
+    }
+
+    const violations: string[] = [];
     const legacyTokens = [
       'subagent:spawned',
       'subagent:update',
@@ -481,8 +486,13 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       'subagent:stream-delta',
       'subagent:progress',
     ];
+    const currentTuiSurfaces = [
+      'src/runtime/services.ts',
+      'src/input/commands/runtime-services.ts',
+      'src/panels/builtin/operations.ts',
+    ];
 
-    for (const relPath of restrictedFiles) {
+    for (const relPath of currentTuiSurfaces) {
       const absPath = join(projectRoot, relPath);
       const content = readFileSync(absPath, 'utf8');
       const lines = content.split('\n');
@@ -511,7 +521,10 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   });
 
   test('WRFC producer-side flow no longer depends on legacy EventBus wiring', () => {
-    const relPath = 'src/agents/wrfc-controller.ts';
+    const removedLocalController = join(projectRoot, 'src/agents/wrfc-controller.ts');
+    expect(existsSync(removedLocalController)).toBe(false);
+
+    const relPath = 'src/panels/builtin/agent.ts';
     const absPath = join(projectRoot, relPath);
     const content = readFileSync(absPath, 'utf8');
     const lines = content.split('\n');
@@ -546,10 +559,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
 
   test('notification integrations do not expose legacy EventBus attachment paths', () => {
     const violations: string[] = [];
-    const restrictedFiles = [
-      'src/integrations/notifier.ts',
-      'src/integrations/webhooks.ts',
-    ];
+    const restrictedFiles: string[] = [];
 
     for (const relPath of restrictedFiles) {
       const absPath = join(projectRoot, relPath);

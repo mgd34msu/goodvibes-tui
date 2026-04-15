@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { SessionManager } from '../../sessions/manager.ts';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import {
   checkRecoveryFile,
   deleteRecoveryFile,
@@ -15,11 +14,10 @@ import {
   readLastSessionPointer,
   writeRecoveryFile,
 } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeTmpDir(prefix: string): string {
-  const dir = join(tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+  return makeProjectTempDir(prefix);
 }
 
 describe('runtime/session-persistence', () => {
@@ -30,7 +28,7 @@ describe('runtime/session-persistence', () => {
   beforeEach(() => {
     cwdDir = makeTmpDir('gv-session-persist-cwd');
     homeDir = makeTmpDir('gv-session-persist-home');
-    sessionManager = new SessionManager(cwdDir);
+    sessionManager = new SessionManager(cwdDir, { surfaceRoot: 'tui' });
   });
 
   afterEach(() => {
@@ -64,11 +62,11 @@ describe('runtime/session-persistence', () => {
       'gpt-test',
       'openai',
       'Hello',
-      { workingDirectory: cwdDir, homeDirectory: homeDir, sessionManager },
+      { workingDirectory: cwdDir, homeDirectory: homeDir, sessionManager, surfaceRoot: 'tui' },
     );
 
-    expect(readLastSessionPointer({ workingDirectory: cwdDir, homeDirectory: homeDir })).toBe('user-test');
-    const pointer = JSON.parse(readFileSync(getLastSessionPointerPath(cwdDir), 'utf-8')) as { sessionId: string };
+    expect(readLastSessionPointer({ workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' })).toBe('user-test');
+    const pointer = JSON.parse(readFileSync(getLastSessionPointerPath(cwdDir, 'tui'), 'utf-8')) as { sessionId: string };
     expect(pointer.sessionId).toBe('user-test');
 
     const { meta, messages } = sessionManager.load('user-test');
@@ -84,9 +82,9 @@ describe('runtime/session-persistence', () => {
   });
 
   test('loadLastConversation returns null when no last-session pointer exists', () => {
-    const loaded = loadLastConversation({ workingDirectory: cwdDir, homeDirectory: homeDir, sessionManager });
+    const loaded = loadLastConversation({ workingDirectory: cwdDir, homeDirectory: homeDir, sessionManager, surfaceRoot: 'tui' });
     expect(loaded).toBeNull();
-    expect(readLastSessionPointer({ workingDirectory: cwdDir, homeDirectory: homeDir })).toBeNull();
+    expect(readLastSessionPointer({ workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' })).toBeNull();
     expect(sessionManager.list()).toHaveLength(0);
   });
 
@@ -100,16 +98,16 @@ describe('runtime/session-persistence', () => {
       },
       'user-recovery',
       'Recovered Session',
-      { workingDirectory: cwdDir, homeDirectory: homeDir },
+      { workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' },
     );
 
-    const info = checkRecoveryFile({ workingDirectory: cwdDir, homeDirectory: homeDir });
+    const info = checkRecoveryFile({ workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' });
     expect(info).not.toBeNull();
     expect(info?.sessionId).toBe('user-recovery');
     expect(info?.title).toBe('Recovered Session');
     expect(info?.returnContext).toBeUndefined();
 
-    const loaded = loadRecoveryConversation({ homeDirectory: homeDir });
+    const loaded = loadRecoveryConversation({ homeDirectory: homeDir, surfaceRoot: 'tui' });
     expect(loaded).toEqual({
       title: 'Recovered Session',
       titleSource: undefined,
@@ -120,8 +118,8 @@ describe('runtime/session-persistence', () => {
       ],
     });
 
-    deleteRecoveryFile({ homeDirectory: homeDir });
-    expect(existsSync(getRecoveryFilePath(homeDir))).toBe(false);
+    deleteRecoveryFile({ homeDirectory: homeDir, surfaceRoot: 'tui' });
+    expect(existsSync(getRecoveryFilePath(homeDir, 'tui'))).toBe(false);
   });
 
   test('recovery helpers preserve return context metadata when provided', () => {
@@ -150,13 +148,13 @@ describe('runtime/session-persistence', () => {
       },
       'user-recovery',
       'Recovered Session',
-      { workingDirectory: cwdDir, homeDirectory: homeDir },
+      { workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' },
     );
 
-    const info = checkRecoveryFile({ workingDirectory: cwdDir, homeDirectory: homeDir });
+    const info = checkRecoveryFile({ workingDirectory: cwdDir, homeDirectory: homeDir, surfaceRoot: 'tui' });
     expect(info?.returnContext?.activityLabel).toBe('assistant replied');
 
-    const loaded = loadRecoveryConversation({ homeDirectory: homeDir });
+    const loaded = loadRecoveryConversation({ homeDirectory: homeDir, surfaceRoot: 'tui' });
     expect(loaded?.titleSource).toBe('system');
     expect(loaded?.returnContext?.statusLabel).toBe('ready for next turn');
     expect(loaded?.returnContext?.remoteContracts).toBe(1);

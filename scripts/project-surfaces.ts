@@ -3,8 +3,7 @@ import { join } from 'node:path';
 import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
 import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
-import { buildOperatorContract } from '../src/control-plane/operator-contract.ts';
-import { renderFoundationClientTypes } from './foundation-typegen.ts';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
 
 const ROOT = join(import.meta.dir, '..');
 
@@ -35,10 +34,6 @@ function writeJsonArtifact(outputDir: string, name: string, value: unknown): voi
 
 function writeTextArtifact(outputDir: string, name: string, value: string): void {
   writeFileSync(join(outputDir, name), value.endsWith('\n') ? value : `${value}\n`, 'utf8');
-}
-
-function writeGeneratedFile(path: string, value: string): void {
-  writeFileSync(path, value.endsWith('\n') ? value : `${value}\n`, 'utf8');
 }
 
 export function syncVersionSurfaces(root = ROOT): string {
@@ -75,10 +70,8 @@ export function syncVersionSurfaces(root = ROOT): string {
 
 export function syncFoundationArtifacts(root = ROOT): void {
   const outputDir = join(root, 'docs', 'foundation-artifacts');
-  const generatedTypesPath = join(root, 'src', 'types', 'generated', 'foundation-client-types.ts');
 
   mkdirSync(outputDir, { recursive: true });
-  mkdirSync(join(root, 'src', 'types', 'generated'), { recursive: true });
 
   const catalog = new GatewayMethodCatalog();
   const operatorContract = buildOperatorContract(catalog);
@@ -88,7 +81,6 @@ export function syncFoundationArtifacts(root = ROOT): void {
   writeJsonArtifact(outputDir, 'peer-contract.json', peerContract);
   writeTextArtifact(outputDir, 'knowledge-graphql.graphql', getKnowledgeGraphqlSchemaText());
   writeTextArtifact(outputDir, 'knowledge-store.sql', renderKnowledgeSchemaSql());
-  writeGeneratedFile(generatedTypesPath, renderFoundationClientTypes(operatorContract, peerContract));
 
   console.log(`foundation artifacts written to ${outputDir}`);
 }

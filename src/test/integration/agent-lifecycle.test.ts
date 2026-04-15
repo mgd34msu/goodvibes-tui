@@ -10,7 +10,7 @@ describe('Agent lifecycle integration', () => {
     // Restore them here and re-import the concrete implementations.
     mock.restore();
 
-    const { AgentManager } = await import('../../tools/agent/manager.ts');
+    const { AgentManager } = await import('@pellux/goodvibes-sdk/platform/tools/agent/manager');
     resetTestRuntimeServices();
     manager = getTestAgentManager();
   });

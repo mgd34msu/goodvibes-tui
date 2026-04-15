@@ -1,17 +1,15 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { tmpdir } from 'os';
-import { SessionManager } from '../../sessions/manager.ts';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function makeTmpDir(): string {
-  const dir = join(tmpdir(), `gv-session-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+  return makeProjectTempDir('gv-session-test');
 }
 
 const META = {
@@ -31,7 +29,7 @@ describe('SessionManager', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    sm = new SessionManager(tmpDir);
+    sm = new SessionManager(tmpDir, { surfaceRoot: 'tui' });
   });
 
   afterEach(() => {
@@ -179,7 +177,7 @@ describe('SessionManager', () => {
   describe('list', () => {
     test('returns empty array when no sessions directory', () => {
       const emptyDir = makeTmpDir();
-      const emptySm = new SessionManager(emptyDir);
+      const emptySm = new SessionManager(emptyDir, { surfaceRoot: 'tui' });
       // No sessions written, so sessions dir doesn't exist
       expect(emptySm.list()).toEqual([]);
       rmSync(emptyDir, { recursive: true, force: true });

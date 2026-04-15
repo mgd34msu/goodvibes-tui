@@ -4,6 +4,28 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.12] — 2026-04-15
+
+### SDK `0.18.28` Session-Persistence Boundary Fix
+
+- Updated `goodvibes-tui` to consume the published canonical SDK line at `@pellux/goodvibes-sdk@0.18.28`
+- Pulled in the SDK fix that threads `surfaceRoot` through the last-session pointer and crash-recovery helpers instead of silently falling back to the shared `.goodvibes/...` tree
+- This closes the remaining TUI session-storage boundary leak that could still split a TUI-owned session across `.goodvibes/tui/...` and the unscoped shared root even after the broader SDK cutover
+
+### TUI Validation Tail Cleanup
+
+- Moved the remaining session, template, picker, plugin, bootstrap-service, and related test temp roots onto the repo-local `.test-tmp/...` path instead of `os.tmpdir()`, removing the local quota failures that were still breaking the TUI validation pass
+- Updated the shell-control cutover gate to assert against the current TUI production surfaces and the intentional removal of old local platform files instead of reading deleted pre-cutover paths
+- Removed the stale typed-emission allowlist entry for `src/runtime/health/effect-handlers.ts` after that file was deleted during the SDK cutover, so the enforcement gate now reflects the live tree again
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Full test runner passes: `bun run test` (`437` files passed / `0` failed)
+- Architecture gate passes: `bun run architecture:check`
+- Build passes: `bun run build`
+- Targeted cutover regression band passes against the published SDK `0.18.28`
+
 ## [0.18.11] — 2026-04-15
 
 ### Version Boundary Cleanup

@@ -20,7 +20,7 @@ import { getConfigSnapshot } from '../config/index.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { createResumeSessionHandler } from './bootstrap-hook-bridge.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { loadBootstrapSystemPrompt } from './bootstrap-helpers.ts';
+import { loadBootstrapSystemPrompt } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
 import { createShellPlanRuntime, createShellRemoteCommandService } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-services';
 import { createRuntimeFoundationClients } from '@pellux/goodvibes-sdk/platform/runtime/foundation-clients';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';

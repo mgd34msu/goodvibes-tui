@@ -1,5 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
 import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
@@ -40,6 +39,7 @@ import { ScheduleManager, TriggerManager, WorkflowManager } from '@pellux/goodvi
 import { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/provider-registry';
 import { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search/provider-registry';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { makeProjectTempDir } from './project-temp.ts';
 
 type IntelligenceTestRoots = {
   root: string;
@@ -70,7 +70,7 @@ let agentExecutorForTests: AgentExecutor | null = null;
 function getTestRoots(): IntelligenceTestRoots {
   if (testRoots) return testRoots;
 
-  const root = mkdtempSync(join(tmpdir(), 'gv-test-runtime-'));
+  const root = makeProjectTempDir('gv-test-runtime');
   const workingDir = join(root, 'intelligence-workspace');
   const homeDir = join(root, 'intelligence-home');
   mkdirSync(workingDir, { recursive: true });

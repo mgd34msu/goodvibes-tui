@@ -14,7 +14,7 @@ import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispat
 import type { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import type { SessionManager } from '../../sessions/manager.ts';
+import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
@@ -61,7 +61,7 @@ export interface BuiltinPanelDeps {
   /** MemoryRegistry for the Memory panel. */
   memoryRegistry?: MemoryRegistry;
   /** Shared policy runtime state for governance/policy diagnostics. */
-  policyRuntimeState?: import('../../runtime/permissions/policy-runtime.ts').PolicyRuntimeState;
+  policyRuntimeState?: import('@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime').PolicyRuntimeState;
   /** Approval broker for control-plane/operator panels. */
   approvalBroker?: ApprovalBroker;
   /** Shared session broker for control-plane/operator panels. */

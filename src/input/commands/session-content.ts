@@ -4,7 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
 import { exportToMarkdown } from '@pellux/goodvibes-sdk/platform/export/markdown';
-import { TemplateManager, parseTemplateArgs } from '../../templates/manager.ts';
+import { TemplateManager, parseTemplateArgs } from '@pellux/goodvibes-sdk/platform/templates/manager';
 import { requireSessionManager, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
@@ -43,7 +43,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           const exportMsgs = msgs.map(m => ({
             role: String(m.role ?? 'user') as 'user' | 'assistant' | 'system' | 'tool',
             content: Array.isArray(m.content)
-              ? m.content as import('../../providers/interface.ts').ContentPart[]
+              ? m.content as import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[]
               : String(m.content ?? ''),
             toolCalls: m.toolCalls as import('@pellux/goodvibes-sdk/platform/types/tools').ToolCall[] | undefined,
             callId: m.callId as string | undefined,

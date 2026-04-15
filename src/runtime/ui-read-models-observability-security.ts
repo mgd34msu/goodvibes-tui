@@ -26,8 +26,8 @@ export interface UiSecuritySnapshot {
     readonly lintFindingCount: number;
   };
   readonly deniedPermissions: number;
-  readonly incidents: ReturnType<import('./forensics/index.ts').ForensicsRegistry['getAll']>;
-  readonly latestIncident: ReturnType<import('./forensics/index.ts').ForensicsRegistry['latest']>;
+  readonly incidents: ReturnType<import('@pellux/goodvibes-sdk/platform/runtime/forensics/index').ForensicsRegistry['getAll']>;
+  readonly latestIncident: ReturnType<import('@pellux/goodvibes-sdk/platform/runtime/forensics/index').ForensicsRegistry['latest']>;
   readonly mcpServers: readonly McpSecuritySnapshot[];
   readonly recentMcpDecisions: readonly McpDecisionRecord[];
   readonly attackPathReview: ReturnType<typeof buildMcpAttackPathReview>;

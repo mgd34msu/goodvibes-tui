@@ -9,9 +9,6 @@
  * The allowlist contains:
  * - src/runtime/emitters/**  — the typed wrapper modules (these ARE allowed
  *   to call bus.emit directly; that is their sole purpose)
- * - src/runtime/health/effect-handlers.ts — emits synthetic health events
- *   that are intentionally outside AnyRuntimeEvent; documented cross-domain cast
- *
  * Any other file calling bus.emit on a RuntimeEventBus instance is a violation
  * of the typed emission contract and must be migrated to a wrapper function.
  *
@@ -40,9 +37,6 @@ import { join, relative } from 'node:path';
 const EMIT_ALLOWLIST: readonly string[] = [
   // Typed emitter wrappers — the ONLY approved place for raw RuntimeEventBus.emit()
   'src/runtime/emitters/',
-  // Health effect handler: emits synthetic out-of-band events (CASCADE_APPLIED)
-  // that are not part of AnyRuntimeEvent. Cast is documented and intentional.
-  'src/runtime/health/effect-handlers.ts',
 ];
 
 // ---------------------------------------------------------------------------

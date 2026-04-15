@@ -160,7 +160,7 @@ describe('Orchestrator tool result reconciliation', () => {
   async function buildOrchestrator() {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager, createPermissionConfigReader } = await import('../../permissions/manager.ts');
+    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions/manager');
     const configManager = createTestConfigManager();
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();
@@ -345,7 +345,7 @@ describe('Orchestrator tool result reconciliation', () => {
   test('isReconciliationEnabled returns false when flag is disabled in manager', async () => {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager, createPermissionConfigReader } = await import('../../permissions/manager.ts');
+    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions/manager');
     const { createFeatureFlagManager } = await import('@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager');
     const configManager = createTestConfigManager();
     const cm = new ConversationManager(() => 80, configManager);
@@ -369,7 +369,7 @@ describe('Orchestrator tool result reconciliation', () => {
   test('reconcileUnresolvedToolCalls does NOT emit event when flag is disabled', async () => {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager, createPermissionConfigReader } = await import('../../permissions/manager.ts');
+    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions/manager');
     const { createFeatureFlagManager } = await import('@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager');
     const configManager = createTestConfigManager();
     const cm = new ConversationManager(() => 80, configManager);

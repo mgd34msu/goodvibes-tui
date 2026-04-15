@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve, isAbsolute } from 'path';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { createPluginAPI, type PluginAPIContext } from './api';
+import { createPluginAPI, type PluginAPIContext } from '@pellux/goodvibes-sdk/platform/plugins/api';
 import type { CommandRegistry } from '../input/command-registry.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
@@ -244,7 +244,7 @@ export async function loadPlugin(
     const ctx: PluginAPIContext = {
       pluginName: manifest.name,
       runtimeBus: deps.runtimeBus,
-      commandRegistry: deps.commandRegistry,
+      commandRegistry: deps.commandRegistry as PluginAPIContext['commandRegistry'],
       providerRegistry: deps.providerRegistry,
       toolRegistry: deps.toolRegistry,
       gatewayMethods: deps.gatewayMethods,

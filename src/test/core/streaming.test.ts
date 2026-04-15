@@ -178,7 +178,7 @@ describe('Orchestrator: abort during streaming cleanup', () => {
   async function buildOrchestrator() {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager, createPermissionConfigReader } = await import('../../permissions/manager.ts');
+    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions/manager');
     const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools/registry');
     const configManager = createTestConfigManager();
     const cm = new ConversationManager(() => 80, configManager);

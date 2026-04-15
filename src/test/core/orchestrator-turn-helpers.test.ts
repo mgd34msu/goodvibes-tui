@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
-import { prepareConversationForTurn } from '../../core/orchestrator-turn-helpers.ts';
+import type { ConversationManager as SdkConversationManager } from '@pellux/goodvibes-sdk/platform/core/conversation';
+import { prepareConversationForTurn } from '@pellux/goodvibes-sdk/platform/core/orchestrator-turn-helpers';
 
 const providerRegistry = {
   getCurrentModel: () => ({
@@ -19,7 +20,7 @@ describe('prepareConversationForTurn', () => {
   test('does not inject project mode for long single-task implementation prompts', () => {
     const conversation = new ConversationManager(() => 80);
     prepareConversationForTurn(
-      conversation,
+      conversation as unknown as SdkConversationManager,
       providerRegistry,
       'Update src/runtime/bootstrap.ts so the session restore path preserves the current provider selection, retains the existing lifecycle hooks, and keeps the shutdown semantics intact. This should be a single focused change in one source area with careful handling of the current bootstrap flow and no architectural planning output.',
       undefined,
@@ -36,7 +37,7 @@ describe('prepareConversationForTurn', () => {
   test('injects project mode when the prompt clearly signals multi-step project work', () => {
     const conversation = new ConversationManager(() => 80);
     prepareConversationForTurn(
-      conversation,
+      conversation as unknown as SdkConversationManager,
       providerRegistry,
       'Design the architecture for a new plugin system. Create the operator contract updates, implement the runtime integration, and add the release-gate coverage. Run the work in phases and keep the execution plan updated as each milestone lands.',
       undefined,

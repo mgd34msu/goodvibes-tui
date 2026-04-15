@@ -161,9 +161,9 @@ export interface DaemonRouteContext {
   readonly parseSurfaceControlCommand: (text: string) => { readonly action: 'status' | 'cancel' | 'retry'; readonly id: string } | null;
   readonly performSurfaceControlCommand: (command: { readonly action: 'status' | 'cancel' | 'retry'; readonly id: string }) => Promise<string>;
   readonly performInteractiveSurfaceAction: (actionId: string, surface: 'slack' | 'discord', req: Request) => Promise<string>;
-  readonly trySpawnAgent: (input: { mode: 'spawn'; task: string; model?: string; tools?: readonly string[]; provider?: string; context?: string }, logLabel: string, sessionId?: string) => import('../tools/agent/index.ts').AgentRecord | Response;
-  readonly syncSpawnedAgentTask: (record: import('../tools/agent/index.ts').AgentRecord, sessionId?: string) => void;
-  readonly syncFinishedAgentTask: (record: import('../tools/agent/index.ts').AgentRecord) => void;
+  readonly trySpawnAgent: (input: { mode: 'spawn'; task: string; model?: string; tools?: readonly string[]; provider?: string; context?: string }, logLabel: string, sessionId?: string) => import('@pellux/goodvibes-sdk/platform/tools/agent/index').AgentRecord | Response;
+  readonly syncSpawnedAgentTask: (record: import('@pellux/goodvibes-sdk/platform/tools/agent/index').AgentRecord, sessionId?: string) => void;
+  readonly syncFinishedAgentTask: (record: import('@pellux/goodvibes-sdk/platform/tools/agent/index').AgentRecord) => void;
   readonly findSchedule: (id: string) => AutomationJob | undefined;
   readonly surfaceDeliveryEnabled: (surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage' | 'msteams' | 'bluebubbles' | 'mattermost' | 'matrix') => boolean;
   readonly pollPendingSurfaceReplies: () => Promise<void>;

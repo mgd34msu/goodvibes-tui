@@ -324,12 +324,12 @@ describe('Path traversal protection via resolveAndValidatePath', () => {
 
   test('resolveAndValidatePath is used by write tool (import exists)', async () => {
     // Verify the guard is imported and used — import the module to confirm no errors
-    const { createWriteTool } = await import('../../tools/write/index.ts');
+    const { createWriteTool } = await import('@pellux/goodvibes-sdk/platform/tools/write/index');
     expect(typeof createWriteTool).toBe('function');
   });
 
   test('resolveAndValidatePath is used by edit tool (import exists)', async () => {
-    const { createEditTool } = await import('../../tools/edit/index.ts');
+    const { createEditTool } = await import('@pellux/goodvibes-sdk/platform/tools/edit/index');
     expect(typeof createEditTool).toBe('function');
   });
 

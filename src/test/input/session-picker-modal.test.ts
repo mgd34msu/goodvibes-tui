@@ -2,20 +2,17 @@
  * Tests for SessionPickerModal state class.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, rmSync, existsSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { rmSync, existsSync } from 'fs';
 import { SessionPickerModal } from '../../input/session-picker-modal.ts';
-import { SessionManager } from '../../sessions/manager.ts';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function makeTmpDir(): string {
-  const dir = join(tmpdir(), `gv-sess-picker-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+  return makeProjectTempDir('gv-sess-picker-test');
 }
 
 const META = { title: 'Test Session', model: 'mercury-2', provider: 'inceptionlabs', timestamp: 1700000000000 };
@@ -31,7 +28,7 @@ describe('SessionPickerModal', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    sm = new SessionManager(tmpDir);
+    sm = new SessionManager(tmpDir, { surfaceRoot: 'tui' });
   });
 
   afterEach(() => {
