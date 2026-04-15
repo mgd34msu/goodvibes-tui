@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.18.3-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.18.4-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -103,6 +103,8 @@ goodvibes-tui is a terminal-native product for coding, operations, automation, k
 The interface is rendered directly to the alternate screen buffer with raw ANSI escape sequences. Conversation, panels, modals, overlays, and the footer all share the same renderer foundation.
 
 The runtime is organized around typed store domains, typed runtime events, a shared control plane for permissions and orchestration, and product surfaces for reviewing and repairing state. Agents run in-process with isolated histories, scoped tools, and optional worktrees. Operational state such as provider routing, local auth, daemon/gateway posture, channels, search, artifacts, structured knowledge, multimodal analysis, remote sessions, settings control-plane state, and task execution is routed into dedicated panels and APIs.
+
+The TUI now consumes the extracted `@pellux/goodvibes-sdk` platform layer for shared contracts, daemon route surfaces, transports, remote runtime contracts, and other reusable runtime code. The repo keeps the terminal UI, host wiring, and product-specific composition while future surfaces consume the same SDK-backed runtime foundation.
 
 ---
 

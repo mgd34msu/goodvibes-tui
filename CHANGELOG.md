@@ -4,6 +4,32 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.4] — 2026-04-14
+
+### Canonical SDK Cutover
+
+- Switched `goodvibes-tui` from the temporary beta line to the canonical `@pellux/goodvibes-sdk@0.18.14` package and rewired imports to the canonical SDK entrypoints
+- Removed the duplicated local platform implementation that had already been extracted into the SDK, including large portions of contracts, daemon route handlers, runtime transports, state/runtime helpers, tools, utilities, and other shared platform code
+- Cut the remaining local state-inspector implementation over to the SDK-owned surface so the TUI now consumes the shared runtime inspection code instead of carrying its own duplicate copy
+
+### CI And Release Path Fixes
+
+- Fixed the TUI eval gate to use the SDK-backed eval baseline, formatting, and scorecard exports after the platform extraction removed the old local files
+- Fixed the TUI performance gate to build CI snapshots against the SDK-backed `surfacePerf` domain shape instead of the pre-extraction local `uiPerf` shape
+- Fixed the architecture check so it tolerates removed migration targets on clean checkouts instead of crashing when extracted directories no longer exist
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Architecture gate passes: `bun run architecture:check`
+- Performance gate passes: `bun run perf:check`
+- Eval gate passes: `bun run eval:gate`
+- Full test runner passes: `bun run test`
+- Build passes: `bun run build`
+- Foundation artifact export passes: `bun run foundation:artifacts`
+- Publish packaging check passes: `bun run publish:check`
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.3] — 2026-04-14
 
 ### SDK-Ready Transport And Contract Seams
