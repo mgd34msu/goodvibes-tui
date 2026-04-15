@@ -8,16 +8,16 @@ import { join } from 'node:path';
 import { ConfigManager } from '../../config/manager.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { ModelPickerModal } from '../../input/model-picker.ts';
 import { renderModelPickerOverlay } from '../../renderer/model-picker-overlay.ts';
 import { lineToString, linesToText } from '../setup.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
 import { ProviderRegistry } from '../../providers/registry.ts';
-import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
-import { FavoritesStore } from '../../providers/favorites.ts';
-import { BenchmarkStore, type BenchmarkEntry } from '../../providers/model-benchmarks.ts';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { BenchmarkStore, type BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 
 const W = 120;
 

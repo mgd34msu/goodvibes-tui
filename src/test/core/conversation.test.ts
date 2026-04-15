@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
-import { getDisplayWidth } from '../../utils/terminal-width.ts';
+import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 // ConversationManager has renderer dependencies for display;
 // we test the LLM message interface and state management which are renderer-independent.
@@ -44,6 +44,15 @@ describe('ConversationManager', () => {
       const msgs = cm.getMessagesForLLM();
       expect(msgs).toHaveLength(1);
       expect(msgs[0]).toMatchObject({ role: 'tool', callId: 'c1', content: 'file content' });
+    });
+
+    test('addToolResults carries through the matching tool name when a prior assistant tool call exists', () => {
+      cm.addAssistantMessage('calling tool', {
+        toolCalls: [{ id: 'call-web-1', name: 'web_search', arguments: { query: 'dllm language model' } }],
+      });
+      cm.addToolResults([{ callId: 'call-web-1', success: true, output: 'file content' }]);
+      const msgs = cm.getMessagesForLLM();
+      expect(msgs[1]).toMatchObject({ role: 'tool', callId: 'call-web-1', name: 'web_search' });
     });
 
     test('addToolResults with failure includes error message', () => {

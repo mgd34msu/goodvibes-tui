@@ -2,10 +2,10 @@
  * UI emitters — typed wrappers for UIEvent domain.
  */
 
-import { createEventEnvelope } from '../events/envelope.ts';
-import type { RuntimeEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { UIEvent } from '../events/ui.ts';
+import type { UIEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/ui';
 import type { EmitterContext } from './index.ts';
 
 function uiEvent<T extends UIEvent['type']>(

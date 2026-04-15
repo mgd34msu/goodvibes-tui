@@ -15,8 +15,8 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /** Identifies a specific key press with modifiers. */
 export interface KeyCombo {

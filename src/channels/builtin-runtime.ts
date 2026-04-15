@@ -1,4 +1,4 @@
-import type { Tool } from '../types/tools.ts';
+import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type {
   ChannelAccountLifecycleAction,
   ChannelAccountLifecycleResult,
@@ -16,7 +16,7 @@ import type {
   ChannelSurface,
   ChannelTargetResolveOptions,
   ChannelToolDescriptor,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/types';
 import type { ChannelPlugin } from './plugin-registry.ts';
 import type { ProviderRuntimeSurface } from './provider-runtime.ts';
 import { buildBuiltinAccount, resolveBuiltinAccount } from './builtin/accounts.ts';
@@ -33,7 +33,7 @@ import {
   listBuiltinCapabilities,
   listBuiltinOperatorActions,
   listBuiltinTools,
-} from './builtin/descriptors.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/descriptors';
 import { getBuiltinSetupSchema } from './builtin/setup-schema.ts';
 import { registerBuiltinChannelPlugins } from './builtin/plugins.ts';
 import type { BuiltinChannelRuntimeDeps, ManagedSurface } from './builtin/shared.ts';
@@ -46,7 +46,7 @@ import {
   readConversationKind,
   readDirectoryScope,
   readLifecycleAction,
-} from './builtin/parsing.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/parsing';
 import {
   listBuiltinAgentTools,
   notifyBuiltinApprovalViaRouter,

@@ -2,10 +2,10 @@ import { existsSync, statSync } from 'node:fs';
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import type { WatcherKind, WatcherRecord, WatcherSourceStatus } from '../runtime/store/domains/watchers.ts';
-import type { AutomationSourceRecord } from '../automation/sources.ts';
-import type { WatcherSourceKind } from '../runtime/events/watchers.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import type { WatcherKind, WatcherRecord, WatcherSourceStatus } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/watchers';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
+import type { WatcherSourceKind } from '@pellux/goodvibes-sdk/platform/runtime/events/watchers';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   emitWatcherFailed,
   emitWatcherHeartbeat,
@@ -16,7 +16,7 @@ import {
   loadWatcherSnapshotFromPath,
   resolveWatcherStorePath,
   saveWatcherSnapshotToPath,
-} from './store.ts';
+} from '@pellux/goodvibes-sdk/platform/watchers/store';
 
 export interface RegisterWatcherInput {
   readonly id: string;

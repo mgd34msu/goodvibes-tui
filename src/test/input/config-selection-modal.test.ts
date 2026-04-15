@@ -6,7 +6,7 @@ import { mkdirSync, rmSync } from 'fs';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerConfigCommand } from '../../input/commands/config.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type { SelectionAction, SelectionItem, SelectionResult } from '../../input/selection-modal.ts';
 
 function makeContext(dir: string): {

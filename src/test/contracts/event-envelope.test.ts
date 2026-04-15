@@ -3,8 +3,8 @@ import {
   createEventEnvelope,
   type RuntimeEventEnvelope,
   type EnvelopeContext,
-} from '../../runtime/events/envelope.ts';
-import type { TaskEvent } from '../../runtime/events/tasks.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tasks';
 
 describe('event-envelope contract', () => {
   const baseContext: EnvelopeContext = {

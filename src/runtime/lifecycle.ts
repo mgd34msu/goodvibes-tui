@@ -5,14 +5,14 @@
  * stop background managers. Terminal teardown remains in main.ts.
  */
 import type { HookDispatcher } from '../hooks/index.ts';
-import type { HookPhase, HookCategory, HookEventPath } from '../hooks/types.ts';
-import type { ScheduleManager } from '../tools/workflow/index.ts';
+import type { HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import type { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
 import type { ProviderRegistry } from '../providers/registry.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 export { saveSession } from './session-persistence.ts';
 import { saveSession, type SessionPersistenceOptions, type SessionSnapshot } from './session-persistence.ts';
-import type { CrossSessionTaskRegistry } from '../sessions/orchestration/index.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import type { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ── Startup lifecycle ────────────────────────────────────────────────────────
 

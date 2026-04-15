@@ -22,7 +22,7 @@ interface DaemonSurfaceActionContext {
     sessionId?: string,
   ) => AgentRecord | Response;
   readonly queueSurfaceReplyFromBinding: (
-    binding: import('../automation/routes.ts').AutomationRouteBinding | undefined,
+    binding: import('@pellux/goodvibes-sdk/platform/automation/routes').AutomationRouteBinding | undefined,
     input: { readonly agentId: string; readonly task: string; readonly sessionId?: string },
   ) => void;
   readonly queueWebhookReply: (input: {

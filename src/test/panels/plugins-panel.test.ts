@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { PluginsPanel } from '../../panels/plugins-panel.ts';
 import type { PluginManagerObserver, PluginStatus } from '../../plugins/manager.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 
 function linesText(lines: Line[]): string {
   return lines

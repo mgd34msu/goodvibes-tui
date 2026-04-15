@@ -1,7 +1,7 @@
 import { describe, expect, mock, spyOn, test } from 'bun:test';
 import { OpenAICompatProvider } from '../../providers/openai-compat.ts';
-import { ProviderError } from '../../types/errors.ts';
-import { logger } from '../../utils/logger.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 function makeProvider(): OpenAICompatProvider {
   return new OpenAICompatProvider({

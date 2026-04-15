@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { createOperatorClientServices } from '../../runtime/foundation-services.ts';
 import { createEventEnvelope, RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createOperatorClient } from '../../runtime/operator-client.ts';
-import { createInitialTasksState, type RuntimeTask } from '../../runtime/store/domains/tasks.ts';
+import { createInitialTasksState, type RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 async function waitFor<T>(fn: () => T | undefined | null, timeoutMs = 500, intervalMs = 5): Promise<T> {
@@ -83,7 +83,7 @@ describe('operator client', () => {
     expect(client.sessions.get(session.id)?.title).toBe('Operator Session');
     expect(client.sessions.messages(session.id)).toHaveLength(0);
     expect(client.shellPaths.workingDirectory).toBe(runtimeServices.shellPaths.workingDirectory);
-    expect(client.shellPaths.resolveProjectTuiPath('sessions')).toBe(join(runtimeServices.shellPaths.projectTuiRoot, 'sessions'));
+    expect(client.shellPaths.resolveProjectPath('tui', 'sessions')).toBe(join(runtimeServices.shellPaths.resolveProjectPath('tui'), 'sessions'));
   });
 
   test('tasks are surfaced as a stable read model', () => {

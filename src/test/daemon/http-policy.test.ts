@@ -3,7 +3,7 @@ import {
   buildMissingScopeBody,
   resolveAuthenticatedPrincipal,
   resolvePrivateHostFetchOptions,
-} from '../../daemon/http-policy.ts';
+} from '@pellux/goodvibes-sdk/platform/daemon/http-policy';
 
 describe('daemon http policy helpers', () => {
   test('resolveAuthenticatedPrincipal resolves principals from request auth', () => {

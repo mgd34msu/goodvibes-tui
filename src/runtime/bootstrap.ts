@@ -12,7 +12,7 @@
 import { Orchestrator } from '../core/orchestrator.ts';
 import { AcpManager } from '../acp/manager.ts';
 import { getTierPromptSupplement, getTierForContextWindow } from '../providers/tier-prompts.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHistory } from '../input/input-history.ts';
@@ -36,10 +36,10 @@ import { startBackgroundProviderRegistration } from './bootstrap-background.ts';
 import { restoreSavedModel } from './bootstrap-helpers.ts';
 import { startExternalServices, type ExternalServicesHandle } from './bootstrap-services.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
-import { createDeferredStartupCoordinator } from './deferred-startup.ts';
+import { createDeferredStartupCoordinator } from '@pellux/goodvibes-sdk/platform/runtime/deferred-startup';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ── Bootstrap context type ──────────────────────────────────────────────────
 

@@ -15,7 +15,7 @@ import {
   type RouteExplanation,
 } from './capabilities.ts';
 import type { ModelDefinition, ProviderRegistry } from './registry.ts';
-import type { ProviderHealthRecord } from '../runtime/store/domains/provider-health.ts';
+import type { ProviderHealthRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 
 // ---------------------------------------------------------------------------
 // Types

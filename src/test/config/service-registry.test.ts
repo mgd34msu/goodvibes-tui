@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SecretsManager } from '../../config/secrets.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 const originalFetch = globalThis.fetch;
 
 // ---------------------------------------------------------------------------

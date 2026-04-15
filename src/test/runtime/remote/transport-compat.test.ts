@@ -4,13 +4,13 @@ import {
   CURRENT_PROTOCOL_VERSION,
   TRANSPORT_COMPATIBILITY_MATRIX,
   VersionMismatchError,
-} from '../../../runtime/remote/transport-contract.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/transport-contract';
 import type {
   ProtocolVersion,
   VersionNegotiationResult,
   NegotiatedProtocol,
-} from '../../../runtime/remote/types.ts';
-import { TransportPanel } from '../../../runtime/diagnostics/panels/transport.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/types';
+import { TransportPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/transport';
 
 // ---------------------------------------------------------------------------
 // Helpers

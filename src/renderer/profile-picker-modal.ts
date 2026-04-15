@@ -7,11 +7,11 @@
  * Footer hints: [Up/Down] Navigate  [Enter] Load  [d] Arm/Delete  [s] Save current  [Esc] Close
  */
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ModalFactory } from './modal-factory.ts';
 import type { ProfilePickerModal } from '../input/profile-picker-modal.ts';
 import { formatTimestamp } from './modal-utils.ts';
-import { fitDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ---------------------------------------------------------------------------

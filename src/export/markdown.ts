@@ -1,4 +1,4 @@
-import type { ToolCall } from '../types/tools.ts';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ContentPart } from '../providers/interface.ts';
 
 /**

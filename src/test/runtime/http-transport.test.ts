@@ -10,7 +10,7 @@ import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createHttpTransport } from '../../runtime/transports/http.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { UserAuthManager } from '../../security/user-auth.ts';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 
 const TEST_TOKEN = 'http-transport-token-abc123';
 

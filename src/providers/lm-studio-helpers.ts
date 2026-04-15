@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
-import { ProviderError } from '../types/errors.ts';
-import type { ToolCall, ToolDefinition } from '../types/tools.ts';
-import { summarizeError, toProviderError } from '../utils/error-display.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import type { ToolCall, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { summarizeError, toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import type {
   ChatRequest,
   ChatResponse,
@@ -217,8 +217,12 @@ export async function consumeSSE(
     onEvent(eventType, payload);
   };
 
-  for await (const chunk of body) {
-    buffer += decoder.decode(chunk, { stream: true });
+  const reader = body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split(/\r?\n/);
     buffer = lines.pop() ?? '';
     for (const line of lines) {

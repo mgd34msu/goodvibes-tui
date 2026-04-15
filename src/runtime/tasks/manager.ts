@@ -15,7 +15,7 @@
 import { createDomainDispatch } from '../store/index.ts';
 import type { RuntimeStore, DomainDispatch } from '../store/index.ts';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { RuntimeTask, TaskKind, TaskLifecycleState } from '../store/domains/tasks.ts';
+import type { RuntimeTask, TaskKind, TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import type { EmitterContext } from '../emitters/index.ts';
 import type {
   TaskManager,
@@ -23,9 +23,9 @@ import type {
   TaskUpdateParams,
   TaskCancelParams,
   TaskFailParams,
-} from './types.ts';
-import { TaskRegistry } from './registry.ts';
-import { canTransition } from './lifecycle.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
+import { TaskRegistry } from '@pellux/goodvibes-sdk/platform/runtime/tasks/registry';
+import { canTransition } from '@pellux/goodvibes-sdk/platform/runtime/tasks/lifecycle';
 import {
   emitTaskCreated,
   emitTaskStarted,

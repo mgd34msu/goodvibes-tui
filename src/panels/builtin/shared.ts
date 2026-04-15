@@ -1,6 +1,6 @@
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
-import type { ToolRegistry } from '../../tools/registry.ts';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { Orchestrator } from '../../core/orchestrator.ts';
 import type { MemoryRegistry } from '../../state/memory-store.ts';
@@ -11,17 +11,17 @@ import type { UiRuntimeServices } from '../../runtime/ui-services.ts';
 import type { PluginManagerObserver } from '../../plugins/manager.ts';
 import type { HookWorkbench } from '../../hooks/workbench.ts';
 import type { HookDispatcher } from '../../hooks/dispatcher.ts';
-import type { HookActivityTracker } from '../../hooks/activity.ts';
+import type { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 import type { McpRegistry } from '../../mcp/registry.ts';
 import type { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import type { SessionManager } from '../../sessions/manager.ts';
-import type { SubscriptionManager } from '../../config/subscriptions.ts';
-import type { UserAuthManager } from '../../security/user-auth.ts';
-import type { SessionMemoryStore } from '../../core/session-memory.ts';
-import type { ExecutionPlanManager } from '../../core/execution-plan.ts';
-import type { AdaptivePlanner } from '../../core/adaptive-planner.ts';
-import type { ApiTokenAuditor } from '../../security/token-audit.ts';
-import type { PanelHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
+import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
+import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
+import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
+import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
+import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import type { WorktreeRegistry } from '../../runtime/worktree/registry.ts';
 import type { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
 
@@ -55,7 +55,7 @@ export interface BuiltinPanelDeps {
   /** Request a shell repaint directly rather than routing through a retired event path. */
   requestRender?: () => void;
   /** ForensicsRegistry for the Forensics panel. */
-  forensicsRegistry?: import('../../runtime/forensics/registry.ts').ForensicsRegistry;
+  forensicsRegistry?: import('@pellux/goodvibes-sdk/platform/runtime/forensics/registry').ForensicsRegistry;
   /** EvalRegistry for the Eval panel. */
   evalRegistry?: import('../eval-panel.ts').EvalRegistry;
   /** MemoryRegistry for the Memory panel. */

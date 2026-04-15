@@ -8,16 +8,16 @@
 
 export { ConfigManager } from './manager.ts';
 export type { DeepReadonly } from './manager.ts';
-export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig } from './schema.ts';
-export { DEFAULT_CONFIG, CONFIG_SCHEMA } from './schema.ts';
-export { ConfigError } from '../types/errors.ts';
+export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig } from '@pellux/goodvibes-sdk/platform/config/schema';
+export { DEFAULT_CONFIG, CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config/schema';
+export { ConfigError } from '@pellux/goodvibes-sdk/platform/types/errors';
 
 import { readFileSync } from 'fs';
 import { ConfigManager } from './manager.ts';
-import type { GoodVibesConfig } from './schema.ts';
+import type { GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config/schema';
 import { SecretsManager } from './secrets.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function getConfigSnapshot(configManager: Pick<ConfigManager, 'getRaw'>): Readonly<GoodVibesConfig> {
   return configManager.getRaw();

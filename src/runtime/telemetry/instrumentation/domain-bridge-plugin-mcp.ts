@@ -1,7 +1,7 @@
-import type { McpEvent } from '../../events/mcp.ts';
-import type { PluginEvent } from '../../events/plugins.ts';
-import { endMcpSpan, recordMcpPhase, startMcpSpan } from '../spans/mcp.ts';
-import { endPluginSpan, recordPluginPhase, startPluginSpan } from '../spans/plugin.ts';
+import type { McpEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/mcp';
+import type { PluginEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/plugins';
+import { endMcpSpan, recordMcpPhase, startMcpSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/mcp';
+import { endPluginSpan, recordPluginPhase, startPluginSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/plugin';
 import type { DomainBridgeAttachmentInput, Env, SpanMap } from './domain-bridge-shared.ts';
 
 export function attachPluginDomain(

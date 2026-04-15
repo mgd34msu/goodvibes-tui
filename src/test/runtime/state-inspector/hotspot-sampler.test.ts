@@ -3,7 +3,7 @@
  * and latency percentile computation.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { SelectorHotspotSampler } from '../../../runtime/ui/state-inspector/hotspot-sampler.ts';
+import { SelectorHotspotSampler } from '@pellux/goodvibes-sdk/platform/runtime/inspection/state-inspector';
 
 let originalDateNow: typeof Date.now;
 let mockedNow = 0;

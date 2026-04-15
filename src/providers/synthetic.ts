@@ -1,11 +1,11 @@
 import type { LLMProvider, ChatRequest, ChatResponse } from './interface.ts';
-import { ProviderError, isRateLimitOrQuotaError } from '../types/errors.ts';
-import { logger } from '../utils/logger.ts';
-import type { BenchmarkEntry } from './model-benchmarks.ts';
-import { compositeScore } from './model-benchmarks.ts';
+import { ProviderError, isRateLimitOrQuotaError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import { compositeScore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitModelFallback } from '../runtime/emitters/index.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // --- Types ---
 

@@ -13,8 +13,8 @@
  */
 
 export { McpLifecycleManager, type McpEventHandler, type McpLifecycleManagerOptions } from './manager.ts';
-export { McpPermissionManager, buildMcpAttackPathReview } from './permissions.ts';
-export { McpSchemaFreshnessTracker } from './schema-freshness.ts';
+export { McpPermissionManager, buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/permissions';
+export { McpSchemaFreshnessTracker } from '@pellux/goodvibes-sdk/platform/runtime/mcp/schema-freshness';
 export {
   canTransition,
   reachableFrom,
@@ -22,7 +22,7 @@ export {
   isOperational,
   isTerminal,
   type TransitionResult,
-} from './lifecycle.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/mcp/lifecycle';
 export type {
   McpServerState,
   SchemaFreshness,
@@ -47,8 +47,8 @@ export type {
   McpServerPermissions,
   McpServerEntry,
   McpReconnectConfig,
-} from './types.ts';
-export { DEFAULT_RECONNECT_CONFIG } from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
+export { DEFAULT_RECONNECT_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 
 import { McpLifecycleManager } from './manager.ts';
 import type { McpLifecycleManagerOptions } from './manager.ts';

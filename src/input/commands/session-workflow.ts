@@ -7,7 +7,7 @@ import type { ConversationTitleSource } from '../../core/conversation.ts';
 import type { SessionReturnContextSummary } from '../../runtime/session-return-context.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '../../runtime/session-return-context.ts';
 import { requirePanelManager, requireProviderApi, requireSessionManager } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
   const normalized = (raw ?? 'all').toLowerCase().replace(/-/g, '_');

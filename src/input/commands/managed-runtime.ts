@@ -3,8 +3,8 @@ import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { profileDataToConfigSnapshot } from '../../profiles/shape.ts';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
-import { CONFIG_KEYS } from '../../config/schema.ts';
-import type { ManagedSettingsBundle } from '../../runtime/sandbox/types.ts';
+import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config/schema';
+import type { ManagedSettingsBundle } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import {
   applyStagedManagedBundle,
   clearManagedSettingLock,
@@ -18,7 +18,7 @@ import {
   stageManagedSettingsBundle,
 } from '../../runtime/settings/control-plane.ts';
 import { requireProfileManager, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 function buildConfigSnapshot(
   manager: { get: (key: ConfigKey) => unknown },

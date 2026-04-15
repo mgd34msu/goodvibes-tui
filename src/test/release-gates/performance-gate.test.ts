@@ -10,7 +10,7 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { DEFAULT_BUDGETS } from '../../runtime/perf/budgets.ts';
+import { DEFAULT_BUDGETS } from '@pellux/goodvibes-sdk/platform/runtime/perf/budgets';
 import {
   computeQualityScore,
   escalateStrategy,
@@ -18,7 +18,7 @@ import {
 } from '../../runtime/compaction/quality-score.ts';
 import { SloCollector } from '../../runtime/perf/slo-collector.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { FEATURE_FLAGS } from '../../runtime/feature-flags/flags.ts';
+import { FEATURE_FLAGS } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/flags';
 import type { ProviderMessage } from '../../providers/interface.ts';
 
 // ---------------------------------------------------------------------------

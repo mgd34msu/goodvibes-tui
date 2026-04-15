@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { ConfigManager } from '../../config/manager.ts';
-import { DEFAULT_CONFIG } from '../../config/schema.ts';
+import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config/schema';
 
 // Helper to create an isolated temporary directory for each test suite.
 function makeTempDir(): string {

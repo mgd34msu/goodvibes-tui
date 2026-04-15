@@ -2,10 +2,10 @@
  * Security emitters — typed wrappers for SecurityEvent domain.
  */
 
-import { createEventEnvelope } from '../events/envelope.ts';
-import type { RuntimeEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { SecurityEvent } from '../events/security.ts';
+import type { SecurityEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/security';
 import type { EmitterContext } from './index.ts';
 
 function securityEvent<T extends SecurityEvent['type']>(

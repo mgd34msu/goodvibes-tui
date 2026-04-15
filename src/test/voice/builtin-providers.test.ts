@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { ensureBuiltinVoiceProviders, VoiceProviderRegistry, VoiceService } from '../../voice/index.ts';
+import { ensureBuiltinVoiceProviders, VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 const BUILTIN_VOICE_ENV_KEYS = [

@@ -4,7 +4,7 @@
  */
 
 import type { PermissionCategory } from '../../../permissions/manager.ts';
-import type { PermissionRiskLevel } from '../../../permissions/types.ts';
+import type { PermissionRiskLevel } from '@pellux/goodvibes-sdk/platform/permissions/types';
 
 /** Permission evaluation modes (maps to PermissionsToolConfig). */
 export type PermissionMode =

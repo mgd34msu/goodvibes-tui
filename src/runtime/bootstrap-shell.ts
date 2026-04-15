@@ -19,18 +19,18 @@ import { createSystemMessageRouter, type SystemMessageRouter } from '../core/sys
 import { getConfigSnapshot } from '../config/index.ts';
 import { createBootstrapCommandContext } from './bootstrap-command-context.ts';
 import { createResumeSessionHandler } from './bootstrap-hook-bridge.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { loadBootstrapSystemPrompt } from './bootstrap-helpers.ts';
 import { createShellPlanRuntime, createShellRemoteCommandService } from './shell-command-services.ts';
 import { createRuntimeFoundationClients } from './foundation-clients.ts';
 import type { ControlPlaneRecentEvent } from '../control-plane/gateway.ts';
 import type { BuiltinPanelDeps } from '../panels/builtin/shared.ts';
-import type { ToolRegistry } from '../tools/registry.ts';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { ForensicsRegistry } from './forensics/index.ts';
 import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
-import type { TaskManager } from './tasks/types.ts';
+import type { TaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
 import type { UiRuntimeServices } from './ui-services.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface BootstrapShellState {
   readonly commandRegistry: CommandRegistry;
@@ -247,7 +247,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   const saveHistory = configManager.get('behavior.saveHistory') as boolean;
   const inputHistory = new InputHistory({
-    historyPath: services.shellPaths.resolveUserTuiPath('input-history.json'),
+    historyPath: services.shellPaths.resolveUserPath('tui', 'input-history.json'),
     persist: saveHistory,
   });
 

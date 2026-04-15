@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
 import { ConfigManager } from '../../config/manager.ts';
 import { createPermissionConfigReader, PermissionManager } from '../../permissions/manager.ts';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
@@ -212,7 +212,7 @@ describe('addUserMessage with ContentPart[]', () => {
 
 describe('Orchestrator capability check for non-multimodal models', () => {
   test('strips images and adds warning when model lacks multimodal capability', async () => {
-    const { ToolRegistry } = await import('../../tools/registry.ts');
+    const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools/registry');
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
     const { RuntimeEventBus } = await import('../../runtime/events/index.ts');

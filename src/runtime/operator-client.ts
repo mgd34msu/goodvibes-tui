@@ -15,10 +15,10 @@ import { buildProviderAccountSnapshot, type ProviderAccountSnapshot } from './pr
 import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../providers/runtime-snapshot.ts';
 import { getProviderRuntimeSnapshot, getProviderUsageSnapshot, listProviderRuntimeSnapshots } from '../providers/runtime-snapshot.ts';
 import type { OperatorClientServices } from './foundation-services.ts';
-import type { RuntimeTask } from './store/domains/tasks.ts';
+import type { RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import type { UiControlPlaneSnapshot, UiSessionSnapshot, UiTasksSnapshot } from './ui-read-models.ts';
 import type { UiRuntimeEvents } from './ui-events.ts';
-import type { ShellPathService } from './shell-paths.ts';
+import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 
 export interface OperatorControlPlaneSnapshot extends UiControlPlaneSnapshot {}
 

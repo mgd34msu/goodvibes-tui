@@ -2,8 +2,8 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ArchetypeLoader } from '../../agents/archetypes.ts';
-import type { AgentArchetype } from '../../agents/archetypes.ts';
+import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
+import type { AgentArchetype } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
 import { getTestArchetypeLoader, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

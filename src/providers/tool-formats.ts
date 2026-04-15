@@ -1,7 +1,7 @@
-import type { ToolDefinition, ToolCall } from '../types/tools.ts';
+import type { ToolDefinition, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ProviderMessage, ContentPart } from './interface.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------
 // OpenAI wire format

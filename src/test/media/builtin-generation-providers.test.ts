@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { ArtifactStore } from '../../artifacts/index.ts';
+import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import { ensureBuiltinMediaProviders, MediaProviderRegistry } from '../../media/index.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { ProviderRuntimeMetadata } from '../../providers/interface.ts';

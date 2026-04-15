@@ -7,9 +7,9 @@ import {
   formatChangeNotifications,
 } from '../../providers/model-catalog.ts';
 import type { CatalogModel, CatalogDiff } from '../../providers/model-catalog.ts';
-import type { FavoritesData } from '../../providers/favorites.ts';
-import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
-import type { BenchmarkEntry } from '../../providers/model-benchmarks.ts';
+import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import { writeBenchmarksCache } from '../helpers/provider-cache.ts';
 
 // ---------------------------------------------------------------------------

@@ -3,11 +3,11 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '../../config/manager.ts';
-import { PersistentStore } from '../../state/persistent-store.ts';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import { AutomationManager } from '../../automation/manager.ts';
-import { AutomationRouteStore } from '../../automation/store/routes.ts';
-import { AutomationJobStore } from '../../automation/store/jobs.ts';
-import { AutomationRunStore } from '../../automation/store/runs.ts';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
+import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
+import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
 import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
 import {
@@ -15,9 +15,9 @@ import {
   normalizeCronSchedule,
   normalizeEverySchedule,
   resolveStableAutomationCronOffsetMs,
-} from '../../automation/schedules.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/schedules';
 import type { SpawnAutomationTaskInput } from '../../automation/manager-runtime.ts';
-import type { LegacySchedulerSnapshot } from '../../automation/migration.ts';
+import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
 import { AgentManager } from '../../tools/agent/index.ts';
 
 const testAgentExecutor = {

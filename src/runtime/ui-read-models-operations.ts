@@ -1,15 +1,15 @@
 import type { ControlPlaneRecentEvent, SharedApprovalRecord, SharedSessionRecord } from '../control-plane/index.ts';
 import type { RuntimeServices } from './services.ts';
-import type { AutomationJob } from '../automation/jobs.ts';
-import type { AutomationRun } from '../automation/runs.ts';
-import type { AutomationRouteBinding } from '../automation/routes.ts';
-import type { WatcherRecord } from './store/domains/watchers.ts';
-import type { OrchestrationGraphRecord } from './store/domains/orchestration.ts';
-import type { RuntimeCommunicationRecord } from './store/domains/communication.ts';
-import type { ControlPlaneClientRecord } from './store/domains/control-plane.ts';
-import type { AcpConnection } from './store/domains/acp.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
+import type { WatcherRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/watchers';
+import type { OrchestrationGraphRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';
+import type { RuntimeCommunicationRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/communication';
+import type { ControlPlaneClientRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/control-plane';
+import type { AcpConnection } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/acp';
 import { combineSubscriptions, createStoreBackedReadModel } from './ui-read-model-helpers.ts';
-import type { UiReadModel } from './ui-read-models-base.ts';
+import type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
 
 export interface UiAutomationSnapshot {
   readonly jobs: readonly AutomationJob[];

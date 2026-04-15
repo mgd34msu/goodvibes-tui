@@ -2,7 +2,7 @@
  * MemoryPanel — project memory substrate TUI panel.
  */
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { MemoryRegistry } from '../state/memory-store.ts';
 import type { MemoryRecord, MemoryClass } from '../state/memory-store.ts';
 import { BasePanel } from './base-panel.ts';

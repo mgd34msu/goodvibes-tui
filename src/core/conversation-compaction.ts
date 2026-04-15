@@ -1,11 +1,11 @@
 import type { ProviderMessage } from '../providers/interface.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { compactMessages } from './context-compaction.ts';
 import type { CompactionContext } from './context-compaction.ts';
-import type { SessionMemoryStore } from './session-memory.ts';
-import type { SessionLineageTracker } from './session-lineage.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
+import type { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface ConversationCompactionHost {
   getMessageCount(): number;

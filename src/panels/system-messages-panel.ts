@@ -4,8 +4,8 @@
  */
 
 import { BasePanel } from './base-panel.ts';
-import type { Line } from '../types/grid.ts';
-import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import {
   buildBodyText,
   buildEmptyState,

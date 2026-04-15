@@ -7,7 +7,7 @@ import type { ForensicsRegistry } from './forensics/index.ts';
 import type { ControlPlaneRecentEvent } from '../control-plane/index.ts';
 import type { ApprovalBroker } from '../control-plane/approval-broker.ts';
 import type { SharedSessionBroker } from '../control-plane/session-broker.ts';
-import type { ShellPathService } from './shell-paths.ts';
+import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type { SecretsManager } from '../config/secrets.ts';
 
 export interface UiEnvironmentServices {

@@ -3,8 +3,8 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { FileWatcher } from '../../state/file-watcher.ts';
-import { FileStateCache } from '../../state/file-cache.ts';
-import { ProjectIndex } from '../../state/project-index.ts';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
@@ -182,7 +182,7 @@ describe('FileWatcher', () => {
     });
 
     // Spy on fire using bun:test spyOn
-    const fireSpy = spyOn(hookDispatcher, 'fire').mockImplementation(async (event: import('../../hooks/types.ts').HookEvent) => {
+    const fireSpy = spyOn(hookDispatcher, 'fire').mockImplementation(async (event: import('@pellux/goodvibes-sdk/platform/hooks/types').HookEvent) => {
       firedPaths.push((event.payload as { filePath: string }).filePath);
       return { ok: true };
     });

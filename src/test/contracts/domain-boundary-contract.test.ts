@@ -133,9 +133,12 @@ describe('GC-ARCH-001 domain import boundary contract', () => {
     }
   });
 
-  test('acp is authorized to read daemon (only current cross-domain import)', () => {
-    const allowedForAcp = getAllowedReadsFor('acp');
-    expect(allowedForAcp.has('daemon')).toBe(true);
+  test('all remaining local domains are self-contained', () => {
+    for (const domain of DOMAINS) {
+      const allowed = getAllowedReadsFor(domain);
+      expect(allowed.size).toBe(1);
+      expect(allowed.has(domain)).toBe(true);
+    }
   });
 
   test('domains with no matrix entry have no cross-domain read rights', () => {

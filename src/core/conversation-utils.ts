@@ -26,11 +26,12 @@ function toInternalMessage(message: ProviderMessage): Message {
   if (message.role === 'assistant') {
     return { role: 'assistant', content: extractAssistantText(message.content) };
   }
-  const toolMsg = message as { role: 'tool'; callId: string; content: string | unknown };
+  const toolMsg = message as { role: 'tool'; callId: string; content: string | unknown; name?: string };
   return {
     role: 'tool',
     callId: toolMsg.callId ?? '',
     content: typeof toolMsg.content === 'string' ? toolMsg.content : String(toolMsg.content),
+    ...(typeof toolMsg.name === 'string' && toolMsg.name.length > 0 ? { toolName: toolMsg.name } : {}),
   };
 }
 

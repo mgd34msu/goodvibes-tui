@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, test, expect } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ChannelPolicyManager } from '../../channels/policy-manager.ts';
+import { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels/policy-manager';
 
 describe('ChannelPolicyManager', () => {
   let root = '';

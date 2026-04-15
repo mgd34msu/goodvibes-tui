@@ -5,7 +5,7 @@ import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import { listHookPointContracts } from '../../hooks/index.ts';
 import { isRunningInWsl } from '../../runtime/sandbox/manager.ts';
-import { renderQemuWrapperTemplate } from '../../runtime/sandbox/qemu-wrapper-template.ts';
+import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
 import type { SetupTransferBundle } from './local-setup-transfer.ts';
 import {
   buildSetupTransferBundle,
@@ -16,7 +16,7 @@ import {
 } from './local-setup-transfer.ts';
 import { buildSetupReviewSnapshot, exportSetupSupportBundle, renderSetupSandboxReview } from './local-setup-review.ts';
 import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerLocalSetupCommands(registry: CommandRegistry): void {
   registry.register({
@@ -210,17 +210,17 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
               }
             }
             if (bundle.services) {
-              const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
+              const servicesPath = shellPaths.resolveProjectPath('tui', 'services.json');
               mkdirSync(dirname(servicesPath), { recursive: true });
               writeFileSync(servicesPath, JSON.stringify(bundle.services, null, 2) + '\n', 'utf-8');
             }
             if (bundle.ecosystem?.plugins) {
-              const pluginsPath = shellPaths.resolveProjectTuiPath('ecosystem', 'plugins.json');
+              const pluginsPath = shellPaths.resolveProjectPath('tui', 'ecosystem', 'plugins.json');
               mkdirSync(dirname(pluginsPath), { recursive: true });
               writeFileSync(pluginsPath, JSON.stringify(bundle.ecosystem.plugins, null, 2) + '\n', 'utf-8');
             }
             if (bundle.ecosystem?.skills) {
-              const skillsPath = shellPaths.resolveProjectTuiPath('ecosystem', 'skills.json');
+              const skillsPath = shellPaths.resolveProjectPath('tui', 'ecosystem', 'skills.json');
               mkdirSync(dirname(skillsPath), { recursive: true });
               writeFileSync(skillsPath, JSON.stringify(bundle.ecosystem.skills, null, 2) + '\n', 'utf-8');
             }

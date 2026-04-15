@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { VoiceProviderRegistry, VoiceService } from '../../voice/index.ts';
+import { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
 
 describe('VoiceProviderRegistry and VoiceService', () => {
   test('registers TS-only TTS providers and routes synthesis', async () => {

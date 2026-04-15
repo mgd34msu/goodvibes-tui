@@ -1,14 +1,14 @@
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { HookDispatcher } from '../hooks/dispatcher.ts';
-import type { HookEvent } from '../hooks/types.ts';
+import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import {
   authenticateOperatorRequest,
   buildOperatorSessionCookie,
-} from '../security/http-auth.ts';
-import { UserAuthManager } from '../security/user-auth.ts';
+} from '@pellux/goodvibes-sdk/platform/security/http-auth';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { ConfigManager } from '../config/manager.ts';
 import { extractForwardedClientIp, resolveInboundTlsContext, type ResolvedInboundTlsContext } from '../runtime/network/index.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -259,7 +259,7 @@ export class HttpListener {
     const phase = typeof body.phase === 'string' ? body.phase : 'Post';
 
     const hookEvent: HookEvent = {
-      path: `${phase}:webhook:${eventType}` as unknown as import('../hooks/types.ts').HookEventPath,
+      path: `${phase}:webhook:${eventType}` as unknown as import('@pellux/goodvibes-sdk/platform/hooks/types').HookEventPath,
       phase: phase as HookEvent['phase'],
       category: 'workflow' as HookEvent['category'],
       specific: eventType,

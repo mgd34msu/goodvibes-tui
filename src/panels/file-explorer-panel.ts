@@ -4,8 +4,8 @@
 
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative, basename } from 'node:path';
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
 import {
   buildEmptyState,
@@ -16,7 +16,7 @@ import {
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,

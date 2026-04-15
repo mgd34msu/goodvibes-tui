@@ -1,13 +1,13 @@
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { type Line } from '../types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ModalFactory } from './modal-factory.ts';
 import type { AgentManager } from '../tools/agent/index.ts';
 import type { AgentMessageBus } from '../agents/message-bus.ts';
 import { formatDuration } from './modal-utils.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

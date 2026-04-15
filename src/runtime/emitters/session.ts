@@ -3,10 +3,10 @@
  *
  * Import and call these instead of emitting raw strings.
  */
-import { createEventEnvelope } from '../events/envelope.ts';
-import type { RuntimeEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { SessionEvent } from '../events/session.ts';
+import type { SessionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/session';
 import type { EmitterContext } from './index.ts';
 
 // ---------------------------------------------------------------------------

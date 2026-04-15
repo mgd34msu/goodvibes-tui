@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { createInitialOrchestrationState } from '../../runtime/store/domains/orchestration.ts';
+import { createInitialOrchestrationState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';
 import { OrchestrationPanel } from '../../panels/orchestration-panel.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
@@ -8,7 +8,7 @@ import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
 import { ConfigManager } from '../../config/manager.ts';
 

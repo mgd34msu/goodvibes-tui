@@ -16,10 +16,10 @@ import {
   type SettingsSyncBundle,
 } from '../../runtime/settings/control-plane.ts';
 import { type ConfigKey } from '../../config/index.ts';
-import { CONFIG_KEYS } from '../../config/schema.ts';
+import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): void {
   registry.register({

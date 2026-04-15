@@ -10,18 +10,18 @@
  * Saves changes via configManager.set(key, value) or featureFlagManager methods.
  */
 
-import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagState } from '../config/schema.ts';
+import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { ConfigManager } from '../config/manager.ts';
-import type { SubscriptionManager } from '../config/subscriptions.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
 import type { ProviderAuthFreshness, ProviderAuthRoute } from '../runtime/provider-accounts/registry.ts';
 import { getResolvedSettingLookup } from '../runtime/settings/control-plane.ts';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
-import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
-import type { FeatureFlag, FlagState } from '../runtime/feature-flags/types.ts';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
 import type { McpRegistry } from '../mcp/registry.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------
 // Types

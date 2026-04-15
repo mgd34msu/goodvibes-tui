@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-import { KVState } from '../../state/kv-state.ts';
+import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -16,8 +16,8 @@ import type { LLMProvider } from './interface.ts';
 import type { ProviderRegistry } from './registry.ts';
 import { hasKeyForProvider } from './model-catalog.ts';
 import type { CatalogProvider } from './model-catalog.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------
 // Types

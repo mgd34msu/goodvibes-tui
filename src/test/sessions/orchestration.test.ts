@@ -2,11 +2,11 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { mkdtempSync, existsSync } from 'fs';
-import { SessionTaskGraph } from '../../sessions/orchestration/graph.ts';
+import { SessionTaskGraph } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/graph';
 import {
   CrossSessionTaskRegistry,
-} from '../../sessions/orchestration/registry.ts';
-import type { CrossSessionTaskRef, SessionTaskGraphSnapshot } from '../../sessions/orchestration/types.ts';
+} from '@pellux/goodvibes-sdk/platform/sessions/orchestration/registry';
+import type { CrossSessionTaskRef, SessionTaskGraphSnapshot } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/types';
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 

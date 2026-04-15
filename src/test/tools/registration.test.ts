@@ -2,19 +2,19 @@ import { describe, test, expect } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ToolRegistry } from '../../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { registerAllTools } from '../../tools/index.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
-import { CrossSessionTaskRegistry } from '../../sessions/orchestration/index.ts';
+import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
 import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
 import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
-import { OverflowHandler } from '../../tools/shared/overflow.ts';
-import { FileUndoManager } from '../../state/file-undo.ts';
-import { ModeManager } from '../../state/mode-manager.ts';
-import { ProcessManager } from '../../tools/shared/process-manager.ts';
-import { createWorkflowServices } from '../../tools/workflow/index.ts';
+import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
+import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
+import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
+import { createWorkflowServices } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
 
 function registerTools(registry: ToolRegistry): void {
   const services = createTestManagers();

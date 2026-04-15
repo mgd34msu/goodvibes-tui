@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { ProcessManager } from '../../../tools/shared/process-manager.ts';
-import type { BackgroundProcess } from '../../../tools/shared/process-manager.ts';
+import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
+import type { BackgroundProcess } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
 
 let processManager: ProcessManager;
 

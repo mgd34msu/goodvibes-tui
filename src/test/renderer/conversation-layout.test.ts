@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createStyledCell } from '../../types/grid.ts';
+import { createStyledCell } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { overlayViewportBottom, replaceViewportWithOverlay } from '../../renderer/conversation-layout.ts';
 
 function makeLine(width: number, fill: string) {

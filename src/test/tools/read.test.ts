@@ -7,10 +7,10 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mkdirSync, writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { ReadTool } from '../../tools/read/index.ts';
-import { FileStateCache } from '../../state/file-cache.ts';
-import { ProjectIndex } from '../../state/project-index.ts';
-import { CodeIntelligence } from '../../intelligence/facade.ts';
+import { ReadTool } from '@pellux/goodvibes-sdk/platform/tools/read/index';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
+import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence/facade';
 import { getTestCodeIntelligence, getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

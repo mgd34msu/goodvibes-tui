@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createRemoteRuntimeEvents, createRemoteUiRuntimeEvents } from '../../runtime/transports/remote-events.ts';
-import { createWebSocketConnector } from '../../runtime/transports/runtime-events-client.ts';
+import { createWebSocketConnector } from '@pellux/goodvibes-sdk/platform/runtime/transports/runtime-events-client';
 
 describe('remote runtime transport events', () => {
   test('disconnects an async event stream if listeners unsubscribe before connect resolves', async () => {

@@ -3,8 +3,8 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { SpillBackend } from '../../../tools/shared/overflow.ts';
-import { OverflowHandler } from '../../../tools/shared/overflow.ts';
+import type { SpillBackend } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
+import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
 
 function makeTmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'overflow-test-'));

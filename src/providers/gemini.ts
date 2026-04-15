@@ -8,17 +8,17 @@ import type {
   ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
-import { ProviderError } from '../types/errors.ts';
-import { withRetry } from '../utils/retry.ts';
-import { logger } from '../utils/logger.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import {
   toGeminiFunctionDeclarations,
   toGeminiContents,
   fromGeminiParts,
 } from './tool-formats.ts';
 import type { GeminiPart } from './tool-formats.ts';
-import type { CacheHitTracker } from './cache-strategy.ts';
-import { summarizeError, toProviderError } from '../utils/error-display.ts';
+import type { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
+import { summarizeError, toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const GEMINI_CACHE_TTL_SECONDS = 3600;

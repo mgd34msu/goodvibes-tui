@@ -1,10 +1,10 @@
 import { ConversationManager } from '../core/conversation.ts';
-import { ToolRegistry } from '../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { join } from 'node:path';
 import type { ProviderRegistry } from '../providers/registry.ts';
-import { logger } from '../utils/logger.ts';
-import { ConsecutiveErrorBreaker } from '../core/circuit-breaker.ts';
-import { isRateLimitOrQuotaError, isContextSizeExceededError } from '../types/errors.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { ConsecutiveErrorBreaker } from '@pellux/goodvibes-sdk/platform/core/circuit-breaker';
+import { isRateLimitOrQuotaError, isContextSizeExceededError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { AgentSession } from './session.ts';
 import type { ProviderOptimizer } from '../providers/optimizer.ts';
 import {
@@ -14,16 +14,16 @@ import {
 } from '../core/context-compaction.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import type { LLMProvider, StreamDelta } from '../providers/interface.ts';
-import type { ToolResult } from '../types/tools.ts';
-import type { ProcessManager } from '../tools/shared/process-manager.ts';
-import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
+import type { ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
+import type { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { summarizeToolArgs } from './orchestrator-utils.ts';
+import { summarizeToolArgs } from '@pellux/goodvibes-sdk/platform/agents/orchestrator-utils';
 import { buildLayeredOrchestratorSystemPrompt, buildOrchestratorSystemPrompt } from './orchestrator-prompts.ts';
 import type { AgentMessageBus } from './message-bus.ts';
 import type { KnowledgeService } from '../knowledge/index.ts';
-import type { ArchetypeLoader } from './archetypes.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import type { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const MAX_TURNS = 50;
 const NETWORK_RETRY_DELAYS_MS = [5_000, 10_000, 20_000, 40_000, 60_000];

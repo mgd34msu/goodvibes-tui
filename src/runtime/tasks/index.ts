@@ -19,17 +19,17 @@ export type {
   TaskUpdateParams,
   TaskCancelParams,
   TaskFailParams,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 export {
   canTransition,
   getValidTransitions,
   isTerminalStatus,
-} from './lifecycle.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tasks/lifecycle';
 
 // ── Registry ──────────────────────────────────────────────────────────────────
-export { TaskRegistry } from './registry.ts';
+export { TaskRegistry } from '@pellux/goodvibes-sdk/platform/runtime/tasks/registry';
 
 // ── Manager ───────────────────────────────────────────────────────────────────
 export {
@@ -42,7 +42,7 @@ export {
 // ── Factory ───────────────────────────────────────────────────────────────────
 import type { RuntimeStore } from '../store/index.ts';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { TaskManager } from './types.ts';
+import type { TaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
 import { UnifiedTaskManager } from './manager.ts';
 
 /**

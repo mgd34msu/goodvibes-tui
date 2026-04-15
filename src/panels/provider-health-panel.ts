@@ -1,5 +1,5 @@
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { ProviderAuthRouteDescriptor } from '../providers/interface.ts';
 import type { ProviderEvent, TurnEvent } from '../runtime/events/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';

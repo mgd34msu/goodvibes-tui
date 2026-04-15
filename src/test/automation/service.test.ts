@@ -7,10 +7,10 @@ import { AutomationManager } from '../../automation/manager.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
 import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
-import { PersistentStore } from '../../state/persistent-store.ts';
-import type { AutomationJob } from '../../automation/jobs.ts';
-import type { AutomationRouteBinding } from '../../automation/routes.ts';
-import type { AutomationSourceRecord } from '../../automation/sources.ts';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
 
 describe('automation service', () => {
   let root = '';

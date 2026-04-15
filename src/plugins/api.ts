@@ -1,8 +1,8 @@
 import type { CommandRegistry, SlashCommand } from '../input/command-registry.ts';
 import type { ModelDefinition, ProviderRegistry, RuntimeProviderRegistration, TokenLimits, ModelTier } from '../providers/registry.ts';
 import type { LLMProvider } from '../providers/interface.ts';
-import type { ToolRegistry } from '../tools/registry.ts';
-import type { ToolDefinition } from '../types/tools.ts';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
+import type { ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { RuntimeEventBus, AnyRuntimeEvent, RuntimeEventPayload } from '../runtime/events/index.ts';
 import type { GatewayMethodCatalog, GatewayMethodDescriptor, GatewayMethodHandler } from '../control-plane/index.ts';
 import {
@@ -11,11 +11,11 @@ import {
 } from '../channels/index.ts';
 import type { ChannelDeliveryRouter, ChannelPluginRegistry } from '../channels/index.ts';
 import type { MemoryEmbeddingProvider, MemoryEmbeddingProviderRegistry } from '../state/index.ts';
-import type { VoiceProvider, VoiceProviderRegistry } from '../voice/index.ts';
+import type { VoiceProvider, VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/index';
 import type { MediaProvider, MediaProviderRegistry } from '../media/index.ts';
 import type { WebSearchProvider, WebSearchProviderRegistry } from '../web-search/index.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /**
  * PluginProviderConfig — minimal config for registering a custom LLM provider

@@ -6,7 +6,7 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
-import type { HookEvent, HookDefinition } from '../../hooks/types.ts';
+import type { HookEvent, HookDefinition } from '@pellux/goodvibes-sdk/platform/hooks/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -149,7 +149,7 @@ describe('Hook lifecycle — phase transitions', () => {
   });
 
   test('hook deny decision propagates correctly', () => {
-    const result: import('../../hooks/types.ts').HookResult = {
+    const result: import('@pellux/goodvibes-sdk/platform/hooks/types').HookResult = {
       ok: true,
       decision: 'deny',
       reason: 'blocked by policy',
@@ -159,7 +159,7 @@ describe('Hook lifecycle — phase transitions', () => {
   });
 
   test('hook allow decision propagates correctly', () => {
-    const result: import('../../hooks/types.ts').HookResult = {
+    const result: import('@pellux/goodvibes-sdk/platform/hooks/types').HookResult = {
       ok: true,
       decision: 'allow',
     };

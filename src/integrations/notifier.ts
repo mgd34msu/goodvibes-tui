@@ -1,10 +1,10 @@
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '../runtime/events/index.ts';
-import { SlackIntegration } from './slack.ts';
-import { DiscordIntegration } from './discord.ts';
-import { DeliveryQueue } from './delivery.ts';
-import type { DeliveryQueueConfig, IntegrationQueueStatus } from './delivery.ts';
-import { snapshotQueueStatus } from './delivery.ts';
+import { SlackIntegration } from '@pellux/goodvibes-sdk/platform/integrations/slack';
+import { DiscordIntegration } from '@pellux/goodvibes-sdk/platform/integrations/discord';
+import { DeliveryQueue } from '@pellux/goodvibes-sdk/platform/integrations/delivery';
+import type { DeliveryQueueConfig, IntegrationQueueStatus } from '@pellux/goodvibes-sdk/platform/integrations/delivery';
+import { snapshotQueueStatus } from '@pellux/goodvibes-sdk/platform/integrations/delivery';
 import { ServiceRegistry } from '../config/service-registry.ts';
 
 // ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ export class Notifier {
    * Replay all dead-letter entries to their respective channels.
    * Re-attempts delivery for each DLQ entry; results are returned per-entry.
    */
-  async replayDeadLetters(): Promise<Array<{ id: string; outcome: import('./delivery.ts').DeliveryOutcome }>> {
+  async replayDeadLetters(): Promise<Array<{ id: string; outcome: import('@pellux/goodvibes-sdk/platform/integrations/delivery').DeliveryOutcome }>> {
     return this._queue.replay(async (dlqEntry) => {
       const text = dlqEntry.payload;
       if (dlqEntry.channel === 'slack' && this.slack) {

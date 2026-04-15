@@ -1,5 +1,5 @@
-import { logger } from '../utils/logger.ts';
-import type { FavoritesData } from './favorites.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import type { CatalogDiff, CatalogModel } from './model-catalog.ts';
 
 export function diffCatalogs(

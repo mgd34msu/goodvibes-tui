@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import type { DiscoveredServer } from '../../discovery/index.ts';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/index';
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ProviderRuntimeMetadata, LLMProvider, ChatResponse } from '../../providers/index.ts';
-import type { FavoritesData } from '../../providers/favorites.ts';
+import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import {
   createProviderApi,
   type ProviderApiDependencies,
 } from '../../providers/index.ts';
-import type { BenchmarkEntry } from '../../providers/model-benchmarks.ts';
+import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { ModelDefinition } from '../../providers/registry.ts';
 
 function cloneFavorites(data: FavoritesData): FavoritesData {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { getDistributedNodeHostContract } from '../../runtime/remote/distributed-runtime-contract.ts';
-import { createHttpJsonTransport } from '../../runtime/transports/http-json-transport.ts';
-import { createPeerRemoteClient } from '../../runtime/transports/peer-remote-client.ts';
+import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
+import { createHttpJsonTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-json-transport';
+import { createPeerRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/peer-remote-client';
 
 function createJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

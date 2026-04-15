@@ -3,10 +3,10 @@ import type { ProviderRegistry } from '../providers/registry.ts';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { ConfigManager } from '../config/index.ts';
 import type { DeepReadonly, GoodVibesConfig } from '../config/index.ts';
-import type { ToolRegistry } from '../tools/registry.ts';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
-import type { FileUndoManager } from '../state/file-undo.ts';
+import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { KnowledgeApi } from '../knowledge/knowledge-api.ts';
@@ -110,16 +110,16 @@ export interface CommandSessionServices {
   readonly conversationManager: ConversationManager;
   readonly runtime: CommandRuntimeState;
   readonly sessionManager?: import('../sessions/manager.ts').SessionManager;
-  readonly sessionMemoryStore?: import('../core/session-memory.ts').SessionMemoryStore;
-  readonly sessionLineageTracker?: import('../core/session-lineage.ts').SessionLineageTracker;
-  readonly changeTracker?: import('../sessions/change-tracker.ts').SessionChangeTracker;
+  readonly sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core/session-memory').SessionMemoryStore;
+  readonly sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core/session-lineage').SessionLineageTracker;
+  readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions/change-tracker').SessionChangeTracker;
 }
 
 export interface CommandProviderServices {
   readonly providerRegistry: ProviderRegistry;
   readonly providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
-  readonly favoritesStore?: import('../providers/favorites.ts').FavoritesStore;
-  readonly benchmarkStore?: import('../providers/model-benchmarks.ts').BenchmarkStore;
+  readonly favoritesStore?: import('@pellux/goodvibes-sdk/platform/providers/favorites').FavoritesStore;
+  readonly benchmarkStore?: import('@pellux/goodvibes-sdk/platform/providers/model-benchmarks').BenchmarkStore;
 }
 
 /**
@@ -130,8 +130,8 @@ export interface CommandWorkspaceUiServices {
   keybindingsManager?: KeybindingsManager;
   fileUndoManager?: FileUndoManager;
   panelManager?: PanelManager;
-  profileManager?: import('../profiles/manager.ts').ProfileManager;
-  bookmarkManager?: import('../bookmarks/manager.ts').BookmarkManager;
+  profileManager?: import('@pellux/goodvibes-sdk/platform/profiles/manager').ProfileManager;
+  bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks/manager').BookmarkManager;
 }
 
 export interface CommandWorkspaceServices

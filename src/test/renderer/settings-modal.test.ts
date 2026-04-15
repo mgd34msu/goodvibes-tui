@@ -9,9 +9,9 @@ import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.t
 import { ConfigManager } from '../../config/manager.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
-import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
-import type { FeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
 import type { McpRegistry } from '../../mcp/registry.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';

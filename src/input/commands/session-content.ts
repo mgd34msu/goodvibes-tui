@@ -6,7 +6,7 @@ import type { SelectionItem } from '../selection-modal.ts';
 import { exportToMarkdown } from '../../export/markdown.ts';
 import { TemplateManager, parseTemplateArgs } from '../../templates/manager.ts';
 import { requireSessionManager, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerSessionContentCommands(registry: CommandRegistry): void {
   registry.register({
@@ -45,7 +45,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
             content: Array.isArray(m.content)
               ? m.content as import('../../providers/interface.ts').ContentPart[]
               : String(m.content ?? ''),
-            toolCalls: m.toolCalls as import('../../types/tools.ts').ToolCall[] | undefined,
+            toolCalls: m.toolCalls as import('@pellux/goodvibes-sdk/platform/types/tools').ToolCall[] | undefined,
             callId: m.callId as string | undefined,
             toolName: m.toolName as string | undefined,
             reasoningContent: m.reasoningContent as string | undefined,

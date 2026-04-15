@@ -2,10 +2,10 @@
  * Route emitters — typed wrappers for RouteEvent domain.
  */
 
-import { createEventEnvelope } from '../events/envelope.ts';
-import type { RuntimeEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { RouteEvent, RouteSurfaceKind, RouteTargetKind } from '../events/routes.ts';
+import type { RouteEvent, RouteSurfaceKind, RouteTargetKind } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
 import type { EmitterContext } from './index.ts';
 
 function routeEvent<T extends RouteEvent['type']>(

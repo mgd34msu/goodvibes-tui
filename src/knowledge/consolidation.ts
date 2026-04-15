@@ -1,12 +1,12 @@
 import type { MemoryClass, MemoryRegistry, MemoryScope } from '../state/index.ts';
-import type { KnowledgeStore } from './store.ts';
+import type { KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/store';
 import type {
   KnowledgeConsolidationCandidateRecord,
   KnowledgeConsolidationReportRecord,
   KnowledgeNodeRecord,
   KnowledgeSourceRecord,
   KnowledgeUsageRecord,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/types';
 import {
   DEEP_CONSOLIDATION_AUTOPROMOTE_THRESHOLD,
   LIGHT_CONSOLIDATION_THRESHOLD,

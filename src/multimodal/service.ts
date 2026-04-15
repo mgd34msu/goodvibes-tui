@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { ArtifactStore } from '../artifacts/index.ts';
-import type { ArtifactDescriptor, ArtifactRecord } from '../artifacts/types.ts';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
+import type { ArtifactDescriptor, ArtifactRecord } from '@pellux/goodvibes-sdk/platform/artifacts/types';
 import { MediaProviderRegistry } from '../media/index.ts';
-import { extractKnowledgeArtifact } from '../knowledge/extractors.ts';
+import { extractKnowledgeArtifact } from '@pellux/goodvibes-sdk/platform/knowledge/extractors';
 import { KnowledgeService } from '../knowledge/index.ts';
-import { VoiceService } from '../voice/index.ts';
-import type { VoiceAudioArtifact } from '../voice/index.ts';
+import { VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
+import type { VoiceAudioArtifact } from '@pellux/goodvibes-sdk/platform/voice/index';
 import type {
   MultimodalAnalysisRequest,
   MultimodalAnalysisResult,
@@ -15,7 +15,7 @@ import type {
   MultimodalProviderDescriptor,
   MultimodalServiceStatus,
   MultimodalWritebackResult,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/multimodal/types';
 
 const PACKET_BUDGETS: Record<MultimodalDetail, number> = {
   compact: 280,

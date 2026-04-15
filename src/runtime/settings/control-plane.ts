@@ -2,8 +2,8 @@ import type { ConfigManager } from '../../config/manager.ts';
 import { join } from 'node:path';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
-import { ProfileManager } from '../../profiles/manager.ts';
-import type { ManagedSettingsBundle } from '../sandbox/types.ts';
+import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
+import type { ManagedSettingsBundle } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import {
   configSnapshot,
   defaultStore,

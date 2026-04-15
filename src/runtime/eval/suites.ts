@@ -8,9 +8,9 @@
  * baseline key for regression detection.
  */
 
-import type { EvalScenario, EvalRawResult } from './types.ts';
+import type { EvalScenario, EvalRawResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
 import { createPerfMonitor } from '../perf/index.ts';
-import { createInitialUiPerfState } from '../store/domains/ui-perf.ts';
+import { createInitialSurfacePerfState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surface-perf';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ const corePerformanceScenarios: EvalScenario[] = [
     async run(): Promise<EvalRawResult> {
       const t0 = Date.now();
       const monitor = createPerfMonitor();
-      const uiPerf = createInitialUiPerfState();
+      const surfacePerf = createInitialSurfacePerfState();
 
       // Inject fast render cycles (well under budget)
       const durations = syntheticRenderCycles(60, 8); // 8ms average
@@ -53,11 +53,11 @@ const corePerformanceScenarios: EvalScenario[] = [
         durationMs,
         overBudget: durationMs > 16,
       }));
-      uiPerf.recentCycles = cycles;
-      uiPerf.heapUsedBytes = 50 * 1024 * 1024; // 50 MiB stable
+      surfacePerf.recentCycles = cycles;
+      surfacePerf.heapUsedBytes = 50 * 1024 * 1024; // 50 MiB stable
 
       const perfReport = monitor.evaluate({
-        uiPerf,
+        surfacePerf,
         extraMetrics: {
           'event.queue.depth': 10,
           'tool.executor.overhead.p95': 2,
@@ -88,11 +88,11 @@ const corePerformanceScenarios: EvalScenario[] = [
     async run(): Promise<EvalRawResult> {
       const t0 = Date.now();
       const monitor = createPerfMonitor();
-      const uiPerf = createInitialUiPerfState();
-      uiPerf.heapUsedBytes = 60 * 1024 * 1024;
+      const surfacePerf = createInitialSurfacePerfState();
+      surfacePerf.heapUsedBytes = 60 * 1024 * 1024;
 
       const perfReport = monitor.evaluate({
-        uiPerf,
+        surfacePerf,
         extraMetrics: {
           'event.queue.depth': 50,
           'tool.executor.overhead.p95': 3,
@@ -123,17 +123,17 @@ const corePerformanceScenarios: EvalScenario[] = [
     async run(): Promise<EvalRawResult> {
       const t0 = Date.now();
       const monitor = createPerfMonitor();
-      const uiPerf = createInitialUiPerfState();
+      const surfacePerf = createInitialSurfacePerfState();
 
       // Simulate two consecutive evaluations with negligible heap growth
-      uiPerf.heapUsedBytes = 80 * 1024 * 1024;
-      uiPerf.lastMemorySampleAt = t0 - 60_000; // 1 minute ago
-      monitor.evaluate({ uiPerf, extraMetrics: {} }); // prime the monitor
+      surfacePerf.heapUsedBytes = 80 * 1024 * 1024;
+      surfacePerf.lastMemorySampleAt = t0 - 60_000; // 1 minute ago
+      monitor.evaluate({ surfacePerf, extraMetrics: {} }); // prime the monitor
 
-      uiPerf.heapUsedBytes = 80 * 1024 * 1024 + 512 * 1024; // +512 KiB over 1 min
-      uiPerf.lastMemorySampleAt = t0;
+      surfacePerf.heapUsedBytes = 80 * 1024 * 1024 + 512 * 1024; // +512 KiB over 1 min
+      surfacePerf.lastMemorySampleAt = t0;
 
-      const perfReport = monitor.evaluate({ uiPerf, extraMetrics: {} });
+      const perfReport = monitor.evaluate({ surfacePerf, extraMetrics: {} });
 
       return {
         completed: true,

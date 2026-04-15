@@ -3,13 +3,13 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '../../config/manager.ts';
-import { FavoritesStore } from '../../providers/favorites.ts';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
-import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
-import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import { ProviderRegistry } from '../../providers/registry.ts';
 
 const CLEAN_ENV_KEYS = [

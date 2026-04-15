@@ -1,16 +1,16 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { KVState } from '../../state/kv-state.ts';
-import { ProjectIndex } from '../../state/project-index.ts';
-import { ModeManager } from '../../state/mode-manager.ts';
+import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
+import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
-import { TelemetryDB } from '../../state/telemetry.ts';
-import type { TelemetryFilter } from '../../state/telemetry.ts';
-import { logger } from '../../utils/logger.ts';
-import type { Tool, ToolDefinition } from '../../types/tools.ts';
-import { STATE_TOOL_SCHEMA } from './schema.ts';
-import type { StateInput } from './schema.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { TelemetryDB } from '@pellux/goodvibes-sdk/platform/state/telemetry';
+import type { TelemetryFilter } from '@pellux/goodvibes-sdk/platform/state/telemetry';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { STATE_TOOL_SCHEMA } from '@pellux/goodvibes-sdk/platform/tools/state/schema';
+import type { StateInput } from '@pellux/goodvibes-sdk/platform/tools/state/schema';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -368,7 +368,7 @@ function runHooks(
     if (!VALID_HOOK_TYPES.has(hookDef.type)) {
       return { success: false, error: `hookDefinition.type must be one of: command, http, ts` };
     }
-    dispatcher.register(eventPattern, hookDef as import('../../hooks/types.ts').HookDefinition);
+    dispatcher.register(eventPattern, hookDef as import('@pellux/goodvibes-sdk/platform/hooks/types').HookDefinition);
     return {
       success: true,
       output: JSON.stringify({ mode: 'hooks', action: 'add', eventPattern, name: hookDef.name ?? null }),

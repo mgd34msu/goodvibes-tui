@@ -1,5 +1,5 @@
 import { DEFAULT_MEMORY_EMBEDDING_DIMS } from './memory-embeddings.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import type {
   MemoryEmbeddingProvider,
   MemoryEmbeddingProviderState,

@@ -1,13 +1,13 @@
 import type { LLMProvider, ProviderRuntimeMetadata, ProviderRuntimeMetadataDeps } from './interface.ts';
 import { join } from 'node:path';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import {
   ProviderCapabilityRegistry,
   type ProviderCapability,
   type RequestProfile,
   type RouteExplanation,
 } from './capabilities.ts';
-import type { DiscoveredServer } from '../discovery/scanner.ts';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
 import { createDiscoveredProvider, getDiscoveredReasoningFormat } from './discovered-factory.ts';
 import { getDiscoveredTraits } from './discovered-traits.ts';
 import { getConfiguredApiKeys, getConfiguredModelId, getConfiguredProviderId } from '../config/index.ts';
@@ -34,17 +34,17 @@ import {
   type PricingCatalog,
 } from './model-catalog.ts';
 import { registerBuiltinProviders, CATALOG_PROVIDER_NAME_ALIASES } from './builtin-registry.ts';
-import type { CacheHitTracker } from './cache-strategy.ts';
+import type { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import type { ConfigManager } from '../config/manager.ts';
-import type { SubscriptionManager } from '../config/subscriptions.ts';
-import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
-import type { FavoritesStore } from './favorites.ts';
-import type { BenchmarkStore } from './model-benchmarks.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import type { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { CanonicalModel } from './synthetic.ts';
-import { LocalContextIngestionService } from './local-context-ingestion.ts';
+import { LocalContextIngestionService } from '@pellux/goodvibes-sdk/platform/providers/local-context-ingestion';
 import { getModelLimitsCachePath, ModelLimitsService } from './model-limits.ts';
 import { getGitHubCopilotTokenCachePath } from './github-copilot.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   getBaseModelId,
   splitModelRegistryKey,

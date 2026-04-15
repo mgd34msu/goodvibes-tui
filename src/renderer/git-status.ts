@@ -1,6 +1,6 @@
 import { GitService } from '../git/service.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /** Git state shown in the header bar. */
 export interface GitHeaderInfo {

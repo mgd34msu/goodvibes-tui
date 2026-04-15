@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ModelDefinition } from '../../providers/registry.ts';
 import { ModelLimitsService } from '../../providers/model-limits.ts';
-import { resolveContextWindow } from '../../providers/local-context-ingestion.ts';
+import { resolveContextWindow } from '@pellux/goodvibes-sdk/platform/providers/local-context-ingestion';
 
 // ---------------------------------------------------------------------------
 // Helpers

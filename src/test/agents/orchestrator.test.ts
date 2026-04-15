@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { AgentOrchestrator, summarizeToolArgs } from '../../agents/orchestrator.ts';
 import type { AgentRecord } from '../../tools/agent/index.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
-import { FileStateCache } from '../../state/file-cache.ts';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
-import { ProjectIndex } from '../../state/project-index.ts';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import { randomUUID } from 'node:crypto';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 

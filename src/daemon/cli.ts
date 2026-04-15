@@ -5,9 +5,9 @@ import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { DaemonServer } from './server.ts';
 import { HttpListener } from './http-listener.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { GlobalNetworkTransportInstaller } from '../runtime/network/index.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type DaemonCliOwnership = {
   readonly workingDirectory: string;

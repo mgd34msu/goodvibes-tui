@@ -4,7 +4,7 @@ import { configSnapshotToProfileData, profileDataToConfigSnapshot } from '../../
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { requireProfileManager, requireProviderApi, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 interface ConfigBundle {
   readonly schemaVersion: 'v1';
@@ -219,9 +219,9 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             return;
           }
           const targetPath = shellPaths.resolveWorkspacePath(bundlePath);
-          const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
-          const pluginCatalogPath = shellPaths.resolveProjectTuiPath('ecosystem', 'plugins.json');
-          const skillCatalogPath = shellPaths.resolveProjectTuiPath('ecosystem', 'skills.json');
+          const servicesPath = shellPaths.resolveProjectPath('tui', 'services.json');
+          const pluginCatalogPath = shellPaths.resolveProjectPath('tui', 'ecosystem', 'plugins.json');
+          const skillCatalogPath = shellPaths.resolveProjectPath('tui', 'ecosystem', 'skills.json');
           const bundle: ConfigBundle = {
             schemaVersion: 'v1',
             exportedAt: Date.now(),
@@ -275,9 +275,9 @@ export function registerConfigCommand(registry: CommandRegistry): void {
             if (entry.key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = value as string;
           }
 
-          const ecosystemDir = shellPaths.resolveProjectTuiPath('ecosystem');
+          const ecosystemDir = shellPaths.resolveProjectPath('tui', 'ecosystem');
           if (bundle.services) {
-            const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
+            const servicesPath = shellPaths.resolveProjectPath('tui', 'services.json');
             mkdirSync(dirname(servicesPath), { recursive: true });
             writeFileSync(servicesPath, JSON.stringify(bundle.services, null, 2) + '\n', 'utf-8');
           }

@@ -1,7 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { GitService } from '../../git/service.ts';
 import { requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerGitRuntimeCommands(registry: CommandRegistry): void {
   registry.register({

@@ -10,12 +10,12 @@ import { AmazonBedrockMantleProvider } from './amazon-bedrock-mantle.ts';
 import { AnthropicVertexProvider } from './anthropic-vertex.ts';
 import { GitHubCopilotProvider } from './github-copilot.ts';
 import { BUILTIN_COMPAT_PROVIDERS, type BuiltinCompatDefinition } from './builtin-catalog.ts';
-import { normalizeFoundryEndpoint } from './microsoft-foundry-shared.ts';
+import { normalizeFoundryEndpoint } from '@pellux/goodvibes-sdk/platform/providers/microsoft-foundry-shared';
 import { SyntheticProvider } from './synthetic.ts';
-import type { BenchmarkEntry } from './model-benchmarks.ts';
+import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { CanonicalModel } from './synthetic.ts';
-import type { SubscriptionManager } from '../config/subscriptions.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 export interface ProviderRegistrar {
   register(provider: LLMProvider): void;
@@ -55,7 +55,7 @@ export function createBuiltinCompatProvider(
   definition: BuiltinCompatDefinition,
   apiKey: string,
   options: {
-    readonly cacheHitTracker?: import('./cache-strategy.ts').CacheHitTracker;
+    readonly cacheHitTracker?: import('@pellux/goodvibes-sdk/platform/providers/cache-strategy').CacheHitTracker;
   },
 ): LLMProvider {
   if (definition.kind === 'anthropic-compat') {
@@ -114,7 +114,7 @@ export function registerBuiltinProviders(
   apiKey: (name: string) => string,
   options: {
     readonly resolveProvider: (providerName: string) => LLMProvider;
-    readonly cacheHitTracker?: import('./cache-strategy.ts').CacheHitTracker;
+    readonly cacheHitTracker?: import('@pellux/goodvibes-sdk/platform/providers/cache-strategy').CacheHitTracker;
     readonly getCatalogModels: () => readonly CanonicalModel[];
     readonly getBenchmarks: (modelId: string) => BenchmarkEntry | undefined;
     readonly githubCopilotTokenCachePath: string;

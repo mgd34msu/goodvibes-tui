@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import type { TaskLifecycleState, RuntimeTask, TaskKind } from '../../runtime/store/domains/tasks.ts';
-import { createInitialTasksState } from '../../runtime/store/domains/tasks.ts';
+import type { TaskLifecycleState, RuntimeTask, TaskKind } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
+import { createInitialTasksState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 
 // ---------------------------------------------------------------------------
 // State machine — declarative valid transitions

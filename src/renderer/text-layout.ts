@@ -1,4 +1,4 @@
-import { getDisplayWidth, truncateDisplay, wrapText } from '../utils/terminal-width.ts';
+import { getDisplayWidth, truncateDisplay, wrapText } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 export function wrapWithHangingIndent(
   text: string,

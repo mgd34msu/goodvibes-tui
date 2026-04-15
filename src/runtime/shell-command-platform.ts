@@ -1,9 +1,9 @@
-import type { DeterministicReplayEngine } from '../core/deterministic-replay.ts';
+import type { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core/deterministic-replay';
 import type { ServiceRegistry } from '../config/service-registry.ts';
 import type { SecretsManager } from '../config/secrets.ts';
-import type { SubscriptionManager } from '../config/subscriptions.ts';
-import type { UserAuthManager } from '../security/user-auth.ts';
-import type { ApiTokenAuditor } from '../security/token-audit.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
+import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
 import type { WebhookNotifier } from '../integrations/webhooks.ts';
 import type { UiReadModels } from './ui-read-models.ts';
 

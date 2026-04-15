@@ -17,7 +17,7 @@ import {
   estimateConversationTokens,
   compactSmallWindow,
 } from '../../core/context-compaction.ts';
-import { isContextSizeExceededError } from '../../types/errors.ts';
+import { isContextSizeExceededError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { getTestAgentOrchestrator, getTestProviderRegistry, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
-import type { Line } from '../types/grid.ts';
-import type { PanelResourceContract, PanelHealthState } from '../runtime/perf/panel-contracts.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { PanelResourceContract, PanelHealthState } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-contracts';
 
 export type PanelCategory = 'development' | 'agent' | 'monitoring' | 'session' | 'ai';
 

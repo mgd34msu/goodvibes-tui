@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getHookPointContract } from '../../hooks/contracts.ts';
+import { getHookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
 
 describe('hook contract coverage', () => {
   test('covers permission and transport lifecycle edges', () => {

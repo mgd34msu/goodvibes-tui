@@ -11,9 +11,9 @@ import { createOperatorClientServices } from '../../runtime/foundation-services.
 import { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
-import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
+import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import type { MemoryAddOptions } from '../../state/memory-store.ts';
-import { UserAuthManager } from '../../security/user-auth.ts';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import { RemoteSupervisor } from '../../runtime/remote/supervisor.ts';
 import { createUiReadModels } from '../../runtime/ui-read-models.ts';
@@ -1788,7 +1788,7 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('active subscriptions: 0');
 
     const { DaemonServer } = await import('../../daemon/server.ts');
-    const { UserAuthManager } = await import('../../security/user-auth.ts');
+    const { UserAuthManager } = await import('@pellux/goodvibes-sdk/platform/security/user-auth');
     const daemon = new DaemonServer({
       port: 39451,
       host: '127.0.0.1',

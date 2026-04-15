@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
-import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
-import type { ShellPathService } from '../runtime/shell-paths.ts';
+import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import {
   buildEmptyState,
   buildPanelLine,

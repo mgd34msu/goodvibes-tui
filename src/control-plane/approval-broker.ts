@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { PersistentStore } from '../state/persistent-store.ts';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import type { PermissionPromptDecision, PermissionPromptRequest, PermissionRequestHandler } from '../permissions/prompt.ts';
-import type { ControlPlaneSurfaceMessage } from './types.ts';
+import type { ControlPlaneSurfaceMessage } from '@pellux/goodvibes-sdk/platform/control-plane/types';
 
 export type SharedApprovalStatus = 'pending' | 'claimed' | 'approved' | 'denied' | 'cancelled' | 'expired';
 

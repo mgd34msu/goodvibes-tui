@@ -1,6 +1,6 @@
 // Tests for JsonFileStore
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { JsonFileStore } from '../../state/json-file-store.ts';
+import { JsonFileStore } from '@pellux/goodvibes-sdk/platform/state/json-file-store';
 import { makeTempDir, writeTempFile } from '../setup.ts';
 import { rm } from 'node:fs/promises';
 

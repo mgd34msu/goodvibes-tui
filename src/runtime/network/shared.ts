@@ -8,8 +8,7 @@ type NetworkRootConfig = Pick<ConfigManager, 'getControlPlaneConfigDir'>;
 
 export function getGoodVibesRootDir(configManager: NetworkRootConfig): string {
   const configuredDir = configManager.getControlPlaneConfigDir();
-  const normalized = resolve(configuredDir);
-  return basename(normalized) === 'tui' ? dirname(normalized) : normalized;
+  return resolve(configuredDir);
 }
 
 export function getDefaultCertDirectory(configManager: NetworkRootConfig): string {

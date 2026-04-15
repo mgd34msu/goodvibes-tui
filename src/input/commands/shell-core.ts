@@ -1,10 +1,10 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
-import { EFFORT_DESCRIPTIONS } from '../../providers/effort-levels.ts';
+import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers/effort-levels';
 import { REASONING_BUDGET_MAP } from '../../providers/interface.ts';
 import { executeWriteQuit } from './quit-shared.ts';
 import { compactConversation, requireKeybindingsManager, requireProviderApi } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({

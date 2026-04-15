@@ -7,10 +7,10 @@ import {
   normalizeSecretRef,
   resolveSecretRef,
   type SecretCommandRunner,
-} from '../../config/secret-refs.ts';
+} from '@pellux/goodvibes-sdk/platform/config/secret-refs';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `gv-secret-refs-test-${process.pid}-${Math.random().toString(36).slice(2)}`);

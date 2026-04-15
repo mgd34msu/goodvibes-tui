@@ -1,17 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { PersistentStore } from '../state/persistent-store.ts';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import { ConfigManager } from '../config/manager.ts';
 import { AutomationManager } from './manager.ts';
-import { migrateLegacySchedules, type LegacySchedulerSnapshot } from './migration.ts';
-import type { AutomationJob } from './jobs.ts';
-import type { AutomationRouteBinding } from './routes.ts';
-import type { AutomationRun } from './runs.ts';
-import type { AutomationSourceRecord } from './sources.ts';
-import { AutomationJobStore } from './store/jobs.ts';
-import { resolveAutomationStorePath } from './store/paths.ts';
-import { AutomationRouteStore } from './store/routes.ts';
-import { AutomationRunStore } from './store/runs.ts';
-import { AutomationSourceStore } from './store/sources.ts';
+import { migrateLegacySchedules, type LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
+import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
+import { resolveAutomationStorePath } from '@pellux/goodvibes-sdk/platform/automation/store/paths';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
+import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
+import { AutomationSourceStore } from '@pellux/goodvibes-sdk/platform/automation/store/sources';
 
 export interface AutomationServiceConfig {
   readonly configManager: ConfigManager;

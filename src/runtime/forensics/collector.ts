@@ -25,9 +25,9 @@ import type {
   ForensicsJumpLink,
   PermissionEvidenceEntry,
   BudgetBreachEvidence,
-} from './types.ts';
-import { classifyFailure, summariseFailure } from './classifier.ts';
-import type { ForensicsRegistry } from './registry.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
+import { classifyFailure, summariseFailure } from '@pellux/goodvibes-sdk/platform/runtime/forensics/classifier';
+import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import { emitForensicsReportCreated } from '../emitters/forensics.ts';
 
 // ---------------------------------------------------------------------------

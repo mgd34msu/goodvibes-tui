@@ -1,6 +1,6 @@
-import { withRetry } from '../utils/retry.ts';
-import { ProviderError } from '../types/errors.ts';
-import type { ToolCall } from '../types/tools.ts';
+import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ProviderCapability } from './capabilities.ts';
 import type {
   ChatRequest,
@@ -14,7 +14,7 @@ import type {
   ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
-import { summarizeError, toProviderError } from '../utils/error-display.ts';
+import { summarizeError, toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   extractTextToolCalls,
   fromOpenAIToolCalls,

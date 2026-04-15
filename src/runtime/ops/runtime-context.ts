@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import { existsSync, readFileSync } from 'fs';
 import type { RuntimeEventBus } from '../events/index.ts';
 import type { RuntimeStore } from '../store/index.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface OpsRuntimeContextConfig {
   runtimeBus: RuntimeEventBus;

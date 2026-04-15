@@ -5,8 +5,8 @@
  * provider health records into a structured FallbackChainData snapshot
  * suitable for UI rendering.
  */
-import type { ModelDomainState } from '../../store/domains/model.ts';
-import type { ProviderHealthDomainState } from '../../store/domains/provider-health.ts';
+import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
+import type { ProviderHealthDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 import type { FallbackChainData, FallbackChainNode } from './types.ts';
 
 /**

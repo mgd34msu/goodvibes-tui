@@ -4,7 +4,7 @@ import { execSync } from 'child_process';
 import { join } from 'path';
 import { GitService } from '../../git/service.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
-import type { HookEvent } from '../../hooks/types.ts';
+import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { getTestGitService, resetTestGitServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

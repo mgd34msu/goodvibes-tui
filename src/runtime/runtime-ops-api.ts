@@ -1,8 +1,8 @@
 import type { OpsApi } from './ops-api.ts';
 import type { OpsControlPlane } from './ops/control-plane.ts';
-import type { RuntimeTask } from './store/domains/tasks.ts';
+import type { RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import type { UiTasksSnapshot } from './ui-read-models.ts';
-import type { TaskManager } from './tasks/types.ts';
+import type { TaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
 
 export interface RuntimeOpsApiOptions {
   readonly tasksReadModel: {

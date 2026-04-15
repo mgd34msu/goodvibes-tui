@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ProviderStatsPanel } from '../../panels/provider-stats-panel.ts';
 import { ToolInspectorPanel } from '../../panels/tool-inspector-panel.ts';
 import { SessionBrowserPanel } from '../../panels/session-browser-panel.ts';
@@ -19,8 +19,8 @@ import { OpsStrategyPanel } from '../../panels/ops-strategy-panel.ts';
 import { AgentLogsPanel } from '../../panels/agent-logs-panel.ts';
 import { AgentInspectorPanel } from '../../panels/agent-inspector-panel.ts';
 import { SessionManager } from '../../sessions/manager.ts';
-import { SessionMemoryStore } from '../../core/session-memory.ts';
-import { AdaptivePlanner } from '../../core/adaptive-planner.ts';
+import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
+import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 
 function linesText(lines: Line[]): string {

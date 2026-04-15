@@ -9,7 +9,7 @@ import type {
   SandboxLaunchPlan,
   SandboxProfile,
   SandboxResolvedBackend,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\"'\"'`)}'`;

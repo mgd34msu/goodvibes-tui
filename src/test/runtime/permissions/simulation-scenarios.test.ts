@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createPermissionSimulator } from '../../../runtime/permissions/index.ts';
-import { buildDefaultPolicySimulationScenarios, runPolicySimulationScenarios } from '../../../runtime/permissions/simulation-scenarios.ts';
+import { buildDefaultPolicySimulationScenarios, runPolicySimulationScenarios } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation-scenarios';
 
 describe('policy simulation scenarios', () => {
   test('builds a concrete default scenario set', () => {

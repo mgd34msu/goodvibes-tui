@@ -1,21 +1,21 @@
 import { readFileSync, statSync } from 'fs';
 import { dirname } from 'path';
-import type { HookDefinition, HookChain, HookEvent, HookResult } from './types.ts';
-import { matchesEventPath, matchesMatcher } from './matcher.ts';
-import { getHookPointContract } from './contracts.ts';
-import { HookActivityTracker } from './activity.ts';
-import { logger } from '../utils/logger.ts';
-import type { HooksConfig } from './types.ts';
+import type { HookDefinition, HookChain, HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { matchesEventPath, matchesMatcher } from '@pellux/goodvibes-sdk/platform/hooks/matcher';
+import { getHookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
+import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { HooksConfig } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { AgentManager } from '../tools/agent/index.ts';
 import type { ToolLLM } from '../config/tool-llm.ts';
-import * as commandRunner from './runners/command.ts';
+import * as commandRunner from '@pellux/goodvibes-sdk/platform/hooks/runners/command';
 import * as promptRunner from './runners/prompt.ts';
 import * as agentRunner from './runners/agent.ts';
-import * as httpRunner from './runners/http.ts';
-import * as tsRunner from './runners/typescript.ts';
-import { fireTriggers } from '../workflow/trigger-executor.ts';
-import type { TriggerManagerLike } from '../workflow/trigger-executor.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import * as httpRunner from '@pellux/goodvibes-sdk/platform/hooks/runners/http';
+import * as tsRunner from '@pellux/goodvibes-sdk/platform/hooks/runners/typescript';
+import { fireTriggers } from '@pellux/goodvibes-sdk/platform/workflow/trigger-executor';
+import type { TriggerManagerLike } from '@pellux/goodvibes-sdk/platform/workflow/trigger-executor';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type HookRunnerDeps = {
   readonly agentManager?: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'>;
@@ -118,7 +118,7 @@ export class HookDispatcher {
                 logger.info('HookDispatcher: hook missing "match" field, skipping', { filePath, pattern });
                 continue;
               }
-              this.register(pattern, d as unknown as import('./types.ts').HookDefinition);
+              this.register(pattern, d as unknown as import('@pellux/goodvibes-sdk/platform/hooks/types').HookDefinition);
             }
           }
         }
@@ -156,7 +156,7 @@ export class HookDispatcher {
               logger.info('HookDispatcher: chain action missing "match" field, skipping', { filePath, name: c.name });
               continue;
             }
-            this.registerChain(c as unknown as import('./types.ts').HookChain);
+            this.registerChain(c as unknown as import('@pellux/goodvibes-sdk/platform/hooks/types').HookChain);
           }
         }
       }

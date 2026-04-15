@@ -1,6 +1,6 @@
-import type { AutomationRouteBinding } from '../../automation/routes.ts';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
 import type { SharedApprovalRecord } from '../../control-plane/index.ts';
-import type { Tool } from '../../types/tools.ts';
+import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ChannelDeliveryRouteBinding } from '../delivery-router.ts';
 import type { ChannelDeliveryRequest } from '../delivery/types.ts';
 import type {
@@ -8,7 +8,7 @@ import type {
   ChannelRenderResult,
   ChannelSurface,
   ChannelToolDescriptor,
-} from '../types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/types';
 import type { BuiltinChannelRuntimeDeps } from './shared.ts';
 
 interface BuiltinRenderingContext {

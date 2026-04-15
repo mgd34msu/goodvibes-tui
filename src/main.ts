@@ -4,16 +4,16 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Compositor } from './renderer/compositor.ts';
-import { type Line } from './types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator.ts';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
 import { ConfigManager } from './config/index.ts';
 import type { ContentPart } from './providers/interface.ts';
-import { ToolRegistry } from './tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { registerAllTools } from './tools/index.ts';
-import { FileUndoManager } from './state/file-undo.ts';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
 import { PermissionManager } from './permissions/manager.ts';
 import { AcpManager } from './acp/manager.ts';
 import { PermissionPromptUI } from './permissions/prompt.ts';
@@ -22,7 +22,7 @@ import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
 import { WrfcController } from './agents/wrfc-controller.ts';
 import { registerBuiltinCommands } from './input/commands.ts';
-import { ScheduleManager } from './tools/workflow/index.ts';
+import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
 import { InputHistory } from './input/input-history.ts';
 import { getTierPromptSupplement, getTierForContextWindow } from './providers/tier-prompts.ts';
 import { GitStatusProvider } from './renderer/git-status.ts';
@@ -34,13 +34,13 @@ import {
 } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
-import { configureActivityLogger, logger } from './utils/logger.ts';
+import { configureActivityLogger, logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
-import type { HITLMode } from './state/mode-manager.ts';
-import type { HookPhase, HookCategory, HookEventPath } from './hooks/types.ts';
+import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
+import type { HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import {
   checkRecoveryFile,
   deleteRecoveryFile,
@@ -53,7 +53,7 @@ import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './runtime/session-return-context.ts';
 import { GlobalNetworkTransportInstaller } from './runtime/network/index.ts';
-import { summarizeError } from './utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';

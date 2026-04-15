@@ -9,8 +9,8 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { CASCADE_RULES } from '../../../runtime/health/cascade-rules.ts';
-import { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from '../../../runtime/health/cascade-playbook-map.ts';
+import { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
+import { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-playbook-map';
 import {
   stuckTurnPlaybook,
   reconnectFailurePlaybook,

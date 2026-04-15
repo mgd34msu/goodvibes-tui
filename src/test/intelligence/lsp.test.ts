@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { LspClient } from '../../intelligence/lsp/client.ts';
-import { LspService } from '../../intelligence/lsp/service.ts';
-import { parseCapabilities, hasCapability } from '../../intelligence/lsp/capabilities.ts';
-import type { LspCapabilities } from '../../intelligence/lsp/capabilities.ts';
+import { LspClient } from '@pellux/goodvibes-sdk/platform/intelligence/lsp/client';
+import { LspService } from '@pellux/goodvibes-sdk/platform/intelligence/lsp/service';
+import { parseCapabilities, hasCapability } from '@pellux/goodvibes-sdk/platform/intelligence/lsp/capabilities';
+import type { LspCapabilities } from '@pellux/goodvibes-sdk/platform/intelligence/lsp/capabilities';
 import { getTestLspService, resetTestLspService } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

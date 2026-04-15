@@ -9,7 +9,7 @@
  */
 import type { RuntimeEventBus, EnvelopeListener } from '../../events/index.ts';
 import type { AnyRuntimeEvent } from '../../events/domain-map.ts';
-import type { RuntimeEventEnvelope } from '../../events/envelope.ts';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import {
   type AgentEntry,
   type AgentDiagnosticState,
@@ -18,7 +18,7 @@ import {
   DEFAULT_PANEL_CONFIG,
   applyFilter,
   appendBounded,
-} from '../types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 
 /** Internal mutable agent record for in-progress agents. */
 interface MutableAgentRecord {

@@ -1,5 +1,5 @@
-import { logger } from '../../utils/logger.ts';
-import { GitHubIntegration } from '../../integrations/github.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { GitHubIntegration } from '@pellux/goodvibes-sdk/platform/integrations/github';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
 import type { TrySpawnAgentFn } from '../types.ts';
 

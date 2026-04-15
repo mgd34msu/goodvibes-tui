@@ -5,7 +5,7 @@ import { describe, test, expect } from 'bun:test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ProfilePickerModal } from '../../input/profile-picker-modal.ts';
-import { ProfileManager } from '../../profiles/manager.ts';
+import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
 import { renderProfilePickerModal } from '../../renderer/profile-picker-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 

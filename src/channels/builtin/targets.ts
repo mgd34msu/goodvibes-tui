@@ -7,7 +7,7 @@ import type {
   ChannelResolvedTarget,
   ChannelSurface,
   ChannelTargetResolveOptions,
-} from '../types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/types';
 import type { BuiltinChannelRuntimeDeps, ManagedSurface } from './shared.ts';
 import { resolveDiscordBotToken, resolveSlackBotToken } from './surfaces.ts';
 

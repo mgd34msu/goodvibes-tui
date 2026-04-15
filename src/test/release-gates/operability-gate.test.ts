@@ -23,13 +23,13 @@ import {
 import {
   classifyFailure,
   summariseFailure,
-} from '../../runtime/forensics/classifier.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/forensics/classifier';
 import type {
   FailureClass,
   FailureReport,
   CausalChainEntry,
   ForensicsBundle,
-} from '../../runtime/forensics/types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
 
 // ---------------------------------------------------------------------------
 // 1. Forensics classifier: all known failure classes are reachable

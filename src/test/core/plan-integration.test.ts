@@ -12,8 +12,8 @@ import { afterEach, describe, test, expect } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ExecutionPlanManager } from '../../core/execution-plan.ts';
-import type { ExecutionPlan, PlanItem } from '../../core/execution-plan.ts';
+import { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
+import type { ExecutionPlan, PlanItem } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 
 const planRoots = new Set<string>();
 

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { DiscoveredServer } from '../../discovery/index.ts';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/index';
 import { HelperModel } from '../../config/helper-model.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
@@ -17,7 +17,7 @@ import type {
   ProviderApiRuntimeQuery,
   ProviderApiRuntimeQueryResult,
 } from '../../providers/provider-api.ts';
-import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 
 function failOnAccess(label: string): never {
   throw new Error(`unexpected raw access: ${label}`);

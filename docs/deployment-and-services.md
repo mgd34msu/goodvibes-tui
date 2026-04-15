@@ -96,8 +96,8 @@ This is the right shape when a future web UI, browser clients, SSE, and WebSocke
 
 If no explicit certificate paths are configured, GoodVibes looks for:
 
-- `~/.goodvibes/certs/fullchain.pem`
-- `~/.goodvibes/certs/privkey.pem`
+- `~/.goodvibes/tui/certs/fullchain.pem`
+- `~/.goodvibes/tui/certs/privkey.pem`
 
 That convention also works well with self-hosted Let’s Encrypt deployment patterns where the operator copies or syncs certificate material into the GoodVibes home directory.
 

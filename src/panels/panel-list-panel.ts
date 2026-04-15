@@ -12,12 +12,12 @@
  *
  * Open via /panel list.
  */
-import type { Line, Cell } from '../types/grid.ts';
+import type { Line, Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { PanelCategory, PanelRegistration } from './types.ts';
 import { BasePanel } from './base-panel.ts';
 import type { PanelManager } from './panel-manager.ts';
-import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import {
   buildEmptyState,
   buildKeyValueLine,
@@ -30,7 +30,7 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import { wrapWithHangingIndent } from '../renderer/text-layout.ts';
 import {
   getPanelSearchFocusTransition,

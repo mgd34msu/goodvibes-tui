@@ -20,8 +20,8 @@ describe('runtime/network inbound TLS', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  test('uses ~/.goodvibes/certs-style defaults for direct control-plane TLS', () => {
-    const certDir = join(root, '.goodvibes', 'certs');
+  test('uses ~/.goodvibes/tui/certs defaults for direct control-plane TLS', () => {
+    const certDir = join(root, '.goodvibes', 'tui', 'certs');
     mkdirSync(certDir, { recursive: true });
     writeFileSync(join(certDir, 'fullchain.pem'), 'CERT\n', 'utf-8');
     writeFileSync(join(certDir, 'privkey.pem'), 'KEY\n', 'utf-8');
@@ -53,7 +53,7 @@ describe('runtime/network inbound TLS', () => {
   });
 
   test('checks private key permissions when direct listener TLS is enabled', () => {
-    const certDir = join(root, '.goodvibes', 'certs');
+    const certDir = join(root, '.goodvibes', 'tui', 'certs');
     mkdirSync(certDir, { recursive: true });
     const certFile = join(certDir, 'listener.pem');
     const keyFile = join(certDir, 'listener-key.pem');

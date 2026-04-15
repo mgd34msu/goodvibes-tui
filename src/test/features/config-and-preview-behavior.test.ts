@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '../../config/manager.ts';
 import { UIFactory } from '../../renderer/ui-factory.ts';
-import { getDisplayWidth } from '../../utils/terminal-width.ts';
+import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `gv-config-preview-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);

@@ -1,19 +1,19 @@
-import { PersistentStore } from '../state/persistent-store.ts';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import { ConfigManager } from '../config/manager.ts';
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import type { AgentManager } from '../tools/agent/index.ts';
 import { AgentMessageBus } from '../agents/message-bus.ts';
-import { migrateLegacySchedules, type LegacySchedulerSnapshot } from './migration.ts';
-import { AutomationJobStore } from './store/jobs.ts';
-import { AutomationRunStore } from './store/runs.ts';
-import { resolveAutomationStorePath } from './store/paths.ts';
+import { migrateLegacySchedules, type LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
+import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
+import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
+import { resolveAutomationStorePath } from '@pellux/goodvibes-sdk/platform/automation/store/paths';
 import { AutomationDeliveryManager } from './delivery-manager.ts';
 import { RouteBindingManager } from '../channels/index.ts';
-import type { AutomationJob } from './jobs.ts';
-import type { AutomationRun, AutomationRunContinuationMode, AutomationRunTelemetry } from './runs.ts';
-import type { AutomationRunTrigger } from './types.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRun, AutomationRunContinuationMode, AutomationRunTelemetry } from '@pellux/goodvibes-sdk/platform/automation/runs';
+import type { AutomationRunTrigger } from '@pellux/goodvibes-sdk/platform/automation/types';
 import { SharedSessionBroker } from '../control-plane/index.ts';
 import type {
   CreateAutomationJobInput,
@@ -68,7 +68,7 @@ import {
   syncAutomationRuntimeSnapshot,
 } from './manager-runtime-sync.ts';
 import { reconcileAutomationActiveRuns } from './manager-runtime-reconcile.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   createAutomationJobRecord,
   toggleAutomationJobEnabled,

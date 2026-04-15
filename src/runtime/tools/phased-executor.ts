@@ -1,7 +1,7 @@
-import type { Tool, ToolCall, ToolResult } from '../../types/tools.ts';
-import { logger } from '../../utils/logger.ts';
+import type { Tool, ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { ToolRuntimeContext } from './context.ts';
-import type { ExecutorConfig, PhaseResult, ToolExecutionPhase, ToolExecutionRecord } from './types.ts';
+import type { ExecutorConfig, PhaseResult, ToolExecutionPhase, ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 import {
   emitBudgetExceededCost,
   emitBudgetExceededMs,
@@ -377,7 +377,7 @@ export class PhasedToolExecutor {
   }
 
   private _emitBudgetEvent(
-    reason: import('./types.ts').BudgetExceedReason,
+    reason: import('@pellux/goodvibes-sdk/platform/runtime/tools/types').BudgetExceedReason,
     meta: Record<string, number>,
     phase: ToolExecutionPhase,
     call: ToolCall,

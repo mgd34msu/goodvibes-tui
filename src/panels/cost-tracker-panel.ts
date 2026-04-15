@@ -2,8 +2,8 @@
 // CostTrackerPanel — per-session / per-agent / per-plan cost estimates
 // ---------------------------------------------------------------------------
 
-import type { Line } from '../types/grid.ts';
-import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
 import type { AgentEvent, TurnEvent } from '../runtime/events/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';

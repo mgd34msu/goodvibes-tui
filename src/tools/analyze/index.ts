@@ -1,10 +1,10 @@
-import type { Tool } from '../../types/tools.ts';
+import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import { resolve } from 'node:path';
 import type { ToolLLM } from '../../config/tool-llm.ts';
-import { analyzeSchema } from './schema.ts';
-import { appendSchemaFingerprint } from '../shared/schema-fingerprint.ts';
-import type { AnalyzeInput } from './types.ts';
-import { applyAnalyzeTokenBudget, summarizeAnalyzeResult } from './shared.ts';
+import { analyzeSchema } from '@pellux/goodvibes-sdk/platform/tools/analyze/schema';
+import { appendSchemaFingerprint } from '@pellux/goodvibes-sdk/platform/tools/shared/schema-fingerprint';
+import type { AnalyzeInput } from '@pellux/goodvibes-sdk/platform/tools/analyze/types';
+import { applyAnalyzeTokenBudget, summarizeAnalyzeResult } from '@pellux/goodvibes-sdk/platform/tools/analyze/shared';
 import {
   runBundle,
   runCoverage,
@@ -17,17 +17,17 @@ import {
   runSecurity,
   runSurface,
   runTestFind,
-} from './scan-modes.ts';
+} from '@pellux/goodvibes-sdk/platform/tools/analyze/scan-modes';
 import {
   runBreaking,
   runDiff,
   runSemanticDiff,
   runUpgrade,
 } from './git-modes.ts';
-import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
-export type { AnalyzeInput } from './types.ts';
+export type { AnalyzeInput } from '@pellux/goodvibes-sdk/platform/tools/analyze/types';
 
 export function createAnalyzeTool(
   toolLLM: Pick<ToolLLM, 'chat'>,

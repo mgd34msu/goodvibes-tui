@@ -2,13 +2,13 @@ import { join } from 'node:path';
 import { ConfigManager } from '../config/manager.ts';
 import { SecretsManager } from '../config/secrets.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
-import { SubscriptionManager } from '../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '../automation/index.ts';
 import { ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '../channels/index.ts';
 import { ChannelDeliveryRouter } from '../channels/delivery-router.ts';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '../control-plane/index.ts';
 import { WatcherRegistry } from '../watchers/index.ts';
-import { ArtifactStore } from '../artifacts/index.ts';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import { KnowledgeService, KnowledgeStore } from '../knowledge/index.ts';
 import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '../media/index.ts';
 import { MultimodalService } from '../multimodal/index.ts';
@@ -16,63 +16,63 @@ import { AgentManager } from '../tools/agent/index.ts';
 import { AgentMessageBus } from '../agents/message-bus.ts';
 import { WrfcController } from '../agents/wrfc-controller.ts';
 import { AgentOrchestrator } from '../agents/orchestrator.ts';
-import { ArchetypeLoader } from '../agents/archetypes.ts';
-import { ProcessManager } from '../tools/shared/process-manager.ts';
-import { ModeManager } from '../state/mode-manager.ts';
-import { FileUndoManager } from '../state/file-undo.ts';
+import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
+import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
+import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
 import { MemoryRegistry } from '../state/memory-registry.ts';
 import { MemoryStore } from '../state/memory-store.ts';
 import type { RuntimeEventBus } from './events/index.ts';
 import { createDomainDispatch } from './store/index.ts';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
-import { DistributedRuntimeManager } from './remote/distributed-runtime-manager.ts';
+import { DistributedRuntimeManager } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-manager';
 import { RemoteRunnerRegistry, RemoteSupervisor } from './remote/index.ts';
 import { IntegrationHelperService } from './integration/helpers.ts';
-import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '../voice/index.ts';
+import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice/index';
 import { WebSearchProviderRegistry, WebSearchService } from '../web-search/index.ts';
 import { MemoryEmbeddingProviderRegistry } from '../state/memory-embeddings.ts';
 import { PanelManager } from '../panels/panel-manager.ts';
-import { HookActivityTracker } from '../hooks/activity.ts';
+import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 import { HookDispatcher, createHookWorkbench, type HookWorkbench } from '../hooks/index.ts';
 import { PluginManager } from '../plugins/manager.ts';
-import { BookmarkManager } from '../bookmarks/manager.ts';
-import { ProfileManager } from '../profiles/manager.ts';
+import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
+import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
 import { SessionManager } from '../sessions/manager.ts';
-import { CrossSessionTaskRegistry } from '../sessions/orchestration/index.ts';
-import { ApiTokenAuditor } from '../security/token-audit.ts';
-import { UserAuthManager } from '../security/user-auth.ts';
+import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
+import { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { WebhookNotifier } from '../integrations/webhooks.ts';
 import { McpRegistry } from '../mcp/registry.ts';
-import { DeterministicReplayEngine } from '../core/deterministic-replay.ts';
+import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core/deterministic-replay';
 import { ProviderOptimizer } from '../providers/optimizer.ts';
 import { ProviderRegistry } from '../providers/registry.ts';
 import { ProviderCapabilityRegistry } from '../providers/capabilities.ts';
-import { CacheHitTracker } from '../providers/cache-strategy.ts';
-import { FavoritesStore } from '../providers/favorites.ts';
-import { BenchmarkStore } from '../providers/model-benchmarks.ts';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import { ModelLimitsService } from '../providers/model-limits.ts';
 import { KeybindingsManager } from '../input/keybindings.ts';
-import { SessionMemoryStore } from '../core/session-memory.ts';
-import { SessionLineageTracker } from '../core/session-lineage.ts';
-import { SessionChangeTracker } from '../sessions/change-tracker.ts';
-import { ExecutionPlanManager } from '../core/execution-plan.ts';
-import { AdaptivePlanner } from '../core/adaptive-planner.ts';
-import { FileStateCache } from '../state/file-cache.ts';
-import { ProjectIndex } from '../state/project-index.ts';
-import { IdempotencyStore } from './idempotency/index.ts';
-import { OverflowHandler } from '../tools/shared/overflow.ts';
+import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
+import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
+import { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions/change-tracker';
+import { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
+import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
+import { IdempotencyStore } from '@pellux/goodvibes-sdk/platform/runtime/idempotency/index';
+import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
 import { ToolLLM } from '../config/tool-llm.ts';
-import { PanelHealthMonitor } from './perf/panel-health-monitor.ts';
+import { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import { WorktreeRegistry } from './worktree/registry.ts';
 import { SandboxSessionRegistry } from './sandbox/session-registry.ts';
-import { createShellPathService, type ShellPathService } from './shell-paths.ts';
-import type { FeatureFlagManager } from './feature-flags/index.ts';
-import { createFeatureFlagManager } from './feature-flags/index.ts';
+import { createShellPathService, type ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { PolicyRuntimeState } from './permissions/policy-runtime.ts';
 import {
   createWorkflowServices,
   type WorkflowServices,
-} from '../tools/workflow/index.ts';
+} from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
 
 export interface RuntimeServicesOptions {
   readonly runtimeBus: RuntimeEventBus;
@@ -180,7 +180,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const gatewayMethods = new GatewayMethodCatalog();
   const panelManager = new PanelManager();
   const keybindingsManager = new KeybindingsManager({
-    configPath: shellPaths.resolveUserTuiPath('keybindings.json'),
+    configPath: shellPaths.resolveUserPath('tui', 'keybindings.json'),
   });
   const routeBindings = new RouteBindingManager({
     store: new AutomationRouteStore({ configManager }),
@@ -196,18 +196,18 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     configManager,
   });
   const subscriptionManager = new SubscriptionManager(
-    shellPaths.resolveUserTuiPath('subscriptions.json'),
+    shellPaths.resolveUserPath('tui', 'subscriptions.json'),
   );
-  const serviceRegistry = new ServiceRegistry(shellPaths.resolveProjectTuiPath('services.json'), {
+  const serviceRegistry = new ServiceRegistry(shellPaths.resolveProjectPath('tui', 'services.json'), {
     secretsManager,
     subscriptionManager,
   });
   const providerCapabilityRegistry = new ProviderCapabilityRegistry();
   const cacheHitTracker = new CacheHitTracker();
-  const favoritesStore = new FavoritesStore({ dir: shellPaths.userTuiRoot });
-  const benchmarkStore = new BenchmarkStore({ dir: shellPaths.userTuiRoot });
+  const favoritesStore = new FavoritesStore({ dir: shellPaths.resolveUserPath('tui') });
+  const benchmarkStore = new BenchmarkStore({ dir: shellPaths.resolveUserPath('tui') });
   const modelLimitsService = new ModelLimitsService({
-    cachePath: shellPaths.resolveUserTuiPath('model-limits.json'),
+    cachePath: shellPaths.resolveUserPath('tui', 'model-limits.json'),
   });
   const providerRegistry = new ProviderRegistry({
     configManager,
@@ -228,16 +228,16 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     providerRegistry,
   });
   const localUserAuthManager = new UserAuthManager({
-    bootstrapFilePath: shellPaths.resolveUserTuiPath('auth-users.json'),
-    bootstrapCredentialPath: shellPaths.resolveUserTuiPath('auth-bootstrap.txt'),
+    bootstrapFilePath: shellPaths.resolveUserPath('tui', 'auth-users.json'),
+    bootstrapCredentialPath: shellPaths.resolveUserPath('tui', 'auth-bootstrap.txt'),
   });
-  const profileManager = new ProfileManager(shellPaths.resolveUserTuiPath('profiles'));
-  const bookmarkManager = new BookmarkManager(shellPaths.resolveUserTuiPath('bookmarks'));
+  const profileManager = new ProfileManager(shellPaths.resolveUserPath('tui', 'profiles'));
+  const bookmarkManager = new BookmarkManager(shellPaths.resolveUserPath('tui', 'bookmarks'));
   const sessionManager = new SessionManager(workingDirectory);
   const sessionOrchestration = new CrossSessionTaskRegistry(workingDirectory);
   const hookActivityTracker = new HookActivityTracker();
   const watcherRegistry = new WatcherRegistry({
-    storePath: shellPaths.resolveProjectTuiPath('watchers.json'),
+    storePath: shellPaths.resolveProjectPath('tui', 'watchers.json'),
   });
   watcherRegistry.attachRuntime({
     runtimeStore: options.runtimeStore,
@@ -270,10 +270,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     configManager,
   });
   const approvalBroker = new ApprovalBroker({
-    storePath: shellPaths.resolveProjectTuiPath('control-plane', 'approvals.json'),
+    storePath: shellPaths.resolveProjectPath('tui', 'control-plane', 'approvals.json'),
   });
   const sessionBroker = new SharedSessionBroker({
-    storePath: shellPaths.resolveProjectTuiPath('control-plane', 'sessions.json'),
+    storePath: shellPaths.resolveProjectPath('tui', 'control-plane', 'sessions.json'),
     routeBindings,
     agentStatusProvider: agentManager,
     messageSender: agentMessageBus,
@@ -364,12 +364,12 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
       cwd: shellPaths.workingDirectory,
       homeDir: shellPaths.homeDirectory,
     },
-    stateFilePath: shellPaths.resolveUserTuiPath('plugins.json'),
+    stateFilePath: shellPaths.resolveUserPath('tui', 'plugins.json'),
   });
   const workflow = createWorkflowServices();
   hookDispatcher.setTriggerManager(workflow.triggerManager);
   const channelPolicy = new ChannelPolicyManager({
-    storePath: shellPaths.resolveProjectTuiPath('channels', 'policies.json'),
+    storePath: shellPaths.resolveProjectPath('tui', 'channels', 'policies.json'),
   });
   const distributedRuntime = new DistributedRuntimeManager();
   distributedRuntime.attachRuntime({

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ScheduleManager, parseInterval } from '../../tools/workflow/index.ts';
+import { ScheduleManager, parseInterval } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
 import { getTestScheduleManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 beforeEach(() => {

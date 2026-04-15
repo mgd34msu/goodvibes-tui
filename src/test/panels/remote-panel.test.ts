@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { RemotePanel } from '../../panels/remote-panel.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { RemoteRunnerRegistry, RemoteSupervisor } from '../../runtime/remote/index.ts';
 import type { UiRemoteSnapshot } from '../../runtime/ui-read-models.ts';
 import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';

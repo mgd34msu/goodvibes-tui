@@ -19,6 +19,7 @@ describe('transcript event index', () => {
     expect(index.events.some((event) => event.kind === 'tool_result' && event.relatedCallId === 'call-1')).toBe(true);
     expect(index.events.some((event) => event.kind === 'remote_status')).toBe(true);
     expect(index.groups.some((group) => group.key === 'tool:call-1')).toBe(true);
+    expect(index.events.find((event) => event.kind === 'tool_result' && event.relatedCallId === 'call-1')?.title).toBe('exec');
   });
 
   test('navigates to next and previous transcript event lines by kind', () => {

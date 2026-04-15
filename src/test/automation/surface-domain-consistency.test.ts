@@ -3,19 +3,19 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AutomationDeliveryManager } from '../../automation/delivery-manager.ts';
-import type { AutomationJob } from '../../automation/jobs.ts';
-import type { AutomationRun } from '../../automation/runs.ts';
-import { AutomationRouteStore } from '../../automation/store/routes.ts';
-import type { AutomationSourceRecord } from '../../automation/sources.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
-import { ArtifactStore } from '../../artifacts/index.ts';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import { ConfigManager } from '../../config/manager.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SecretsManager } from '../../config/secrets.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import type { DeliveryEvent } from '../../runtime/events/deliveries.ts';
-import type { RouteEvent } from '../../runtime/events/routes.ts';
+import type { DeliveryEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/deliveries';
+import type { RouteEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
 
 describe('surface domain consistency', () => {
   let root = '';

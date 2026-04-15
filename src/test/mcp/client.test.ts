@@ -7,7 +7,7 @@
  */
 import { describe, test, expect } from 'bun:test';
 import { McpClient } from '../../mcp/client.ts';
-import type { McpServerConfig } from '../../mcp/config.ts';
+import type { McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
 
 // ---------------------------------------------------------------------------
 // Helper: build a minimal server config for tests

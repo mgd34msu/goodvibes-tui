@@ -3,9 +3,9 @@ import { renderMarkdown, renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
 import { renderSystemMessage } from '../renderer/system-message.ts';
-import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
+import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
-import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
+import { interpolateColor, getDisplayWidth, wrapText } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import { LAYOUT } from '../renderer/layout.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
@@ -15,6 +15,10 @@ import { parseDiffForApply } from './conversation-diff.ts';
 import { extractUserDisplayText } from './conversation-utils.ts';
 
 type Message = ConversationMessageSnapshot;
+
+function summarizeCallId(callId: string, maxLength = 24): string {
+  return callId.length <= maxLength ? callId : `${callId.slice(0, maxLength - 1)}…`;
+}
 
 interface ConversationRenderContext {
   readonly history: {
@@ -203,7 +207,9 @@ export function renderConversationToolMessage(
     labelFg: blockType === 'diff' ? '#f59e0b' : '#38bdf8',
     detailFg: '244',
   }, [
-    { text: ` ${message.callId || 'standalone'} `, fg: '244', dim: true },
+    ...(message.toolName
+      ? [{ text: ` ${message.toolName} `, fg: '#e2e8f0' as const }]
+      : [{ text: ` ${summarizeCallId(message.callId || 'standalone')} `, fg: '244' as const, dim: true }]),
     { text: ` ${isCollapsed ? GLYPHS.navigation.collapsed : GLYPHS.navigation.expanded} ${lineCount} line${lineCount === 1 ? '' : 's'} `, fg: '244', dim: true },
   ]));
 

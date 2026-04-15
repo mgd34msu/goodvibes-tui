@@ -10,9 +10,9 @@
  */
 
 import { describe, it, expect, mock } from 'bun:test';
-import { PermissionSimulator } from '../../../runtime/permissions/simulation.ts';
-import { DivergenceDashboard } from '../../../runtime/permissions/divergence-dashboard.ts';
-import { DivergencePanel } from '../../../runtime/diagnostics/panels/divergence.ts';
+import { PermissionSimulator } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation';
+import { DivergenceDashboard } from '@pellux/goodvibes-sdk/platform/runtime/permissions/divergence-dashboard';
+import { DivergencePanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/divergence';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

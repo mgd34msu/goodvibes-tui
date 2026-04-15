@@ -6,17 +6,17 @@ import type {
 import type {
   PendingSubscriptionLogin,
   ProviderSubscription,
-} from '../config/subscriptions.ts';
-import type { LocalAuthSnapshot } from '../security/user-auth.ts';
+} from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import type { SessionInfo } from '../sessions/manager.ts';
-import type { Tool } from '../types/tools.ts';
+import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ModelDefinition } from '../providers/registry.ts';
 import type {
   ProviderApi,
   ProviderRuntimeSnapshot,
 } from '../providers/provider-api.ts';
-import type { ExecutionPlan } from '../core/execution-plan.ts';
-import type { PlannerDecision, ExecutionStrategy } from '../core/adaptive-planner.ts';
+import type { ExecutionPlan } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
+import type { PlannerDecision, ExecutionStrategy } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 
 export interface EnvironmentVariableQuery {
   hasEnvironmentVariable(name: string): boolean;

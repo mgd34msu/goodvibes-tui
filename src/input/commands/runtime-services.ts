@@ -8,7 +8,7 @@ import type {
   CommandWorkspaceServices,
 } from '../command-registry.ts';
 import type { UiReadModels } from '../../runtime/ui-read-models.ts';
-import type { ShellPathService } from '../../runtime/shell-paths.ts';
+import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type { EcosystemCatalogPathOptions } from '../../runtime/ecosystem/catalog.ts';
 import type { PluginPathOptions } from '../../plugins/loader.ts';
 import type { DirectTransport } from '../../runtime/transports/direct.ts';

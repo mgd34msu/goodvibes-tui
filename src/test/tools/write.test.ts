@@ -4,8 +4,8 @@ import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createWriteTool } from '../../tools/write/index.ts';
-import { FileStateCache } from '../../state/file-cache.ts';
-import { ProjectIndex } from '../../state/project-index.ts';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 
 // ---------------------------------------------------------------------------
 // Helpers

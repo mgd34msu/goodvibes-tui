@@ -1,12 +1,12 @@
-import { InfiniteBuffer } from './history.ts';
-import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
+import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { SplashOptions } from '../utils/splash-lines.ts';
-import type { ToolCall, ToolResult } from '../types/tools.ts';
+import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ProviderMessage, ContentPart } from '../providers/interface.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { ConfigManager } from '../config/manager.ts';
-import type { SessionMemoryStore } from './session-memory.ts';
-import { SessionLineageTracker } from './session-lineage.ts';
+import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
+import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
 import { buildTranscriptEventIndex } from './transcript-events/index.ts';
 import type { TranscriptEventKind } from './transcript-events/index.ts';
 import { compactConversation } from './conversation-compaction.ts';
@@ -157,10 +157,20 @@ export class ConversationManager {
       } else if (m.role === 'assistant') {
         result.push({ role: 'assistant', content: m.content, toolCalls: m.toolCalls });
       } else if (m.role === 'tool') {
-        result.push({ role: 'tool', callId: m.callId, content: m.content });
+        result.push({ role: 'tool', callId: m.callId, content: m.content, ...(m.toolName ? { name: m.toolName } : {}) });
       }
     }
     return result;
+  }
+
+  private findToolName(callId: string): string | undefined {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const message = this.messages[i];
+      if (message.role !== 'assistant' || !message.toolCalls?.length) continue;
+      const match = message.toolCalls.find((call) => call.id === callId);
+      if (match?.name) return match.name;
+    }
+    return undefined;
   }
 
   public addUserMessage(content: string | ContentPart[]): void {
@@ -186,7 +196,13 @@ export class ConversationManager {
       const content = r.success
         ? (r.output ?? 'Tool completed successfully.')
         : `Error: ${r.error ?? 'Unknown error'}`;
-      this.messages.push({ role: 'tool', callId: r.callId, content });
+      const toolName = this.findToolName(r.callId);
+      this.messages.push({
+        role: 'tool',
+        callId: r.callId,
+        content,
+        ...(toolName ? { toolName } : {}),
+      });
     }
     this.markDirty();
   }

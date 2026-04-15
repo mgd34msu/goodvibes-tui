@@ -1,7 +1,7 @@
 import type {
   OperatorContractManifest,
   PeerContractManifest,
-} from '../src/types/foundation-contract.ts';
+} from '@pellux/goodvibes-sdk/platform/types/foundation-contract';
 
 export function renderFoundationClientTypes(
   _operatorContract: OperatorContractManifest,
@@ -29,6 +29,6 @@ export function renderFoundationClientTypes(
     "  RuntimeDomainEventPayloadMap,",
     "  RuntimeDomainEventType,",
     "  RuntimeEventTypedDomain,",
-    "} from '@pellux/goodvibes-sdk-beta/contracts';",
+    "} from '@pellux/goodvibes-sdk/contracts';",
   ].join('\n');
 }

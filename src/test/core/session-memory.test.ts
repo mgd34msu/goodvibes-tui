@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { SessionMemoryStore } from '../../core/session-memory.ts';
+import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
 
 describe('SessionMemoryStore', () => {
   let store: SessionMemoryStore;

@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { AcpConnection } from './connection.ts';
-import type { SubagentInfo, SubagentResult, SubagentTask } from './protocol.ts';
+import type { SubagentInfo, SubagentResult, SubagentTask } from '@pellux/goodvibes-sdk/platform/acp/protocol';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import { emitAgentSpawning } from '../runtime/emitters/index.ts';

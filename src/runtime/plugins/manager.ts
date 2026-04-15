@@ -7,8 +7,8 @@
  * Gated by the `plugin-lifecycle` feature flag.
  */
 
-import { logger } from '../../utils/logger.ts';
-import type { PluginEvent } from '../events/plugins.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { PluginEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/plugins';
 import { RuntimeEventBus } from '../events/index.ts';
 import type { RuntimeEventBus as RuntimeEventBusContract } from '../events/index.ts';
 import type { PluginLoaderDeps, LoadedPlugin } from '../../plugins/loader.ts';
@@ -18,7 +18,7 @@ import {
   unloadPlugin,
   type PluginPathOptions,
 } from '../../plugins/loader.ts';
-import type { PluginLifecycleState } from '../store/domains/plugins.ts';
+import type { PluginLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/plugins';
 import {
   type PluginCapability,
   type PluginLifecycleManagerOptions,
@@ -31,7 +31,7 @@ import { applyTransition, isOperational } from './lifecycle.ts';
 import { resolveCapabilityManifest } from './manifest.ts';
 import { PluginTrustStore, type PluginTrustTier } from './trust.ts';
 import { PluginQuarantineEngine } from './quarantine.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   emitPluginActive,
   emitPluginDegraded,

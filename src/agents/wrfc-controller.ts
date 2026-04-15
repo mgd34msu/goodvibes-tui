@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { AgentMessageBus } from './message-bus.ts';
-import { type CompletionReport, type ReviewerReport } from './completion-report.ts';
+import { type CompletionReport, type ReviewerReport } from '@pellux/goodvibes-sdk/platform/agents/completion-report';
 import {
   buildGateFailureTask,
   buildFixTask,
@@ -10,14 +10,14 @@ import {
   parseReviewerCompletionReport,
 } from './wrfc-reporting.ts';
 import type { QualityGateResult, QueuedChain, WrfcChain, WrfcState } from './wrfc-types.ts';
-import { WrfcWorkmap } from './wrfc-workmap.ts';
+import { WrfcWorkmap } from '@pellux/goodvibes-sdk/platform/agents/wrfc-workmap';
 import { AgentWorktree } from './worktree.ts';
-import { completePlanItemsForAgent } from './wrfc-plan-sync.ts';
+import { completePlanItemsForAgent } from '@pellux/goodvibes-sdk/platform/agents/wrfc-plan-sync';
 import type { ConfigManager } from '../config/manager.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
-import type { ExecutionPlanManager } from '../core/execution-plan.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import type { AgentEvent, RuntimeEventBus } from '../runtime/events/index.ts';
 import {
   emitWorkflowChainFailed,

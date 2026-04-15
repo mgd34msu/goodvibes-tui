@@ -12,6 +12,7 @@
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 function walkTs(dir: string, files: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -578,8 +579,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   });
 
   test('replay engine does not emit replay events through the legacy global bus path', () => {
-    const relPath = 'src/core/deterministic-replay.ts';
-    const absPath = join(projectRoot, relPath);
+    const resolvedPath = import.meta.resolve('@pellux/goodvibes-sdk/platform/core/deterministic-replay');
+    const absPath = resolvedPath.startsWith('file:') ? fileURLToPath(resolvedPath) : resolvedPath;
+    const relPath = relative(projectRoot, absPath);
     const content = readFileSync(absPath, 'utf8');
     const lines = content.split('\n');
     const violations: string[] = [];

@@ -1,4 +1,4 @@
-import { ArchetypeLoader } from '../../agents/archetypes.ts';
+import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
 import { AgentOrchestrator } from '../../agents/orchestrator.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { WrfcController } from '../../agents/wrfc-controller.ts';
@@ -14,10 +14,10 @@ import {
 } from '../../runtime/emitters/index.ts';
 import type { OrchestrationTaskContract } from '../../runtime/events/index.ts';
 import { evaluateOrchestrationSpawn } from '../../runtime/orchestration/spawn-policy.ts';
-import type { ExecutionIntent } from '../../runtime/execution-intents.ts';
-import { logger } from '../../utils/logger.ts';
-import type { AgentInput } from './schema.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import type { ExecutionIntent } from '@pellux/goodvibes-sdk/platform/runtime/execution-intents';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { AgentInput } from '@pellux/goodvibes-sdk/platform/tools/agent/schema';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export type AgentExecutor = {
   runAgent(record: AgentRecord): Promise<void>;

@@ -1,10 +1,10 @@
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { ConfigManager } from '../config/manager.ts';
-import type { AutomationJob } from './jobs.ts';
-import type { AutomationRun } from './runs.ts';
-import type { AutomationRunTrigger } from './types.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
+import type { AutomationRunTrigger } from '@pellux/goodvibes-sdk/platform/automation/types';
 import { computeNextRun } from './manager-runtime-helpers.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 

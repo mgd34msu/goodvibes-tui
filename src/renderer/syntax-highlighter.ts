@@ -20,9 +20,9 @@
  *   Default:           252      (light grey)
  */
 import type { Node } from 'web-tree-sitter';
-import { TreeSitterService } from '../intelligence/tree-sitter/service.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/service';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

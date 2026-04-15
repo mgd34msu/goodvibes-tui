@@ -6,7 +6,7 @@ import { registerBuiltinCommands } from '../../input/commands.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
+import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
@@ -22,11 +22,11 @@ import { createRuntimeProviderApi } from '../../runtime/runtime-provider-api.ts'
 import { createOperatorClient } from '../../runtime/operator-client.ts';
 import { createPeerClient } from '../../runtime/peer-client.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
-import { ToolRegistry } from '../../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
-import { listHookPointContracts } from '../../hooks/contracts.ts';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
 
 type CommandContextOverrides =
   Omit<Partial<CommandContext>, 'session' | 'provider' | 'workspace' | 'platform' | 'ops' | 'extensions'> & {

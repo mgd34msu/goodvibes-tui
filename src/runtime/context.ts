@@ -7,18 +7,18 @@
  */
 import type { ConversationManager } from '../core/conversation.ts';
 import type { Orchestrator } from '../core/orchestrator.ts';
-import type { ToolRegistry } from '../tools/registry.ts';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { HookDispatcher } from '../hooks/dispatcher.ts';
-import type { FileStateCache } from '../state/file-cache.ts';
-import type { ProjectIndex } from '../state/project-index.ts';
+import type { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import type { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { RuntimeStore } from './store/index.ts';
 import type { RuntimeEventBus } from './events/index.ts';
-import type { FeatureFlagManager } from './feature-flags/index.ts';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import type { SessionSnapshot } from './session-persistence.ts';
 import type { RuntimeServices } from './services.ts';
-import type { PanelHealthMonitor } from './perf/panel-health-monitor.ts';
+import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import type { WorktreeRegistry } from './worktree/registry.ts';
 import type { SandboxSessionRegistry } from './sandbox/session-registry.ts';
 

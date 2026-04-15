@@ -1,9 +1,9 @@
 import type { HookDispatcher } from '../../hooks/dispatcher.ts';
 import type { PermissionManager } from '../../permissions/manager.ts';
-import type { FileStateCache } from '../../state/file-cache.ts';
-import type { ProjectIndex } from '../../state/project-index.ts';
+import type { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import type { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { OverflowHandler } from '../../tools/shared/overflow.ts';
+import type { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
 
 /**
  * Minimal read/subscribe interface over the Zustand RuntimeStore.

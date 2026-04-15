@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import type { ProfileBundleEntry, ProfileSyncBundle } from '../../runtime/sandbox/types.ts';
+import type { ProfileBundleEntry, ProfileSyncBundle } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import { recordSettingsSyncEvent, recordSettingsSyncFailure } from '../../runtime/settings/control-plane.ts';
 import { requireProfileManager, requireShellPaths } from './runtime-services.ts';
 

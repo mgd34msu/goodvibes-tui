@@ -8,7 +8,7 @@ import { recallCommand } from '../../input/commands/memory.ts';
 import { createMemoryApi } from '../../knowledge/knowledge-api.ts';
 import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
 import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
-import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 
 function makeBaseContext(registry: MemoryRegistry, printed: string[]): CommandContext {
   const providerRegistry = {} as never;

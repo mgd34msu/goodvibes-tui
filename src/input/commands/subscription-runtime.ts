@@ -1,14 +1,14 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { createOAuthLocalListener } from '../../config/oauth-local-listener.ts';
-import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '../../config/openai-codex-auth.ts';
-import type { OAuthProviderConfig, ProviderSubscription } from '../../config/subscriptions.ts';
+import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config/oauth-local-listener';
+import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
+import type { OAuthProviderConfig, ProviderSubscription } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '../../config/subscription-providers.ts';
 import { inspectProviderAuth } from '../../runtime/auth/inspection.ts';
-import { openExternalUrl } from '../../utils/open-external.ts';
+import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils/open-external';
 import { requireSecretsManager, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 interface SubscriptionBundle {
   readonly version: 1;

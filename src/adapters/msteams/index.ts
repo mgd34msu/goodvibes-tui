@@ -1,5 +1,5 @@
 import type { ChannelConversationKind } from '../../channels/index.ts';
-import { constantTimeEquals, readBearerOrHeaderToken, readTextBodyWithinLimit } from '../helpers.ts';
+import { constantTimeEquals, readBearerOrHeaderToken, readTextBodyWithinLimit } from '@pellux/goodvibes-sdk/platform/adapters/helpers';
 import type { SurfaceAdapterContext } from '../types.ts';
 
 function readRecord(value: unknown): Record<string, unknown> | null {

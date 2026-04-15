@@ -4,7 +4,7 @@ import { estimateTokens } from '../core/context-compaction.ts';
 import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '../state/index.ts';
 import type { MemoryRegistry } from '../state/index.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 type PromptContextDeps = {
   readonly workingDirectory: string;

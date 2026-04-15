@@ -7,8 +7,8 @@
  * This class is a data provider only — it contains no rendering logic.
  * Subscribe to change notifications and call getSnapshot() to render.
  */
-import type { ProviderHealthDomainState, ProviderHealthRecord } from '../../store/domains/provider-health.ts';
-import type { ModelDomainState } from '../../store/domains/model.ts';
+import type { ProviderHealthDomainState, ProviderHealthRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
+import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
 import { buildFallbackChainData } from './fallback-visualizer.ts';
 import type {
   ProviderHealthData,

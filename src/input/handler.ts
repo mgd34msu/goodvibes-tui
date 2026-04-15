@@ -1,6 +1,6 @@
-import { InputTokenizer } from '../core/tokenizer.ts';
+import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import { SelectionManager } from './selection.ts';
-import type { InfiniteBuffer } from '../core/history.ts';
+import type { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';
@@ -203,7 +203,7 @@ export class InputHandler {
     this.agentDetailModal = new AgentDetailModal({
       agentManager: uiServices.agents.agentManager,
       agentMessageBus: uiServices.agents.agentMessageBus,
-      sessionLogPathResolver: (agentId) => uiServices.environment.shellPaths.resolveProjectTuiPath('sessions', `${agentId}.jsonl`),
+      sessionLogPathResolver: (agentId) => uiServices.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
     });
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager);

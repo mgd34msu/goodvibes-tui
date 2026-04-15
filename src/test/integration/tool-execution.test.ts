@@ -10,7 +10,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
-import { ToolRegistry } from '../../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { PermissionManager } from '../../permissions/manager.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { createPermissionConfigReader } from '../../permissions/manager.ts';

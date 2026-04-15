@@ -1,7 +1,7 @@
-import type { HookDefinition, HookResult, HookEvent } from '../types.ts';
-import { logger } from '../../utils/logger.ts';
+import type { HookDefinition, HookResult, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { AgentManager } from '../../tools/agent/index.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /**
  * Agent hook runner — spawns a subagent via AgentManager and waits for

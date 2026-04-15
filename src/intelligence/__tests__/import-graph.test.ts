@@ -5,7 +5,7 @@ import {
   ImportGraph,
   extractRelativeSpecifiersForTest,
   resolveSpecifierForTest,
-} from '../import-graph.ts';
+} from '@pellux/goodvibes-sdk/platform/intelligence/import-graph';
 
 function fileMap(entries: Record<string, string>, root = '/virtual'): Record<string, string> {
   return Object.fromEntries(

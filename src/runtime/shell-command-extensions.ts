@@ -1,5 +1,5 @@
 import type { ForensicsRegistry } from './forensics/index.ts';
-import type { PolicyRegistry } from './permissions/policy-registry.ts';
+import type { PolicyRegistry } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-registry';
 import type { PolicyRuntimeState } from './permissions/policy-runtime.ts';
 import type { MemoryRegistry } from '../state/memory-store.ts';
 import type { IntegrationHelperService } from './integration/helpers.ts';

@@ -8,5 +8,5 @@ export type {
   McpServerRecord,
   McpServerSecurityRecord,
 } from './mcp-api.ts';
-export { loadMcpConfig } from './config.ts';
-export type { McpConfig, McpConfigRoots, McpServerConfig } from './config.ts';
+export { loadMcpConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
+export type { McpConfig, McpConfigRoots, McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';

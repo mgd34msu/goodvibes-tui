@@ -2,10 +2,10 @@
  * Knowledge emitters — typed wrappers for KnowledgeEvent domain.
  */
 
-import { createEventEnvelope } from '../events/envelope.ts';
-import type { RuntimeEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { KnowledgeEvent } from '../events/knowledge.ts';
+import type { KnowledgeEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/knowledge';
 import type { EmitterContext } from './index.ts';
 
 function knowledgeEvent<T extends KnowledgeEvent['type']>(

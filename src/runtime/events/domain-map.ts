@@ -4,32 +4,32 @@
  * Used by RuntimeEventBus for type-safe subscriptions. Combine all domain
  * discriminated union members into a single flat map keyed by the type string.
  */
-import type { SessionEvent } from './session.ts';
+import type { SessionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/session';
 import type { TurnEvent } from './turn.ts';
-import type { ProviderEvent } from './providers.ts';
-import type { ToolEvent } from './tools.ts';
-import type { TaskEvent } from './tasks.ts';
-import type { AgentEvent } from './agents.ts';
+import type { ProviderEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/providers';
+import type { ToolEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tools';
+import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tasks';
+import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/agents';
 import type { WorkflowEvent } from './workflows.ts';
-import type { OrchestrationEvent } from './orchestration.ts';
-import type { CommunicationEvent } from './communication.ts';
-import type { PlannerEvent } from './planner.ts';
-import type { PermissionEvent } from './permissions.ts';
-import type { PluginEvent } from './plugins.ts';
-import type { McpEvent } from './mcp.ts';
-import type { TransportEvent } from './transport.ts';
-import type { CompactionEvent } from './compaction.ts';
-import type { UIEvent } from './ui.ts';
-import type { OpsEvent } from './ops.ts';
-import type { ForensicsEvent } from './forensics.ts';
-import type { SecurityEvent } from './security.ts';
-import type { AutomationEvent } from './automation.ts';
-import type { RouteEvent } from './routes.ts';
-import type { ControlPlaneEvent } from './control-plane.ts';
-import type { DeliveryEvent } from './deliveries.ts';
-import type { WatcherEvent } from './watchers.ts';
-import type { SurfaceEvent } from './surfaces.ts';
-import type { KnowledgeEvent } from './knowledge.ts';
+import type { OrchestrationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/orchestration';
+import type { CommunicationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/communication';
+import type { PlannerEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/planner';
+import type { PermissionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/permissions';
+import type { PluginEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/plugins';
+import type { McpEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/mcp';
+import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
+import type { CompactionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/compaction';
+import type { UIEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/ui';
+import type { OpsEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/ops';
+import type { ForensicsEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/forensics';
+import type { SecurityEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/security';
+import type { AutomationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/automation';
+import type { RouteEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
+import type { ControlPlaneEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/control-plane';
+import type { DeliveryEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/deliveries';
+import type { WatcherEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/watchers';
+import type { SurfaceEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/surfaces';
+import type { KnowledgeEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/knowledge';
 
 /** Union of all runtime domain events. */
 export type AnyRuntimeEvent =

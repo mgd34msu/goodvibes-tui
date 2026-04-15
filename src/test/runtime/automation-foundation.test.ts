@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '../../config/manager.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { createFeatureFlagManager } from '../../runtime/feature-flags/index.ts';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 
 describe('automation/control-plane foundation', () => {
   let root = '';

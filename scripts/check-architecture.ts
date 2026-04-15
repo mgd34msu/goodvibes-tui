@@ -179,7 +179,6 @@ const rules: readonly Rule[] = [
     allow: [
       'src/main.ts',
       'src/daemon/cli.ts',
-      'src/runtime/shell-paths.ts',
       'src/runtime/worktree/registry.ts',
     ],
     pattern: /join\(\s*['"]\.goodvibes['"]|join\(\s*['"]\.['"]\s*,\s*['"]\.goodvibes['"]|workspaceRoot:\s*['"]\.['"]/,
@@ -236,20 +235,23 @@ for (const file of testFiles) {
   }
 }
 
-const requiredSnippets: Array<{ file: string; snippet: string; message: string }> = [
+const requiredSnippets: Array<{ file: string; snippets: readonly string[]; message: string }> = [
   {
     file: 'src/control-plane/method-catalog-control-core.ts',
-    snippet: "id: 'control.contract'",
+    snippets: ["id: 'control.contract'"],
     message: 'operator contract method must stay cataloged',
   },
   {
-    file: 'src/control-plane/routes/operator.ts',
-    snippet: "/api/control-plane/contract",
+    file: 'src/control-plane/operator-contract.ts',
+    snippets: [
+      'getOperatorContract',
+      '@pellux/goodvibes-sdk/contracts',
+    ],
     message: 'operator contract route must stay exposed',
   },
   {
     file: 'src/control-plane/method-catalog-runtime.ts',
-    snippet: "id: 'remote.node_host.contract'",
+    snippets: ["id: 'remote.node_host.contract'"],
     message: 'peer contract method must stay cataloged',
   },
 ];
@@ -257,7 +259,7 @@ const requiredSnippets: Array<{ file: string; snippet: string; message: string }
 for (const requirement of requiredSnippets) {
   const file = join(ROOT, requirement.file);
   const text = readFileSync(file, 'utf-8');
-  if (!text.includes(requirement.snippet)) {
+  if (!requirement.snippets.some((snippet) => text.includes(snippet))) {
     violations.push(`${requirement.file}: ${requirement.message}`);
   }
 }

@@ -2,11 +2,11 @@ import type { ConfigManager } from '../config/manager.ts';
 import type { ServiceRegistry } from '../config/service-registry.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { MutableRuntimeState } from './context.ts';
-import type { IntegrationRecord } from './store/domains/integrations.ts';
-import { logger } from '../utils/logger.ts';
-import { loadSystemPrompt as _loadSystemPrompt } from '../utils/prompt-loader.ts';
+import type { IntegrationRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/integrations';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { loadSystemPrompt as _loadSystemPrompt } from '@pellux/goodvibes-sdk/platform/utils/prompt-loader';
 import { isAbsolute, resolve } from 'node:path';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 function requireOwnedPromptRoot(path: string | null, name: 'workingDirectory' | 'homeDirectory'): string {
   const trimmed = path?.trim();

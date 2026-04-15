@@ -4,10 +4,10 @@
 
 import { describe, it, expect } from 'bun:test';
 import { EvalRunner } from '../../../runtime/eval/runner.ts';
-import { scoreScenario, DIMENSION_FLOOR } from '../../../runtime/eval/scorecard.ts';
-import { captureBaseline, serialiseBaseline, deserialiseBaseline } from '../../../runtime/eval/baseline.ts';
+import { scoreScenario, DIMENSION_FLOOR } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
+import { captureBaseline, serialiseBaseline, deserialiseBaseline } from '@pellux/goodvibes-sdk/platform/runtime/eval/baseline';
 import { BUILTIN_SUITES, ALL_SCENARIOS } from '../../../runtime/eval/suites.ts';
-import type { EvalScenario, EvalRawResult } from '../../../runtime/eval/types.ts';
+import type { EvalScenario, EvalRawResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
 
 // ── scoreScenario ──────────────────────────────────────────────────────────────
 

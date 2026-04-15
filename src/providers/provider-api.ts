@@ -1,4 +1,4 @@
-import type { DiscoveredServer } from '../discovery/index.ts';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/index';
 import { HelperModel, type HelperModelDeps } from '../config/helper-model.ts';
 import {
   compositeScore,
@@ -8,9 +8,9 @@ import {
   type BenchmarkStore,
   type ModelBenchmarks,
   type QualityTier,
-} from './model-benchmarks.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { MinimalModelDefinition, SyntheticModelInfo } from './model-catalog.ts';
-import type { FavoritesData, FavoritesStore } from './favorites.ts';
+import type { FavoritesData, FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import type { LLMProvider, ProviderRuntimeMetadata } from './interface.ts';
 import type { ModelDefinition } from './registry-types.ts';
 import {

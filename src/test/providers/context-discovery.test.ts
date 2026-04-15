@@ -16,7 +16,7 @@ import {
   _extractOrigin,
   _extractOllamaContextLength,
   _extractOpenAIContextLength,
-} from '../../providers/context-discovery.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/context-discovery';
 
 // ---------------------------------------------------------------------------
 // Helpers

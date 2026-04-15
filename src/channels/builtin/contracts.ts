@@ -1,5 +1,5 @@
-import type { SurfacesConfig } from '../../config/schema.ts';
-import { ChannelPolicyManager } from '../policy-manager.ts';
+import type { SurfacesConfig } from '@pellux/goodvibes-sdk/platform/config/schema';
+import { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels/policy-manager';
 import type {
   ChannelAccountRecord,
   ChannelAllowlistEditInput,
@@ -18,14 +18,14 @@ import type {
   ChannelResolvedTarget,
   ChannelSurface,
   ChannelTargetResolveOptions,
-} from '../types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/types';
 import type { ChannelPlugin } from '../plugin-registry.ts';
 import {
   CHANNEL_SETUP_VERSION,
   type BuiltinChannelRuntimeDeps,
   configSectionForSurface,
 } from './shared.ts';
-import { renderBuiltinPolicy, surfaceLabelForBuiltin } from './presentation.ts';
+import { renderBuiltinPolicy, surfaceLabelForBuiltin } from '@pellux/goodvibes-sdk/platform/channels/builtin/presentation';
 import { getBuiltinSetupSchema } from './setup-schema.ts';
 
 interface BuiltinContractContext {

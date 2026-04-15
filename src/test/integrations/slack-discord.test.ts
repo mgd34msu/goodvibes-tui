@@ -1,8 +1,8 @@
 import { describe, test, expect, mock } from 'bun:test';
 import { createHmac } from 'crypto';
-import { SlackIntegration } from '../../integrations/slack.ts';
-import { DiscordIntegration } from '../../integrations/discord.ts';
-import { NtfyIntegration } from '../../integrations/ntfy.ts';
+import { SlackIntegration } from '@pellux/goodvibes-sdk/platform/integrations/slack';
+import { DiscordIntegration } from '@pellux/goodvibes-sdk/platform/integrations/discord';
+import { NtfyIntegration } from '@pellux/goodvibes-sdk/platform/integrations/ntfy';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { classifyIntent } from '../../core/intent-classifier.ts';
+import { classifyIntent } from '@pellux/goodvibes-sdk/platform/core/intent-classifier';
 import { requireAdaptivePlanner, requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
 
 export function registerPlanningRuntimeCommands(registry: CommandRegistry): void {

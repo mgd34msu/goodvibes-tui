@@ -10,7 +10,7 @@ import {
   scaffoldSandboxQemuSetupBundle,
 } from '../../runtime/sandbox/provisioning.ts';
 import { requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export async function handleSandboxQemuCommand(args: string[], ctx: CommandContext): Promise<boolean> {
   const shellPaths = requireShellPaths(ctx);

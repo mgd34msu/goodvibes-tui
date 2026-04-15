@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { matchesEventPath, matchesMatcher } from '../../hooks/matcher.ts';
+import { matchesEventPath, matchesMatcher } from '@pellux/goodvibes-sdk/platform/hooks/matcher';
 
 describe('matchesEventPath', () => {
   describe('exact matching', () => {

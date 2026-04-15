@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { CommandRegistry } from '../command-registry.ts';
-import type { RemoteSessionBundle } from '../../runtime/remote/types.ts';
+import type { RemoteSessionBundle } from '@pellux/goodvibes-sdk/platform/runtime/remote/types';
 import { requirePeerClient, requireShellPaths } from './runtime-services.ts';
 
 function inspectRemoteSessionBundle(bundle: RemoteSessionBundle): string {

@@ -1,5 +1,5 @@
-import type { InputToken } from '../core/tokenizer.ts';
-import type { InfiniteBuffer } from '../core/history.ts';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import type { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
 import type { SelectionResult, SelectionModal } from './selection-modal.ts';
 import type { BookmarkModal } from './bookmark-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';

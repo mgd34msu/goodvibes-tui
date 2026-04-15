@@ -1,5 +1,5 @@
 import type { GatewayEventDescriptor, GatewayMethodCatalog, GatewayMethodDescriptor } from './method-catalog.ts';
-import { getOperatorContract } from '@pellux/goodvibes-sdk-beta/contracts';
+import { getOperatorContract } from '@pellux/goodvibes-sdk/contracts';
 import {
   BOOLEAN_SCHEMA,
   METHOD_DESCRIPTOR_SCHEMA,
@@ -14,9 +14,9 @@ import {
   CONTROL_AUTH_LOGIN_REQUEST_SCHEMA,
   CONTROL_AUTH_LOGIN_RESPONSE_SCHEMA,
 } from './operator-contract-schemas.ts';
-import type { OperatorContractManifest } from '../types/foundation-contract.ts';
+import type { OperatorContractManifest } from '@pellux/goodvibes-sdk/platform/types/foundation-contract';
 import { VERSION } from '../version.ts';
-import { OPERATOR_SESSION_COOKIE_NAME } from '../security/http-auth.ts';
+import { OPERATOR_SESSION_COOKIE_NAME } from '@pellux/goodvibes-sdk/platform/security/http-auth';
 
 const OPERATOR_CONTRACT_VERSION = 1;
 const OPERATOR_WS_PATH = '/api/control-plane/ws';
@@ -28,7 +28,7 @@ const OPERATOR_AUTH_CURRENT_ALIAS_PATHS = ['/api/control-plane/whoami'];
 const PEER_CONTRACT_PATH = '/api/remote/node-host/contract';
 const PEER_CONTRACT_ALIAS_PATHS = ['/api/remote/device/contract'];
 
-export type { OperatorContractManifest } from '../types/foundation-contract.ts';
+export type { OperatorContractManifest } from '@pellux/goodvibes-sdk/platform/types/foundation-contract';
 
 interface OperatorSchemaCoverage {
   readonly methods: number;

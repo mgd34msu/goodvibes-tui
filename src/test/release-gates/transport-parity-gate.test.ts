@@ -11,7 +11,7 @@ import { createHttpTransport } from '../../runtime/transports/http.ts';
 import { createRealtimeTransport } from '../../runtime/transports/realtime.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { UserAuthManager } from '../../security/user-auth.ts';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 
 type TransportKind = 'direct' | 'http' | 'realtime';
 

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { getBuiltinSubscriptionProvider } from '../../config/subscription-providers.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 describe('subscription providers', () => {
   const originalCwd = process.cwd();

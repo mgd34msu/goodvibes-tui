@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ProfileManager } from '../../profiles/manager.ts';
+import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
 
 describe('ProfileManager', () => {
   let dir: string;

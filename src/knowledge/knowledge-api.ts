@@ -1,5 +1,5 @@
 import type { KnowledgeService } from './service.ts';
-import type { ArtifactFetchMode } from '../artifacts/types.ts';
+import type { ArtifactFetchMode } from '@pellux/goodvibes-sdk/platform/artifacts/types';
 import {
   buildKnowledgeInjectionPrompt,
   selectKnowledgeForTask,
@@ -19,7 +19,7 @@ import type {
 } from '../state/memory-store.ts';
 import type { MemoryVectorStats } from '../state/memory-vector-store.ts';
 import type { MemoryRegistry } from '../state/memory-registry.ts';
-export type { ArtifactFetchMode } from '../artifacts/types.ts';
+export type { ArtifactFetchMode } from '@pellux/goodvibes-sdk/platform/artifacts/types';
 export type {
   KnowledgeInjection,
 } from '../state/knowledge-injection.ts';

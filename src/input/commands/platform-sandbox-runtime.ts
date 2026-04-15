@@ -14,9 +14,9 @@ import {
   renderSandboxReview,
   renderSandboxSessions,
 } from '../../runtime/sandbox/manager.ts';
-import { renderQemuWrapperTemplate } from '../../runtime/sandbox/qemu-wrapper-template.ts';
+import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
 import { buildSandboxLaunchPlan, executeSandboxManagedCommand, probeSandboxBackends } from '../../runtime/sandbox/backend.ts';
-import type { SandboxBundle, SandboxProbe } from '../../runtime/sandbox/types.ts';
+import type { SandboxBundle, SandboxProbe } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import {
   exportSandboxGuestBundle,
   inspectSandboxGuestBundle,

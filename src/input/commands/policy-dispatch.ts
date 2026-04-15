@@ -5,11 +5,11 @@ import {
   lintPolicyConfig,
   runPolicySimulationScenarios,
 } from '../../runtime/permissions/index.ts';
-import { DivergenceDashboard } from '../../runtime/permissions/divergence-dashboard.ts';
+import { DivergenceDashboard } from '@pellux/goodvibes-sdk/platform/runtime/permissions/divergence-dashboard';
 import type { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
-import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
-import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
-import type { PolicyRule, PermissionsConfig, DivergenceStats } from '../../runtime/permissions/types.ts';
+import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
+import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
+import type { PolicyRule, PermissionsConfig, DivergenceStats } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
 import { requireShellPaths } from './runtime-services.ts';
 
 function getPolicyState(ctx?: CommandContext): PolicyRuntimeState {

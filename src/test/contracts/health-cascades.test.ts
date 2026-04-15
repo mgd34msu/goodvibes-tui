@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { RuntimeHealthAggregator } from '../../runtime/health/aggregator.ts';
-import { CascadeEngine } from '../../runtime/health/cascade-engine.ts';
-import { CASCADE_RULES } from '../../runtime/health/cascade-rules.ts';
-import type { HealthDomain, HealthStatus } from '../../runtime/health/types.ts';
+import { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
+import { CascadeEngine } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-engine';
+import { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
+import type { HealthDomain, HealthStatus } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

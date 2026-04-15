@@ -9,8 +9,8 @@ import type {
   ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import type { ProviderCapability } from './capabilities.ts';
-import { ProviderError } from '../types/errors.ts';
-import { withRetry } from '../utils/retry.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
 import {
   toOpenAITools,
   toOpenAIMessages,
@@ -18,12 +18,12 @@ import {
   extractTextToolCalls,
 } from './tool-formats.ts';
 import type { OpenAIToolCall } from './tool-formats.ts';
-import { getCacheCapability } from './cache-capability.ts';
-import type { ProviderCacheCapability } from './cache-capability.ts';
-import type { CacheHitTracker } from './cache-strategy.ts';
-import { extractOpenAIStreamTextDelta } from './openai-stream-delta.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError, toProviderError } from '../utils/error-display.ts';
+import { getCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
+import type { ProviderCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
+import type { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
+import { extractOpenAIStreamTextDelta } from '@pellux/goodvibes-sdk/platform/providers/openai-stream-delta';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError, toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const NOOP_CACHE_HIT_TRACKER: Pick<CacheHitTracker, 'recordTurn'> = {
   recordTurn: () => {},

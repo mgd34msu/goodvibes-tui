@@ -32,8 +32,8 @@ export type {
   RuntimeStateSnapshot,
   DomainHealthSummary,
   HealthDashboardData,
-} from './types.ts';
-export { DEFAULT_BUFFER_LIMIT, DEFAULT_PANEL_CONFIG, applyFilter, appendBounded } from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
+export { DEFAULT_BUFFER_LIMIT, DEFAULT_PANEL_CONFIG, applyFilter, appendBounded } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 
 // ── Action system ────────────────────────────────────────────────────────────
 export type {
@@ -76,8 +76,8 @@ export { ToolCallsPanel } from './panels/tool-calls.ts';
 export { AgentsPanel } from './panels/agents.ts';
 export { TasksPanel } from './panels/tasks.ts';
 export { EventsPanel } from './panels/events.ts';
-export { StateInspectorPanel } from './panels/state-inspector.ts';
-export type { InspectableDomain } from './panels/state-inspector.ts';
+export { StateInspectorPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/state-inspector';
+export type { InspectableDomain } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/state-inspector';
 export { HealthPanel } from './panels/health.ts';
 
 // ── Provider ─────────────────────────────────────────────────────────────────

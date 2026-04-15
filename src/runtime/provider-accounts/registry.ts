@@ -3,9 +3,9 @@ import { resolveApiKeys } from '../../config/index.ts';
 import type { SecretsManager } from '../../config/secrets.ts';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { ProviderRuntimeMetadata } from '../../providers/interface.ts';
-import { decodeJwtPayload } from '../auth/oauth-core.ts';
+import { decodeJwtPayload } from '@pellux/goodvibes-sdk/platform/runtime/auth/oauth-core';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
-import type { SubscriptionManager } from '../../config/subscriptions.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 export type ProviderAuthRoute = 'api-key' | 'subscription' | 'service-oauth' | 'unconfigured';
 export type ProviderAuthFreshness = 'healthy' | 'expiring' | 'expired' | 'pending' | 'unconfigured';

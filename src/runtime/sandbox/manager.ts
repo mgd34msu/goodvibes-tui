@@ -1,5 +1,5 @@
 import type { ConfigManager } from '../../config/manager.ts';
-import type { ConfigKey } from '../../config/schema.ts';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type {
   SandboxBackendProbe,
   SandboxConfigSnapshot,
@@ -16,7 +16,7 @@ import type {
   SandboxSessionArtifact,
   SandboxVmBackend,
   SandboxWindowsMode,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import { probeSandboxBackends } from './backend.ts';
 
 function readConfigValue<K extends ConfigKey>(

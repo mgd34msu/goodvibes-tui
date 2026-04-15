@@ -1,4 +1,4 @@
-import type { ServerType } from '../discovery/scanner.ts';
+import type { ServerType } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
 import type { ProviderCapability } from './capabilities.ts';
 
 export interface DiscoveredServerTraits {

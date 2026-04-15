@@ -1,4 +1,4 @@
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { RuntimeEventBus, AgentEvent, WorkflowEvent } from '../runtime/events/index.ts';
 
 // ---------------------------------------------------------------------------

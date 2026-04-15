@@ -9,9 +9,9 @@ import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
-import type { ShellPathService } from '../../runtime/shell-paths.ts';
+import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { ConfigManager } from '../../config/manager.ts';
 
 function linesText(lines: Line[]): string {

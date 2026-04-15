@@ -1,9 +1,9 @@
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import { join } from 'node:path';
 import { AGENT_TEMPLATES } from '../../tools/agent/manager.ts';
-import { ArchetypeLoader, type AgentArchetype } from '../../agents/archetypes.ts';
+import { ArchetypeLoader, type AgentArchetype } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
 import { requireOpsApi, requireReadModels, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type TeamworkModeId =
   | 'local-engineer'

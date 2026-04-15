@@ -9,13 +9,13 @@
  * This is the single integration point for the /ops commands and Ctrl+O panel.
  */
 import { randomUUID } from 'node:crypto';
-import type { TaskManager } from '../tasks/types.ts';
+import type { TaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
 import type { RuntimeEventBus } from '../events/index.ts';
 import { createDomainDispatch } from '../store/index.ts';
 import type { RuntimeStore, DomainDispatch } from '../store/index.ts';
-import type { TaskLifecycleState } from '../store/domains/tasks.ts';
-import type { AgentLifecycleState } from '../store/domains/agents.ts';
-import { canTransition } from '../tasks/lifecycle.ts';
+import type { TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
+import type { AgentLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
+import { canTransition } from '@pellux/goodvibes-sdk/platform/runtime/tasks/lifecycle';
 import {
   emitOpsTaskCancelled,
   emitOpsTaskPaused,
@@ -23,7 +23,7 @@ import {
   emitOpsTaskRetried,
   emitOpsAgentCancelled,
 } from '../emitters/ops.ts';
-import type { OpsInterventionReason } from '../events/ops.ts';
+import type { OpsInterventionReason } from '@pellux/goodvibes-sdk/platform/runtime/events/ops';
 
 // ---------------------------------------------------------------------------
 // Error types

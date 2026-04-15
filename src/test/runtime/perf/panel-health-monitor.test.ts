@@ -12,9 +12,9 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import {
   PanelHealthMonitor,
-} from '../../../runtime/perf/panel-health-monitor.ts';
-import { buildContract } from '../../../runtime/perf/panel-contracts.ts';
-import { PanelResourcesPanel } from '../../../runtime/diagnostics/panels/panel-resources.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import { buildContract } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-contracts';
+import { PanelResourcesPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/panel-resources';
 
 // ---------------------------------------------------------------------------
 // Helpers

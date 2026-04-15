@@ -20,11 +20,11 @@ import {
   isSecretRefInput,
   resolveSecretRef,
   type SecretRefInput,
-} from './secret-refs.ts';
-import type { OAuthProviderConfig } from './subscriptions.ts';
-import { SubscriptionManager } from './subscriptions.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+} from '@pellux/goodvibes-sdk/platform/config/secret-refs';
+import type { OAuthProviderConfig } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------
 // Types

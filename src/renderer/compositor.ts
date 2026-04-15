@@ -1,7 +1,7 @@
 import { TerminalBuffer } from './buffer.ts';
 import { DiffEngine } from './diff.ts';
-import { type Line, createStyledCell } from '../types/grid.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { type Line, createStyledCell } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import type { SearchManager } from '../input/search.ts';
 
 export interface SelectionInfo {

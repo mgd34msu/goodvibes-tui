@@ -17,14 +17,14 @@ import type {
   CacheContext,
   CacheBreakpoint,
   CacheHitTracker,
-} from './cache-strategy.ts';
-import { getDefaultStrategy } from './cache-strategy.ts';
-import { getCacheCapability } from './cache-capability.ts';
-import type { ProviderCacheCapability } from './cache-capability.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
+import { getDefaultStrategy } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
+import { getCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
+import type { ProviderCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
 import type { ConfigManager } from '../config/manager.ts';
 import type { HelperModel } from '../config/helper-model.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /** Result of a strategy planning run. */
 export interface PlanResult {

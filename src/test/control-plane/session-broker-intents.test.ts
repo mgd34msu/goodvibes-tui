@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
 import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
-import { AutomationRouteStore } from '../../automation/store/routes.ts';
-import { PersistentStore } from '../../state/persistent-store.ts';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 
 describe('SharedSessionBroker explicit intents', () => {
   let root = '';

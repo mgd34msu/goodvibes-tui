@@ -1,10 +1,10 @@
 /**
  * Communication emitters — typed emission wrappers for communication domain.
  */
-import { createEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
 import type { EmitterContext } from './index.ts';
-import type { CommunicationKind, CommunicationScope } from '../events/communication.ts';
+import type { CommunicationKind, CommunicationScope } from '@pellux/goodvibes-sdk/platform/runtime/events/communication';
 
 type BaseCommunication = {
   messageId: string;

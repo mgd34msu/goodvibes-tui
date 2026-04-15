@@ -3,7 +3,7 @@ import { createAgentTool, AgentManager } from '../../tools/agent/index.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import type { OrchestrationEvent } from '../../runtime/events/orchestration.ts';
+import type { OrchestrationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/orchestration';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 

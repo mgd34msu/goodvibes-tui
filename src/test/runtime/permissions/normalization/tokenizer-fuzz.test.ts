@@ -15,7 +15,7 @@ import {
   MAX_INPUT_LENGTH,
   MAX_TOKEN_COUNT,
   tokenize,
-} from '../../../../runtime/permissions/normalization/tokenizer.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/tokenizer';
 
 // ---------------------------------------------------------------------------
 // Fuzz seed corpus — pathological inputs that commonly expose parser hangs

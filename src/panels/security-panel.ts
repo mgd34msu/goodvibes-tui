@@ -1,7 +1,7 @@
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
-import type { TokenAuditResult } from '../security/token-audit.ts';
+import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security/token-audit';
 import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.ts';
 import {
   buildEmptyState,
