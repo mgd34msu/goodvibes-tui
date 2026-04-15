@@ -6,10 +6,10 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
-import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import type { PeerClient } from '../../runtime/peer-client.ts';
-import { getDistributedNodeHostContract } from '../../runtime/remote/distributed-runtime-contract.ts';
+import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import {
   getTestAgentManager,

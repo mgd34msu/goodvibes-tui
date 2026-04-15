@@ -9,24 +9,24 @@
  */
 
 import type { RuntimeState } from '../state.ts';
-import type { SessionDomainState } from '../domains/session.ts';
-import type { ModelDomainState } from '../domains/model.ts';
+import type { SessionDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/session';
+import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
 import type { ConversationDomainState, TurnState } from '../domains/conversation.ts';
-import type { OverlayDomainState, OverlayId } from '../domains/overlays.ts';
+import type { OverlayDomainState, OverlayId } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/overlays';
 import type { PanelDomainState, PanelState } from '../domains/panels.ts';
 import type { PermissionDomainState, PermissionMode } from '../domains/permissions.ts';
-import type { TaskDomainState, RuntimeTask, TaskKind } from '../domains/tasks.ts';
-import type { AgentDomainState, RuntimeAgent } from '../domains/agents.ts';
-import type { ProviderHealthDomainState, CompositeHealthStatus } from '../domains/provider-health.ts';
-import type { McpDomainState } from '../domains/mcp.ts';
-import type { PluginDomainState } from '../domains/plugins.ts';
-import type { DaemonDomainState } from '../domains/daemon.ts';
-import type { AcpDomainState } from '../domains/acp.ts';
-import type { IntegrationDomainState } from '../domains/integrations.ts';
-import type { TelemetryDomainState } from '../domains/telemetry.ts';
-import type { GitDomainState } from '../domains/git.ts';
-import type { DiscoveryDomainState } from '../domains/discovery.ts';
-import type { IntelligenceDomainState } from '../domains/intelligence.ts';
+import type { TaskDomainState, RuntimeTask, TaskKind } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
+import type { AgentDomainState, RuntimeAgent } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
+import type { ProviderHealthDomainState, CompositeHealthStatus } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
+import type { McpDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/mcp';
+import type { PluginDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/plugins';
+import type { DaemonDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/daemon';
+import type { AcpDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/acp';
+import type { IntegrationDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/integrations';
+import type { TelemetryDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/telemetry';
+import type { GitDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/git';
+import type { DiscoveryDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/discovery';
+import type { IntelligenceDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/intelligence';
 import type { UiPerfDomainState } from '../domains/ui-perf.ts';
 
 // ---------------------------------------------------------------------------

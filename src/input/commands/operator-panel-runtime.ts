@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { requirePanelManager } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerOperatorPanelCommand(registry: CommandRegistry): void {
   registry.register({

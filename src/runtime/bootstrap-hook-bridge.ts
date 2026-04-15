@@ -1,9 +1,9 @@
 import type { ConversationManager } from '../core/conversation.ts';
 import type { HookDispatcher } from '../hooks/index.ts';
-import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
+import type { HookCategory, HookEventPath, HookPhase } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { MutableRuntimeState } from './context.ts';
 import type { AgentEvent, OpsEvent, RuntimeEventBus, WorkflowEvent } from './events/index.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { emitSessionResumed } from './emitters/index.ts';
 import { HelperModel } from '../config/helper-model.ts';
 import type { ConfigManager } from '../config/manager.ts';
@@ -12,7 +12,7 @@ import type { SharedSessionBroker } from '../control-plane/index.ts';
 import type { SessionManager } from '../sessions/manager.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 interface FireHookOptions {
   readonly hookDispatcher: HookDispatcher;
@@ -192,14 +192,14 @@ export function registerBootstrapHookBridge(
       passed: payload.passed,
     });
   }));
-  unsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_GRAPH_CREATED' }>>('ORCHESTRATION_GRAPH_CREATED', ({ payload }) => {
+  unsubs.push(runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/orchestration').OrchestrationEvent, { type: 'ORCHESTRATION_GRAPH_CREATED' }>>('ORCHESTRATION_GRAPH_CREATED', ({ payload }) => {
     fireHook(fireOptions, 'Lifecycle:orchestration:graph-created', 'Lifecycle', 'orchestration', 'graph-created', {
       graphId: payload.graphId,
       title: payload.title,
       mode: payload.mode,
     });
   }));
-  unsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_STARTED' }>>('ORCHESTRATION_NODE_STARTED', ({ payload }) => {
+  unsubs.push(runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/orchestration').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_STARTED' }>>('ORCHESTRATION_NODE_STARTED', ({ payload }) => {
     fireHook(fireOptions, 'Lifecycle:orchestration:node-started', 'Lifecycle', 'orchestration', 'node-started', {
       graphId: payload.graphId,
       nodeId: payload.nodeId,
@@ -207,21 +207,21 @@ export function registerBootstrapHookBridge(
       ...(payload.agentId !== undefined ? { agentId: payload.agentId } : {}),
     });
   }));
-  unsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_COMPLETED' }>>('ORCHESTRATION_NODE_COMPLETED', ({ payload }) => {
+  unsubs.push(runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/orchestration').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_COMPLETED' }>>('ORCHESTRATION_NODE_COMPLETED', ({ payload }) => {
     fireHook(fireOptions, 'Lifecycle:orchestration:node-completed', 'Lifecycle', 'orchestration', 'node-completed', {
       graphId: payload.graphId,
       nodeId: payload.nodeId,
       ...(payload.summary !== undefined ? { summary: payload.summary } : {}),
     });
   }));
-  unsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_FAILED' }>>('ORCHESTRATION_NODE_FAILED', ({ payload }) => {
+  unsubs.push(runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/orchestration').OrchestrationEvent, { type: 'ORCHESTRATION_NODE_FAILED' }>>('ORCHESTRATION_NODE_FAILED', ({ payload }) => {
     fireHook(fireOptions, 'Lifecycle:orchestration:node-failed', 'Lifecycle', 'orchestration', 'node-failed', {
       graphId: payload.graphId,
       nodeId: payload.nodeId,
       error: payload.error,
     });
   }));
-  unsubs.push(runtimeBus.on<Extract<import('../runtime/events/orchestration.ts').OrchestrationEvent, { type: 'ORCHESTRATION_RECURSION_GUARD_TRIGGERED' }>>('ORCHESTRATION_RECURSION_GUARD_TRIGGERED', ({ payload }) => {
+  unsubs.push(runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/orchestration').OrchestrationEvent, { type: 'ORCHESTRATION_RECURSION_GUARD_TRIGGERED' }>>('ORCHESTRATION_RECURSION_GUARD_TRIGGERED', ({ payload }) => {
     fireHook(fireOptions, 'Change:orchestration:recursion-guard', 'Change', 'orchestration', 'recursion-guard', {
       graphId: payload.graphId,
       ...(payload.nodeId !== undefined ? { nodeId: payload.nodeId } : {}),
@@ -230,7 +230,7 @@ export function registerBootstrapHookBridge(
       reason: payload.reason,
     });
   }));
-  unsubs.push(runtimeBus.on<Extract<import('../runtime/events/communication.ts').CommunicationEvent, { type: 'COMMUNICATION_SENT' }>>('COMMUNICATION_SENT', ({ payload }) => {
+  unsubs.push(runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/communication').CommunicationEvent, { type: 'COMMUNICATION_SENT' }>>('COMMUNICATION_SENT', ({ payload }) => {
     fireHook(fireOptions, 'Lifecycle:communication:sent', 'Lifecycle', 'communication', 'sent', {
       messageId: payload.messageId,
       fromId: payload.fromId,
@@ -241,7 +241,7 @@ export function registerBootstrapHookBridge(
       ...(payload.toRole !== undefined ? { toRole: payload.toRole } : {}),
     });
   }));
-  unsubs.push(runtimeBus.on<Extract<import('../runtime/events/communication.ts').CommunicationEvent, { type: 'COMMUNICATION_DELIVERED' }>>('COMMUNICATION_DELIVERED', ({ payload }) => {
+  unsubs.push(runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/communication').CommunicationEvent, { type: 'COMMUNICATION_DELIVERED' }>>('COMMUNICATION_DELIVERED', ({ payload }) => {
     fireHook(fireOptions, 'Lifecycle:communication:delivered', 'Lifecycle', 'communication', 'delivered', {
       messageId: payload.messageId,
       fromId: payload.fromId,
@@ -250,7 +250,7 @@ export function registerBootstrapHookBridge(
       kind: payload.kind,
     });
   }));
-  unsubs.push(runtimeBus.on<Extract<import('../runtime/events/communication.ts').CommunicationEvent, { type: 'COMMUNICATION_BLOCKED' }>>('COMMUNICATION_BLOCKED', ({ payload }) => {
+  unsubs.push(runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/communication').CommunicationEvent, { type: 'COMMUNICATION_BLOCKED' }>>('COMMUNICATION_BLOCKED', ({ payload }) => {
     fireHook(fireOptions, 'Change:communication:blocked', 'Change', 'communication', 'blocked', {
       messageId: payload.messageId,
       fromId: payload.fromId,

@@ -1,8 +1,8 @@
 import type { PermissionPromptRequest } from '../prompt.ts';
-import { classifyPermissionRiskFamily } from '../../runtime/permissions/risk-model.ts';
-import { explainPermissionRiskFamily } from '../../runtime/permissions/risk-language.ts';
-import type { PermissionApprovalBrief } from './types.ts';
-import type { PermissionRequestAnalysis } from '../types.ts';
+import { classifyPermissionRiskFamily } from '@pellux/goodvibes-sdk/platform/runtime/permissions/risk-model';
+import { explainPermissionRiskFamily } from '@pellux/goodvibes-sdk/platform/runtime/permissions/risk-language';
+import type { PermissionApprovalBrief } from '@pellux/goodvibes-sdk/platform/permissions/briefs/types';
+import type { PermissionRequestAnalysis } from '@pellux/goodvibes-sdk/platform/permissions/types';
 
 export function getDisplayArg(_tool: string, args: Record<string, unknown>): string {
   if (typeof args['path'] === 'string') return args['path'];

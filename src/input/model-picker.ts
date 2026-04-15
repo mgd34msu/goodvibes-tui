@@ -1,8 +1,8 @@
 import type { ModelDefinition } from '../providers/registry.ts';
-import type { FavoritesStore } from '../providers/favorites.ts';
-import { EFFORT_DESCRIPTIONS } from '../providers/effort-levels.ts';
-import { getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '../providers/model-benchmarks.ts';
-import type { BenchmarkStore } from '../providers/model-benchmarks.ts';
+import type { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers/effort-levels';
+import { getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { ProviderRegistry } from '../providers/registry.ts';
 
 export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap';

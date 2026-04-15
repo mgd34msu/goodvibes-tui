@@ -6,7 +6,7 @@ import { ConfigManager } from '../../config/manager.ts';
 import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
 import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
 import { KnowledgePanel } from '../../panels/knowledge-panel.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 
 function linesText(lines: Line[]): string {
   return lines

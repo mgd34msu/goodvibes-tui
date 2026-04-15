@@ -14,14 +14,14 @@ import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index
 import type { SessionEvent } from '../../runtime/events/index.ts';
 import type { CommandRegistry, SlashCommand } from '../../input/command-registry.ts';
 import type { ModelDefinition, ProviderRegistry } from '../../providers/registry.ts';
-import type { ToolRegistry } from '../../tools/registry.ts';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { LoadedPlugin, PluginLoaderDeps } from '../../plugins/loader.ts';
 import type { PluginAPIContext } from '../../plugins/api.ts';
 import { ChannelDeliveryRouter, ChannelPluginRegistry } from '../../channels/index.ts';
 import { GatewayMethodCatalog } from '../../control-plane/index.ts';
 import { MediaProviderRegistry } from '../../media/index.ts';
 import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
-import { VoiceProviderRegistry } from '../../voice/index.ts';
+import { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/index';
 import { WebSearchProviderRegistry } from '../../web-search/index.ts';
 import type { SearchProviderContext } from '../../web-search/providers/shared.ts';
 

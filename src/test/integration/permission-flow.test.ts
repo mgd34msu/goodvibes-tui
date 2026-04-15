@@ -7,7 +7,7 @@
 import { describe, test, expect } from 'bun:test';
 import { PermissionManager } from '../../permissions/manager.ts';
 import type { PermissionPromptRequest } from '../../permissions/prompt.ts';
-import type { GoodVibesConfig, PermissionAction } from '../../config/schema.ts';
+import type { GoodVibesConfig, PermissionAction } from '@pellux/goodvibes-sdk/platform/config/schema';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 
 // ---------------------------------------------------------------------------

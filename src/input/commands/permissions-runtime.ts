@@ -1,6 +1,6 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const VALID_MODES = ['allow-all', 'prompt', 'custom'] as const;
 const VALID_ACTIONS = ['allow', 'prompt', 'deny'] as const;

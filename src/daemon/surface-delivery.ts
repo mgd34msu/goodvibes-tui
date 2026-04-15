@@ -6,11 +6,11 @@ import type { SharedSessionBroker } from '../control-plane/index.ts';
 import type { ChannelPluginRegistry, ChannelReplyPipeline, RouteBindingManager } from '../channels/index.ts';
 import type { ChannelSurface } from '../channels/index.ts';
 import { SlackIntegration, DiscordIntegration, NtfyIntegration } from '../integrations/index.ts';
-import { logger } from '../utils/logger.ts';
-import { validatePublicWebhookUrl } from '../utils/url-safety.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { validatePublicWebhookUrl } from '@pellux/goodvibes-sdk/platform/utils/url-safety';
 import type { SharedApprovalRecord } from '../control-plane/index.ts';
 import type { PendingSurfaceReply } from './types.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type DeliverySurface =
   | 'slack'
@@ -27,7 +27,7 @@ type DeliverySurface =
   | 'mattermost'
   | 'matrix';
 
-type RouteBinding = import('../automation/routes.ts').AutomationRouteBinding;
+type RouteBinding = import('@pellux/goodvibes-sdk/platform/automation/routes').AutomationRouteBinding;
 
 function isSupportedDeliverySurface(surface: string): surface is DeliverySurface {
   return surface === 'slack'

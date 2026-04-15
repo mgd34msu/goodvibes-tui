@@ -7,11 +7,11 @@ import { createOperatorClient, type OperatorClient, type OperatorControlPlaneSna
 import { createPeerClient, type PeerClient, type PeerClientSnapshot } from '../peer-client.ts';
 import type { RuntimeServices } from '../services.ts';
 import type { UiSessionSnapshot, UiTasksSnapshot } from '../ui-read-models.ts';
-import type { ShellPathService } from '../shell-paths.ts';
-import { createDirectClientTransport } from './direct-client.ts';
-import type { DirectClientTransport } from './direct-client.ts';
-export { createDirectClientTransport } from './direct-client.ts';
-export type { DirectClientTransport } from './direct-client.ts';
+import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { createDirectClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct-client';
+import type { DirectClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct-client';
+export { createDirectClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct-client';
+export type { DirectClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct-client';
 
 export interface DirectTransportSnapshot {
   readonly kind: 'direct';

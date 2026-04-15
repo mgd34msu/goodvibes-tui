@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { TaskScheduler } from '../../scheduler/scheduler.ts';
+import { TaskScheduler } from '@pellux/goodvibes-sdk/platform/scheduler/scheduler';
 import { getTestTaskScheduler, resetTestTaskScheduler } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

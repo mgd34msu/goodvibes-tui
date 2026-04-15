@@ -10,8 +10,8 @@ import type {
   WorkflowEvent,
 } from '../events/index.ts';
 import type { UiEventFeed, UiRuntimeEvents } from '../ui-events.ts';
-import type { DomainEventConnector } from './domain-events.ts';
-import { createRemoteRuntimeEvents, type RemoteRuntimeEvents } from './runtime-events-client.ts';
+import type { DomainEventConnector } from '@pellux/goodvibes-sdk/platform/runtime/transports/domain-events';
+import { createRemoteRuntimeEvents, type RemoteRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/transports/runtime-events-client';
 
 type RuntimeEventRecord = { readonly type: string };
 

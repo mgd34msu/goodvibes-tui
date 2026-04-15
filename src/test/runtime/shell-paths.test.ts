@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 
 describe('createShellPathService', () => {
   test('derives project and user roots from explicit absolute ownership', () => {
@@ -12,7 +12,7 @@ describe('createShellPathService', () => {
     expect(paths.workingDirectory).toBe(workingDirectory);
     expect(paths.homeDirectory).toBe(homeDirectory);
     expect(paths.projectGoodVibesRoot).toBe(join(workingDirectory, '.goodvibes'));
-    expect(paths.userTuiRoot).toBe(join(homeDirectory, '.goodvibes', 'tui'));
+    expect(paths.resolveUserPath('tui')).toBe(join(homeDirectory, '.goodvibes', 'tui'));
   });
 
   test('rejects relative or empty owned roots', () => {

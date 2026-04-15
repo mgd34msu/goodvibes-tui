@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { DiscoveredServer } from '../../discovery/scanner.ts';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
 import { createDiscoveredProvider } from '../../providers/discovered-factory.ts';
 import { LocalAIProvider, TGIProvider, VLLMProvider } from '../../providers/discovered-compat.ts';
 import { LlamaCppProvider } from '../../providers/llama-cpp.ts';

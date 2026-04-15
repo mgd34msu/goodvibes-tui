@@ -1,5 +1,5 @@
 import { describe, test, expect, spyOn, beforeEach, afterEach } from 'bun:test';
-import { notifyCompletion, escapeAppleScript } from '../../utils/notify.ts';
+import { notifyCompletion, escapeAppleScript } from '@pellux/goodvibes-sdk/platform/utils/notify';
 
 describe('escapeAppleScript', () => {
   test('escapes double quotes', () => {

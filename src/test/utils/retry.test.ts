@@ -1,6 +1,6 @@
 import { describe, test, expect, mock } from 'bun:test';
-import { withRetry, isRetryableError } from '../../utils/retry.ts';
-import { AppError, ProviderError } from '../../types/errors.ts';
+import { withRetry, isRetryableError } from '@pellux/goodvibes-sdk/platform/utils/retry';
+import { AppError, ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 
 describe('isRetryableError', () => {
   test('returns false for plain Error', () => {

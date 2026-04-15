@@ -1,7 +1,7 @@
 /**
  * Tool emitters — typed emission wrappers for ToolEvent domain.
  */
-import { createEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
 import type { EmitterContext } from './index.ts';
 

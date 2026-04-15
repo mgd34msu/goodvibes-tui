@@ -1,12 +1,12 @@
 import type { RuntimeStore } from '../store/index.ts';
-import type { AcpConnection } from '../store/domains/acp.ts';
+import type { AcpConnection } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/acp';
 import { RemoteRunnerRegistry } from './runner-registry.ts';
-import type { RemoteRunnerContract, RemoteRunnerPool } from './types.ts';
-import { deriveRemoteCapabilities, type RemoteCapabilitySnapshot } from './capabilities.ts';
-import { deriveRemoteHeartbeat, type RemoteHeartbeatSnapshot } from './heartbeat.ts';
-import { deriveRemoteNegotiation, type RemoteNegotiationSnapshot } from './negotiation.ts';
-import { deriveRemoteRecoveryActions, type RemoteRecoveryAction } from './recovery.ts';
-import { buildRemoteSessionStateSnapshot, type RemoteSessionStateSnapshot } from './session-state.ts';
+import type { RemoteRunnerContract, RemoteRunnerPool } from '@pellux/goodvibes-sdk/platform/runtime/remote/types';
+import { deriveRemoteCapabilities, type RemoteCapabilitySnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/capabilities';
+import { deriveRemoteHeartbeat, type RemoteHeartbeatSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/heartbeat';
+import { deriveRemoteNegotiation, type RemoteNegotiationSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/negotiation';
+import { deriveRemoteRecoveryActions, type RemoteRecoveryAction } from '@pellux/goodvibes-sdk/platform/runtime/remote/recovery';
+import { buildRemoteSessionStateSnapshot, type RemoteSessionStateSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/remote/session-state';
 
 export interface RemoteSupervisorSnapshot {
   readonly capturedAt: number;

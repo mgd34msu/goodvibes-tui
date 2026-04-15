@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { logger } from '../utils/logger.ts';
-import { getHookPointContract } from './contracts.ts';
-import { matchesEventPath, matchesMatcher } from './matcher.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { getHookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
+import { matchesEventPath, matchesMatcher } from '@pellux/goodvibes-sdk/platform/hooks/matcher';
 import type { HookDispatcher } from './dispatcher.ts';
-import type { HookChain, HookDefinition, HookEvent, HookResult, HookType, HooksConfig } from './types.ts';
+import type { HookChain, HookDefinition, HookEvent, HookResult, HookType, HooksConfig } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { ConfigManager } from '../config/manager.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface HookAuthoringAction {
   readonly kind: 'load' | 'save' | 'reload' | 'scaffold-hook' | 'scaffold-chain' | 'remove' | 'toggle' | 'simulate' | 'export' | 'import' | 'inspect';

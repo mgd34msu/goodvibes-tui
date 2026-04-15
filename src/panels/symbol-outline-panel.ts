@@ -1,6 +1,6 @@
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine } from '../types/grid.ts';
-import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -9,7 +9,7 @@ import {
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 // ── Symbol types ────────────────────────────────────────────────────────────
 

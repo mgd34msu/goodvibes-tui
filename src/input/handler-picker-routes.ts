@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
-import type { InputToken } from '../core/tokenizer.ts';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import type { CommandContext } from './command-registry.ts';
 import type { CategoryFilter, ModelPickerModal } from './model-picker.ts';
 import { MODEL_PICKER_CHROME_LINES } from '../renderer/model-picker-overlay.ts';
-import { resolveAndValidatePath } from '../utils/path-safety.ts';
-import { logger } from '../utils/logger.ts';
+import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { ProcessEntry } from '../renderer/process-modal.ts';
 import type { BlockActionId } from '../renderer/block-actions.ts';
 

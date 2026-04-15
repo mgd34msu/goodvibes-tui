@@ -13,16 +13,16 @@
  *   - Delegate permission checks to McpPermissionManager
  *   - Delegate schema freshness to McpSchemaFreshnessTracker
  */
-import { logger } from '../../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { McpClient } from '../../mcp/client.ts';
-import type { McpServerConfig } from '../../mcp/config.ts';
-import type { McpEvent } from '../events/mcp.ts';
+import type { McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
+import type { McpEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/mcp';
 import {
   applyTransition,
   isOperational,
-} from './lifecycle.ts';
-import { McpPermissionManager } from './permissions.ts';
-import { McpSchemaFreshnessTracker } from './schema-freshness.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/mcp/lifecycle';
+import { McpPermissionManager } from '@pellux/goodvibes-sdk/platform/runtime/mcp/permissions';
+import { McpSchemaFreshnessTracker } from '@pellux/goodvibes-sdk/platform/runtime/mcp/schema-freshness';
 import type {
   McpServerState,
   McpServerEntry,
@@ -34,9 +34,9 @@ import type {
   McpTrustMode,
   McpServerRole,
   McpServerPermissions,
-} from './types.ts';
-import { DEFAULT_RECONNECT_CONFIG } from './types.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
+import { DEFAULT_RECONNECT_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /** Callback type for state-change notifications. */
 export type McpEventHandler = (event: McpEvent) => void;

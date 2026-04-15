@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { jsonErrorResponse } from '../../daemon/http/error-response.ts';
-import { ProviderError } from '../../types/errors.ts';
+import { jsonErrorResponse } from '@pellux/goodvibes-sdk/platform/daemon/http/error-response';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 
 describe('jsonErrorResponse', () => {
   test('keeps error string compatibility while exposing structured metadata', async () => {

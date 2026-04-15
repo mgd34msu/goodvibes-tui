@@ -7,11 +7,11 @@
  */
 import type { ModelDefinition } from '../../../providers/registry.ts';
 import type { ProviderRegistry } from '../../../providers/registry.ts';
-import type { BenchmarkStore } from '../../../providers/model-benchmarks.ts';
-import type { ProviderHealthDomainState, ProviderHealthRecord } from '../../store/domains/provider-health.ts';
-import type { ModelDomainState } from '../../store/domains/model.ts';
+import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import type { ProviderHealthDomainState, ProviderHealthRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
+import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
 import { detectFamily, tierToCategoryFilter } from '../../../input/model-picker.ts';
-import { getQualityTier, getQualityTierFromScore, compositeScore } from '../../../providers/model-benchmarks.ts';
+import { getQualityTier, getQualityTierFromScore, compositeScore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type {
   ModelPickerEntry,
   ModelPickerGroup,

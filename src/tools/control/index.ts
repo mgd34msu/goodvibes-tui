@@ -1,5 +1,5 @@
-import type { Tool } from '../../types/tools.ts';
-import { CONTROL_TOOL_SCHEMA, type ControlToolInput } from './schema.ts';
+import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { CONTROL_TOOL_SCHEMA, type ControlToolInput } from '@pellux/goodvibes-sdk/platform/tools/control/schema';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
 import { listSandboxPresets } from '../../runtime/sandbox/manager.ts';
 

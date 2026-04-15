@@ -1,20 +1,20 @@
-import { logger } from '../../utils/logger.ts';
-import type { Tool, ToolDefinition } from '../../types/tools.ts';
-import { FETCH_TOOL_SCHEMA } from './schema.ts';
-import type { FetchInput, FetchUrlInput, FetchAuthInput, FetchExtractMode, FetchVerbosity, FetchSanitizeMode } from './schema.ts';
-import type { FetchOutput, FetchUrlResult } from './types.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { FETCH_TOOL_SCHEMA } from '@pellux/goodvibes-sdk/platform/tools/fetch/schema';
+import type { FetchInput, FetchUrlInput, FetchAuthInput, FetchExtractMode, FetchVerbosity, FetchSanitizeMode } from '@pellux/goodvibes-sdk/platform/tools/fetch/schema';
+import type { FetchOutput, FetchUrlResult } from '@pellux/goodvibes-sdk/platform/tools/fetch/types';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
-import { applySanitizer, resolveSanitizeMode } from './sanitizer.ts';
+import { applySanitizer, resolveSanitizeMode } from '@pellux/goodvibes-sdk/platform/tools/fetch/sanitizer';
 import {
   classifyHostTrustTier,
   emitSsrfDeny,
   emitHostTrustTier,
   extractHostname,
   type TrustTierConfig,
-} from './trust-tiers.ts';
-import { applyExtract, sniffContentType } from './extract.ts';
-import type { FeatureFlagManager } from '../../runtime/feature-flags/index.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+} from '@pellux/goodvibes-sdk/platform/tools/fetch/trust-tiers';
+import { applyExtract, sniffContentType } from '@pellux/goodvibes-sdk/platform/tools/fetch/extract';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface FetchRuntimeDeps {
   readonly serviceRegistry?: Pick<ServiceRegistry, 'resolveAuth'> | null;

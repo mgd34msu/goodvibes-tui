@@ -10,20 +10,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   LocalContextIngestionService,
-} from '../../providers/local-context-ingestion.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/local-context-ingestion';
 import { ConfigManager } from '../../config/manager.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { enrichModelEntries } from '../../runtime/ui/model-picker/health-enrichment.ts';
 import type { ModelDefinition } from '../../providers/registry.ts';
 import { ProviderRegistry } from '../../providers/registry.ts';
-import { createInitialProviderHealthState } from '../../runtime/store/domains/provider-health.ts';
-import { createInitialModelState } from '../../runtime/store/domains/model.ts';
-import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { createInitialProviderHealthState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
+import { createInitialModelState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
-import { FavoritesStore } from '../../providers/favorites.ts';
-import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 
 // ---------------------------------------------------------------------------
 // Test helpers

@@ -1,10 +1,10 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { ToolContractVerifier } from '../../runtime/tools/contract-verifier.ts';
-import type { ReplaySnapshotInput } from '../../runtime/forensics/registry.ts';
-import { logger } from '../../utils/logger.ts';
+import { ToolContractVerifier } from '@pellux/goodvibes-sdk/platform/runtime/tools/contract-verifier';
+import type { ReplaySnapshotInput } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { registerOperatorPanelCommand } from './operator-panel-runtime.ts';
 import { requireOpsApi, requireProfileManager, requireReplayEngine } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerOperatorRuntimeCommands(registry: CommandRegistry): void {
   registerOperatorPanelCommand(registry);
@@ -107,7 +107,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
         const newMode = sub as 'quiet' | 'balanced' | 'operator';
         mgr.setHITLMode(newMode);
         try {
-          ctx.platform.configManager.setDynamic('behavior.hitlMode' as import('../../config/schema.ts').ConfigKey, newMode);
+          ctx.platform.configManager.setDynamic('behavior.hitlMode' as import('@pellux/goodvibes-sdk/platform/config/schema').ConfigKey, newMode);
         } catch (e) {
           logger.warn('[/mode] Failed to persist mode', { error: summarizeError(e) });
         }

@@ -1,18 +1,18 @@
-import { ToolRegistry } from '../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { ConfigManager } from '../config/manager.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { registerAllTools } from '../tools/index.ts';
 import { registerChannelAgentTools } from '../tools/channel/agent-tools.ts';
 import { AgentMessageBus } from './message-bus.ts';
 import type { ChannelPluginRegistry } from '../channels/index.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
-import { FileStateCache } from '../state/file-cache.ts';
-import { ProjectIndex } from '../state/project-index.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import type { ToolLLM } from '../config/tool-llm.ts';
 import type { LLMProvider } from '../providers/interface.ts';
-import type { FeatureFlagManager } from '../runtime/feature-flags/manager.ts';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import {
   emitAgentCancelled,
@@ -28,7 +28,7 @@ import {
 } from '../runtime/emitters/index.ts';
 import { splitModelRegistryKey } from '../providers/registry-helpers.ts';
 import { runAgentTask, type AgentOrchestratorRunContext } from './orchestrator-runner.ts';
-export { summarizeToolArgs } from './orchestrator-utils.ts';
+export { summarizeToolArgs } from '@pellux/goodvibes-sdk/platform/agents/orchestrator-utils';
 
 type AgentProviderRoutingPolicy = NonNullable<AgentRecord['routing']>;
 type ResolvedAgentProviderRouting = {
@@ -45,26 +45,26 @@ type AgentOrchestratorToolDeps = {
   readonly fileCache: FileStateCache;
   readonly projectIndex: ProjectIndex;
   readonly workingDirectory: string;
-  readonly fileUndoManager: import('../state/file-undo.ts').FileUndoManager;
-  readonly modeManager: import('../state/mode-manager.ts').ModeManager;
-  readonly processManager: import('../tools/shared/process-manager.ts').ProcessManager;
+  readonly fileUndoManager: import('@pellux/goodvibes-sdk/platform/state/file-undo').FileUndoManager;
+  readonly modeManager: import('@pellux/goodvibes-sdk/platform/state/mode-manager').ModeManager;
+  readonly processManager: import('@pellux/goodvibes-sdk/platform/tools/shared/process-manager').ProcessManager;
   readonly agentMessageBus: AgentMessageBus;
   readonly webSearchService?: import('../web-search/index.ts').WebSearchService;
   readonly channelRegistry?: import('../channels/index.ts').ChannelPluginRegistry | null;
   readonly remoteRunnerRegistry?: import('../runtime/remote/index.ts').RemoteRunnerRegistry;
   readonly knowledgeService?: import('../knowledge/index.ts').KnowledgeService;
   readonly memoryRegistry?: import('../state/index.ts').MemoryRegistry;
-  readonly sessionOrchestration: import('../sessions/orchestration/index.ts').CrossSessionTaskRegistry;
-  readonly archetypeLoader?: import('./archetypes.ts').ArchetypeLoader;
+  readonly sessionOrchestration: import('@pellux/goodvibes-sdk/platform/sessions/orchestration/index').CrossSessionTaskRegistry;
+  readonly archetypeLoader?: import('@pellux/goodvibes-sdk/platform/agents/archetypes').ArchetypeLoader;
   readonly configManager?: ConfigManager;
   readonly providerRegistry?: ProviderRegistry;
   readonly providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
   readonly toolLLM?: ToolLLM;
   readonly serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
   readonly featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null;
-  readonly overflowHandler?: import('../tools/shared/overflow.ts').OverflowHandler;
+  readonly overflowHandler?: import('@pellux/goodvibes-sdk/platform/tools/shared/overflow').OverflowHandler;
   readonly sandboxSessionRegistry: import('../runtime/sandbox/session-registry.ts').SandboxSessionRegistry;
-  readonly workflowServices: ReturnType<typeof import('../tools/workflow/index.ts').createWorkflowServices>;
+  readonly workflowServices: ReturnType<typeof import('@pellux/goodvibes-sdk/platform/tools/workflow/index').createWorkflowServices>;
 };
 
 /**

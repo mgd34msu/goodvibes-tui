@@ -3,9 +3,9 @@ import {
   ApiTokenAuditor,
   DEFAULT_ROTATION_CADENCE_MS,
   DEFAULT_ROTATION_WARNING_THRESHOLD_MS,
-} from '../../security/token-audit.ts';
-import type { ApiTokenMetadata, TokenScopePolicy } from '../../security/token-audit.ts';
-import { SecurityPanel } from '../../runtime/diagnostics/panels/security.ts';
+} from '@pellux/goodvibes-sdk/platform/security/token-audit';
+import type { ApiTokenMetadata, TokenScopePolicy } from '@pellux/goodvibes-sdk/platform/security/token-audit';
+import { SecurityPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/security';
 
 // ---------------------------------------------------------------------------
 // Helpers

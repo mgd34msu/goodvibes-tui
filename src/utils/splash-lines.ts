@@ -1,4 +1,4 @@
-import { center, getDisplayWidth } from './terminal-width.ts';
+import { center, getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import { VERSION } from '../version.ts';
 
 const ART_LINES = [

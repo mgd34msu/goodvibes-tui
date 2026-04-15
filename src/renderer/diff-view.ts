@@ -1,6 +1,6 @@
-import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
+import { type Line, type Cell, createStyledCell } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 /**
  * renderDiffView - Render a unified diff string as styled Line[].

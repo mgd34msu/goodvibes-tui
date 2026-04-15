@@ -1,19 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, copyFileSync, unlinkSync, realpathSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import type { Tool, ToolDefinition } from '../../types/tools.ts';
-import { WRITE_SCHEMA, type WriteInput, type WriteFileInput, type WriteMode } from './schema.ts';
-import { runValidators, formatValidatorFailure, type ValidatorName } from '../shared/validators.ts';
-import { FileStateCache } from '../../state/file-cache.ts';
-import { ProjectIndex } from '../../state/project-index.ts';
-import { FileUndoManager } from '../../state/file-undo.ts';
+import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { WRITE_SCHEMA, type WriteInput, type WriteFileInput, type WriteMode } from '@pellux/goodvibes-sdk/platform/tools/write/schema';
+import { runValidators, formatValidatorFailure, type ValidatorName } from '@pellux/goodvibes-sdk/platform/tools/shared/validators';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ToolLLM } from '../../config/tool-llm.ts';
 import { AutoHealer } from '../shared/auto-heal.ts';
-import { isNotebookFile } from '../../utils/notebook.ts';
-import { logger } from '../../utils/logger.ts';
-import type { SessionChangeTracker } from '../../sessions/change-tracker.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { isNotebookFile } from '@pellux/goodvibes-sdk/platform/utils/notebook';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions/change-tracker';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------
 // Result types

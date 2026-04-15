@@ -1,4 +1,4 @@
-import type { InputToken } from '../core/tokenizer.ts';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { CommandContext } from './command-registry.ts';
 

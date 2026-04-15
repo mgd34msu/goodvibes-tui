@@ -1,7 +1,7 @@
 import { ConversationManager } from '../core/conversation.ts';
 import { SelectionManager } from '../input/selection.ts';
 import { ConfigManager, getConfiguredSystemPrompt } from '../config/index.ts';
-import { ToolRegistry } from '../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { registerAllTools } from '../tools/index.ts';
 import { PermissionManager, createPermissionConfigReader } from '../permissions/manager.ts';
 import { Notifier } from '../integrations/notifier.ts';
@@ -9,10 +9,10 @@ import { WebhookNotifier } from '../integrations/webhooks.ts';
 import { Compositor } from '../renderer/compositor.ts';
 import type { PermissionRequestHandler } from '../permissions/prompt.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
-import type { ConversationFollowUpItem } from '../core/conversation-follow-ups.ts';
+import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
 import type { ControlPlaneRecentEvent } from '../control-plane/gateway.ts';
 import type { BootstrapOptions, MutableRuntimeState } from './context.ts';
-import { createFeatureFlagManager } from './feature-flags/index.ts';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { RuntimeEventBus } from './events/index.ts';
 import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './store/index.ts';
 import { ForensicsCollector, ForensicsRegistry } from './forensics/index.ts';
@@ -63,7 +63,7 @@ export async function initializeBootstrapCore(
 
   const featureFlags = createFeatureFlagManager();
   featureFlags.loadFromConfig({
-    flags: (configManager.getCategory('featureFlags') as Record<string, import('./feature-flags/types.ts').FlagState>) ?? {},
+    flags: (configManager.getCategory('featureFlags') as Record<string, import('@pellux/goodvibes-sdk/platform/runtime/feature-flags/types').FlagState>) ?? {},
   });
 
   const userSessionId = `user-${generateUserSessionId()}`;

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { createDaemonChannelRouteHandlers } from '../../daemon/http/channel-routes.ts';
-import { createDaemonIntegrationRouteHandlers } from '../../daemon/http/integration-routes.ts';
-import { createDaemonSystemRouteHandlers } from '../../daemon/http/system-routes.ts';
-import { createDaemonKnowledgeRouteHandlers } from '../../daemon/http/knowledge-routes.ts';
-import { createDaemonMediaRouteHandlers } from '../../daemon/http/media-routes.ts';
+import { createDaemonChannelRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/channel-routes';
+import { createDaemonIntegrationRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/integration-routes';
+import { createDaemonSystemRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/system-routes';
+import { createDaemonKnowledgeRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/knowledge-routes';
+import { createDaemonMediaRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/media-routes';
 
 describe('daemon route seams', () => {
   test('channel routes use injected surface and plugin services', async () => {

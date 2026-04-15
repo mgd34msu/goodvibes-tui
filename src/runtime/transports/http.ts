@@ -1,5 +1,5 @@
-import { getOperatorContract, getPeerContract } from '@pellux/goodvibes-sdk-beta/contracts';
-import type { AutomationSurfaceKind } from '../../automation/types.ts';
+import { getOperatorContract, getPeerContract } from '@pellux/goodvibes-sdk/contracts';
+import type { AutomationSurfaceKind } from '@pellux/goodvibes-sdk/platform/automation/types';
 import type {
   ControlPlaneRecentEvent,
   SharedApprovalRecord,
@@ -8,17 +8,17 @@ import type {
   SharedSessionRecord,
   SharedSessionSubmission,
 } from '../../control-plane/index.ts';
-import type { RuntimeTask } from '../store/domains/tasks.ts';
+import type { RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../../providers/runtime-snapshot.ts';
 import type { TelemetryFilter, TelemetryListResponse, TelemetryRecord, TelemetrySnapshot } from '../telemetry/api.ts';
-import type { ReadableSpan } from '../telemetry/types.ts';
+import type { ReadableSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/types';
 import type {
   DistributedNodeHostContract,
   DistributedPendingWork,
   DistributedPeerKind,
   DistributedPeerRecord,
   DistributedRuntimePairRequest,
-} from '../remote/distributed-runtime-types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-types';
 import type {
   UiControlPlaneSnapshot,
   UiLocalAuthSnapshot,
@@ -26,8 +26,8 @@ import type {
   UiTasksSnapshot,
 } from '../ui-read-models.ts';
 import type { UiRuntimeEvents } from '../ui-events.ts';
-import { createClientTransport } from './client-transport.ts';
-import { createHttpJsonTransport, type HttpJsonTransport } from './http-json-transport.ts';
+import { createClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/client-transport';
+import { createHttpJsonTransport, type HttpJsonTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-json-transport';
 import {
   appendTelemetryQuery,
   buildSessionEnsureBody,
@@ -40,13 +40,13 @@ import {
   normalizeTelemetryQuery,
   readControlPlaneSnapshot,
 } from './http-helpers.ts';
-import { createOperatorRemoteClient } from './operator-remote-client.ts';
-import { createPeerRemoteClient } from './peer-remote-client.ts';
+import { createOperatorRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/operator-remote-client';
+import { createPeerRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/peer-remote-client';
 import {
   createEventSourceConnector,
   requestJson,
 } from './shared.ts';
-import type { TransportPaths } from './transport-paths.ts';
+import type { TransportPaths } from '@pellux/goodvibes-sdk/platform/runtime/transports/transport-paths';
 import type {
   HttpPeerRecordSnapshot,
   HttpPeerSnapshot,

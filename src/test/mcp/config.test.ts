@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
-import { loadMcpConfig } from '../../mcp/config.ts';
+import { loadMcpConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
 
 describe('loadMcpConfig', () => {
   let tmpDir: string;

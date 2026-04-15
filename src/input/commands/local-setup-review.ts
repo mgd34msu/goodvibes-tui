@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { CommandContext } from '../command-registry.ts';
 import { discoverSkills } from '../../panels/skills-panel.ts';
 import { buildSandboxReview, isRunningInWsl } from '../../runtime/sandbox/manager.ts';
-import { renderQemuWrapperTemplate } from '../../runtime/sandbox/qemu-wrapper-template.ts';
+import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
 import { getPluginDirectories } from '../../plugins/loader.ts';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
 import type { SetupReviewSnapshot } from './local-setup-transfer.ts';
@@ -179,7 +179,7 @@ export function exportSetupSupportBundle(
   const targetDir = shellPaths.resolveWorkspacePath(targetDirArg);
   mkdirSync(targetDir, { recursive: true });
   writeFileSync(join(targetDir, 'startup-review.json'), JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
-  const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
+  const servicesPath = shellPaths.resolveProjectPath('tui', 'services.json');
   if (existsSync(servicesPath)) {
     writeFileSync(join(targetDir, 'services.json'), readFileSync(servicesPath, 'utf-8'), 'utf-8');
   }

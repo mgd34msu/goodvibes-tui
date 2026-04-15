@@ -32,7 +32,7 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createTaskManager } from '../../runtime/tasks/index.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { OpsControlPlane } from '../../runtime/ops/control-plane.ts';
-import { DeterministicReplayEngine } from '../../core/deterministic-replay.ts';
+import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core/deterministic-replay';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,7 +73,7 @@ function makeSimulator(diverged: boolean) {
         authoritativeDecision: { allowed: true },
       };
     },
-  } as unknown as import('../../runtime/permissions/simulation.ts').PermissionSimulator;
+  } as unknown as import('@pellux/goodvibes-sdk/platform/runtime/permissions/simulation').PermissionSimulator;
 }
 
 // ---------------------------------------------------------------------------
@@ -449,7 +449,7 @@ describe('error handling', () => {
   test('catches handler errors and returns failure result', async () => {
     const brokenEngine = {
       reset() { throw new Error('engine exploded'); },
-    } as unknown as import('../../core/deterministic-replay.ts').DeterministicReplayEngine;
+    } as unknown as import('@pellux/goodvibes-sdk/platform/core/deterministic-replay').DeterministicReplayEngine;
 
     const dispatcher = new DiagnosticActionDispatcher({
       replayEngine: brokenEngine,

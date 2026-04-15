@@ -1,7 +1,7 @@
-import type { ArtifactDescriptor } from '../artifacts/types.ts';
+import type { ArtifactDescriptor } from '@pellux/goodvibes-sdk/platform/artifacts/types';
 import type { MemoryReviewState, ProvenanceLink } from '../state/memory-store.ts';
-import type { KnowledgePacket, KnowledgePacketDetail, KnowledgePacketItem } from './types.ts';
-import type { KnowledgeSourceType } from './types.ts';
+import type { KnowledgePacket, KnowledgePacketDetail, KnowledgePacketItem } from '@pellux/goodvibes-sdk/platform/knowledge/types';
+import type { KnowledgeSourceType } from '@pellux/goodvibes-sdk/platform/knowledge/types';
 
 export const LINT_NAMESPACE = 'knowledge-lint';
 export const DEFAULT_PACKET_LIMIT = 6;

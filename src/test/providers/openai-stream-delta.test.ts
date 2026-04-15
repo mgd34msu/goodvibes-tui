@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { extractOpenAIStreamTextDelta } from '../../providers/openai-stream-delta.ts';
+import { extractOpenAIStreamTextDelta } from '@pellux/goodvibes-sdk/platform/providers/openai-stream-delta';
 
 describe('extractOpenAIStreamTextDelta', () => {
   test('extracts plain string content deltas', () => {

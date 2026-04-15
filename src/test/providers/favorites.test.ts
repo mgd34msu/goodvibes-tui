@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { FavoritesStore, type FavoritesData } from '../../providers/favorites.ts';
+import { FavoritesStore, type FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 
 // ---------------------------------------------------------------------------
 // Test isolation — redirect favorites to a per-test temp directory

@@ -20,7 +20,7 @@ import {
   resolveSandboxCommandPlan,
 } from '../../../runtime/sandbox/backend.ts';
 import { SandboxSessionRegistry } from '../../../runtime/sandbox/session-registry.ts';
-import { renderQemuWrapperTemplate } from '../../../runtime/sandbox/qemu-wrapper-template.ts';
+import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
 
 function makeManager(overrides: Partial<Record<string, unknown>> = {}) {
   const values = new Map<string, unknown>([

@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import type { ConfigManager } from '../../config/manager.ts';
 import { getSandboxConfigSnapshot } from './manager.ts';
-import { renderQemuWrapperTemplate } from './qemu-wrapper-template.ts';
+import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
 
 export interface SandboxDoctorCheck {
   readonly label: string;

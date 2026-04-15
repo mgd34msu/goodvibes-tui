@@ -16,8 +16,8 @@ import {
   SyntheticProvider,
 } from '../../providers/synthetic.ts';
 import type { CanonicalModel } from '../../providers/synthetic.ts';
-import type { BenchmarkEntry } from '../../providers/model-benchmarks.ts';
-import { ProviderError } from '../../types/errors.ts';
+import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/interface.ts';
 
 // ---------------------------------------------------------------------------

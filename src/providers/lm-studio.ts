@@ -10,10 +10,10 @@ import type {
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
 } from './interface.ts';
-import type { ToolCall, ToolDefinition } from '../types/tools.ts';
+import type { ToolCall, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
-import { ProviderError } from '../types/errors.ts';
-import { withRetry } from '../utils/retry.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
 import {
   buildHttpError,
   buildResponsesInput,

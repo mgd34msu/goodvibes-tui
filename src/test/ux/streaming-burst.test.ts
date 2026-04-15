@@ -21,8 +21,8 @@ import type {
   ConversationDomainState,
   ActiveToolCall,
 } from '../../runtime/store/domains/conversation.ts';
-import type { AgentDomainState, RuntimeAgent } from '../../runtime/store/domains/agents.ts';
-import type { TaskDomainState } from '../../runtime/store/domains/tasks.ts';
+import type { AgentDomainState, RuntimeAgent } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
+import type { TaskDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

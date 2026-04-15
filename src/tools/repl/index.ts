@@ -6,10 +6,10 @@ import ts from 'typescript';
 import type { ConfigManager } from '../../config/manager.ts';
 import type { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
 import { executeSandboxCommand } from '../../runtime/sandbox/backend.ts';
-import type { SandboxLaunchPlan } from '../../runtime/sandbox/types.ts';
-import type { Tool } from '../../types/tools.ts';
-import { summarizeError } from '../../utils/error-display.ts';
-import { REPL_TOOL_SCHEMA, type ReplToolInput } from './schema.ts';
+import type { SandboxLaunchPlan } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
+import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { REPL_TOOL_SCHEMA, type ReplToolInput } from '@pellux/goodvibes-sdk/platform/tools/repl/schema';
 
 interface ReplHistoryEntry {
   readonly ts: number;
@@ -166,7 +166,7 @@ async function evalSql(
   const payload = JSON.stringify({ expression });
   const script = `
 import { Database } from 'bun:sqlite';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 const payload = JSON.parse(process.env.GV_REPL_PAYLOAD ?? '{}');
 const db = new Database(':memory:');
 db.exec("CREATE TABLE sandbox_eval (id INTEGER PRIMARY KEY, value TEXT);");

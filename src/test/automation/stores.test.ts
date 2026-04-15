@@ -8,10 +8,10 @@ import {
   AutomationRunStore,
   AutomationSourceStore,
 } from '../../automation/index.ts';
-import type { AutomationJob } from '../../automation/jobs.ts';
-import type { AutomationRouteBinding } from '../../automation/routes.ts';
-import type { AutomationRun } from '../../automation/runs.ts';
-import type { AutomationSourceRecord } from '../../automation/sources.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
 
 describe('automation persistent stores', () => {
   let root = '';

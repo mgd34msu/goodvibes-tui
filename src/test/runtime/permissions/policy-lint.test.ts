@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { lintPolicyConfig } from '../../../runtime/permissions/index.ts';
-import type { PermissionsConfig } from '../../../runtime/permissions/types.ts';
+import type { PermissionsConfig } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
 
 describe('lintPolicyConfig', () => {
   test('flags duplicate rule ids and broad rules', () => {

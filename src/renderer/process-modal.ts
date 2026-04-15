@@ -1,7 +1,7 @@
-import { type Line } from '../types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ModalFactory } from './modal-factory.ts';
 import { formatDuration } from './modal-utils.ts';
-import type { ProcessManager } from '../tools/shared/process-manager.ts';
+import type { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
 import type { AgentManager, AgentRecord } from '../tools/agent/index.ts';
 import type { WrfcController } from '../agents/wrfc-controller.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';

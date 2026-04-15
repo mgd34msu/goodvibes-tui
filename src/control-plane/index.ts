@@ -4,7 +4,7 @@ export type {
   ControlPlaneServerConfig,
   ControlPlaneClientDescriptor,
   ControlPlaneEventSubscription,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/types';
 export type { ControlPlaneGatewayConfig, ControlPlaneEventStreamOptions, ControlPlaneRecentEvent } from './gateway.ts';
 export { ControlPlaneGateway } from './gateway.ts';
 export {
@@ -32,7 +32,7 @@ export type {
   SharedSessionSubmission,
   SteerSharedSessionMessageInput,
   SubmitSharedSessionMessageInput,
-} from './session-types.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/session-types';
 export type {
   SharedSessionCompletion,
   SharedSessionContinuationRequest,
@@ -42,7 +42,7 @@ export type {
   SharedSessionInputRecord,
   SharedSessionInputState,
   SharedSessionRoutingIntent,
-} from './session-intents.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/session-intents';
 export { SharedSessionBroker } from './session-broker.ts';
 export type {
   SharedApprovalRecord,
@@ -51,4 +51,4 @@ export type {
   RequestSharedApprovalInput,
 } from './approval-broker.ts';
 export { ApprovalBroker } from './approval-broker.ts';
-export type { ControlPlaneAuthMode, ControlPlaneAuthSnapshot } from './auth-snapshot.ts';
+export type { ControlPlaneAuthMode, ControlPlaneAuthSnapshot } from '@pellux/goodvibes-sdk/platform/control-plane/auth-snapshot';

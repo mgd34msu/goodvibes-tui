@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { openServerSentEventStream } from '../../runtime/transports/sse-stream.ts';
+import { openServerSentEventStream } from '@pellux/goodvibes-sdk/platform/runtime/transports/sse-stream';
 
 function createSseResponse(chunks: readonly string[], status = 200): Response {
   const encoder = new TextEncoder();

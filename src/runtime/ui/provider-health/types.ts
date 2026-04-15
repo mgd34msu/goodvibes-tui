@@ -4,7 +4,7 @@
  * Purely data-oriented — no rendering logic. These types are produced by
  * ProviderHealthDataProvider and consumed by renderers/components.
  */
-import type { ProviderStatus, CompositeHealthStatus } from '../../store/domains/provider-health.ts';
+import type { ProviderStatus, CompositeHealthStatus } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 
 // Re-exports for convenience
 export type { ProviderStatus, CompositeHealthStatus };

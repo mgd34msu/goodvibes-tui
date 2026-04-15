@@ -5,10 +5,10 @@
  */
 
 import type { ProviderMessage } from '../providers/interface.ts';
-import type { SessionMemory } from './session-memory.ts';
+import type { SessionMemory } from '@pellux/goodvibes-sdk/platform/core/session-memory';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import type { WrfcChain } from '../agents/wrfc-types.ts';
-import type { ExecutionPlan } from './execution-plan.ts';
+import type { ExecutionPlan } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 
 // ---------------------------------------------------------------------------
 // Section types

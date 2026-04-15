@@ -17,8 +17,8 @@
 import type { ConfigManager } from './manager.ts';
 import type { LLMProvider } from '../providers/interface.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /** Resolved provider + model pair for tool-internal LLM calls. */
 export interface ResolvedToolLLM {

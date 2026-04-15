@@ -10,4 +10,4 @@ export type {
   MultimodalSegment,
   MultimodalServiceStatus,
   MultimodalWritebackResult,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/multimodal/types';

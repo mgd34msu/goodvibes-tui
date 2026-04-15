@@ -1,6 +1,6 @@
-import { type Line, createStyledCell } from '../types/grid.ts';
+import { type Line, createStyledCell } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 /** Color by file extension category. */
 function getFileColor(name: string): string {

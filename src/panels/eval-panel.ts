@@ -6,8 +6,8 @@
  */
 
 import { BasePanel } from './base-panel.ts';
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -23,7 +23,7 @@ import type {
   EvalResult,
   EvalGateResult,
   EvalDimension,
-} from '../runtime/eval/types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
 
 /**
  * Holds the latest eval run state for display in EvalPanel.

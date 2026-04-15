@@ -1,4 +1,4 @@
-import { ArtifactStore } from '../artifacts/index.ts';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import type { ContentPart, LLMProvider, ProviderMessage } from '../providers/interface.ts';
 import type { ModelDefinition, ProviderRegistry } from '../providers/registry.ts';
 import type {
@@ -6,7 +6,7 @@ import type {
   MediaAnalysisResult,
   MediaProvider,
   MediaProviderStatus,
-} from './provider-registry.ts';
+} from '@pellux/goodvibes-sdk/platform/media/provider-registry';
 
 interface StructuredImageAnalysis {
   description?: string;

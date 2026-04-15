@@ -30,7 +30,7 @@ export type {
   Playbook,
   PlaybookRegistryEntry,
   PlaybookRegistry,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ops/types';
 
 // Re-export all playbooks
 export {
@@ -43,7 +43,7 @@ export {
   compactionFailurePlaybook,
 } from './playbooks/index.ts';
 
-import type { Playbook, PlaybookRegistry, PlaybookRegistryEntry } from './types.ts';
+import type { Playbook, PlaybookRegistry, PlaybookRegistryEntry } from '@pellux/goodvibes-sdk/platform/runtime/ops/types';
 import {
   stuckTurnPlaybook,
   reconnectFailurePlaybook,

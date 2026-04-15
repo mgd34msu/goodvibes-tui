@@ -2,10 +2,10 @@
 // SessionBrowserPanel — browse, search, and resume old sessions.
 // ---------------------------------------------------------------------------
 
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
 import type { SessionInfo } from '../sessions/manager.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { SessionBrowserQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
@@ -17,8 +17,8 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,

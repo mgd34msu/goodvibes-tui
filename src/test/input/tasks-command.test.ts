@@ -7,7 +7,7 @@ import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createRuntimeOpsApi } from '../../runtime/runtime-ops-api.ts';
 import { createTaskManager } from '../../runtime/tasks/index.ts';
 import { OpsControlPlane } from '../../runtime/ops/control-plane.ts';
-import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { createTasksReadModel } from '../helpers/ui-read-models.ts';
 import type { OperatorClient } from '../../runtime/operator-client.ts';
 

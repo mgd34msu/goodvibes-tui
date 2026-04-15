@@ -1,5 +1,5 @@
-import type { ToolCall } from '../../types/tools.ts';
-import type { TranscriptEvent } from './types.ts';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
+import type { TranscriptEvent } from '@pellux/goodvibes-sdk/platform/core/transcript-events/types';
 import type { ConversationMessageSnapshot } from '../conversation.ts';
 
 function summarizeText(text: string, max = 96): string {

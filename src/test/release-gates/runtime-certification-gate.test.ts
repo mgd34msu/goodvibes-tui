@@ -3,10 +3,10 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
 import { ForensicsCollector } from '../../runtime/forensics/collector.ts';
-import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
+import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import { PhasedToolExecutor } from '../../runtime/tools/phased-executor.ts';
 import type { ToolRuntimeContext } from '../../runtime/tools/context.ts';
-import type { Tool, ToolCall } from '../../types/tools.ts';
+import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 
 function emitTurn(
   bus: RuntimeEventBus,

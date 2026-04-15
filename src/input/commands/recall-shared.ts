@@ -1,4 +1,4 @@
-import type { ShellPathService } from '../../runtime/shell-paths.ts';
+import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type { MemoryClass, MemoryReviewState, MemoryScope } from '../../state/memory-store.ts';
 
 export const VALID_CLASSES: MemoryClass[] = ['decision', 'constraint', 'incident', 'pattern', 'fact', 'risk', 'runbook', 'architecture', 'ownership'];

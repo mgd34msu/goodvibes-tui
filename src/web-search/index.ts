@@ -13,7 +13,7 @@ export type {
   WebSearchSafeSearch,
   WebSearchTimeRange,
   WebSearchVerbosity,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/web-search/types';
 export { WebSearchProviderRegistry } from './provider-registry.ts';
 export { WebSearchService } from './service.ts';
 export type { WebSearchServiceStatus } from './service.ts';

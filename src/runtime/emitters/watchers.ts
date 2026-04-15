@@ -2,10 +2,10 @@
  * Watcher emitters — typed wrappers for WatcherEvent domain.
  */
 
-import { createEventEnvelope } from '../events/envelope.ts';
-import type { RuntimeEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { WatcherEvent, WatcherSourceKind } from '../events/watchers.ts';
+import type { WatcherEvent, WatcherSourceKind } from '@pellux/goodvibes-sdk/platform/runtime/events/watchers';
 import type { EmitterContext } from './index.ts';
 
 function watcherEvent<T extends WatcherEvent['type']>(

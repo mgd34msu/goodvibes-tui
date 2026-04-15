@@ -7,9 +7,9 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, existsSync, rmSync, mkdtempSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { KVState } from '../../state/kv-state.ts';
-import { ProjectIndex } from '../../state/project-index.ts';
-import { ModeManager } from '../../state/mode-manager.ts';
+import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
+import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
 import { createStateTool } from '../../tools/state/index.ts';
 import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';

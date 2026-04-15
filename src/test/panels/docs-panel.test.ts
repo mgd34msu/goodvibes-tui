@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { DocsPanel } from '../../panels/docs-panel.ts';
-import type { ToolRegistry } from '../../tools/registry.ts';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { ProviderRegistry } from '../../providers/registry.ts';
 
 function linesText(lines: ReturnType<DocsPanel['render']>): string {

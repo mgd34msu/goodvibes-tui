@@ -1,7 +1,7 @@
-import { ToolError, PermissionError } from '../types/errors.ts';
-import type { HookEvent, HookEventPath, HookResult } from '../hooks/types.ts';
-import type { ToolCall, ToolResult } from '../types/tools.ts';
-import type { ToolRegistry } from '../tools/registry.ts';
+import { ToolError, PermissionError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import type { HookEvent, HookEventPath, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { PermissionManager } from '../permissions/manager.ts';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import {
@@ -16,15 +16,15 @@ import {
   emitToolReceived,
   emitToolSucceeded,
 } from '../runtime/emitters/index.ts';
-import { buildSyntheticResult, detectUnresolvedToolCalls, type ReconciliationReason } from './tool-reconciliation.ts';
-import { logger } from '../utils/logger.ts';
+import { buildSyntheticResult, detectUnresolvedToolCalls, type ReconciliationReason } from '@pellux/goodvibes-sdk/platform/core/tool-reconciliation';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { ConfigManager } from '../config/manager.ts';
 import type { AgentManager } from '../tools/agent/index.ts';
-import type { AgentInput } from '../tools/agent/schema.ts';
-import type { ExecutionPlan, ExecutionPlanManager, PlanItem } from './execution-plan.ts';
+import type { AgentInput } from '@pellux/goodvibes-sdk/platform/tools/agent/schema';
+import type { ExecutionPlan, ExecutionPlanManager, PlanItem } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { evaluateOrchestrationSpawn } from '../runtime/orchestration/spawn-policy.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type HookDispatcherLike = {
   fire(event: HookEvent): Promise<HookResult>;

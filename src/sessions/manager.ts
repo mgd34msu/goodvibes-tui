@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { AgentRecord } from '../tools/agent/index.ts';
 import type { SessionReturnContextSummary } from '../runtime/session-return-context.ts';
 import type { ConversationTitleSource } from '../core/conversation.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /**
  * Metadata for a saved session (the first JSONL line).

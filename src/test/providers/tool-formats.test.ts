@@ -11,7 +11,7 @@ import {
   toGeminiContents,
   extractTextToolCalls,
 } from '../../providers/tool-formats.ts';
-import type { ToolDefinition, ToolCall } from '../../types/tools.ts';
+import type { ToolDefinition, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ProviderMessage } from '../../providers/interface.ts';
 
 const sampleTool: ToolDefinition = {

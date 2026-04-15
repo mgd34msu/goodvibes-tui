@@ -7,7 +7,7 @@
  * @example
  * ```ts
  * import { createTelemetryProvider } from './index.ts';
- * import { LocalLedgerExporter } from './exporters/index.ts';
+ * import { LocalLedgerExporter } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/exporters/index';
  *
  * const { tracer, meter } = createTelemetryProvider({
  *   tracer: {
@@ -19,9 +19,9 @@
  * });
  * ```
  */
-import { RuntimeTracer } from './tracer.ts';
-import { RuntimeMeter } from './meter.ts';
-import type { TelemetryProviderConfig } from './types.ts';
+import { RuntimeTracer } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/tracer';
+import { RuntimeMeter } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/meter';
+import type { TelemetryProviderConfig } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/types';
 
 // Re-export all public types
 export type {
@@ -43,12 +43,12 @@ export type {
   TracerConfig,
   MeterConfig,
   TelemetryProviderConfig,
-} from './types.ts';
-export { SpanStatusCode as SpanStatusCodes, SpanKind as SpanKinds } from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/telemetry/types';
+export { SpanStatusCode as SpanStatusCodes, SpanKind as SpanKinds } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/types';
 
 // Re-export tracer and meter classes
-export { RuntimeTracer } from './tracer.ts';
-export { RuntimeMeter } from './meter.ts';
+export { RuntimeTracer } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/tracer';
+export { RuntimeMeter } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/meter';
 export type {
   TelemetrySeverity,
   TelemetryViewMode,
@@ -98,7 +98,7 @@ export type {
   CompactionSpanEndContext,
   CompactionPhase,
   HealthCascadeSpanContext,
-} from './spans/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/index';
 export {
   startTurnSpan,
   endTurnSpan,
@@ -133,11 +133,11 @@ export {
   recordCompactionPhase,
   endCompactionSpan,
   recordHealthCascadeSpan,
-} from './spans/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/index';
 
 // Re-export exporters
-export type { LocalLedgerConfig, ConsoleVerbosity, ConsoleExporterConfig } from './exporters/index.ts';
-export { LocalLedgerExporter, ConsoleExporter } from './exporters/index.ts';
+export type { LocalLedgerConfig, ConsoleVerbosity, ConsoleExporterConfig } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/exporters/index';
+export { LocalLedgerExporter, ConsoleExporter } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/exporters/index';
 
 // Re-export instrumentation
 export type { InstrumentationHandle } from './instrumentation/index.ts';

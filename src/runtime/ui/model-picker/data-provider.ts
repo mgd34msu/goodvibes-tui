@@ -10,9 +10,9 @@
  */
 import type { ModelDefinition } from '../../../providers/registry.ts';
 import type { ProviderRegistry } from '../../../providers/registry.ts';
-import type { BenchmarkStore } from '../../../providers/model-benchmarks.ts';
-import type { ProviderHealthDomainState } from '../../store/domains/provider-health.ts';
-import type { ModelDomainState } from '../../store/domains/model.ts';
+import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import type { ProviderHealthDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
+import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
 import { enrichModelEntries, groupEntriesByProvider } from './health-enrichment.ts';
 import type { ModelPickerData, ModelPickerEntry } from './types.ts';
 

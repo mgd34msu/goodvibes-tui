@@ -1,14 +1,14 @@
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
 import { listHookPointContracts } from '../hooks/index.ts';
 import type { HookDispatcher } from '../hooks/dispatcher.ts';
-import type { HookPointContract } from '../hooks/contracts.ts';
-import type { HookActivityRecord, HookActivityTracker } from '../hooks/activity.ts';
+import type { HookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
+import type { HookActivityRecord, HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 import type { HookAuthoringAction, HookSimulationResult } from '../hooks/workbench.ts';
-import type { HookChain, HookDefinition } from '../hooks/types.ts';
+import type { HookChain, HookDefinition } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { HookWorkbench } from '../hooks/workbench.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 import {
   buildEmptyState,
   buildPanelLine,

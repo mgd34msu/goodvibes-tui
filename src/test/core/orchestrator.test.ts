@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { ToolRegistry } from '../../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { MockLLMProvider } from '../setup.ts';
 import { HookDispatcher } from '../../hooks/dispatcher.ts';
-import type { HookEvent, HookResult } from '../../hooks/types.ts';
+import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { PermissionManager } from '../../permissions/manager.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';

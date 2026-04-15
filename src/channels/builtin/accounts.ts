@@ -5,7 +5,7 @@ import type {
   ChannelAccountRecord,
   ChannelSecretStatus,
   ChannelSurface,
-} from '../types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/types';
 import type { BuiltinChannelRuntimeDeps } from './shared.ts';
 
 interface BuiltinAccountContext {

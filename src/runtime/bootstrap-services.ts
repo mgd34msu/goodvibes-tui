@@ -3,9 +3,9 @@ import type { RuntimeEventBus } from './events/index.ts';
 import type { RuntimeServices } from './services.ts';
 import { DaemonServer } from '../daemon/server.ts';
 import { HttpListener } from '../daemon/http-listener.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import net from 'node:net';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 interface DaemonService {
   enable(config: { daemon: boolean }, token?: string): boolean;

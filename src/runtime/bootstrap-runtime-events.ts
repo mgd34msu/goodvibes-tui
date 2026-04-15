@@ -1,6 +1,6 @@
 import type { ConfigManager } from '../config/manager.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
-import type { ConversationFollowUpItem } from '../core/conversation-follow-ups.ts';
+import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
 import type { AgentEvent, ProviderEvent, RuntimeEventBus, WorkflowEvent } from './events/index.ts';
 import type { createDomainDispatch } from './store/index.ts';
 import type { WrfcController } from '../agents/wrfc-controller.ts';

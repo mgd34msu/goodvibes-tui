@@ -6,16 +6,16 @@ import type {
   ProviderRuntimeMetadataDeps,
 } from './interface.ts';
 import { REASONING_BUDGET_MAP } from './interface.ts';
-import { ProviderError } from '../types/errors.ts';
-import { withRetry } from '../utils/retry.ts';
-import { logger } from '../utils/logger.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import {
   toAnthropicTools,
   toAnthropicMessages,
   fromAnthropicContent,
 } from './tool-formats.ts';
 import type { AnthropicContentBlock } from './tool-formats.ts';
-import { toProviderError } from '../utils/error-display.ts';
+import { toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const ANTHROPIC_API_VERSION = '2023-06-01';
 

@@ -27,7 +27,7 @@ import type {
   DistributedPeerTokenRecord,
   DistributedRuntimePairRequest,
   DistributedWorkPriority,
-} from '../remote/distributed-runtime-types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-types';
 import type { UiControlPlaneSnapshot, UiLocalAuthSnapshot, UiSessionSnapshot, UiTasksSnapshot } from '../ui-read-models.ts';
 import type { UiRuntimeEvents } from '../ui-events.ts';
 import type { TransportPaths } from './shared.ts';
@@ -87,9 +87,9 @@ export interface HttpTransportSessionsClient {
 
 export interface HttpTransportTasksClient {
   snapshot(): Promise<UiTasksSnapshot>;
-  list(limit?: number): Promise<readonly import('../store/domains/tasks.ts').RuntimeTask[]>;
-  get(taskId: string): Promise<import('../store/domains/tasks.ts').RuntimeTask | null>;
-  running(): Promise<readonly import('../store/domains/tasks.ts').RuntimeTask[]>;
+  list(limit?: number): Promise<readonly import('@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks').RuntimeTask[]>;
+  get(taskId: string): Promise<import('@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks').RuntimeTask | null>;
+  running(): Promise<readonly import('@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks').RuntimeTask[]>;
   submit(input: HttpTaskSubmitInput): Promise<HttpTaskSubmitResponse>;
   cancel(taskId: string): Promise<HttpTaskActionResponse>;
   retry(taskId: string): Promise<HttpTaskRetryResponse>;
@@ -151,7 +151,7 @@ export interface HttpTransportTelemetryClient {
   snapshot(query?: HttpTransportTelemetryQuery): Promise<TelemetrySnapshot>;
   events(query?: HttpTransportTelemetryQuery): Promise<TelemetryListResponse<TelemetryRecord>>;
   errors(query?: HttpTransportTelemetryQuery): Promise<TelemetryListResponse<TelemetryRecord>>;
-  traces(query?: HttpTransportTelemetryQuery): Promise<TelemetryListResponse<import('../telemetry/types.ts').ReadableSpan>>;
+  traces(query?: HttpTransportTelemetryQuery): Promise<TelemetryListResponse<import('@pellux/goodvibes-sdk/platform/runtime/telemetry/types').ReadableSpan>>;
   metrics(query?: HttpTransportTelemetryQuery): Promise<HttpTransportTelemetryMetricsSnapshot>;
   otlpTraces(query?: HttpTransportTelemetryQuery): Promise<Record<string, unknown>>;
   otlpLogs(query?: HttpTransportTelemetryQuery): Promise<Record<string, unknown>>;
@@ -272,12 +272,12 @@ export interface HttpTaskSubmitResponse {
 }
 
 export interface HttpTaskActionResponse {
-  readonly task: import('../store/domains/tasks.ts').RuntimeTask | null;
+  readonly task: import('@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks').RuntimeTask | null;
 }
 
 export interface HttpTaskRetryResponse {
   readonly retried?: boolean;
-  readonly task: import('../store/domains/tasks.ts').RuntimeTask | null;
+  readonly task: import('@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks').RuntimeTask | null;
   readonly agentId?: string;
 }
 

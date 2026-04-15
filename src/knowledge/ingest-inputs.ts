@@ -4,7 +4,7 @@ import {
   emitKnowledgeIngestFailed,
   emitKnowledgeIngestStarted,
 } from '../runtime/emitters/index.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import { finalizeKnowledgeIngestedSource } from './ingest-compile.ts';
 import type { KnowledgeIngestContext } from './ingest-context.ts';
 import {
@@ -21,7 +21,7 @@ import type {
   KnowledgeIssueRecord,
   KnowledgeSourceRecord,
   KnowledgeSourceType,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/types';
 
 export async function ingestKnowledgeUrl(
   context: KnowledgeIngestContext,

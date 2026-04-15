@@ -13,12 +13,12 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import {
   ToolContractVerifier,
-} from '../../../runtime/tools/contract-verifier.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tools/contract-verifier';
 import type {
   ContractVerifierOptions,
-} from '../../../runtime/tools/contract-verifier.ts';
-import { ToolContractsPanel } from '../../../runtime/diagnostics/panels/tool-contracts.ts';
-import type { Tool } from '../../../types/tools.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tools/contract-verifier';
+import { ToolContractsPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/tool-contracts';
+import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

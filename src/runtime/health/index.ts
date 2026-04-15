@@ -18,22 +18,22 @@ export type {
   CascadeResult,
   EvaluateResult,
   CascadeAppliedEvent,
-} from './types.ts';
-export { createCascadeAppliedEvent } from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/health/types';
+export { createCascadeAppliedEvent } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
 
-export { RuntimeHealthAggregator } from './aggregator.ts';
-export { CascadeEngine } from './cascade-engine.ts';
-export { CASCADE_RULES } from './cascade-rules.ts';
+export { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
+export { CascadeEngine } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-engine';
+export { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
 export { HealthStoreWiring } from './wiring.ts';
 export { handleCascadeEffect } from './effect-handlers.ts';
 export type { EffectHandlerContext } from './effect-handlers.ts';
-export { CascadeTimer, deriveCascadeSeverity } from './cascade-timing.ts';
-export type { CascadeSeverity, TimedCascadeResult, TimedEvaluateResult } from './cascade-timing.ts';
-export { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from './cascade-playbook-map.ts';
+export { CascadeTimer, deriveCascadeSeverity } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-timing';
+export type { CascadeSeverity, TimedCascadeResult, TimedEvaluateResult } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-timing';
+export { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-playbook-map';
 
-import { RuntimeHealthAggregator } from './aggregator.ts';
-import { CascadeEngine } from './cascade-engine.ts';
-import { CASCADE_RULES } from './cascade-rules.ts';
+import { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
+import { CascadeEngine } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-engine';
+import { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
 import { HealthStoreWiring } from './wiring.ts';
 
 /**

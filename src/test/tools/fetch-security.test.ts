@@ -11,18 +11,18 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
 import {
   applySanitizer,
   resolveSanitizeMode,
   type SanitizeMode,
-} from '../../tools/fetch/sanitizer.ts';
+} from '@pellux/goodvibes-sdk/platform/tools/fetch/sanitizer';
 import {
   classifyHostTrustTier,
   extractHostname,
   TRUST_TIER_EVENTS,
   type TrustTierConfig,
-} from '../../tools/fetch/trust-tiers.ts';
+} from '@pellux/goodvibes-sdk/platform/tools/fetch/trust-tiers';
 import { createFetchTool } from '../../tools/fetch/index.ts';
 
 function createFetchHarness() {

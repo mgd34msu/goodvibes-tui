@@ -1,6 +1,6 @@
-import { withRetry } from '../utils/retry.ts';
-import { ProviderError } from '../types/errors.ts';
-import type { ToolCall, ToolDefinition } from '../types/tools.ts';
+import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import type { ToolCall, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ProviderCapability } from './capabilities.ts';
 import type {
   ChatRequest,
@@ -16,7 +16,7 @@ import type {
 } from './interface.ts';
 import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
 import { toOpenAITools } from './tool-formats.ts';
-import { summarizeError, toProviderError } from '../utils/error-display.ts';
+import { summarizeError, toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type NativeFetch = (
   input: RequestInfo | URL,
@@ -379,8 +379,12 @@ async function consumeNDJSON(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  for await (const chunk of body) {
-    buffer += decoder.decode(chunk, { stream: true });
+  const reader = body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split(/\r?\n/);
     buffer = lines.pop() ?? '';
     for (const line of lines) {

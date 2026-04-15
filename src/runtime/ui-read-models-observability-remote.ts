@@ -1,8 +1,8 @@
 import type { RuntimeServices } from './services.ts';
-import type { UiReadModel } from './ui-read-models-base.ts';
+import type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
 import { createStoreBackedReadModel } from './ui-read-model-helpers.ts';
 import type { RemoteSupervisorSnapshot } from './remote/supervisor.ts';
-import type { DistributedPendingWork, DistributedPeerRecord, DistributedRuntimePairRequest } from './remote/distributed-runtime-types.ts';
+import type { DistributedPendingWork, DistributedPeerRecord, DistributedRuntimePairRequest } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-types';
 
 export interface UiRemoteSnapshot {
   readonly daemon: {
@@ -15,7 +15,7 @@ export interface UiRemoteSnapshot {
   readonly acp: {
     readonly transportState: string;
     readonly totalMessages: number;
-    readonly activeConnections: readonly import('./store/domains/acp.ts').AcpConnection[];
+    readonly activeConnections: readonly import('@pellux/goodvibes-sdk/platform/runtime/store/domains/acp').AcpConnection[];
   };
   readonly pools: ReturnType<RuntimeServices['remoteRunnerRegistry']['listPools']>;
   readonly contracts: ReturnType<RuntimeServices['remoteRunnerRegistry']['listContracts']>;
@@ -56,7 +56,7 @@ export function createRemoteReadModels(runtimeServices: RuntimeServices): UiRemo
           totalMessages: state.acp.totalMessages,
           activeConnections: state.acp.activeConnectionIds
             .map((id) => state.acp.connections.get(id))
-            .filter((connection): connection is import('./store/domains/acp.ts').AcpConnection => connection !== undefined),
+            .filter((connection): connection is import('@pellux/goodvibes-sdk/platform/runtime/store/domains/acp').AcpConnection => connection !== undefined),
         },
         pools: runtimeServices.remoteRunnerRegistry.listPools(),
         contracts: runtimeServices.remoteRunnerRegistry.listContracts(),

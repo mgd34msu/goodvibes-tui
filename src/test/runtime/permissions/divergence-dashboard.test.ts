@@ -13,11 +13,11 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { PermissionSimulator } from '../../../runtime/permissions/simulation.ts';
+import { PermissionSimulator } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation';
 import {
   DivergenceDashboard,
   DivergenceGateError,
-} from '../../../runtime/permissions/divergence-dashboard.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/permissions/divergence-dashboard';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

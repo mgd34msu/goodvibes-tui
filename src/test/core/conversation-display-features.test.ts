@@ -43,6 +43,25 @@ describe('ConversationManager.getDiffAtLine', () => {
   });
 });
 
+describe('tool result rendering', () => {
+  test('renders the human-readable tool name instead of only the opaque call id when available', () => {
+    const cm = new ConversationManager(() => 80);
+    const callId = 'chatcmpl-tool-b697f24c7516250';
+    cm.addAssistantMessage('Running web search.', {
+      toolCalls: [{ id: callId, name: 'web_search', arguments: { query: 'dllm language model' } }],
+    });
+    cm.addToolResults([{ callId, success: true, output: '1 line' }]);
+
+    const text = cm.getDisplayBlocks()
+      .map((line) => line.map((cell) => cell.char).join(''))
+      .join('\n');
+
+    expect(text).toContain('tool result');
+    expect(text).toContain('web_search');
+    expect(text).not.toContain(callId);
+  });
+});
+
 describe('BlockActionsMenu', () => {
   test('opens with correct actions for tool block', () => {
     const menu = new BlockActionsMenu();

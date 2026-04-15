@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ArtifactStore } from '../../artifacts/index.ts';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import { ConfigManager } from '../../config/manager.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { knowledgeCommand } from '../../input/commands/knowledge.ts';

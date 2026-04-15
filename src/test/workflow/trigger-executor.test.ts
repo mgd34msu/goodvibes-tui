@@ -1,7 +1,7 @@
 import { describe, test, expect, mock } from 'bun:test';
-import { fireTriggers } from '../../workflow/trigger-executor.ts';
-import type { TriggerDefinition } from '../../tools/workflow/index.ts';
-import type { HookEvent } from '../../hooks/types.ts';
+import { fireTriggers } from '@pellux/goodvibes-sdk/platform/workflow/trigger-executor';
+import type { TriggerDefinition } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
+import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

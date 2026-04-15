@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { WrfcChain, WrfcState, QualityGateResult } from '../agents/wrfc-types.ts';
 import type { WrfcController } from '../agents/wrfc-controller.ts';
 import { BasePanel } from './base-panel.ts';
@@ -14,7 +14,7 @@ import {
   buildStyledPanelLine,
   buildEmptyState,
 } from './polish.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 // ---------------------------------------------------------------------------
 // Colour palette

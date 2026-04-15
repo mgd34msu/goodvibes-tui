@@ -7,17 +7,17 @@
  *
  * Tool namespace: mcp:<server-name>:<tool-name>
  */
-import { logger } from '../utils/logger.ts';
-import { loadMcpConfig } from './config.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { loadMcpConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
 import { McpClient } from './client.ts';
 import type { McpProcessSpec } from './client.ts';
 import type { McpToolInfo, McpToolSchema } from './client.ts';
-import type { McpServerConfig } from './config.ts';
+import type { McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
 import type { HookDispatcher } from '../hooks/dispatcher.ts';
-import type { HookEvent } from '../hooks/types.ts';
-import { McpPermissionManager } from '../runtime/mcp/permissions.ts';
-import { McpSchemaFreshnessTracker } from '../runtime/mcp/schema-freshness.ts';
-import type { McpDecisionRecord, QuarantineReason, SchemaFreshness } from '../runtime/mcp/types.ts';
+import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { McpPermissionManager } from '@pellux/goodvibes-sdk/platform/runtime/mcp/permissions';
+import { McpSchemaFreshnessTracker } from '@pellux/goodvibes-sdk/platform/runtime/mcp/schema-freshness';
+import type { McpDecisionRecord, QuarantineReason, SchemaFreshness } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 import type { RuntimeEventBus } from '../runtime/events/index.ts';
 import {
   emitMcpConfigured,
@@ -26,13 +26,13 @@ import {
   emitMcpSchemaQuarantined,
 } from '../runtime/emitters/mcp.ts';
 import type { ConfigManager } from '../config/manager.ts';
-import type { McpConfigRoots } from './config.ts';
+import type { McpConfigRoots } from '@pellux/goodvibes-sdk/platform/mcp/config';
 import { getSandboxConfigSnapshot } from '../runtime/sandbox/manager.ts';
 import {
   type SandboxSessionRegistry,
 } from '../runtime/sandbox/session-registry.ts';
 import { resolveSandboxCommandPlan } from '../runtime/sandbox/backend.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 function compactEnv(env: NodeJS.ProcessEnv | Record<string, string>): Record<string, string> {
   return Object.fromEntries(
@@ -259,8 +259,8 @@ export class McpRegistry {
   listServerSecurity(): Array<{
     name: string;
     connected: boolean;
-    role: import('../runtime/mcp/types.ts').McpServerRole;
-    trustMode: import('../runtime/mcp/types.ts').McpTrustMode;
+    role: import('@pellux/goodvibes-sdk/platform/runtime/mcp/types').McpServerRole;
+    trustMode: import('@pellux/goodvibes-sdk/platform/runtime/mcp/types').McpTrustMode;
     allowedPaths: string[];
     allowedHosts: string[];
     schemaFreshness: SchemaFreshness;
@@ -290,8 +290,8 @@ export class McpRegistry {
     name: string;
     sessionId?: string;
     profileId?: 'mcp-shared' | 'mcp-per-server';
-    state?: import('../runtime/sandbox/types.ts').SandboxSessionState;
-    backend?: import('../runtime/sandbox/types.ts').SandboxResolvedBackend | import('../runtime/sandbox/types.ts').SandboxVmBackend;
+    state?: import('@pellux/goodvibes-sdk/platform/runtime/sandbox/types').SandboxSessionState;
+    backend?: import('@pellux/goodvibes-sdk/platform/runtime/sandbox/types').SandboxResolvedBackend | import('@pellux/goodvibes-sdk/platform/runtime/sandbox/types').SandboxVmBackend;
     startupStatus?: 'verified' | 'planned' | 'failed';
   }> {
     return this.serverNames.map((name) => {
@@ -310,12 +310,12 @@ export class McpRegistry {
     });
   }
 
-  setServerTrustMode(serverName: string, mode: import('../runtime/mcp/types.ts').McpTrustMode): void {
+  setServerTrustMode(serverName: string, mode: import('@pellux/goodvibes-sdk/platform/runtime/mcp/types').McpTrustMode): void {
     this.permissions.setTrustMode(serverName, mode);
     this._emitPolicyUpdate(serverName);
   }
 
-  setServerRole(serverName: string, role: import('../runtime/mcp/types.ts').McpServerRole): void {
+  setServerRole(serverName: string, role: import('@pellux/goodvibes-sdk/platform/runtime/mcp/types').McpServerRole): void {
     this.permissions.setServerRole(serverName, role);
     this._emitPolicyUpdate(serverName);
   }

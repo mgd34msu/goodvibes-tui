@@ -13,7 +13,7 @@ import {
   rollbackManagedApply,
   stageManagedSettingsBundle,
 } from '../../runtime/settings/control-plane.ts';
-import type { ManagedSettingsBundle } from '../../runtime/sandbox/types.ts';
+import type { ManagedSettingsBundle } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
 describe('runtime/settings/control-plane', () => {

@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ConfigManager } from '../../config/manager.ts';
-import { DEFAULT_CONFIG } from '../../config/schema.ts';
+import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config/schema';
 
 // ---------------------------------------------------------------------------
 // Helpers

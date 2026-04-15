@@ -1,6 +1,6 @@
 import { describe, test, expect, afterEach } from 'bun:test';
 import { McpRegistry } from '../../mcp/registry.ts';
-import type { McpServerConfig } from '../../mcp/config.ts';
+import type { McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';

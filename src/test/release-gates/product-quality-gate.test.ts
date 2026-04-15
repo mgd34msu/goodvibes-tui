@@ -10,9 +10,9 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { FEATURE_FLAGS } from '../../runtime/feature-flags/flags.ts';
-import { createFeatureFlagManager } from '../../runtime/feature-flags/manager.ts';
-import { NotificationRouter } from '../../runtime/notifications/router.ts';
+import { FEATURE_FLAGS } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/flags';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
+import { NotificationRouter } from '@pellux/goodvibes-sdk/platform/runtime/notifications/router';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionAction, SelectionItem } from '../selection-modal.ts';
 import { openCommandPanel, requireServiceRegistry, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerServicesRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -159,7 +159,7 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
         const sourcePath = shellPaths.resolveWorkspacePath(pathArg);
         try {
           const parsed = JSON.parse(readFileSync(sourcePath, 'utf-8')) as Record<string, unknown>;
-          const targetPath = shellPaths.resolveProjectTuiPath('services.json');
+          const targetPath = shellPaths.resolveProjectPath('tui', 'services.json');
           mkdirSync(dirname(targetPath), { recursive: true });
           writeFileSync(targetPath, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
           ctx.print(`Imported services config from ${sourcePath}`);

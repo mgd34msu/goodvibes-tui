@@ -1,16 +1,16 @@
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { BookmarkManager } from '../../bookmarks/manager.ts';
+import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
 import { ConfigManager } from '../../config/manager.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SecretsManager } from '../../config/secrets.ts';
-import { FavoritesStore } from '../../providers/favorites.ts';
-import { BenchmarkStore } from '../../providers/model-benchmarks.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { ToolLLM } from '../../config/tool-llm.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
-import { CacheHitTracker } from '../../providers/cache-strategy.ts';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import { ProviderRegistry } from '../../providers/registry.ts';
 
 export interface TestManagers {

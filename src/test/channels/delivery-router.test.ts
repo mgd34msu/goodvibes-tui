@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ArtifactStore } from '../../artifacts/index.ts';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import { ChannelDeliveryRouter } from '../../channels/index.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SecretsManager } from '../../config/secrets.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { ControlPlaneGateway } from '../../control-plane/index.ts';
 import type { ChannelDeliveryRequest } from '../../channels/index.ts';
 

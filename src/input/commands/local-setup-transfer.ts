@@ -75,9 +75,9 @@ export function buildSetupTransferBundle(ctx: CommandContext, snapshot: SetupRev
       // Ignore unreadable config values in transfer bundles.
     }
   }
-  const servicesPath = shellPaths.resolveProjectTuiPath('services.json');
-  const pluginsPath = shellPaths.resolveProjectTuiPath('ecosystem', 'plugins.json');
-  const skillsPath = shellPaths.resolveProjectTuiPath('ecosystem', 'skills.json');
+  const servicesPath = shellPaths.resolveProjectPath('tui', 'services.json');
+  const pluginsPath = shellPaths.resolveProjectPath('tui', 'ecosystem', 'plugins.json');
+  const skillsPath = shellPaths.resolveProjectPath('tui', 'ecosystem', 'skills.json');
   const services = existsSync(servicesPath)
     ? JSON.parse(readFileSync(servicesPath, 'utf-8')) as Record<string, unknown>
     : undefined;

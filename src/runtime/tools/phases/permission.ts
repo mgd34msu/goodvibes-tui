@@ -1,12 +1,12 @@
-import type { Tool, ToolCall } from '../../../types/tools.ts';
+import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ToolRuntimeContext } from '../context.ts';
-import type { PhaseResult, ToolExecutionRecord } from '../types.ts';
+import type { PhaseResult, ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 import {
   emitPermissionDecision,
   emitPermissionRequested,
 } from '../../emitters/permissions.ts';
-import type { PermissionCheckResult } from '../../../permissions/types.ts';
-import { summarizeError } from '../../../utils/error-display.ts';
+import type { PermissionCheckResult } from '@pellux/goodvibes-sdk/platform/permissions/types';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /**
  * permission — Phase 3 of the tool execution pipeline.

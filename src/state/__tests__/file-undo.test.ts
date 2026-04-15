@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { FileUndoManager } from '../file-undo.ts';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
 import { getTestFileUndoManager, resetTestRuntimeServices } from '../../test/helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

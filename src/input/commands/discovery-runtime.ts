@@ -1,7 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { scan, persistProviders } from '../../discovery/index.ts';
+import { scan, persistProviders } from '@pellux/goodvibes-sdk/platform/discovery/index';
 import { requireProviderApi, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerDiscoveryRuntimeCommands(registry: CommandRegistry): void {
   registry.register({

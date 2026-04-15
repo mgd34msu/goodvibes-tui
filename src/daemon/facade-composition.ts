@@ -1,7 +1,7 @@
 import { AgentManager } from '../tools/agent/index.ts';
 import { ConfigManager } from '../config/manager.ts';
 import { ServiceRegistry } from '../config/service-registry.ts';
-import { UserAuthManager } from '../security/user-auth.ts';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import {
   AutomationDeliveryManager,
   AutomationManager,
@@ -369,7 +369,7 @@ export function createDaemonFacadeCollaborators(
 export function configureDaemonSessionContinuation(options: {
   readonly sessionBroker: SharedSessionBroker;
   readonly trySpawnAgent: (input: Parameters<AgentManager['spawn']>[0], logLabel?: string, sessionId?: string) => import('../tools/agent/index.ts').AgentRecord | Response;
-  readonly queueSurfaceReplyFromBinding: (binding: import('../automation/routes.ts').AutomationRouteBinding | undefined, input: {
+  readonly queueSurfaceReplyFromBinding: (binding: import('@pellux/goodvibes-sdk/platform/automation/routes').AutomationRouteBinding | undefined, input: {
     readonly agentId: string;
     readonly task: string;
     readonly sessionId?: string;

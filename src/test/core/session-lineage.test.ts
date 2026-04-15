@@ -4,7 +4,7 @@
  * Run with: bun test src/test/core/session-lineage.test.ts
  */
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { SessionLineageTracker } from '../../core/session-lineage.ts';
+import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
 
 describe('SessionLineageTracker', () => {
   let tracker: SessionLineageTracker;

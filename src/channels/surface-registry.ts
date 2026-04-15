@@ -1,6 +1,6 @@
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
-import type { SurfaceRecord } from '../runtime/store/domains/surfaces.ts';
+import type { SurfaceRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surfaces';
 import { ConfigManager } from '../config/manager.ts';
 import type { ChannelPluginRegistry } from './plugin-registry.ts';
 

@@ -1,6 +1,6 @@
 export { HookDispatcher } from './dispatcher.ts';
 export { ChainEngine } from './chain-engine.ts';
-export { HookActivityTracker } from './activity.ts';
+export { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 export { HookWorkbench, createHookWorkbench } from './workbench.ts';
 export { createHookApi } from './hook-api.ts';
 export type {
@@ -23,18 +23,18 @@ export type {
   ChainStep,
   HookChain,
   HooksConfig,
-} from './types.ts';
-export type { HookActivityRecord } from './activity.ts';
+} from '@pellux/goodvibes-sdk/platform/hooks/types';
+export type { HookActivityRecord } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 export type { HookAuthoringAction, HookConfigInspection, HookSimulationResult } from './workbench.ts';
-export type { HookExecutionMode, HookAuthority, HookPointContract } from './contracts.ts';
+export type { HookExecutionMode, HookAuthority, HookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
 import type { AgentManager } from '../tools/agent/index.ts';
 export {
   listHookPointContracts,
   getHookPointContract,
   parseHookPath,
-} from './contracts.ts';
+} from '@pellux/goodvibes-sdk/platform/hooks/contracts';
 
-import { HookActivityTracker } from './activity.ts';
+import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 import { HookDispatcher } from './dispatcher.ts';
 
 export function createHookDispatcher(config: {

@@ -1,7 +1,7 @@
-import { loadSkillByTrigger } from '../tools/registry-tool/skill-loader.ts';
+import { loadSkillByTrigger } from '@pellux/goodvibes-sdk/platform/tools/registry-tool/skill-loader';
 import type { CommandContext, CommandRegistry } from './command-registry.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
-import type { InputToken } from '../core/tokenizer.ts';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import type { ConversationManager } from '../core/conversation.ts';
 
 export type CommandModeRouteState = {

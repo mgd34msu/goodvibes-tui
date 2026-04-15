@@ -5,7 +5,7 @@ import type { MemoryBundle, MemorySearchFilter } from '../../state/memory-store.
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope, resolveBundlePath } from './recall-shared.ts';
 import { requireShellPaths } from './runtime-services.ts';
 import { getMemoryApi } from './recall-query.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function handleRecallExport(args: string[], context: CommandContext): void {
   const memory = getMemoryApi(context);

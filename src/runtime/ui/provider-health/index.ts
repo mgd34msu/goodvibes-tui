@@ -18,8 +18,8 @@ export type {
 export { ProviderHealthDataProvider } from './data-provider.ts';
 export { buildFallbackChainData } from './fallback-visualizer.ts';
 
-import type { ProviderHealthDomainState } from '../../store/domains/provider-health.ts';
-import type { ModelDomainState } from '../../store/domains/model.ts';
+import type { ProviderHealthDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
+import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
 import { ProviderHealthDataProvider } from './data-provider.ts';
 import type { ProviderHealthData } from './types.ts';
 

@@ -4,15 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SchedulePanel } from '../../panels/schedule-panel.ts';
 import { AutomationManager } from '../../automation/index.ts';
-import { normalizeCronSchedule } from '../../automation/schedules.ts';
-import { AutomationJobStore } from '../../automation/store/jobs.ts';
-import { AutomationRouteStore } from '../../automation/store/routes.ts';
-import { AutomationRunStore } from '../../automation/store/runs.ts';
+import { normalizeCronSchedule } from '@pellux/goodvibes-sdk/platform/automation/schedules';
+import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
+import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
 import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import { PersistentStore } from '../../state/persistent-store.ts';
-import type { LegacySchedulerSnapshot } from '../../automation/migration.ts';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
+import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function linesText(lines: ReturnType<SchedulePanel['render']>): string {

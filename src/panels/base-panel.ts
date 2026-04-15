@@ -1,7 +1,7 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { Panel, PanelCategory } from './types.ts';
-import type { PanelResourceContract, PanelHealthState } from '../runtime/perf/panel-contracts.ts';
-import type { PanelHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
+import type { PanelResourceContract, PanelHealthState } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-contracts';
+import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 
 export abstract class BasePanel implements Panel {
   public needsRender = true;

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createEventEnvelope, RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
 import { ProviderHealthPanel } from '../../panels/provider-health-panel.ts';
-import type { Line } from '../../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';

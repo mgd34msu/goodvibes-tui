@@ -1,24 +1,24 @@
 import { ConfigManager } from '../config/manager.ts';
 import type { AgentRecord } from '../tools/agent/index.ts';
-import type { ExecutionIntent } from '../runtime/execution-intents.ts';
-import type { AutomationDeliveryPolicy } from './delivery.ts';
-import type { AutomationFailurePolicy } from './failures.ts';
-import type { AutomationJob } from './jobs.ts';
-import type { AutomationRun, AutomationRunTelemetry } from './runs.ts';
-import type { AutomationExecutionPolicy, AutomationExternalContentSource, AutomationSessionTarget, AutomationWakeMode } from './session-targets.ts';
-import type { AutomationSourceRecord } from './sources.ts';
+import type { ExecutionIntent } from '@pellux/goodvibes-sdk/platform/runtime/execution-intents';
+import type { AutomationDeliveryPolicy } from '@pellux/goodvibes-sdk/platform/automation/delivery';
+import type { AutomationFailurePolicy } from '@pellux/goodvibes-sdk/platform/automation/failures';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRun, AutomationRunTelemetry } from '@pellux/goodvibes-sdk/platform/automation/runs';
+import type { AutomationExecutionPolicy, AutomationExternalContentSource, AutomationSessionTarget, AutomationWakeMode } from '@pellux/goodvibes-sdk/platform/automation/session-targets';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
 import type {
   AutomationExecutionIntent,
   AutomationExecutionMode,
   AutomationExecutionTargetKind,
   ProviderModelRoutingPolicy,
-} from './types.ts';
-import { getNextAutomationOccurrence } from './schedules.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/types';
+import { getNextAutomationOccurrence } from '@pellux/goodvibes-sdk/platform/automation/schedules';
 
 export interface CreateAutomationJobInput {
   readonly name: string;
   readonly prompt: string;
-  readonly schedule: import('./schedules.ts').AutomationScheduleDefinition;
+  readonly schedule: import('@pellux/goodvibes-sdk/platform/automation/schedules').AutomationScheduleDefinition;
   readonly description?: string;
   readonly model?: string;
   readonly provider?: string;
@@ -46,7 +46,7 @@ export interface CreateAutomationJobInput {
 export interface UpdateAutomationJobInput {
   readonly name?: string;
   readonly prompt?: string;
-  readonly schedule?: import('./schedules.ts').AutomationScheduleDefinition;
+  readonly schedule?: import('@pellux/goodvibes-sdk/platform/automation/schedules').AutomationScheduleDefinition;
   readonly description?: string;
   readonly model?: string;
   readonly provider?: string;
@@ -93,7 +93,7 @@ export function sortRuns(runs: Iterable<AutomationRun>): AutomationRun[] {
 }
 
 export function computeNextRun(
-  schedule: import('./schedules.ts').AutomationScheduleDefinition,
+  schedule: import('@pellux/goodvibes-sdk/platform/automation/schedules').AutomationScheduleDefinition,
   from = Date.now(),
   stableId?: string,
 ): number | undefined {

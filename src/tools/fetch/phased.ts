@@ -4,7 +4,7 @@
  * Delegates to a freshly constructed fetch tool instance and adds the
  * PhasedTool metadata required by the phased executor.
  */
-import { asPhasedTool } from '../../runtime/tools/adapter.ts';
+import { asPhasedTool } from '@pellux/goodvibes-sdk/platform/runtime/tools/adapter';
 import { createFetchTool } from './index.ts';
 
 // ---------------------------------------------------------------------------

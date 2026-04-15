@@ -3,12 +3,12 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ArtifactStore } from '../../artifacts/index.ts';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
-import { UserAuthManager } from '../../security/user-auth.ts';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import type { TransportEvent } from '../../runtime/events/transport.ts';
+import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { MultimodalService } from '../../multimodal/index.ts';
@@ -184,7 +184,7 @@ describe('DaemonServer', () => {
   });
 
   test('passes TLS options to Bun.serve when direct daemon TLS is enabled', async () => {
-    const certDir = join(homeDir, '.goodvibes', 'certs');
+    const certDir = join(homeDir, '.goodvibes', 'tui', 'certs');
     mkdirSync(certDir, { recursive: true });
     const certFile = join(certDir, 'fullchain.pem');
     const keyFile = join(certDir, 'privkey.pem');
@@ -2950,7 +2950,7 @@ describe('HttpListener', () => {
   });
 
   test('passes TLS options to Bun.serve when direct listener TLS is enabled', async () => {
-    const certDir = join(homeDir, '.goodvibes', 'certs');
+    const certDir = join(homeDir, '.goodvibes', 'tui', 'certs');
     mkdirSync(certDir, { recursive: true });
     const certFile = join(certDir, 'fullchain.pem');
     const keyFile = join(certDir, 'privkey.pem');

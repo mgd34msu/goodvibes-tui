@@ -6,12 +6,12 @@
  */
 
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { PolicyRegistry } from '../../../runtime/permissions/policy-registry.ts';
-import { createUnsignedBundle } from '../../../runtime/permissions/policy-loader.ts';
-import type { PolicyBundlePayload } from '../../../runtime/permissions/policy-loader.ts';
-import type { DivergenceReport, DivergenceStats } from '../../../runtime/permissions/types.ts';
-import type { EnforceGateResult } from '../../../runtime/permissions/divergence-dashboard.ts';
-import type { PolicyRule } from '../../../runtime/permissions/types.ts';
+import { PolicyRegistry } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-registry';
+import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
+import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
+import type { DivergenceReport, DivergenceStats } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
+import type { EnforceGateResult } from '@pellux/goodvibes-sdk/platform/runtime/permissions/divergence-dashboard';
+import type { PolicyRule } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

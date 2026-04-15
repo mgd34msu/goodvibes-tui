@@ -7,15 +7,15 @@ import {
   normalizeEverySchedule,
 } from '../../automation/index.ts';
 import type { AutomationManager } from '../../automation/index.ts';
-import type { AutomationJob } from '../../automation/jobs.ts';
-import type { AutomationScheduleDefinition } from '../../automation/schedules.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation/schedules';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import type {
   AutomationExecutionPolicy,
   AutomationExternalContentSource,
   AutomationSessionTarget,
   AutomationWakeMode,
-} from '../../automation/session-targets.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/session-targets';
 
 function formatSchedule(schedule: AutomationScheduleDefinition): string {
   switch (schedule.kind) {

@@ -5,10 +5,10 @@
  * Progressive loading: listTools() returns names + descriptions only.
  * getToolSchema() fetches full inputSchema on demand and caches it.
  */
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { VERSION } from '../version.ts';
-import type { McpServerConfig } from './config.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import type { McpServerConfig } from '@pellux/goodvibes-sdk/platform/mcp/config';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface McpProcessSpec {
   command: string;

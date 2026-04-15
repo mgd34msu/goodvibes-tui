@@ -1,9 +1,9 @@
-import type { ArtifactReference } from '../../artifacts/index.ts';
+import type { ArtifactReference } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
-import type { ArtifactStore } from '../../artifacts/index.ts';
+import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import type { ControlPlaneGateway } from '../../control-plane/gateway.ts';
-import type { RouteSurfaceKind } from '../../runtime/events/routes.ts';
+import type { RouteSurfaceKind } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
 
 export type ChannelDeliverySurfaceKind = RouteSurfaceKind;
 export type ChannelDeliveryTargetKind = 'none' | 'webhook' | 'surface' | 'integration' | 'link';

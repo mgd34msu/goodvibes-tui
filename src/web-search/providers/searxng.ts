@@ -1,4 +1,4 @@
-import type { WebSearchProvider, WebSearchProviderResponse, WebSearchRequest } from '../types.ts';
+import type { WebSearchProvider, WebSearchProviderResponse, WebSearchRequest } from '@pellux/goodvibes-sdk/platform/web-search/types';
 import {
   buildDescriptor,
   executeJsonRequest,

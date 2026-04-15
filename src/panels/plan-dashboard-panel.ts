@@ -1,5 +1,5 @@
-import type { Line } from '../types/grid.ts';
-import type { ExecutionPlan, PlanItem, PlanItemStatus } from '../core/execution-plan.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { ExecutionPlan, PlanItem, PlanItemStatus } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import { BasePanel } from './base-panel.ts';
 import type { PlanDashboardQuery } from '../runtime/ui-service-queries.ts';
 import {

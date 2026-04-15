@@ -12,12 +12,12 @@
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
 import { EvalRunner } from '../../runtime/eval/runner.ts';
 import { BUILTIN_SUITES } from '../../runtime/eval/suites.ts';
-import { formatScorecard } from '../../runtime/eval/scorecard.ts';
-import { loadBaseline, captureBaseline, formatBaselineComparison, writeBaseline } from '../../runtime/eval/baseline.ts';
+import { formatScorecard } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
+import { loadBaseline, captureBaseline, formatBaselineComparison, writeBaseline } from '@pellux/goodvibes-sdk/platform/runtime/eval/baseline';
 import type { EvalRegistry } from '../../panels/eval-panel.ts';
-import { formatSuiteResult, formatGateResult } from '../../runtime/eval/format.ts';
+import { formatSuiteResult, formatGateResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/format';
 import { requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ── Subcommand helpers ────────────────────────────────────────────────────────
 

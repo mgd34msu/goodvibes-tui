@@ -27,7 +27,7 @@ function createAgentDetailModal(): AgentDetailModal {
   return new AgentDetailModal({
     agentManager: ui.agents.agentManager,
     agentMessageBus: ui.agents.agentMessageBus,
-    sessionLogPathResolver: (agentId) => ui.environment.shellPaths.resolveProjectTuiPath('sessions', `${agentId}.jsonl`),
+    sessionLogPathResolver: (agentId) => ui.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
   });
 }
 

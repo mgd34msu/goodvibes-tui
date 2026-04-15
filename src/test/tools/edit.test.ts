@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { createEditTool } from '../../tools/edit/index.ts';
 import type { EditToolOptions } from '../../tools/edit/index.ts';
-import { FileStateCache } from '../../state/file-cache.ts';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 
 // ---------------------------------------------------------------------------
 // Helpers

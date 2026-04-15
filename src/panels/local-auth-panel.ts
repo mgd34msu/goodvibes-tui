@@ -1,5 +1,5 @@
-import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
 import {
   buildDetailBlock,
@@ -12,7 +12,7 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import type { LocalAuthSnapshot } from '../security/user-auth.ts';
+import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import type { LocalAuthInspectionQuery } from '../runtime/ui-service-queries.ts';
 
 const C = {

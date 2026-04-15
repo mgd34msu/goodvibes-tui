@@ -7,11 +7,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
-import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 
-import { CodeIntelligence, pathToUri, uriToPath } from '../../intelligence/facade.ts';
-import { TreeSitterService } from '../../intelligence/tree-sitter/service.ts';
-import { LspService } from '../../intelligence/lsp/service.ts';
+import { CodeIntelligence, pathToUri, uriToPath } from '@pellux/goodvibes-sdk/platform/intelligence/facade';
+import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/service';
+import { LspService } from '@pellux/goodvibes-sdk/platform/intelligence/lsp/service';
 import {
   getTestCodeIntelligence,
   getTestLspService,
@@ -23,7 +23,7 @@ import {
   loadLanguageConfigs,
   getLanguageConfig,
   getDefaultConfigs,
-} from '../../intelligence/config.ts';
+} from '@pellux/goodvibes-sdk/platform/intelligence/config';
 
 // ---------------------------------------------------------------------------
 // Helpers

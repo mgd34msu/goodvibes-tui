@@ -17,13 +17,13 @@ import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:
 import { AcpConnection } from '../../acp/connection.ts';
 import { AcpManager } from '../../acp/manager.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import type { TransportEvent } from '../../runtime/events/transport.ts';
+import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
 import type {
   SubagentInfo,
   SubagentResult,
   SubagentTask,
   SubagentStatus,
-} from '../../acp/protocol.ts';
+} from '@pellux/goodvibes-sdk/platform/acp/protocol';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -275,7 +275,7 @@ describe('AcpConnection', () => {
         throw new Error('spawn failure');
       };
       const errors: Array<{ agentId: string; error: string }> = [];
-      runtimeBus.on<Extract<import('../../runtime/events/agents.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
+      runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/agents').AgentEvent, { type: 'AGENT_FAILED' }>>(
         'AGENT_FAILED',
         ({ payload }) => errors.push(payload),
       );
@@ -458,7 +458,7 @@ describe('AcpManager', () => {
       });
 
       const spawned: Array<{ agentId: string; task: string }> = [];
-      runtimeBus.on<Extract<import('../../runtime/events/agents.ts').AgentEvent, { type: 'AGENT_SPAWNING' }>>(
+      runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/agents').AgentEvent, { type: 'AGENT_SPAWNING' }>>(
         'AGENT_SPAWNING',
         ({ payload }) => spawned.push(payload),
       );
@@ -818,7 +818,7 @@ describe('Error handling', () => {
       throw new Error('timeout');
     };
     const errors: Array<{ agentId: string; error: string }> = [];
-    runtimeBus.on<Extract<import('../../runtime/events/agents.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
+    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/agents').AgentEvent, { type: 'AGENT_FAILED' }>>(
       'AGENT_FAILED',
       ({ payload }) => errors.push(payload),
     );
@@ -835,7 +835,7 @@ describe('Error handling', () => {
       throw new Error('fail');
     };
     const errors: string[] = [];
-    runtimeBus.on<Extract<import('../../runtime/events/agents.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
+    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/agents').AgentEvent, { type: 'AGENT_FAILED' }>>(
       'AGENT_FAILED',
       ({ payload }) => errors.push(payload.agentId),
     );

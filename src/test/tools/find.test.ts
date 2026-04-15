@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { makeTempDir, writeTempFile } from '../setup.ts';
-import { createFindTool } from '../../tools/find/index.ts';
+import { createFindTool } from '@pellux/goodvibes-sdk/platform/tools/find/index';
 
 let findTool: ReturnType<typeof createFindTool>;
 

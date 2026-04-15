@@ -8,8 +8,8 @@
  */
 
 import { BasePanel } from './base-panel.ts';
-import type { Line } from '../types/grid.ts';
-import type { PlannerDecision, ExecutionStrategy } from '../core/adaptive-planner.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { PlannerDecision, ExecutionStrategy } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import type { PlannerEvent } from '../runtime/events/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsStrategyQuery } from '../runtime/ui-service-queries.ts';

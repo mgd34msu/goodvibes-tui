@@ -10,7 +10,7 @@ import type { ProviderRegistry } from '../../providers/registry.ts';
 import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/interface.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createDomainDispatch, createRuntimeStore } from '../../runtime/store/index.ts';
-import { ToolRegistry } from '../../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { createPermissionConfigReader } from '../../permissions/manager.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';

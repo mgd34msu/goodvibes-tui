@@ -1,8 +1,8 @@
-import type { ToolDefinition, ToolCall } from '../types/tools.ts';
+import type { ToolDefinition, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ProviderCapability } from './capabilities.ts';
 import type { SecretsManager } from '../config/secrets.ts';
 import type { ServiceRegistry } from '../config/service-registry.ts';
-import type { SubscriptionManager } from '../config/subscriptions.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 /** Shared budget token map for reasoning effort levels. */
 export const REASONING_BUDGET_MAP: Record<string, number> = {

@@ -7,13 +7,13 @@
  * Requires the `operator-control-plane` feature flag to be enabled.
  * Open via Ctrl+O keybind or `/ops view` command.
  */
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { OpsEvent } from '../runtime/events/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsAuditEntry } from '../runtime/diagnostics/panels/ops.ts';
 import { OpsPanel } from '../runtime/diagnostics/panels/ops.ts';
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import {
   buildEmptyState,
   buildPanelLine,

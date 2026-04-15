@@ -1,10 +1,10 @@
 /**
  * Planner emitters — typed emission wrappers for adaptive planner events.
  */
-import { createEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
 import type { EmitterContext } from './index.ts';
-import type { PlannerDecision, ExecutionStrategy } from '../../core/adaptive-planner.ts';
+import type { PlannerDecision, ExecutionStrategy } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 
 export function emitPlanStrategySelected(
   bus: RuntimeEventBus,

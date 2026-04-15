@@ -8,13 +8,13 @@ import { PermissionManager, createPermissionConfigReader } from '../../permissio
 import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/interface.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createDomainDispatch, createRuntimeStore } from '../../runtime/store/index.ts';
-import { ToolRegistry } from '../../tools/registry.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { AgentManager } from '../../tools/agent/index.ts';
 import { ForensicsCollector } from '../../runtime/forensics/collector.ts';
-import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
+import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
-import { ProviderError } from '../../types/errors.ts';
-import type { HookResult } from '../../hooks/types.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import type { HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 const testManagers = createTestManagers();

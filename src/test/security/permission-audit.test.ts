@@ -11,15 +11,15 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
-import { analyzePermissionRequest } from '../../permissions/analysis.ts';
+import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions/analysis';
 import { ConfigManager } from '../../config/manager.ts';
 import { createPermissionConfigReader, PermissionManager } from '../../permissions/manager.ts';
 import { DaemonServer } from '../../daemon/server.ts';
 import { HttpListener } from '../../daemon/http-listener.ts';
-import { UserAuthManager } from '../../security/user-auth.ts';
-import { SpawnTokenManager } from '../../security/spawn-tokens.ts';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
+import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security/spawn-tokens';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
-import { resolveAndValidatePath } from '../../utils/path-safety.ts';
+import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
 import { resetTestSpawnTokenManagers } from '../helpers/runtime-services.ts';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
@@ -334,14 +334,14 @@ describe('Path traversal protection via resolveAndValidatePath', () => {
   });
 
   test('resolveAndValidatePath is used by read tool (import exists)', async () => {
-    const { ReadTool } = await import('../../tools/read/index.ts');
+    const { ReadTool } = await import('@pellux/goodvibes-sdk/platform/tools/read/index');
     expect(typeof ReadTool).toBe('function');
   });
 
   test('resolveAndValidatePath is used by exec tool (import exists)', async () => {
-    const { createExecTool } = await import('../../tools/exec/index.ts');
-    const { ProcessManager } = await import('../../tools/shared/process-manager.ts');
-    const { OverflowHandler } = await import('../../tools/shared/overflow.ts');
+    const { createExecTool } = await import('@pellux/goodvibes-sdk/platform/tools/exec/index');
+    const { ProcessManager } = await import('@pellux/goodvibes-sdk/platform/tools/shared/process-manager');
+    const { OverflowHandler } = await import('@pellux/goodvibes-sdk/platform/tools/shared/overflow');
     const execTool = createExecTool(new ProcessManager(), {
       overflowHandler: new OverflowHandler({ baseDir: PROJECT_ROOT }),
     });

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { PricingCatalog } from '../../providers/model-catalog.ts';
-import type { DiscoveredServer } from '../../discovery/scanner.ts';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { createProviderCacheFixture, writeModelCatalogCache } from '../helpers/provider-cache.ts';
 

@@ -1,5 +1,5 @@
 import type { RegisteredTool } from './registry.ts';
-import type { McpDecisionRecord, McpServerRole, McpTrustMode, QuarantineReason, SchemaFreshness } from '../runtime/mcp/types.ts';
+import type { McpDecisionRecord, McpServerRole, McpTrustMode, QuarantineReason, SchemaFreshness } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 
 export interface McpServerRecord {
   readonly name: string;
@@ -23,8 +23,8 @@ export interface McpSandboxBindingRecord {
   readonly name: string;
   readonly sessionId?: string;
   readonly profileId?: 'mcp-shared' | 'mcp-per-server';
-  readonly state?: import('../runtime/sandbox/types.ts').SandboxSessionState;
-  readonly backend?: import('../runtime/sandbox/types.ts').SandboxResolvedBackend | import('../runtime/sandbox/types.ts').SandboxVmBackend;
+  readonly state?: import('@pellux/goodvibes-sdk/platform/runtime/sandbox/types').SandboxSessionState;
+  readonly backend?: import('@pellux/goodvibes-sdk/platform/runtime/sandbox/types').SandboxResolvedBackend | import('@pellux/goodvibes-sdk/platform/runtime/sandbox/types').SandboxVmBackend;
   readonly startupStatus?: 'verified' | 'planned' | 'failed';
 }
 

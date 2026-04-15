@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { ProviderError } from '../../types/errors.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import {
   buildErrorResponseBody,
   formatError,
@@ -7,7 +7,7 @@ import {
   normalizeError,
   summarizeError,
   toProviderError,
-} from '../../utils/error-display.ts';
+} from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 describe('F6 - ProviderError semantics', () => {
   it('keeps rate-limit retries recoverable and parses retry-after', () => {

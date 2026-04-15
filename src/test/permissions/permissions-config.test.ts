@@ -4,7 +4,12 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { PermissionManager, createPermissionConfigReader } from '../../permissions/manager.ts';
 import { ConfigManager } from '../../config/manager.ts';
-import type { ConfigKey, PermissionAction, PermissionMode } from '../../config/schema.ts';
+import {
+  DEFAULT_CONFIG,
+  type ConfigKey,
+  type PermissionAction,
+  type PermissionMode,
+} from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { PermissionPromptRequest, PermissionPromptDecision } from '../../permissions/prompt.ts';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 
@@ -192,8 +197,6 @@ describe('PermissionManager — config-driven modes', () => {
     });
 
     test('DEFAULT_CONFIG has correct permission defaults for new tool names', () => {
-      // Read defaults directly from schema rather than from ConfigManager (avoids disk state)
-      const { DEFAULT_CONFIG } = require('../../config/schema.ts');
       expect(DEFAULT_CONFIG.permissions.mode).toBe('prompt');
       expect(DEFAULT_CONFIG.permissions.tools.read).toBe('allow');
       expect(DEFAULT_CONFIG.permissions.tools.write).toBe('prompt');

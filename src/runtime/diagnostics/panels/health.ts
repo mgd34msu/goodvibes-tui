@@ -8,13 +8,13 @@
  * SLO status rows are included when an SloCollector is attached.
  * Remediation actions are included when a CascadeTimer is attached.
  */
-import type { RuntimeHealthAggregator } from '../../health/aggregator.ts';
-import type { CompositeHealth, HealthDomain, HealthStatus } from '../../health/types.ts';
-import type { HealthDashboardData, DomainHealthSummary, SloRow, SloGateStatus, RemediationAction } from '../types.ts';
+import type { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
+import type { CompositeHealth, HealthDomain, HealthStatus } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
+import type { HealthDashboardData, DomainHealthSummary, SloRow, SloGateStatus, RemediationAction } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 import type { SloCollector } from '../../perf/slo-collector.ts';
-import type { CascadeTimer } from '../../health/cascade-timing.ts';
+import type { CascadeTimer } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-timing';
 import { SLO_METRICS } from '../../perf/slo-collector.ts';
-import { DEFAULT_BUDGETS } from '../../perf/budgets.ts';
+import { DEFAULT_BUDGETS } from '@pellux/goodvibes-sdk/platform/runtime/perf/budgets';
 
 /**
  * Human-readable names for playbooks, keyed by playbook ID.

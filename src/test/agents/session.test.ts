@@ -6,7 +6,7 @@ import { tmpdir } from 'os';
 
 import { AgentSession } from '../../agents/session.ts';
 import { ConversationManager } from '../../core/conversation.ts';
-import { KVState } from '../../state/kv-state.ts';
+import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
 
 describe('AgentSession', () => {
   let session: AgentSession;

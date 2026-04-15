@@ -7,10 +7,10 @@
  * Footer hints: [Up/Down] Navigate  [Enter] Jump  [o] Open File  [d] Remove  [Esc] Close
  */
 
-import { type Line } from '../types/grid.ts';
+import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ModalFactory } from './modal-factory.ts';
 import { BookmarkModal } from '../input/bookmark-modal.ts';
-import type { BookmarkEntry } from '../bookmarks/manager.ts';
+import type { BookmarkEntry } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
 import { getOverlayContentBudget, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ---------------------------------------------------------------------------

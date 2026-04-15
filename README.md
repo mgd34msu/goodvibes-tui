@@ -51,7 +51,7 @@ Common paths:
 - services: `.goodvibes/tui/services.json`
 - custom providers: `~/.goodvibes/tui/providers/*.json`
 - schedules: `.goodvibes/tui/schedules.json`
-- direct TLS certs: `~/.goodvibes/certs/fullchain.pem` and `~/.goodvibes/certs/privkey.pem`
+- direct TLS certs: `~/.goodvibes/tui/certs/fullchain.pem` and `~/.goodvibes/tui/certs/privkey.pem`
 
 Deployment shapes:
 

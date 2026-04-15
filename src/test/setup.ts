@@ -4,7 +4,7 @@
 import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { LLMProvider, ChatRequest, ChatResponse } from '../providers/interface.ts';
-import type { ToolCall } from '../types/tools.ts';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 
 // ---------------------------------------------------------------------------
 // Mock LLM Provider
@@ -102,13 +102,13 @@ export async function writeTempFile(dir: string, name: string, content: string):
  * Extract plain text string from a Line (Cell[]).
  * Joins all cell characters, trims trailing spaces.
  */
-export function lineToString(line: import('../types/grid.ts').Line): string {
+export function lineToString(line: import('@pellux/goodvibes-sdk/platform/types/grid').Line): string {
   return line.map((c) => c.char).join('').trimEnd();
 }
 
 /**
  * Extract plain text from an array of Lines.
  */
-export function linesToText(lines: import('../types/grid.ts').Line[]): string[] {
+export function linesToText(lines: import('@pellux/goodvibes-sdk/platform/types/grid').Line[]): string[] {
   return lines.map(lineToString);
 }

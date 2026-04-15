@@ -1,6 +1,6 @@
 import type { RuntimeEventBus, RuntimeEventEnvelope } from '../../events/index.ts';
-import type { RuntimeTracer } from '../tracer.ts';
-import type { Span } from '../types.ts';
+import type { RuntimeTracer } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/tracer';
+import type { Span } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/types';
 
 export type Env<T extends { type: string }> = RuntimeEventEnvelope<T['type'], T>;
 export type SpanMap = Map<string, Span>;

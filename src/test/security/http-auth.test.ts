@@ -8,8 +8,8 @@ import {
   extractOperatorAuthToken,
   isOperatorAdmin,
   OPERATOR_SESSION_COOKIE_NAME,
-} from '../../security/http-auth.ts';
-import { UserAuthManager } from '../../security/user-auth.ts';
+} from '@pellux/goodvibes-sdk/platform/security/http-auth';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 
 describe('http auth helpers', () => {
   let userAuth: UserAuthManager;

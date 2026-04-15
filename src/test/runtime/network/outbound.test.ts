@@ -8,7 +8,7 @@ import {
   createNetworkFetch,
   inspectOutboundTls,
 } from '../../../runtime/network/index.ts';
-import { logger } from '../../../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 describe('runtime/network outbound TLS', () => {
   let root: string;
@@ -33,7 +33,7 @@ describe('runtime/network outbound TLS', () => {
   });
 
   test('merges bundled roots with custom CA files when requested', () => {
-    const certDir = join(root, '.goodvibes', 'certs');
+    const certDir = join(root, '.goodvibes', 'tui', 'certs');
     mkdirSync(certDir, { recursive: true });
     const caPath = join(certDir, 'corp-root.pem');
     writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\ncorp\n-----END CERTIFICATE-----\n', 'utf-8');
@@ -67,7 +67,7 @@ describe('runtime/network outbound TLS', () => {
   });
 
   test('wraps fetch and injects resolved TLS options', async () => {
-    const certDir = join(root, '.goodvibes', 'certs');
+    const certDir = join(root, '.goodvibes', 'tui', 'certs');
     mkdirSync(certDir, { recursive: true });
     const caPath = join(certDir, 'internal.pem');
     writeFileSync(caPath, '-----BEGIN CERTIFICATE-----\ncorp\n-----END CERTIFICATE-----\n', 'utf-8');

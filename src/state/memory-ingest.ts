@@ -1,5 +1,5 @@
 import type { MemoryAddOptions, ProvenanceLink } from './memory-store.ts';
-import type { ForensicsBundle } from '../runtime/forensics/types.ts';
+import type { ForensicsBundle } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
 import type { PolicyPreflightReview } from '../runtime/permissions/preflight.ts';
 import type { PluginStatus } from '../plugins/manager.ts';
 

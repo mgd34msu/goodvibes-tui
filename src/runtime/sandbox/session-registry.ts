@@ -10,9 +10,9 @@ import type {
   SandboxSession,
   SandboxSessionArtifact,
   SandboxSessionKind,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import type { SandboxCommandResult } from './backend.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 function createSandboxSessionId(): string {
   return `sandbox_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;

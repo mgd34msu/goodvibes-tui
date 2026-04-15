@@ -1,8 +1,8 @@
 import { AgentManager } from '../tools/agent/index.ts';
 import type { ConfigManager } from '../config/manager.ts';
 import type { SharedSessionBroker } from '../control-plane/index.ts';
-import type { AutomationJob } from './jobs.ts';
-import type { AutomationRun } from './runs.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
 import { buildRunTelemetryFromAgent, getTerminalAgentState } from './manager-runtime-helpers.ts';
 
 interface AutomationReconcileContext {

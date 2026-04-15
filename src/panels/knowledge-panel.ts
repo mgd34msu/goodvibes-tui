@@ -1,4 +1,4 @@
-import type { Line } from '../types/grid.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
 import type { MemoryClass, MemoryRecord, MemoryRegistry, MemoryReviewState } from '../state/memory-store.ts';
 import {

@@ -8,8 +8,8 @@ import type {
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
 } from './interface.ts';
-import { ProviderError } from '../types/errors.ts';
-import { withRetry } from '../utils/retry.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
 import {
   toOpenAITools,
   toOpenAIMessages,
@@ -17,9 +17,9 @@ import {
   extractTextToolCalls,
 } from './tool-formats.ts';
 import type { OpenAIToolCall } from './tool-formats.ts';
-import type { CacheHitTracker } from './cache-strategy.ts';
-import { extractOpenAIStreamTextDelta } from './openai-stream-delta.ts';
-import { summarizeError, toProviderError } from '../utils/error-display.ts';
+import type { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
+import { extractOpenAIStreamTextDelta } from '@pellux/goodvibes-sdk/platform/providers/openai-stream-delta';
+import { summarizeError, toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const NOOP_CACHE_HIT_TRACKER: Pick<CacheHitTracker, 'recordTurn'> = {
   recordTurn: () => {},
@@ -121,7 +121,7 @@ export class OpenAIProvider implements LLMProvider {
           });
         }
       } catch (err: unknown) {
-        const { hasStatus } = await import('../utils/retry.ts');
+        const { hasStatus } = await import('@pellux/goodvibes-sdk/platform/utils/retry');
         const status = hasStatus(err) ? err.status : undefined;
         throw toProviderError(err, {
           ...(status !== undefined ? { statusCode: status } : {}),

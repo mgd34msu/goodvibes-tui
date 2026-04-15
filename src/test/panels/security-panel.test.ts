@@ -2,13 +2,13 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { SecurityPanel } from '../../panels/security-panel.ts';
 import {
   ApiTokenAuditor,
-} from '../../security/token-audit.ts';
-import type { Line } from '../../types/grid.ts';
+} from '@pellux/goodvibes-sdk/platform/security/token-audit';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { ForensicsRegistry } from '../../runtime/forensics/registry.ts';
+import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import type { PluginManagerObserver, PluginStatus } from '../../plugins/manager.ts';
-import type { McpDecisionRecord } from '../../runtime/mcp/types.ts';
+import type { McpDecisionRecord } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 import type { UiSecuritySnapshot } from '../../runtime/ui-read-models.ts';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import { buildMcpAttackPathReview } from '../../runtime/mcp/index.ts';

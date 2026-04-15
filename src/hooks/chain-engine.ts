@@ -1,8 +1,8 @@
-import type { HookChain, HookEvent, HookResult, ChainStep } from './types.ts';
+import type { HookChain, HookEvent, HookResult, ChainStep } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { HookDispatcher } from './dispatcher.ts';
-import { matchesEventPath } from './matcher.ts';
-import { logger } from '../utils/logger.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { matchesEventPath } from '@pellux/goodvibes-sdk/platform/hooks/matcher';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /** Parse a duration string like "30s" or "5m" into milliseconds */
 function parseDuration(s: string): number {
@@ -316,7 +316,7 @@ export class ChainEngine {
               try {
                 await this.dispatcher.fire({
                   ...pendingEvent,
-                  path: chain.action.match as unknown as import('./types.ts').HookEventPath,
+                  path: chain.action.match as unknown as import('@pellux/goodvibes-sdk/platform/hooks/types').HookEventPath,
                 });
               } catch (err) {
                 logger.error('ChainEngine: chain action error', {
@@ -343,7 +343,7 @@ export class ChainEngine {
       if (state.currentStep >= chain.steps.length) {
         const actionEvent: HookEvent = {
           ...event,
-          path: chain.action.match as unknown as import('./types.ts').HookEventPath,
+          path: chain.action.match as unknown as import('@pellux/goodvibes-sdk/platform/hooks/types').HookEventPath,
         };
         try {
           result = await this.dispatcher.fire(actionEvent);

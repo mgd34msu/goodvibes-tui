@@ -1,5 +1,5 @@
 import { createHttpTransport } from './http.ts';
-import { createClientTransport } from './client-transport.ts';
+import { createClientTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/client-transport';
 import type { HttpTransportOptions, HttpTransportPeerClient, HttpTransportOperatorClient, HttpTransportSnapshot } from './http-types.ts';
 import { createWebSocketConnector } from './shared.ts';
 import { createRemoteUiRuntimeEvents } from './ui-runtime-events.ts';

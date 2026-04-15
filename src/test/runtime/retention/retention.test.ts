@@ -10,8 +10,8 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { RetentionPolicy, DEFAULT_RETENTION_CONFIG } from '../../../runtime/retention/policy.ts';
-import { SnapshotPruner } from '../../../runtime/retention/pruner.ts';
+import { RetentionPolicy, DEFAULT_RETENTION_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/retention/policy';
+import { SnapshotPruner } from '@pellux/goodvibes-sdk/platform/runtime/retention/pruner';
 import type {
   CheckpointRecord,
   PerClassPruneResult,
@@ -19,7 +19,7 @@ import type {
   PruneOptions,
   PruneResult,
   RetentionClass,
-} from '../../../runtime/retention/types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/retention/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

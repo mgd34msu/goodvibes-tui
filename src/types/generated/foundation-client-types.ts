@@ -19,4 +19,4 @@ export type {
   RuntimeDomainEventPayloadMap,
   RuntimeDomainEventType,
   RuntimeEventTypedDomain,
-} from '@pellux/goodvibes-sdk-beta/contracts';
+} from '@pellux/goodvibes-sdk/contracts';

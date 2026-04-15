@@ -11,9 +11,9 @@
 import { describe, test, expect, mock } from 'bun:test';
 import { budgetPhase } from '../../runtime/tools/phases/budget.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import type { ToolCall, ToolResult } from '../../types/tools.ts';
+import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ToolRuntimeContext } from '../../runtime/tools/context.ts';
-import type { ToolExecutionRecord } from '../../runtime/tools/types.ts';
+import type { ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

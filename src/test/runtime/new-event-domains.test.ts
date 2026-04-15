@@ -3,7 +3,7 @@ import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import {
   registeredEventTypes,
   validateEvent,
-} from '../../runtime/events/contracts.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/events/contracts';
 import {
   emitAutomationJobCreated,
   emitControlPlaneClientConnected,

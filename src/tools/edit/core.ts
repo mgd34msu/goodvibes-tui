@@ -1,32 +1,32 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { relative } from 'node:path';
-import type { Tool, ToolDefinition } from '../../types/tools.ts';
-import { logger } from '../../utils/logger.ts';
-import type { SessionChangeTracker } from '../../sessions/change-tracker.ts';
-import { FileUndoManager } from '../../state/file-undo.ts';
-import { FileStateCache, unifiedDiff } from '../../state/file-cache.ts';
+import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions/change-tracker';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
+import { FileStateCache, unifiedDiff } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ToolLLM } from '../../config/tool-llm.ts';
-import { resolveAndValidatePath } from '../../utils/path-safety.ts';
-import { editSchema } from './schema.ts';
+import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
+import { editSchema } from '@pellux/goodvibes-sdk/platform/tools/edit/schema';
 import { AutoHealer } from '../shared/auto-heal.ts';
-import { ImportGraph } from '../../intelligence/index.ts';
+import { ImportGraph } from '@pellux/goodvibes-sdk/platform/intelligence/index';
 import {
   buildFailedEditResult,
   classifyEditFailure,
   computeAstEdit,
   computeAstPatternEdit,
   computeSingleEdit,
-} from './match.ts';
+} from '@pellux/goodvibes-sdk/platform/tools/edit/match';
 import type {
   EditInput,
   EditItem,
   EditResult,
   EditResultStatus,
   ValidatorName,
-} from './types.ts';
-import { executeNotebookEdit } from './notebook.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+} from '@pellux/goodvibes-sdk/platform/tools/edit/types';
+import { executeNotebookEdit } from '@pellux/goodvibes-sdk/platform/tools/edit/notebook';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const DIFF_TRUNCATE_THRESHOLD = 5000;
 const DIFF_PREVIEW_LENGTH = 500;

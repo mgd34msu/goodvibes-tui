@@ -1,6 +1,6 @@
-import type { Tool } from '../../types/tools.ts';
+import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { WebSearchService } from '../../web-search/index.ts';
-import { WEB_SEARCH_TOOL_SCHEMA } from './schema.ts';
+import { WEB_SEARCH_TOOL_SCHEMA } from '@pellux/goodvibes-sdk/platform/tools/web-search/schema';
 
 export function createWebSearchTool(service: WebSearchService): Tool {
   return {
@@ -23,14 +23,14 @@ export function createWebSearchTool(service: WebSearchService): Tool {
         query,
         ...(typeof args.providerId === 'string' ? { providerId: args.providerId } : {}),
         ...(typeof args.maxResults === 'number' ? { maxResults: args.maxResults } : {}),
-        ...(typeof args.verbosity === 'string' ? { verbosity: args.verbosity as import('../../web-search/types.ts').WebSearchVerbosity } : {}),
+        ...(typeof args.verbosity === 'string' ? { verbosity: args.verbosity as import('@pellux/goodvibes-sdk/platform/web-search/types').WebSearchVerbosity } : {}),
         ...(typeof args.region === 'string' ? { region: args.region } : {}),
-        ...(typeof args.safeSearch === 'string' ? { safeSearch: args.safeSearch as import('../../web-search/types.ts').WebSearchSafeSearch } : {}),
-        ...(typeof args.timeRange === 'string' ? { timeRange: args.timeRange as import('../../web-search/types.ts').WebSearchTimeRange } : {}),
+        ...(typeof args.safeSearch === 'string' ? { safeSearch: args.safeSearch as import('@pellux/goodvibes-sdk/platform/web-search/types').WebSearchSafeSearch } : {}),
+        ...(typeof args.timeRange === 'string' ? { timeRange: args.timeRange as import('@pellux/goodvibes-sdk/platform/web-search/types').WebSearchTimeRange } : {}),
         ...(typeof args.includeInstantAnswer === 'boolean' ? { includeInstantAnswer: args.includeInstantAnswer } : {}),
         ...(typeof args.includeEvidence === 'boolean' ? { includeEvidence: args.includeEvidence } : {}),
         ...(typeof args.evidenceTopN === 'number' ? { evidenceTopN: args.evidenceTopN } : {}),
-        ...(typeof args.evidenceExtract === 'string' ? { evidenceExtract: args.evidenceExtract as import('../../tools/fetch/schema.ts').FetchExtractMode } : {}),
+        ...(typeof args.evidenceExtract === 'string' ? { evidenceExtract: args.evidenceExtract as import('@pellux/goodvibes-sdk/platform/tools/fetch/schema').FetchExtractMode } : {}),
       });
       return { success: true, output: JSON.stringify(output) };
     },

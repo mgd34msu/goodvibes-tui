@@ -1,11 +1,11 @@
-import type { AgentEvent } from '../../events/agents.ts';
-import type { CompactionEvent } from '../../events/compaction.ts';
-import type { PermissionEvent } from '../../events/permissions.ts';
-import type { SessionEvent } from '../../events/session.ts';
-import { endAgentSpan, recordAgentPhase, startAgentSpan } from '../spans/agent.ts';
-import { endCompactionSpan, recordCompactionPhase, startCompactionSpan } from '../spans/compaction.ts';
-import { endPermissionSpan, recordPermissionPhase, startPermissionSpan } from '../spans/permission.ts';
-import { endSessionSpan, recordSessionPhase, startSessionSpan } from '../spans/session.ts';
+import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/agents';
+import type { CompactionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/compaction';
+import type { PermissionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/permissions';
+import type { SessionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/session';
+import { endAgentSpan, recordAgentPhase, startAgentSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/agent';
+import { endCompactionSpan, recordCompactionPhase, startCompactionSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/compaction';
+import { endPermissionSpan, recordPermissionPhase, startPermissionSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/permission';
+import { endSessionSpan, recordSessionPhase, startSessionSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/session';
 import type { DomainBridgeAttachmentInput, Env, SpanMap } from './domain-bridge-shared.ts';
 
 export function attachAgentDomain(

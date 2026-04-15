@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { GatewayMethodCatalog } from '../../control-plane/method-catalog.ts';
 import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
 import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '../../knowledge/index.ts';
-import { getDistributedNodeHostContract } from '../../runtime/remote/distributed-runtime-contract.ts';
+import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
 import { renderFoundationClientTypes } from '../../../scripts/foundation-typegen.ts';
 
 const ROOT = join(import.meta.dir, '..', '..', '..');

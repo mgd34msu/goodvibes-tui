@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PersistentStore } from '../../../state/persistent-store.ts';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import {
   DistributedRuntimeManager,
   type DistributedRuntimeSnapshotStore,
-} from '../../../runtime/remote/distributed-runtime.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime';
 
 function createManager() {
   const dir = mkdtempSync(join(tmpdir(), 'gv-distributed-runtime-'));

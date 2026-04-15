@@ -1,4 +1,4 @@
-import type { DiscoveredServer } from '../discovery/scanner.ts';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
 import type { LLMProvider } from './interface.ts';
 import { getDiscoveredTraits } from './discovered-traits.ts';
 import { LocalAIProvider, TGIProvider, VLLMProvider } from './discovered-compat.ts';

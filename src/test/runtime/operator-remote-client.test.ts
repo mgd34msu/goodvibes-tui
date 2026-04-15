@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { GatewayMethodCatalog } from '../../control-plane/method-catalog.ts';
 import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
-import { createHttpJsonTransport } from '../../runtime/transports/http-json-transport.ts';
-import { createOperatorRemoteClient } from '../../runtime/transports/operator-remote-client.ts';
+import { createHttpJsonTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-json-transport';
+import { createOperatorRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/operator-remote-client';
 
 function createJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

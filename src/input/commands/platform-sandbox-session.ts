@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import type { CommandContext } from '../command-registry.ts';
 import { inspectSandboxSessionArtifact, listSandboxProfiles, renderSandboxSessions } from '../../runtime/sandbox/manager.ts';
 import { requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const SANDBOX_PROFILE_IDS = [
   'eval-js',

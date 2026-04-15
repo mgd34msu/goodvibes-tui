@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { McpPermissionManager } from '../../../runtime/mcp/permissions.ts';
+import { McpPermissionManager } from '@pellux/goodvibes-sdk/platform/runtime/mcp/permissions';
 
 describe('McpPermissionManager coherence evaluation', () => {
   test('constrained docs server denies incoherent write request', () => {

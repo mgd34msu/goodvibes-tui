@@ -14,8 +14,8 @@
 import { randomUUID } from 'node:crypto';
 import { createDomainDispatch } from '../../store/index.ts';
 import type { RuntimeStore, DomainDispatch } from '../../store/index.ts';
-import type { RuntimeTask } from '../../store/domains/tasks.ts';
-import type { TaskScheduler, ScheduledTask, TaskRunRecord } from '../../../scheduler/scheduler.ts';
+import type { RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
+import type { TaskScheduler, ScheduledTask, TaskRunRecord } from '@pellux/goodvibes-sdk/platform/scheduler/scheduler';
 
 /**
  * Bridges TaskScheduler job executions into the RuntimeTask registry.

@@ -13,7 +13,7 @@
  * const result = await executor.execute(call, tool, context);
  * ```
  */
-export type { ToolExecutionPhase, PhaseResult, ToolExecutionRecord, ExecutorConfig } from './types.ts';
+export type { ToolExecutionPhase, PhaseResult, ToolExecutionRecord, ExecutorConfig } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 export type {
   ToolRuntimeContext,
   RuntimeStoreAccess,
@@ -23,7 +23,7 @@ export { PhasedToolExecutor } from './phased-executor.ts';
 export * from './phases/index.ts';
 
 import { PhasedToolExecutor } from './phased-executor.ts';
-import type { ExecutorConfig } from './types.ts';
+import type { ExecutorConfig } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 
 /** Default executor configuration. */
 const DEFAULTS: ExecutorConfig = {

@@ -1,5 +1,5 @@
-import type { Line } from '../types/grid.ts';
-import type { ForensicsRegistry } from '../runtime/forensics/registry.ts';
+import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import { BasePanel } from './base-panel.ts';
 import {
   buildBodyText,

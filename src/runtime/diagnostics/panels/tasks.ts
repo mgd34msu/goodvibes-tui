@@ -9,7 +9,7 @@
  */
 import type { RuntimeEventBus, EnvelopeListener } from '../../events/index.ts';
 import type { AnyRuntimeEvent } from '../../events/domain-map.ts';
-import type { RuntimeEventEnvelope } from '../../events/envelope.ts';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import {
   type TaskEntry,
   type DiagnosticFilter,
@@ -17,7 +17,7 @@ import {
   DEFAULT_PANEL_CONFIG,
   applyFilter,
   appendBounded,
-} from '../types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 
 /** Task state as tracked internally while a task is in progress. */
 type MutableTaskState = TaskEntry['state'];

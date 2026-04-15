@@ -1,21 +1,21 @@
 import { getConfigSnapshot, isAutoApproveEnabled } from '../config/index.ts';
-import type { PermissionAction, PermissionsToolConfig } from '../config/schema.ts';
+import type { PermissionAction, PermissionsToolConfig } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { PermissionRequestHandler } from './prompt.ts';
-import { analyzePermissionRequest } from './analysis.ts';
+import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions/analysis';
 import type { PolicyRuntimeState } from '../runtime/permissions/policy-runtime.ts';
-import { LayeredPolicyEvaluator } from '../runtime/permissions/evaluator.ts';
-import type { PermissionDecision as LayeredPermissionDecision } from '../runtime/permissions/types.ts';
+import { LayeredPolicyEvaluator } from '@pellux/goodvibes-sdk/platform/runtime/permissions/evaluator';
+import type { PermissionDecision as LayeredPermissionDecision } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
 import type { HookDispatcher } from '../hooks/index.ts';
-import type { HookCategory, HookEventPath, HookPhase } from '../hooks/types.ts';
+import type { HookCategory, HookEventPath, HookPhase } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { ConfigManager } from '../config/manager.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import type {
   PermissionCategory,
   PermissionCheckResult,
   PermissionDecisionReasonCode,
   PermissionDecisionSource,
-} from './types.ts';
-export type { PermissionMode } from '../config/schema.ts';
+} from '@pellux/goodvibes-sdk/platform/permissions/types';
+export type { PermissionMode } from '@pellux/goodvibes-sdk/platform/config/schema';
 export type {
   PermissionCategory,
   PermissionRiskLevel,
@@ -23,7 +23,7 @@ export type {
   PermissionDecisionReasonCode,
   PermissionRequestAnalysis,
   PermissionCheckResult,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/permissions/types';
 
 type PermissionConfigSnapshot = ReturnType<typeof getConfigSnapshot>;
 

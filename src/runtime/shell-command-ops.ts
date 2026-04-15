@@ -1,12 +1,12 @@
 import { handlePlanCommand } from '../core/plan-command-handler.ts';
-import type { AdaptivePlanner } from '../core/adaptive-planner.ts';
-import type { SubagentTask } from '../acp/protocol.ts';
+import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
+import type { SubagentTask } from '@pellux/goodvibes-sdk/platform/acp/protocol';
 import { exportRemoteArtifactForAgent } from './remote/runner-registry.ts';
 import type { RuntimeEventBus } from './events/index.ts';
 import type { RuntimeStore } from './store/index.ts';
-import type { AgentInput } from '../tools/agent/schema.ts';
+import type { AgentInput } from '@pellux/goodvibes-sdk/platform/tools/agent/schema';
 import type { AgentRecord } from '../tools/agent/manager.ts';
-import type { AcpConnection } from './store/domains/acp.ts';
+import type { AcpConnection } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/acp';
 import type { UiRemoteSnapshot } from './ui-read-models.ts';
 import type { RemoteRunnerRegistry } from './remote/index.ts';
 import type {
@@ -14,7 +14,7 @@ import type {
   RemoteRunnerContract,
   RemoteRunnerPool,
   RemoteSessionBundle,
-} from './remote/types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/types';
 import type {
   AutomationJob,
   AutomationRun,
@@ -27,10 +27,10 @@ import type {
   CrossSessionTaskRef,
   SessionTaskGraphSnapshot,
   TaskHandoffRecord,
-} from '../sessions/orchestration/index.ts';
-import type { ExecutionPlan, PlanItem } from '../core/execution-plan.ts';
-import type { DomainVerbosity } from './notifications/types.ts';
-import type { HITLMode, HITLModeDefinition } from '../state/mode-manager.ts';
+} from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
+import type { ExecutionPlan, PlanItem } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
+import type { DomainVerbosity } from '@pellux/goodvibes-sdk/platform/runtime/notifications/types';
+import type { HITLMode, HITLModeDefinition } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
 
 export interface ShellAgentManagerService {
   spawn(input: AgentInput): AgentRecord;

@@ -16,7 +16,7 @@
 
 import { createPerfMonitor, formatReport, exitCode } from '../src/runtime/perf/index.ts';
 import { createInitialUiPerfState } from '../src/runtime/store/domains/ui-perf.ts';
-import type { PerfSnapshot } from '../src/runtime/perf/monitor.ts';
+import type { PerfSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
 
 /**
  * Builds a PerfSnapshot for use in CI.

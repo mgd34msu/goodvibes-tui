@@ -7,13 +7,13 @@ import type {
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
 } from './interface.ts';
-import type { ToolCall, ToolDefinition } from '../types/tools.ts';
-import { ProviderError } from '../types/errors.ts';
-import { withRetry } from '../utils/retry.ts';
+import type { ToolCall, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
 import { resolveSubscriptionAccessToken } from '../config/subscription-auth.ts';
 import { arch, platform, release } from 'node:os';
-import type { SubscriptionManager } from '../config/subscriptions.ts';
-import { toProviderError } from '../utils/error-display.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const OPENAI_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
 const OPENAI_CODEX_PROVIDER_NAME = 'openai-subscriber';
@@ -371,8 +371,12 @@ export async function chatWithOpenAICodex(
         }
         };
 
-        for await (const chunk of response.body) {
-          buffer += decoder.decode(chunk, { stream: true });
+        const reader = response.body.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!value) continue;
+          buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split(/\r?\n/);
           buffer = lines.pop() ?? '';
           for (const rawLine of lines) {

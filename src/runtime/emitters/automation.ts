@@ -2,10 +2,10 @@
  * Automation emitters — typed wrappers for AutomationEvent domain.
  */
 
-import { createEventEnvelope } from '../events/envelope.ts';
-import type { RuntimeEventEnvelope } from '../events/envelope.ts';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import type { RuntimeEventBus } from '../events/index.ts';
-import type { AutomationEvent } from '../events/automation.ts';
+import type { AutomationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/automation';
 import type { EmitterContext } from './index.ts';
 
 function automationEvent<T extends AutomationEvent['type']>(

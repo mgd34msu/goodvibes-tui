@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { Compositor } from '../../renderer/compositor.ts';
-import { createStyledCell, createEmptyLine } from '../../types/grid.ts';
-import type { Line, Cell } from '../../types/grid.ts';
+import { createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line, Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { CompositeRequest, PanelCompositeData, SelectionInfo } from '../../renderer/compositor.ts';
 
 // ---------------------------------------------------------------------------

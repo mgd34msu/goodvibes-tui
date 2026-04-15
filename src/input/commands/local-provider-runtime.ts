@@ -2,10 +2,10 @@ import { join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
 import type { CommandRegistry } from '../command-registry.ts';
-import { fetchModelContextWindows } from '../../discovery/scanner.ts';
+import { fetchModelContextWindows } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
 import type { CustomProviderConfig } from '../../providers/custom-loader.ts';
 import { requireProviderApi, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 function isValidProviderName(name: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(name);
@@ -38,7 +38,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
           ctx.print(`Error: '${baseURL}' is not a valid URL. Example: http://192.168.0.85:8001/v1`);
           return;
         }
-        const providersDir = shellPaths.resolveUserTuiPath('providers');
+        const providersDir = shellPaths.resolveUserPath('tui', 'providers');
         const providerFile = join(providersDir, `${name}.json`);
         if (existsSync(providerFile)) {
           ctx.print(`Error: Provider '${name}' already exists at ${providerFile}\nRemove it first with: /provider remove ${name}`);
@@ -120,7 +120,7 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
           ctx.print('Error: Provider name must contain only letters, numbers, hyphens, and underscores.');
           return;
         }
-        const providerFile = shellPaths.resolveUserTuiPath('providers', `${name}.json`);
+        const providerFile = shellPaths.resolveUserPath('tui', 'providers', `${name}.json`);
         if (!existsSync(providerFile)) {
           ctx.print(`Error: No custom provider '${name}' found at ${providerFile}`);
           return;

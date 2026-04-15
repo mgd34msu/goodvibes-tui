@@ -11,9 +11,9 @@
  * @module health/effect-handlers
  */
 
-import type { CascadeEffect, CascadeResult } from './types.ts';
-import { createCascadeAppliedEvent } from './types.ts';
-import type { RuntimeHealthAggregator } from './aggregator.ts';
+import type { CascadeEffect, CascadeResult } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
+import { createCascadeAppliedEvent } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
+import type { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
 import type { RuntimeEventBus, RuntimeEventEnvelope } from '../events/index.ts';
 import { createEventEnvelope } from '../events/index.ts';
 import type { AnyRuntimeEvent } from '../events/index.ts';

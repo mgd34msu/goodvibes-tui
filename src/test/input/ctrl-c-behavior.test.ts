@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
-import { InfiniteBuffer } from '../../core/history.ts';
+import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 
 type InputHandlerTestAccess = {

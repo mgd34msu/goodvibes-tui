@@ -2,7 +2,7 @@ import type { StatusResult } from 'simple-git';
 import { basename } from 'path';
 import type { CommandContext } from '../command-registry.ts';
 import { GitService } from '../../git/service.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type GitLike = Pick<GitService, 'addAll' | 'status' | 'commit'>;
 

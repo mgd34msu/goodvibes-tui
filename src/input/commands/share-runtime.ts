@@ -2,9 +2,9 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { defaultExportPath, exportToHTML, exportToJSON, exportToMarkdownExtended } from '../../export/session-export.ts';
-import { logger } from '../../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export function registerShareRuntimeCommands(registry: CommandRegistry): void {
   registry.register({

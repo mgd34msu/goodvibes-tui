@@ -5,9 +5,9 @@ import { PermissionManager } from '../../permissions/manager.ts';
 import { ConfigManager } from '../../config/manager.ts';
 import type { PermissionPromptRequest, PermissionPromptDecision } from '../../permissions/prompt.ts';
 import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
-import { createUnsignedBundle } from '../../runtime/permissions/policy-loader.ts';
-import type { PolicyBundlePayload } from '../../runtime/permissions/policy-loader.ts';
-import type { PolicyRule } from '../../runtime/permissions/types.ts';
+import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
+import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
+import type { PolicyRule } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
 import { createPermissionConfigReader } from '../../permissions/manager.ts';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 

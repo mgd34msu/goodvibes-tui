@@ -27,7 +27,7 @@ import type {
 } from '../../../runtime/compaction/types.ts';
 import type { ProviderMessage } from '../../../providers/interface.ts';
 import type { RuntimeEventBus } from '../../../runtime/events/index.ts';
-import type { FeatureFlagManager } from '../../../runtime/feature-flags/manager.ts';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -9,15 +9,15 @@ import { WatchersPanel } from '../../panels/watchers-panel.ts';
 import { ControlPlanePanel } from '../../panels/control-plane-panel.ts';
 import { ApprovalBroker, SharedSessionBroker, ControlPlaneGateway } from '../../control-plane/index.ts';
 import type { PermissionPromptRequest } from '../../permissions/prompt.ts';
-import type { AutomationJob } from '../../automation/jobs.ts';
-import type { AutomationRun } from '../../automation/runs.ts';
-import type { AutomationRouteBinding } from '../../automation/routes.ts';
-import { AutomationRouteStore } from '../../automation/store/routes.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
 import { RouteBindingManager } from '../../channels/route-manager.ts';
-import type { AutomationDeliveryAttempt } from '../../automation/delivery.ts';
-import type { WatcherRecord } from '../../runtime/store/domains/watchers.ts';
-import type { ControlPlaneClientRecord } from '../../runtime/store/domains/control-plane.ts';
-import { PersistentStore } from '../../state/persistent-store.ts';
+import type { AutomationDeliveryAttempt } from '@pellux/goodvibes-sdk/platform/automation/delivery';
+import type { WatcherRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/watchers';
+import type { ControlPlaneClientRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/control-plane';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import { getTestApprovalBroker, getTestSessionBroker, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 import {
   createAutomationReadModel,

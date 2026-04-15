@@ -3,10 +3,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ChatResponse, LLMProvider } from '../../providers/interface.ts';
 import { LMStudioProvider } from '../../providers/lm-studio.ts';
-import { ProviderError } from '../../types/errors.ts';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import { SubscriptionManager } from '../../config/subscriptions.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 function sse(events: Array<{ event: string; data: Record<string, unknown> }>): string {
   return events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('');

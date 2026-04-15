@@ -1,21 +1,21 @@
 import type { ConfigManager } from '../../config/manager.ts';
 import type { ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '../../channels/index.ts';
 import type { KnowledgeGraphqlService, KnowledgeService } from '../../knowledge/index.ts';
-import type { ArtifactStore } from '../../artifacts/index.ts';
+import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import type { MediaProviderRegistry } from '../../media/index.ts';
 import type { MultimodalService } from '../../multimodal/index.ts';
-import type { VoiceService } from '../../voice/index.ts';
+import type { VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
 import type { WebSearchService } from '../../web-search/index.ts';
 import type { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
 import type { ApprovalBroker } from '../../control-plane/index.ts';
 import type { PlatformServiceManager } from '../service-manager.ts';
 import type { JsonRecord } from '../helpers.ts';
 import type { WatcherRegistry } from '../../watchers/index.ts';
-import type { DaemonChannelRouteContext } from './channel-route-types.ts';
-import type { DaemonIntegrationRouteContext } from './integration-route-types.ts';
-import type { DaemonKnowledgeRouteContext } from './knowledge-route-types.ts';
-import type { DaemonMediaRouteContext } from './media-route-types.ts';
-import type { DaemonSystemRouteContext, WatcherRecord } from './system-route-types.ts';
+import type { DaemonChannelRouteContext } from '@pellux/goodvibes-sdk/platform/daemon/http/channel-route-types';
+import type { DaemonIntegrationRouteContext } from '@pellux/goodvibes-sdk/platform/daemon/http/integration-route-types';
+import type { DaemonKnowledgeRouteContext } from '@pellux/goodvibes-sdk/platform/daemon/http/knowledge-route-types';
+import type { DaemonMediaRouteContext } from '@pellux/goodvibes-sdk/platform/daemon/http/media-route-types';
+import type { DaemonSystemRouteContext, WatcherRecord } from '@pellux/goodvibes-sdk/platform/daemon/http/system-route-types';
 
 export function buildChannelRouteContext(input: {
   readonly channelPlugins: ChannelPluginRegistry;

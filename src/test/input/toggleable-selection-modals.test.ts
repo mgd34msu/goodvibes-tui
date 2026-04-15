@@ -8,7 +8,7 @@ import { ConfigManager } from '../../config/manager.ts';
 import { registerConfigCommand } from '../../input/commands/config.ts';
 import { registerPermissionsRuntimeCommands } from '../../input/commands/permissions-runtime.ts';
 import { registerLocalRuntimeCommands } from '../../input/commands/local-runtime.ts';
-import { createShellPathService } from '../../runtime/shell-paths.ts';
+import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type { SelectionAction, SelectionItem, SelectionResult } from '../../input/selection-modal.ts';
 
 function makeContext(dir: string): {

@@ -17,7 +17,7 @@ import type { ProviderRegistry } from '../../providers/registry.ts';
 import { OpenAICompatProvider } from '../../providers/openai-compat.ts';
 import { AnthropicCompatProvider } from '../../providers/anthropic-compat.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
-import { logger } from '../../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 // ---------------------------------------------------------------------------
 // Test helpers

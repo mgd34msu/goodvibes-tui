@@ -1,16 +1,16 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { copyToClipboard, pasteFromClipboard, pasteImageFromClipboard } from '../utils/clipboard.ts';
-import type { InfiniteBuffer } from '../core/history.ts';
+import { copyToClipboard, pasteFromClipboard, pasteImageFromClipboard } from '@pellux/goodvibes-sdk/platform/utils/clipboard';
+import type { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
 import type { ConversationManager } from '../core/conversation.ts';
 import type { PermissionCategory } from '../permissions/manager.ts';
 import type { ContentPart } from '../providers/interface.ts';
 import type { CommandContext } from './command-registry.ts';
-import type { BookmarkManager } from '../bookmarks/manager.ts';
-import { resolveAndValidatePath } from '../utils/path-safety.ts';
-import { analyzePermissionRequest } from '../permissions/analysis.ts';
-import { logger } from '../utils/logger.ts';
+import type { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
+import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
+import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions/analysis';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { SelectionManager } from './selection.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export const MARKER_REGEX = /\[(TEXT|IMAGE): [^\]]+\]/g;
 

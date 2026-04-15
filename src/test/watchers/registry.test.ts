@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { WatcherRegistry } from '../../watchers/index.ts';
-import { loadWatcherSnapshotFromPath, resolveWatcherStorePath, saveWatcherSnapshotToPath } from '../../watchers/store.ts';
+import { loadWatcherSnapshotFromPath, resolveWatcherStorePath, saveWatcherSnapshotToPath } from '@pellux/goodvibes-sdk/platform/watchers/store';
 
 function createTempWatcherStore(): { readonly root: string; readonly storePath: string } {
   const root = mkdtempSync(join(tmpdir(), 'goodvibes-watchers-'));

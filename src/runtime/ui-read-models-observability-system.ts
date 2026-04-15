@@ -1,6 +1,6 @@
 import { buildEcosystemRecommendations, type EcosystemRecommendation } from './ecosystem/recommendations.ts';
 import type { RuntimeServices } from './services.ts';
-import type { UiReadModel } from './ui-read-models-base.ts';
+import type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
 import { combineSubscriptions, createStoreBackedReadModel } from './ui-read-model-helpers.ts';
 import type {
   ContinuitySnapshot as IntegrationContinuitySnapshot,
@@ -24,7 +24,7 @@ export interface UiIntelligenceSnapshot {
     readonly active: boolean;
     readonly filePath?: string;
   };
-  readonly diagnostics: ReadonlyMap<string, readonly import('./store/domains/intelligence.ts').LspDiagnostic[]>;
+  readonly diagnostics: ReadonlyMap<string, readonly import('@pellux/goodvibes-sdk/platform/runtime/store/domains/intelligence').LspDiagnostic[]>;
 }
 
 export interface UiMarketplaceSnapshot {

@@ -5,9 +5,9 @@ import type { InputHandler } from '../input/handler.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { MutableRuntimeState } from '../runtime/context.ts';
-import type { FeatureFlagManager } from '../runtime/feature-flags/index.ts';
+import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import type { McpRegistry } from '../mcp/registry.ts';
-import type { SubscriptionManager } from '../config/subscriptions.ts';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 
 type WireShellUiOpenersOptions = {

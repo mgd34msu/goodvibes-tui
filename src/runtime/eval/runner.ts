@@ -10,10 +10,10 @@
  * production code paths that gate CI.
  */
 
-import type { EvalScenario, EvalRawResult, EvalResult, EvalSuiteResult, EvalGateResult, EvalBaseline, RegressionEntry } from './types.ts';
-import { scoreScenario } from './scorecard.ts';
+import type { EvalScenario, EvalRawResult, EvalResult, EvalSuiteResult, EvalGateResult, EvalBaseline, RegressionEntry } from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
+import { scoreScenario } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
 import { createPerfMonitor } from '../perf/index.ts';
-import { summarizeError } from '../../utils/error-display.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ── EvalRunner ────────────────────────────────────────────────────────────────
 
@@ -127,13 +127,11 @@ export class EvalRunner {
     // evaluation against an empty snapshot to at least populate the field.
     if (!raw.perfReport) {
       const monitor = createPerfMonitor();
-      // Import createInitialUiPerfState inline to avoid a top-level import
-      // that would couple the runner to the store domain at build time.
-      const { createInitialUiPerfState } = await import('../store/domains/ui-perf.ts');
+      const { createInitialSurfacePerfState } = await import('@pellux/goodvibes-sdk/platform/runtime/store/domains/surface-perf');
       raw = {
         ...raw,
         perfReport: monitor.evaluate({
-          uiPerf: createInitialUiPerfState(),
+          surfacePerf: createInitialSurfacePerfState(),
           extraMetrics: {},
         }),
       };

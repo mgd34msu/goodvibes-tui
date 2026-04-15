@@ -5,7 +5,7 @@ import type {
   RuntimeStoreAccess,
 } from '../../runtime/tools/context.ts';
 import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import type { PhaseResult, ToolExecutionPhase } from '../../runtime/tools/types.ts';
+import type { PhaseResult, ToolExecutionPhase } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 
 // ---------------------------------------------------------------------------
 // Minimal stubs — test structural invariants without real implementations

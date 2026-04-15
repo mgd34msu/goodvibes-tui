@@ -19,31 +19,31 @@ export type {
   BudgetViolation,
   PerfReport,
   PerfUnit,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/perf/types';
 
-export { DEFAULT_BUDGETS } from './budgets.ts';
-export { PerfMonitor } from './monitor.ts';
-export type { PerfSnapshot } from './monitor.ts';
-export { formatReport, exitCode } from './reporter.ts';
+export { DEFAULT_BUDGETS } from '@pellux/goodvibes-sdk/platform/runtime/perf/budgets';
+export { PerfMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
+export type { PerfSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
+export { formatReport, exitCode } from '@pellux/goodvibes-sdk/platform/runtime/perf/reporter';
 export { SloCollector, SLO_METRICS } from './slo-collector.ts';
 export type {
   PanelResourceContract,
   PanelHealthState,
   PanelThrottleStatus,
   PanelHealthStatus,
-} from './panel-contracts.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-contracts';
 export {
   CATEGORY_CONTRACTS,
   buildContract,
   createInitialPanelHealthState,
-} from './panel-contracts.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-contracts';
 export {
   PanelHealthMonitor,
-} from './panel-health-monitor.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 
-import { PerfMonitor } from './monitor.ts';
-import type { PerfBudget } from './types.ts';
-import { DEFAULT_BUDGETS } from './budgets.ts';
+import { PerfMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
+import type { PerfBudget } from '@pellux/goodvibes-sdk/platform/runtime/perf/types';
+import { DEFAULT_BUDGETS } from '@pellux/goodvibes-sdk/platform/runtime/perf/budgets';
 
 /**
  * Factory function that creates a PerfMonitor with the default budgets.

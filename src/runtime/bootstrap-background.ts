@@ -1,13 +1,13 @@
 import type { ConfigManager } from '../config/manager.ts';
-import { logger } from '../utils/logger.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import { autoRegisterProviders } from '../providers/auto-register.ts';
-import { scan, loadPersistedProviders, persistProviders, removePersistedProviders, scanMcpServers } from '../discovery/index.ts';
+import { scan, loadPersistedProviders, persistProviders, removePersistedProviders, scanMcpServers } from '@pellux/goodvibes-sdk/platform/discovery/index';
 import type { MutableRuntimeState } from './context.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { McpRegistry } from '../mcp/registry.ts';
-import type { ShellPathService } from './shell-paths.ts';
-import { summarizeError } from '../utils/error-display.ts';
+import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type BackgroundProviderRegistrationOptions = {
   configManager: ConfigManager;

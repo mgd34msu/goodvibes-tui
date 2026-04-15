@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'node:path';
 import { rm, mkdtemp, mkdir } from 'node:fs/promises';
-import { ExecutionPlanManager } from '../../core/execution-plan.ts';
-import type { ExecutionPlan, PlanItem } from '../../core/execution-plan.ts';
+import { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
+import type { ExecutionPlan, PlanItem } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 
 // ---------------------------------------------------------------------------
 // Test isolation: each suite gets its own temp directory

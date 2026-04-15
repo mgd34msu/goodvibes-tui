@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ToolRegistry } from '../../tools/registry.ts';
-import { ToolError } from '../../types/errors.ts';
-import type { Tool, ToolDefinition } from '../../types/tools.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
+import { ToolError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
 
 function makeTool(name: string, output = 'ok'): Tool {
   return {
