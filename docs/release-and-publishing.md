@@ -46,7 +46,7 @@ Release workflow behavior:
 
 - tag pushes matching `v*` create compiled binary artifacts
 - the release workflow re-runs the same core validation gates used for normal CI before building release assets
-- a GitHub Release is created from the matching `CHANGELOG.md` section
+- a GitHub Release is created from `docs/releases/<version>.md` when present, otherwise it falls back to the matching `CHANGELOG.md` section
 - npm publishing is optional and stays disabled unless explicitly enabled in repo configuration
 
 ## npm Distribution
