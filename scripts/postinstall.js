@@ -11,6 +11,10 @@ const home = homedir();
 const pkg = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'));
 const noDownload = process.argv.includes('--no-download') || process.env.GOODVIBES_SKIP_BINARY_DOWNLOAD === '1';
 
+function isSourceCheckout() {
+  return existsSync(join(projectRoot, '.git')) || existsSync(join(projectRoot, 'bun.lock'));
+}
+
 function resolveArtifactNames(platform, arch) {
   if (platform === 'linux' && arch === 'x64') {
     return {
@@ -98,6 +102,11 @@ async function installPlatformBinaries() {
 
   if (noDownload) {
     console.log('postinstall: skipping binary install (--no-download)');
+    return;
+  }
+
+  if (isSourceCheckout()) {
+    console.log('postinstall: source checkout detected; skipping release-binary install');
     return;
   }
 

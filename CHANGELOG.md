@@ -4,7 +4,26 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.7] — 2026-04-14
+
+### Release Workflow Install Fix
+
+- Fixed the TUI package postinstall path so source checkouts no longer try to download release binaries during `bun install`
+- This unblocks CI and release validation jobs, which install repo dependencies before the GitHub Release assets exist
+- Kept the actual packaged install behavior unchanged: published npm and GitHub Packages installs still download the matching TUI and standalone daemon binaries during `postinstall`
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Publish packaging check passes: `bun run publish:check`
+- Staged npm package rehearsal passes: `bun run publish:dry-run`
+- Staged GitHub Packages rehearsal passes: `bun run publish:dry-run:github`
+- Local package install smoke passes through `postinstall` with staged release artifacts
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.6] — 2026-04-14
+
+Superseded before successful public registry release. The repo checkout still ran the binary-download `postinstall` during CI `bun install`, which blocked the tagged release before publish. The corrected release shipped in `0.18.7`.
 
 ### Public Package Delivery Fix
 
