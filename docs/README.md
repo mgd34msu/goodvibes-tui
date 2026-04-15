@@ -23,9 +23,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
   Built-in tool families, slash-command families, and the operator/workflow surfaces that tie them together.
 
 - [Release and publishing](release-and-publishing.md)
-  Release validation, GitHub CD, compiled binary releases, and optional Bun-oriented npm distribution.
+  Release validation, GitHub CD, compiled binary releases, npm distribution, and the GitHub Packages mirror.
 
-- [Release notes](releases/0.18.5.md)
+- [Release notes](releases/0.18.6.md)
   Version-specific release notes for shipped TUI releases.
 
 - [Foundation artifacts](foundation-artifacts/README.md)

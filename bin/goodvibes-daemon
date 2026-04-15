@@ -62,5 +62,5 @@ console.error(`platform: ${process.platform}-${process.arch}`);
 console.error(`supported prebuilt targets: ${supported}`);
 console.error('Either:');
 console.error('  1. install Bun and re-run the command, or');
-console.error('  2. reinstall a package version that includes bundled daemon binaries.');
+console.error('  2. rerun the package postinstall step so the matching daemon binary is downloaded.');
 process.exit(1);

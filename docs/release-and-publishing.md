@@ -3,7 +3,7 @@
 `goodvibes-tui` has two release distributions:
 
 - GitHub Releases with compiled platform binaries
-- an npm package that bundles the platform binaries directly
+- an npm package that installs the matching platform binaries during `postinstall`
 
 It also mirrors the npm package to GitHub Packages:
 
@@ -54,6 +54,7 @@ Release workflow behavior:
 - npm publish targets `@pellux/goodvibes-tui`
 - GitHub Packages publish targets `@mgd34msu/goodvibes-tui`
 - the GitHub Release is created from `docs/releases/<version>.md` when present, otherwise it falls back to the matching `CHANGELOG.md` section
+- the GitHub Release is created before the registry publish jobs so the package install script can fetch version-matched release assets immediately
 - npm publishing is optional and stays disabled unless explicitly enabled in repo configuration
 
 ## npm Distribution
@@ -66,9 +67,9 @@ The npm package is intended to be directly installable:
 
 Install behavior:
 
-- on Linux and macOS, the published package already contains the matching bundled binaries
+- on Linux and macOS, the published package downloads the matching TUI and daemon binaries from the version-matched GitHub Release during `postinstall`
 - on Windows, native execution is not supported; users should use WSL so the Linux binary path applies
-- if Bun is already available and no vendored binary is present, the launchers can still fall back to Bun + source
+- if Bun is already available and the platform binary is missing, the launchers can still fall back to Bun + source
 
 Local npm packaging checks:
 
@@ -84,7 +85,8 @@ What `publish:check` verifies:
 - the publish bin is executable
 - the tarball does not accidentally include CI/workflow or test-only paths
 - the tarball includes the required runtime and bootstrap files
-- the tarball includes the vendored TUI and standalone daemon binaries plus checksums
+- the tarball does not accidentally include vendored release binaries
+- the tarball stays under the package-size guardrail for registry publishing
 
 If npm publishing is enabled in GitHub Actions, the workflow expects:
 
@@ -92,7 +94,7 @@ If npm publishing is enabled in GitHub Actions, the workflow expects:
 - repository secret `NPM_TOKEN`
 - built-in `GITHUB_TOKEN` package permissions for the GitHub Packages mirror
 
-The release workflow also needs the release assets to exist before npm publishing:
+The release workflow publishes these release assets before registry publishing:
 
 - `goodvibes-linux-x64`
 - `goodvibes-linux-arm64`

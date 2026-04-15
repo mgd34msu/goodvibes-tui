@@ -1,55 +1,151 @@
 #!/usr/bin/env node
-import { chmodSync, cpSync, copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, '..');
 const home = homedir();
+const pkg = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8'));
+const noDownload = process.argv.includes('--no-download') || process.env.GOODVIBES_SKIP_BINARY_DOWNLOAD === '1';
 
-function resolveArtifactName(platform, arch) {
-  if (platform === 'linux' && arch === 'x64') return 'goodvibes-linux-x64';
-  if (platform === 'linux' && arch === 'arm64') return 'goodvibes-linux-arm64';
-  if (platform === 'darwin' && arch === 'x64') return 'goodvibes-macos-x64';
-  if (platform === 'darwin' && arch === 'arm64') return 'goodvibes-macos-arm64';
+function resolveArtifactNames(platform, arch) {
+  if (platform === 'linux' && arch === 'x64') {
+    return {
+      app: 'goodvibes-linux-x64',
+      daemon: 'goodvibes-daemon-linux-x64',
+    };
+  }
+  if (platform === 'linux' && arch === 'arm64') {
+    return {
+      app: 'goodvibes-linux-arm64',
+      daemon: 'goodvibes-daemon-linux-arm64',
+    };
+  }
+  if (platform === 'darwin' && arch === 'x64') {
+    return {
+      app: 'goodvibes-macos-x64',
+      daemon: 'goodvibes-daemon-macos-x64',
+    };
+  }
+  if (platform === 'darwin' && arch === 'arm64') {
+    return {
+      app: 'goodvibes-macos-arm64',
+      daemon: 'goodvibes-daemon-macos-arm64',
+    };
+  }
   return null;
 }
 
-function resolveDaemonArtifactName(platform, arch) {
-  if (platform === 'linux' && arch === 'x64') return 'goodvibes-daemon-linux-x64';
-  if (platform === 'linux' && arch === 'arm64') return 'goodvibes-daemon-linux-arm64';
-  if (platform === 'darwin' && arch === 'x64') return 'goodvibes-daemon-macos-x64';
-  if (platform === 'darwin' && arch === 'arm64') return 'goodvibes-daemon-macos-arm64';
-  return null;
+function prepareBinary(path) {
+  if (process.platform !== 'win32') {
+    chmodSync(path, 0o755);
+  }
 }
 
-function prepareVendoredBinaries() {
+function sha256(buffer) {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
+function parseChecksumFile(contents) {
+  const checksums = new Map();
+  for (const rawLine of contents.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const match = line.match(/^([a-f0-9]{64})\s+\*?(.+)$/i);
+    if (!match) continue;
+    checksums.set(match[2], match[1].toLowerCase());
+  }
+  return checksums;
+}
+
+function resolveRepositoryBaseUrl() {
+  const repositoryUrl = typeof pkg.repository?.url === 'string' ? pkg.repository.url : '';
+  const normalized = repositoryUrl
+    .replace(/^git\+/, '')
+    .replace(/\.git$/, '')
+    .replace(/^git@github\.com:/, 'https://github.com/');
+  if (!normalized.startsWith('https://github.com/')) {
+    throw new Error(`unsupported repository URL for binary downloads: ${repositoryUrl || '(missing)'}`);
+  }
+  return normalized;
+}
+
+async function downloadFile(url, destination) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`download failed (${response.status}) for ${url}`);
+  }
+  writeFileSync(destination, Buffer.from(await response.arrayBuffer()));
+}
+
+async function downloadText(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`download failed (${response.status}) for ${url}`);
+  }
+  return await response.text();
+}
+
+async function installPlatformBinaries() {
+  const artifacts = resolveArtifactNames(process.platform, process.arch);
+  if (!artifacts) {
+    console.log(`postinstall: no prebuilt binaries for ${process.platform}-${process.arch}; skipping binary install`);
+    return;
+  }
+
+  if (noDownload) {
+    console.log('postinstall: skipping binary install (--no-download)');
+    return;
+  }
+
   const vendorDir = join(projectRoot, 'vendor');
-  let prepared = 0;
-  for (const artifactName of [
-    resolveArtifactName('linux', 'x64'),
-    resolveArtifactName('linux', 'arm64'),
-    resolveArtifactName('darwin', 'x64'),
-    resolveArtifactName('darwin', 'arm64'),
-    resolveDaemonArtifactName('linux', 'x64'),
-    resolveDaemonArtifactName('linux', 'arm64'),
-    resolveDaemonArtifactName('darwin', 'x64'),
-    resolveDaemonArtifactName('darwin', 'arm64'),
-  ]) {
-    if (!artifactName) continue;
-    const binaryPath = join(vendorDir, artifactName);
-    if (!existsSync(binaryPath)) continue;
-    if (process.platform !== 'win32') {
-      chmodSync(binaryPath, 0o755);
+  mkdirSync(vendorDir, { recursive: true });
+
+  const localSourceDir = process.env.GOODVIBES_ASSET_SOURCE_DIR?.trim();
+  if (localSourceDir) {
+    for (const artifactName of [artifacts.app, artifacts.daemon]) {
+      const sourcePath = join(localSourceDir, artifactName);
+      if (!existsSync(sourcePath)) {
+        throw new Error(`missing local release artifact for postinstall smoke: ${sourcePath}`);
+      }
+      const destination = join(vendorDir, artifactName);
+      copyFileSync(sourcePath, destination);
+      prepareBinary(destination);
     }
-    prepared++;
+    console.log(`postinstall: installed local smoke-test binaries for ${process.platform}-${process.arch}`);
+    return;
   }
-  if (prepared > 0) {
-    console.log(`postinstall: prepared ${prepared} bundled binaries`);
-  } else {
-    console.log('postinstall: no bundled binaries found');
+
+  const releaseBaseUrl =
+    process.env.GOODVIBES_RELEASE_BASE_URL?.trim() ||
+    `${resolveRepositoryBaseUrl()}/releases/download/v${pkg.version}`;
+
+  const checksumUrl = `${releaseBaseUrl}/SHA256SUMS.txt`;
+  const checksumText = await downloadText(checksumUrl);
+  writeFileSync(join(vendorDir, 'SHA256SUMS.txt'), checksumText);
+  const checksums = parseChecksumFile(checksumText);
+
+  for (const artifactName of [artifacts.app, artifacts.daemon]) {
+    const destination = join(vendorDir, artifactName);
+    const tempDestination = `${destination}.download`;
+    rmSync(tempDestination, { force: true });
+    await downloadFile(`${releaseBaseUrl}/${artifactName}`, tempDestination);
+    const actual = sha256(readFileSync(tempDestination));
+    const expected = checksums.get(artifactName);
+    if (expected && expected !== actual) {
+      rmSync(tempDestination, { force: true });
+      throw new Error(`checksum mismatch for ${artifactName}: expected ${expected}, got ${actual}`);
+    }
+    rmSync(destination, { force: true });
+    copyFileSync(tempDestination, destination);
+    rmSync(tempDestination, { force: true });
+    prepareBinary(destination);
   }
+
+  console.log(`postinstall: installed release binaries for ${process.platform}-${process.arch}`);
 }
 
 function deployBundledFiles() {
@@ -94,7 +190,7 @@ function deployBundledFiles() {
   if (existsSync(goodvibesSrc) && !existsSync(goodvibesDest)) {
     mkdirSync(join(home, '.goodvibes'), { recursive: true });
     copyFileSync(goodvibesSrc, goodvibesDest);
-    console.log('  installed: ~/.goodvibes/GOODVIBES.md');
+    console.log(`  installed: ${basename(goodvibesDest)}`);
     installed++;
   } else if (existsSync(goodvibesDest)) {
     skipped++;
@@ -108,7 +204,7 @@ function deployBundledFiles() {
 }
 
 async function main() {
-  prepareVendoredBinaries();
+  await installPlatformBinaries();
   deployBundledFiles();
 }
 

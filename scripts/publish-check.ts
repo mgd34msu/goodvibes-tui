@@ -41,11 +41,12 @@ const packRaw = execSync('npm pack --json --dry-run', {
 const [packResult] = JSON.parse(packRaw);
 const filePaths = Array.isArray(packResult.files) ? packResult.files.map((entry) => entry.path) : [];
 const forbiddenPrefixes = ['.github/', 'src/test/', 'src/.test/', '.goodvibes/memory/'];
-const requireVendor = process.env.GOODVIBES_REQUIRE_VENDOR === '1';
-
 for (const filePath of filePaths) {
   if (forbiddenPrefixes.some((prefix) => filePath.startsWith(prefix))) {
     throw new Error(`published tarball includes forbidden path: ${filePath}`);
+  }
+  if (filePath.startsWith('vendor/')) {
+    throw new Error(`published tarball should not include vendored release binaries: ${filePath}`);
   }
 }
 
@@ -55,22 +56,8 @@ for (const requiredPath of ['README.md', 'CHANGELOG.md', 'src/main.ts', 'src/dae
   }
 }
 
-if (requireVendor) {
-  for (const vendorPath of [
-    'vendor/goodvibes-linux-x64',
-    'vendor/goodvibes-linux-arm64',
-    'vendor/goodvibes-macos-x64',
-    'vendor/goodvibes-macos-arm64',
-    'vendor/goodvibes-daemon-linux-x64',
-    'vendor/goodvibes-daemon-linux-arm64',
-    'vendor/goodvibes-daemon-macos-x64',
-    'vendor/goodvibes-daemon-macos-arm64',
-    'vendor/SHA256SUMS.txt',
-  ]) {
-    if (!filePaths.includes(vendorPath)) {
-      throw new Error(`published tarball is missing required vendored release artifact: ${vendorPath}`);
-    }
-  }
+if (typeof packResult.size === 'number' && packResult.size > 50 * 1024 * 1024) {
+  throw new Error(`published tarball is too large: ${packResult.size} bytes`);
 }
 
 console.log(`publish check passed (${packResult.entryCount} files, ${packResult.unpackedSize} bytes unpacked)`);
