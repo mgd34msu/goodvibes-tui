@@ -136,11 +136,19 @@ jobs:
         id: changelog
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          EXCERPT=$(awk "/^## \\[${VERSION}\\]/,/^## \\[/{if (/^## \\[${VERSION}\\]/) next; if (/^## \\[/) exit; print}" CHANGELOG.md)
-          if [ -z "$EXCERPT" ]; then
-            EXCERPT="Release ${VERSION}"
+          RELEASE_DOC="docs/releases/${VERSION}.md"
+          if [ -f "$RELEASE_DOC" ]; then
+            cp "$RELEASE_DOC" /tmp/release_notes.md
+          else
+            awk -v version="$VERSION" '
+              $0 ~ "^## \\[" version "\\]" { in_section=1; next }
+              in_section && $0 ~ "^## \\[" { exit }
+              in_section { print }
+            ' CHANGELOG.md > /tmp/release_notes.md
+            if [ ! -s /tmp/release_notes.md ] || ! grep -q '[^[:space:]]' /tmp/release_notes.md; then
+              printf 'Release %s\n' "$VERSION" > /tmp/release_notes.md
+            fi
           fi
-          printf '%s\n' "$EXCERPT" > /tmp/release_notes.md
           echo "excerpt_file=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
       - name: Create GitHub Release
         uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631
