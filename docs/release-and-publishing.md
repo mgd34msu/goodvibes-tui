@@ -53,9 +53,9 @@ Release workflow behavior:
 
 The npm package is intended to be directly installable:
 
-- `npm install -g goodvibes-tui`
-- `pnpm add -g goodvibes-tui`
-- `bun add -g goodvibes-tui`
+- `npm install -g @pellux/goodvibes-tui`
+- `pnpm add -g @pellux/goodvibes-tui`
+- `bun add -g @pellux/goodvibes-tui`
 
 Install behavior:
 

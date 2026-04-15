@@ -12,7 +12,7 @@
 Install from npm on Linux, macOS, or WSL:
 
 ```sh
-npm install -g goodvibes-tui
+npm install -g @pellux/goodvibes-tui
 goodvibes
 ```
 
