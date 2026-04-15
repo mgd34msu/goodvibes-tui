@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
@@ -38,6 +38,9 @@ function isTestSource(path: string): boolean {
 function expandTargets(targets: readonly string[]): string[] {
   return targets.flatMap((target) => {
     const abs = join(ROOT, target);
+    if (!existsSync(abs)) {
+      return [];
+    }
     const stats = statSync(abs);
     if (stats.isDirectory()) {
       return walk(abs).filter((file) => !isTestSource(file));
