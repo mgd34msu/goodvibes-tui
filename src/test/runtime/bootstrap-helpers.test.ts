@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { loadBootstrapSystemPrompt } from '../../runtime/bootstrap-helpers.ts';
+import { loadBootstrapSystemPrompt } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeTempDir(): string {
-  const path = join(tmpdir(), `gv-bootstrap-helpers-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  mkdirSync(path, { recursive: true });
-  return path;
+  return makeProjectTempDir('gv-bootstrap-helpers');
 }
 
 describe('loadBootstrapSystemPrompt', () => {
@@ -46,7 +44,7 @@ describe('loadBootstrapSystemPrompt', () => {
     const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir });
 
     expect(() => loadBootstrapSystemPrompt(configManager)).toThrow(
-      'loadBootstrapSystemPrompt requires ConfigManager with explicit workingDirectory.',
+      'loadRuntimeSystemPrompt requires ConfigManager with explicit workingDirectory.',
     );
   });
 });

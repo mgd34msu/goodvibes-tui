@@ -85,8 +85,8 @@ export interface BootstrapCommandSectionOptions {
   readonly knowledgeService?: KnowledgeService;
   readonly pluginManager?: PluginManager;
   readonly hookWorkbench?: HookWorkbench;
-  readonly providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
-  readonly sessionManager?: import('../sessions/manager.ts').SessionManager;
+  readonly providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers/optimizer').ProviderOptimizer;
+  readonly sessionManager?: import('@pellux/goodvibes-sdk/platform/sessions/manager').SessionManager;
   readonly profileManager?: import('@pellux/goodvibes-sdk/platform/profiles/manager').ProfileManager;
   readonly bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks/manager').BookmarkManager;
   readonly favoritesStore?: import('@pellux/goodvibes-sdk/platform/providers/favorites').FavoritesStore;
@@ -97,7 +97,7 @@ export interface BootstrapCommandSectionOptions {
   readonly localUserAuthManager?: import('@pellux/goodvibes-sdk/platform/security/user-auth').UserAuthManager;
   readonly tokenAuditor?: import('@pellux/goodvibes-sdk/platform/security/token-audit').ApiTokenAuditor;
   readonly replayEngine?: import('@pellux/goodvibes-sdk/platform/core/deterministic-replay').DeterministicReplayEngine;
-  readonly webhookNotifier?: import('../integrations/webhooks.ts').WebhookNotifier;
+  readonly webhookNotifier?: import('@pellux/goodvibes-sdk/platform/integrations/webhooks').WebhookNotifier;
   readonly sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core/session-memory').SessionMemoryStore;
   readonly sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core/session-lineage').SessionLineageTracker;
   readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions/change-tracker').SessionChangeTracker;

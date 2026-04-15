@@ -9,7 +9,7 @@ import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/ses
 import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
 import { buildTranscriptEventIndex } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
 import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
-import { compactConversation } from './conversation-compaction';
+import { compactConversation } from '@pellux/goodvibes-sdk/platform/core/conversation-compaction';
 import {
   addConversationSplashScreen,
   appendConversationMessages,
@@ -27,8 +27,8 @@ import {
   deriveConversationTitle,
   messagesToInternal,
   restoreBranchMap,
-} from './conversation-utils';
-import { applyDiffContent, parseDiffForApply } from './conversation-diff';
+} from '@pellux/goodvibes-sdk/platform/core/conversation-utils';
+import { applyDiffContent, parseDiffForApply } from '@pellux/goodvibes-sdk/platform/core/conversation-diff';
 
 /**
  * ConversationManager - Owns conversation messages and the rendered history buffer.
@@ -662,7 +662,7 @@ export class ConversationManager {
     modelId: string,
     trigger: 'auto' | 'manual' = 'manual',
     provider?: string,
-    context?: import('./context-compaction.ts').CompactionContext,
+    context?: import('@pellux/goodvibes-sdk/platform/core/context-compaction').CompactionContext,
   ): Promise<void> {
     return compactConversation(this, registry, modelId, trigger, provider, context);
   }
@@ -772,4 +772,4 @@ export class ConversationManager {
     this.dirty = true;
   }
 }
-export { parseDiffForApply, applyDiffContent } from './conversation-diff';
+export { parseDiffForApply, applyDiffContent } from '@pellux/goodvibes-sdk/platform/core/conversation-diff';

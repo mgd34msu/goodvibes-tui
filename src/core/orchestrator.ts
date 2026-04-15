@@ -20,7 +20,7 @@ import { EventReplayQueue } from '@pellux/goodvibes-sdk/platform/core/event-repl
 import {
   type ConversationFollowUpItem,
 } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
-import { OrchestratorFollowUpRuntime } from './orchestrator-follow-up-runtime';
+import { OrchestratorFollowUpRuntime } from '@pellux/goodvibes-sdk/platform/core/orchestrator-follow-up-runtime';
 import type { SystemMessageRouter } from './system-message-router.ts';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
@@ -42,12 +42,12 @@ import {
   autoSpawnPendingItems,
   executeToolCalls,
   reconcileUnresolvedToolCalls,
-} from './orchestrator-tool-runtime';
+} from '@pellux/goodvibes-sdk/platform/core/orchestrator-tool-runtime';
 import {
   checkContextWindowPreflight,
   emitContextOverflowError,
   handlePostTurnContextMaintenance,
-} from './orchestrator-context-runtime';
+} from '@pellux/goodvibes-sdk/platform/core/orchestrator-context-runtime';
 import {
   createEmitterContext,
   estimateFreshTurnInputTokens,
@@ -58,13 +58,14 @@ import {
   requireConfigManager,
   requireProviderRegistry,
   type OrchestratorCoreServices,
-} from './orchestrator-runtime';
+} from '@pellux/goodvibes-sdk/platform/core/orchestrator-runtime';
 import {
   type ChatResponseWithReasoning,
   maybeEmitAdaptivePlannerDecision,
   prepareConversationForTurn,
-} from './orchestrator-turn-helpers';
-import { executeOrchestratorTurnLoop } from './orchestrator-turn-loop';
+} from '@pellux/goodvibes-sdk/platform/core/orchestrator-turn-helpers';
+import { executeOrchestratorTurnLoop } from '@pellux/goodvibes-sdk/platform/core/orchestrator-turn-loop';
+import type { ConversationManager as SdkConversationManager } from '@pellux/goodvibes-sdk/platform/core/conversation';
 
 /** Minimal interface for hook dispatch — allows any compatible implementation */
 interface HookDispatcherLike {
@@ -180,6 +181,7 @@ export class Orchestrator {
       readonly wrfcController: Pick<WrfcController, 'listChains'>;
     },
   ) {
+    const sdkConversation = this.conversation as unknown as SdkConversationManager;
     this.replayQueue = new EventReplayQueue();
     this.detachReplay = runtimeBus
       ? EventReplayQueue.attachToRuntimeBus(runtimeBus, this.replayQueue)
@@ -190,7 +192,7 @@ export class Orchestrator {
     this.agentManager = services.agentManager;
     this.wrfcController = services.wrfcController;
     this.followUpRuntime = new OrchestratorFollowUpRuntime({
-      conversation: this.conversation,
+      conversation: sdkConversation,
       getViewportHeight: () => this.getViewportHeight(),
       scrollToEnd: (height) => this.scrollToEnd(height),
       getSystemPrompt: () => this.getSystemPrompt(),
@@ -449,7 +451,7 @@ export class Orchestrator {
     // Pre-turn plan injection: if an active plan exists, inject its current state into
     // the conversation so the LLM can refer to it and update item statuses.
     const preTurnPlan = prepareConversationForTurn(
-      this.conversation,
+      this.conversation as unknown as SdkConversationManager,
       providerRegistry,
       text,
       content,
@@ -465,7 +467,7 @@ export class Orchestrator {
 
     try {
       await executeOrchestratorTurnLoop({
-        conversation: this.conversation,
+        conversation: this.conversation as unknown as SdkConversationManager,
         toolRegistry: this.toolRegistry,
         getSystemPrompt: this.getSystemPrompt,
         getAbortSignal: () => this.abortController?.signal,
@@ -504,7 +506,7 @@ export class Orchestrator {
       });
 
       await handlePostTurnContextMaintenance({
-        conversation: this.conversation,
+        conversation: this.conversation as unknown as SdkConversationManager,
         agentManager: this.agentManager,
         wrfcController: this.wrfcController,
         planManager: this.coreServices.planManager ?? null,
@@ -639,7 +641,7 @@ export class Orchestrator {
     const configManager = requireConfigManager(this.coreServices);
     const providerRegistry = requireProviderRegistry(this.coreServices);
     return checkContextWindowPreflight({
-      conversation: this.conversation,
+      conversation: this.conversation as unknown as SdkConversationManager,
       requestRender: this.requestRender,
       hookDispatcher: this.hookDispatcher,
       configManager,

@@ -32,9 +32,9 @@ import {
   loadLastConversation,
   writeLastSessionPointer,
 } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
-import { startBackgroundProviderRegistration } from './bootstrap-background.ts';
-import { restoreSavedModel } from './bootstrap-helpers.ts';
-import { startExternalServices, type ExternalServicesHandle } from './bootstrap-services.ts';
+import { startBackgroundProviderRegistration } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-background';
+import { restoreSavedModel } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
+import { startExternalServices, type ExternalServicesHandle } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { createDeferredStartupCoordinator } from '@pellux/goodvibes-sdk/platform/runtime/deferred-startup';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
@@ -128,7 +128,7 @@ export async function bootstrapRuntime(
   const workingDir = options.workingDir;
   const configManager = options.configManager;
   const controlPlaneRecentEventsRef: {
-    value: (limit: number) => readonly import('../control-plane/gateway.ts').ControlPlaneRecentEvent[];
+    value: (limit: number) => readonly import('@pellux/goodvibes-sdk/platform/control-plane/gateway').ControlPlaneRecentEvent[];
   } = {
     value: (_limit) => [],
   };
@@ -358,6 +358,7 @@ export async function bootstrapRuntime(
     restoreSavedModel,
     systemMessageRouter,
     shellPaths: services.shellPaths,
+    surfaceRoot: 'tui',
   });
   if (configManager.get('automation.enabled')) {
     deferredStartup.schedule({

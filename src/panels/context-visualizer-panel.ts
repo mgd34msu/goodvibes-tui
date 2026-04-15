@@ -2,9 +2,10 @@
 // ContextVisualizerPanel — stacked bar showing context window composition.
 // ---------------------------------------------------------------------------
 
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
-import { evaluateSessionMaintenance } from './session-maintenance.ts';
+import { evaluateSessionMaintenance } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
 import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
@@ -46,6 +47,7 @@ export class ContextVisualizerPanel extends BasePanel {
   constructor(
     private readonly turnEvents: UiEventFeed<TurnEvent>,
     sessionMemoryStore: SessionMemoryQuery,
+    private readonly configManager: Pick<ConfigManager, 'get'>,
     private getUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
     private contextLimit?: number,
     private sessionReadModel?: UiReadModel<UiSessionSnapshot>,
@@ -165,6 +167,7 @@ export class ContextVisualizerPanel extends BasePanel {
 
   private _renderMaintenance(width: number): Line[] {
     const status = evaluateSessionMaintenance({
+      configManager: this.configManager,
       currentTokens: this.snapshot.input,
       contextWindow: this.snapshot.limit,
       sessionMemoryCount: this.sessionMemoryStore.list().length,

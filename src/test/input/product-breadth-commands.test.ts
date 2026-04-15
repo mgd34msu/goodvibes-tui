@@ -1789,7 +1789,7 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Auth Review Bundle');
     expect(out.join('\n')).toContain('active subscriptions: 0');
 
-    const { DaemonServer } = await import('../../daemon/server.ts');
+    const { DaemonServer } = await import('@pellux/goodvibes-sdk/platform/daemon/server');
     const { UserAuthManager } = await import('@pellux/goodvibes-sdk/platform/security/user-auth');
     const daemon = new DaemonServer({
       port: 39451,

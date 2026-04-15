@@ -42,6 +42,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     factory: () => new ContextVisualizerPanel(
       requireUiServices(deps).events.turns,
       deps.sessionMemoryStore,
+      deps.configManager,
       deps.getOrchestratorUsage,
       deps.contextWindow,
       requireUiServices(deps).readModels.session,

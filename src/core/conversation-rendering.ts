@@ -11,8 +11,8 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manage
 import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
 import type { BlockMeta, ConversationMessageSnapshot } from './conversation';
-import { parseDiffForApply } from './conversation-diff';
-import { extractUserDisplayText } from './conversation-utils';
+import { parseDiffForApply } from '@pellux/goodvibes-sdk/platform/core/conversation-diff';
+import { extractUserDisplayText } from '@pellux/goodvibes-sdk/platform/core/conversation-utils';
 
 type Message = ConversationMessageSnapshot;
 

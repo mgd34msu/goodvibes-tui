@@ -493,7 +493,7 @@ describe('Orchestrator', () => {
 
       const mockAcp = {
         spawn: mock(async (_task: unknown) => 'agent-id-123'),
-      } as unknown as import('../../acp/manager.ts').AcpManager;
+      } as unknown as import('@pellux/goodvibes-sdk/platform/acp/manager').AcpManager;
 
       orch.registerDelegateTool(mockAcp);
 
@@ -505,7 +505,7 @@ describe('Orchestrator', () => {
 
       const mockAcp = {
         spawn: mock(async (_task: unknown) => 'agent-id'),
-      } as unknown as import('../../acp/manager.ts').AcpManager;
+      } as unknown as import('@pellux/goodvibes-sdk/platform/acp/manager').AcpManager;
 
       orch.registerDelegateTool(mockAcp);
 
@@ -522,7 +522,7 @@ describe('Orchestrator', () => {
       const { orch } = await buildOrchestrator();
 
       const spawnMock = mock(async (_task: unknown) => 'spawned-agent-id');
-      const mockAcp = { spawn: spawnMock } as unknown as import('../../acp/manager.ts').AcpManager;
+      const mockAcp = { spawn: spawnMock } as unknown as import('@pellux/goodvibes-sdk/platform/acp/manager').AcpManager;
 
       orch.registerDelegateTool(mockAcp);
 
@@ -543,7 +543,7 @@ describe('Orchestrator', () => {
       // Register WITHOUT calling registerDelegateTool - then directly inject
       // We test the internal null-check by accessing the tool function after registration
       // First register with a real mock to get the tool registered
-      const mockAcp = { spawn: mock(async () => 'id') } as unknown as import('../../acp/manager.ts').AcpManager;
+      const mockAcp = { spawn: mock(async () => 'id') } as unknown as import('@pellux/goodvibes-sdk/platform/acp/manager').AcpManager;
       orch.registerDelegateTool(mockAcp);
 
       // Now manually clear the internal acpManager via type cast to simulate null scenario

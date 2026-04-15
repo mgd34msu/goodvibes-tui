@@ -49,7 +49,7 @@ export interface UiCockpitSnapshot {
   readonly tokenScopeViolationCount: number;
   readonly tokenRotationWarningCount: number;
   readonly incidentCount: number;
-  readonly latestIncident: ReturnType<import('./forensics/index.ts').ForensicsRegistry['latest']>;
+  readonly latestIncident: ReturnType<import('@pellux/goodvibes-sdk/platform/runtime/forensics/index').ForensicsRegistry['latest']>;
   readonly elevatedMcp: number;
   readonly unhealthyMcp: number;
   readonly erroredPlugins: number;

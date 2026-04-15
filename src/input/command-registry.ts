@@ -55,7 +55,7 @@ export interface CommandUiActions {
   renderRequest: () => void;
   print: (text: string) => void;
   exit: () => void;
-  submitInput?: (text: string, content?: import('../providers/interface.ts').ContentPart[]) => void;
+  submitInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[]) => void;
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
   cancelGeneration?: () => void;
   completeModelSelection?: (selection: {
@@ -109,7 +109,7 @@ export interface CommandShellUiOpeners {
 export interface CommandSessionServices {
   readonly conversationManager: ConversationManager;
   readonly runtime: CommandRuntimeState;
-  readonly sessionManager?: import('../sessions/manager.ts').SessionManager;
+  readonly sessionManager?: import('@pellux/goodvibes-sdk/platform/sessions/manager').SessionManager;
   readonly sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core/session-memory').SessionMemoryStore;
   readonly sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core/session-lineage').SessionLineageTracker;
   readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions/change-tracker').SessionChangeTracker;
@@ -117,7 +117,7 @@ export interface CommandSessionServices {
 
 export interface CommandProviderServices {
   readonly providerRegistry: ProviderRegistry;
-  readonly providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
+  readonly providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers/optimizer').ProviderOptimizer;
   readonly favoritesStore?: import('@pellux/goodvibes-sdk/platform/providers/favorites').FavoritesStore;
   readonly benchmarkStore?: import('@pellux/goodvibes-sdk/platform/providers/model-benchmarks').BenchmarkStore;
 }

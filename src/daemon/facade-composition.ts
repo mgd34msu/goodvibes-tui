@@ -25,10 +25,10 @@ import { type DistributedPeerAuth } from '@pellux/goodvibes-sdk/platform/runtime
 import { KnowledgeGraphqlService, KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
 import { DaemonControlPlaneHelper } from '@pellux/goodvibes-sdk/platform/daemon/control-plane';
-import { DaemonSurfaceDeliveryHelper } from './surface-delivery.ts';
-import { DaemonSurfaceActionHelper } from './surface-actions.ts';
+import { DaemonSurfaceDeliveryHelper } from '@pellux/goodvibes-sdk/platform/daemon/surface-delivery';
+import { DaemonSurfaceActionHelper } from '@pellux/goodvibes-sdk/platform/daemon/surface-actions';
 import { DaemonTransportEventsHelper } from '@pellux/goodvibes-sdk/platform/daemon/transport-events';
-import { DaemonHttpRouter } from './http/router.ts';
+import { DaemonHttpRouter } from '@pellux/goodvibes-sdk/platform/daemon/http/router';
 import { createRuntimeServices, type RuntimeServices } from '../runtime/services.ts';
 import type { DaemonConfig, PendingSurfaceReply } from './types.ts';
 import type { ResolvedInboundTlsContext } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
@@ -104,7 +104,7 @@ export function resolveDaemonFacadeRuntime(
       enabled: false,
       host: config.host ?? String(resolvedConfigManager.get('controlPlane.host') ?? '127.0.0.1'),
       port: config.port ?? Number(resolvedConfigManager.get('controlPlane.port') ?? 3421),
-      streamingMode: (resolvedConfigManager.get('controlPlane.streamMode') as import('../control-plane/index.ts').ControlPlaneStreamingMode | undefined) ?? 'sse',
+      streamingMode: (resolvedConfigManager.get('controlPlane.streamMode') as import('@pellux/goodvibes-sdk/platform/control-plane/index').ControlPlaneStreamingMode | undefined) ?? 'sse',
     },
   });
 
@@ -189,7 +189,7 @@ export interface CreateDaemonFacadeCollaboratorsOptions {
   readonly dispatchApiRoutes: (req: Request) => Promise<Response | null>;
   readonly parseJsonBody: (req: Request) => Promise<JsonBody | Response>;
   readonly requireAuthenticatedSession: (req: Request) => { username: string; roles: readonly string[] } | null;
-  readonly trySpawnAgent: (input: Parameters<AgentManager['spawn']>[0], logLabel?: string, sessionId?: string) => import('../tools/agent/index.ts').AgentRecord | Response;
+  readonly trySpawnAgent: (input: Parameters<AgentManager['spawn']>[0], logLabel?: string, sessionId?: string) => import('@pellux/goodvibes-sdk/platform/tools/agent/index').AgentRecord | Response;
   readonly checkAuth: (req: Request) => boolean;
   readonly extractAuthToken: (req: Request) => string;
   readonly requireAdmin: (req: Request) => Response | null;
@@ -213,8 +213,8 @@ export interface CreateDaemonFacadeCollaboratorsOptions {
       readonly clientKind?: string;
     };
   }) => Promise<{ status: number; ok: boolean; body: unknown }>;
-  readonly syncSpawnedAgentTask: (record: import('../tools/agent/index.ts').AgentRecord, sessionId?: string) => void;
-  readonly syncFinishedAgentTask: (record: import('../tools/agent/index.ts').AgentRecord) => void;
+  readonly syncSpawnedAgentTask: (record: import('@pellux/goodvibes-sdk/platform/tools/agent/index').AgentRecord, sessionId?: string) => void;
+  readonly syncFinishedAgentTask: (record: import('@pellux/goodvibes-sdk/platform/tools/agent/index').AgentRecord) => void;
   readonly surfaceDeliveryEnabled: (surface: 'slack' | 'discord' | 'ntfy' | 'webhook' | 'telegram' | 'google-chat' | 'signal' | 'whatsapp' | 'imessage' | 'msteams' | 'bluebubbles' | 'mattermost' | 'matrix') => boolean;
   readonly signWebhookPayload: (body: string, secret: string) => string;
   readonly handleApprovalAction: (approvalId: string, action: 'claim' | 'approve' | 'deny' | 'cancel', req: Request) => Promise<Response>;
@@ -369,7 +369,7 @@ export function createDaemonFacadeCollaborators(
 
 export function configureDaemonSessionContinuation(options: {
   readonly sessionBroker: SharedSessionBroker;
-  readonly trySpawnAgent: (input: Parameters<AgentManager['spawn']>[0], logLabel?: string, sessionId?: string) => import('../tools/agent/index.ts').AgentRecord | Response;
+  readonly trySpawnAgent: (input: Parameters<AgentManager['spawn']>[0], logLabel?: string, sessionId?: string) => import('@pellux/goodvibes-sdk/platform/tools/agent/index').AgentRecord | Response;
   readonly queueSurfaceReplyFromBinding: (binding: import('@pellux/goodvibes-sdk/platform/automation/routes').AutomationRouteBinding | undefined, input: {
     readonly agentId: string;
     readonly task: string;

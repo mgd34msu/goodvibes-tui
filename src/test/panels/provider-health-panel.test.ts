@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createEventEnvelope, RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ProviderHealthPanel } from '../../panels/provider-health-panel.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
@@ -37,6 +38,7 @@ function createPanel(runtimeBus = new RuntimeEventBus()): ProviderHealthPanel {
   return new ProviderHealthPanel(
     providerRuntime,
     {
+      configManager: new ConfigManager({ surfaceRoot: 'tui', homeDir: '/tmp', workingDir: '/tmp' }),
       turnEvents: events.turns,
       providerEvents: events.providers,
       providers: createStaticUiReadModel({

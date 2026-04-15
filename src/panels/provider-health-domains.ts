@@ -1,4 +1,5 @@
-import { evaluateSessionMaintenance } from './session-maintenance.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { evaluateSessionMaintenance } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
 import type {
   UiContinuitySnapshot,
   UiIntelligenceSnapshot,
@@ -20,6 +21,7 @@ export interface HealthDomainSummary {
 }
 
 export interface ProviderHealthDomainInputs {
+  readonly configManager: Pick<ConfigManager, 'get'>;
   readonly auth: UiLocalAuthSnapshot;
   readonly settings: UiSettingsSnapshot;
   readonly remote: UiRemoteSnapshot;
@@ -35,6 +37,7 @@ export function buildProviderHealthDomainSummaries(
 ): HealthDomainSummary[] {
   const summaries: HealthDomainSummary[] = [];
   const {
+    configManager,
     auth,
     settings,
     remote,
@@ -153,6 +156,7 @@ export function buildProviderHealthDomainSummaries(
   });
 
   const maintenance = evaluateSessionMaintenance({
+    configManager,
     currentTokens: session.estimatedContextTokens,
     contextWindow: session.contextWindow,
     messageCount: session.messageCount,

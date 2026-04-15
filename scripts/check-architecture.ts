@@ -240,28 +240,20 @@ for (const file of testFiles) {
 
 const requiredSnippets: Array<{ file: string; snippets: readonly string[]; message: string }> = [
   {
-    file: 'src/control-plane/method-catalog-control-core.ts',
+    file: 'scripts/project-surfaces.ts',
     snippets: [
-      "id: 'control.contract'",
-      '@pellux/goodvibes-sdk/platform/control-plane/method-catalog-control-core',
+      'GatewayMethodCatalog',
+      '@pellux/goodvibes-sdk/platform/control-plane/operator-contract',
     ],
-    message: 'operator contract method must stay cataloged',
+    message: 'foundation artifacts must be generated from SDK control-plane surfaces',
   },
   {
-    file: 'src/control-plane/operator-contract.ts',
+    file: 'src/daemon/facade.ts',
     snippets: [
-      'getOperatorContract',
-      '@pellux/goodvibes-sdk/contracts',
+      '@pellux/goodvibes-sdk/platform/daemon/http/router',
+      '@pellux/goodvibes-sdk/platform/control-plane/index',
     ],
-    message: 'operator contract route must stay exposed',
-  },
-  {
-    file: 'src/control-plane/method-catalog-runtime.ts',
-    snippets: [
-      "id: 'remote.node_host.contract'",
-      '@pellux/goodvibes-sdk/platform/control-plane/method-catalog-runtime',
-    ],
-    message: 'peer contract method must stay cataloged',
+    message: 'daemon runtime composition must stay wired through the SDK package surface',
   },
 ];
 
@@ -273,8 +265,15 @@ for (const requirement of requiredSnippets) {
   }
 }
 
-const { GatewayMethodCatalog } = await import(join(ROOT, 'src/control-plane/method-catalog.ts'));
+const { GatewayMethodCatalog } = await import('@pellux/goodvibes-sdk/platform/control-plane/method-catalog');
 const catalog = new GatewayMethodCatalog();
+const methodIds = new Set(catalog.list().map((method) => method.id));
+if (!methodIds.has('control.contract')) {
+  violations.push('operator-contract: control.contract must stay cataloged');
+}
+if (!methodIds.has('remote.node_host.contract')) {
+  violations.push('operator-contract: remote.node_host.contract must stay cataloged');
+}
 for (const method of catalog.list()) {
   if (isGenericObjectSchema(method.inputSchema)) {
     violations.push(`operator-contract: ${method.id} still exposes a generic object input schema`);

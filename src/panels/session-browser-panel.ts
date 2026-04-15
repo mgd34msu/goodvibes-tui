@@ -4,7 +4,7 @@
 
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
-import type { SessionInfo } from '../sessions/manager.ts';
+import type { SessionInfo } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { SessionBrowserQuery } from '../runtime/ui-service-queries.ts';
 import {

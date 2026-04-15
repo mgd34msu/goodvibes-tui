@@ -6,7 +6,7 @@
  */
 
 import { unlinkSync } from 'node:fs';
-import type { SessionInfo, SessionManager } from '../sessions/manager.ts';
+import type { SessionInfo, SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import type { ConversationManager } from '../core/conversation';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

@@ -1,3 +1,4 @@
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers/interface';
@@ -23,7 +24,7 @@ import type {
   UiSettingsSnapshot,
   UiWorktreeSnapshot,
 } from '../runtime/ui-read-models.ts';
-import { evaluateSessionMaintenance } from './session-maintenance.ts';
+import { evaluateSessionMaintenance } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
 import {
   buildBodyText,
   buildDetailBlock,
@@ -44,6 +45,7 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface ProviderHealthPanelDeps {
+  readonly configManager: Pick<ConfigManager, 'get'>;
   readonly turnEvents: UiEventFeed<TurnEvent>;
   readonly providerEvents: UiEventFeed<ProviderEvent>;
   readonly providers: UiReadModel<UiProvidersSnapshot>;
@@ -589,6 +591,7 @@ export class ProviderHealthPanel extends BasePanel {
 
     const domainLines: Line[] = [];
     for (const domain of buildProviderHealthDomainSummaries({
+      configManager: this.deps.configManager,
       auth: this.deps.localAuth.getSnapshot(),
       settings: this.deps.settings.getSnapshot(),
       remote: this.deps.remote.getSnapshot(),
@@ -620,6 +623,7 @@ export class ProviderHealthPanel extends BasePanel {
     const maintenanceLines: Line[] = [];
     const session = this.deps.session.getSnapshot();
     const maintenance = evaluateSessionMaintenance({
+      configManager: this.deps.configManager,
       currentTokens: session.estimatedContextTokens,
       contextWindow: session.contextWindow,
       messageCount: session.messageCount,

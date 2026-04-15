@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { Orchestrator } from '../../core/orchestrator';
 const TEST_ROOT = '/tmp/goodvibes-test';
@@ -265,7 +266,10 @@ describe('TokenBudgetPanel', () => {
   }
 
   beforeEach(() => {
-    panel = new TokenBudgetPanel(new SessionMemoryStore());
+    panel = new TokenBudgetPanel(
+      new SessionMemoryStore(),
+      new ConfigManager({ surfaceRoot: 'tui', homeDir: TEST_ROOT, workingDir: TEST_ROOT }),
+    );
   });
 
   describe('render() — unwired panel', () => {

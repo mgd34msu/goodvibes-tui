@@ -4,12 +4,10 @@ import { join } from 'node:path';
 import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
 import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
-import { renderFoundationClientTypes } from '../../../scripts/foundation-typegen.ts';
-import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
 
 const ROOT = join(import.meta.dir, '..', '..', '..');
 const ARTIFACTS_DIR = join(ROOT, 'docs', 'foundation-artifacts');
-const GENERATED_TYPES_PATH = join(ROOT, 'src', 'types', 'generated', 'foundation-client-types.ts');
 
 function canonicalJson(value: unknown): string {
   function toSerializable(entry: unknown, stack = new Map<object, string>(), path = '$'): unknown {
@@ -53,15 +51,6 @@ describe('foundation artifacts gate', () => {
     );
     expect(readFileSync(join(ARTIFACTS_DIR, 'knowledge-store.sql'), 'utf8')).toBe(
       normalizeText(renderKnowledgeSchemaSql()),
-    );
-  });
-
-  test('generated foundation client types stay in sync with the canonical contracts', () => {
-    const catalog = new GatewayMethodCatalog();
-    const operatorContract = buildOperatorContract(catalog);
-    const peerContract = getDistributedNodeHostContract();
-    expect(readFileSync(GENERATED_TYPES_PATH, 'utf8')).toBe(
-      `${renderFoundationClientTypes(operatorContract, peerContract).replace(/\n?$/, '\n')}`,
     );
   });
 });

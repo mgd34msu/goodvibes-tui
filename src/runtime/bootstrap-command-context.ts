@@ -70,12 +70,12 @@ export type CreateBootstrapCommandContextOptions = {
   integrationHelpers?: IntegrationHelperService;
   automationManager?: ShellAutomationManagerRuntimeService;
   knowledgeService?: KnowledgeService;
-  providerOptimizer?: import('../providers/optimizer.ts').ProviderOptimizer;
+  providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers/optimizer').ProviderOptimizer;
   pluginManager?: PluginManager;
   hookWorkbench?: HookWorkbench;
   agentManager?: ShellAgentManagerService;
   modeManager?: ShellModeManagerService;
-  sessionManager?: import('../sessions/manager.ts').SessionManager;
+  sessionManager?: import('@pellux/goodvibes-sdk/platform/sessions/manager').SessionManager;
   profileManager?: import('@pellux/goodvibes-sdk/platform/profiles/manager').ProfileManager;
   bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks/manager').BookmarkManager;
   favoritesStore?: import('@pellux/goodvibes-sdk/platform/providers/favorites').FavoritesStore;
@@ -87,7 +87,7 @@ export type CreateBootstrapCommandContextOptions = {
   localUserAuthManager?: import('@pellux/goodvibes-sdk/platform/security/user-auth').UserAuthManager;
   tokenAuditor?: import('@pellux/goodvibes-sdk/platform/security/token-audit').ApiTokenAuditor;
   replayEngine?: import('@pellux/goodvibes-sdk/platform/core/deterministic-replay').DeterministicReplayEngine;
-  webhookNotifier?: import('../integrations/webhooks.ts').WebhookNotifier;
+  webhookNotifier?: import('@pellux/goodvibes-sdk/platform/integrations/webhooks').WebhookNotifier;
   sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core/session-memory').SessionMemoryStore;
   changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions/change-tracker').SessionChangeTracker;
   planManager?: ShellPlanManagerService;

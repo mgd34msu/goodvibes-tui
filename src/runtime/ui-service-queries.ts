@@ -8,7 +8,7 @@ import type {
   ProviderSubscription,
 } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import type { SessionInfo } from '../sessions/manager.ts';
+import type { SessionInfo } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type {

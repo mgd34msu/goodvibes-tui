@@ -315,6 +315,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     factory: () => new ProviderHealthPanel(
       providerRuntime,
       {
+        configManager: deps.configManager,
         turnEvents: ui.events.turns,
         providerEvents: ui.events.providers,
         providers: ui.readModels.providers,

@@ -1,7 +1,8 @@
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { Orchestrator } from '../core/orchestrator';
-import { evaluateSessionMaintenance } from './session-maintenance.ts';
+import { evaluateSessionMaintenance } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
 import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
 import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
 import {
@@ -97,10 +98,12 @@ export class TokenBudgetPanel extends BasePanel {
   private getContextWindow: (() => number) | null = null;
   private sessionReadModel: UiReadModel<UiSessionSnapshot> | null = null;
   private readonly sessionMemoryStore: SessionMemoryQuery;
+  private readonly configManager: Pick<ConfigManager, 'get'>;
 
-  constructor(sessionMemoryStore: SessionMemoryQuery) {
+  constructor(sessionMemoryStore: SessionMemoryQuery, configManager: Pick<ConfigManager, 'get'>) {
     super('tokens', 'Tokens', 'T', 'monitoring');
     this.sessionMemoryStore = sessionMemoryStore;
+    this.configManager = configManager;
   }
 
   // ---------------------------------------------------------------------------
@@ -260,6 +263,7 @@ export class TokenBudgetPanel extends BasePanel {
   private renderMaintenance(width: number): Line[] {
     const sessionSnapshot = this.sessionReadModel?.getSnapshot();
     const status = evaluateSessionMaintenance({
+      configManager: this.configManager,
       currentTokens: this.lastInputTokens,
       contextWindow: this.contextWindow,
       messageCount: sessionSnapshot?.totalTurns,

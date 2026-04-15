@@ -29,10 +29,10 @@ import { type DistributedPeerAuth } from '@pellux/goodvibes-sdk/platform/runtime
 import type { KnowledgeGraphqlService, KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
 import type { DaemonControlPlaneHelper, ControlPlaneWebSocketData } from '@pellux/goodvibes-sdk/platform/daemon/control-plane';
-import type { DaemonSurfaceDeliveryHelper } from './surface-delivery.ts';
-import type { DaemonSurfaceActionHelper } from './surface-actions.ts';
+import type { DaemonSurfaceDeliveryHelper } from '@pellux/goodvibes-sdk/platform/daemon/surface-delivery';
+import type { DaemonSurfaceActionHelper } from '@pellux/goodvibes-sdk/platform/daemon/surface-actions';
 import type { DaemonTransportEventsHelper } from '@pellux/goodvibes-sdk/platform/daemon/transport-events';
-import type { DaemonHttpRouter } from './http/router.ts';
+import type { DaemonHttpRouter } from '@pellux/goodvibes-sdk/platform/daemon/http/router';
 import { isSurfaceDeliveryEnabled } from './surface-policy.ts';
 import {
   configureDaemonSessionContinuation,
@@ -205,7 +205,7 @@ export class DaemonServer {
     });
   }
 
-  listRecentControlPlaneEvents(limit = 100): readonly import('../control-plane/gateway.ts').ControlPlaneRecentEvent[] {
+  listRecentControlPlaneEvents(limit = 100): readonly import('@pellux/goodvibes-sdk/platform/control-plane/gateway').ControlPlaneRecentEvent[] {
     return this.controlPlaneGateway.listRecentEvents(limit);
   }
 
@@ -429,7 +429,7 @@ export class DaemonServer {
   }
 
   private validateGatewayInvocation(
-    descriptor: import('../control-plane/index.ts').GatewayMethodDescriptor,
+    descriptor: import('@pellux/goodvibes-sdk/platform/control-plane/index').GatewayMethodDescriptor,
     context?: {
       readonly principalKind?: 'user' | 'bot' | 'service' | 'token' | 'remote-peer';
       readonly scopes?: readonly string[];
@@ -447,7 +447,7 @@ export class DaemonServer {
   }
 
   private handleControlPlaneWebSocketOpen(ws: {
-    data: import('./control-plane.ts').ControlPlaneWebSocketData;
+    data: import('@pellux/goodvibes-sdk/platform/daemon/control-plane').ControlPlaneWebSocketData;
     send(message: string): void;
   }): void {
     this.controlPlaneHelper.handleControlPlaneWebSocketOpen(ws);
@@ -455,7 +455,7 @@ export class DaemonServer {
 
   private async handleControlPlaneWebSocketMessage(
     ws: {
-      data: import('./control-plane.ts').ControlPlaneWebSocketData;
+      data: import('@pellux/goodvibes-sdk/platform/daemon/control-plane').ControlPlaneWebSocketData;
       send(message: string): void;
     },
     message: string | Buffer | ArrayBuffer | Uint8Array,
@@ -464,7 +464,7 @@ export class DaemonServer {
   }
 
   private handleControlPlaneWebSocketClose(ws: {
-    data: import('./control-plane.ts').ControlPlaneWebSocketData;
+    data: import('@pellux/goodvibes-sdk/platform/daemon/control-plane').ControlPlaneWebSocketData;
   }): void {
     this.controlPlaneHelper.handleControlPlaneWebSocketClose(ws);
   }

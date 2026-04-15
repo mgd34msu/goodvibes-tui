@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { type SessionMeta } from '../../sessions/manager.ts';
+import { type SessionMeta } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
 import type { ConversationTitleSource } from '../../core/conversation';
 import type { SessionReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';

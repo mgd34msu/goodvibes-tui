@@ -109,7 +109,7 @@ export interface InputFeedContext {
   readonly handleBlockToggle: () => void;
   readonly findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   readonly cleanupMarkerRegistry: (text: string) => void;
-  readonly expandPrompt: (text: string) => string | import('../providers/interface.ts').ContentPart[];
+  readonly expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[];
   readonly exitApp: () => void;
 }
 

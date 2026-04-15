@@ -9,7 +9,7 @@ import { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model'
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
 import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
-import type { SessionManager } from '../sessions/manager.ts';
+import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
