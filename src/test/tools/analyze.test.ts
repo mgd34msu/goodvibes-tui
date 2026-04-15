@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
-import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { makeTempDir, writeTempFile } from '../setup.ts';
 import { createAnalyzeTool } from '../../tools/analyze/index.ts';
@@ -542,8 +543,7 @@ describe('bundle mode', () => {
 
 /** Create an isolated temp git repo with a configured identity. */
 function makeTempGitRepo(prefix = 'analyze-git-test'): string {
-  const tmpDir = join('/tmp', `${prefix}-${process.pid}-${Date.now()}`);
-  mkdirSync(tmpDir, { recursive: true });
+  const tmpDir = mkdtempSync(join(tmpdir(), `${prefix}-`));
   execSync('git init', { cwd: tmpDir });
   execSync('git config user.email "test@test.com"', { cwd: tmpDir });
   execSync('git config user.name "Test"', { cwd: tmpDir });
@@ -660,7 +660,7 @@ describe('diff mode', () => {
   test('non-existent repo path returns error', async () => {
     const result = await analyzeMayFail({
       mode: 'diff',
-      projectRoot: '/tmp/nonexistent-repo-xyz-12345',
+      projectRoot: join(tmpdir(), 'nonexistent-repo-xyz-12345'),
       before: 'HEAD~1',
       after: 'HEAD',
     });

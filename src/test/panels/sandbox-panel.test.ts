@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ConfigManager } from '../../config/manager.ts';
 import { SandboxPanel } from '../../panels/sandbox-panel.ts';
-import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
+import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 
 describe('SandboxPanel', () => {
   let sessions: SandboxSessionRegistry;

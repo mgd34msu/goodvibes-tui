@@ -6,7 +6,7 @@ import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { registerAllTools } from '../../tools/index.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
-import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
+import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
 import { AgentMessageBus } from '../../agents/message-bus.ts';
 import { AgentManager } from '../../tools/agent/index.ts';
@@ -23,7 +23,9 @@ function registerTools(registry: ToolRegistry): void {
     messageBus: new AgentMessageBus(),
     configManager: services.configManager,
   });
-  const sessionOrchestration = new CrossSessionTaskRegistry(process.cwd());
+  const sessionOrchestration = new CrossSessionTaskRegistry(
+    join(workingDirectory, '.goodvibes', 'tui', 'sessions', 'task-graph.json'),
+  );
   const sandboxSessionRegistry = new SandboxSessionRegistry(workingDirectory);
   const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
   const agentMessageBus = new AgentMessageBus();

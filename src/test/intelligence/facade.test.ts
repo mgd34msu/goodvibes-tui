@@ -393,8 +393,8 @@ describe('loadLanguageConfigs with project override', () => {
   beforeEach(() => {
     tempDir = join(tmpdir(), `gv-facade-test-${Date.now()}`);
     homeDir = join(tmpdir(), `gv-facade-home-${Date.now()}`);
-    langDir = join(tempDir, '.goodvibes', 'tui', 'languages');
-    mkdirSync(join(homeDir, '.goodvibes', 'tui', 'languages'), { recursive: true });
+    langDir = join(tempDir, '.goodvibes', 'languages');
+    mkdirSync(join(homeDir, '.goodvibes', 'languages'), { recursive: true });
     mkdirSync(langDir, { recursive: true });
     roots = createShellPathService({ workingDirectory: tempDir, homeDirectory: homeDir });
   });

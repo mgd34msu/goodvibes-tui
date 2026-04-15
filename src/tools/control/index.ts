@@ -1,7 +1,7 @@
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
 import { CONTROL_TOOL_SCHEMA, type ControlToolInput } from '@pellux/goodvibes-sdk/platform/tools/control/schema';
 import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
-import { listSandboxPresets } from '../../runtime/sandbox/manager.ts';
+import { listSandboxPresets } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
 
 const PACKAGED_COMMANDS = [
   'setup',

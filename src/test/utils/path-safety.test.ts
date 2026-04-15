@@ -1,6 +1,5 @@
 import { describe, test, expect } from 'bun:test';
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
 
@@ -56,7 +55,7 @@ describe('resolveAndValidatePath', () => {
   });
 
   test('throws for symlinks that escape the project root', () => {
-    const outside = mkdtempSync(join(tmpdir(), 'gv-path-safety-'));
+    const outside = mkdtempSync(join(resolve(PROJECT_ROOT, '..'), 'gv-path-safety-outside-'));
     const outsideFile = join(outside, 'secret.txt');
     const linkPath = join(PROJECT_ROOT, `.gv-path-link-${process.pid}-${Date.now()}`);
     writeFileSync(outsideFile, 'secret');

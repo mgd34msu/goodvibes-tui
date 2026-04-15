@@ -22,13 +22,13 @@ import { createWorkflowServices, createWorkflowTool } from '@pellux/goodvibes-sd
 import { createRegistryTool } from '@pellux/goodvibes-sdk/platform/tools/registry-tool/index';
 import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
 import { createTaskTool } from '@pellux/goodvibes-sdk/platform/tools/task/index';
-import { teamTool } from '@pellux/goodvibes-sdk/platform/tools/team/index';
-import { worklistTool } from '@pellux/goodvibes-sdk/platform/tools/worklist/index';
+import { createTeamTool } from '@pellux/goodvibes-sdk/platform/tools/team/index';
+import { createWorklistTool } from '@pellux/goodvibes-sdk/platform/tools/worklist/index';
 import { createMcpTool } from './mcp/index.ts';
 import { createPacketTool } from '@pellux/goodvibes-sdk/platform/tools/packet/index';
 import { createQueryTool } from '@pellux/goodvibes-sdk/platform/tools/query/index';
 import { createRemoteTool } from './remote-trigger/index.ts';
-import { createReplTool } from './repl/index.ts';
+import { createReplTool } from '@pellux/goodvibes-sdk/platform/tools/repl/index';
 import { controlTool } from './control/index.ts';
 import { createChannelTool } from './channel/index.ts';
 import { createWebSearchTool } from './web-search/index.ts';
@@ -40,7 +40,7 @@ import type { WebSearchService } from '../web-search/index.ts';
 import type { ChannelPluginRegistry } from '../channels/index.ts';
 import type { RemoteRunnerRegistry } from '../runtime/remote/index.ts';
 import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
-import type { SandboxSessionRegistry } from '../runtime/sandbox/session-registry.ts';
+import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import type { ServiceRegistry } from '../config/service-registry.ts';
 import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
@@ -169,8 +169,8 @@ export function registerAllTools(
     homeDirectory: deps.configManager.getHomeDirectory() ?? undefined,
   }));
   registry.register(createTaskTool(sessionOrchestration));
-  registry.register(teamTool);
-  registry.register(worklistTool);
+  registry.register(createTeamTool({ surfaceRoot: 'tui' }));
+  registry.register(createWorklistTool({ surfaceRoot: 'tui' }));
   if (mcpRegistry) {
     registry.register(createMcpTool(mcpRegistry));
   }
@@ -179,7 +179,7 @@ export function registerAllTools(
   if (remoteRunnerRegistry) {
     registry.register(createRemoteTool(remoteRunnerRegistry));
   }
-  registry.register(createReplTool(deps.configManager, deps.sandboxSessionRegistry));
+  registry.register(createReplTool(deps.configManager, deps.sandboxSessionRegistry, { surfaceRoot: 'tui' }));
   registry.register(controlTool);
   registry.register(createChannelTool(channelRegistry));
   return { fileCache, projectIndex };

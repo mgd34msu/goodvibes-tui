@@ -41,22 +41,15 @@ import { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/prov
 import { WebSearchProviderRegistry } from '../../web-search/provider-registry.ts';
 import { ConfigManager } from '../../config/manager.ts';
 
-const TEST_ROOT = mkdtempSync(join(tmpdir(), 'gv-test-runtime-'));
-const TEST_INTELLIGENCE_WORKING_DIR = join(TEST_ROOT, 'intelligence-workspace');
-const TEST_INTELLIGENCE_HOME_DIR = join(TEST_ROOT, 'intelligence-home');
-mkdirSync(TEST_INTELLIGENCE_WORKING_DIR, { recursive: true });
-mkdirSync(TEST_INTELLIGENCE_HOME_DIR, { recursive: true });
-const TEST_INTELLIGENCE_SHELL_PATHS = createShellPathService({
-  workingDirectory: TEST_INTELLIGENCE_WORKING_DIR,
-  homeDirectory: TEST_INTELLIGENCE_HOME_DIR,
-});
-process.on('exit', () => {
-  try {
-    rmSync(TEST_ROOT, { recursive: true, force: true });
-  } catch {
-    // ignore cleanup failures
-  }
-});
+type IntelligenceTestRoots = {
+  root: string;
+  workingDir: string;
+  homeDir: string;
+  shellPaths: ReturnType<typeof createShellPathService>;
+};
+
+let testRoots: IntelligenceTestRoots | null = null;
+let cleanupRegistered = false;
 
 let runtimeServices: RuntimeServices | null = null;
 let runtimeCounter = 0;
@@ -74,9 +67,43 @@ const gitServices = new Map<string, GitService>();
 let wrfcController: WrfcController | null = null;
 let agentExecutorForTests: AgentExecutor | null = null;
 
+function getTestRoots(): IntelligenceTestRoots {
+  if (testRoots) return testRoots;
+
+  const root = mkdtempSync(join(tmpdir(), 'gv-test-runtime-'));
+  const workingDir = join(root, 'intelligence-workspace');
+  const homeDir = join(root, 'intelligence-home');
+  mkdirSync(workingDir, { recursive: true });
+  mkdirSync(homeDir, { recursive: true });
+
+  testRoots = {
+    root,
+    workingDir,
+    homeDir,
+    shellPaths: createShellPathService({
+      workingDirectory: workingDir,
+      homeDirectory: homeDir,
+    }),
+  };
+
+  if (!cleanupRegistered) {
+    process.on('exit', () => {
+      if (!testRoots) return;
+      try {
+        rmSync(testRoots.root, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup failures
+      }
+    });
+    cleanupRegistered = true;
+  }
+
+  return testRoots;
+}
+
 function nextRuntimeRoots(): { workingDir: string; configDir: string } {
   runtimeCounter += 1;
-  const rootDir = join(TEST_ROOT, `runtime-${runtimeCounter}`);
+  const rootDir = join(getTestRoots().root, `runtime-${runtimeCounter}`);
   const workingDir = join(rootDir, 'workspace');
   const configDir = join(rootDir, 'config');
   mkdirSync(workingDir, { recursive: true });
@@ -299,7 +326,7 @@ export function resetTestAutoHealer(): void {
 }
 
 export function getTestLspService(): LspService {
-  lspService ??= new LspService(TEST_INTELLIGENCE_SHELL_PATHS);
+  lspService ??= new LspService(getTestRoots().shellPaths);
   return lspService;
 }
 
@@ -314,7 +341,7 @@ export function getTestTreeSitterService(): TreeSitterService {
 
 export function getTestCodeIntelligence(): CodeIntelligence {
   codeIntelligence ??= new CodeIntelligence({
-    shellPaths: TEST_INTELLIGENCE_SHELL_PATHS,
+    shellPaths: getTestRoots().shellPaths,
     treeSitter: getTestTreeSitterService(),
     lsp: getTestLspService(),
   });
@@ -322,7 +349,7 @@ export function getTestCodeIntelligence(): CodeIntelligence {
 }
 
 export function getTestIntelligenceShellPaths() {
-  return TEST_INTELLIGENCE_SHELL_PATHS;
+  return getTestRoots().shellPaths;
 }
 
 export function resetTestCodeIntelligence(): void {
@@ -343,7 +370,7 @@ export function getTestTaskScheduler(
   config?: string | ConstructorParameters<typeof TaskScheduler>[0],
 ): TaskScheduler {
   taskScheduler ??= new TaskScheduler(config ?? {
-    storePath: join(TEST_ROOT, 'scheduler.json'),
+    storePath: join(getTestRoots().root, 'scheduler.json'),
     spawnTask: () => 'test-agent',
   });
   return taskScheduler;

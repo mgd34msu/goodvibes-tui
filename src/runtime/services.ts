@@ -64,7 +64,7 @@ import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/ove
 import { ToolLLM } from '../config/tool-llm.ts';
 import { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import { WorktreeRegistry } from './worktree/registry.ts';
-import { SandboxSessionRegistry } from './sandbox/session-registry.ts';
+import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import { createShellPathService, type ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
@@ -234,7 +234,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const profileManager = new ProfileManager(shellPaths.resolveUserPath('tui', 'profiles'));
   const bookmarkManager = new BookmarkManager(shellPaths.resolveUserPath('tui', 'bookmarks'));
   const sessionManager = new SessionManager(workingDirectory);
-  const sessionOrchestration = new CrossSessionTaskRegistry(workingDirectory);
+  const sessionOrchestration = new CrossSessionTaskRegistry(
+    shellPaths.resolveProjectPath('tui', 'sessions', 'task-graph.json'),
+  );
   const hookActivityTracker = new HookActivityTracker();
   const watcherRegistry = new WatcherRegistry({
     storePath: shellPaths.resolveProjectPath('tui', 'watchers.json'),
@@ -371,7 +373,9 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const channelPolicy = new ChannelPolicyManager({
     storePath: shellPaths.resolveProjectPath('tui', 'channels', 'policies.json'),
   });
-  const distributedRuntime = new DistributedRuntimeManager();
+  const distributedRuntime = new DistributedRuntimeManager(
+    shellPaths.resolveProjectPath('tui', 'remote', 'distributed-runtime.json'),
+  );
   distributedRuntime.attachRuntime({
     sessionBridge: sessionBroker,
     approvalBridge: approvalBroker,

@@ -1,15 +1,15 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createReplTool } from '../../tools/repl/index.ts';
-import { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
+import { createReplTool } from '@pellux/goodvibes-sdk/platform/tools/repl/index';
+import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
 
 let workspaceRoot = process.cwd();
 let sandboxSessionRegistry = new SandboxSessionRegistry(workspaceRoot);
-let replTool = createReplTool(createTestConfigManager(), sandboxSessionRegistry);
+let replTool = createReplTool(createTestConfigManager(), sandboxSessionRegistry, { surfaceRoot: 'tui' });
+const tempRoot = join(process.cwd(), '.test-tmp');
 
 function withWorkspace(input: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -19,9 +19,16 @@ function withWorkspace(input: Record<string, unknown>): Record<string, unknown> 
 }
 
 beforeEach(() => {
-  workspaceRoot = mkdtempSync(join(tmpdir(), 'goodvibes-repl-'));
+  mkdirSync(tempRoot, { recursive: true });
+  workspaceRoot = mkdtempSync(join(tempRoot, 'goodvibes-repl-'));
   sandboxSessionRegistry = new SandboxSessionRegistry(workspaceRoot);
-  replTool = createReplTool(createTestConfigManager(), sandboxSessionRegistry);
+  replTool = createReplTool(createTestConfigManager(), sandboxSessionRegistry, { surfaceRoot: 'tui' });
+});
+
+afterEach(() => {
+  if (workspaceRoot.startsWith(tempRoot)) {
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  }
 });
 
 describe('repl tool', () => {

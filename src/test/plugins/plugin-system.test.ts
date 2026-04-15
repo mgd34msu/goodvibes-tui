@@ -4,10 +4,11 @@
  * Strategy: use a real temp filesystem for plugin fixtures;
  * mock internal registries with lightweight in-memory fakes.
  * Dynamic import (loadPlugin) is tested with real Bun TS imports
- * pointing at fixture files written to /tmp.
+ * pointing at fixture files written to the active temp root.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 import { ConfigManager } from '../../config/manager.ts';
 import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
@@ -28,9 +29,7 @@ import type { SearchProviderContext } from '../../web-search/providers/shared.ts
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makeTempDir(): string {
-  const dir = join('/tmp', `gv-plugin-test-${process.pid}-${Date.now()}`);
-  mkdirSync(dir, { recursive: true });
-  return dir;
+  return mkdtempSync(join(tmpdir(), 'gv-plugin-test-'));
 }
 
 function makePluginPathOptions(root: string) {
@@ -185,7 +184,7 @@ function makePluginApiContext(overrides: Partial<PluginAPIContext> = {}): Plugin
 function createLoadedPlugin(overrides: Partial<LoadedPlugin> = {}): LoadedPlugin {
   return {
     manifest: { name: 'test', version: '1.0.0', description: 'test' },
-    pluginDir: '/tmp/test',
+    pluginDir: join(tmpdir(), 'test-plugin'),
     active: true,
     cleanup: [],
     ...overrides,

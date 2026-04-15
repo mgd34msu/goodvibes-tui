@@ -63,7 +63,7 @@ type AgentOrchestratorToolDeps = {
   readonly serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
   readonly featureFlags?: Pick<FeatureFlagManager, 'isEnabled'> | null;
   readonly overflowHandler?: import('@pellux/goodvibes-sdk/platform/tools/shared/overflow').OverflowHandler;
-  readonly sandboxSessionRegistry: import('../runtime/sandbox/session-registry.ts').SandboxSessionRegistry;
+  readonly sandboxSessionRegistry: import('@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry').SandboxSessionRegistry;
   readonly workflowServices: ReturnType<typeof import('@pellux/goodvibes-sdk/platform/tools/workflow/index').createWorkflowServices>;
 };
 

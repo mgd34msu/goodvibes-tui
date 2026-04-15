@@ -23,7 +23,7 @@ import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adapti
 import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
 import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import type { WorktreeRegistry } from '../../runtime/worktree/registry.ts';
-import type { SandboxSessionRegistry } from '../../runtime/sandbox/session-registry.ts';
+import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 
 export interface BuiltinPanelDeps {
   /** Config manager for settings-sync and other config-backed panels. */

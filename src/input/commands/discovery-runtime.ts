@@ -38,7 +38,13 @@ export function registerDiscoveryRuntimeCommands(registry: CommandRegistry): voi
         ctx.print(`[Scan] Warning: failed to register some providers: ${summarizeError(err)}`);
       }
 
-      if (result.servers.length > 0) persistProviders(requireShellPaths(ctx), result.servers);
+      if (result.servers.length > 0) {
+        const shellPaths = requireShellPaths(ctx);
+        persistProviders({
+          homeDirectory: shellPaths.homeDirectory,
+          surfaceRoot: 'tui',
+        }, result.servers);
+      }
       ctx.renderRequest();
     },
   });

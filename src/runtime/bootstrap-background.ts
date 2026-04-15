@@ -19,14 +19,23 @@ type BackgroundProviderRegistrationOptions = {
   shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
 };
 
+function toDiscoveryRoots(shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>) {
+  return {
+    workingDirectory: shellPaths.workingDirectory,
+    homeDirectory: shellPaths.homeDirectory,
+    surfaceRoot: 'tui',
+  } as const;
+}
+
 export function startBackgroundProviderRegistration(
   options: BackgroundProviderRegistrationOptions,
 ): void {
   const { configManager, providerRegistry, runtime, requestRender, restoreSavedModel, systemMessageRouter, shellPaths } = options;
+  const discoveryRoots = toDiscoveryRoots(shellPaths);
 
   autoRegisterProviders(providerRegistry);
 
-  const persisted = loadPersistedProviders(shellPaths);
+  const persisted = loadPersistedProviders(discoveryRoots);
   if (persisted.length > 0) {
     try {
       providerRegistry.registerDiscoveredProviders(persisted);
@@ -79,7 +88,7 @@ export function startBackgroundProviderRegistration(
     }
 
     if (result.servers.length > 0 && removedServers.length > 0) {
-      removePersistedProviders(shellPaths, removedServers);
+      removePersistedProviders(discoveryRoots, removedServers);
       for (const server of removedServers) {
         systemMessageRouter.low(
           `[Scan] ${server.name} at ${server.host}:${server.port} is no longer reachable — removed`,
@@ -105,7 +114,7 @@ export function startBackgroundProviderRegistration(
     }
 
     if (result.servers.length > 0) {
-      persistProviders(shellPaths, result.servers);
+      persistProviders(discoveryRoots, result.servers);
     }
 
     if (newServers.length > 0 || removedServers.length > 0) {
@@ -125,6 +134,7 @@ type McpAutodiscoveryOptions = {
 
 export function scheduleMcpAutodiscovery(options: McpAutodiscoveryOptions): void {
   const { mcpRegistry, systemMessageRouter, requestRender, shellPaths } = options;
+  const discoveryRoots = toDiscoveryRoots(shellPaths);
 
   mcpRegistry.connectAll(shellPaths).catch((err) => {
     logger.debug('MCP auto-connect failed (non-fatal)', { error: summarizeError(err) });
@@ -132,7 +142,7 @@ export function scheduleMcpAutodiscovery(options: McpAutodiscoveryOptions): void
 
   setTimeout(() => {
     const registeredNames = new Set(mcpRegistry.serverNames);
-    scanMcpServers(shellPaths, registeredNames).then((result) => {
+    scanMcpServers(discoveryRoots, registeredNames).then((result) => {
       if (result.suggestions.length === 0) return;
       for (const suggestion of result.suggestions) {
         systemMessageRouter.low(
