@@ -1,5 +1,5 @@
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { WebSearchService } from '../../web-search/index.ts';
+import type { WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search/index';
 import { WEB_SEARCH_TOOL_SCHEMA } from '@pellux/goodvibes-sdk/platform/tools/web-search/schema';
 
 export function createWebSearchTool(service: WebSearchService): Tool {

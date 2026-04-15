@@ -5,17 +5,17 @@ import type {
   LLMProvider,
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
-} from './interface.ts';
-import { REASONING_BUDGET_MAP } from './interface.ts';
-import type { AnthropicContentBlock } from './tool-formats.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { AnthropicContentBlock } from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
 import {
   fromAnthropicContent,
   toAnthropicMessages,
   toAnthropicTools,
-} from './tool-formats.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
-import { buildStandardProviderAuthRoutes } from './runtime-metadata.ts';
+import { buildStandardProviderAuthRoutes } from '@pellux/goodvibes-sdk/platform/providers/runtime-metadata';
 import { toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const DEFAULT_MAX_OUTPUT = 8192;

@@ -1,4 +1,4 @@
-import type { RegisteredTool } from './registry.ts';
+import type { RegisteredTool } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import type { McpDecisionRecord, McpServerRole, McpTrustMode, QuarantineReason, SchemaFreshness } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 
 export interface McpServerRecord {

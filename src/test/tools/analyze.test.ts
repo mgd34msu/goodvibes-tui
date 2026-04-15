@@ -5,8 +5,8 @@ import { mkdir } from 'node:fs/promises';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { makeTempDir, writeTempFile } from '../setup.ts';
-import { createAnalyzeTool } from '../../tools/analyze/index.ts';
-import { GitService } from '../../git/service.ts';
+import { createAnalyzeTool } from '@pellux/goodvibes-sdk/platform/tools/analyze/index';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git/service';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { getTestGitService } from '../helpers/runtime-services.ts';
 

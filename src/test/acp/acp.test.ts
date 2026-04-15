@@ -14,9 +14,9 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
-import { AcpConnection } from '../../acp/connection.ts';
-import { AcpManager } from '../../acp/manager.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { AcpConnection } from '@pellux/goodvibes-sdk/platform/acp/connection';
+import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
 import type {
   SubagentInfo,

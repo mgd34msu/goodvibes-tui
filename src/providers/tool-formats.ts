@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ProviderMessage, ContentPart } from './interface.ts';
+import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

@@ -1,4 +1,4 @@
-import { getPersistedWorktreeMeta, reviewWorktreeAttachments, summarizeWorktreeOwnership } from '../../runtime/worktree/registry.ts';
+import { getPersistedWorktreeMeta, reviewWorktreeAttachments, summarizeWorktreeOwnership } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import type { CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireShellPaths } from './runtime-services.ts';
 

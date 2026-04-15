@@ -1,4 +1,4 @@
-import type { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { join } from 'node:path';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import type { ConfigKey } from '../../config/index.ts';
@@ -30,7 +30,7 @@ import {
   type SettingsSyncEvent,
   type StagedManagedBundle,
   type SyncSurface,
-} from './control-plane-store.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane-store';
 
 export type {
   ManagedBundleChange,

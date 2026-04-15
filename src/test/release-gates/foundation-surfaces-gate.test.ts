@@ -1,25 +1,25 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import * as Channels from '../../channels/index.ts';
-import * as Hooks from '../../hooks/index.ts';
-import * as Knowledge from '../../knowledge/index.ts';
-import * as Mcp from '../../mcp/index.ts';
-import * as Providers from '../../providers/index.ts';
-import type { KnowledgeApi } from '../../knowledge/index.ts';
-import type { ProviderApi } from '../../providers/index.ts';
+import * as Channels from '@pellux/goodvibes-sdk/platform/channels/index';
+import * as Hooks from '@pellux/goodvibes-sdk/platform/hooks/index';
+import * as Knowledge from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import * as Mcp from '@pellux/goodvibes-sdk/platform/mcp/index';
+import * as Providers from '@pellux/goodvibes-sdk/platform/providers/index';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/index';
 import {
   createDirectTransportServices,
   createOperatorClientServices,
   createPeerClientDependencies,
-} from '../../runtime/foundation-services.ts';
-import { createOperatorClient, type OperatorClient } from '../../runtime/operator-client.ts';
-import { createPeerClient, type PeerClient } from '../../runtime/peer-client.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
+import { createOperatorClient, type OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+import { createPeerClient, type PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import {
   createDirectTransport,
   createDirectTransportFromServices,
   type DirectTransport,
-} from '../../runtime/transports/direct.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function resetPeerFoundationState(): void {

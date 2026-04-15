@@ -29,8 +29,8 @@
  */
 
 import { getConfigSnapshot } from '../config/index.ts';
-import type { ConfigManager } from '../config/manager.ts';
-import type { ConversationManager } from './conversation.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ConversationManager } from './conversation';
 import type { SystemMessagesPanel, SystemMessagePriority } from '../panels/system-messages-panel.ts';
 
 // ---------------------------------------------------------------------------

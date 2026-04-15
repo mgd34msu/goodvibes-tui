@@ -57,8 +57,8 @@ export type {
 
 export type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
 export { migrateLegacySchedules } from '@pellux/goodvibes-sdk/platform/automation/migration';
-export { AutomationDeliveryManager } from './delivery-manager.ts';
-export { AutomationService } from './service.ts';
+export { AutomationDeliveryManager } from '@pellux/goodvibes-sdk/platform/automation/delivery-manager';
+export { AutomationService } from '@pellux/goodvibes-sdk/platform/automation/service';
 export { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
 export { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
 export { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
@@ -68,5 +68,5 @@ export type {
   AutomationHeartbeatWake,
   CreateAutomationJobInput,
   UpdateAutomationJobInput,
-} from './manager.ts';
-export { AutomationManager } from './manager.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager';
+export { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/manager';

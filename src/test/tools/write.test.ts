@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWriteTool } from '../../tools/write/index.ts';
+import { createWriteTool } from '@pellux/goodvibes-sdk/platform/tools/write/index';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 

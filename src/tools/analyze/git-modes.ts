@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { GitService } from '../../git/service.ts';
-import type { ToolLLM } from '../../config/tool-llm.ts';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git/service';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
 import type { AnalyzeInput, SemanticDiffSummary } from '@pellux/goodvibes-sdk/platform/tools/analyze/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {

@@ -1,5 +1,5 @@
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import type { WrfcState } from './wrfc-types.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { WrfcState } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
 import {
   emitOrchestrationGraphCreated,
   emitOrchestrationNodeAdded,
@@ -12,7 +12,7 @@ import {
   emitWorkflowChainPassed,
   emitWorkflowGateResult,
   emitWorkflowStateChanged,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 
 export type WorkflowContext = { sessionId: string; traceId: string; source: string };
 export type WrfcNodeRole = 'engineer' | 'reviewer' | 'fixer' | 'verifier';

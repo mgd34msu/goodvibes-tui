@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { copyToClipboard, pasteFromClipboard, pasteImageFromClipboard } from '@pellux/goodvibes-sdk/platform/utils/clipboard';
 import type { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
-import type { ConversationManager } from '../core/conversation.ts';
-import type { PermissionCategory } from '../permissions/manager.ts';
-import type { ContentPart } from '../providers/interface.ts';
+import type { ConversationManager } from '../core/conversation';
+import type { PermissionCategory } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { CommandContext } from './command-registry.ts';
 import type { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';

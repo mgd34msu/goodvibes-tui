@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { WatcherKind, WatcherRecord, WatcherSourceStatus } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/watchers';
 import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
 import type { WatcherSourceKind } from '@pellux/goodvibes-sdk/platform/runtime/events/watchers';
@@ -11,7 +11,7 @@ import {
   emitWatcherHeartbeat,
   emitWatcherStarted,
   emitWatcherStopped,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import {
   loadWatcherSnapshotFromPath,
   resolveWatcherStorePath,

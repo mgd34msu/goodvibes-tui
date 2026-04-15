@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { SystemMessageRouter, createSystemMessageRouter, type SystemMessageKind, type SystemMessageTarget } from '../../core/system-message-router.ts';
 import type { SystemMessagesPanel, SystemMessagePriority } from '../../panels/system-messages-panel.ts';
-import type { ConversationManager } from '../../core/conversation.ts';
+import type { ConversationManager } from '../../core/conversation';
 
 // ---------------------------------------------------------------------------
 // Minimal stubs

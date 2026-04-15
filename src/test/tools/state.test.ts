@@ -10,8 +10,8 @@ import { join } from 'node:path';
 import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
-import { createStateTool } from '../../tools/state/index.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
+import { createStateTool } from '@pellux/goodvibes-sdk/platform/tools/state/index';
 import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

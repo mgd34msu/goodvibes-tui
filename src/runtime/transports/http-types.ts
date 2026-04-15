@@ -6,9 +6,9 @@ import type {
   SharedSessionMessage,
   SharedSessionRecord,
   SharedSessionSubmission,
-} from '../../control-plane/index.ts';
-import type { SteerSharedSessionMessageInput } from '../../control-plane/index.ts';
-import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '../../providers/runtime-snapshot.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { SteerSharedSessionMessageInput } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { ProviderRuntimeSnapshot, ProviderUsageSnapshot } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
 import type {
   TelemetryAggregates,
   TelemetryCapabilities,
@@ -18,7 +18,7 @@ import type {
   TelemetryRuntimeSnapshot,
   TelemetrySnapshot,
   TelemetryViewMode,
-} from '../telemetry/api.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
 import type {
   DistributedNodeHostContract,
   DistributedPendingWork,
@@ -29,8 +29,8 @@ import type {
   DistributedWorkPriority,
 } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-types';
 import type { UiControlPlaneSnapshot, UiLocalAuthSnapshot, UiSessionSnapshot, UiTasksSnapshot } from '../ui-read-models.ts';
-import type { UiRuntimeEvents } from '../ui-events.ts';
-import type { TransportPaths } from './shared.ts';
+import type { UiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import type { TransportPaths } from '@pellux/goodvibes-sdk/platform/runtime/transports/shared';
 
 export interface HttpTransportOptions {
   readonly baseUrl: string;

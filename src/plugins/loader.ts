@@ -1,17 +1,17 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve, isAbsolute } from 'path';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { createPluginAPI, type PluginAPIContext } from './api.ts';
+import { createPluginAPI, type PluginAPIContext } from './api';
 import type { CommandRegistry } from '../input/command-registry.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import type { GatewayMethodCatalog } from '../control-plane/index.ts';
-import type { ChannelDeliveryRouter, ChannelPluginRegistry } from '../channels/index.ts';
-import type { MemoryEmbeddingProviderRegistry } from '../state/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { ChannelDeliveryRouter, ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
+import type { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 import type { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/index';
-import type { MediaProviderRegistry } from '../media/index.ts';
-import type { WebSearchProviderRegistry } from '../web-search/index.ts';
+import type { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/index';
+import type { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface PluginPathOptions {

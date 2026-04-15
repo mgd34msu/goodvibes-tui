@@ -1,32 +1,31 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { createOperatorClientServices } from '../../runtime/foundation-services.ts';
-import { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createOperatorClientServices } from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
+import { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
 import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import type { MemoryAddOptions } from '../../state/memory-store.ts';
+import type { MemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { RemoteRunnerRegistry } from '../../runtime/remote/runner-registry.ts';
-import { RemoteSupervisor } from '../../runtime/remote/supervisor.ts';
+import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
+import { RemoteSupervisor } from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
 import { createUiReadModels } from '../../runtime/ui-read-models.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
-import { listHookPointContracts } from '../../hooks/index.ts';
-import { createRuntimeOpsApi } from '../../runtime/runtime-ops-api.ts';
-import { createOperatorClient } from '../../runtime/operator-client.ts';
-import { createPeerClient } from '../../runtime/peer-client.ts';
-import { createRuntimeHookApi } from '../../runtime/runtime-hook-api.ts';
-import { createRuntimeKnowledgeApi } from '../../runtime/runtime-knowledge-api.ts';
-import { createMemoryApi } from '../../knowledge/knowledge-api.ts';
-import { createRuntimeMcpApi } from '../../runtime/runtime-mcp-api.ts';
-import { createRuntimeProviderApi } from '../../runtime/runtime-provider-api.ts';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
+import { createRuntimeOpsApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-ops-api';
+import { createOperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+import { createPeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
+import { createRuntimeHookApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-hook-api';
+import { createRuntimeKnowledgeApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-knowledge-api';
+import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
+import { createRuntimeMcpApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-mcp-api';
+import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
 import {
   resetTestRuntimeServices,
 } from '../helpers/runtime-services.ts';
@@ -35,6 +34,7 @@ let productRemoteRunnerRegistry: RemoteRunnerRegistry;
 let productRemoteSupervisor: RemoteSupervisor;
 let localUserAuthManager: UserAuthManager;
 let runtimeServices: RuntimeServices;
+const TEST_TMP_ROOT = join(import.meta.dir, '../../../.tmp-tests');
 
 describe('product breadth commands', () => {
   const originalCwd = process.cwd();
@@ -46,19 +46,26 @@ describe('product breadth commands', () => {
 
   beforeEach(() => {
     resetTestRuntimeServices();
-    root = mkdtempSync(join(tmpdir(), 'gv-product-commands-'));
+    mkdirSync(TEST_TMP_ROOT, { recursive: true });
+    root = mkdtempSync(join(TEST_TMP_ROOT, 'gv-product-commands-'));
     process.env.HOME = root;
     process.chdir(root);
+    localUserAuthManager = new UserAuthManager({
+      bootstrapFilePath: join(root, '.goodvibes', 'tui', 'auth-users.json'),
+      bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
+      users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin-pass'), roles: ['admin'] }],
+    });
     runtimeServices = createRuntimeServices({
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
       workingDir: root,
       homeDirectory: root,
-      configManager: new ConfigManager({
+      configManager: new ConfigManager({ surfaceRoot: 'tui',
         configDir: join(root, '.goodvibes', 'tui'),
         workingDir: root,
         homeDir: root,
       }),
+      localUserAuthManager,
       getConversationTitle: () => 'test-runtime',
     });
     productRemoteRunnerRegistry = new RemoteRunnerRegistry({
@@ -66,11 +73,6 @@ describe('product breadth commands', () => {
       list: () => [],
     });
     productRemoteSupervisor = new RemoteSupervisor(productRemoteRunnerRegistry);
-    localUserAuthManager = new UserAuthManager({
-      bootstrapFilePath: join(root, '.goodvibes', 'tui', 'auth-users.json'),
-      bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
-      users: [{ username: 'admin', passwordHash: UserAuthManager.hashPassword('admin-pass'), roles: ['admin'] }],
-    });
   });
 
   afterEach(() => {

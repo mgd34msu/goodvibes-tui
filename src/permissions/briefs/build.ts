@@ -1,4 +1,4 @@
-import type { PermissionPromptRequest } from '../prompt.ts';
+import type { PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
 import { classifyPermissionRiskFamily } from '@pellux/goodvibes-sdk/platform/runtime/permissions/risk-model';
 import { explainPermissionRiskFamily } from '@pellux/goodvibes-sdk/platform/runtime/permissions/risk-language';
 import type { PermissionApprovalBrief } from '@pellux/goodvibes-sdk/platform/permissions/briefs/types';

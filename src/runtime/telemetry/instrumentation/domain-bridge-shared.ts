@@ -1,4 +1,4 @@
-import type { RuntimeEventBus, RuntimeEventEnvelope } from '../../events/index.ts';
+import type { RuntimeEventBus, RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RuntimeTracer } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/tracer';
 import type { Span } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/types';
 

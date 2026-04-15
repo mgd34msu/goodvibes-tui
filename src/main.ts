@@ -6,25 +6,25 @@ import { join } from 'node:path';
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { UIFactory } from './renderer/ui-factory.ts';
-import { Orchestrator } from './core/orchestrator.ts';
+import { Orchestrator } from './core/orchestrator';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
 import { ConfigManager } from './config/index.ts';
-import type { ContentPart } from './providers/interface.ts';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { registerAllTools } from './tools/index.ts';
+import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
-import { PermissionManager } from './permissions/manager.ts';
-import { AcpManager } from './acp/manager.ts';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
-import { WrfcController } from './agents/wrfc-controller.ts';
+import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
 import { InputHistory } from './input/input-history.ts';
-import { getTierPromptSupplement, getTierForContextWindow } from './providers/tier-prompts.ts';
+import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers/tier-prompts';
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
@@ -47,12 +47,12 @@ import {
   loadRecoveryConversation,
   persistConversation,
   writeRecoveryFile,
-} from './runtime/session-persistence.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
-import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './runtime/session-return-context.ts';
-import { GlobalNetworkTransportInstaller } from './runtime/network/index.ts';
+import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
+import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 
@@ -91,6 +91,7 @@ async function main() {
   const configManager = new ConfigManager({
     workingDir: bootstrapWorkingDir,
     homeDir: bootstrapHomeDirectory,
+    surfaceRoot: 'tui',
   });
   new GlobalNetworkTransportInstaller().install(configManager);
 

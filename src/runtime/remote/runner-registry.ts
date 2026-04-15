@@ -1,8 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import type { AgentManager } from '../../tools/agent/index.ts';
-import type { AgentRecord } from '../../tools/agent/manager.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/manager';
 import type { RuntimeStore } from '../store/index.ts';
 import type { AcpConnection } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/acp';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';

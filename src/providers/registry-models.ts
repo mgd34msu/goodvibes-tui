@@ -1,5 +1,5 @@
-import type { ModelDefinition } from './registry-types.ts';
-import { splitModelRegistryKey, withRegistryKey } from './registry-helpers.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry-types';
+import { splitModelRegistryKey, withRegistryKey } from '@pellux/goodvibes-sdk/platform/providers/registry-helpers';
 
 export function getProviderLookupCandidates(
   providerName: string,

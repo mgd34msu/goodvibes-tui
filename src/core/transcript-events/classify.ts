@@ -1,6 +1,6 @@
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { TranscriptEvent } from '@pellux/goodvibes-sdk/platform/core/transcript-events/types';
-import type { ConversationMessageSnapshot } from '../conversation.ts';
+import type { ConversationMessageSnapshot } from '../conversation';
 
 function summarizeText(text: string, max = 96): string {
   const normalized = text.replace(/\s+/g, ' ').trim();

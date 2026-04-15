@@ -7,7 +7,7 @@
  * Usage:
  * ```ts
  * import { emitTurnSubmitted } from '../runtime/emitters/index.ts';
- * import { RuntimeEventBus } from '../runtime/events/index.ts';
+ * import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
  *
  * const bus = new RuntimeEventBus();
  * const ctx: EmitterContext = { sessionId: '...', traceId: '...', source: 'orchestrator' };
@@ -31,29 +31,29 @@ export interface EmitterContext extends EnvelopeContext {
   readonly traceId: string;
 }
 
-export * from './session.ts';
-export * from './turn.ts';
-export * from './providers.ts';
-export * from './tools.ts';
-export * from './tasks.ts';
-export * from './agents.ts';
-export * from './workflows.ts';
-export * from './orchestration.ts';
-export * from './communication.ts';
-export * from './planner.ts';
-export * from './permissions.ts';
-export * from './plugins.ts';
-export * from './mcp.ts';
-export * from './transport.ts';
-export * from './compaction.ts';
-export * from './ui.ts';
-export * from './ops.ts';
-export * from './forensics.ts';
-export * from './security.ts';
-export * from './automation.ts';
-export * from './routes.ts';
-export * from './control-plane.ts';
-export * from './deliveries.ts';
-export * from './watchers.ts';
-export * from './surfaces.ts';
-export * from './knowledge.ts';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/session';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/turn';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/providers';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/tools';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/tasks';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/agents';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/workflows';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/orchestration';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/communication';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/planner';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/permissions';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/plugins';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/mcp';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/transport';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/compaction';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/ui';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/ops';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/forensics';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/security';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/automation';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/routes';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/control-plane';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/deliveries';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/watchers';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/surfaces';
+export * from '@pellux/goodvibes-sdk/platform/runtime/emitters/knowledge';

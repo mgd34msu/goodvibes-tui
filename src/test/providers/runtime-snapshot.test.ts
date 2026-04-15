@@ -2,16 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
-import { ProviderRegistry } from '../../providers/registry.ts';
-import { getProviderRuntimeSnapshot, getProviderUsageSnapshot } from '../../providers/runtime-snapshot.ts';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { getProviderRuntimeSnapshot, getProviderUsageSnapshot } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
 
 function jsonRef(value: unknown): string {
   return `secretref:${JSON.stringify(value)}`;
@@ -39,7 +39,7 @@ describe('provider runtime snapshots', () => {
     const favoritesStore = new FavoritesStore({ dir: join(root, '.goodvibes', 'tui') });
     const benchmarkStore = new BenchmarkStore({ dir: join(root, '.goodvibes', 'tui') });
     providerRegistry = new ProviderRegistry({
-      configManager: new ConfigManager({ configDir: join(root, '.goodvibes', 'tui') }),
+      configManager: new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui') }),
       subscriptionManager: subscriptions,
       secretsManager: secrets,
       serviceRegistry,

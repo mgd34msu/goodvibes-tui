@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
-import { exportToMarkdown } from '../../export/markdown.ts';
+import { exportToMarkdown } from '@pellux/goodvibes-sdk/platform/export/markdown';
 import { TemplateManager, parseTemplateArgs } from '../../templates/manager.ts';
 import { requireSessionManager, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { MediaProviderRegistry } from '../../media/index.ts';
+import { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/index';
 
 describe('MediaProviderRegistry', () => {
   test('registers media providers and dispatches capability lookups', async () => {

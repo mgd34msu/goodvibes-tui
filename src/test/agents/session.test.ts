@@ -1,12 +1,12 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { existsSync, readFileSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { mkdtempSync } from 'fs';
-import { tmpdir } from 'os';
 
-import { AgentSession } from '../../agents/session.ts';
-import { ConversationManager } from '../../core/conversation.ts';
+import { AgentSession } from '@pellux/goodvibes-sdk/platform/agents/session';
+import { ConversationManager } from '@pellux/goodvibes-sdk/platform/core/conversation';
 import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
+
+const TEST_TMP_ROOT = join(import.meta.dir, '../../../.tmp-tests');
 
 describe('AgentSession', () => {
   let session: AgentSession;
@@ -23,7 +23,8 @@ describe('AgentSession', () => {
   }
 
   beforeEach(() => {
-    rootDir = mkdtempSync(join(tmpdir(), 'gv-agent-session-'));
+    mkdirSync(TEST_TMP_ROOT, { recursive: true });
+    rootDir = mkdtempSync(join(TEST_TMP_ROOT, 'gv-agent-session-'));
     session = new AgentSession(agentId, model, provider, sessionPaths(rootDir));
   });
 

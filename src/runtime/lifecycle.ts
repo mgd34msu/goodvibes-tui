@@ -4,13 +4,13 @@
  * Handles ordered teardown: persist session, fire lifecycle hooks,
  * stop background managers. Terminal teardown remains in main.ts.
  */
-import type { HookDispatcher } from '../hooks/index.ts';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/index';
 import type { HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-export { saveSession } from './session-persistence.ts';
-import { saveSession, type SessionPersistenceOptions, type SessionSnapshot } from './session-persistence.ts';
+export { saveSession } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
+import { saveSession, type SessionPersistenceOptions, type SessionSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import type { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

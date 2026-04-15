@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { GitService } from '../../git/service.ts';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git/service';
 
 export type ManagedWorktreeState = 'active' | 'paused' | 'kept' | 'discard' | 'cleanup-pending';
 export type ManagedWorktreeKind = 'agent' | 'orchestrator' | 'manual';

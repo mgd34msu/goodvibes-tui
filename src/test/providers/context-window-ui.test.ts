@@ -11,17 +11,17 @@ import { join } from 'node:path';
 import {
   LocalContextIngestionService,
 } from '@pellux/goodvibes-sdk/platform/providers/local-context-ingestion';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { enrichModelEntries } from '../../runtime/ui/model-picker/health-enrichment.ts';
-import type { ModelDefinition } from '../../providers/registry.ts';
-import { ProviderRegistry } from '../../providers/registry.ts';
+import { enrichModelEntries } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/health-enrichment';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { createInitialProviderHealthState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 import { createInitialModelState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 
@@ -91,7 +91,7 @@ function createEnrichmentHarness(): EnrichmentHarness {
   benchmarkStore.initBenchmarks();
 
   const providerRegistry = new ProviderRegistry({
-    configManager: new ConfigManager({ configDir }),
+    configManager: new ConfigManager({ surfaceRoot: 'tui',  configDir }),
     subscriptionManager,
     secretsManager,
     serviceRegistry,

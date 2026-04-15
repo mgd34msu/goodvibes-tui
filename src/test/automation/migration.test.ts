@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { migrateLegacySchedules } from '../../automation/index.ts';
+import { migrateLegacySchedules } from '@pellux/goodvibes-sdk/platform/automation/index';
 
 describe('legacy scheduler migration', () => {
   test('maps scheduled tasks and history into first-class automation records', () => {

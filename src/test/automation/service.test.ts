@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AutomationJobStore, AutomationRouteStore, AutomationRunStore, AutomationService, AutomationSourceStore } from '../../automation/index.ts';
-import { AutomationManager } from '../../automation/manager.ts';
-import { ConfigManager } from '../../config/manager.ts';
-import { RouteBindingManager } from '../../channels/route-manager.ts';
-import { SharedSessionBroker } from '../../control-plane/session-broker.ts';
+import { AutomationJobStore, AutomationRouteStore, AutomationRunStore, AutomationService, AutomationSourceStore } from '@pellux/goodvibes-sdk/platform/automation/index';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
@@ -27,7 +27,7 @@ describe('automation service', () => {
     const routeBindings = new RouteBindingManager({
       store: new AutomationRouteStore(join(root, `bindings-${Date.now()}-${Math.random().toString(16).slice(2)}.json`)),
     });
-    const configManager = new ConfigManager({
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',
       workingDir: root,
       configDir: join(root, '.goodvibes', 'tui'),
     });
@@ -54,7 +54,7 @@ describe('automation service', () => {
 
   function createService(): AutomationService {
     return new AutomationService({
-      configManager: new ConfigManager({
+      configManager: new ConfigManager({ surfaceRoot: 'tui',
         workingDir: root,
         configDir: join(root, '.goodvibes', 'tui'),
       }),

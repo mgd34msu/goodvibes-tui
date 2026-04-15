@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '../../config/manager.ts';
-import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
-import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 import { KnowledgePanel } from '../../panels/knowledge-panel.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 
@@ -23,7 +23,7 @@ describe('KnowledgePanel', () => {
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'gv-knowledge-panel-'));
-    configManager = new ConfigManager({ configDir: join(dir, '.goodvibes', 'tui'), workingDir: dir });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(dir, '.goodvibes', 'tui'), workingDir: dir });
     store = new MemoryStore(join(dir, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
     });

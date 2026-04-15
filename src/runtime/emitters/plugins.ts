@@ -2,8 +2,8 @@
  * Plugin emitters — typed emission wrappers for PluginEvent domain.
  */
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import type { RuntimeEventBus } from '../events/index.ts';
-import type { EmitterContext } from './index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 
 /** Emit PLUGIN_DISCOVERED when a plugin is found during scan. */
 export function emitPluginDiscovered(

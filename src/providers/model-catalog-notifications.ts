@@ -1,6 +1,6 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
-import type { CatalogDiff, CatalogModel } from './model-catalog.ts';
+import type { CatalogDiff, CatalogModel } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
 
 export function diffCatalogs(
   oldCatalog: readonly CatalogModel[],

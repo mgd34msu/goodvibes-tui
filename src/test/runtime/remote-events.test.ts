@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createRemoteRuntimeEvents, createRemoteUiRuntimeEvents } from '../../runtime/transports/remote-events.ts';
+import { createRemoteRuntimeEvents, createRemoteUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/transports/remote-events';
 import { createWebSocketConnector } from '@pellux/goodvibes-sdk/platform/runtime/transports/runtime-events-client';
 
 describe('remote runtime transport events', () => {

@@ -5,18 +5,18 @@ import {
   getCostFromPricingCatalog,
   createModelCatalog,
   getCatalogModelDefinitionsFrom,
-} from '../../providers/model-catalog.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
 import {
   buildSyntheticCanonicalModels,
   nameToSlug,
   normalizeModelName,
-} from '../../providers/model-catalog-synthetic.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/model-catalog-synthetic';
 import type {
   CatalogProvider,
   PricingCatalog,
   CatalogModel,
-} from '../../providers/model-catalog.ts';
-import type { ModelDefinition, ProviderRegistry } from '../../providers/registry.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 
 describe('normalizeModelId', () => {
   it('strips coding- prefix', () => {

@@ -9,14 +9,14 @@
  *  5. Feature flag disabled → no compaction, error re-thrown
  */
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
-import { AgentOrchestrator } from '../../agents/orchestrator.ts';
-import type { AgentRecord } from '../../tools/agent/index.ts';
-import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
+import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents/orchestrator';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import {
   estimateTokens,
   estimateConversationTokens,
   compactSmallWindow,
-} from '../../core/context-compaction.ts';
+} from '@pellux/goodvibes-sdk/platform/core/context-compaction';
 import { isContextSizeExceededError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { getTestAgentOrchestrator, getTestProviderRegistry, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 

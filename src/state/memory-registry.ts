@@ -1,6 +1,6 @@
-import type { MemoryAddOptions, MemoryBundle, MemoryDoctorReport, MemoryLink, MemoryRecord, MemoryReviewPatch, MemoryScope, MemorySearchFilter, MemorySemanticSearchResult, MemoryStore } from './memory-store.ts';
-import type { MemoryVectorStats } from './memory-vector-store.ts';
-import type { MemoryImportResult } from './memory-store.ts';
+import type { MemoryAddOptions, MemoryBundle, MemoryDoctorReport, MemoryLink, MemoryRecord, MemoryReviewPatch, MemoryScope, MemorySearchFilter, MemorySemanticSearchResult, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { MemoryVectorStats } from '@pellux/goodvibes-sdk/platform/state/memory-vector-store';
+import type { MemoryImportResult } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 
 /**
  * MemoryRegistry — thin observable wrapper around the MemoryStore.

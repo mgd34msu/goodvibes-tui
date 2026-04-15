@@ -4,14 +4,14 @@ import {
   ApiTokenAuditor,
 } from '@pellux/goodvibes-sdk/platform/security/token-audit';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import type { PluginManagerObserver, PluginStatus } from '../../plugins/manager.ts';
+import type { PluginManagerObserver, PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins/manager';
 import type { McpDecisionRecord } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 import type { UiSecuritySnapshot } from '../../runtime/ui-read-models.ts';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
-import { buildMcpAttackPathReview } from '../../runtime/mcp/index.ts';
+import { buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/index';
 
 function linesText(lines: Line[]): string {
   return lines

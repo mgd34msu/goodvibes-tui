@@ -7,7 +7,7 @@ import type {
   ChatResponse,
   ContentPart,
   ProviderMessage,
-} from './interface.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 export type ResponsesInputItem =
   | { role: 'user'; content: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string; detail: 'auto' }> }

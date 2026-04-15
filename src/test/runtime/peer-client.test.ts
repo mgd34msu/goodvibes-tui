@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { createPeerClient } from '../../runtime/peer-client.ts';
+import { createPeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import { getTestAgentManager, getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 describe('PeerClient', () => {

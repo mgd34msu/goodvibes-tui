@@ -23,7 +23,7 @@ import {
   TRUST_TIER_EVENTS,
   type TrustTierConfig,
 } from '@pellux/goodvibes-sdk/platform/tools/fetch/trust-tiers';
-import { createFetchTool } from '../../tools/fetch/index.ts';
+import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
 
 function createFetchHarness() {
   const featureFlags = createFeatureFlagManager();

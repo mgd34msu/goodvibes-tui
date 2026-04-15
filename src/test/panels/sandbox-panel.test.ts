@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SandboxPanel } from '../../panels/sandbox-panel.ts';
 import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 
@@ -13,7 +13,7 @@ describe('SandboxPanel', () => {
   beforeEach(() => {
     const root = mkdtempSync(join(tmpdir(), 'gv-sandbox-panel-'));
     sessions = new SandboxSessionRegistry(root);
-    config = new ConfigManager({
+    config = new ConfigManager({ surfaceRoot: 'tui',
       configDir: join(root, '.goodvibes', 'tui'),
       workingDir: root,
     });

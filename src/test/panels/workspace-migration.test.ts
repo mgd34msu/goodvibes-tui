@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
-import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
+import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { ProviderStatsPanel } from '../../panels/provider-stats-panel.ts';
 import { ToolInspectorPanel } from '../../panels/tool-inspector-panel.ts';

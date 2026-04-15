@@ -24,9 +24,9 @@ export { createCascadeAppliedEvent } from '@pellux/goodvibes-sdk/platform/runtim
 export { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
 export { CascadeEngine } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-engine';
 export { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
-export { HealthStoreWiring } from './wiring.ts';
-export { handleCascadeEffect } from './effect-handlers.ts';
-export type { EffectHandlerContext } from './effect-handlers.ts';
+export { HealthStoreWiring } from '@pellux/goodvibes-sdk/platform/runtime/health/wiring';
+export { handleCascadeEffect } from '@pellux/goodvibes-sdk/platform/runtime/health/effect-handlers';
+export type { EffectHandlerContext } from '@pellux/goodvibes-sdk/platform/runtime/health/effect-handlers';
 export { CascadeTimer, deriveCascadeSeverity } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-timing';
 export type { CascadeSeverity, TimedCascadeResult, TimedEvaluateResult } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-timing';
 export { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-playbook-map';
@@ -34,7 +34,7 @@ export { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from '@pellux/goodvibes-sd
 import { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
 import { CascadeEngine } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-engine';
 import { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
-import { HealthStoreWiring } from './wiring.ts';
+import { HealthStoreWiring } from '@pellux/goodvibes-sdk/platform/runtime/health/wiring';
 
 /**
  * Factory function that creates a fully wired health monitoring system.

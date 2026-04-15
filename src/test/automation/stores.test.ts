@@ -7,7 +7,7 @@ import {
   AutomationRouteStore,
   AutomationRunStore,
   AutomationSourceStore,
-} from '../../automation/index.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/index';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
 import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';

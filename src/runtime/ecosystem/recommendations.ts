@@ -5,7 +5,7 @@ import {
   loadEcosystemCatalog,
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
-} from './catalog.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
 
 export interface EcosystemRecommendation {
   readonly id: string;

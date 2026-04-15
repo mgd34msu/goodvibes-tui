@@ -24,9 +24,9 @@ export type {
   PluginLifecycleRecord,
   PluginLifecycleManagerOptions,
   PluginLifecycleState,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
 
-export { ALL_CAPABILITIES, MAX_TRANSITION_HISTORY } from './types.ts';
+export { ALL_CAPABILITIES, MAX_TRANSITION_HISTORY } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
 
 export {
   VALID_TRANSITIONS,
@@ -35,37 +35,37 @@ export {
   isOperational,
   isReloadable,
   isTerminal,
-} from './lifecycle.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/plugins/lifecycle';
 
 export {
   resolveCapabilityManifest,
   hasCapability,
   validateManifestV2,
-} from './manifest.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/plugins/manifest';
 
-export { PluginLifecycleManager } from './manager.ts';
-import { PluginLifecycleManager } from './manager.ts';
+export { PluginLifecycleManager } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manager';
+import { PluginLifecycleManager } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manager';
 
 // Trust framework.
 export type {
   PluginTrustTier,
   PluginTrustRecord,
   SignatureValidationResult,
-} from './trust.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/plugins/trust';
 export {
   PluginTrustStore,
   validatePluginSignature,
   filterCapabilitiesByTrust,
   SAFE_CAPABILITIES,
-} from './trust.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/plugins/trust';
 
-export type { QuarantineRecord } from './quarantine.ts';
-export { PluginQuarantineEngine } from './quarantine.ts';
+export type { QuarantineRecord } from '@pellux/goodvibes-sdk/platform/runtime/plugins/quarantine';
+export { PluginQuarantineEngine } from '@pellux/goodvibes-sdk/platform/runtime/plugins/quarantine';
 
-export { isHighRiskCapability } from './manifest.ts';
+export { isHighRiskCapability } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manifest';
 
-export type { HotReloadOptions, HotReloadResult } from './hot-reload.ts';
-export { runHotReload } from './hot-reload.ts';
+export type { HotReloadOptions, HotReloadResult } from '@pellux/goodvibes-sdk/platform/runtime/plugins/hot-reload';
+export { runHotReload } from '@pellux/goodvibes-sdk/platform/runtime/plugins/hot-reload';
 
 /**
  * createPluginLifecycleManager — Factory function for the PluginLifecycleManager.

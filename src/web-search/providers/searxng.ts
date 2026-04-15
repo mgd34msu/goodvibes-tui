@@ -5,7 +5,7 @@ import {
   firstString,
   resultFromRecord,
   type SearchProviderContext,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
 
 const SEARXNG_ENV_KEYS = ['SEARXNG_BASE_URL'] as const;
 const SEARXNG_SERVICE_NAME = 'searxng';

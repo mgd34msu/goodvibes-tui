@@ -1,7 +1,7 @@
 import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import type { WorktreeRegistry } from './worktree/registry.ts';
+import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 
 export interface CommandWorkspaceShellServices {
   readonly shellPaths?: ShellPathService;

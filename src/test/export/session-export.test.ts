@@ -6,8 +6,8 @@ import {
   exportToHTML,
   exportToMarkdownExtended,
   defaultExportPath,
-} from '../../export/session-export.ts';
-import type { ExportMessage, ExportMetadata } from '../../export/session-export.ts';
+} from '@pellux/goodvibes-sdk/platform/export/session-export';
+import type { ExportMessage, ExportMetadata } from '@pellux/goodvibes-sdk/platform/export/session-export';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

@@ -3,15 +3,15 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { MemoryStore, MemoryRegistry } from '../../state/memory-store.ts';
-import { resolveMemoryVectorDbPath } from '../../state/memory-vector-store.ts';
-import { DEFAULT_MEMORY_EMBEDDING_DIMS, MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { MemoryStore, MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import { resolveMemoryVectorDbPath } from '@pellux/goodvibes-sdk/platform/state/memory-vector-store';
+import { DEFAULT_MEMORY_EMBEDDING_DIMS, MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { unlinkSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 function tempDbPath(): string {
   return join(tmpdir(), `memory-test-${randomUUID()}.db`);
@@ -36,7 +36,7 @@ describe('MemoryStore', () => {
     configRoot = mkdtempSync(join(tmpdir(), 'memory-config-'));
     configDir = join(configRoot, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
-    configManager = new ConfigManager({ configDir, workingDir: configRoot });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: configRoot });
     embeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
     store = new MemoryStore(dbPath, { embeddingRegistry });
     await store.init();
@@ -180,7 +180,7 @@ describe('MemoryStore', () => {
       const asyncConfigRoot = mkdtempSync(join(tmpdir(), 'memory-config-'));
       const asyncConfigDir = join(asyncConfigRoot, '.goodvibes', 'tui');
       mkdirSync(asyncConfigDir, { recursive: true });
-      const configManager = new ConfigManager({ configDir: asyncConfigDir, workingDir: asyncConfigRoot });
+      const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: asyncConfigDir, workingDir: asyncConfigRoot });
       const registry = new MemoryEmbeddingProviderRegistry({ configManager });
       let embedCalls = 0;
       registry.register({
@@ -318,7 +318,7 @@ describe('MemoryStore', () => {
       const otherConfigRoot = mkdtempSync(join(tmpdir(), 'memory-test-config-'));
       const otherConfigDir = join(otherConfigRoot, '.goodvibes', 'tui');
       mkdirSync(otherConfigDir, { recursive: true });
-      const otherConfigManager = new ConfigManager({ configDir: otherConfigDir, workingDir: otherConfigRoot });
+      const otherConfigManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: otherConfigDir, workingDir: otherConfigRoot });
       const otherStore = new MemoryStore(otherPath, {
         embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager: otherConfigManager }),
       });
@@ -410,7 +410,7 @@ describe('MemoryRegistry', () => {
     configRoot = mkdtempSync(join(tmpdir(), 'memory-registry-config-'));
     configDir = join(configRoot, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
-    configManager = new ConfigManager({ configDir, workingDir: configRoot });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: configRoot });
     embeddingRegistry = new MemoryEmbeddingProviderRegistry({ configManager });
     store = new MemoryStore(dbPath, { embeddingRegistry });
     await store.init();

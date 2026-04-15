@@ -8,8 +8,8 @@ import { readFile } from 'node:fs/promises';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
-import type { AgentManager, AgentRecord } from '../tools/agent/index.ts';
-import type { AgentMessageBus } from '../agents/message-bus.ts';
+import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import {
   buildEmptyState,

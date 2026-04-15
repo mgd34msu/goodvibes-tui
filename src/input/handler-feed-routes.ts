@@ -1,7 +1,7 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
-import type { BlockMeta, ConversationManager } from '../core/conversation.ts';
+import type { BlockMeta, ConversationManager } from '../core/conversation';
 import type { InputHistory } from './input-history.ts';
-import type { ContentPart } from '../providers/interface.ts';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { SelectionManager } from './selection.ts';

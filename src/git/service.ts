@@ -1,5 +1,5 @@
 import { simpleGit, type SimpleGit, type StatusResult } from 'simple-git';
-import type { HookDispatcher } from '../hooks/dispatcher.ts';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

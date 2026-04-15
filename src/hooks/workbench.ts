@@ -4,9 +4,9 @@ import { dirname, resolve } from 'node:path';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { getHookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
 import { matchesEventPath, matchesMatcher } from '@pellux/goodvibes-sdk/platform/hooks/matcher';
-import type { HookDispatcher } from './dispatcher.ts';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { HookChain, HookDefinition, HookEvent, HookResult, HookType, HooksConfig } from '@pellux/goodvibes-sdk/platform/hooks/types';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export interface HookAuthoringAction {

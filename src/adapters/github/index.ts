@@ -1,7 +1,7 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { GitHubIntegration } from '@pellux/goodvibes-sdk/platform/integrations/github';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
-import type { TrySpawnAgentFn } from '../types.ts';
+import type { TrySpawnAgentFn } from '@pellux/goodvibes-sdk/platform/adapters/types';
 
 function parseJsonRecord(rawBody: string): Record<string, unknown> | Response {
   try {

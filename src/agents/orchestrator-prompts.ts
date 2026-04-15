@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { estimateTokens } from '../core/context-compaction.ts';
-import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '../state/index.ts';
-import type { MemoryRegistry } from '../state/index.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
+import { estimateTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
+import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '@pellux/goodvibes-sdk/platform/state/index';
+import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 type PromptContextDeps = {

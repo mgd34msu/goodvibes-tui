@@ -14,11 +14,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import {
   SyntheticProvider,
-} from '../../providers/synthetic.ts';
-import type { CanonicalModel } from '../../providers/synthetic.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/synthetic';
+import type { CanonicalModel } from '@pellux/goodvibes-sdk/platform/providers/synthetic';
 import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
-import type { ChatRequest, ChatResponse, LLMProvider } from '../../providers/interface.ts';
+import type { ChatRequest, ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 // ---------------------------------------------------------------------------
 // Helpers

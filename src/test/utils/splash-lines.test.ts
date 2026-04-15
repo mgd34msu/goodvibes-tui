@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getSplashLines } from '../../utils/splash-lines.ts';
+import { getSplashLines } from '@pellux/goodvibes-sdk/platform/utils/splash-lines';
 import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 describe('splash lines', () => {

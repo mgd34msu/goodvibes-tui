@@ -1,5 +1,5 @@
 import { AnthropicBedrockMantle } from '@anthropic-ai/bedrock-sdk';
-import { AnthropicSdkProvider } from './anthropic-sdk-provider.ts';
+import { AnthropicSdkProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-sdk-provider';
 
 const BEDROCK_MANTLE_MODELS = [
   'claude-sonnet-4-6',

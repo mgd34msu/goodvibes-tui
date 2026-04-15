@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
-import type { CreateAutomationJobInput, UpdateAutomationJobInput } from './manager-runtime-helpers.ts';
+import type { CreateAutomationJobInput, UpdateAutomationJobInput } from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-helpers';
 import {
   buildDefaultDelivery,
   buildDefaultExecution,
@@ -11,7 +11,7 @@ import {
   normalizeProviderRoutingPolicy,
   normalizeOptionalString,
   normalizeStringList,
-} from './manager-runtime-helpers.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-helpers';
 
 interface AutomationJobMutationContext {
   readonly configManager: ConfigManager;

@@ -10,11 +10,11 @@ import type {
 import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import type { SessionInfo } from '../sessions/manager.ts';
 import type { Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ModelDefinition } from '../providers/registry.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type {
   ProviderApi,
   ProviderRuntimeSnapshot,
-} from '../providers/provider-api.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/provider-api';
 import type { ExecutionPlan } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import type { PlannerDecision, ExecutionStrategy } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 

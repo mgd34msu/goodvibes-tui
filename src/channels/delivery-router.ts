@@ -1,7 +1,7 @@
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ServiceRegistry } from '../config/service-registry.ts';
-import type { ControlPlaneGateway } from '../control-plane/gateway.ts';
+import type { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
 import {
   createDiscordDeliveryStrategy,
   createGoogleChatDeliveryStrategy,
@@ -10,24 +10,24 @@ import {
   createTelegramDeliveryStrategy,
   createWebControlPlaneDeliveryStrategy,
   createWebhookDeliveryStrategy,
-} from './delivery/strategies-core.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery/strategies-core';
 import {
   createBlueBubblesDeliveryStrategy,
   createIMessageDeliveryStrategy,
   createSignalDeliveryStrategy,
   createWhatsAppDeliveryStrategy,
-} from './delivery/strategies-bridge.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery/strategies-bridge';
 import {
   createMSTeamsDeliveryStrategy,
   createMattermostDeliveryStrategy,
   createMatrixDeliveryStrategy,
-} from './delivery/strategies-enterprise.ts';
-import { resolveChannelDeliverySurfaceKind } from './delivery/shared.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery/strategies-enterprise';
+import { resolveChannelDeliverySurfaceKind } from '@pellux/goodvibes-sdk/platform/channels/delivery/shared';
 import type {
   ChannelDeliveryRequest,
   ChannelDeliveryRouterConfig,
   ChannelDeliveryStrategy,
-} from './delivery/types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery/types';
 
 export type {
   ChannelDeliveryResult,
@@ -37,9 +37,9 @@ export type {
   ChannelDeliverySurfaceKind,
   ChannelDeliveryTarget,
   ChannelDeliveryTargetKind,
-} from './delivery/types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery/types';
 
-export { resolveChannelDeliverySurfaceKind } from './delivery/shared.ts';
+export { resolveChannelDeliverySurfaceKind } from '@pellux/goodvibes-sdk/platform/channels/delivery/shared';
 
 export function createDefaultChannelDeliveryStrategies(
   configManager: ConfigManager,

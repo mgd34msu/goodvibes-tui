@@ -1,8 +1,8 @@
-import type { HookDispatcher } from '../../hooks/dispatcher.ts';
-import type { PermissionManager } from '../../permissions/manager.ts';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
+import type { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
 import type { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import type { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
 
 /**

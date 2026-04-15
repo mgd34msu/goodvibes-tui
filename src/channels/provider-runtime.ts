@@ -1,4 +1,4 @@
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { ServiceRegistry } from '../config/service-registry.ts';
 import {
   DiscordGatewayClient,
@@ -9,13 +9,13 @@ import {
   type DiscordGatewayDispatch,
   type NtfyMessage,
   type SlackSocketModeEnvelope,
-} from '../integrations/index.ts';
+} from '@pellux/goodvibes-sdk/platform/integrations/index';
 import {
   type SurfaceAdapterContext,
   handleDiscordGatewayDispatchPayload,
   handleNtfySurfacePayload,
   handleSlackSurfacePayload,
-} from '../adapters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/adapters/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

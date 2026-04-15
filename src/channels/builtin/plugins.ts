@@ -13,10 +13,10 @@ import {
   handleSlackSurfaceWebhook,
   handleTelegramSurfaceWebhook,
   handleWhatsAppSurfaceWebhook,
-} from '../../adapters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/adapters/index';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
-import type { SharedApprovalRecord } from '../../control-plane/index.ts';
-import type { ProviderRuntimeSurface } from '../provider-runtime.ts';
+import type { SharedApprovalRecord } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { ProviderRuntimeSurface } from '@pellux/goodvibes-sdk/platform/channels/provider-runtime';
 import type {
   ChannelAccountRecord,
   ChannelCapabilityDescriptor,
@@ -26,8 +26,8 @@ import type {
   ChannelSurface,
   ChannelToolDescriptor,
 } from '@pellux/goodvibes-sdk/platform/channels/types';
-import type { ChannelPlugin } from '../plugin-registry.ts';
-import type { BuiltinChannelRuntimeDeps, ManagedSurface } from './shared.ts';
+import type { ChannelPlugin } from '@pellux/goodvibes-sdk/platform/channels/plugin-registry';
+import type { BuiltinChannelRuntimeDeps, ManagedSurface } from '@pellux/goodvibes-sdk/platform/channels/builtin/shared';
 
 interface BuiltinPluginRegistrationContext {
   readonly deps: BuiltinChannelRuntimeDeps;

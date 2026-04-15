@@ -1,7 +1,7 @@
 import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import type { ToolCall, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ProviderCapability } from './capabilities.ts';
+import type { ProviderCapability } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import type {
   ChatRequest,
   ChatResponse,
@@ -13,9 +13,9 @@ import type {
   ProviderMessage,
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
-} from './interface.ts';
-import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
-import { toOpenAITools } from './tool-formats.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { OpenAICompatProvider, type OpenAICompatOptions } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import { toOpenAITools } from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
 import { summarizeError, toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 type NativeFetch = (

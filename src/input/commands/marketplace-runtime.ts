@@ -18,7 +18,7 @@ import {
   type EcosystemCatalogBundle,
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
-} from '../../runtime/ecosystem/catalog.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
 import { openCommandPanel, requireEcosystemCatalogPaths, requireReadModels, requireShellPaths } from './runtime-services.ts';
 
 function resolveMarketplaceEntry(

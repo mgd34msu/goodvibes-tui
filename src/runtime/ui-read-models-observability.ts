@@ -1,44 +1,44 @@
-export type { UiObservabilityReadModelOptions } from './ui-read-models-observability-options.ts';
+export type { UiObservabilityReadModelOptions } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-options';
 export type {
   UiRemoteSnapshot,
   UiRemoteReadModels,
-} from './ui-read-models-observability-remote.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-remote';
 export type {
   UiIntelligenceSnapshot,
   UiMarketplaceSnapshot,
   UiCockpitSnapshot,
   UiHealthSnapshot,
   UiSystemObservabilityReadModels,
-} from './ui-read-models-observability-system.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-system';
 export type {
   UiSecuritySnapshot,
   UiMcpServerSnapshot,
   UiMcpSnapshot,
   UiLocalAuthSnapshot,
   UiSecurityObservabilityReadModels,
-} from './ui-read-models-observability-security.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-security';
 export type {
   UiSettingsSnapshot,
   UiContinuitySnapshot,
   UiWorktreeSnapshot,
   UiMaintenanceObservabilityReadModels,
-} from './ui-read-models-observability-maintenance.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-maintenance';
 
 import type { RuntimeServices } from './services.ts';
-import { createRemoteReadModels, type UiRemoteReadModels } from './ui-read-models-observability-remote.ts';
+import { createRemoteReadModels, type UiRemoteReadModels } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-remote';
 import {
   createSystemObservabilityReadModels,
   type UiSystemObservabilityReadModels,
-} from './ui-read-models-observability-system.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-system';
 import {
   createSecurityObservabilityReadModels,
   type UiSecurityObservabilityReadModels,
-} from './ui-read-models-observability-security.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-security';
 import {
   createMaintenanceObservabilityReadModels,
   type UiMaintenanceObservabilityReadModels,
-} from './ui-read-models-observability-maintenance.ts';
-import type { UiObservabilityReadModelOptions } from './ui-read-models-observability-options.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-maintenance';
+import type { UiObservabilityReadModelOptions } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-options';
 
 export interface UiObservabilityReadModels
   extends UiRemoteReadModels,

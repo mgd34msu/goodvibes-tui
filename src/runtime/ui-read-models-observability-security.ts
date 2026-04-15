@@ -1,10 +1,10 @@
-import { buildMcpAttackPathReview } from './mcp/index.ts';
+import { buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/index';
 import type { McpDecisionRecord, McpSecuritySnapshot } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 import type { RuntimeServices } from './services.ts';
 import type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
-import { combineSubscriptions } from './ui-read-model-helpers.ts';
+import { combineSubscriptions } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-model-helpers';
 import type { SecurityPanelSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/security';
-import type { PluginStatus } from '../plugins/manager.ts';
+import type { PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins/manager';
 
 export interface UiMcpServerSnapshot {
   readonly name: string;

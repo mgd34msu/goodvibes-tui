@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createMcpApi } from '../../mcp/index.ts';
+import { createMcpApi } from '@pellux/goodvibes-sdk/platform/mcp/index';
 
 describe('McpApi', () => {
   test('wraps MCP security and tool inspection behind a stable api', async () => {

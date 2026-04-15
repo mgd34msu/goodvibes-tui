@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { AgentWorktree } from '../../agents/worktree.ts';
+import { AgentWorktree } from '@pellux/goodvibes-sdk/platform/agents/worktree';
 
 // ---------------------------------------------------------------------------
 // Helpers

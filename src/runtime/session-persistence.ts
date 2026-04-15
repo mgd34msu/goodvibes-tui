@@ -15,8 +15,8 @@ import { dirname, join } from 'path';
 
 import { SessionManager, type SessionMeta } from '../sessions/manager.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { SessionReturnContextSummary } from './session-return-context.ts';
-import type { ConversationTitleSource } from '../core/conversation.ts';
+import type { SessionReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
+import type { ConversationTitleSource } from '../core/conversation';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export type SessionSnapshot = {

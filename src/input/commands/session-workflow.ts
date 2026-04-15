@@ -2,10 +2,10 @@ import { randomBytes } from 'node:crypto';
 
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { type SessionMeta } from '../../sessions/manager.ts';
-import type { TranscriptEventKind } from '../../core/transcript-events/index.ts';
-import type { ConversationTitleSource } from '../../core/conversation.ts';
-import type { SessionReturnContextSummary } from '../../runtime/session-return-context.ts';
-import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '../../runtime/session-return-context.ts';
+import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
+import type { ConversationTitleSource } from '../../core/conversation';
+import type { SessionReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
+import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
 import { requirePanelManager, requireProviderApi, requireSessionManager } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

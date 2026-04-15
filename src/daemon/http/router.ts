@@ -1,37 +1,37 @@
-import type { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { ServiceRegistry } from '../../config/service-registry.ts';
 import { isValidConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { buildOperatorSessionCookie, OPERATOR_SESSION_COOKIE_NAME } from '@pellux/goodvibes-sdk/platform/security/http-auth';
-import type { AgentManager } from '../../tools/agent/index.ts';
-import { normalizeAtSchedule, normalizeCronSchedule, normalizeEverySchedule, type AutomationManager } from '../../automation/index.ts';
-import type { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../../control-plane/index.ts';
-import type { GatewayMethodCatalog } from '../../control-plane/index.ts';
-import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { normalizeAtSchedule, normalizeCronSchedule, normalizeEverySchedule, type AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/index';
+import type { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import {
   getProviderRuntimeSnapshot,
   getProviderUsageSnapshot,
   listProviderRuntimeSnapshots,
-} from '../../providers/runtime-snapshot.ts';
-import type { RouteBindingManager, ChannelPolicyManager, ChannelPluginRegistry, SurfaceRegistry } from '../../channels/index.ts';
-import type { WatcherRegistry } from '../../watchers/index.ts';
-import type { DistributedPeerAuth, DistributedRuntimeManager } from '../../runtime/remote/index.ts';
-import type { KnowledgeGraphqlService, KnowledgeService } from '../../knowledge/index.ts';
-import { inspectKnowledgeGraphqlAccess } from '../../knowledge/index.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
+import type { RouteBindingManager, ChannelPolicyManager, ChannelPluginRegistry, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
+import type { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers/index';
+import type { DistributedPeerAuth, DistributedRuntimeManager } from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
+import type { KnowledgeGraphqlService, KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import { inspectKnowledgeGraphqlAccess } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import type { VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
-import type { WebSearchService } from '../../web-search/index.ts';
+import type { WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search/index';
 import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import type { MediaProviderRegistry } from '../../media/index.ts';
-import type { MultimodalService } from '../../multimodal/index.ts';
-import type { IntegrationHelperService } from '../../runtime/integration/helpers.ts';
+import type { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/index';
+import type { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/index';
+import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
 import type { DomainDispatch, RuntimeStore } from '../../runtime/store/index.ts';
-import type { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { TelemetryApiService } from '../../runtime/telemetry/api.ts';
-import { inspectInboundTls, inspectOutboundTls } from '../../runtime/network/index.ts';
-import type { MemoryEmbeddingProviderRegistry, MemoryRegistry } from '../../state/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { TelemetryApiService } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
+import { inspectInboundTls, inspectOutboundTls } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
+import type { MemoryEmbeddingProviderRegistry, MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 import { dispatchDaemonApiRoutes } from '@pellux/goodvibes-sdk/platform/control-plane/routes/index';
-import { handleGitHubAutomationWebhook, handleSlackSurfaceWebhook, handleDiscordSurfaceWebhook, handleNtfySurfaceWebhook, handleGenericWebhookSurface } from '../../adapters/index.ts';
+import { handleGitHubAutomationWebhook, handleSlackSurfaceWebhook, handleDiscordSurfaceWebhook, handleNtfySurfaceWebhook, handleGenericWebhookSurface } from '@pellux/goodvibes-sdk/platform/adapters/index';
 import { createDaemonKnowledgeRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/knowledge-routes';
 import { createDaemonMediaRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/media-routes';
 import {
@@ -54,9 +54,9 @@ import {
   buildMediaRouteContext,
   buildSystemRouteContext,
 } from './router-route-contexts.ts';
-import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '../../adapters/index.ts';
-import type { PlatformServiceManager } from '../service-manager.ts';
-import type { JsonRecord } from '../helpers.ts';
+import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '@pellux/goodvibes-sdk/platform/adapters/index';
+import type { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon/service-manager';
+import type { JsonRecord } from '@pellux/goodvibes-sdk/platform/daemon/helpers';
 import { jsonErrorResponse } from '@pellux/goodvibes-sdk/platform/daemon/http/error-response';
 import { AppError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { VERSION } from '../../version.ts';

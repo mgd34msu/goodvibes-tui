@@ -1,7 +1,7 @@
-import type { TurnEvent } from '../../../events/turn.ts';
+import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/turn';
 import type { ToolEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tools';
-import type { ConversationDomainState, ActiveToolCall, ToolExecutionState } from '../../domains/conversation.ts';
-import { canStartNewTurn, formatPartialToolPreview, isCurrentTurnEvent, isTerminalTurnState, now, resetStreamState, updateDomainMetadata } from './shared.ts';
+import type { ConversationDomainState, ActiveToolCall, ToolExecutionState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
+import { canStartNewTurn, formatPartialToolPreview, isCurrentTurnEvent, isTerminalTurnState, now, resetStreamState, updateDomainMetadata } from '@pellux/goodvibes-sdk/platform/runtime/store/helpers/reducers/shared';
 
 function formatToolArgs(event: ToolEvent | TurnEvent): string {
   if ('args' in event) {

@@ -1,14 +1,14 @@
-import type { ConfigManager } from '../config/manager.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { QualityGateResult } from './wrfc-types.ts';
+import type { QualityGateResult } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
 import {
   executeGateCommand,
   getSkippedGateReason,
   loadPackageScripts,
 } from '@pellux/goodvibes-sdk/platform/agents/wrfc-gates';
-import { getEnabledWrfcGates } from './wrfc-config.ts';
-import { emitWrfcGateResult } from './wrfc-runtime-events.ts';
+import { getEnabledWrfcGates } from '@pellux/goodvibes-sdk/platform/agents/wrfc-config';
+import { emitWrfcGateResult } from '@pellux/goodvibes-sdk/platform/agents/wrfc-runtime-events';
 
 export async function runWrfcGateChecks(options: {
   readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;

@@ -1,4 +1,4 @@
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SessionDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/session';
 
 export type GuidanceMode = 'off' | 'minimal' | 'guided';

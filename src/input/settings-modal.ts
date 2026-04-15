@@ -11,15 +11,15 @@
  */
 
 import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config/schema';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
-import type { ProviderAuthFreshness, ProviderAuthRoute } from '../runtime/provider-accounts/registry.ts';
-import { getResolvedSettingLookup } from '../runtime/settings/control-plane.ts';
+import type { ProviderAuthFreshness, ProviderAuthRoute } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
+import { getResolvedSettingLookup } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
-import type { McpRegistry } from '../mcp/registry.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

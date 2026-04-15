@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { ChatResponse, LLMProvider } from '../../providers/interface.ts';
-import { LlamaCppProvider } from '../../providers/llama-cpp.ts';
+import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { LlamaCppProvider } from '@pellux/goodvibes-sdk/platform/providers/llama-cpp';
 
 describe('LlamaCppProvider', () => {
   beforeEach(() => {

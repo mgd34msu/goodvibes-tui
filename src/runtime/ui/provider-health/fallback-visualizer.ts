@@ -7,7 +7,7 @@
  */
 import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
 import type { ProviderHealthDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
-import type { FallbackChainData, FallbackChainNode } from './types.ts';
+import type { FallbackChainData, FallbackChainNode } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/types';
 
 /**
  * Build a FallbackChainData snapshot from the current model and health state.

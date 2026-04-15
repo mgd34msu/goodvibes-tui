@@ -1,8 +1,8 @@
-export { HookDispatcher } from './dispatcher.ts';
-export { ChainEngine } from './chain-engine.ts';
+export { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
+export { ChainEngine } from '@pellux/goodvibes-sdk/platform/hooks/chain-engine';
 export { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
-export { HookWorkbench, createHookWorkbench } from './workbench.ts';
-export { createHookApi } from './hook-api.ts';
+export { HookWorkbench, createHookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
+export { createHookApi } from '@pellux/goodvibes-sdk/platform/hooks/hook-api';
 export type {
   CreateHookApiOptions,
   HookApi,
@@ -11,7 +11,7 @@ export type {
   HookContractRecord,
   HookContractSource,
   HookWorkbenchApi,
-} from './hook-api.ts';
+} from '@pellux/goodvibes-sdk/platform/hooks/hook-api';
 export type {
   HookPhase,
   HookCategory,
@@ -25,9 +25,9 @@ export type {
   HooksConfig,
 } from '@pellux/goodvibes-sdk/platform/hooks/types';
 export type { HookActivityRecord } from '@pellux/goodvibes-sdk/platform/hooks/activity';
-export type { HookAuthoringAction, HookConfigInspection, HookSimulationResult } from './workbench.ts';
+export type { HookAuthoringAction, HookConfigInspection, HookSimulationResult } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
 export type { HookExecutionMode, HookAuthority, HookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
-import type { AgentManager } from '../tools/agent/index.ts';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 export {
   listHookPointContracts,
   getHookPointContract,
@@ -35,7 +35,7 @@ export {
 } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
 
 import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
-import { HookDispatcher } from './dispatcher.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 
 export function createHookDispatcher(config: {
   readonly agentManager?: Pick<AgentManager, 'spawn' | 'getStatus' | 'cancel'>;

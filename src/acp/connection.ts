@@ -15,13 +15,13 @@ import type {
   RequestPermissionResponse,
 } from '@pellux/goodvibes-sdk/platform/acp/protocol';
 import type { SubagentInfo, SubagentResult, SubagentTask } from '@pellux/goodvibes-sdk/platform/acp/protocol';
-import type { PermissionCategory } from '../permissions/manager.ts';
-import type { PermissionRequestHandler } from '../permissions/prompt.ts';
+import type { PermissionCategory } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions/analysis';
 import { AcpError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { VERSION } from '../version.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import {
   emitAgentCancelled,
   emitAgentCompleted,
@@ -33,8 +33,8 @@ import {
   emitTransportInitializing,
   emitTransportSyncing,
   emitTransportTerminalFailure,
-} from '../runtime/emitters/index.ts';
-import type { HookDispatcher } from '../hooks/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/index';
 import type { HookCategory, HookEventPath, HookPhase } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

@@ -8,7 +8,7 @@ import type {
   PermissionDomainState,
   PermissionDecisionMachineState,
   PermissionDecision,
-} from '../../domains/permissions.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/store/domains/permissions';
 import type { TaskDomainState, RuntimeTask, TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import type { AgentDomainState, RuntimeAgent, AgentLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
 import type {
@@ -16,8 +16,8 @@ import type {
   OrchestrationGraphRecord,
   OrchestrationNodeRecord,
 } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';
-import type { PermissionCategory } from '../../../../permissions/manager.ts';
-import { now, uniq, updateDomainMetadata } from './shared.ts';
+import type { PermissionCategory } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { now, uniq, updateDomainMetadata } from '@pellux/goodvibes-sdk/platform/runtime/store/helpers/reducers/shared';
 
 function permissionMachineStateForEvent(event: PermissionEvent): PermissionDecisionMachineState {
   switch (event.type) {

@@ -6,8 +6,8 @@ import {
   DEFAULT_MEMORY_EMBEDDING_DIMS,
   HASHED_MEMORY_EMBEDDING_PROVIDER,
   MemoryEmbeddingProviderRegistry,
-} from '../../state/index.ts';
-import { ConfigManager } from '../../config/manager.ts';
+} from '@pellux/goodvibes-sdk/platform/state/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 describe('MemoryEmbeddingProviderRegistry', () => {
   let previousHome: string | undefined;
@@ -18,7 +18,7 @@ describe('MemoryEmbeddingProviderRegistry', () => {
     previousHome = process.env.HOME;
     tempRoot = mkdtempSync(join(tmpdir(), 'gv-memory-embeddings-'));
     process.env.HOME = tempRoot;
-    configManager = new ConfigManager({ configDir: join(tempRoot, '.goodvibes', 'tui') });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(tempRoot, '.goodvibes', 'tui') });
   });
 
   afterEach(() => {

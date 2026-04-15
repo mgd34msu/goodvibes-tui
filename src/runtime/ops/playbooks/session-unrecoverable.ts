@@ -7,8 +7,8 @@
 import type { Playbook, DiagnosticCheckResult } from '@pellux/goodvibes-sdk/platform/runtime/ops/types';
 import { safeCheck } from '@pellux/goodvibes-sdk/platform/runtime/ops/safe-check';
 import { existsSync } from 'fs';
-import { readRecoveryFileMetadata } from '../runtime-context.ts';
-import type { OpsRuntimeContextState } from '../runtime-context.ts';
+import { readRecoveryFileMetadata } from '@pellux/goodvibes-sdk/platform/runtime/ops/runtime-context';
+import type { OpsRuntimeContextState } from '@pellux/goodvibes-sdk/platform/runtime/ops/runtime-context';
 
 export function createSessionUnrecoverablePlaybook(
   getRuntimeContext: () => OpsRuntimeContextState | null = () => null,

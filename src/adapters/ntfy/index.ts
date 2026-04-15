@@ -1,5 +1,5 @@
 import { parseJsonRecord, readBearerOrHeaderToken, readTextBodyWithinLimit } from '@pellux/goodvibes-sdk/platform/adapters/helpers';
-import type { SurfaceAdapterContext } from '../types.ts';
+import type { SurfaceAdapterContext } from '@pellux/goodvibes-sdk/platform/adapters/types';
 
 export async function handleNtfySurfaceWebhook(req: Request, context: SurfaceAdapterContext): Promise<Response> {
   const enabled = Boolean(context.configManager.get('surfaces.ntfy.enabled'));

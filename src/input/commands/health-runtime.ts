@@ -1,13 +1,13 @@
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import type { ConfigManager } from '../../config/manager.ts';
-import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '../../runtime/session-maintenance.ts';
-import { estimateConversationTokens } from '../../core/context-compaction.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
+import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
 import type { CommandRegistry } from '../command-registry.ts';
 import { buildSetupReviewSnapshot } from './local-setup-review.ts';
-import { buildProviderAccountSnapshot } from '../../runtime/provider-accounts/registry.ts';
-import { getSettingsControlPlaneSnapshot } from '../../runtime/settings/control-plane.ts';
-import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '../../runtime/worktree/registry.ts';
-import { checkRecoveryFile, readLastSessionPointer } from '../../runtime/session-persistence.ts';
+import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
+import { getSettingsControlPlaneSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
+import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
+import { checkRecoveryFile, readLastSessionPointer } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import {
   openCommandPanel,
   requireLocalUserAuthManager,

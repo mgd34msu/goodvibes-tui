@@ -1,17 +1,17 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { MockLLMProvider } from '../setup.ts';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
-import { PermissionManager } from '../../permissions/manager.ts';
-import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { createEventEnvelope } from '../../runtime/events/index.ts';
-import { createPermissionConfigReader } from '../../permissions/manager.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 // ---------------------------------------------------------------------------
 // Helpers

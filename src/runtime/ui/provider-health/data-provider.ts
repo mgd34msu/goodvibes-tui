@@ -9,13 +9,13 @@
  */
 import type { ProviderHealthDomainState, ProviderHealthRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
 import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import { buildFallbackChainData } from './fallback-visualizer.ts';
+import { buildFallbackChainData } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/fallback-visualizer';
 import type {
   ProviderHealthData,
   ProviderHealthEntry,
   HealthTimeline,
   HealthTimelinePoint,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/types';
 
 /**
  * Number of timeline points retained per provider.

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { ControlPlaneGateway } from '../../control-plane/gateway.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 
 function decodeChunk(chunk: Uint8Array | undefined): string {
   return chunk ? new TextDecoder().decode(chunk) : '';

@@ -1,4 +1,4 @@
-import { DiscordIntegration, SlackIntegration } from '../../integrations/index.ts';
+import { DiscordIntegration, SlackIntegration } from '@pellux/goodvibes-sdk/platform/integrations/index';
 import type {
   ChannelConversationKind,
   ChannelDirectoryEntry,
@@ -8,8 +8,8 @@ import type {
   ChannelSurface,
   ChannelTargetResolveOptions,
 } from '@pellux/goodvibes-sdk/platform/channels/types';
-import type { BuiltinChannelRuntimeDeps, ManagedSurface } from './shared.ts';
-import { resolveDiscordBotToken, resolveSlackBotToken } from './surfaces.ts';
+import type { BuiltinChannelRuntimeDeps, ManagedSurface } from '@pellux/goodvibes-sdk/platform/channels/builtin/shared';
+import { resolveDiscordBotToken, resolveSlackBotToken } from '@pellux/goodvibes-sdk/platform/channels/builtin/surfaces';
 
 interface BuiltinTargetContext {
   readonly deps: BuiltinChannelRuntimeDeps;

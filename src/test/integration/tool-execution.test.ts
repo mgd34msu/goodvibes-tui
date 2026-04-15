@@ -9,12 +9,12 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RuntimeEventBus, createEventEnvelope } from '../../runtime/events/index.ts';
+import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { PermissionManager } from '../../permissions/manager.ts';
-import { ConfigManager } from '../../config/manager.ts';
-import { createPermissionConfigReader } from '../../permissions/manager.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,7 +23,7 @@ import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts'
 function buildStack(configManager?: ConfigManager) {
   const root = join(tmpdir(), `gv-tool-exec-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(root, { recursive: true });
-  configManager = configManager ?? new ConfigManager({
+  configManager = configManager ?? new ConfigManager({ surfaceRoot: 'tui',
     workingDir: root,
     homeDir: root,
     configDir: join(root, '.goodvibes', 'tui'),
@@ -163,7 +163,7 @@ describe('Tool execution pipeline — permission + registry', () => {
   beforeEach(() => {
     tmpConfigDir = join(tmpdir(), `gv-tool-execution-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     mkdirSync(tmpConfigDir, { recursive: true });
-    configManager = new ConfigManager({ configDir: tmpConfigDir });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: tmpConfigDir });
     savedAutoApprove = (configManager.get('behavior.autoApprove') as boolean | undefined) ?? false;
     savedPermissionMode = (configManager.get('permissions.mode') as 'prompt' | 'allow-all' | 'custom' | undefined) ?? 'prompt';
     configManager.set('behavior.autoApprove', true);

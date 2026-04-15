@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { createEventEnvelope, RuntimeEventBus } from '../../runtime/events/index.ts';
-import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
+import { createEventEnvelope, RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import { ProviderHealthPanel } from '../../panels/provider-health-panel.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { buildMcpAttackPathReview } from '../../runtime/mcp/index.ts';
-import { createProviderApi } from '../../providers/provider-api.ts';
+import { buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/index';
+import { createProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
 import { createProviderRuntimeInspectionQuery } from '../../runtime/ui-service-queries.ts';
 
 function linesText(lines: Line[]): string {

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ensureBuiltinMediaProviders, MediaProviderRegistry } from '../../media/index.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
-import type { ProviderRuntimeMetadata } from '../../providers/interface.ts';
+import { ensureBuiltinMediaProviders, MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/index';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ProviderRuntimeMetadata } from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 const BUILTIN_MEDIA_ENV_KEYS = [
   'BYTEPLUS_API_KEY',

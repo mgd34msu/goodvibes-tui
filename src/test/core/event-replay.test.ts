@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { EventReplayQueue } from '../../core/event-replay.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { EventReplayQueue } from '@pellux/goodvibes-sdk/platform/core/event-replay';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 
 describe('EventReplayQueue', () => {

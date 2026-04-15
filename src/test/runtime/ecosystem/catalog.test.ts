@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   exportEcosystemCatalogBundle,
@@ -11,15 +10,26 @@ import {
   loadEcosystemCatalog,
   searchEcosystemCatalog,
   uninstallEcosystemCatalogEntry,
-} from '../../../runtime/ecosystem/catalog.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
 
 describe('ecosystem catalog', () => {
   const originalHome = process.env.HOME;
+  const testTmpRoot = join(import.meta.dir, '../../../../.tmp-tests');
   let root = '';
   let homeDir = '';
 
+  function ecosystemPaths(cwd: string, homeDirectory: string) {
+    return {
+      cwd,
+      homeDir: homeDirectory,
+      projectCatalogRoot: join(cwd, '.goodvibes', 'tui', 'ecosystem'),
+      userCatalogRoot: join(homeDirectory, '.goodvibes', 'tui', 'ecosystem'),
+    } as const;
+  }
+
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'gv-ecosystem-'));
+    mkdirSync(testTmpRoot, { recursive: true });
+    root = mkdtempSync(join(testTmpRoot, 'gv-ecosystem-'));
     homeDir = join(root, 'home');
     mkdirSync(homeDir, { recursive: true });
     process.env.HOME = homeDir;
@@ -50,7 +60,7 @@ describe('ecosystem catalog', () => {
       ],
     }, null, 2));
 
-    const entries = loadEcosystemCatalog('plugin', { cwd: root, homeDir });
+    const entries = loadEcosystemCatalog('plugin', ecosystemPaths(root, homeDir));
     expect(entries).toHaveLength(1);
     expect(entries[0]?.id).toBe('deploy-audit');
   });
@@ -71,7 +81,7 @@ describe('ecosystem catalog', () => {
       ],
     }, null, 2));
 
-    const entries = searchEcosystemCatalog('skill', 'release', { cwd: root, homeDir });
+    const entries = searchEcosystemCatalog('skill', 'release', ecosystemPaths(root, homeDir));
     expect(entries).toHaveLength(1);
     expect(entries[0]?.name).toBe('Release Gate');
   });
@@ -99,25 +109,34 @@ describe('ecosystem catalog', () => {
       ],
     }, null, 2));
 
-    const installResult = installEcosystemCatalogEntry('plugin', 'deploy-audit', { cwd: root, homeDir, scope: 'project' });
+    const installResult = installEcosystemCatalogEntry('plugin', 'deploy-audit', {
+      ...ecosystemPaths(root, homeDir),
+      scope: 'project',
+    });
     expect(installResult.ok).toBe(true);
     if (!installResult.ok) return;
     expect(existsSync(join(root, '.goodvibes', 'plugins', 'deploy-audit', 'manifest.json'))).toBe(true);
 
-    const receipts = listInstalledEcosystemEntries('plugin', { cwd: root, homeDir });
+    const receipts = listInstalledEcosystemEntries('plugin', ecosystemPaths(root, homeDir));
     expect(receipts).toHaveLength(1);
     expect(receipts[0]?.entry.id).toBe('deploy-audit');
     expect(receipts[0]?.fingerprint).toHaveLength(64);
     expect(readFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'installed', 'plugin-deploy-audit.json'), 'utf-8')).toContain('"scope": "project"');
 
-    const inspected = inspectInstalledEcosystemEntry('plugin', 'deploy-audit', { cwd: root, homeDir, scope: 'project' });
+    const inspected = inspectInstalledEcosystemEntry('plugin', 'deploy-audit', {
+      ...ecosystemPaths(root, homeDir),
+      scope: 'project',
+    });
     expect(inspected.ok).toBe(true);
     if (inspected.ok) {
       expect(inspected.receipt.compatibility.appVersion).toBeDefined();
       expect(inspected.receipt.provenanceSummary).toBe('./catalog/plugins/deploy-audit');
     }
 
-    const uninstallResult = uninstallEcosystemCatalogEntry('plugin', 'deploy-audit', { cwd: root, homeDir, scope: 'project' });
+    const uninstallResult = uninstallEcosystemCatalogEntry('plugin', 'deploy-audit', {
+      ...ecosystemPaths(root, homeDir),
+      scope: 'project',
+    });
     expect(uninstallResult.ok).toBe(true);
     expect(existsSync(join(root, '.goodvibes', 'plugins', 'deploy-audit'))).toBe(false);
   });
@@ -180,18 +199,21 @@ describe('ecosystem catalog', () => {
       ],
     }, null, 2));
 
-    const bundle = exportEcosystemCatalogBundle('project', { cwd: root, homeDir });
+    const bundle = exportEcosystemCatalogBundle('project', ecosystemPaths(root, homeDir));
     expect(bundle.entries).toHaveLength(4);
 
     const importedRoot = join(root, 'imported');
     mkdirSync(join(importedRoot, '.goodvibes', 'tui', 'ecosystem'), { recursive: true });
-    const imported = importEcosystemCatalogBundle(bundle, { cwd: importedRoot, homeDir, scope: 'project' });
+    const imported = importEcosystemCatalogBundle(bundle, {
+      ...ecosystemPaths(importedRoot, homeDir),
+      scope: 'project',
+    });
     expect(imported.imported).toBe(4);
 
-    const importedPlugins = loadEcosystemCatalog('plugin', { cwd: importedRoot, homeDir });
-    const importedSkills = loadEcosystemCatalog('skill', { cwd: importedRoot, homeDir });
-    const importedHookPacks = loadEcosystemCatalog('hook-pack', { cwd: importedRoot, homeDir });
-    const importedPolicyPacks = loadEcosystemCatalog('policy-pack', { cwd: importedRoot, homeDir });
+    const importedPlugins = loadEcosystemCatalog('plugin', ecosystemPaths(importedRoot, homeDir));
+    const importedSkills = loadEcosystemCatalog('skill', ecosystemPaths(importedRoot, homeDir));
+    const importedHookPacks = loadEcosystemCatalog('hook-pack', ecosystemPaths(importedRoot, homeDir));
+    const importedPolicyPacks = loadEcosystemCatalog('policy-pack', ecosystemPaths(importedRoot, homeDir));
     expect(importedPlugins).toHaveLength(1);
     expect(importedSkills).toHaveLength(1);
     expect(importedHookPacks).toHaveLength(1);

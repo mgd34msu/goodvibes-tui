@@ -1,19 +1,19 @@
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { ConfigManager } from '../config/manager.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
-import { registerAllTools } from '../tools/index.ts';
-import { registerChannelAgentTools } from '../tools/channel/agent-tools.ts';
-import { AgentMessageBus } from './message-bus.ts';
-import type { ChannelPluginRegistry } from '../channels/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
+import { registerChannelAgentTools } from '@pellux/goodvibes-sdk/platform/tools/channel/agent-tools';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import type { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import type { AgentRecord } from '../tools/agent/index.ts';
-import type { ToolLLM } from '../config/tool-llm.ts';
-import type { LLMProvider } from '../providers/interface.ts';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import {
   emitAgentCancelled,
   emitAgentCompleted,
@@ -25,9 +25,9 @@ import {
   emitOrchestrationNodeCompleted,
   emitOrchestrationNodeFailed,
   emitOrchestrationNodeProgress,
-} from '../runtime/emitters/index.ts';
-import { splitModelRegistryKey } from '../providers/registry-helpers.ts';
-import { runAgentTask, type AgentOrchestratorRunContext } from './orchestrator-runner.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import { splitModelRegistryKey } from '@pellux/goodvibes-sdk/platform/providers/registry-helpers';
+import { runAgentTask, type AgentOrchestratorRunContext } from '@pellux/goodvibes-sdk/platform/agents/orchestrator-runner';
 export { summarizeToolArgs } from '@pellux/goodvibes-sdk/platform/agents/orchestrator-utils';
 
 type AgentProviderRoutingPolicy = NonNullable<AgentRecord['routing']>;
@@ -42,6 +42,7 @@ type ResolvedAgentProviderRouting = {
 };
 
 type AgentOrchestratorToolDeps = {
+  readonly surfaceRoot: string;
   readonly fileCache: FileStateCache;
   readonly projectIndex: ProjectIndex;
   readonly workingDirectory: string;

@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { recallCommand } from '../../input/commands/memory.ts';
-import { createMemoryApi } from '../../knowledge/knowledge-api.ts';
-import { MemoryRegistry, MemoryStore } from '../../state/memory-store.ts';
-import { MemoryEmbeddingProviderRegistry } from '../../state/index.ts';
+import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 
 function makeBaseContext(registry: MemoryRegistry, printed: string[]): CommandContext {
@@ -63,7 +63,7 @@ describe('recall command breadth', () => {
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'gv-recall-'));
-    configManager = new ConfigManager({ configDir: join(dir, '.goodvibes', 'tui'), workingDir: dir });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(dir, '.goodvibes', 'tui'), workingDir: dir });
     store = new MemoryStore(join(dir, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
     });
@@ -138,7 +138,7 @@ describe('recall command breadth', () => {
     expect(bundleText).toContain('"recordCount": 1');
 
     const importDir = mkdtempSync(join(tmpdir(), 'gv-recall-import-'));
-    const importConfig = new ConfigManager({ configDir: join(importDir, '.goodvibes', 'tui'), workingDir: importDir });
+    const importConfig = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(importDir, '.goodvibes', 'tui'), workingDir: importDir });
     const importStore = new MemoryStore(join(importDir, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager: importConfig }),
     });
@@ -171,7 +171,7 @@ describe('recall command breadth', () => {
     expect(printed.some((line) => line.includes('Memory Handoff Review'))).toBe(true);
 
     const importDir = mkdtempSync(join(tmpdir(), 'gv-recall-handoff-import-'));
-    const importConfig = new ConfigManager({ configDir: join(importDir, '.goodvibes', 'tui'), workingDir: importDir });
+    const importConfig = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(importDir, '.goodvibes', 'tui'), workingDir: importDir });
     const importStore = new MemoryStore(join(importDir, 'memory.sqlite'), {
       embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager: importConfig }),
     });

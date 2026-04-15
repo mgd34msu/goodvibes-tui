@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ConversationManager } from '../../core/conversation.ts';
+import { ConversationManager } from '../../core/conversation';
 import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
 // ConversationManager has renderer dependencies for display;

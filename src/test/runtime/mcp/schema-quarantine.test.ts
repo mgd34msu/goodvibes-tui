@@ -12,7 +12,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import { McpSchemaFreshnessTracker } from '@pellux/goodvibes-sdk/platform/runtime/mcp/schema-freshness';
-import { McpLifecycleManager } from '../../../runtime/mcp/manager.ts';
+import { McpLifecycleManager } from '@pellux/goodvibes-sdk/platform/runtime/mcp/manager';
 import type { McpEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/mcp';
 import type { QuarantineReason } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 

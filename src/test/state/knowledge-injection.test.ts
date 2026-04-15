@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { buildKnowledgeInjectionPrompt } from '../../state/knowledge-injection.ts';
-import { renderPacket } from '../../knowledge/internal.ts';
+import { buildKnowledgeInjectionPrompt } from '@pellux/goodvibes-sdk/platform/state/knowledge-injection';
+import { renderPacket } from '@pellux/goodvibes-sdk/platform/knowledge/internal';
 
 describe('knowledge prompt trust boundaries', () => {
   test('frames injected memory as untrusted reference material', () => {

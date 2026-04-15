@@ -4,7 +4,7 @@ import { join, resolve } from 'path';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import type { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import type { HookDispatcher } from '../hooks/dispatcher.ts';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

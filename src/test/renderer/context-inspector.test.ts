@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ContextInspectorModal, renderContextInspector } from '../../renderer/context-inspector.ts';
-import { ConversationManager } from '../../core/conversation.ts';
+import { ConversationManager } from '../../core/conversation';
 import { linesToText } from '../setup.ts';
 
 const W = 120;

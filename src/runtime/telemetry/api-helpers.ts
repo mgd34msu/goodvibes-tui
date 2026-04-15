@@ -7,7 +7,7 @@ import type {
   AnyRuntimeEvent,
   RuntimeEventDomain,
   RuntimeEventEnvelope,
-} from '../events/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RuntimeStore } from '../store/index.ts';
 import type {
   AttributeValue,
@@ -22,7 +22,7 @@ import type {
   TelemetryRecord,
   TelemetrySeverity,
   TelemetryViewMode,
-} from './api.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
 
 export const SERVICE_NAME = 'goodvibes-tui';
 export const DEFAULT_EVENT_LIMIT = 500;

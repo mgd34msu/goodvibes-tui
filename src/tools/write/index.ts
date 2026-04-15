@@ -7,9 +7,9 @@ import { runValidators, formatValidatorFailure, type ValidatorName } from '@pell
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
-import type { ConfigManager } from '../../config/manager.ts';
-import type { ToolLLM } from '../../config/tool-llm.ts';
-import { AutoHealer } from '../shared/auto-heal.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
+import { AutoHealer } from '@pellux/goodvibes-sdk/platform/tools/shared/auto-heal';
 import { isNotebookFile } from '@pellux/goodvibes-sdk/platform/utils/notebook';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions/change-tracker';

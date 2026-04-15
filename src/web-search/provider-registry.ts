@@ -2,14 +2,14 @@ import type {
   WebSearchProvider,
   WebSearchProviderDescriptor,
 } from '@pellux/goodvibes-sdk/platform/web-search/types';
-import { createBraveSearchProvider } from './providers/brave.ts';
-import { createDuckDuckGoProvider } from './providers/duckduckgo.ts';
-import { createExaSearchProvider } from './providers/exa.ts';
-import { createFirecrawlSearchProvider } from './providers/firecrawl.ts';
-import { createPerplexitySearchProvider } from './providers/perplexity.ts';
-import { createSearxngSearchProvider } from './providers/searxng.ts';
-import { createTavilySearchProvider } from './providers/tavily.ts';
-import type { SearchProviderContext } from './providers/shared.ts';
+import { createBraveSearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/brave';
+import { createDuckDuckGoProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/duckduckgo';
+import { createExaSearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/exa';
+import { createFirecrawlSearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/firecrawl';
+import { createPerplexitySearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/perplexity';
+import { createSearxngSearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/searxng';
+import { createTavilySearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/tavily';
+import type { SearchProviderContext } from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
 
 export class WebSearchProviderRegistry {
   private readonly providers = new Map<string, WebSearchProvider>();

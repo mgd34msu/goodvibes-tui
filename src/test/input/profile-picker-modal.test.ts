@@ -7,7 +7,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { ProfilePickerModal } from '../../input/profile-picker-modal.ts';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -20,7 +20,7 @@ function makeTmpDir(): string {
 }
 
 function createConfigManager(root: string): ConfigManager {
-  return new ConfigManager({
+  return new ConfigManager({ surfaceRoot: 'tui',
     workingDir: root,
     homeDir: root,
     configDir: join(root, '.goodvibes', 'global-tui'),

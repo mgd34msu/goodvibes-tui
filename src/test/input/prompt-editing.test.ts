@@ -281,7 +281,7 @@ describe('handlePathCompletion', () => {
     ih.filePicker.allFiles = ['src/input/handler.ts', 'src/input/file-picker.ts', 'src/runtime/events/index.ts'];
     const result = asTestAccess(ih).handlePathCompletion();
     expect(result).toBe(true);
-    // Prompt should now contain @src/input/... 
+    // Prompt should now contain @src/input/...
     expect(ih.prompt.startsWith('@src/input/')).toBe(true);
   });
 

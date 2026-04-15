@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { ChatRequest, ChatResponse, LLMProvider, ProviderRuntimeMetadata, ProviderRuntimeMetadataDeps } from './interface.ts';
-import { OpenAICompatProvider } from './openai-compat.ts';
-import { AnthropicCompatProvider } from './anthropic-compat.ts';
+import type { ChatRequest, ChatResponse, LLMProvider, ProviderRuntimeMetadata, ProviderRuntimeMetadataDeps } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import { AnthropicCompatProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-compat';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
-import { buildStandardProviderAuthRoutes } from './runtime-metadata.ts';
+import { buildStandardProviderAuthRoutes } from '@pellux/goodvibes-sdk/platform/providers/runtime-metadata';
 import { toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const COPILOT_TOKEN_URL = 'https://api.github.com/copilot_internal/v2/token';

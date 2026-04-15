@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { getCostFromPricingCatalog } from '../../providers/model-catalog.ts';
-import type { PricingCatalog } from '../../providers/model-catalog.ts';
+import { getCostFromPricingCatalog } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
+import type { PricingCatalog } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
 
 // ---------------------------------------------------------------------------
 // Fixtures

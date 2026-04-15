@@ -1,5 +1,5 @@
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import type { EmitterContext } from '../runtime/emitters/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import {
   emitAutomationJobAutoDisabled,
   emitAutomationJobCreated,
@@ -10,7 +10,7 @@ import {
   emitAutomationRunFailed,
   emitAutomationRunQueued,
   emitAutomationRunStarted,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
 

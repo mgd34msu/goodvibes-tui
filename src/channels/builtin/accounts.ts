@@ -1,12 +1,12 @@
 import type { ServiceSecretField } from '../../config/service-registry.ts';
-import type { ProviderRuntimeSurface } from '../provider-runtime.ts';
+import type { ProviderRuntimeSurface } from '@pellux/goodvibes-sdk/platform/channels/provider-runtime';
 import type {
   ChannelAccountAction,
   ChannelAccountRecord,
   ChannelSecretStatus,
   ChannelSurface,
 } from '@pellux/goodvibes-sdk/platform/channels/types';
-import type { BuiltinChannelRuntimeDeps } from './shared.ts';
+import type { BuiltinChannelRuntimeDeps } from '@pellux/goodvibes-sdk/platform/channels/builtin/shared';
 
 interface BuiltinAccountContext {
   readonly deps: BuiltinChannelRuntimeDeps;

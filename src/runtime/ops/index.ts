@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { getPlaybookRegistry, getPlaybook } from './index.ts';
+ * import { getPlaybookRegistry, getPlaybook } from '@pellux/goodvibes-sdk/platform/runtime/ops/index';
  *
  * const registry = getPlaybookRegistry();
  * const playbook = getPlaybook('stuck-turn');
@@ -41,7 +41,7 @@ export {
   exportRecoveryPlaybook,
   sessionUnrecoverablePlaybook,
   compactionFailurePlaybook,
-} from './playbooks/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/index';
 
 import type { Playbook, PlaybookRegistry, PlaybookRegistryEntry } from '@pellux/goodvibes-sdk/platform/runtime/ops/types';
 import {
@@ -52,7 +52,7 @@ import {
   exportRecoveryPlaybook,
   sessionUnrecoverablePlaybook,
   compactionFailurePlaybook,
-} from './playbooks/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/index';
 
 /** All registered playbooks in definition order. */
 const ALL_PLAYBOOKS: readonly Playbook[] = [

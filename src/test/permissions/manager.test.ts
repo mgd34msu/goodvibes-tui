@@ -1,14 +1,14 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PermissionManager } from '../../permissions/manager.ts';
-import { ConfigManager } from '../../config/manager.ts';
-import type { PermissionPromptRequest, PermissionPromptDecision } from '../../permissions/prompt.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { PermissionPromptRequest, PermissionPromptDecision } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import type { PolicyRule } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
-import { createPermissionConfigReader } from '../../permissions/manager.ts';
+import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
 // behavior.autoApprove reflects the --no-worries-just-vibes flag.
@@ -26,7 +26,7 @@ describe('PermissionManager', () => {
   let policyRuntimeState: PolicyRuntimeState;
 
   beforeEach(() => {
-    configManager = new ConfigManager({ configDir: join(tmpdir(), `gv-permissions-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(tmpdir(), `gv-permissions-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
     resetSettingsControlPlaneStore(configManager);
     policyRuntimeState = new PolicyRuntimeState();
     // Snapshot current config state

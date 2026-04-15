@@ -25,7 +25,7 @@ export { DEFAULT_BUDGETS } from '@pellux/goodvibes-sdk/platform/runtime/perf/bud
 export { PerfMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
 export type { PerfSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
 export { formatReport, exitCode } from '@pellux/goodvibes-sdk/platform/runtime/perf/reporter';
-export { SloCollector, SLO_METRICS } from './slo-collector.ts';
+export { SloCollector, SLO_METRICS } from '@pellux/goodvibes-sdk/platform/runtime/perf/slo-collector';
 export type {
   PanelResourceContract,
   PanelHealthState,

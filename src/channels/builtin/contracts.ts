@@ -19,14 +19,14 @@ import type {
   ChannelSurface,
   ChannelTargetResolveOptions,
 } from '@pellux/goodvibes-sdk/platform/channels/types';
-import type { ChannelPlugin } from '../plugin-registry.ts';
+import type { ChannelPlugin } from '@pellux/goodvibes-sdk/platform/channels/plugin-registry';
 import {
   CHANNEL_SETUP_VERSION,
   type BuiltinChannelRuntimeDeps,
   configSectionForSurface,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/shared';
 import { renderBuiltinPolicy, surfaceLabelForBuiltin } from '@pellux/goodvibes-sdk/platform/channels/builtin/presentation';
-import { getBuiltinSetupSchema } from './setup-schema.ts';
+import { getBuiltinSetupSchema } from '@pellux/goodvibes-sdk/platform/channels/builtin/setup-schema';
 
 interface BuiltinContractContext {
   readonly deps: BuiltinChannelRuntimeDeps;

@@ -1,5 +1,5 @@
 import type { ServiceRegistry } from '../../config/service-registry.ts';
-import { executeFetchInput, type FetchOutput, type FetchUrlResult } from '../../tools/fetch/index.ts';
+import { executeFetchInput, type FetchOutput, type FetchUrlResult } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
 import type { FetchAuthInput, FetchInput, FetchUrlInput } from '@pellux/goodvibes-sdk/platform/tools/fetch/schema';
 import type { WebSearchEvidence, WebSearchProviderDescriptor, WebSearchResult } from '@pellux/goodvibes-sdk/platform/web-search/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

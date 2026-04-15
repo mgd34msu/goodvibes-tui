@@ -18,11 +18,11 @@ export type {
   ToolRuntimeContext,
   RuntimeStoreAccess,
   TaskHooks,
-} from './context.ts';
-export { PhasedToolExecutor } from './phased-executor.ts';
-export * from './phases/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
+export { PhasedToolExecutor } from '@pellux/goodvibes-sdk/platform/runtime/tools/phased-executor';
+export * from '@pellux/goodvibes-sdk/platform/runtime/tools/phases/index';
 
-import { PhasedToolExecutor } from './phased-executor.ts';
+import { PhasedToolExecutor } from '@pellux/goodvibes-sdk/platform/runtime/tools/phased-executor';
 import type { ExecutorConfig } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 
 /** Default executor configuration. */

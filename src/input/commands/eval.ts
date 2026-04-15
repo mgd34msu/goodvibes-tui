@@ -10,8 +10,8 @@
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
-import { EvalRunner } from '../../runtime/eval/runner.ts';
-import { BUILTIN_SUITES } from '../../runtime/eval/suites.ts';
+import { EvalRunner } from '@pellux/goodvibes-sdk/platform/runtime/eval/runner';
+import { BUILTIN_SUITES } from '@pellux/goodvibes-sdk/platform/runtime/eval/suites';
 import { formatScorecard } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
 import { loadBaseline, captureBaseline, formatBaselineComparison, writeBaseline } from '@pellux/goodvibes-sdk/platform/runtime/eval/baseline';
 import type { EvalRegistry } from '../../panels/eval-panel.ts';

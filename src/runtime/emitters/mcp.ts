@@ -2,9 +2,9 @@
  * MCP emitters — typed emission wrappers for McpEvent domain.
  */
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { McpServerRole, McpTrustMode, QuarantineReason } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
-import type { EmitterContext } from './index.ts';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 
 /** Emit MCP_CONFIGURED when an MCP server config is parsed. */
 export function emitMcpConfigured(

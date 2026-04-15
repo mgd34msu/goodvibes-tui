@@ -1,18 +1,18 @@
 import { randomUUID } from 'node:crypto';
-import { SharedSessionBroker } from '../control-plane/index.ts';
-import type { SharedSessionRecord, SharedSessionSubmission } from '../control-plane/index.ts';
-import type { RouteBindingManager } from '../channels/index.ts';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { SharedSessionRecord, SharedSessionSubmission } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/index';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
 import type { AutomationRun, AutomationRunContinuationMode } from '@pellux/goodvibes-sdk/platform/automation/runs';
 import type { AutomationSessionTarget } from '@pellux/goodvibes-sdk/platform/automation/session-targets';
 import type { AutomationRunTrigger } from '@pellux/goodvibes-sdk/platform/automation/types';
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   buildAutomationExecutionIntent,
   buildAutomationExecutionContext,
-} from './manager-runtime-helpers.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/manager-runtime-helpers';
 
 export interface AutomationManagerExecutionContext {
   readonly configManager: ConfigManager;

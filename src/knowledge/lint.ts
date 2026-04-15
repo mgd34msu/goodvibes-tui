@@ -1,8 +1,8 @@
 import type { KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/store';
 import type { KnowledgeIssueRecord, KnowledgeSourceRecord } from '@pellux/goodvibes-sdk/platform/knowledge/types';
-import { emitKnowledgeLintCompleted } from '../runtime/emitters/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { isSourcePastRefreshWindow, LINT_NAMESPACE } from './internal.ts';
+import { emitKnowledgeLintCompleted } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { isSourcePastRefreshWindow, LINT_NAMESPACE } from '@pellux/goodvibes-sdk/platform/knowledge/internal';
 
 export interface KnowledgeLintContext {
   readonly store: KnowledgeStore;

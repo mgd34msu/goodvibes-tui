@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import { TelemetryDB } from '@pellux/goodvibes-sdk/platform/state/telemetry';
 import type { TelemetryFilter } from '@pellux/goodvibes-sdk/platform/state/telemetry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';

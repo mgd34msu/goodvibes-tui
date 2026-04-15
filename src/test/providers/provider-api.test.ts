@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/index';
-import type { ConfigManager } from '../../config/manager.ts';
-import type { ProviderRuntimeMetadata, LLMProvider, ChatResponse } from '../../providers/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ProviderRuntimeMetadata, LLMProvider, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/index';
 import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import {
   createProviderApi,
   type ProviderApiDependencies,
-} from '../../providers/index.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/index';
 import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { ModelDefinition } from '../../providers/registry.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
 
 function cloneFavorites(data: FavoritesData): FavoritesData {
   return {
@@ -370,8 +370,8 @@ describe('provider api', () => {
     const helperConfig = {
       get: () => false,
       getCategory: () => ({}),
-    } as Pick<ConfigManager, 'get' | 'getCategory'>;
-    const helper = api.createHelperModel(helperConfig);
+    };
+    const helper = (api.createHelperModel as (config: unknown) => ReturnType<typeof api.createHelperModel>)(helperConfig);
     await expect(helper.chat('tool_summarize', 'hello', { helperOnly: true })).resolves.toBe('');
   });
 });

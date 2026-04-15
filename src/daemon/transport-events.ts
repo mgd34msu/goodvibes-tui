@@ -1,14 +1,14 @@
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import {
   emitTransportConnected,
   emitTransportDisconnected,
   emitTransportInitializing,
   emitTransportTerminalFailure,
   type EmitterContext,
-} from '../runtime/emitters/index.ts';
-import type { HookDispatcher } from '../hooks/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/index';
 import type { HookCategory, HookEventPath, HookPhase } from '@pellux/goodvibes-sdk/platform/hooks/types';
-import type { ResolvedInboundTlsContext } from '../runtime/network/index.ts';
+import type { ResolvedInboundTlsContext } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 
 interface DaemonTransportEventsContext {
   readonly runtimeBus: RuntimeEventBus | null;

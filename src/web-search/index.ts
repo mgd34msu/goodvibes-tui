@@ -14,13 +14,13 @@ export type {
   WebSearchTimeRange,
   WebSearchVerbosity,
 } from '@pellux/goodvibes-sdk/platform/web-search/types';
-export { WebSearchProviderRegistry } from './provider-registry.ts';
-export { WebSearchService } from './service.ts';
-export type { WebSearchServiceStatus } from './service.ts';
-export { createBraveSearchProvider } from './providers/brave.ts';
-export { createDuckDuckGoProvider } from './providers/duckduckgo.ts';
-export { createExaSearchProvider } from './providers/exa.ts';
-export { createFirecrawlSearchProvider } from './providers/firecrawl.ts';
-export { createPerplexitySearchProvider } from './providers/perplexity.ts';
-export { createSearxngSearchProvider } from './providers/searxng.ts';
-export { createTavilySearchProvider } from './providers/tavily.ts';
+export { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search/provider-registry';
+export { WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search/service';
+export type { WebSearchServiceStatus } from '@pellux/goodvibes-sdk/platform/web-search/service';
+export { createBraveSearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/brave';
+export { createDuckDuckGoProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/duckduckgo';
+export { createExaSearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/exa';
+export { createFirecrawlSearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/firecrawl';
+export { createPerplexitySearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/perplexity';
+export { createSearxngSearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/searxng';
+export { createTavilySearchProvider } from '@pellux/goodvibes-sdk/platform/web-search/providers/tavily';

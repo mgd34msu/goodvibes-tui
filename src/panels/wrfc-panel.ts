@@ -1,9 +1,9 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { WrfcChain, WrfcState, QualityGateResult } from '../agents/wrfc-types.ts';
-import type { WrfcController } from '../agents/wrfc-controller.ts';
+import type { WrfcChain, WrfcState, QualityGateResult } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
+import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
 import { BasePanel } from './base-panel.ts';
-import type { WorkflowEvent } from '../runtime/events/index.ts';
-import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import {
   buildPanelLine,
   buildPanelWorkspace,

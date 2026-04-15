@@ -3,12 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
-import { DaemonServer } from '../../daemon/server.ts';
-import { RuntimeEventBus, createEventEnvelope, type AgentEvent } from '../../runtime/events/index.ts';
-import { createDirectTransport } from '../../runtime/transports/direct.ts';
-import { createHttpTransport } from '../../runtime/transports/http.ts';
-import { createRealtimeTransport } from '../../runtime/transports/realtime.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
+import { RuntimeEventBus, createEventEnvelope, type AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createDirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
+import { createHttpTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http';
+import { createRealtimeTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/realtime';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
@@ -81,7 +81,7 @@ function createRuntimeFixture(prefix: string) {
   mkdirSync(workingDir, { recursive: true });
   mkdirSync(homeDir, { recursive: true });
   const runtimeBus = new RuntimeEventBus();
-  const configManager = new ConfigManager({
+  const configManager = new ConfigManager({ surfaceRoot: 'tui',
     configDir: join(homeDir, '.goodvibes', 'tui'),
     workingDir,
     homeDir,

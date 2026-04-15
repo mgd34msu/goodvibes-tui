@@ -6,7 +6,7 @@ import {
   resultFromRecord,
   withInlineApiKey,
   type SearchProviderContext,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
 
 const BRAVE_DEFAULT_BASE_URL = 'https://api.search.brave.com';
 const BRAVE_ENV_KEYS = ['BRAVE_SEARCH_API_KEY', 'BRAVE_API_KEY'] as const;

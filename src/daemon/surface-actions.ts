@@ -1,12 +1,12 @@
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { ServiceRegistry } from '../config/service-registry.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
-import type { AgentManager } from '../tools/agent/index.ts';
-import type { SharedSessionBroker } from '../control-plane/index.ts';
-import type { RouteBindingManager, ChannelPolicyManager } from '../channels/index.ts';
-import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '../adapters/index.ts';
-import type { AutomationManager } from '../automation/index.ts';
-import type { ChannelPolicyDecision, ChannelIngressPolicyInput } from '../channels/index.ts';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { RouteBindingManager, ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels/index';
+import type { GenericWebhookAdapterContext, SurfaceAdapterContext } from '@pellux/goodvibes-sdk/platform/adapters/index';
+import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/index';
+import type { ChannelPolicyDecision, ChannelIngressPolicyInput } from '@pellux/goodvibes-sdk/platform/channels/index';
 
 interface DaemonSurfaceActionContext {
   readonly serviceRegistry: ServiceRegistry;

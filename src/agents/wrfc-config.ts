@@ -1,5 +1,5 @@
-import type { ConfigManager } from '../config/manager.ts';
-import type { AgentManager } from '../tools/agent/index.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 export type AgentManagerLike = Pick<AgentManager, 'spawn' | 'getStatus' | 'list' | 'cancel' | 'listByCohort' | 'clear'>;
 export type WrfcConfigLike = {

@@ -1,7 +1,7 @@
 import { dirname } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { CommandContext } from '../command-registry.ts';
-import type { MemoryBundle, MemorySearchFilter } from '../../state/memory-store.ts';
+import type { MemoryBundle, MemorySearchFilter } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope, resolveBundlePath } from './recall-shared.ts';
 import { requireShellPaths } from './runtime-services.ts';
 import { getMemoryApi } from './recall-query.ts';

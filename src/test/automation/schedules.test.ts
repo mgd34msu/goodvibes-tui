@@ -8,7 +8,7 @@ import {
   normalizeEverySchedule,
   parseEveryInterval,
   resolveStableAutomationCronOffsetMs,
-} from '../../automation/index.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/index';
 
 describe('automation schedules', () => {
   test('parses and formats every intervals', () => {

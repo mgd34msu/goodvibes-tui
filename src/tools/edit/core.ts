@@ -5,11 +5,11 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions/change-tracker';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
 import { FileStateCache, unifiedDiff } from '@pellux/goodvibes-sdk/platform/state/file-cache';
-import type { ConfigManager } from '../../config/manager.ts';
-import type { ToolLLM } from '../../config/tool-llm.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
 import { editSchema } from '@pellux/goodvibes-sdk/platform/tools/edit/schema';
-import { AutoHealer } from '../shared/auto-heal.ts';
+import { AutoHealer } from '@pellux/goodvibes-sdk/platform/tools/shared/auto-heal';
 import { ImportGraph } from '@pellux/goodvibes-sdk/platform/intelligence/index';
 import {
   buildFailedEditResult,

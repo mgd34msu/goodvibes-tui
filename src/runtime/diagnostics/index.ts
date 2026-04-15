@@ -54,7 +54,7 @@ export type {
   RetryTaskPayload,
   CancelTaskPayload,
   CancelAgentPayload,
-} from './actions.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/actions';
 export {
   DiagnosticActionDispatcher,
   buildLoadReplayAction,
@@ -69,7 +69,7 @@ export {
   diagnosticFromAgentFailure,
   diagnosticFromToolContractViolation,
   diagnosticFromForensicsRun,
-} from './actions.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/actions';
 
 // ── Panel data providers ─────────────────────────────────────────────────────
 export { ToolCallsPanel } from './panels/tool-calls.ts';
@@ -81,11 +81,11 @@ export type { InspectableDomain } from '@pellux/goodvibes-sdk/platform/runtime/d
 export { HealthPanel } from './panels/health.ts';
 
 // ── Provider ─────────────────────────────────────────────────────────────────
-export { DiagnosticsProvider } from './provider.ts';
-export type { DiagnosticsProviderConfig, DiagnosticPanelName } from './provider.ts';
+export { DiagnosticsProvider } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/provider';
+export type { DiagnosticsProviderConfig, DiagnosticPanelName } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/provider';
 
 // ── Factory ───────────────────────────────────────────────────────────────────
-import { DiagnosticsProvider, type DiagnosticsProviderConfig } from './provider.ts';
+import { DiagnosticsProvider, type DiagnosticsProviderConfig } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/provider';
 
 /**
  * Factory function that creates a fully wired DiagnosticsProvider.

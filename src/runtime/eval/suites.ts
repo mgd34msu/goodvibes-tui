@@ -9,7 +9,7 @@
  */
 
 import type { EvalScenario, EvalRawResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
-import { createPerfMonitor } from '../perf/index.ts';
+import { createPerfMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/index';
 import { createInitialSurfacePerfState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surface-perf';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

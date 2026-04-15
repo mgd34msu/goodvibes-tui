@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ConversationManager } from '../../core/conversation.ts';
+import { ConversationManager } from '../../core/conversation';
 
 describe('transcript event index', () => {
   test('classifies tool runs and system notices into grouped transcript events', () => {

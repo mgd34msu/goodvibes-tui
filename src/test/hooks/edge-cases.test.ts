@@ -3,8 +3,8 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
-import { ChainEngine } from '../../hooks/chain-engine.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
+import { ChainEngine } from '@pellux/goodvibes-sdk/platform/hooks/chain-engine';
 import type { HookChain, HookEvent, HookDefinition, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
 
 // ---------------------------------------------------------------------------

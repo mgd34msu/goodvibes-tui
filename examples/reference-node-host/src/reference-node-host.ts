@@ -9,7 +9,7 @@ import {
   type DistributedPeerTokenRecord,
   type DistributedPendingWork,
   type DistributedRuntimePairRequest,
-} from '../../../src/runtime/remote/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
 
 export interface ReferenceNodeHostConfig {
   readonly baseUrl: string;

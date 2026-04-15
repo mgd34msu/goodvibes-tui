@@ -1,6 +1,6 @@
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { ConversationManager } from '../core/conversation.ts';
+import type { ConversationManager } from '../core/conversation';
 
 export interface ConversationViewportRequest {
   readonly conversation: ConversationManager;

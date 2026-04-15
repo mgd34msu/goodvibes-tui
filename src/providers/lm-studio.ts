@@ -1,4 +1,4 @@
-import type { ProviderCapability } from './capabilities.ts';
+import type { ProviderCapability } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import type {
   ChatRequest,
   ChatResponse,
@@ -9,9 +9,9 @@ import type {
   ProviderMessage,
   ProviderRuntimeMetadata,
   ProviderRuntimeMetadataDeps,
-} from './interface.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { ToolCall, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
-import { OpenAICompatProvider, type OpenAICompatOptions } from './openai-compat.ts';
+import { OpenAICompatProvider, type OpenAICompatOptions } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { withRetry } from '@pellux/goodvibes-sdk/platform/utils/retry';
 import {
@@ -37,7 +37,7 @@ import {
   shouldFallbackFromResponses,
   toNativeChatInput,
   toRecord,
-} from './lm-studio-helpers.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/lm-studio-helpers';
 
 export interface LMStudioProviderOptions extends OpenAICompatOptions {
   nativeFetch?: NativeFetch;

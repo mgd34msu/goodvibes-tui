@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { AgentManager } from '../../tools/agent/index.ts';
-import { AgentMessageBus } from '../../agents/message-bus.ts';
-import type { AgentRecord } from '../../tools/agent/index.ts';
-import type { StreamDelta } from '../../providers/interface.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { StreamDelta } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 beforeEach(() => {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
-import { ConfigManager } from '../config/manager.ts';
-import { AutomationManager } from './manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/manager';
 import { migrateLegacySchedules, type LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';

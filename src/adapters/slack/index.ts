@@ -1,6 +1,6 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { SlackIntegration } from '../../integrations/index.ts';
-import type { SurfaceAdapterContext } from '../types.ts';
+import { SlackIntegration } from '@pellux/goodvibes-sdk/platform/integrations/index';
+import type { SurfaceAdapterContext } from '@pellux/goodvibes-sdk/platform/adapters/types';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export async function handleSlackSurfaceWebhook(req: Request, context: SurfaceAdapterContext): Promise<Response> {

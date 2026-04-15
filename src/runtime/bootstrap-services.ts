@@ -1,8 +1,8 @@
-import type { HookDispatcher } from '../hooks/dispatcher.ts';
-import type { RuntimeEventBus } from './events/index.ts';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RuntimeServices } from './services.ts';
-import { DaemonServer } from '../daemon/server.ts';
-import { HttpListener } from '../daemon/http-listener.ts';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
+import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import net from 'node:net';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

@@ -1,13 +1,13 @@
-import { AgentManager } from '../tools/agent/index.ts';
-import { ConfigManager } from '../config/manager.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import {
   AutomationDeliveryManager,
   AutomationManager,
-} from '../automation/index.ts';
-import { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '../control-plane/index.ts';
-import { GatewayMethodCatalog } from '../control-plane/index.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/index';
+import { ApprovalBroker, ControlPlaneGateway, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import {
   BuiltinChannelRuntime,
   ChannelReplyPipeline,
@@ -16,22 +16,22 @@ import {
   ChannelPolicyManager,
   RouteBindingManager,
   SurfaceRegistry,
-} from '../channels/index.ts';
-import { RuntimeEventBus } from '../runtime/events/index.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/index';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore } from '../runtime/store/index.ts';
-import { PlatformServiceManager } from './service-manager.ts';
-import { WatcherRegistry } from '../watchers/index.ts';
-import { type DistributedPeerAuth } from '../runtime/remote/index.ts';
-import { KnowledgeGraphqlService, KnowledgeService } from '../knowledge/index.ts';
-import type { IntegrationHelperService } from '../runtime/integration/helpers.ts';
-import { DaemonControlPlaneHelper } from './control-plane.ts';
+import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon/service-manager';
+import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers/index';
+import { type DistributedPeerAuth } from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
+import { KnowledgeGraphqlService, KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
+import { DaemonControlPlaneHelper } from '@pellux/goodvibes-sdk/platform/daemon/control-plane';
 import { DaemonSurfaceDeliveryHelper } from './surface-delivery.ts';
 import { DaemonSurfaceActionHelper } from './surface-actions.ts';
-import { DaemonTransportEventsHelper } from './transport-events.ts';
+import { DaemonTransportEventsHelper } from '@pellux/goodvibes-sdk/platform/daemon/transport-events';
 import { DaemonHttpRouter } from './http/router.ts';
 import { createRuntimeServices, type RuntimeServices } from '../runtime/services.ts';
 import type { DaemonConfig, PendingSurfaceReply } from './types.ts';
-import type { ResolvedInboundTlsContext } from '../runtime/network/index.ts';
+import type { ResolvedInboundTlsContext } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 
 type JsonBody = Record<string, unknown>;
 
@@ -154,6 +154,7 @@ export function resolveDaemonFacadeRuntime(
     platformServiceManager: new PlatformServiceManager(resolvedConfigManager, {
       workingDirectory: runtimeServices.workingDirectory,
       homeDirectory: runtimeServices.homeDirectory,
+      surfaceRoot: 'tui',
     }),
     distributedRuntime: runtimeServices.distributedRuntime,
     voiceService: runtimeServices.voiceService,

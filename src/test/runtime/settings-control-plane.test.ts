@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import {
   applyStagedManagedBundle,
   applySettingsSyncBundle,
@@ -12,7 +12,7 @@ import {
   resolveSettingsSyncConflict,
   rollbackManagedApply,
   stageManagedSettingsBundle,
-} from '../../runtime/settings/control-plane.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
 import type { ManagedSettingsBundle } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
@@ -23,16 +23,16 @@ describe('runtime/settings/control-plane', () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'gv-settings-plane-'));
     configDir = join(root, '.goodvibes', 'tui');
-    resetSettingsControlPlaneStore(new ConfigManager({ configDir }));
+    resetSettingsControlPlaneStore(new ConfigManager({ surfaceRoot: 'tui',  configDir }));
   });
 
   afterEach(() => {
-    resetSettingsControlPlaneStore(new ConfigManager({ configDir }));
+    resetSettingsControlPlaneStore(new ConfigManager({ surfaceRoot: 'tui',  configDir }));
     configDir = '';
   });
 
   test('formats resolved setting review with layer provenance', () => {
-    const config = new ConfigManager({ configDir });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir });
     const managed: ManagedSettingsBundle = {
       version: 1,
       exportedAt: Date.now(),
@@ -55,7 +55,7 @@ describe('runtime/settings/control-plane', () => {
   });
 
   test('formats staged managed bundle review with change details', () => {
-    const config = new ConfigManager({ configDir });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir });
     const managed: ManagedSettingsBundle = {
       version: 1,
       exportedAt: Date.now(),
@@ -75,7 +75,7 @@ describe('runtime/settings/control-plane', () => {
   });
 
   test('partial staged apply leaves unmatched keys staged and rollback restores previous values', () => {
-    const config = new ConfigManager({ configDir });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir });
     config.setDynamic('provider.model', 'gpt-5');
     config.setDynamic('provider.provider', 'openrouter');
 
@@ -107,7 +107,7 @@ describe('runtime/settings/control-plane', () => {
   });
 
   test('synced conflicts can be resolved back to local or kept as synced', () => {
-    const config = new ConfigManager({ configDir });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir });
     config.setDynamic('provider.model', 'local-model');
 
     const bundle = {

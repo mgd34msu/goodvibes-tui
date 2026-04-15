@@ -1,4 +1,4 @@
-import { DEFAULT_MEMORY_EMBEDDING_DIMS } from './memory-embeddings.ts';
+import { DEFAULT_MEMORY_EMBEDDING_DIMS } from '@pellux/goodvibes-sdk/platform/state/memory-embeddings';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import type {
   MemoryEmbeddingProvider,
@@ -6,7 +6,7 @@ import type {
   MemoryEmbeddingProviderStatus,
   MemoryEmbeddingRequest,
   MemoryEmbeddingResult,
-} from './memory-embeddings.ts';
+} from '@pellux/goodvibes-sdk/platform/state/memory-embeddings';
 
 type EnvMap = Record<string, string | undefined>;
 

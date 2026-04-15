@@ -12,7 +12,7 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getSettingsControlPlaneSnapshot } from '../runtime/settings/control-plane.ts';
+import { getSettingsControlPlaneSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
 import type { ConfigManager } from '../config/index.ts';
 
 const C = {

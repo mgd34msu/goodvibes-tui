@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { GatewayMethodCatalog } from '../../control-plane/index.ts';
-import { buildOperatorContract } from '../../control-plane/operator-contract.ts';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
 
 function schemaProperty(schema: unknown, ...path: string[]): unknown {
   let current: unknown = schema;

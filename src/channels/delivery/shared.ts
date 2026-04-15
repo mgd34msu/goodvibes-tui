@@ -1,12 +1,12 @@
 import { ArtifactStore, type ArtifactAttachment, type ArtifactReference } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import type {
   ChannelDeliveryRequest,
   ChannelDeliveryResult,
   ChannelDeliverySurfaceKind,
   ChannelDeliveryTarget,
-} from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery/types';
 
 export function resolveChannelDeliverySurfaceKind(
   target: ChannelDeliveryTarget,

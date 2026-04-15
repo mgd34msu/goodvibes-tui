@@ -5,8 +5,8 @@ import {
   normalizeAtSchedule,
   normalizeCronSchedule,
   normalizeEverySchedule,
-} from '../../automation/index.ts';
-import type { AutomationManager } from '../../automation/index.ts';
+} from '@pellux/goodvibes-sdk/platform/automation/index';
+import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/index';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation/schedules';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';

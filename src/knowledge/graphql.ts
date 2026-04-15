@@ -1,5 +1,5 @@
 import { GraphQLError, buildSchema, graphql, parse, printSchema } from 'graphql';
-import type { KnowledgeService } from './service.ts';
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/service';
 import {
   KNOWLEDGE_GRAPHQL_SDL,
   clampInt,

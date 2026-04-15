@@ -1,6 +1,6 @@
-import type { ProviderRuntimeSurface } from '../provider-runtime.ts';
+import type { ProviderRuntimeSurface } from '@pellux/goodvibes-sdk/platform/channels/provider-runtime';
 import type { ChannelSurface } from '@pellux/goodvibes-sdk/platform/channels/types';
-import type { BuiltinChannelRuntimeDeps, ManagedSurface } from './shared.ts';
+import type { BuiltinChannelRuntimeDeps, ManagedSurface } from '@pellux/goodvibes-sdk/platform/channels/builtin/shared';
 
 export function asProviderRuntimeSurface(surface: ChannelSurface): ProviderRuntimeSurface | null {
   return surface === 'slack' || surface === 'discord' || surface === 'ntfy' ? surface : null;

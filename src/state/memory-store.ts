@@ -14,12 +14,12 @@ import {
   SqliteVecMemoryIndex,
   type MemoryVectorStats,
   resolveMemoryVectorDbPath,
-} from './memory-vector-store.ts';
+} from '@pellux/goodvibes-sdk/platform/state/memory-vector-store';
 import {
   HASHED_MEMORY_EMBEDDING_PROVIDER,
   MemoryEmbeddingProviderRegistry,
   type MemoryEmbeddingDoctorReport,
-} from './memory-embeddings.ts';
+} from '@pellux/goodvibes-sdk/platform/state/memory-embeddings';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
@@ -34,7 +34,7 @@ import {
   rowToRecord,
   safeParseJson,
   scoreRecord,
-} from './memory-store-helpers.ts';
+} from '@pellux/goodvibes-sdk/platform/state/memory-store-helpers';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -184,7 +184,7 @@ export interface MemoryDoctorReport {
   readonly checkedAt: number;
 }
 
-export { MemoryRegistry } from './memory-registry.ts';
+export { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-registry';
 
 // ── MemoryStore ───────────────────────────────────────────────────────────────
 

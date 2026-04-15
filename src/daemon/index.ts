@@ -1,3 +1,1 @@
-export { DaemonServer } from './server.ts';
-export { HttpListener } from './http-listener.ts';
-export { PlatformServiceManager } from './service-manager.ts';
+export * from '@pellux/goodvibes-sdk/platform/daemon/index';

@@ -1,4 +1,4 @@
-import type { PermissionAuditEntry } from './policy-runtime.ts';
+import type { PermissionAuditEntry } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 
 export interface PermissionRuleSuggestion {
   readonly id: string;

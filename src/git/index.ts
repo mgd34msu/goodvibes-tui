@@ -1,1 +1,1 @@
-export { GitService } from './service.ts';
+export * from '@pellux/goodvibes-sdk/platform/git/index';

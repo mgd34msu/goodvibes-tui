@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { evaluateOrchestrationSpawn } from '../../../runtime/orchestration/spawn-policy.ts';
+import { evaluateOrchestrationSpawn } from '@pellux/goodvibes-sdk/platform/runtime/orchestration/spawn-policy';
 import { createTestConfigManager } from '../../helpers/test-managers.ts';
 
 const configManager = createTestConfigManager();

@@ -12,7 +12,7 @@
 
 import type { EvalScenario, EvalRawResult, EvalResult, EvalSuiteResult, EvalGateResult, EvalBaseline, RegressionEntry } from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
 import { scoreScenario } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
-import { createPerfMonitor } from '../perf/index.ts';
+import { createPerfMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ── EvalRunner ────────────────────────────────────────────────────────────────

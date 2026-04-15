@@ -2,16 +2,16 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { PermissionManager, createPermissionConfigReader } from '../../permissions/manager.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import {
   DEFAULT_CONFIG,
   type ConfigKey,
   type PermissionAction,
   type PermissionMode,
 } from '@pellux/goodvibes-sdk/platform/config/schema';
-import type { PermissionPromptRequest, PermissionPromptDecision } from '../../permissions/prompt.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import type { PermissionPromptRequest, PermissionPromptDecision } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 
 const setPermissionMode = (cm: ConfigManager, mode: PermissionMode): void => {
   cm.set('permissions.mode', mode);
@@ -33,7 +33,7 @@ describe('PermissionManager — config-driven modes', () => {
   let decisions: PermissionPromptDecision[];
   let policyRuntimeState: PolicyRuntimeState;
 
-  const createIsolatedConfigManager = () => new ConfigManager({ configDir: tempDir, workingDir: tempDir });
+  const createIsolatedConfigManager = () => new ConfigManager({ surfaceRoot: 'tui',  configDir: tempDir, workingDir: tempDir });
 
   beforeEach(() => {
     tempDir = join(tmpdir(), `gv-permissions-config-${Date.now()}-${Math.random().toString(36).slice(2)}`);

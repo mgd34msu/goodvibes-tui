@@ -12,7 +12,7 @@
  *   - Manager from manager.ts
  */
 
-export { McpLifecycleManager, type McpEventHandler, type McpLifecycleManagerOptions } from './manager.ts';
+export { McpLifecycleManager, type McpEventHandler, type McpLifecycleManagerOptions } from '@pellux/goodvibes-sdk/platform/runtime/mcp/manager';
 export { McpPermissionManager, buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/permissions';
 export { McpSchemaFreshnessTracker } from '@pellux/goodvibes-sdk/platform/runtime/mcp/schema-freshness';
 export {
@@ -50,8 +50,8 @@ export type {
 } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 export { DEFAULT_RECONNECT_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
 
-import { McpLifecycleManager } from './manager.ts';
-import type { McpLifecycleManagerOptions } from './manager.ts';
+import { McpLifecycleManager } from '@pellux/goodvibes-sdk/platform/runtime/mcp/manager';
+import type { McpLifecycleManagerOptions } from '@pellux/goodvibes-sdk/platform/runtime/mcp/manager';
 
 /**
  * Factory function for creating a `McpLifecycleManager`.

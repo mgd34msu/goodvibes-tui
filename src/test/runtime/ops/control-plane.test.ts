@@ -11,10 +11,10 @@
  */
 
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import { OpsControlPlane, OpsIllegalActionError, OpsTargetNotFoundError } from '../../../runtime/ops/control-plane.ts';
+import { OpsControlPlane, OpsIllegalActionError, OpsTargetNotFoundError } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
-import { createTaskManager } from '../../../runtime/tasks/index.ts';
-import { RuntimeEventBus } from '../../../runtime/events/index.ts';
+import { createTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/index';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 
 // ---------------------------------------------------------------------------
 // Helpers

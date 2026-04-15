@@ -20,7 +20,7 @@
  * const unsubscribe = provider.subscribe('tool-calls', () => render());
  * ```
  */
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
 import type {
   ToolCallEntry,

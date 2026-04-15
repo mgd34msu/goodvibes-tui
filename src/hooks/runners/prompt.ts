@@ -1,6 +1,6 @@
 import type { HookDefinition, HookResult, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { ToolLLM } from '../../config/tool-llm.ts';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 /**

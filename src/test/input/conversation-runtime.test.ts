@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
-import { ConversationManager } from '../../core/conversation.ts';
+import { ConversationManager } from '../../core/conversation';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 

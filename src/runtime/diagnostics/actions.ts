@@ -16,7 +16,7 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core/deterministic-replay';
 import type { PermissionSimulator } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation';
-import type { OpsControlPlane } from '../ops/control-plane.ts';
+import type { OpsControlPlane } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ── Action type union ─────────────────────────────────────────────────────────

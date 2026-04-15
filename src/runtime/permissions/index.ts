@@ -13,8 +13,8 @@ export { runSafetyChecks } from '@pellux/goodvibes-sdk/platform/runtime/permissi
 export { PermissionSimulator, SimulationEnforcementError } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation';
 export { buildDefaultPolicySimulationScenarios, runPolicySimulationScenarios } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation-scenarios';
 export { lintPolicyConfig } from '@pellux/goodvibes-sdk/platform/runtime/permissions/lint';
-export { buildPolicyPreflightReview } from './preflight.ts';
-export { buildPermissionRuleSuggestions } from './rule-suggestions.ts';
+export { buildPolicyPreflightReview } from '@pellux/goodvibes-sdk/platform/runtime/permissions/preflight';
+export { buildPermissionRuleSuggestions } from '@pellux/goodvibes-sdk/platform/runtime/permissions/rule-suggestions';
 // Policy signing
 export { signBundle, verifyBundle, canonicalise } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-signer';
 export { loadPolicyBundle, createUnsignedBundle, PolicySignatureError } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
@@ -46,13 +46,13 @@ export type {
 export type { DecisionLogEntry, DecisionLogQuery } from '@pellux/goodvibes-sdk/platform/runtime/permissions/decision-log';
 export type { SafetyCheckResult } from '@pellux/goodvibes-sdk/platform/runtime/permissions/safety-checks';
 export type { PolicyLintFinding, PolicyLintSeverity } from '@pellux/goodvibes-sdk/platform/runtime/permissions/lint';
-export type { PermissionRuleSuggestion } from './rule-suggestions.ts';
+export type { PermissionRuleSuggestion } from '@pellux/goodvibes-sdk/platform/runtime/permissions/rule-suggestions';
 export type {
   PolicyPreflightStatus,
   PolicyPreflightServer,
   PolicyPreflightIssue,
   PolicyPreflightReview,
-} from './preflight.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/permissions/preflight';
 export type {
   PolicySimulationScenario,
   PolicySimulationScenarioResult,
@@ -98,7 +98,7 @@ export type {
 export { PolicyRegistry } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-registry';
 export {
   PolicyRuntimeState,
-} from './policy-runtime.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 export type {
   BundleLifecycleState,
   PolicyBundleVersion,

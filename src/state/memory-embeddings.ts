@@ -1,6 +1,6 @@
 import { ConfigManager, getConfiguredEmbeddingProviderId } from '../config/index.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { createBuiltinMemoryEmbeddingProviders } from './memory-embedding-http.ts';
+import { createBuiltinMemoryEmbeddingProviders } from '@pellux/goodvibes-sdk/platform/state/memory-embedding-http';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export const DEFAULT_MEMORY_EMBEDDING_DIMS = 384;

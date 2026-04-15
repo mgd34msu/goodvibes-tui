@@ -3,11 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../config/manager.ts';
-import { DaemonServer } from '../../daemon/server.ts';
-import type { AgentEvent } from '../../runtime/events/index.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { createHttpTransport } from '../../runtime/transports/http.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
+import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createHttpTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
@@ -70,7 +70,7 @@ describe('HttpTransport', () => {
     const runtimeServices = createRuntimeServices({
       runtimeStore: createRuntimeStore(),
       runtimeBus: new RuntimeEventBus(),
-      configManager: new ConfigManager({
+      configManager: new ConfigManager({ surfaceRoot: 'tui',
         configDir: join(homeDir, '.goodvibes', 'tui'),
         workingDir,
         homeDir,

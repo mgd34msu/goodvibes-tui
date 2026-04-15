@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import {
   registeredEventTypes,
   validateEvent,
@@ -13,7 +13,7 @@ import {
   emitSurfaceEnabled,
   emitUiRenderRequest,
   emitWatcherStarted,
-} from '../../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import {
   CONTROL_PLANE_CLIENT_KINDS,
   CONTROL_PLANE_TRANSPORT_KINDS,
@@ -21,7 +21,7 @@ import {
   ROUTE_SURFACE_KINDS,
   SURFACE_KINDS,
   isRuntimeEventDomain,
-} from '../../runtime/events/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 
 describe('new runtime event domains', () => {
   test('exports the canonical runtime domain vocabulary', () => {

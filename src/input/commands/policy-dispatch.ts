@@ -4,9 +4,9 @@ import {
   createPermissionSimulator,
   lintPolicyConfig,
   runPolicySimulationScenarios,
-} from '../../runtime/permissions/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/permissions/index';
 import { DivergenceDashboard } from '@pellux/goodvibes-sdk/platform/runtime/permissions/divergence-dashboard';
-import type { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import type { PolicyRule, PermissionsConfig, DivergenceStats } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';

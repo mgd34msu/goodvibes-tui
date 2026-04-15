@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { extractForwardedClientIp } from '../../../runtime/network/index.ts';
+import { extractForwardedClientIp } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 
 describe('runtime/network shared helpers', () => {
   test('extractForwardedClientIp only trusts forwarded headers when enabled', () => {

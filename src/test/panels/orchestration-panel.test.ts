@@ -4,13 +4,13 @@ import { createInitialOrchestrationState } from '@pellux/goodvibes-sdk/platform/
 import { OrchestrationPanel } from '../../panels/orchestration-panel.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -118,7 +118,7 @@ describe('OrchestrationPanel', () => {
     const manager = new PanelManager();
     const root = process.cwd();
     const services = createRuntimeServices({
-      configManager: new ConfigManager({
+      configManager: new ConfigManager({ surfaceRoot: 'tui',
         workingDir: root,
         homeDir: root,
         configDir: `${root}/.goodvibes/test-orchestration-panel`,

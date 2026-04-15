@@ -1,17 +1,17 @@
-import type { ConversationManager } from '../core/conversation.ts';
-import type { HookDispatcher } from '../hooks/index.ts';
+import type { ConversationManager } from '../core/conversation';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/index';
 import type { HookCategory, HookEventPath, HookPhase } from '@pellux/goodvibes-sdk/platform/hooks/types';
 import type { MutableRuntimeState } from './context.ts';
-import type { AgentEvent, OpsEvent, RuntimeEventBus, WorkflowEvent } from './events/index.ts';
+import type { AgentEvent, OpsEvent, RuntimeEventBus, WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { emitSessionResumed } from './emitters/index.ts';
-import { HelperModel } from '../config/helper-model.ts';
-import type { ConfigManager } from '../config/manager.ts';
-import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from './session-return-context.ts';
-import type { SharedSessionBroker } from '../control-plane/index.ts';
+import { emitSessionResumed } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
+import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import type { SessionManager } from '../sessions/manager.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 interface FireHookOptions {

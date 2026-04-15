@@ -14,7 +14,7 @@ import {
   persistConversation,
   readLastSessionPointer,
   writeRecoveryFile,
-} from '../../runtime/session-persistence.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 
 function makeTmpDir(prefix: string): string {
   const dir = join(tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`);

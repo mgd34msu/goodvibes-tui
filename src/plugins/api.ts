@@ -1,19 +1,19 @@
 import type { CommandRegistry, SlashCommand } from '../input/command-registry.ts';
-import type { ModelDefinition, ProviderRegistry, RuntimeProviderRegistration, TokenLimits, ModelTier } from '../providers/registry.ts';
-import type { LLMProvider } from '../providers/interface.ts';
+import type { ModelDefinition, ProviderRegistry, RuntimeProviderRegistration, TokenLimits, ModelTier } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { RuntimeEventBus, AnyRuntimeEvent, RuntimeEventPayload } from '../runtime/events/index.ts';
-import type { GatewayMethodCatalog, GatewayMethodDescriptor, GatewayMethodHandler } from '../control-plane/index.ts';
+import type { RuntimeEventBus, AnyRuntimeEvent, RuntimeEventPayload } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { GatewayMethodCatalog, GatewayMethodDescriptor, GatewayMethodHandler } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import {
   type ChannelDeliveryStrategy,
   type ChannelPlugin,
-} from '../channels/index.ts';
-import type { ChannelDeliveryRouter, ChannelPluginRegistry } from '../channels/index.ts';
-import type { MemoryEmbeddingProvider, MemoryEmbeddingProviderRegistry } from '../state/index.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/index';
+import type { ChannelDeliveryRouter, ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
+import type { MemoryEmbeddingProvider, MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
 import type { VoiceProvider, VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/index';
-import type { MediaProvider, MediaProviderRegistry } from '../media/index.ts';
-import type { WebSearchProvider, WebSearchProviderRegistry } from '../web-search/index.ts';
+import type { MediaProvider, MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/index';
+import type { WebSearchProvider, WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search/index';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

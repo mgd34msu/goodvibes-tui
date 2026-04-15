@@ -1,5 +1,5 @@
 import type { ArtifactDescriptor } from '@pellux/goodvibes-sdk/platform/artifacts/types';
-import type { MemoryReviewState, ProvenanceLink } from '../state/memory-store.ts';
+import type { MemoryReviewState, ProvenanceLink } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import type { KnowledgePacket, KnowledgePacketDetail, KnowledgePacketItem } from '@pellux/goodvibes-sdk/platform/knowledge/types';
 import type { KnowledgeSourceType } from '@pellux/goodvibes-sdk/platform/knowledge/types';
 

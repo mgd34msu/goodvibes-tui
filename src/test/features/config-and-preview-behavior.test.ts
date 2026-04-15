@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { UIFactory } from '../../renderer/ui-factory.ts';
 import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
 
@@ -22,7 +22,7 @@ describe('config diff logic', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir();
-    cm = new ConfigManager({ workingDir: tmpDir, configDir: join(tmpDir, '.config-override') });
+    cm = new ConfigManager({ surfaceRoot: 'tui',  workingDir: tmpDir, configDir: join(tmpDir, '.config-override') });
   });
 
   afterEach(() => {

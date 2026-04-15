@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { DEFAULT_CONFIG } from '../../config/index.ts';
-import { ConversationManager } from '../../core/conversation.ts';
+import { ConversationManager } from '../../core/conversation';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { GLYPHS } from '../../renderer/ui-primitives.ts';
 import { getOverlayWidthClass } from '../../renderer/overlay-viewport.ts';

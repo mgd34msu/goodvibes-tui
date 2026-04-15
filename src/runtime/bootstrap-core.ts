@@ -1,24 +1,24 @@
-import { ConversationManager } from '../core/conversation.ts';
+import { ConversationManager } from '../core/conversation';
 import { SelectionManager } from '../input/selection.ts';
 import { ConfigManager, getConfiguredSystemPrompt } from '../config/index.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { registerAllTools } from '../tools/index.ts';
-import { PermissionManager, createPermissionConfigReader } from '../permissions/manager.ts';
-import { Notifier } from '../integrations/notifier.ts';
-import { WebhookNotifier } from '../integrations/webhooks.ts';
+import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
+import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations/notifier';
+import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations/webhooks';
 import { Compositor } from '../renderer/compositor.ts';
-import type { PermissionRequestHandler } from '../permissions/prompt.ts';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
-import type { ControlPlaneRecentEvent } from '../control-plane/gateway.ts';
+import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
 import type { BootstrapOptions, MutableRuntimeState } from './context.ts';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import { RuntimeEventBus } from './events/index.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './store/index.ts';
-import { ForensicsCollector, ForensicsRegistry } from './forensics/index.ts';
+import { ForensicsCollector, ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
 import {
   generateUserSessionId,
-} from './session-persistence.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import { loadBootstrapSystemPrompt, syncConfiguredServices } from './bootstrap-helpers.ts';
 import { registerBootstrapHookBridge } from './bootstrap-hook-bridge.ts';
 import { registerBootstrapRuntimeEvents } from './bootstrap-runtime-events.ts';
@@ -166,6 +166,7 @@ export async function initializeBootstrapCore(
 
   const toolRegistry = new ToolRegistry();
   const { fileCache, projectIndex } = registerAllTools(toolRegistry, {
+    surfaceRoot: 'tui',
     fileUndoManager: services.fileUndoManager,
     modeManager: services.modeManager,
     processManager: services.processManager,
@@ -190,6 +191,7 @@ export async function initializeBootstrapCore(
     changeTracker: services.sessionChangeTracker,
   });
   services.agentOrchestrator.setDependencies({
+    surfaceRoot: 'tui',
     fileCache,
     projectIndex,
     workingDirectory: services.workingDirectory,

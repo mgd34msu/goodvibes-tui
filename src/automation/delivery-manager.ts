@@ -1,17 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import type { ArtifactReference, ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ChannelDeliveryRouter, RouteBindingManager } from '../channels/index.ts';
+import { ChannelDeliveryRouter, RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/index';
 import { ServiceRegistry } from '../config/service-registry.ts';
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RouteSurfaceKind } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
 import {
   emitDeliveryFailed,
   emitDeliveryQueued,
   emitDeliveryStarted,
   emitDeliverySucceeded,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import type { AutomationDeliveryAttempt, AutomationDeliveryTarget } from '@pellux/goodvibes-sdk/platform/automation/delivery';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
@@ -105,7 +105,7 @@ export class AutomationDeliveryManager {
 
   constructor(config: {
     readonly serviceRegistry?: ServiceRegistry;
-    readonly configManager?: import('../config/manager.ts').ConfigManager;
+    readonly configManager?: import('@pellux/goodvibes-sdk/platform/config/manager').ConfigManager;
     readonly routeBindings: RouteBindingManager;
     readonly deliveryRouter?: ChannelDeliveryRouter;
     readonly artifactStore?: ArtifactStore;

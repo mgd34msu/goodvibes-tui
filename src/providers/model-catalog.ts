@@ -1,6 +1,6 @@
-import type { ModelDefinition, ProviderRegistry } from './registry.ts';
-import type { ModelLimitsService } from './model-limits.ts';
-import type { MinimalModelDefinition, SyntheticModelInfo } from './model-catalog-synthetic.ts';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ModelLimitsService } from '@pellux/goodvibes-sdk/platform/providers/model-limits';
+import type { MinimalModelDefinition, SyntheticModelInfo } from '@pellux/goodvibes-sdk/platform/providers/model-catalog-synthetic';
 
 export interface CatalogProvider {
   id: string;
@@ -186,7 +186,7 @@ export function getCatalogModelDefinitionsFrom(models: readonly CatalogModel[]):
   });
 }
 
-export type { MinimalModelDefinition, SyntheticModelInfo } from './model-catalog-synthetic.ts';
+export type { MinimalModelDefinition, SyntheticModelInfo } from '@pellux/goodvibes-sdk/platform/providers/model-catalog-synthetic';
 export {
   fetchCatalog,
   getCatalogCachePath,
@@ -194,7 +194,7 @@ export {
   isCatalogCacheStale,
   loadCatalogCache,
   saveCatalogCache,
-} from './model-catalog-cache.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/model-catalog-cache';
 export {
   buildSyntheticCanonicalModels,
   getSyntheticBackendModelIds,
@@ -202,10 +202,10 @@ export {
   getSyntheticModelInfo,
   nameToSlug,
   normalizeModelName,
-} from './model-catalog-synthetic.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/model-catalog-synthetic';
 export {
   diffCatalogs,
   filterRelevantChanges,
   formatChangeNotifications,
   notifyCatalogChanges,
-} from './model-catalog-notifications.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/model-catalog-notifications';

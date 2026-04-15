@@ -1,5 +1,5 @@
 import type { ConversationManager } from './conversation.ts';
-import type { ModelDefinition, ProviderRegistry } from '../providers/registry.ts';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
@@ -7,7 +7,7 @@ import {
   normalizeConversationFollowUpItems,
   type ConversationFollowUpItem,
 } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
-import { normalizeUsage } from './orchestrator-runtime.ts';
+import { normalizeUsage } from './orchestrator-runtime';
 
 const FOLLOW_UP_DEDUP_TTL_MS = 60_000;
 const FOLLOW_UP_MAX_OUTPUT_TOKENS = 160;

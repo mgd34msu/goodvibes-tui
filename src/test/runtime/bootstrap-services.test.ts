@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import { startExternalServices } from '../../runtime/bootstrap-services.ts';
 import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
 

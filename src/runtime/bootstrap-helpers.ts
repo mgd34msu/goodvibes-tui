@@ -1,6 +1,6 @@
-import type { ConfigManager } from '../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { ServiceRegistry } from '../config/service-registry.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { MutableRuntimeState } from './context.ts';
 import type { IntegrationRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/integrations';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';

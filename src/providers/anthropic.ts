@@ -1,5 +1,5 @@
-import type { LLMProvider, ChatRequest, ChatResponse, ProviderRuntimeMetadata, ProviderRuntimeMetadataDeps } from './interface.ts';
-import { REASONING_BUDGET_MAP } from './interface.ts';
+import type { LLMProvider, ChatRequest, ChatResponse, ProviderRuntimeMetadata, ProviderRuntimeMetadataDeps } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { getCacheCapability } from '@pellux/goodvibes-sdk/platform/providers/cache-capability';
 import { getDefaultStrategy } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
 import type { CacheContext, CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
@@ -10,8 +10,8 @@ import {
   toAnthropicTools,
   toAnthropicMessages,
   fromAnthropicContent,
-} from './tool-formats.ts';
-import type { AnthropicContentBlock } from './tool-formats.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
+import type { AnthropicContentBlock } from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
 import { toProviderError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 const ANTHROPIC_API_BASE = 'https://api.anthropic.com/v1';

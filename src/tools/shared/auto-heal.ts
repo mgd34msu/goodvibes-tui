@@ -16,8 +16,8 @@ import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import type { ConfigManager } from '../../config/manager.ts';
-import type { ToolLLM } from '../../config/tool-llm.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

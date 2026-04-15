@@ -5,7 +5,7 @@ import { mkdirSync, rmSync } from 'fs';
 
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerConfigCommand } from '../../input/commands/config.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type { SelectionAction, SelectionItem, SelectionResult } from '../../input/selection-modal.ts';
 
@@ -22,7 +22,7 @@ function makeContext(dir: string): {
     };
   };
 } {
-  const cm = new ConfigManager({
+  const cm = new ConfigManager({ surfaceRoot: 'tui',
     workingDir: dir,
     configDir: join(dir, '.goodvibes', 'tui'),
   });

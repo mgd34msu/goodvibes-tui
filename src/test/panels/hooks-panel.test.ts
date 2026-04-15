@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { createHookWorkbench } from '../../hooks/index.ts';
+import { createHookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/index';
 import { HooksPanel } from '../../panels/hooks-panel.ts';
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import type { HookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
 import type { HookActivityRecord } from '@pellux/goodvibes-sdk/platform/hooks/activity';
-import type { HookAuthoringAction, HookSimulationResult } from '../../hooks/workbench.ts';
+import type { HookAuthoringAction, HookSimulationResult } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
 import type { HookChain, HookDefinition } from '@pellux/goodvibes-sdk/platform/hooks/types';
 
 function linesText(lines: Line[]): string {

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { createDirectTransportServices } from '../../runtime/foundation-services.ts';
+import { createDirectTransportServices } from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
 import {
   createDirectClientTransport,
   createDirectTransport,
   createDirectTransportFromServices,
   createRuntimeDirectTransport,
-} from '../../runtime/transports/direct.ts';
-import { createOperatorClient } from '../../runtime/operator-client.ts';
-import { createPeerClient } from '../../runtime/peer-client.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
+import { createOperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+import { createPeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 async function waitFor<T>(fn: () => T | undefined | null, timeoutMs = 500, intervalMs = 5): Promise<T> {

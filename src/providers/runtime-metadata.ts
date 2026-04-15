@@ -1,5 +1,5 @@
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
-import type { ProviderAuthRouteDescriptor, ProviderRuntimeMetadataDeps } from './interface.ts';
+import type { ProviderAuthRouteDescriptor, ProviderRuntimeMetadataDeps } from '@pellux/goodvibes-sdk/platform/providers/interface';
 
 export interface StandardProviderAuthOptions {
   readonly providerId: string;

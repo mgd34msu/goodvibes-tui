@@ -1,17 +1,17 @@
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ServiceRegistry } from '../../config/service-registry.ts';
 import { SecretsManager } from '../../config/secrets.ts';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { ToolLLM } from '../../config/tool-llm.ts';
+import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import { ProviderCapabilityRegistry } from '../../providers/capabilities.ts';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderRegistry } from '../../providers/registry.ts';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 
 export interface TestManagers {
   readonly configManager: ConfigManager;
@@ -37,7 +37,7 @@ export function createTestManagers(): TestManagers {
   const bookmarksDir = join(rootDir, 'bookmarks');
   const providerDataDir = join(rootDir, 'provider-data');
 
-  const configManager = new ConfigManager({ configDir, workingDir, homeDir });
+  const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
   const subscriptionManager = new SubscriptionManager(subscriptionsPath);
   const secretsManager = new SecretsManager({ projectRoot: workingDir, globalHome: homeDir });
   const serviceRegistry = new ServiceRegistry(servicesPath, {

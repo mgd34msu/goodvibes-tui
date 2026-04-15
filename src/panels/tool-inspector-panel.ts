@@ -4,8 +4,8 @@
 
 import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
 import { BasePanel } from './base-panel.ts';
-import type { ToolEvent, TurnEvent } from '../runtime/events/index.ts';
-import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { ToolEvent, TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
 import {
   buildEmptyState,
   buildPanelLine,

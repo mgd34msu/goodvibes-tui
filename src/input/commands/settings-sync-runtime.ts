@@ -14,7 +14,7 @@ import {
   recordSettingsSyncFailure,
   setManagedSettingLock,
   type SettingsSyncBundle,
-} from '../../runtime/settings/control-plane.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
 import { type ConfigKey } from '../../config/index.ts';
 import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { CommandRegistry } from '../command-registry.ts';

@@ -2,11 +2,11 @@ import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { existsSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AgentOrchestrator, summarizeToolArgs } from '../../agents/orchestrator.ts';
-import type { AgentRecord } from '../../tools/agent/index.ts';
-import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
+import { AgentOrchestrator, summarizeToolArgs } from '@pellux/goodvibes-sdk/platform/agents/orchestrator';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
-import { MemoryRegistry, MemoryStore } from '../../state/index.ts';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/index';
 import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
 import { randomUUID } from 'node:crypto';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
@@ -159,6 +159,7 @@ describe('AgentOrchestrator', () => {
     orchestrator.setRuntimeBus(orchestratorRuntime.runtimeBus);
     orchestrator.setFeatureFlagManager(orchestratorRuntime.featureFlags);
     orchestrator.setDependencies({
+      surfaceRoot: 'tui',
       fileCache,
       projectIndex,
       fileUndoManager: orchestratorRuntime.fileUndoManager,

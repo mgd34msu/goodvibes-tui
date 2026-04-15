@@ -4,10 +4,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { RuntimeEventBus, createEventEnvelope } from '../../../runtime/events/index.ts';
+import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
-import { createStuckTurnPlaybook } from '../../../runtime/ops/playbooks/stuck-turn.ts';
-import { createSessionUnrecoverablePlaybook } from '../../../runtime/ops/playbooks/session-unrecoverable.ts';
+import { createStuckTurnPlaybook } from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/stuck-turn';
+import { createSessionUnrecoverablePlaybook } from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/session-unrecoverable';
 
 describe('ops playbook runtime context', () => {
   test('stuck-turn checks inspect live conversation state', async () => {

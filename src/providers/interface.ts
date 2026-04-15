@@ -1,5 +1,5 @@
 import type { ToolDefinition, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ProviderCapability } from './capabilities.ts';
+import type { ProviderCapability } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
 import type { SecretsManager } from '../config/secrets.ts';
 import type { ServiceRegistry } from '../config/service-registry.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';

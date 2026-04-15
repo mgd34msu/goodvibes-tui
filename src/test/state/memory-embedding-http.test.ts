@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { createBuiltinMemoryEmbeddingProviders } from '../../state/memory-embedding-http.ts';
-import type { MemoryEmbeddingProvider } from '../../state/index.ts';
+import { createBuiltinMemoryEmbeddingProviders } from '@pellux/goodvibes-sdk/platform/state/memory-embedding-http';
+import type { MemoryEmbeddingProvider } from '@pellux/goodvibes-sdk/platform/state/index';
 
 const ENV_KEYS = [
   'OPENAI_API_KEY',

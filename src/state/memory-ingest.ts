@@ -1,7 +1,7 @@
-import type { MemoryAddOptions, ProvenanceLink } from './memory-store.ts';
+import type { MemoryAddOptions, ProvenanceLink } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import type { ForensicsBundle } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
-import type { PolicyPreflightReview } from '../runtime/permissions/preflight.ts';
-import type { PluginStatus } from '../plugins/manager.ts';
+import type { PolicyPreflightReview } from '@pellux/goodvibes-sdk/platform/runtime/permissions/preflight';
+import type { PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins/manager';
 
 export interface McpSecurityCapture {
   readonly name: string;

@@ -1,5 +1,5 @@
 import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk';
-import { AnthropicSdkProvider } from './anthropic-sdk-provider.ts';
+import { AnthropicSdkProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-sdk-provider';
 
 const BEDROCK_MODELS = [
   'claude-opus-4-6',

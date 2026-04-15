@@ -5,7 +5,7 @@
  * PhasedTool metadata required by the phased executor.
  */
 import { asPhasedTool } from '@pellux/goodvibes-sdk/platform/runtime/tools/adapter';
-import { createFetchTool } from './index.ts';
+import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
 
 // ---------------------------------------------------------------------------
 // Constants

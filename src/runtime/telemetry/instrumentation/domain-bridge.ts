@@ -12,15 +12,15 @@
  * - All map lookups are safe — missing spans on terminal events are no-ops.
  * - The bridge is opt-in: calling `attach()` wires it; `detach()` unwires.
  */
-import type { RuntimeEventBus } from '../../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RuntimeTracer } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/tracer';
 import type { Span } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/types';
 import type { CascadeAppliedEvent } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
 import { recordHealthCascadeSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/health';
-import { attachAgentDomain, attachCompactionDomain, attachPermissionDomain, attachSessionDomain } from './domain-bridge-agent-session.ts';
-import { attachPluginDomain, attachMcpDomain } from './domain-bridge-plugin-mcp.ts';
-import { type DomainBridgeHelpers, type SpanMap } from './domain-bridge-shared.ts';
-import { attachTaskDomain, attachTransportDomain } from './domain-bridge-transport-task.ts';
+import { attachAgentDomain, attachCompactionDomain, attachPermissionDomain, attachSessionDomain } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/domain-bridge-agent-session';
+import { attachPluginDomain, attachMcpDomain } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/domain-bridge-plugin-mcp';
+import { type DomainBridgeHelpers, type SpanMap } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/domain-bridge-shared';
+import { attachTaskDomain, attachTransportDomain } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/domain-bridge-transport-task';
 
 /**
  * DomainBridge wires the RuntimeEventBus to the OTel span system.

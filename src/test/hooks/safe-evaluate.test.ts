@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { safeEvaluate } from '../../hooks/chain-engine.ts';
+import { safeEvaluate } from '@pellux/goodvibes-sdk/platform/hooks/chain-engine';
 
 describe('safeEvaluate', () => {
   describe('string methods', () => {

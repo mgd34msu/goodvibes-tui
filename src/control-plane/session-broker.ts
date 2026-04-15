@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
-import { RouteBindingManager } from '../channels/index.ts';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/index';
 import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
 import type { AutomationSurfaceKind } from '@pellux/goodvibes-sdk/platform/automation/types';
 import type {

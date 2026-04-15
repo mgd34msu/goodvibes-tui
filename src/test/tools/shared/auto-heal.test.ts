@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import type { ConfigManager } from '../../../config/manager.ts';
-import type { ToolLLM } from '../../../config/tool-llm.ts';
-import { AutoHealer } from '../../../tools/shared/auto-heal.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
+import { AutoHealer } from '@pellux/goodvibes-sdk/platform/tools/shared/auto-heal';
 
 // ---------------------------------------------------------------------------
 // Helpers

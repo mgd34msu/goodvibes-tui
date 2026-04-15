@@ -1,8 +1,8 @@
 import { createDomainDispatch } from '../runtime/store/index.ts';
 import type { DomainDispatch, RuntimeStore } from '../runtime/store/index.ts';
 import type { SurfaceRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surfaces';
-import { ConfigManager } from '../config/manager.ts';
-import type { ChannelPluginRegistry } from './plugin-registry.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/plugin-registry';
 
 function now(): number {
   return Date.now();

@@ -6,7 +6,7 @@ import { endAgentSpan, recordAgentPhase, startAgentSpan } from '@pellux/goodvibe
 import { endCompactionSpan, recordCompactionPhase, startCompactionSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/compaction';
 import { endPermissionSpan, recordPermissionPhase, startPermissionSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/permission';
 import { endSessionSpan, recordSessionPhase, startSessionSpan } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/spans/session';
-import type { DomainBridgeAttachmentInput, Env, SpanMap } from './domain-bridge-shared.ts';
+import type { DomainBridgeAttachmentInput, Env, SpanMap } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/domain-bridge-shared';
 
 export function attachAgentDomain(
   { bus, helpers }: DomainBridgeAttachmentInput,

@@ -1,4 +1,4 @@
-import { createKnowledgeApi, type CreateKnowledgeApiOptions, type KnowledgeApi } from '../knowledge/knowledge-api.ts';
+import { createKnowledgeApi, type CreateKnowledgeApiOptions, type KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
 import type { RuntimeServices } from './services.ts';
 
 export interface RuntimeKnowledgeApiServices

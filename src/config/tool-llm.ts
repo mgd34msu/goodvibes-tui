@@ -14,9 +14,9 @@
  *   - Singleton pattern — import `toolLLM` for use
  */
 
-import type { ConfigManager } from './manager.ts';
-import type { LLMProvider } from '../providers/interface.ts';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ConversationManager } from '../../core/conversation.ts';
-import { RuntimeEventBus, createEventEnvelope, type TurnEvent } from '../../runtime/events/index.ts';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { ConversationManager } from '../../core/conversation';
+import { RuntimeEventBus, createEventEnvelope, type TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
 // ---------------------------------------------------------------------------
 // ConversationManager streaming block lifecycle

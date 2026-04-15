@@ -14,9 +14,9 @@
 
 import { createDomainDispatch } from '../store/index.ts';
 import type { RuntimeStore, DomainDispatch } from '../store/index.ts';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { RuntimeTask, TaskKind, TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
-import type { EmitterContext } from '../emitters/index.ts';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import type {
   TaskManager,
   TaskCreateParams,
@@ -33,7 +33,7 @@ import {
   emitTaskCompleted,
   emitTaskFailed,
   emitTaskCancelled,
-} from '../emitters/tasks.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/tasks';
 
 // ---------------------------------------------------------------------------
 // Error types

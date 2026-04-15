@@ -6,14 +6,14 @@
  * - Pure helpers that derive values from an explicit ConfigManager instance
  */
 
-export { ConfigManager } from './manager.ts';
-export type { DeepReadonly } from './manager.ts';
+export { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+export type { DeepReadonly } from '@pellux/goodvibes-sdk/platform/config/manager';
 export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig } from '@pellux/goodvibes-sdk/platform/config/schema';
 export { DEFAULT_CONFIG, CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config/schema';
 export { ConfigError } from '@pellux/goodvibes-sdk/platform/types/errors';
 
 import { readFileSync } from 'fs';
-import { ConfigManager } from './manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config/schema';
 import { SecretsManager } from './secrets.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';

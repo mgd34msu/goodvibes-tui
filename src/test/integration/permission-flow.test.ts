@@ -5,10 +5,10 @@
  * Direct permission handler interactions are verified at each stage.
  */
 import { describe, test, expect } from 'bun:test';
-import { PermissionManager } from '../../permissions/manager.ts';
-import type { PermissionPromptRequest } from '../../permissions/prompt.ts';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import type { PermissionPromptRequest } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
 import type { GoodVibesConfig, PermissionAction } from '@pellux/goodvibes-sdk/platform/config/schema';
-import { PolicyRuntimeState } from '../../runtime/permissions/policy-runtime.ts';
+import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import { TriggerManager } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
 import { getTestTriggerManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 

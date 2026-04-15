@@ -241,7 +241,10 @@ for (const file of testFiles) {
 const requiredSnippets: Array<{ file: string; snippets: readonly string[]; message: string }> = [
   {
     file: 'src/control-plane/method-catalog-control-core.ts',
-    snippets: ["id: 'control.contract'"],
+    snippets: [
+      "id: 'control.contract'",
+      '@pellux/goodvibes-sdk/platform/control-plane/method-catalog-control-core',
+    ],
     message: 'operator contract method must stay cataloged',
   },
   {
@@ -254,7 +257,10 @@ const requiredSnippets: Array<{ file: string; snippets: readonly string[]; messa
   },
   {
     file: 'src/control-plane/method-catalog-runtime.ts',
-    snippets: ["id: 'remote.node_host.contract'"],
+    snippets: [
+      "id: 'remote.node_host.contract'",
+      '@pellux/goodvibes-sdk/platform/control-plane/method-catalog-runtime',
+    ],
     message: 'peer contract method must stay cataloged',
   },
 ];

@@ -1,5 +1,5 @@
-import { DiscordIntegration, NtfyIntegration, SlackIntegration } from '../../integrations/index.ts';
-import type { ProviderRuntimeSurface } from '../provider-runtime.ts';
+import { DiscordIntegration, NtfyIntegration, SlackIntegration } from '@pellux/goodvibes-sdk/platform/integrations/index';
+import type { ProviderRuntimeSurface } from '@pellux/goodvibes-sdk/platform/channels/provider-runtime';
 import type {
   ChannelAccountLifecycleAction,
   ChannelAccountLifecycleResult,
@@ -8,7 +8,7 @@ import type {
   ChannelActorAuthorizationResult,
   ChannelSurface,
 } from '@pellux/goodvibes-sdk/platform/channels/types';
-import type { BuiltinChannelRuntimeDeps } from './shared.ts';
+import type { BuiltinChannelRuntimeDeps } from '@pellux/goodvibes-sdk/platform/channels/builtin/shared';
 import {
   readDirectoryScope,
   readSecretScope,
@@ -22,8 +22,8 @@ import {
   providerRuntimeStatus,
   resolveDiscordBotToken,
   resolveNtfyToken,
-} from './surfaces.ts';
-import { lookupBuiltinProviderDirectory } from './targets.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/surfaces';
+import { lookupBuiltinProviderDirectory } from '@pellux/goodvibes-sdk/platform/channels/builtin/targets';
 
 interface BuiltinAccountActionContext {
   readonly deps: BuiltinChannelRuntimeDeps;

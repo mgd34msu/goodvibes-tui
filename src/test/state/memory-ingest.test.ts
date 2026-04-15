@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildIncidentMemoryAddOptions } from '../../state/memory-ingest.ts';
+import { buildIncidentMemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state/memory-ingest';
 import type { ForensicsBundle } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
 
 describe('buildIncidentMemoryAddOptions', () => {

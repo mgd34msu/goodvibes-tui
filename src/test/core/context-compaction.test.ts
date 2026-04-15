@@ -14,10 +14,10 @@ import {
   COMPACTION_BUFFER_TOKENS,
   SMALL_WINDOW_THRESHOLD,
   compactSmallWindow,
-} from '../../core/context-compaction.ts';
-import type { ProviderMessage, ContentPart, LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
-import type { ProviderRegistry } from '../../providers/registry.ts';
-import type { CompactionContext } from '../../core/compaction-types.ts';
+} from '@pellux/goodvibes-sdk/platform/core/context-compaction';
+import type { ProviderMessage, ContentPart, LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { CompactionContext } from '@pellux/goodvibes-sdk/platform/core/compaction-types';
 
 // ---------------------------------------------------------------------------
 // Helpers

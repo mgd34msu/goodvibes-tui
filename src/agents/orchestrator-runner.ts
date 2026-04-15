@@ -1,27 +1,27 @@
-import { ConversationManager } from '../core/conversation.ts';
+import { ConversationManager } from '../core/conversation';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { join } from 'node:path';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { ConsecutiveErrorBreaker } from '@pellux/goodvibes-sdk/platform/core/circuit-breaker';
 import { isRateLimitOrQuotaError, isContextSizeExceededError } from '@pellux/goodvibes-sdk/platform/types/errors';
-import { AgentSession } from './session.ts';
-import type { ProviderOptimizer } from '../providers/optimizer.ts';
+import { AgentSession } from '@pellux/goodvibes-sdk/platform/agents/session';
+import type { ProviderOptimizer } from '@pellux/goodvibes-sdk/platform/providers/optimizer';
 import {
   estimateTokens,
   estimateConversationTokens,
   compactSmallWindow,
-} from '../core/context-compaction.ts';
-import type { AgentRecord } from '../tools/agent/index.ts';
-import type { LLMProvider, StreamDelta } from '../providers/interface.ts';
+} from '@pellux/goodvibes-sdk/platform/core/context-compaction';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { LLMProvider, StreamDelta } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { summarizeToolArgs } from '@pellux/goodvibes-sdk/platform/agents/orchestrator-utils';
-import { buildLayeredOrchestratorSystemPrompt, buildOrchestratorSystemPrompt } from './orchestrator-prompts.ts';
-import type { AgentMessageBus } from './message-bus.ts';
-import type { KnowledgeService } from '../knowledge/index.ts';
+import { buildLayeredOrchestratorSystemPrompt, buildOrchestratorSystemPrompt } from '@pellux/goodvibes-sdk/platform/agents/orchestrator-prompts';
+import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import type { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 

@@ -8,8 +8,8 @@ import type {
   KnowledgeNodeRecord,
   KnowledgeUsageRecord,
 } from '@pellux/goodvibes-sdk/platform/knowledge/types';
-import { emitKnowledgePacketBuilt } from '../runtime/emitters/index.ts';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
+import { emitKnowledgePacketBuilt } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import {
   DEFAULT_PACKET_BUDGET,
   DEFAULT_PACKET_LIMIT,
@@ -20,7 +20,7 @@ import {
   summarizeCompact,
   tokenize,
   trimForDetail,
-} from './internal.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/internal';
 
 export interface KnowledgePacketContext {
   readonly store: KnowledgeStore;

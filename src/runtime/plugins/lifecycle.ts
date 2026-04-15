@@ -14,7 +14,7 @@
  */
 
 import type { PluginLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/plugins';
-import type { TransitionResult } from './types.ts';
+import type { TransitionResult } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
 
 /**
  * Adjacency map: from state → set of valid target states.

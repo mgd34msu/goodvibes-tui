@@ -1,7 +1,7 @@
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { ServiceRegistry } from '../../config/service-registry.ts';
-import type { ChannelDeliveryStrategy } from './types.ts';
+import type { ChannelDeliveryStrategy } from '@pellux/goodvibes-sdk/platform/channels/delivery/types';
 import {
   appendAttachmentSummary,
   extractResponseId,
@@ -13,7 +13,7 @@ import {
   resolveChannelDeliverySurfaceKind,
   success,
   trimForSurface,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/delivery/shared';
 
 export function createSignalDeliveryStrategy(
   configManager: ConfigManager,

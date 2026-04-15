@@ -1,11 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '../../src/config/manager.ts';
-import { RuntimeEventBus } from '../../src/runtime/events/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeServices } from '../../src/runtime/services.ts';
 import { createRuntimeStore } from '../../src/runtime/store/index.ts';
-import { createDirectTransport } from '../../src/runtime/transports/direct.ts';
+import { createDirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
 
 export async function runReferenceOperatorClientExample(): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), 'gv-reference-operator-'));

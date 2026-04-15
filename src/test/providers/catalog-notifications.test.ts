@@ -5,8 +5,8 @@ import {
   diffCatalogs,
   filterRelevantChanges,
   formatChangeNotifications,
-} from '../../providers/model-catalog.ts';
-import type { CatalogModel, CatalogDiff } from '../../providers/model-catalog.ts';
+} from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
+import type { CatalogModel, CatalogDiff } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
 import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';

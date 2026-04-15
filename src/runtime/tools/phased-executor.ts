@@ -1,6 +1,6 @@
 import type { Tool, ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { ToolRuntimeContext } from './context.ts';
+import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
 import type { ExecutorConfig, PhaseResult, ToolExecutionPhase, ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
 import {
   emitBudgetExceededCost,
@@ -15,7 +15,7 @@ import {
   emitToolPrehooked,
   emitToolSucceeded,
   emitToolValidated,
-} from '../emitters/tools.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/tools';
 import {
   budgetPhase,
   executePhase,
@@ -24,7 +24,7 @@ import {
   posthookPhase,
   prehookPhase,
   validatePhase,
-} from './phases/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/tools/phases/index';
 
 /**
  * PhasedToolExecutor — runs a ToolCall through the multi-phase execution pipeline.

@@ -3,7 +3,7 @@
  * and the most recent permission decision with full audit trail.
  */
 
-import type { PermissionCategory } from '../../../permissions/manager.ts';
+import type { PermissionCategory } from '@pellux/goodvibes-sdk/platform/permissions/manager';
 import type { PermissionRiskLevel } from '@pellux/goodvibes-sdk/platform/permissions/types';
 
 /** Permission evaluation modes (maps to PermissionsToolConfig). */

@@ -7,7 +7,7 @@ import type {
 import {
   CHANNEL_SETUP_VERSION,
   DEFAULT_SECRET_BACKENDS,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/channels/builtin/shared';
 
 export function getBuiltinSetupSchema(surface: ChannelSurface): ChannelSetupSchema {
   switch (surface) {

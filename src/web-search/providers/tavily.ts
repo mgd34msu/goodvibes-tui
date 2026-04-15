@@ -6,7 +6,7 @@ import {
   resultFromRecord,
   withInlineBearer,
   type SearchProviderContext,
-} from './shared.ts';
+} from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
 
 const TAVILY_DEFAULT_BASE_URL = 'https://api.tavily.com';
 const TAVILY_ENV_KEYS = ['TAVILY_API_KEY'] as const;

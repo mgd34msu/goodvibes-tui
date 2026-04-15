@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { getCACertificates } from 'node:tls';
-import type { ConfigManager } from '../../config/manager.ts';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { isLocalHostname, readPemEntriesFromDirectory, resolvePathFromGoodVibesRoot } from './shared.ts';
+import { isLocalHostname, readPemEntriesFromDirectory, resolvePathFromGoodVibesRoot } from '@pellux/goodvibes-sdk/platform/runtime/network/shared';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export type OutboundTrustMode = 'bundled' | 'bundled+custom' | 'custom';

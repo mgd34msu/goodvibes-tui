@@ -1,23 +1,23 @@
-import { listHookPointContracts } from '../hooks/index.ts';
-import type { HookApi } from '../hooks/hook-api.ts';
-import type { KnowledgeApi } from '../knowledge/knowledge-api.ts';
-import type { McpApi } from '../mcp/mcp-api.ts';
-import type { ProviderApi } from '../providers/provider-api.ts';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
+import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks/hook-api';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
+import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp/mcp-api';
+import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
 import type { RuntimeServices } from './services.ts';
 import {
   createDirectTransportServices,
   type DirectTransportServices,
   type OperatorClientServicesOptions,
-} from './foundation-services.ts';
-import type { OpsApi } from './ops-api.ts';
-import type { OpsControlPlane } from './ops/control-plane.ts';
-import { createRuntimeHookApi } from './runtime-hook-api.ts';
-import { createRuntimeKnowledgeApi } from './runtime-knowledge-api.ts';
-import { createRuntimeMcpApi } from './runtime-mcp-api.ts';
-import { createRuntimeOpsApi } from './runtime-ops-api.ts';
-import { createRuntimeProviderApi } from './runtime-provider-api.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
+import type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
+import type { OpsControlPlane } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
+import { createRuntimeHookApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-hook-api';
+import { createRuntimeKnowledgeApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-knowledge-api';
+import { createRuntimeMcpApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-mcp-api';
+import { createRuntimeOpsApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-ops-api';
+import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
 import type { TaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/types';
-import { createDirectTransportFromServices, type DirectTransport } from './transports/direct.ts';
+import { createDirectTransportFromServices, type DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
 import type { UiTasksSnapshot } from './ui-read-models.ts';
 
 export interface RuntimeFoundationClientsOptions extends OperatorClientServicesOptions {

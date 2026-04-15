@@ -21,7 +21,7 @@ import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/auto
 import type { AutomationSurfaceKind } from '@pellux/goodvibes-sdk/platform/automation/types';
 import type { AutomationDeliveryAttempt } from '@pellux/goodvibes-sdk/platform/automation/delivery';
 import type { SessionDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/session';
-import { now, uniq, updateDomainMetadata } from './shared.ts';
+import { now, uniq, updateDomainMetadata } from '@pellux/goodvibes-sdk/platform/runtime/store/helpers/reducers/shared';
 
 export function updateCommunicationState(
   domain: CommunicationDomainState,

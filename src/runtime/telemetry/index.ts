@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * import { createTelemetryProvider } from './index.ts';
+ * import { createTelemetryProvider } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/index';
  * import { LocalLedgerExporter } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/exporters/index';
  *
  * const { tracer, meter } = createTelemetryProvider({
@@ -60,8 +60,8 @@ export type {
   TelemetryAggregates,
   TelemetryRuntimeSnapshot,
   TelemetrySnapshot,
-} from './api.ts';
-export { TelemetryApiService } from './api.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
+export { TelemetryApiService } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
 
 // Re-export span helpers
 export type {
@@ -140,8 +140,8 @@ export type { LocalLedgerConfig, ConsoleVerbosity, ConsoleExporterConfig } from 
 export { LocalLedgerExporter, ConsoleExporter } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/exporters/index';
 
 // Re-export instrumentation
-export type { InstrumentationHandle } from './instrumentation/index.ts';
-export { DomainBridge, createInstrumentation } from './instrumentation/index.ts';
+export type { InstrumentationHandle } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/index';
+export { DomainBridge, createInstrumentation } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/instrumentation/index';
 
 /** Alias for TelemetryProviderConfig to match the factory parameter name. */
 export type TelemetryConfig = TelemetryProviderConfig;

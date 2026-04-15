@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import type { LLMProvider, ChatRequest, ChatResponse } from '../../providers/interface.ts';
-import { resolveToolLLM } from '../../config/tool-llm.ts';
+import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { resolveToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------

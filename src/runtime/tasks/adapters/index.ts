@@ -5,12 +5,12 @@
  * unified RuntimeTask model and handles lifecycle transitions.
  */
 
-export { ProcessTaskAdapter } from './process-adapter.ts';
-export type { ProcessOwner } from './process-adapter.ts';
+export { ProcessTaskAdapter } from '@pellux/goodvibes-sdk/platform/runtime/tasks/adapters/process-adapter';
+export type { ProcessOwner } from '@pellux/goodvibes-sdk/platform/runtime/tasks/adapters/process-adapter';
 
-export { AgentTaskAdapter } from './agent-adapter.ts';
-export type { AgentOwner } from './agent-adapter.ts';
+export { AgentTaskAdapter } from '@pellux/goodvibes-sdk/platform/runtime/tasks/adapters/agent-adapter';
+export type { AgentOwner } from '@pellux/goodvibes-sdk/platform/runtime/tasks/adapters/agent-adapter';
 
-export { AcpTaskAdapter } from './acp-adapter.ts';
+export { AcpTaskAdapter } from '@pellux/goodvibes-sdk/platform/runtime/tasks/adapters/acp-adapter';
 
-export { SchedulerTaskAdapter } from './scheduler-adapter.ts';
+export { SchedulerTaskAdapter } from '@pellux/goodvibes-sdk/platform/runtime/tasks/adapters/scheduler-adapter';

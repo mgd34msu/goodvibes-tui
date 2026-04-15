@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
 import * as path from 'path';
-import type { RuntimeEventBus } from '../runtime/events/index.ts';
-import { emitProviderWarning } from '../runtime/emitters/index.ts';
-import { OpenAICompatProvider } from './openai-compat.ts';
-import { AnthropicCompatProvider } from './anthropic-compat.ts';
-import type { LLMProvider } from './interface.ts';
-import type { ModelDefinition } from './registry.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { emitProviderWarning } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import { AnthropicCompatProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-compat';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   LocalContextIngestionService,

@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, spyOn } from 'bun:test';
-import { createAgentTool, AgentManager } from '../../tools/agent/index.ts';
-import { AgentMessageBus } from '../../agents/message-bus.ts';
-import { RuntimeEventBus } from '../../runtime/events/index.ts';
-import { ConfigManager } from '../../config/manager.ts';
+import { createAgentTool, AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { OrchestrationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/orchestration';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 
 function makeAgentHarness() {
   const configDir = join(tmpdir(), `gv-agent-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  const configManager = new ConfigManager({ configDir });
+  const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir });
   const manager = new AgentManager({
     messageBus: new AgentMessageBus(),
     configManager,

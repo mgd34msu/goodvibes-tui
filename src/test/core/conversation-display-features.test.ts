@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ConversationManager } from '../../core/conversation.ts';
+import { ConversationManager } from '../../core/conversation';
 
 type ConversationManagerTestAccess = {
   messages: Array<{ role: string; content: string; reasoningContent?: string }>;

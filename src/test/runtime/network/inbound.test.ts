@@ -3,8 +3,8 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdtempSync } from 'node:fs';
-import { ConfigManager } from '../../../config/manager.ts';
-import { inspectInboundTls } from '../../../runtime/network/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { inspectInboundTls } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 
 describe('runtime/network inbound TLS', () => {
   let root: string;
@@ -25,7 +25,7 @@ describe('runtime/network inbound TLS', () => {
     mkdirSync(certDir, { recursive: true });
     writeFileSync(join(certDir, 'fullchain.pem'), 'CERT\n', 'utf-8');
     writeFileSync(join(certDir, 'privkey.pem'), 'KEY\n', 'utf-8');
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     config.set('controlPlane.tls.mode', 'direct');
 
     const snapshot = inspectInboundTls(config, 'controlPlane');
@@ -39,7 +39,7 @@ describe('runtime/network inbound TLS', () => {
   });
 
   test('reports proxy mode without requiring local certs', () => {
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     config.set('controlPlane.tls.mode', 'proxy');
     config.set('controlPlane.trustProxy', true);
 
@@ -60,7 +60,7 @@ describe('runtime/network inbound TLS', () => {
     writeFileSync(certFile, 'CERT\n', 'utf-8');
     writeFileSync(keyFile, 'KEY\n', 'utf-8');
     if (process.platform !== 'win32') chmodSync(keyFile, 0o644);
-    const config = new ConfigManager({ configDir, workingDir: root });
+    const config = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir: root });
     config.set('httpListener.tls.mode', 'direct');
     config.set('httpListener.tls.certFile', certFile);
     config.set('httpListener.tls.keyFile', keyFile);

@@ -13,14 +13,14 @@
  */
 
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { RuntimeEventBus } from '../events/index.ts';
+import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { EmitterContext } from '../emitters/index.ts';
+import type { EmitterContext } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import {
   applyTransition,
   selectStrategy,
   strategyToState,
-} from './lifecycle.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/compaction/lifecycle';
 import {
   runMicrocompact,
   runCollapse,
@@ -28,8 +28,8 @@ import {
   runReactive,
   createBoundaryCommit,
   validateBoundaryCommit,
-} from './strategies/index.ts';
-import { runResumeRepair } from './resume-repair.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/compaction/strategies/index';
+import { runResumeRepair } from '@pellux/goodvibes-sdk/platform/runtime/compaction/resume-repair';
 import type {
   BoundaryCommit,
   CompactionLifecycleResult,
@@ -38,8 +38,8 @@ import type {
   CompactionTrigger,
   StrategyInput,
   StrategyOutput,
-} from './types.ts';
-import type { ResumeRepairResult } from './types.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/compaction/types';
+import type { ResumeRepairResult } from '@pellux/goodvibes-sdk/platform/runtime/compaction/types';
 import {
   emitCompactionCheck,
   emitCompactionDone,
@@ -51,10 +51,10 @@ import {
   emitCompactionReactive,
   emitCompactionQualityScore,
   emitCompactionStrategySwitch,
-} from '../emitters/compaction.ts';
-import { computeQualityScore, escalateStrategy, LOW_QUALITY_THRESHOLD } from './quality-score.ts';
-import type { CompactionQualityScore } from './quality-score.ts';
-import type { ProviderMessage } from '../../providers/interface.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/compaction';
+import { computeQualityScore, escalateStrategy, LOW_QUALITY_THRESHOLD } from '@pellux/goodvibes-sdk/platform/runtime/compaction/quality-score';
+import type { CompactionQualityScore } from '@pellux/goodvibes-sdk/platform/runtime/compaction/quality-score';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ConversationManager, parseDiffForApply, applyDiffContent } from '../../core/conversation.ts';
+import { ConversationManager, parseDiffForApply, applyDiffContent } from '../../core/conversation';
 
 describe('parseDiffForApply', () => {
   test('parses a valid unified diff', () => {

@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { getTierPromptSupplement, getTierForContextWindow } from '../../providers/tier-prompts.ts';
-import type { ModelTier } from '../../providers/registry.ts';
+import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers/tier-prompts';
+import type { ModelTier } from '@pellux/goodvibes-sdk/platform/providers/registry';
 
 describe('getTierPromptSupplement', () => {
   test('premium tier returns empty string', () => {

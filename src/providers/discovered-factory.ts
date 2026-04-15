@@ -1,11 +1,11 @@
 import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
-import type { LLMProvider } from './interface.ts';
-import { getDiscoveredTraits } from './discovered-traits.ts';
-import { LocalAIProvider, TGIProvider, VLLMProvider } from './discovered-compat.ts';
-import { LlamaCppProvider } from './llama-cpp.ts';
-import { LMStudioProvider } from './lm-studio.ts';
-import { OpenAICompatProvider } from './openai-compat.ts';
-import { OllamaProvider } from './ollama.ts';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { getDiscoveredTraits } from '@pellux/goodvibes-sdk/platform/providers/discovered-traits';
+import { LocalAIProvider, TGIProvider, VLLMProvider } from '@pellux/goodvibes-sdk/platform/providers/discovered-compat';
+import { LlamaCppProvider } from '@pellux/goodvibes-sdk/platform/providers/llama-cpp';
+import { LMStudioProvider } from '@pellux/goodvibes-sdk/platform/providers/lm-studio';
+import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
+import { OllamaProvider } from '@pellux/goodvibes-sdk/platform/providers/ollama';
 
 export function createDiscoveredProvider(server: DiscoveredServer): LLMProvider {
   const traits = getDiscoveredTraits(server.serverType);

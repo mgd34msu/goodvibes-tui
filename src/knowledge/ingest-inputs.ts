@@ -3,17 +3,17 @@ import {
   emitKnowledgeIngestCompleted,
   emitKnowledgeIngestFailed,
   emitKnowledgeIngestStarted,
-} from '../runtime/emitters/index.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-import { finalizeKnowledgeIngestedSource } from './ingest-compile.ts';
-import type { KnowledgeIngestContext } from './ingest-context.ts';
+import { finalizeKnowledgeIngestedSource } from '@pellux/goodvibes-sdk/platform/knowledge/ingest-compile';
+import type { KnowledgeIngestContext } from '@pellux/goodvibes-sdk/platform/knowledge/ingest-context';
 import {
   DAY_MS,
   canonicalizeUri,
   inferSourceTypeFromArtifact,
   isHttpUri,
   mergeTags,
-} from './internal.ts';
+} from '@pellux/goodvibes-sdk/platform/knowledge/internal';
 import type {
   KnowledgeBatchIngestResult,
   KnowledgeBookmarkSeed,

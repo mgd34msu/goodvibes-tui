@@ -12,9 +12,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { estimateConversationTokens } from '../../core/context-compaction.ts';
-import { createModelCatalog, type ModelCatalog, type CatalogModelEntry } from '../../providers/model-catalog.ts';
-import type { ProviderMessage } from '../../providers/interface.ts';
+import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
+import { createModelCatalog, type ModelCatalog, type CatalogModelEntry } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------

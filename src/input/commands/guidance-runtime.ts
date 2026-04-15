@@ -1,6 +1,6 @@
-import { estimateConversationTokens } from '../../core/context-compaction.ts';
-import { evaluateSessionMaintenance, formatSessionMaintenanceLines, getGuidanceMode } from '../../runtime/session-maintenance.ts';
-import { dismissGuidance, evaluateContextualGuidance, formatGuidanceItems, resetGuidance } from '../../runtime/guidance.ts';
+import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
+import { evaluateSessionMaintenance, formatSessionMaintenanceLines, getGuidanceMode } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
+import { dismissGuidance, evaluateContextualGuidance, formatGuidanceItems, resetGuidance } from '@pellux/goodvibes-sdk/platform/runtime/guidance';
 import type { CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireProviderApi, requireReadModels, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
 

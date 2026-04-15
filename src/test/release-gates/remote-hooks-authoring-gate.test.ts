@@ -3,12 +3,12 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { AgentManager } from '../../tools/agent/index.ts';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import {
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
-} from '../../runtime/remote/index.ts';
-import { ConfigManager } from '../../config/manager.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import {
   getTestAgentManager,
   getTestHookDispatcher,
@@ -23,7 +23,7 @@ describe('remote and hooks authoring gate', () => {
 
   beforeEach(() => {
     resetTestRuntimeServices();
-    configManager = new ConfigManager({ configDir: join(tmpdir(), `gv-remote-hooks-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
+    configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(tmpdir(), `gv-remote-hooks-${Date.now()}-${Math.random().toString(36).slice(2)}`) });
     originalHooksFile = configManager.get('tools.hooksFile') as string;
     getTestHookDispatcher().clear();
   });

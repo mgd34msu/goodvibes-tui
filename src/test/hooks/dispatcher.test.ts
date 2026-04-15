@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { HookDispatcher } from '../../hooks/dispatcher.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { HookDefinition, HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
 
 /** Helper to create a minimal HookEvent */

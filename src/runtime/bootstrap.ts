@@ -10,10 +10,10 @@
  *   - lifecycle.ts: save/shutdown helpers
  */
 import { Orchestrator } from '../core/orchestrator.ts';
-import { AcpManager } from '../acp/manager.ts';
-import { getTierPromptSupplement, getTierForContextWindow } from '../providers/tier-prompts.ts';
+import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
+import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers/tier-prompts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { PermissionRequestHandler } from '../permissions/prompt.ts';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHistory } from '../input/input-history.ts';
 import type { GitStatusProvider } from '../renderer/git-status.ts';
@@ -22,16 +22,16 @@ import type { SelectionManager } from '../input/selection.ts';
 import type { Compositor } from '../renderer/compositor.ts';
 
 import type { RuntimeContext, BootstrapOptions } from './context.ts';
-import { shutdownRuntime, fireSessionStart, saveSession } from './lifecycle.ts';
-import { createTaskManager } from './tasks/index.ts';
-import { OpsControlPlane } from './ops/control-plane.ts';
-import { AcpTaskAdapter } from './tasks/adapters/acp-adapter.ts';
+import { shutdownRuntime, fireSessionStart, saveSession } from '@pellux/goodvibes-sdk/platform/runtime/lifecycle';
+import { createTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/index';
+import { OpsControlPlane } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
+import { AcpTaskAdapter } from '@pellux/goodvibes-sdk/platform/runtime/tasks/adapters/acp-adapter';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
-import { emitSessionReady, emitSessionStarted } from './emitters/index.ts';
+import { emitSessionReady, emitSessionStarted } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
 import {
   loadLastConversation,
   writeLastSessionPointer,
-} from './session-persistence.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import { startBackgroundProviderRegistration } from './bootstrap-background.ts';
 import { restoreSavedModel } from './bootstrap-helpers.ts';
 import { startExternalServices, type ExternalServicesHandle } from './bootstrap-services.ts';
@@ -260,6 +260,24 @@ export async function bootstrapRuntime(
   const gitStatusProvider = shell.gitStatusProvider;
   const inputHistory = shell.inputHistory;
   const lastGitInfoRef = shell.lastGitInfoRef;
+  const pluginCommandRegistry = {
+    register(command: {
+      readonly name: string;
+      readonly aliases?: readonly string[];
+      readonly description: string;
+      readonly usage?: string;
+      readonly argsHint?: string;
+      readonly handler: (args: string[]) => void | Promise<void>;
+    }): void {
+      commandRegistry.register({
+        ...command,
+        aliases: command.aliases ? [...command.aliases] : undefined,
+      });
+    },
+    unregister(name: string): void {
+      commandRegistry.unregister(name);
+    },
+  };
 
   // ── Phase 7: External services + deferred startup ──────────────────────
 
@@ -277,7 +295,7 @@ export async function bootstrapRuntime(
     run: async () => {
       await pluginManager.init({
         runtimeBus,
-        commandRegistry,
+        commandRegistry: pluginCommandRegistry,
         providerRegistry,
         toolRegistry,
         gatewayMethods: services.gatewayMethods,

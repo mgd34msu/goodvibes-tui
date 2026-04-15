@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { createFetchTool } from '../../tools/fetch/index.ts';
+import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
 
 // ---------------------------------------------------------------------------
 // Local test server

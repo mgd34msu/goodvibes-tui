@@ -1,19 +1,19 @@
-import type { ApprovalBroker } from '../control-plane/approval-broker.ts';
-import type { SharedSessionBroker } from '../control-plane/session-broker.ts';
+import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane/approval-broker';
+import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
 import type { SecretsManager } from '../config/secrets.ts';
 import type { ServiceRegistry } from '../config/service-registry.ts';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import type { ProviderRegistry } from '../providers/registry.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { RuntimeServices } from './services.ts';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import type { UiRuntimeEvents } from './ui-events.ts';
-import { createUiRuntimeEvents } from './ui-events.ts';
-import { createCoreReadModels } from './ui-read-models-core.ts';
+import type { UiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import { createUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import { createCoreReadModels } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-core';
 import {
   createOperationsReadModels,
   type UiOperationsReadModelOptions,
-} from './ui-read-models-operations.ts';
-import type { PeerClientDependencies } from './peer-client.ts';
+} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-operations';
+import type { PeerClientDependencies } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 
 export interface OperatorClientReadModels {
   readonly controlPlane: ReturnType<typeof createOperationsReadModels>['controlPlane'];

@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import {
   KNOWLEDGE_INJECTION_PROMPT_SCHEMA,
   KNOWLEDGE_INJECTION_SCHEMA,
-} from '../../control-plane/operator-contract-schemas-knowledge.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract-schemas-knowledge';
 import {
   ARTIFACT_ACQUISITION_MODE_SCHEMA,
   ARTIFACT_FETCH_MODE_SCHEMA,
-} from '../../control-plane/operator-contract-schemas-media.ts';
-import { ARTIFACT_ATTACHMENT_SCHEMA, ARTIFACT_DESCRIPTOR_SCHEMA } from '../../control-plane/operator-contract-schemas-shared.ts';
+} from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract-schemas-media';
+import { ARTIFACT_ATTACHMENT_SCHEMA, ARTIFACT_DESCRIPTOR_SCHEMA } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract-schemas-shared';
 
 function objectProperties(schema: Record<string, unknown>): Record<string, unknown> {
   return (schema.properties ?? {}) as Record<string, unknown>;

@@ -7,8 +7,8 @@
  *
  * This panel powers the "Events/Diagnostics" view.
  */
-import type { RuntimeEventBus, EnvelopeListener } from '../../events/index.ts';
-import type { AnyRuntimeEvent, RuntimeEventDomain } from '../../events/domain-map.ts';
+import type { RuntimeEventBus, EnvelopeListener } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { AnyRuntimeEvent, RuntimeEventDomain } from '@pellux/goodvibes-sdk/platform/runtime/events/domain-map';
 import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 import {
   type EventEntry,

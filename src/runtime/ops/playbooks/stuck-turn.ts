@@ -6,7 +6,7 @@
  */
 import type { Playbook, DiagnosticCheckResult } from '@pellux/goodvibes-sdk/platform/runtime/ops/types';
 import { safeCheck } from '@pellux/goodvibes-sdk/platform/runtime/ops/safe-check';
-import type { OpsRuntimeContextState } from '../runtime-context.ts';
+import type { OpsRuntimeContextState } from '@pellux/goodvibes-sdk/platform/runtime/ops/runtime-context';
 
 export function createStuckTurnPlaybook(
   getRuntimeContext: () => OpsRuntimeContextState | null = () => null,

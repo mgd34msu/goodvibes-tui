@@ -11,7 +11,7 @@
  * p95 values for PerfMonitor integration via `getMetrics()`.
  */
 
-import type { RuntimeEventBus, RuntimeEventEnvelope, AnyRuntimeEvent } from '../events/index.ts';
+import type { RuntimeEventBus, RuntimeEventEnvelope, AnyRuntimeEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { PerfMetric } from '@pellux/goodvibes-sdk/platform/runtime/perf/types';
 
 /** Metric key constants for each SLO measurement. */

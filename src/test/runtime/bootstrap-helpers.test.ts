@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '../../config/manager.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { loadBootstrapSystemPrompt } from '../../runtime/bootstrap-helpers.ts';
 
 function makeTempDir(): string {
@@ -29,7 +29,7 @@ describe('loadBootstrapSystemPrompt', () => {
   });
 
   test('resolves provider.systemPromptFile relative to the explicit working directory', () => {
-    const configManager = new ConfigManager({ homeDir: homeDirectory, workingDir: workingDirectory });
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',  homeDir: homeDirectory, workingDir: workingDirectory });
     const relativePromptPath = join('prompts', 'runtime.md');
     const promptPath = join(workingDirectory, relativePromptPath);
 
@@ -43,7 +43,7 @@ describe('loadBootstrapSystemPrompt', () => {
   test('rejects config managers that do not own both working and home directories', () => {
     const configDir = join(root, '.goodvibes', 'tui');
     mkdirSync(configDir, { recursive: true });
-    const configManager = new ConfigManager({ configDir });
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir });
 
     expect(() => loadBootstrapSystemPrompt(configManager)).toThrow(
       'loadBootstrapSystemPrompt requires ConfigManager with explicit workingDirectory.',
