@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.18.5-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.18.6-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -39,7 +39,7 @@ Common entrypoints:
 Release distribution:
 
 - GitHub Releases are the primary distribution path for compiled binaries
-- `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL with bundled prebuilt TUI and daemon binaries already inside the package
+- `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL; the install script downloads the matching TUI and daemon binaries for the current platform
 - native Windows is not supported; use WSL on Windows
 
 Common paths:

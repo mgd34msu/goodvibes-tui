@@ -62,5 +62,5 @@ console.error(`platform: ${process.platform}-${process.arch}`);
 console.error(`supported prebuilt targets: ${supported}`);
 console.error('Either:');
 console.error('  1. install Bun and re-run the command, or');
-console.error('  2. reinstall after a matching GitHub release asset exists for this version.');
+console.error('  2. rerun the package postinstall step so the matching release binary is downloaded.');
 process.exit(1);

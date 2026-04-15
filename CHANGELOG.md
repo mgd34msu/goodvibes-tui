@@ -4,7 +4,32 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.6] — 2026-04-14
+
+### Public Package Delivery Fix
+
+- Replaced the oversized bundled-binary npm package model with a smaller package that installs the matching TUI and standalone daemon binaries during `postinstall`
+- Kept the package identities as `@pellux/goodvibes-tui` on npmjs and `@mgd34msu/goodvibes-tui` on GitHub Packages while keeping the installed CLI surface as `goodvibes` and `goodvibes-daemon`
+- Kept the runtime fallback path so installs can still run from Bun + source if a platform binary is unavailable, but made the intended install path the version-matched release binaries
+
+### Release Workflow Correction
+
+- Reordered the release workflow so the GitHub Release and binary assets are created before npmjs and GitHub Packages publishing, ensuring package installs can fetch release assets immediately after publish
+- Reworked install-smoke validation so the packed npm tarball is tested through the real `postinstall` path that installs both the TUI and daemon binaries for the current platform
+- Hardened publish validation so registry tarballs fail if they accidentally include vendored binaries again or exceed the package-size guardrail
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit --pretty false`
+- Publish packaging check passes: `bun run publish:check`
+- Staged npm package rehearsal passes: `bun run publish:dry-run`
+- Staged GitHub Packages rehearsal passes: `bun run publish:dry-run:github`
+- Local package install smoke passes through `postinstall` with staged release artifacts
+- Diff hygiene passes: `git diff --check`
+
 ## [0.18.5] — 2026-04-14
+
+Superseded before successful public registry release. The bundled-binary tarball for this version exceeded npmjs and GitHub Packages size limits, and the corrected public package model shipped in `0.18.6`.
 
 ### Public Package And Release Correction
 
