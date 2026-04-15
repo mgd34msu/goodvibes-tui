@@ -193,10 +193,10 @@ jobs:
           TMPDIR="$(mktemp -d)"
           cd "$TMPDIR"
           npm init -y
-          npm install "${GITHUB_WORKSPACE}/goodvibes-tui-${VERSION}.tgz"
+          npm install "${GITHUB_WORKSPACE}/pellux-goodvibes-tui-${VERSION}.tgz"
           test -x node_modules/.bin/goodvibes
-          test -x node_modules/goodvibes-tui/vendor/goodvibes-linux-x64
-          test -f node_modules/goodvibes-tui/vendor/SHA256SUMS.txt
+          test -x node_modules/@pellux/goodvibes-tui/vendor/goodvibes-linux-x64
+          test -f node_modules/@pellux/goodvibes-tui/vendor/SHA256SUMS.txt
 
   publish-npm:
     name: Publish to npm

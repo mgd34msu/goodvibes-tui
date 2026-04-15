@@ -15,7 +15,7 @@ A terminal-native AI coding, operations, automation, knowledge, and integration 
 Install from npm:
 
 ```sh
-npm install -g goodvibes-tui
+npm install -g @pellux/goodvibes-tui
 goodvibes
 ```
 
@@ -39,7 +39,7 @@ Common entrypoints:
 Release distribution:
 
 - GitHub Releases are the primary distribution path for compiled binaries
-- `npm install -g goodvibes-tui` is supported on Linux, macOS, and WSL by downloading the matching prebuilt release binary during install
+- `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL by downloading the matching prebuilt release binary during install
 - native Windows is not supported; use WSL on Windows
 
 Common paths:
