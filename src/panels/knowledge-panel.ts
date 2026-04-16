@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import type { MemoryClass, MemoryRecord, MemoryRegistry, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import {
   buildBodyText,
@@ -47,6 +48,8 @@ export class KnowledgePanel extends BasePanel {
   private selectedIndex = 0;
   private scrollOffset = 0;
   private records: MemoryRecord[] = [];
+  // I1: confirm for destructive review-state mutations
+  private confirm: ConfirmState<{ id: string; action: 'stale' | 'contradicted' }> | null = null;
 
   public constructor(registry: MemoryRegistry) {
     super('knowledge', 'Knowledge', 'K', 'agent');
@@ -72,6 +75,50 @@ export class KnowledgePanel extends BasePanel {
   }
 
   public handleInput(key: string): boolean {
+    // I1: y/n confirm for stale/contradict
+    if (this.confirm) {
+      const result = handleConfirmInput(this.confirm, key);
+      if (result === 'confirmed') {
+        const { id, action } = this.confirm.subject;
+        this.confirm = null;
+        const selected = this.records.find((r) => r.id === id);
+        if (selected) {
+          try {
+            if (action === 'stale') {
+              this.registry.review(id, {
+                state: 'stale',
+                confidence: Math.min(selected.confidence, 40),
+                reviewedBy: 'operator',
+                staleReason: 'marked stale from the knowledge panel',
+              });
+            } else {
+              this.registry.review(id, {
+                state: 'contradicted',
+                confidence: 0,
+                reviewedBy: 'operator',
+                staleReason: 'marked contradicted from the knowledge panel',
+              });
+            }
+          } catch (e) {
+            // I2: surface async failure
+            this.setError(`Review update failed: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        this.refresh();
+        this.markDirty();
+        return true;
+      }
+      if (result === 'cancelled') {
+        this.confirm = null;
+        this.markDirty();
+        return true;
+      }
+      if (result === 'absorbed') return true;
+    }
+
+    // I2: auto-clear error on next keypress
+    if (this.lastError) this.clearError();
+
     if (this.records.length === 0) return false;
     if (key === 'ArrowUp' || key === 'k') {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
@@ -98,24 +145,14 @@ export class KnowledgePanel extends BasePanel {
       return true;
     }
     if (key === 's') {
-      this.registry.review(selected.id, {
-        state: 'stale',
-        confidence: Math.min(selected.confidence, 40),
-        reviewedBy: 'operator',
-        staleReason: 'marked stale from the knowledge panel',
-      });
-      this.refresh();
+      // I1: prompt confirm before marking stale
+      this.confirm = { subject: { id: selected.id, action: 'stale' }, label: selected.summary.slice(0, 40) };
       this.markDirty();
       return true;
     }
     if (key === 'c') {
-      this.registry.review(selected.id, {
-        state: 'contradicted',
-        confidence: 0,
-        reviewedBy: 'operator',
-        staleReason: 'marked contradicted from the knowledge panel',
-      });
-      this.refresh();
+      // I1: prompt confirm before marking contradicted
+      this.confirm = { subject: { id: selected.id, action: 'contradicted' }, label: selected.summary.slice(0, 40) };
       this.markDirty();
       return true;
     }
@@ -141,6 +178,18 @@ export class KnowledgePanel extends BasePanel {
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
+
+    // I1: show confirm dialog in place of normal content
+    if (this.confirm) {
+      return buildPanelWorkspace(width, height, {
+        title: 'Knowledge Control Room',
+        intro: '',
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirm) }],
+        footerLines: [buildPanelLine(width, [['  y confirm  n / Esc cancel', C.dim]])],
+        palette: C,
+      });
+    }
+
     if (this.records.length === 0) this.refresh();
 
     const intro = 'Typed project knowledge, reviewed evidence, and operator-governed memory across session, project, and team scopes.';

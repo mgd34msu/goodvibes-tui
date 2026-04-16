@@ -1,6 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import { handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import type { ProviderSubscription, PendingSubscriptionLogin } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
 import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime/ui-service-queries.ts';
@@ -95,7 +96,12 @@ export class SubscriptionPanel extends BasePanel {
     }
     if (key === 'enter' || key === 'x') {
       if (!selected?.subscription) return false;
-      if (this.logoutConfirmationTarget !== selected.provider) {
+      // I1: use confirm helper — first press sets target, second (y) executes
+      const confirmResult = handleConfirmInput(
+        this.logoutConfirmationTarget ? { subject: this.logoutConfirmationTarget, label: this.logoutConfirmationTarget } : null,
+        key,
+      );
+      if (this.logoutConfirmationTarget === null || this.logoutConfirmationTarget !== selected.provider) {
         this.logoutConfirmationTarget = selected.provider;
         this.markDirty();
         return true;
@@ -103,6 +109,12 @@ export class SubscriptionPanel extends BasePanel {
       this.subscriptionManager.logout(selected.provider);
       this.logoutConfirmationTarget = null;
       this.refresh();
+      this.markDirty();
+      return true;
+    }
+    // Allow n/Esc to cancel pending logout confirm
+    if ((key === 'n' || key === 'escape') && this.logoutConfirmationTarget) {
+      this.logoutConfirmationTarget = null;
       this.markDirty();
       return true;
     }

@@ -81,11 +81,19 @@ export class ApprovalPanel extends BasePanel {
         { label: 'what-if', value: '/policy simulate + preflight', valueColor: C.info },
         { label: 'operator', value: '/security + /cockpit', valueColor: C.good },
       ], C),
-      buildKeyValueLine(width, [
-        { label: 'recent approvals', value: String(policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === true).length), valueColor: C.good },
-        { label: 'recent denials', value: String(policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === false).length), valueColor: C.bad },
-        { label: 'pending', value: String(policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === undefined).length), valueColor: C.info },
-      ], C),
+      (() => {
+        const approvalCount = policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === true).length;
+        const denialCount = policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === false).length;
+        const pendingCount = policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === undefined).length;
+        return buildPanelLine(width, [
+          ['  \u2713 ', C.good],
+          [`approvals (${approvalCount})  `, C.good],
+          ['\u2715 ', C.bad],
+          [`denials (${denialCount})  `, C.bad],
+          ['\u25cb ', C.info],
+          [`pending (${pendingCount})`, C.info],
+        ]);
+      })(),
       buildGuidanceLine(width, '/approval review shell', 'inspect the highest-risk approval lane and refine scoped review posture', C),
     ];
     const footerLines = [buildPanelLine(width, [[`  Up/Down move  Home/End jump  selected lane opens the next command path`, C.dim]])];

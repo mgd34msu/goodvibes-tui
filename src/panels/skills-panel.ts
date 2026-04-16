@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
@@ -241,6 +242,8 @@ export class SkillsPanel extends BasePanel {
   private scrollOffset = 0;
   private cached: SkillRecord[] | null = null;
   private cacheDirty = true;
+  // I1: confirm state for destructive delete
+  private confirm: ConfirmState | null = null;
 
   public constructor(options: SkillsPanelOptions) {
     super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
@@ -259,6 +262,24 @@ export class SkillsPanel extends BasePanel {
   public override onDestroy(): void {}
 
   public handleInput(key: string): boolean {
+    // I1: y/n confirmation dialog for delete
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      const toDelete = this.confirm!.subject;
+      this.confirm = null;
+      // Skills are read from the filesystem — deletion requires a shell command.
+      // Surface an error directing the user to remove the file manually.
+      this.setError(`Delete via shell: rm "${toDelete}"`);
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
     const records = this._filteredSkills();
     if (this.filterFocused) {
       const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: records.length });
@@ -329,6 +350,15 @@ export class SkillsPanel extends BasePanel {
       this.markDirty();
       return true;
     }
+    // I1: 'd' prompts delete confirmation
+    if (key === 'd') {
+      const skill = records[this.selectedIndex];
+      if (skill) {
+        this.confirm = { subject: skill.path, label: skill.name };
+        this.markDirty();
+      }
+      return true;
+    }
     if (isPanelSearchBackspace(key)) {
       if (this.query.length === 0) return false;
       this.query = this.query.slice(0, -1);
@@ -355,6 +385,20 @@ export class SkillsPanel extends BasePanel {
 
     const start = Date.now();
     this.needsRender = false;
+
+    // I1: show confirm dialog in place of normal content
+    if (this.confirm) {
+      const lines = buildPanelWorkspace(width, height, {
+        title: 'Skills - confirm action',
+        intro: '',
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirm) }],
+        palette: C,
+      });
+      while (lines.length < height) lines.push(createEmptyLine(width));
+      this.reportRenderDuration(Date.now() - start);
+      return lines.slice(0, height);
+    }
+
     const intro = 'Discover project-local and global skill packs, filter by name or description, and inspect path, dependencies, and includes.';
     const skills = this._filteredSkills();
 

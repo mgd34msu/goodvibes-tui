@@ -115,6 +115,9 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   // -------------------------------------------------------------------------
 
   handleInput(key: string): boolean {
+    // I2: auto-clear error on next keypress
+    if (this.lastError) this.clearError();
+
     const items = this.getItems();
     const total = items.length;
 
@@ -205,6 +208,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
    * @param options.footer  Lines appended as the last workspace section.
    * @param options.emptyMessage  Override for the empty-state title text.
    * @param options.title  Workspace title (defaults to `this.name`).
+   * @param options.spinnerFrame  Animation frame for the loading spinner.
    */
   protected renderList(
     width: number,
@@ -214,12 +218,32 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
       readonly footer?: readonly Line[];
       readonly emptyMessage?: string;
       readonly title?: string;
+      readonly spinnerFrame?: number;
     } = {},
   ): Line[] {
     this.needsRender = false;
     const palette = this.getPalette();
     const items = this.getItems();
     const title = options.title ?? this.name;
+
+    // I2: inject error line into footer when present
+    const errorLine = this.renderErrorLine(width);
+    const baseFooter = options.footer ? [...options.footer as Line[]] : [];
+    const effectiveFooter: Line[] = errorLine ? [errorLine, ...baseFooter] : baseFooter;
+
+    // I3: if loading, show spinner in place of normal content
+    const spinnerLine = this.renderLoadingLine(width, options.spinnerFrame ?? 0);
+    if (spinnerLine) {
+      const loadingSection = { lines: [spinnerLine] };
+      const headerSection = options.header ? [{ lines: options.header as Line[] }] : [];
+      const lines = buildPanelWorkspace(width, height, {
+        title,
+        sections: [...headerSection, loadingSection],
+        palette,
+      });
+      while (lines.length < height) lines.push(createEmptyLine(width));
+      return lines.slice(0, height);
+    }
 
     // Build all item lines (pre-render for resolveScrollablePanelSection)
     const scrollableLines: Line[] = items.map((item, index) =>
@@ -240,7 +264,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
         sections: [
           ...(options.header ? [{ lines: options.header as Line[] }] : []),
           { lines: emptyLines },
-          ...(options.footer ? [{ lines: options.footer as Line[] }] : []),
+          ...(effectiveFooter.length > 0 ? [{ lines: effectiveFooter }] : []),
         ],
         palette,
       });
@@ -250,7 +274,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
 
     // Resolve scrollable section (updates scrollStart)
     const beforeSections = options.header ? [{ lines: options.header as Line[] }] : [];
-    const afterSections = options.footer ? [{ lines: options.footer as Line[] }] : [];
+    const afterSections = effectiveFooter.length > 0 ? [{ lines: effectiveFooter }] : [];
 
     const resolved = resolveScrollablePanelSection(width, height, {
       palette,
