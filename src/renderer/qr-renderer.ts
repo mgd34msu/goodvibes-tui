@@ -32,8 +32,8 @@ export function renderQrMatrix(
 
   // Each terminal row covers two matrix rows
   const terminalRows = Math.ceil(rows / 2);
-  // Calculate centering offset
-  const leftPad = Math.max(0, Math.floor((width - cols) / 2));
+  // Left-align with a small indent rather than centering
+  const leftPad = 2;
 
   const lines: Line[] = [];
 

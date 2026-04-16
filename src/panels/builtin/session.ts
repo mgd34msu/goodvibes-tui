@@ -1,3 +1,5 @@
+import { networkInterfaces } from 'node:os';
+import { readFileSync } from 'node:fs';
 import type { PanelManager } from '../panel-manager.ts';
 import { SessionBrowserPanel } from '../session-browser-panel.ts';
 import { QrPanel } from '../qr-panel.ts';
@@ -13,6 +15,32 @@ import {
 } from '@pellux/goodvibes-sdk/platform/pairing/index';
 import { copyToClipboard } from '../../utils/clipboard.ts';
 
+function getLocalNetworkIp(): string {
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] ?? []) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+function readBootstrapPassword(credentialPath: string): string | undefined {
+  try {
+    const content = readFileSync(credentialPath, 'utf-8');
+    for (const line of content.split('\n')) {
+      if (line.startsWith('password=')) {
+        return line.slice('password='.length).trim();
+      }
+    }
+  } catch {
+    // credential file may not exist yet
+  }
+  return undefined;
+}
+
 export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   manager.registerType({
     id: 'qr-code',
@@ -23,11 +51,13 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     factory: () => {
       const tokenRecord = getOrCreateCompanionToken('tui');
       const daemonPort = deps.configManager.get('controlPlane.port');
-      const daemonHost = String(process.env['GOODVIBES_DAEMON_HOST'] ?? 'localhost');
+      const daemonHost = String(process.env['GOODVIBES_DAEMON_HOST'] ?? getLocalNetworkIp());
       const daemonUrl = `http://${daemonHost}:${daemonPort}`;
+      const bootstrapPassword = readBootstrapPassword(deps.localUserAuthManager.getBootstrapCredentialPath());
       const connectionInfo = buildCompanionConnectionInfo({
         daemonUrl,
         token: tokenRecord.token,
+        password: bootstrapPassword,
         surface: 'tui',
       });
       const regenerate = (): typeof connectionInfo => {
@@ -35,6 +65,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
         return buildCompanionConnectionInfo({
           daemonUrl,
           token: newRecord.token,
+          password: bootstrapPassword,
           surface: 'tui',
         });
       };
