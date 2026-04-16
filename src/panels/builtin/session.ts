@@ -22,7 +22,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     description: 'QR code for companion app pairing — scan to connect a mobile or desktop companion',
     factory: () => {
       const tokenRecord = getOrCreateCompanionToken('tui');
-      const daemonPort = Number(process.env['GOODVIBES_DAEMON_PORT'] ?? process.env['PORT'] ?? 3000);
+      const daemonPort = deps.configManager.get('controlPlane.port');
       const daemonHost = String(process.env['GOODVIBES_DAEMON_HOST'] ?? 'localhost');
       const daemonUrl = `http://${daemonHost}:${daemonPort}`;
       const connectionInfo = buildCompanionConnectionInfo({
