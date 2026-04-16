@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "guard-pack",
+      "kind": "hook-pack",
+      "name": "Guard Pack",
+      "summary": "Shared hook guards for risky tool paths",
+      "source": "./catalog/hooks/guard-pack",
+      "tags": [
+        "hooks",
+        "security"
+      ]
+    }
+  ]
+}

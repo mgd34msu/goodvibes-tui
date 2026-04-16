@@ -1,0 +1,308 @@
+{
+  "display": {
+    "stream": true,
+    "lineNumbers": "off",
+    "collapseThreshold": 30,
+    "theme": "vaporwave",
+    "showThinking": false,
+    "showReasoningSummary": false,
+    "showTokenSpeed": false,
+    "showToolPreview": false
+  },
+  "provider": {
+    "reasoningEffort": "medium",
+    "model": "openrouter/free",
+    "provider": "openrouter",
+    "embeddingProvider": "hashed-local",
+    "systemPromptFile": ""
+  },
+  "behavior": {
+    "autoApprove": false,
+    "autoCompactThreshold": 80,
+    "staleContextWarnings": true,
+    "saveHistory": true,
+    "notifyOnComplete": true,
+    "suggestAlternativeOnProviderFail": false,
+    "hitlMode": "balanced",
+    "returnContextMode": "off",
+    "guidanceMode": "minimal"
+  },
+  "storage": {
+    "secretPolicy": "preferred_secure"
+  },
+  "permissions": {
+    "mode": "prompt",
+    "tools": {
+      "read": "allow",
+      "write": "prompt",
+      "edit": "prompt",
+      "exec": "prompt",
+      "find": "allow",
+      "fetch": "prompt",
+      "analyze": "allow",
+      "inspect": "allow",
+      "agent": "prompt",
+      "state": "allow",
+      "workflow": "prompt",
+      "registry": "allow",
+      "delegate": "prompt",
+      "mcp": "prompt"
+    }
+  },
+  "orchestration": {
+    "recursionEnabled": false,
+    "maxActiveAgents": 8,
+    "maxDepth": 0
+  },
+  "sandbox": {
+    "replIsolation": "shared-vm",
+    "mcpIsolation": "disabled",
+    "windowsMode": "native-basic",
+    "vmBackend": "qemu",
+    "qemuBinary": "qemu-system-x86_64",
+    "qemuImagePath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-fweZ9m/artifacts/qemu-bootstrap/images/goodvibes-sandbox.qcow2",
+    "qemuExecWrapper": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-fweZ9m/artifacts/qemu-bootstrap/qemu-wrapper.sh",
+    "qemuGuestHost": "127.0.0.1",
+    "qemuGuestPort": 2222,
+    "qemuGuestUser": "goodvibes",
+    "qemuWorkspacePath": "/workspace",
+    "qemuSessionMode": "launch-per-command"
+  },
+  "ui": {
+    "voiceEnabled": false,
+    "systemMessages": "panel",
+    "operationalMessages": "panel",
+    "wrfcMessages": "both"
+  },
+  "release": {
+    "channel": "stable"
+  },
+  "automation": {
+    "enabled": false,
+    "maxConcurrentRuns": 4,
+    "runHistoryLimit": 100,
+    "defaultTimeoutMs": 900000,
+    "catchUpWindowMinutes": 30,
+    "failureCooldownMs": 300000,
+    "deleteAfterRun": false
+  },
+  "controlPlane": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 3421,
+    "baseUrl": "http://127.0.0.1:3421",
+    "streamMode": "sse",
+    "allowRemote": false,
+    "trustProxy": false,
+    "tls": {
+      "mode": "off",
+      "certFile": "",
+      "keyFile": ""
+    }
+  },
+  "httpListener": {
+    "host": "127.0.0.1",
+    "port": 3422,
+    "trustProxy": false,
+    "tls": {
+      "mode": "off",
+      "certFile": "",
+      "keyFile": ""
+    }
+  },
+  "web": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 3423,
+    "publicBaseUrl": "http://127.0.0.1:3423",
+    "staticAssetsDir": "dist/web"
+  },
+  "surfaces": {
+    "slack": {
+      "enabled": false,
+      "signingSecret": "",
+      "botToken": "",
+      "appToken": "",
+      "defaultChannel": "",
+      "workspaceId": "",
+      "setupVersion": 0
+    },
+    "discord": {
+      "enabled": false,
+      "publicKey": "",
+      "botToken": "",
+      "applicationId": "",
+      "defaultChannelId": "",
+      "guildId": "",
+      "setupVersion": 0
+    },
+    "ntfy": {
+      "enabled": false,
+      "baseUrl": "https://ntfy.sh",
+      "topic": "",
+      "token": "",
+      "defaultPriority": 3,
+      "setupVersion": 0
+    },
+    "webhook": {
+      "enabled": false,
+      "defaultTarget": "",
+      "timeoutMs": 10000,
+      "secret": "",
+      "setupVersion": 0
+    },
+    "telegram": {
+      "enabled": false,
+      "botToken": "",
+      "webhookSecret": "",
+      "defaultChatId": "",
+      "botUsername": "",
+      "mode": "webhook",
+      "setupVersion": 0
+    },
+    "googleChat": {
+      "enabled": false,
+      "webhookUrl": "",
+      "verificationToken": "",
+      "appId": "",
+      "spaceId": "",
+      "setupVersion": 0
+    },
+    "signal": {
+      "enabled": false,
+      "bridgeUrl": "",
+      "account": "",
+      "token": "",
+      "defaultRecipient": "",
+      "setupVersion": 0
+    },
+    "whatsapp": {
+      "enabled": false,
+      "provider": "meta-cloud",
+      "accessToken": "",
+      "verifyToken": "",
+      "signingSecret": "",
+      "phoneNumberId": "",
+      "businessAccountId": "",
+      "defaultRecipient": "",
+      "setupVersion": 0
+    },
+    "imessage": {
+      "enabled": false,
+      "bridgeUrl": "",
+      "account": "",
+      "token": "",
+      "defaultChatId": "",
+      "setupVersion": 0
+    },
+    "msteams": {
+      "enabled": false,
+      "appId": "",
+      "appPassword": "",
+      "tenantId": "",
+      "serviceUrl": "",
+      "botId": "",
+      "defaultConversationId": "",
+      "defaultChannelId": "",
+      "setupVersion": 0
+    },
+    "bluebubbles": {
+      "enabled": false,
+      "serverUrl": "",
+      "password": "",
+      "account": "",
+      "defaultChatGuid": "",
+      "setupVersion": 0
+    },
+    "mattermost": {
+      "enabled": false,
+      "baseUrl": "",
+      "botToken": "",
+      "teamId": "",
+      "defaultChannelId": "",
+      "setupVersion": 0
+    },
+    "matrix": {
+      "enabled": false,
+      "homeserverUrl": "",
+      "accessToken": "",
+      "userId": "",
+      "defaultRoomId": "",
+      "setupVersion": 0
+    }
+  },
+  "watchers": {
+    "enabled": false,
+    "pollIntervalMs": 60000,
+    "heartbeatIntervalMs": 15000,
+    "recoveryWindowMinutes": 10
+  },
+  "service": {
+    "enabled": false,
+    "autostart": false,
+    "restartOnFailure": true,
+    "platform": "auto",
+    "serviceName": "goodvibes",
+    "logPath": ""
+  },
+  "network": {
+    "outboundTls": {
+      "mode": "bundled",
+      "customCaFile": "",
+      "customCaDir": "",
+      "allowInsecureLocalhost": false
+    },
+    "remoteFetch": {
+      "allowPrivateHosts": false
+    }
+  },
+  "danger": {
+    "daemon": false,
+    "httpListener": false
+  },
+  "tools": {
+    "llmEnabled": false,
+    "llmProvider": "",
+    "llmModel": "",
+    "autoHeal": false,
+    "defaultTokenBudget": 5000,
+    "hooksFile": "hooks.json"
+  },
+  "wrfc": {
+    "scoreThreshold": 9.9,
+    "maxFixAttempts": 5,
+    "autoCommit": true,
+    "gates": [
+      {
+        "name": "typecheck",
+        "command": "npx tsc --noEmit",
+        "enabled": true
+      },
+      {
+        "name": "lint",
+        "command": "npx eslint . --max-warnings 0",
+        "enabled": true
+      },
+      {
+        "name": "build",
+        "command": "npm run build",
+        "enabled": false
+      }
+    ]
+  },
+  "cache": {
+    "enabled": true,
+    "stableTtl": "1h",
+    "monitorHitRate": true,
+    "hitRateWarningThreshold": 0.3
+  },
+  "helper": {
+    "enabled": false,
+    "globalProvider": "",
+    "globalModel": ""
+  },
+  "notifications": {
+    "webhookUrls": []
+  },
+  "featureFlags": {}
+}

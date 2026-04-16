@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "hook-pack:guard-pack",
+  "kind": "hook-pack",
+  "installedAt": 1776360185285,
+  "scope": "project",
+  "entry": {
+    "id": "guard-pack",
+    "kind": "hook-pack",
+    "name": "Guard Pack",
+    "summary": "Shared hook guards for risky tool paths",
+    "source": "./catalog/hooks/guard-pack",
+    "tags": [
+      "hooks",
+      "security"
+    ]
+  },
+  "sourcePath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-e2PmAj/catalog/hooks/guard-pack",
+  "targetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-e2PmAj/.goodvibes/hooks/packs/guard-pack",
+  "fingerprint": "fb843d6c92c0f9549c954edd35212e08cf9689812cf5ec49a01a39f9d6d7d065",
+  "provenanceSummary": "./catalog/hooks/guard-pack",
+  "compatibility": {
+    "appVersion": "0.18.33",
+    "status": "compatible",
+    "reasons": []
+  }
+}

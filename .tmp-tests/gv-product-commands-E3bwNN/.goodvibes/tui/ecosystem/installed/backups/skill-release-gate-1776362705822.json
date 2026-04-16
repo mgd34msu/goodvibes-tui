@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "skill:release-gate:1776362705822",
+  "kind": "skill",
+  "createdAt": 1776362705822,
+  "scope": "project",
+  "archivedTargetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-E3bwNN/.goodvibes/tui/ecosystem/installed/backups/skill-release-gate-1776362705822",
+  "targetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-E3bwNN/.goodvibes/skills/release-gate",
+  "receipt": {
+    "version": 1,
+    "id": "skill:release-gate",
+    "kind": "skill",
+    "installedAt": 1776362705822,
+    "scope": "project",
+    "entry": {
+      "id": "release-gate",
+      "kind": "skill",
+      "name": "Release Gate",
+      "summary": "Runs release certification and deploy checks",
+      "source": "./catalog/skills/release-gate",
+      "tags": [
+        "release",
+        "ops"
+      ],
+      "installHint": "Place under .goodvibes/skills/release-gate/SKILL.md."
+    },
+    "sourcePath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-E3bwNN/catalog/skills/release-gate",
+    "targetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-E3bwNN/.goodvibes/skills/release-gate",
+    "fingerprint": "f364a1ed148ad21e0c2b10c433404a58e65c1a12bdbb8625f1de59a8f1b733f8",
+    "provenanceSummary": "./catalog/skills/release-gate",
+    "compatibility": {
+      "appVersion": "0.18.36",
+      "status": "compatible",
+      "reasons": []
+    }
+  },
+  "reason": "uninstall"
+}

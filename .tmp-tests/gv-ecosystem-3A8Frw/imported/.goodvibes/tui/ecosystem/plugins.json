@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "deploy-audit",
+      "kind": "plugin",
+      "name": "Deploy Audit",
+      "summary": "Reviews deploy surfaces before release",
+      "version": "1.0.0",
+      "author": "GoodVibes",
+      "source": "./catalog/plugins/deploy-audit",
+      "tags": [
+        "security",
+        "release"
+      ],
+      "provenance": "curated-local"
+    }
+  ]
+}

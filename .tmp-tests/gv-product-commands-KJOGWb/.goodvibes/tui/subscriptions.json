@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "subscriptions": {
+    "openai": {
+      "provider": "openai",
+      "accessToken": "header.payload.signature",
+      "tokenType": "Bearer",
+      "expiresAt": 1776361081027,
+      "authMode": "oauth",
+      "overrideAmbientApiKeys": true,
+      "createdAt": 1776361076027,
+      "updatedAt": 1776361076027
+    }
+  },
+  "pending": {}
+}

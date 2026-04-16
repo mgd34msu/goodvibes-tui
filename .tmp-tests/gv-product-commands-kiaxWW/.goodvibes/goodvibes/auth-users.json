@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "users": [
+    {
+      "username": "admin",
+      "passwordHash": "GrTU3Taw0EMIV0j4ekABPg==:Rn0WxISeF8eK91b2kn3XyOeDz2513m63+N98WAb0TCxsVjnbPIxMV149xu0rMMuqMaeeSwrE/xB8Nc/bpXszew==",
+      "roles": [
+        "admin"
+      ]
+    }
+  ]
+}

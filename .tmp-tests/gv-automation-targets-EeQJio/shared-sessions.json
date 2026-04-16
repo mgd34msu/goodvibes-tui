@@ -1,0 +1,83 @@
+{
+  "sessions": [
+    {
+      "id": "sess-8bb3f877",
+      "title": "Route-bound automation",
+      "status": "active",
+      "createdAt": 1776360035211,
+      "updatedAt": 1776360035212,
+      "lastMessageAt": 1776360035212,
+      "messageCount": 1,
+      "pendingInputCount": 1,
+      "routeIds": [
+        "route-15b5c21bcc66"
+      ],
+      "surfaceKinds": [
+        "service"
+      ],
+      "participants": [
+        {
+          "surfaceKind": "service",
+          "surfaceId": "surface:automation",
+          "externalId": "automation:auto-70097943",
+          "userId": "automation",
+          "displayName": "Automation: Route-bound automation",
+          "routeId": "route-15b5c21bcc66",
+          "lastSeenAt": 1776360035211
+        }
+      ],
+      "activeAgentId": "agent-246",
+      "lastAgentId": "agent-246",
+      "metadata": {
+        "automationJobId": "auto-70097943",
+        "trigger": "manual",
+        "targetKind": "route"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "id": "smsg-72ece087",
+      "sessionId": "sess-8bb3f877",
+      "role": "user",
+      "body": "Post the weekly route summary",
+      "createdAt": 1776360035212,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "routeId": "route-15b5c21bcc66",
+      "userId": "automation",
+      "displayName": "Automation: Route-bound automation",
+      "metadata": {
+        "automationJobId": "auto-70097943",
+        "trigger": "manual",
+        "targetKind": "route",
+        "sessionIntent": "submit"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "sin-3908a47c",
+      "sessionId": "sess-8bb3f877",
+      "intent": "submit",
+      "state": "spawned",
+      "correlationId": "session-input:sin-3908a47c",
+      "causationId": "smsg-72ece087",
+      "body": "Post the weekly route summary",
+      "createdAt": 1776360035212,
+      "updatedAt": 1776360035212,
+      "routeId": "route-15b5c21bcc66",
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "externalId": "automation:auto-70097943",
+      "userId": "automation",
+      "displayName": "Automation: Route-bound automation",
+      "metadata": {
+        "automationJobId": "auto-70097943",
+        "trigger": "manual",
+        "targetKind": "route"
+      },
+      "activeAgentId": "agent-246"
+    }
+  ]
+}

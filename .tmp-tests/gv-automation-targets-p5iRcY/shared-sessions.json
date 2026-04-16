@@ -1,0 +1,83 @@
+{
+  "sessions": [
+    {
+      "id": "sess-live",
+      "title": "Live continuation automation",
+      "status": "active",
+      "createdAt": 1776360035217,
+      "updatedAt": 1776360035217,
+      "lastMessageAt": 1776360035217,
+      "messageCount": 1,
+      "pendingInputCount": 1,
+      "routeIds": [],
+      "surfaceKinds": [
+        "tui",
+        "service"
+      ],
+      "participants": [
+        {
+          "surfaceKind": "tui",
+          "surfaceId": "surface:tui",
+          "displayName": "Terminal UI",
+          "lastSeenAt": 1776360035217
+        },
+        {
+          "surfaceKind": "service",
+          "surfaceId": "surface:automation",
+          "externalId": "automation:auto-e75b53e0",
+          "userId": "automation",
+          "displayName": "Automation: Live continuation automation",
+          "lastSeenAt": 1776360035217
+        }
+      ],
+      "activeAgentId": "agent-450e0ca8",
+      "lastAgentId": "agent-450e0ca8",
+      "metadata": {
+        "source": "tui"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "id": "smsg-796d9a62",
+      "sessionId": "sess-live",
+      "role": "user",
+      "body": "Add this instruction to the active session",
+      "createdAt": 1776360035217,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "userId": "automation",
+      "displayName": "Automation: Live continuation automation",
+      "metadata": {
+        "automationJobId": "auto-e75b53e0",
+        "trigger": "manual",
+        "targetKind": "session",
+        "sessionIntent": "submit"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "sin-c5dc99ff",
+      "sessionId": "sess-live",
+      "intent": "submit",
+      "state": "delivered",
+      "correlationId": "session-input:sin-c5dc99ff",
+      "causationId": "smsg-796d9a62",
+      "body": "Add this instruction to the active session",
+      "createdAt": 1776360035217,
+      "updatedAt": 1776360035217,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "externalId": "automation:auto-e75b53e0",
+      "userId": "automation",
+      "displayName": "Automation: Live continuation automation",
+      "metadata": {
+        "automationJobId": "auto-e75b53e0",
+        "trigger": "manual",
+        "targetKind": "session"
+      },
+      "activeAgentId": "agent-450e0ca8"
+    }
+  ]
+}

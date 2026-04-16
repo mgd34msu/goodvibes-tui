@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "capturedAt": 1776360067445,
+  "runtime": {
+    "provider": "",
+    "model": "",
+    "sessionId": "sess-product"
+  },
+  "evalSuites": [
+    "core-performance",
+    "safety-baseline",
+    "cost-tokens"
+  ],
+  "incidentCount": 1,
+  "remote": {
+    "pools": 0,
+    "contracts": 0,
+    "artifacts": 0
+  },
+  "ecosystem": {
+    "pluginCatalog": 0,
+    "skillCatalog": 0,
+    "installedPlugins": 0,
+    "installedSkills": 0
+  }
+}

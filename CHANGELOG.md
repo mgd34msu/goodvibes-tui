@@ -4,6 +4,30 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.16] — 2026-04-16
+
+### Bug Fixes
+
+- **resolveToolLLM tests**: enabled `tools.llmEnabled` by default in `createTestManagers()` (`src/test/helpers/test-managers.ts`) so tool LLM resolution tests exercise the resolution logic directly; previously every test hit the gate and resolved to `null`
+- **Domain boundary contract test (GC-ARCH-001)**: removed `'conversation'` and `'permissions'` from the `DOMAINS` array in `src/runtime/store/domains/domain-read-matrix.ts` — the files they referenced were deleted in 0.18.15 and the filesystem↔array consistency check was failing
+
+### Architecture
+
+- **settings-modal decomposition**: extracted 10 pure helpers (`formatValue`, `valueColor`, `flagStateColor`, `mcpTrustColor`, `subscriptionStateColor`, `inferSubscriptionRouteReason`, `CATEGORY_LABELS`, `SETTING_LABELS`, `getSettingLabel`, `describeUiRouting`) into `src/renderer/settings-modal-helpers.ts`. `settings-modal.ts` drops from 844 → 737 lines, back under the 800-line architecture cap
+
+### Dependencies
+
+- Bumped `@pellux/goodvibes-sdk` 0.18.33 → 0.18.36, picking up: daemon shutdown symmetry, event bus iteration fix, atomic session writes, rate limiter TTL + LRU + sweep, `fetchWithTimeout` helper, restored port honoring in `resolveHostBinding` for `local`/`network` hostModes, and restored constructor-injected port/host in `resolveDaemonFacadeRuntime`
+- Regenerated `docs/foundation-artifacts/*` against the new SDK
+
+### Tests & Checks
+
+- Test suite: 437/437 passing (was 431/437 after 0.18.15)
+- Architecture check: passing (was failing with `settings-modal.ts` 844 > 800-line cap)
+- Typecheck: clean
+
+---
+
 ## [0.18.15] — 2026-04-16
 
 ### Correctness Fix

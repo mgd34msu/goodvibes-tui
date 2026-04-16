@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "workspaceRoot": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-RhCLtC",
+  "guestWorkspace": "/workspace",
+  "excludes": [
+    ".git",
+    "node_modules",
+    ".venv",
+    ".goodvibes/cache",
+    ".env*",
+    "*.pem",
+    "*.key",
+    "*credentials*",
+    "*secret*"
+  ],
+  "notes": [
+    "Review and tighten this projection policy before enabling untrusted MCP workloads.",
+    "The wrapper syncs the filtered project root into the guest over tar+ssh."
+  ]
+}

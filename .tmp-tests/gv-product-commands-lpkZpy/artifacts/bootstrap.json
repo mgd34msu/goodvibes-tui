@@ -1,0 +1,18 @@
+{
+  "exportedAt": 1776360185033,
+  "sessionId": "sess-product",
+  "acpAgentCommand": [
+    "/home/buzzkill/.bun/bin/bun",
+    "run",
+    "/home/buzzkill/Projects/goodvibes-tui/src/test/input/product-breadth-commands.test.ts",
+    "--acp"
+  ],
+  "env": {
+    "ACP_AGENT_CMD": "/home/buzzkill/.bun/bin/bun run /home/buzzkill/Projects/goodvibes-tui/src/test/input/product-breadth-commands.test.ts --acp",
+    "GOODVIBES_REMOTE_SESSION": "sess-product"
+  },
+  "links": [
+    "goodvibes://open/remote",
+    "goodvibes://open/cockpit?target=remote"
+  ]
+}

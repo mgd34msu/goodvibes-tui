@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "exportedAt": 1776361086880,
+  "appVersion": "0.18.16",
+  "workingDirectory": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-sSI8vr",
+  "homeDirectory": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-sSI8vr",
+  "profileCount": 0,
+  "secretKeyCount": 0,
+  "setupLinks": [
+    "goodvibes://open/cockpit",
+    "goodvibes://open/security",
+    "goodvibes://open/remote",
+    "goodvibes://open/knowledge"
+  ]
+}

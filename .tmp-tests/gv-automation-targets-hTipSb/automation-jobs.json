@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "auto-04ff91f2",
+      "labels": [],
+      "createdAt": 1776361055293,
+      "updatedAt": 1776361055293,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "name": "Live continuation automation",
+      "description": "Add this instruction to the active session",
+      "status": "enabled",
+      "enabled": true,
+      "schedule": {
+        "kind": "every",
+        "intervalMs": 1200000
+      },
+      "execution": {
+        "prompt": "Add this instruction to the active session",
+        "target": {
+          "kind": "session",
+          "sessionId": "sess-live",
+          "createIfMissing": false
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "delivery": {
+        "mode": "none",
+        "targets": [],
+        "fallbackTargets": [],
+        "includeSummary": true,
+        "includeTranscript": false,
+        "includeLinks": true
+      },
+      "failure": {
+        "action": "retry",
+        "maxConsecutiveFailures": 3,
+        "cooldownMs": 300000,
+        "retryPolicy": {
+          "maxAttempts": 3,
+          "delayMs": 5000,
+          "strategy": "exponential",
+          "maxDelayMs": 60000,
+          "jitterMs": 500
+        },
+        "disableAfterFailures": false
+      },
+      "source": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776361055293,
+        "updatedAt": 1776361055293,
+        "metadata": {}
+      },
+      "nextRunAt": 1776362255293,
+      "lastRunAt": 1776361055293,
+      "lastRunId": "autorun-auto-04ff91f2-1776361055293-3927a5",
+      "runCount": 1,
+      "successCount": 0,
+      "failureCount": 0,
+      "deleteAfterRun": false
+    }
+  ]
+}

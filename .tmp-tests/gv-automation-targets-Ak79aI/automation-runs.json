@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "id": "autorun-auto-a30dfcc7-1776360916208-dbcd78",
+      "labels": [
+        "manual"
+      ],
+      "createdAt": 1776360916208,
+      "updatedAt": 1776360916208,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "jobId": "auto-a30dfcc7",
+      "status": "running",
+      "triggeredBy": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776360916208,
+        "updatedAt": 1776360916208,
+        "metadata": {},
+        "lastSeenAt": 1776360916208
+      },
+      "target": {
+        "kind": "session",
+        "sessionId": "sess-live",
+        "createIfMissing": false
+      },
+      "execution": {
+        "prompt": "Add this instruction to the active session",
+        "target": {
+          "kind": "session",
+          "sessionId": "sess-live",
+          "createIfMissing": false
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "scheduleKind": "every",
+      "queuedAt": 1776360916208,
+      "startedAt": 1776360916208,
+      "forceRun": true,
+      "dueRun": false,
+      "attempt": 1,
+      "sessionId": "sess-live",
+      "continuationMode": "continued-live",
+      "executionIntent": {
+        "targetKind": "session",
+        "mode": "continued-live"
+      },
+      "deliveryIds": [],
+      "agentId": "agent-e433a04a"
+    }
+  ]
+}

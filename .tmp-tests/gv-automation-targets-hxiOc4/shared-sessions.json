@@ -1,0 +1,83 @@
+{
+  "sessions": [
+    {
+      "id": "sess-current",
+      "title": "Current session automation",
+      "status": "active",
+      "createdAt": 1776362669832,
+      "updatedAt": 1776362669833,
+      "lastMessageAt": 1776362669832,
+      "messageCount": 1,
+      "pendingInputCount": 1,
+      "routeIds": [],
+      "surfaceKinds": [
+        "tui",
+        "service"
+      ],
+      "participants": [
+        {
+          "surfaceKind": "tui",
+          "surfaceId": "surface:tui",
+          "displayName": "Terminal UI",
+          "lastSeenAt": 1776362669832
+        },
+        {
+          "surfaceKind": "service",
+          "surfaceId": "surface:automation",
+          "externalId": "automation:auto-bed1fd83",
+          "userId": "automation",
+          "displayName": "Automation: Current session automation",
+          "lastSeenAt": 1776362669832
+        }
+      ],
+      "activeAgentId": "agent-262",
+      "lastAgentId": "agent-262",
+      "metadata": {
+        "source": "tui"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "id": "smsg-be1a8641",
+      "sessionId": "sess-current",
+      "role": "user",
+      "body": "Continue the active terminal workflow",
+      "createdAt": 1776362669832,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "userId": "automation",
+      "displayName": "Automation: Current session automation",
+      "metadata": {
+        "automationJobId": "auto-bed1fd83",
+        "trigger": "manual",
+        "targetKind": "current",
+        "sessionIntent": "submit"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "sin-3acbac7a",
+      "sessionId": "sess-current",
+      "intent": "submit",
+      "state": "spawned",
+      "correlationId": "session-input:sin-3acbac7a",
+      "causationId": "smsg-be1a8641",
+      "body": "Continue the active terminal workflow",
+      "createdAt": 1776362669833,
+      "updatedAt": 1776362669833,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "externalId": "automation:auto-bed1fd83",
+      "userId": "automation",
+      "displayName": "Automation: Current session automation",
+      "metadata": {
+        "automationJobId": "auto-bed1fd83",
+        "trigger": "manual",
+        "targetKind": "current"
+      },
+      "activeAgentId": "agent-262"
+    }
+  ]
+}

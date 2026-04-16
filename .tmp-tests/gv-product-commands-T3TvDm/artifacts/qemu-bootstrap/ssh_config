@@ -1,0 +1,7 @@
+Host goodvibes-sandbox
+  HostName 127.0.0.1
+  Port 2222
+  User goodvibes
+  StrictHostKeyChecking accept-new
+  UserKnownHostsFile ~/.goodvibes/tui/known_hosts
+  LogLevel ERROR

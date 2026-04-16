@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "auto-12d8885f",
+      "labels": [],
+      "createdAt": 1776360916201,
+      "updatedAt": 1776360916201,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "name": "Route-bound automation",
+      "description": "Post the weekly route summary",
+      "status": "enabled",
+      "enabled": true,
+      "schedule": {
+        "kind": "every",
+        "intervalMs": 600000
+      },
+      "execution": {
+        "prompt": "Post the weekly route summary",
+        "target": {
+          "kind": "route",
+          "routeId": "route-15b5c21bcc66",
+          "preserveThread": true,
+          "threadId": "171234.5"
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "delivery": {
+        "mode": "none",
+        "targets": [],
+        "fallbackTargets": [],
+        "includeSummary": true,
+        "includeTranscript": false,
+        "includeLinks": true
+      },
+      "failure": {
+        "action": "retry",
+        "maxConsecutiveFailures": 3,
+        "cooldownMs": 300000,
+        "retryPolicy": {
+          "maxAttempts": 3,
+          "delayMs": 5000,
+          "strategy": "exponential",
+          "maxDelayMs": 60000,
+          "jitterMs": 500
+        },
+        "disableAfterFailures": false
+      },
+      "source": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776360916201,
+        "updatedAt": 1776360916201,
+        "metadata": {}
+      },
+      "nextRunAt": 1776361516201,
+      "lastRunAt": 1776360916201,
+      "lastRunId": "autorun-auto-12d8885f-1776360916201-6c5a5b",
+      "runCount": 1,
+      "successCount": 0,
+      "failureCount": 0,
+      "deleteAfterRun": false
+    }
+  ]
+}

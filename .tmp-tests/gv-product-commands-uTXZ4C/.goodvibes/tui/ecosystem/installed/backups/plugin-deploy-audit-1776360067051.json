@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "plugin:deploy-audit:1776360067051",
+  "kind": "plugin",
+  "createdAt": 1776360067051,
+  "scope": "project",
+  "archivedTargetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-uTXZ4C/.goodvibes/tui/ecosystem/installed/backups/plugin-deploy-audit-1776360067051",
+  "targetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-uTXZ4C/.goodvibes/plugins/deploy-audit",
+  "receipt": {
+    "version": 1,
+    "id": "plugin:deploy-audit",
+    "kind": "plugin",
+    "installedAt": 1776360067050,
+    "scope": "project",
+    "entry": {
+      "id": "deploy-audit",
+      "kind": "plugin",
+      "name": "Deploy Audit",
+      "summary": "Reviews deploy surfaces before release",
+      "source": "./catalog/plugins/deploy-audit",
+      "tags": [
+        "security",
+        "release"
+      ],
+      "installHint": "Clone into .goodvibes/tui/plugins/deploy-audit and reload."
+    },
+    "sourcePath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-uTXZ4C/catalog/plugins/deploy-audit",
+    "targetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-uTXZ4C/.goodvibes/plugins/deploy-audit",
+    "fingerprint": "07aaca2b363c76676baf9006d907c95c7ea677ddd9ff910203a3581feee22c6d",
+    "provenanceSummary": "./catalog/plugins/deploy-audit",
+    "compatibility": {
+      "appVersion": "0.18.33",
+      "status": "compatible",
+      "reasons": []
+    }
+  },
+  "reason": "uninstall"
+}

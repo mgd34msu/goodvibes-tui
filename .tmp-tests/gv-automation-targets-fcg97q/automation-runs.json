@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "id": "autorun-auto-a835e40e-1776359907355-2aee7a",
+      "labels": [
+        "manual"
+      ],
+      "createdAt": 1776359907355,
+      "updatedAt": 1776359907355,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "jobId": "auto-a835e40e",
+      "status": "running",
+      "triggeredBy": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776359907355,
+        "updatedAt": 1776359907355,
+        "metadata": {},
+        "lastSeenAt": 1776359907355
+      },
+      "target": {
+        "kind": "current",
+        "surfaceKind": "tui",
+        "createIfMissing": false,
+        "sessionId": "sess-current"
+      },
+      "execution": {
+        "prompt": "Continue the active terminal workflow",
+        "target": {
+          "kind": "current",
+          "surfaceKind": "tui",
+          "createIfMissing": false
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "scheduleKind": "every",
+      "queuedAt": 1776359907355,
+      "startedAt": 1776359907355,
+      "forceRun": true,
+      "dueRun": false,
+      "attempt": 1,
+      "sessionId": "sess-current",
+      "continuationMode": "shared-session",
+      "executionIntent": {
+        "targetKind": "current",
+        "mode": "shared-session"
+      },
+      "deliveryIds": [],
+      "agentId": "agent-262"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+{"type":"meta","timestamp":1776361212960,"title":"Resume Me","model":"","provider":"","titleSource":"system","returnContext":{"summary":"returning to blocked work","lines":["Pending approvals spotted: 2","Remote runners: runner-a","Worktree paths: /tmp/demo-worktree","Open panels: remote, approval"],"pendingApprovals":2,"activeTasks":1,"blockedTasks":1,"remoteContracts":1,"remoteRunners":["runner-a"],"worktreeCount":1,"worktreePaths":["/tmp/demo-worktree"],"openPanels":["remote","approval"]}}
+{"role":"user","content":"hello","type":"message"}

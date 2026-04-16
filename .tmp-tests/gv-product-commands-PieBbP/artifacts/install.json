@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "exportedAt": 1776359939884,
+  "appVersion": "0.18.15",
+  "workingDirectory": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-PieBbP",
+  "homeDirectory": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-PieBbP",
+  "profileCount": 0,
+  "secretKeyCount": 0,
+  "setupLinks": [
+    "goodvibes://open/cockpit",
+    "goodvibes://open/security",
+    "goodvibes://open/remote",
+    "goodvibes://open/knowledge"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "id": "policy-pack:strict-policy",
+  "kind": "policy-pack",
+  "installedAt": 1776362852952,
+  "scope": "project",
+  "entry": {
+    "id": "strict-policy",
+    "kind": "policy-pack",
+    "name": "Strict Policy",
+    "summary": "Operator-reviewed restrictive policy pack",
+    "source": "./catalog/policies/strict-policy",
+    "tags": [
+      "policy",
+      "security"
+    ]
+  },
+  "sourcePath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-g6w5P1/catalog/policies/strict-policy",
+  "targetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-g6w5P1/.goodvibes/policies/packs/strict-policy",
+  "fingerprint": "a3494831a9b26cc8bfb6f87b4f674c29e166b56e8ae90aff5c4c33beac57d1c8",
+  "provenanceSummary": "./catalog/policies/strict-policy",
+  "compatibility": {
+    "appVersion": "0.18.36",
+    "status": "compatible",
+    "reasons": []
+  }
+}

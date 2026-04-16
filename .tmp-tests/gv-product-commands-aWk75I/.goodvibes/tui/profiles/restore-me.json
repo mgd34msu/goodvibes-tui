@@ -1,0 +1,10 @@
+{
+  "name": "restore-me",
+  "timestamp": 1776360646435,
+  "display": {},
+  "provider": {
+    "model": "model-1",
+    "reasoningEffort": "medium"
+  },
+  "behavior": {}
+}

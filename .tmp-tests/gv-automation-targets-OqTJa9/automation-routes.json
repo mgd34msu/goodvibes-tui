@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "id": "route-15b5c21bcc66",
+      "kind": "thread",
+      "surfaceKind": "slack",
+      "surfaceId": "surface:slack",
+      "externalId": "C123",
+      "sessionPolicy": "create-or-bind",
+      "threadPolicy": "preserve",
+      "deliveryGuarantee": "best-effort",
+      "threadId": "171234.5",
+      "sessionId": "sess-b0540207",
+      "jobId": "auto-e59bcb92",
+      "runId": "autorun-auto-e59bcb92-1776361871280-025bd3",
+      "title": "Slack thread",
+      "lastSeenAt": 1776361871282,
+      "createdAt": 1776361871280,
+      "updatedAt": 1776361871282,
+      "metadata": {
+        "channel": "#ops"
+      }
+    }
+  ]
+}

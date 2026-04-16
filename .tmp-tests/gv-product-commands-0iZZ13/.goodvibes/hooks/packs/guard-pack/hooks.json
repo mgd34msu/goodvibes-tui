@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "Pre:tool:*": [
+      {
+        "name": "guard-edit",
+        "match": "Pre:tool:*",
+        "type": "command",
+        "command": "echo guard"
+      }
+    ]
+  },
+  "chains": []
+}

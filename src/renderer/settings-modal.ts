@@ -17,124 +17,17 @@ import { SETTINGS_CATEGORIES } from '../input/settings-modal.ts';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { getVisibleWindow } from './surface-layout.ts';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function formatValue(entry: SettingEntry): string {
-  const val = entry.currentValue;
-  if (val === null || val === undefined) return '(unset)';
-  if (typeof val === 'boolean') return val ? 'true' : 'false';
-  if (typeof val === 'string' && val === '') return '(empty)';
-  return String(val);
-}
-
-function valueColor(entry: SettingEntry): string {
-  if (!entry.isDefault) return '#00ffcc'; // cyan-green = modified
-  return '244';                            // dim = default
-}
-
-function flagStateColor(state: string, killed: boolean): string {
-  if (killed) return '#ef4444'; // red
-  if (state === 'enabled') return '#00ffcc'; // cyan-green
-  return '244'; // dim
-}
-
-function mcpTrustColor(mode: McpEntry['trustMode']): string {
-  switch (mode) {
-    case 'allow-all':
-      return '#ef4444';
-    case 'ask-on-risk':
-      return '#eab308';
-    case 'constrained':
-      return '#00ffcc';
-    case 'blocked':
-      return '244';
-    default:
-      return '244';
-  }
-}
-
-function subscriptionStateColor(state: SubscriptionEntry['state']): string {
-  switch (state) {
-    case 'active':
-      return '#00ffcc';
-    case 'pending':
-      return '#eab308';
-    case 'available':
-      return '#38bdf8';
-    default:
-      return '244';
-  }
-}
-
-function inferSubscriptionRouteReason(entry: SubscriptionEntry): string | undefined {
-  if (entry.routeReason?.trim()) return entry.routeReason;
-  if (entry.state === 'active' && entry.oauthConfigured) {
-    return 'ambient key override enabled for this provider.';
-  }
-  if (entry.state === 'pending' && entry.oauthConfigured) {
-    return 'oauth configuration present; ambient key override will apply after activation.';
-  }
-  return undefined;
-}
-
-const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], string> = {
-  display: 'Display',
-  ui: 'UI',
-  provider: 'Provider',
-  subscriptions: 'Subscriptions',
-  behavior: 'Behavior',
-  storage: 'Storage',
-  permissions: 'Permissions',
-  mcp: 'MCP',
-  sandbox: 'Sandbox',
-  danger: 'Danger',
-  tools: 'Tools',
-  flags: 'Flags',
-};
-
-const SETTING_LABELS: Partial<Record<string, string>> = {
-  'ui.systemMessages': 'System Message Target',
-  'ui.operationalMessages': 'Operational Message Target',
-  'ui.wrfcMessages': 'WRFC Message Target',
-  'ui.voiceEnabled': 'Voice Surface',
-  'behavior.autoCompactThreshold': 'Auto-Compact %',
-  'behavior.staleContextWarnings': 'Context Warnings',
-  'behavior.returnContextMode': 'Return Context',
-  'behavior.guidanceMode': 'Guidance Mode',
-  'storage.secretPolicy': 'Secret Policy',
-  'sandbox.vmBackend': 'Sandbox Backend',
-  'sandbox.qemuBinary': 'QEMU Binary',
-  'sandbox.qemuImagePath': 'QEMU Image',
-  'sandbox.qemuExecWrapper': 'QEMU Wrapper',
-  'tools.llmProvider': 'Tool LLM Provider',
-  'tools.llmModel': 'Tool LLM Model',
-  'tools.autoHeal': 'Auto-Heal',
-  'tools.defaultTokenBudget': 'Default Token Budget',
-  'tools.hooksFile': 'Hooks File',
-  'helper.enabled': 'Helper Enabled',
-  'helper.globalProvider': 'Helper Provider',
-  'helper.globalModel': 'Helper Model',
-};
-
-function getSettingLabel(entry: SettingEntry): string {
-  return SETTING_LABELS[entry.setting.key] ?? entry.setting.key.replace(/^[^.]+\./, '');
-}
-
-function describeUiRouting(value: string): string {
-  switch (value) {
-    case 'panel':
-      return 'render in panels only';
-    case 'conversation':
-      return 'render inline in conversation';
-    case 'both':
-      return 'render in both conversation and panels';
-    default:
-      return value;
-  }
-}
+import {
+  formatValue,
+  valueColor,
+  flagStateColor,
+  mcpTrustColor,
+  subscriptionStateColor,
+  inferSubscriptionRouteReason,
+  CATEGORY_LABELS,
+  getSettingLabel,
+  describeUiRouting,
+} from './settings-modal-helpers.ts';
 
 // ---------------------------------------------------------------------------
 // Renderer

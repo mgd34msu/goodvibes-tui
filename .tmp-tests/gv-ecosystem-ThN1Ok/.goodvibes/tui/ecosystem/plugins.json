@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "deploy-audit",
+      "kind": "plugin",
+      "name": "Deploy Audit",
+      "summary": "Reviews deploy surfaces before release",
+      "source": "git+https://example.com/deploy-audit.git",
+      "tags": [
+        "security",
+        "release"
+      ],
+      "trustNotes": "Requires limited trust for manifest inspection"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "0.18.33"
+    "version": "0.18.36"
   },
   "auth": {
     "modes": [

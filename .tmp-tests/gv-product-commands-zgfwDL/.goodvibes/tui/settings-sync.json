@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "events": [
+    {
+      "surface": "profiles",
+      "direction": "export",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-zgfwDL/artifacts/profiles.json",
+      "timestamp": 1776359939738,
+      "detail": "1 profiles exported"
+    },
+    {
+      "surface": "profiles",
+      "direction": "import",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-zgfwDL/artifacts/profiles.json",
+      "timestamp": 1776359939738,
+      "detail": "1 profiles imported with prefix team"
+    }
+  ],
+  "managedLocks": [],
+  "failures": [],
+  "syncedSettings": [],
+  "managedSettings": [],
+  "conflicts": [],
+  "rollbackHistory": []
+}

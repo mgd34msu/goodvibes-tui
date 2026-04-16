@@ -1,0 +1,12 @@
+{
+  "bundleId": "strict-policy",
+  "rules": [
+    {
+      "id": "deny-exec",
+      "action": "deny",
+      "match": {
+        "tool": "exec"
+      }
+    }
+  ]
+}

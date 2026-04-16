@@ -1,0 +1,8 @@
+{
+  "github": {
+    "name": "github",
+    "baseUrl": "https://api.github.com",
+    "authType": "bearer",
+    "tokenKey": "GITHUB_TOKEN"
+  }
+}

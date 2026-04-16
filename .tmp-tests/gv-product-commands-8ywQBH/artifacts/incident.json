@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "v1",
+  "exportedAt": 1776361212554,
+  "report": {
+    "id": "incident-1",
+    "traceId": "trace-1",
+    "sessionId": "sess-product",
+    "generatedAt": 1776361212553,
+    "classification": "tool_failure",
+    "summary": "deploy tool failed",
+    "taskId": "task-1",
+    "turnId": "turn-1",
+    "agentId": "agent-1",
+    "phaseTimings": [],
+    "phaseLedger": [],
+    "causalChain": [
+      {
+        "seq": 1,
+        "ts": 1,
+        "description": "tool failed",
+        "sourceEventType": "TASK_FAILED",
+        "isRootCause": true
+      }
+    ],
+    "cascadeEvents": [],
+    "permissionEvidence": [],
+    "budgetBreaches": [],
+    "jumpLinks": []
+  },
+  "evidence": {
+    "rootCause": "tool failed",
+    "phaseCount": 0,
+    "causalCount": 1,
+    "cascadeCount": 0,
+    "permissionDecisionCount": 0,
+    "deniedPermissionCount": 0,
+    "budgetBreachCount": 0,
+    "slowPhases": [],
+    "jumpLinkCount": 0,
+    "relatedIds": {
+      "turnId": "turn-1",
+      "taskId": "task-1",
+      "agentId": "agent-1"
+    }
+  },
+  "replay": {
+    "status": "unavailable",
+    "mismatchCount": 0,
+    "mismatches": [],
+    "relatedMismatches": [],
+    "mismatchBreakdown": {
+      "byKind": {},
+      "byFailureMode": {},
+      "byOwnerDomain": {}
+    },
+    "turnSummaries": []
+  }
+}
