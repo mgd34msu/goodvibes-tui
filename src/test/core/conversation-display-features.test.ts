@@ -4,7 +4,7 @@ import { ConversationManager } from '../../core/conversation';
 type ConversationManagerTestAccess = {
   messages: Array<{ role: string; content: string; reasoningContent?: string }>;
   dirty: boolean;
-  configManager: {
+  _configManager: {
     get(key: string): unknown;
   };
 };
@@ -164,7 +164,7 @@ describe('code block collapse', () => {
     // addAssistantMessage signature supports opts
     testAccess.messages.push({ role: 'assistant', content: 'done', reasoningContent: bigThinking });
     testAccess.dirty = true;
-    testAccess.configManager = {
+    testAccess._configManager = {
       get: (k: string) => k === 'display.showThinking'
         ? true
         : (k === 'display.collapseThreshold' ? 30 : false),

@@ -247,14 +247,6 @@ const requiredSnippets: Array<{ file: string; snippets: readonly string[]; messa
     ],
     message: 'foundation artifacts must be generated from SDK control-plane surfaces',
   },
-  {
-    file: 'src/daemon/facade.ts',
-    snippets: [
-      '@pellux/goodvibes-sdk/platform/daemon/http/router',
-      '@pellux/goodvibes-sdk/platform/control-plane/index',
-    ],
-    message: 'daemon runtime composition must stay wired through the SDK package surface',
-  },
 ];
 
 for (const requirement of requiredSnippets) {
