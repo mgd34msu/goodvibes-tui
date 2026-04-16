@@ -450,9 +450,13 @@ export abstract class SearchableListPanel<T> extends ScrollableListPanel<T> {
   protected buildFilterInputLine(width: number, label = 'Filter', focused: boolean): Line {
     const palette = this.getPalette();
     const formattedLabel = focused ? `[${label}] ` : `${label}: `;
-    const value = focused
-      ? `${this.searchQuery}_`
-      : this.searchQuery;
-    return buildSearchInputLine(width, formattedLabel, value, palette, { active: focused });
+    const value = focused ? `${this.searchQuery}_` : this.searchQuery;
+    // Pass active:false when focused to prevent buildSearchInputLine from converting the
+    // trailing '_' cursor to the block-glyph (GLYPHS.surface.cursor). The focused visual
+    // affordance is provided by the '[Label] ' bracket format and explicit inputBg/info colors.
+    const opts = focused
+      ? { active: false, bg: palette.inputBg, valueColor: palette.info }
+      : { active: false };
+    return buildSearchInputLine(width, formattedLabel, value, palette, opts);
   }
 }
