@@ -1,4 +1,5 @@
-import { homedir } from 'node:os';
+import { homedir, networkInterfaces } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore } from '../runtime/store/index.ts';
@@ -25,6 +26,32 @@ type DaemonCliTokens = {
   readonly daemonToken: string | undefined;
   readonly httpToken: string | undefined;
 };
+
+function getLocalNetworkIp(): string {
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] ?? []) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+function readBootstrapPassword(credentialPath: string): string | undefined {
+  try {
+    const content = readFileSync(credentialPath, 'utf-8');
+    for (const line of content.split('\n')) {
+      if (line.startsWith('password=')) {
+        return line.slice('password='.length).trim();
+      }
+    }
+  } catch {
+    // credential file may not exist yet
+  }
+  return undefined;
+}
 
 function resolveDaemonCliOwnership(): DaemonCliOwnership {
   return {
@@ -89,12 +116,14 @@ async function main(): Promise<void> {
   // Print companion connection info + QR code to stdout.
   // Use the config-driven control plane port, not a hardcoded default.
   const daemonPort = config.get('controlPlane.port');
-  const daemonHost = String(process.env.GOODVIBES_DAEMON_HOST ?? 'localhost');
+  const daemonHost = String(process.env.GOODVIBES_DAEMON_HOST ?? getLocalNetworkIp());
   const daemonUrl = `http://${daemonHost}:${daemonPort}`;
   const companionTokenRecord = getOrCreateCompanionToken('tui');
+  const bootstrapPassword = readBootstrapPassword(userAuth.getBootstrapCredentialPath());
   const connectionInfo = buildCompanionConnectionInfo({
     daemonUrl,
     token: companionTokenRecord.token,
+    password: bootstrapPassword,
     surface: 'tui',
   });
   const payload = encodeConnectionPayload(connectionInfo);

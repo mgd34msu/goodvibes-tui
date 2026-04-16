@@ -22,12 +22,14 @@ const C = {
  * Populated at construction; updated when the token is regenerated.
  */
 export interface QrPanelConnectionInfo {
-  /** Full connection URL (e.g. http://localhost:3141) */
+  /** Full connection URL (e.g. http://192.168.1.x:3141) */
   readonly url: string;
-  /** Auth token (will be truncated for display) */
+  /** Auth token */
   readonly token: string;
   /** Username associated with the companion session */
   readonly username: string;
+  /** Bootstrap password for companion authentication */
+  readonly password?: string;
   /** SDK/surface version (defaults to '0.0.0' if omitted) */
   readonly version?: string;
   /** Surface identifier (defaults to 'tui' if omitted) */
@@ -98,8 +100,7 @@ export class QrPanel extends BasePanel {
     this.needsRender = false;
     const lines: Line[] = [];
 
-    const { url, token, username } = this.connectionInfo;
-    const tokenDisplay = token.length > 20 ? `${token.slice(0, 20)}…` : token;
+    const { url, token, username, password } = this.connectionInfo;
 
     // ── Connection info header ─────────────────────────────────────────────
     lines.push(createEmptyLine(width));
@@ -112,7 +113,7 @@ export class QrPanel extends BasePanel {
     lines.push(
       buildPanelLine(width, [
         [' Token    ', C.label],
-        [tokenDisplay, C.token],
+        [token, C.token],
       ]),
     );
     lines.push(
@@ -121,6 +122,14 @@ export class QrPanel extends BasePanel {
         [username.slice(0, Math.max(0, width - 12)), C.value],
       ]),
     );
+    if (password !== undefined) {
+      lines.push(
+        buildPanelLine(width, [
+          [' Password ', C.label],
+          [password, C.value],
+        ]),
+      );
+    }
     lines.push(createEmptyLine(width));
 
     // ── QR code ────────────────────────────────────────────────────────────
@@ -128,6 +137,7 @@ export class QrPanel extends BasePanel {
       url: this.connectionInfo.url,
       token: this.connectionInfo.token,
       username: this.connectionInfo.username,
+      ...(this.connectionInfo.password !== undefined ? { password: this.connectionInfo.password } : {}),
       version: this.connectionInfo.version ?? '0.0.0',
       surface: this.connectionInfo.surface ?? 'tui',
     });
