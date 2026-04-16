@@ -1,14 +1,13 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { PluginManagerObserver, PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins/manager';
 import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  resolvePrimaryScrollableSection,
-  type PanelWorkspaceSection,
+  type PanelPalette,
 } from './polish.ts';
 
 const C = {
@@ -47,11 +46,9 @@ function statusLabel(status: PluginStatus): string {
   return 'DISABLED';
 }
 
-export class PluginsPanel extends BasePanel {
+export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
   private readonly manager: PluginManagerObserver;
   private readonly unsub: (() => void) | null;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
 
   public constructor(manager: PluginManagerObserver) {
     super('plugins', 'Plugins', 'P', 'monitoring');
@@ -68,26 +65,39 @@ export class PluginsPanel extends BasePanel {
     this.unsub?.();
   }
 
-  public handleInput(key: string): boolean {
-    const plugins = this.manager.list();
-    if (plugins.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(plugins.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+  protected override getPalette(): PanelPalette {
+    return C;
+  }
+
+  protected getItems(): readonly PluginStatus[] {
+    return this.manager.list();
+  }
+
+  protected renderItem(plugin: PluginStatus, _index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [plugin.name.padEnd(22), C.value, bg],
+      [` ${statusLabel(plugin).padEnd(11)}`, statusColor(plugin), bg],
+      [` ${plugin.trustTier.toUpperCase().padEnd(10)}`, trustColor(plugin.trustTier), bg],
+      [` ${plugin.version}`, C.dim, bg],
+    ]);
+  }
+
+  protected override getEmptyStateMessage(): string {
+    return ' No plugins discovered.';
+  }
+
+  protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
+    return [
+      { command: '/plugin list', summary: 'inspect plugin discovery paths and current registry state' },
+      { command: '/marketplace', summary: 'review curated ecosystem entries and provenance posture' },
+    ];
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
     const intro = 'Plugin trust, capabilities, signatures, and quarantine posture for the active ecosystem surface.';
-    const plugins = this.manager.list();
+    const plugins = this.getItems();
 
     if (plugins.length === 0) {
       const workspace = buildPanelWorkspace(width, height, {
@@ -111,7 +121,7 @@ export class PluginsPanel extends BasePanel {
       return workspace;
     }
 
-    this.selectedIndex = Math.min(this.selectedIndex, plugins.length - 1);
+    this.clampSelection();
     const selected = plugins[this.selectedIndex]!;
     const selectedCaps = this.manager.capabilities(selected.name);
     const trustRecord = this.manager.getTrustRecord(selected.name);
@@ -157,45 +167,11 @@ export class PluginsPanel extends BasePanel {
     }
 
     detailLines.push(buildPanelLine(width, [['  Inspect trust and capability state here, then use /plugin to take action.', C.dim]]));
-    const detailSection: PanelWorkspaceSection = { title: 'Selected Plugin', lines: detailLines };
-    const resolvedPluginsSection = resolvePrimaryScrollableSection(width, height, {
-      intro,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through discovered plugins', C.dim]])],
-      palette: C,
-      section: {
-        title: 'Plugins',
-        scrollableLines: plugins.map((plugin, absolute) => {
-          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-          return buildPanelLine(width, [
-            [' ', C.label, bg],
-            [plugin.name.padEnd(22), C.value, bg],
-            [` ${statusLabel(plugin).padEnd(11)}`, statusColor(plugin), bg],
-            [` ${plugin.trustTier.toUpperCase().padEnd(10)}`, trustColor(plugin.trustTier), bg],
-            [` ${plugin.version}`, C.dim, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        guardRows: 1,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: [detailSection],
-    });
-    this.scrollOffset = resolvedPluginsSection.scrollOffset;
+    detailLines.push(buildPanelLine(width, [['  Up/Down move through discovered plugins', C.dim]]));
 
-    const sections: PanelWorkspaceSection[] = [
-      resolvedPluginsSection.section,
-      detailSection,
-    ];
-    const lines = buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'Plugin Control Room',
-      intro,
-      sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through discovered plugins', C.dim]])],
-      palette: C,
+      footer: detailLines,
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
   }
 }

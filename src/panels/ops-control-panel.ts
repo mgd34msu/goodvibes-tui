@@ -12,15 +12,11 @@ import type { OpsEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/ind
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsAuditEntry } from '../runtime/diagnostics/panels/ops.ts';
 import { OpsPanel } from '../runtime/diagnostics/panels/ops.ts';
-import { BasePanel } from './base-panel.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
-  buildEmptyState,
   buildPanelLine,
-  buildPanelWorkspace,
-  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
-  type PanelWorkspaceSection,
+  type PanelPalette,
 } from './polish.ts';
 
 // ── Colour palette ──────────────────────────────────────────────────────────
@@ -74,10 +70,9 @@ function targetColor(kind: OpsAuditEntry['targetKind']): string {
 
 // ── OpsControlPanel ──────────────────────────────────────────────────────────
 
-export class OpsControlPanel extends BasePanel {
+export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   private readonly _opsPanel: OpsPanel;
   private _unsub: (() => void) | null = null;
-  private _scrollOffset = 0;
 
   public constructor(eventFeed: UiEventFeed<OpsEvent>) {
     super('ops-control', 'Ops Control', 'Q', 'agent');
@@ -87,13 +82,7 @@ export class OpsControlPanel extends BasePanel {
 
   public override onActivate(): void {
     super.onActivate();
-    this._scrollOffset = 0;
-  }
-
-  public handleInput(key: string): boolean {
-    if (key === 'up' || key === 'k') { this._scrollOffset = Math.max(0, this._scrollOffset - 1); return true; }
-    if (key === 'down' || key === 'j') { this._scrollOffset++; return true; }
-    return false;
+    this.selectedIndex = 0;
   }
 
   public override onDestroy(): void {
@@ -104,81 +93,57 @@ export class OpsControlPanel extends BasePanel {
     this._opsPanel.dispose();
   }
 
+  protected override getPalette(): PanelPalette {
+    return C;
+  }
+
+  protected getItems(): readonly OpsAuditEntry[] {
+    // Return reversed so newest entries appear at top
+    return [...this._opsPanel.getSnapshot()].reverse();
+  }
+
+  protected renderItem(entry: OpsAuditEntry, _index: number, _selected: boolean, width: number): Line {
+    const seqStr   = String(entry.seq).padStart(4, ' ');
+    const timeStr  = fmtTime(entry.ts);
+    const action   = entry.action.slice(0, 15).padEnd(15, ' ');
+    const kindTag  = entry.targetKind === 'task' ? 'T:' : 'A:';
+    // Truncation is intentional: TUI column width limits target ID display to 14 chars
+    const shortId  = entry.targetId.slice(-10);
+    const target   = (kindTag + shortId).slice(0, 14).padEnd(14, ' ');
+    const outLabel = outcomeLabel(entry.outcome);
+    const noteRaw  = (entry.note ?? entry.errorMessage ?? '').slice(0, Math.max(0, width - 63));
+
+    const segs: Array<[string, string, string?]> = [
+      [` ${seqStr} `, C.seq],
+      [`${timeStr} `, C.dim],
+      [`${action} `, C.value],
+      [`${target}  `, targetColor(entry.targetKind)],
+      [outLabel, outcomeColor(entry.outcome)],
+    ];
+    if (noteRaw) segs.push([` ${noteRaw}`, C.note]);
+    return buildPanelLine(width, segs);
+  }
+
+  protected override getEmptyStateMessage(): string {
+    return ' No operator interventions recorded.';
+  }
+
+  protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
+    return [{ command: '/cockpit', summary: 'open the cockpit and drive runtime interventions from the control rooms' }];
+  }
+
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
-    const entries = this._opsPanel.getSnapshot();
-    const intro = 'Operator interventions, outcomes, and task or agent targets across the active control plane.';
-
-    if (entries.length === 0) {
-      const workspace = buildPanelWorkspace(width, height, {
-        title: 'Operator Control Plane',
-        intro,
-        sections: [{
-          lines: buildEmptyState(
-            width,
-            ' No operator interventions recorded.',
-            'Actions like pause, retry, cancel, move, and approval decisions will appear here once the operator starts intervening in runtime workflows.',
-            [{ command: '/cockpit', summary: 'open the cockpit and drive runtime interventions from the control rooms' }],
-            C,
-          ),
-        }],
-        palette: C,
-      });
-      while (workspace.length < height) workspace.push(createEmptyLine(width));
-      return workspace;
-    }
-
-    const reversed = [...entries].reverse();
-    const entryRows: Line[] = [
+    const headerLines: Line[] = [
       buildPanelLine(width, [['  SEQ  TIME      ACTION          TARGET             OUT    NOTE', C.label]]),
     ];
-    for (const entry of reversed) {
-      const seqStr   = String(entry.seq).padStart(4, ' ');
-      const timeStr  = fmtTime(entry.ts);
-      const action   = entry.action.slice(0, 15).padEnd(15, ' ');
-      const kindTag  = entry.targetKind === 'task' ? 'T:' : 'A:';
-      // Truncation is intentional: TUI column width limits target ID display to 14 chars
-      const shortId  = entry.targetId.slice(-10);
-      const target   = (kindTag + shortId).slice(0, 14).padEnd(14, ' ');
-      const outLabel = outcomeLabel(entry.outcome);
-      const noteRaw  = (entry.note ?? entry.errorMessage ?? '').slice(0, Math.max(0, width - 63));
+    const footerLines: Line[] = [
+      buildPanelLine(width, [['  Up/Down scroll the intervention log', C.dim]]),
+    ];
 
-      const segs: Array<[string, string, string?]> = [
-        [` ${seqStr} `, C.seq],
-        [`${timeStr} `, C.dim],
-        [`${action} `, C.value],
-        [`${target}  `, targetColor(entry.targetKind)],
-        [outLabel, outcomeColor(entry.outcome)],
-      ];
-      if (noteRaw) segs.push([` ${noteRaw}`, C.note]);
-      entryRows.push(buildPanelLine(width, segs));
-    }
-    const logSection = resolveScrollablePanelSection(width, height, {
-      intro,
-      footerLines: [buildPanelLine(width, [['  Up/Down scroll the intervention log', C.dim]])],
-      palette: C,
-      section: {
-        title: 'Audit Log',
-        scrollableLines: entryRows,
-        scrollOffset: this._scrollOffset,
-        minRows: 4,
-        appendWindowSummary: {
-          dimColor: C.label,
-          formatter: (window) => buildPanelLine(width, [[` [${window.start + 1}-${window.end}/${window.total}] Up/Down to scroll`.slice(0, width), C.label]]),
-        },
-      },
-    });
-    this._scrollOffset = logSection.scrollOffset;
-
-    const sections: PanelWorkspaceSection[] = [logSection.section];
-    const lines = buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'Operator Control Plane',
-      intro,
-      sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down scroll the intervention log', C.dim]])],
-      palette: C,
+      header: headerLines,
+      footer: footerLines,
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines;
   }
 }

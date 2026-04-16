@@ -1,18 +1,15 @@
 import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import type { McpDecisionRecord } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
+
+type McpServerSecurityEntry = ReturnType<McpRegistry['listServerSecurity']>[number];
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
-  buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
-  buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  resolvePrimaryScrollableSection,
-  type PanelWorkspaceSection,
 } from './polish.ts';
 
 const C = {
@@ -60,93 +57,101 @@ function decisionColor(decision: McpDecisionRecord): string {
   return decision.incoherent ? C.warn : C.ok;
 }
 
-export class McpPanel extends BasePanel {
+export class McpPanel extends ScrollableListPanel<McpServerSecurityEntry> {
   private readonly registry: McpRegistry;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
 
   public constructor(registry: McpRegistry) {
     super('mcp', 'MCP', 'Z', 'monitoring');
     this.registry = registry;
   }
 
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() { return ' No MCP servers configured or connected.'; }
+  protected override getEmptyStateActions() {
+    return [
+      { command: '/mcp', summary: 'list server state and security posture' },
+      { command: '/settings', summary: 'open the MCP settings category for trust and scope controls' },
+    ];
+  }
+
+  protected getItems(): readonly McpServerSecurityEntry[] {
+    return this.registry.listServerSecurity();
+  }
+
+  protected renderItem(entry: McpServerSecurityEntry, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [entry.name.padEnd(20), C.value, bg],
+      [` ${(entry.connected ? 'CONNECTED' : 'DISCONNECTED').padEnd(13)}`, entry.connected ? C.ok : C.error, bg],
+      [` ${entry.trustMode.padEnd(12)}`, modeColor(entry.trustMode), bg],
+      [` ${entry.role.padEnd(10)}`, C.info, bg],
+      [` ${entry.schemaFreshness}`, freshnessColor(entry.schemaFreshness), bg],
+    ]);
+  }
+
   public handleInput(key: string): boolean {
-    const entries = this.registry.listServerSecurity();
     if (key === 'r') {
       this.markDirty();
       return true;
     }
-    if (entries.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(entries.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+    return super.handleInput(key);
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
-    const intro = 'Trust, quarantine, scope, and recent security decisions for configured MCP servers.';
+    this.clampSelection();
     const entries = this.registry.listServerSecurity();
+    const intro = 'Trust, quarantine, scope, and recent security decisions for configured MCP servers.';
 
-    if (entries.length === 0) {
-      const workspace = buildPanelWorkspace(width, height, {
-        title: 'MCP Control Room',
-        intro,
-        sections: [{
-          lines: buildEmptyState(
-            width,
-            ' No MCP servers configured or connected.',
-            'Add MCP servers, inspect trust posture, and review risk-scoped policies here once the registry is populated.',
-            [
-              { command: '/mcp', summary: 'list server state and security posture' },
-              { command: '/settings', summary: 'open the MCP settings category for trust and scope controls' },
-            ],
-            C,
-          ),
-        }],
-        palette: C,
-      });
-      while (workspace.length < height) workspace.push(createEmptyLine(width));
-      return workspace;
-    }
-
-    this.selectedIndex = Math.min(this.selectedIndex, entries.length - 1);
-    const selected = entries[this.selectedIndex]!;
-    const sandboxBinding = this.registry.listServerSandboxBindings().find((entry) => entry.name === selected.name);
-    const connected = entries.filter((entry) => entry.connected).length;
-    const quarantined = entries.filter((entry) => entry.schemaFreshness === 'quarantined').length;
+    const connected = entries.filter((e) => e.connected).length;
+    const quarantined = entries.filter((e) => e.schemaFreshness === 'quarantined').length;
     const disconnected = entries.length - connected;
-    const staleSchemas = entries.filter((entry) => entry.schemaFreshness !== 'fresh').length;
-    const detailLines: Line[] = [
-      buildPanelLine(width, [
+    const staleSchemas = entries.filter((e) => e.schemaFreshness !== 'fresh').length;
+
+    const headerLines: Line[] = [
+      buildPanelLine(width, [['  MCP posture', C.label]]),
+      buildKeyValueLine(width, [
+        { label: 'servers', value: String(entries.length), valueColor: C.value },
+        { label: 'connected', value: String(connected), valueColor: connected > 0 ? C.ok : C.dim },
+        { label: 'disconnected', value: String(disconnected), valueColor: disconnected > 0 ? C.warn : C.dim },
+        { label: 'stale schema', value: String(staleSchemas), valueColor: staleSchemas > 0 ? C.warn : C.dim },
+        { label: 'quarantined', value: String(quarantined), valueColor: quarantined > 0 ? C.error : C.dim },
+      ], C),
+      buildGuidanceLine(width, '/mcp review', 'inspect trust, freshness, and quarantine posture for configured servers', C),
+      buildGuidanceLine(width, '/mcp repair', 'review reconnect, auth, import, and startup remediation guidance', C),
+    ];
+
+    const selected = entries[this.selectedIndex];
+    const detailLines: Line[] = [];
+    const repairLines: Line[] = [];
+
+    if (selected) {
+      const sandboxBinding = this.registry.listServerSandboxBindings().find((e) => e.name === selected.name);
+      const decisions = this.registry.listRecentSecurityDecisions?.(24) ?? [];
+      const selectedDecision = decisions.find((d) => d.serverName === selected.name);
+
+      detailLines.push(buildPanelLine(width, [
         ['  Server: ', C.label],
         [selected.name, C.value],
         ['  Trust: ', C.label],
         [selected.trustMode, modeColor(selected.trustMode)],
         ['  Role: ', C.label],
         [selected.role, C.info],
-      ]),
-      buildPanelLine(width, [
+      ]));
+      detailLines.push(buildPanelLine(width, [
         ['  Schema: ', C.label],
         [selected.schemaFreshness, freshnessColor(selected.schemaFreshness)],
         ['  Approved by: ', C.label],
         [truncateDisplay(selected.quarantineApprovedBy ?? 'n/a', Math.max(0, width - 31)), selected.quarantineApprovedBy ? C.info : C.dim],
-      ]),
-      buildPanelLine(width, [
+      ]));
+      detailLines.push(buildPanelLine(width, [
         ['  Scope: ', C.label],
         [truncateDisplay(
           `paths ${selected.allowedPaths.length > 0 ? selected.allowedPaths.join(', ') : 'unbounded'}  hosts ${selected.allowedHosts.length > 0 ? selected.allowedHosts.join(', ') : 'unbounded'}`,
           Math.max(0, width - 10),
         ), (selected.allowedPaths.length > 0 || selected.allowedHosts.length > 0) ? C.value : C.dim],
-      ]),
-      buildPanelLine(width, [
+      ]));
+      detailLines.push(buildPanelLine(width, [
         ['  Sandbox: ', C.label],
         [truncateDisplay(
           sandboxBinding?.sessionId
@@ -154,107 +159,55 @@ export class McpPanel extends BasePanel {
             : 'not isolated',
           Math.max(0, width - 13),
         ), sandboxBinding?.sessionId ? C.info : C.dim],
-      ]),
-    ];
-    if (selected.schemaFreshness === 'quarantined') {
-      detailLines.push(buildPanelLine(width, [
-        ['  Quarantine: ', C.label],
-        [truncateDisplay(`${selected.quarantineReason ?? 'unknown'}${selected.quarantineDetail ? ` - ${selected.quarantineDetail}` : ''}`, Math.max(0, width - 15)), C.error],
       ]));
+      if (selected.schemaFreshness === 'quarantined') {
+        detailLines.push(buildPanelLine(width, [
+          ['  Quarantine: ', C.label],
+          [truncateDisplay(`${selected.quarantineReason ?? 'unknown'}${selected.quarantineDetail ? ` - ${selected.quarantineDetail}` : ''}`, Math.max(0, width - 15)), C.error],
+        ]));
+      }
+      if (selectedDecision) {
+        const summary = `${selectedDecision.serverName}:${selectedDecision.toolName} ${selectedDecision.verdict.toUpperCase()} ${selectedDecision.capability}${selectedDecision.incoherent ? ' incoherent' : ''}`;
+        detailLines.push(buildPanelLine(width, [
+          ['  Recent: ', C.label],
+          [truncateDisplay(summary, Math.max(0, width - 10)), decisionColor(selectedDecision)],
+        ]));
+      }
+
+      if (!selected.connected) {
+        repairLines.push(buildPanelLine(width, [['  /mcp repair', C.warn], ['  review reconnect and startup posture for this server', C.dim]]));
+      }
+      if (selected.schemaFreshness !== 'fresh') {
+        repairLines.push(buildPanelLine(width, [['  /mcp review', C.warn], ['  inspect schema freshness, quarantine, and trust posture', C.dim]]));
+      }
+      if (sandboxBinding?.sessionId) {
+        repairLines.push(buildPanelLine(width, [['  /sandbox review', C.info], ['  verify the bound MCP isolation session and startup status', C.dim]]));
+      }
+      if (repairLines.length === 0) {
+        repairLines.push(buildPanelLine(width, [['  No immediate MCP repair actions suggested for the selected server.', C.dim]]));
+      }
+
+      const allDecisions = this.registry.listRecentSecurityDecisions?.(24) ?? [];
+      const decisionLines: Line[] = allDecisions.length === 0
+        ? [buildPanelLine(width, [['  No MCP decisions recorded yet.', C.dim]])]
+        : allDecisions.map((decision) => {
+            const summary = `${decision.serverName}:${decision.toolName} ${decision.verdict.toUpperCase()} ${decision.capability}${decision.incoherent ? ' incoherent' : ''}`;
+            return buildPanelLine(width, [
+              ['  ', C.label],
+              [truncateDisplay(summary, Math.max(0, width - 2)), decisionColor(decision)],
+            ]);
+          });
+      detailLines.push(...repairLines);
+      detailLines.push(...decisionLines);
     }
 
-    const decisions = this.registry.listRecentSecurityDecisions?.(24) ?? [];
-    const selectedDecision = decisions.find((decision) => decision.serverName === selected.name);
-    if (selectedDecision) {
-      const summary = `${selectedDecision.serverName}:${selectedDecision.toolName} ${selectedDecision.verdict.toUpperCase()} ${selectedDecision.capability}${selectedDecision.incoherent ? ' incoherent' : ''}`;
-      detailLines.push(buildPanelLine(width, [
-        ['  Recent: ', C.label],
-        [truncateDisplay(summary, Math.max(0, width - 10)), decisionColor(selectedDecision)],
-      ]));
-    }
-    const decisionLines: Line[] = decisions.length === 0
-      ? [buildPanelLine(width, [['  No MCP decisions recorded yet.', C.dim]])]
-      : decisions.map((decision) => {
-          const summary = `${decision.serverName}:${decision.toolName} ${decision.verdict.toUpperCase()} ${decision.capability}${decision.incoherent ? ' incoherent' : ''}`;
-          return buildPanelLine(width, [
-            ['  ', C.label],
-            [truncateDisplay(summary, Math.max(0, width - 2)), decisionColor(decision)],
-          ]);
-        });
-
-    const repairLines: Line[] = [];
-    if (!selected.connected) {
-      repairLines.push(buildPanelLine(width, [['  /mcp repair', C.warn], ['  review reconnect and startup posture for this server', C.dim]]));
-    }
-    if (selected.schemaFreshness !== 'fresh') {
-      repairLines.push(buildPanelLine(width, [['  /mcp review', C.warn], ['  inspect schema freshness, quarantine, and trust posture', C.dim]]));
-    }
-    if (sandboxBinding?.sessionId) {
-      repairLines.push(buildPanelLine(width, [['  /sandbox review', C.info], ['  verify the bound MCP isolation session and startup status', C.dim]]));
-    }
-    if (repairLines.length === 0) {
-      repairLines.push(buildPanelLine(width, [['  No immediate MCP repair actions suggested for the selected server.', C.dim]]));
-    }
-    const postureSection: PanelWorkspaceSection = {
-      title: 'MCP posture',
-      lines: [
-        buildKeyValueLine(width, [
-          { label: 'servers', value: String(entries.length), valueColor: C.value },
-          { label: 'connected', value: String(connected), valueColor: connected > 0 ? C.ok : C.dim },
-          { label: 'disconnected', value: String(disconnected), valueColor: disconnected > 0 ? C.warn : C.dim },
-          { label: 'stale schema', value: String(staleSchemas), valueColor: staleSchemas > 0 ? C.warn : C.dim },
-          { label: 'quarantined', value: String(quarantined), valueColor: quarantined > 0 ? C.error : C.dim },
-        ], C),
-        buildGuidanceLine(width, '/mcp review', 'inspect trust, freshness, and quarantine posture for configured servers', C),
-        buildGuidanceLine(width, '/mcp repair', 'review reconnect, auth, import, and startup remediation guidance', C),
-      ],
-    };
-    const selectedSection: PanelWorkspaceSection = { title: 'Selected Server', lines: detailLines };
-    const repairSection: PanelWorkspaceSection = { title: 'Repair', lines: repairLines };
-    const decisionsSection: PanelWorkspaceSection = { title: 'Recent Decisions', lines: decisionLines };
-    const resolvedServersSection = resolvePrimaryScrollableSection(width, height, {
-      intro,
-      footerLines: [buildPanelLine(width, [['  Up/Down move  r refresh', C.dim]])],
-      palette: C,
-      beforeSections: [postureSection],
-      section: {
-        title: 'Servers',
-        scrollableLines: entries.map((entry, absolute) => {
-          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-          return buildPanelLine(width, [
-            [' ', C.label, bg],
-            [entry.name.padEnd(20), C.value, bg],
-            [` ${(entry.connected ? 'CONNECTED' : 'DISCONNECTED').padEnd(13)}`, entry.connected ? C.ok : C.error, bg],
-            [` ${entry.trustMode.padEnd(12)}`, modeColor(entry.trustMode), bg],
-            [` ${entry.role.padEnd(10)}`, C.info, bg],
-            [` ${entry.schemaFreshness}`, freshnessColor(entry.schemaFreshness), bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        guardRows: 1,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: [selectedSection, repairSection, decisionsSection],
-    });
-    this.scrollOffset = resolvedServersSection.scrollOffset;
-
-    const sections: PanelWorkspaceSection[] = [
-      postureSection,
-      resolvedServersSection.section,
-      selectedSection,
-      repairSection,
-      decisionsSection,
-    ];
-    const lines = buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'MCP Control Room',
-      intro,
-      sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down move  r refresh', C.dim]])],
-      palette: C,
+      header: headerLines,
+      footer: [
+        ...detailLines,
+        buildPanelLine(width, [['  Up/Down move  r refresh', C.dim]]),
+      ],
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
   }
 }

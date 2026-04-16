@@ -1,14 +1,10 @@
 import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
-  buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  resolvePrimaryScrollableSection,
-  type PanelWorkspaceSection,
 } from './polish.ts';
 import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { buildPermissionRuleSuggestions } from '@pellux/goodvibes-sdk/platform/runtime/permissions/rule-suggestions';
@@ -30,9 +26,9 @@ const APPROVAL_ROWS = [
   ['sandbox', 'why prompted: WSL/VM isolation changes alter host risk posture', 'review via /sandbox preset and /sandbox review'],
 ] as const;
 
-export class ApprovalPanel extends BasePanel {
-  private selectedIndex = 0;
-  private scrollOffset = 0;
+type ApprovalRow = (typeof APPROVAL_ROWS)[number];
+
+export class ApprovalPanel extends ScrollableListPanel<ApprovalRow> {
   private readonly policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>;
 
   public constructor(policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>) {
@@ -40,17 +36,23 @@ export class ApprovalPanel extends BasePanel {
     this.policyRuntimeState = policyRuntimeState;
   }
 
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() { return ' No approval lanes defined.'; }
+
+  protected getItems(): readonly ApprovalRow[] {
+    return APPROVAL_ROWS;
+  }
+
+  protected renderItem(row: ApprovalRow, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      ['  ', C.label],
+      [row[0].padEnd(10), C.info, bg],
+      [row[1].slice(0, Math.max(0, width - 18)), C.value, bg],
+    ]);
+  }
+
   public handleInput(key: string): boolean {
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(APPROVAL_ROWS.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
     if (key === 'home') {
       this.selectedIndex = 0;
       this.markDirty();
@@ -64,7 +66,7 @@ export class ApprovalPanel extends BasePanel {
     if (key === 'enter' || key === 'return') {
       return true;
     }
-    return false;
+    return super.handleInput(key);
   }
 
   public getSelectedCommand(): string | null {
@@ -73,33 +75,16 @@ export class ApprovalPanel extends BasePanel {
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
+    this.clampSelection();
     const policySnapshot = this.policyRuntimeState.getSnapshot();
-    const postureLines = [
-      buildKeyValueLine(width, [
-        { label: 'why prompted', value: 'risk summary', valueColor: C.value },
-        { label: 'what-if', value: '/policy simulate + preflight', valueColor: C.info },
-        { label: 'operator', value: '/security + /cockpit', valueColor: C.good },
-      ], C),
-      (() => {
-        const approvalCount = policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === true).length;
-        const denialCount = policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === false).length;
-        const pendingCount = policySnapshot.recentPermissionAudit.filter((entry) => entry.approved === undefined).length;
-        return buildPanelLine(width, [
-          ['  \u2713 ', C.good],
-          [`approvals (${approvalCount})  `, C.good],
-          ['\u2715 ', C.bad],
-          [`denials (${denialCount})  `, C.bad],
-          ['\u25cb ', C.info],
-          [`pending (${pendingCount})`, C.info],
-        ]);
-      })(),
-      buildGuidanceLine(width, '/approval review shell', 'inspect the highest-risk approval lane and refine scoped review posture', C),
-    ];
-    const footerLines = [buildPanelLine(width, [[`  Up/Down move  Home/End jump  selected lane opens the next command path`, C.dim]])];
+    const approvalCount = policySnapshot.recentPermissionAudit.filter((e) => e.approved === true).length;
+    const denialCount = policySnapshot.recentPermissionAudit.filter((e) => e.approved === false).length;
+    const pendingCount = policySnapshot.recentPermissionAudit.filter((e) => e.approved === undefined).length;
+
     const selected = APPROVAL_ROWS[this.selectedIndex] ?? null;
     const detailLines: Line[] = [];
     if (selected) {
+      detailLines.push(buildPanelLine(width, [['  Selected Lane', C.label]]));
       detailLines.push(buildKeyValueLine(width, [
         { label: 'lane', value: selected[0], valueColor: C.info },
         { label: 'next review', value: selected[2], valueColor: C.dim },
@@ -107,6 +92,7 @@ export class ApprovalPanel extends BasePanel {
       detailLines.push(buildPanelLine(width, [[` ${selected[1]}`, C.value]]));
       detailLines.push(buildGuidanceLine(width, selected[2].replace('review via ', ''), `open the ${selected[0]} review path`, C));
     }
+
     const recentAuditLines: Line[] = [];
     for (const entry of policySnapshot.recentPermissionAudit.slice(0, 5)) {
       const decision = entry.approved === undefined ? 'pending' : entry.approved ? 'approved' : 'denied';
@@ -123,6 +109,7 @@ export class ApprovalPanel extends BasePanel {
     if (recentAuditLines.length === 0) {
       recentAuditLines.push(buildPanelLine(width, [[`  No recent approval pressure. Live requests and decisions will appear here.`, C.dim]]));
     }
+
     const ruleSuggestionLines: Line[] = [];
     for (const suggestion of buildPermissionRuleSuggestions(policySnapshot.recentPermissionAudit).slice(0, 3)) {
       ruleSuggestionLines.push(buildPanelLine(width, [[`  ${suggestion.summary}`, C.info]]));
@@ -131,47 +118,32 @@ export class ApprovalPanel extends BasePanel {
     if (ruleSuggestionLines.length === 0) {
       ruleSuggestionLines.push(buildPanelLine(width, [[`  No repeated denials currently suggest a durable rule.`, C.dim]]));
     }
-    const postureSection: PanelWorkspaceSection = { title: 'Approval posture', lines: postureLines };
-    const selectedSection: PanelWorkspaceSection = { title: 'Selected Lane', lines: detailLines };
-    const pressureSection: PanelWorkspaceSection = { title: 'Recent Pressure', lines: recentAuditLines };
-    const rulesSection: PanelWorkspaceSection = { title: 'Rule Suggestions', lines: ruleSuggestionLines };
-    const resolvedLanesSection = resolvePrimaryScrollableSection(width, height, {
-      intro: 'Action-specific review lanes for approvals, denials, escalations, and preflight guidance.',
-      footerLines,
-      palette: C,
-      beforeSections: [postureSection, selectedSection, pressureSection, rulesSection],
-      section: {
-        title: 'Review Lanes',
-        scrollableLines: APPROVAL_ROWS.map((row, absolute) => {
-          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-          return buildPanelLine(width, [
-            ['  ', C.label],
-            [row[0].padEnd(10), C.info, bg],
-            [row[1].slice(0, Math.max(0, width - 18)), C.value, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        guardRows: 1,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-    });
-    this.scrollOffset = resolvedLanesSection.scrollOffset;
-    const lines = buildPanelWorkspace(width, height, {
+
+    const headerLines: Line[] = [
+      buildPanelLine(width, [['  Approval posture', C.label]]),
+      buildKeyValueLine(width, [
+        { label: 'why prompted', value: 'risk summary', valueColor: C.value },
+        { label: 'what-if', value: '/policy simulate + preflight', valueColor: C.info },
+        { label: 'operator', value: '/security + /cockpit', valueColor: C.good },
+      ], C),
+      buildPanelLine(width, [
+        ['  \u2713 ', C.good],
+        [`approvals (${approvalCount})  `, C.good],
+        ['\u2715 ', C.bad],
+        [`denials (${denialCount})  `, C.bad],
+        ['\u25cb ', C.info],
+        [`pending (${pendingCount})`, C.info],
+      ]),
+      buildGuidanceLine(width, '/approval review shell', 'inspect the highest-risk approval lane and refine scoped review posture', C),
+      ...detailLines,
+      ...recentAuditLines,
+      ...ruleSuggestionLines,
+    ];
+
+    return this.renderList(width, height, {
       title: 'Approval Control Room',
-      intro: 'Action-specific review lanes for approvals, denials, escalations, and preflight guidance.',
-      sections: [
-        postureSection,
-        selectedSection,
-        pressureSection,
-        rulesSection,
-        resolvedLanesSection.section,
-      ],
-      footerLines,
-      palette: C,
+      header: headerLines,
+      footer: [buildPanelLine(width, [[`  Up/Down move  Home/End jump  selected lane opens the next command path`, C.dim]])],
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
   }
 }

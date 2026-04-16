@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiAutomationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
@@ -10,8 +10,7 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  resolvePrimaryScrollableSection,
-  type PanelWorkspaceSection,
+  type PanelPalette,
 } from './polish.ts';
 
 const C = {
@@ -37,11 +36,12 @@ function runStatusColor(status: string): string {
   return C.info;
 }
 
-export class AutomationControlPanel extends BasePanel {
+type AutomationRun = UiAutomationSnapshot['runs'][number];
+type AutomationJob = UiAutomationSnapshot['jobs'][number];
+
+export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
   private readonly readModel?: UiReadModel<UiAutomationSnapshot>;
   private readonly unsub: (() => void) | null;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
 
   public constructor(readModel?: UiReadModel<UiAutomationSnapshot>) {
     super('automation', 'Automation', 'M', 'monitoring');
@@ -53,29 +53,45 @@ export class AutomationControlPanel extends BasePanel {
     this.unsub?.();
   }
 
-  public handleInput(key: string): boolean {
-    const runs = this.runs();
-    if (runs.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(runs.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+  protected override getPalette(): PanelPalette {
+    return C;
   }
 
-  private runs() {
+  private getJobs(): readonly AutomationJob[] {
     if (!this.readModel) return [];
-    return [...this.readModel.getSnapshot().runs];
+    return this.readModel.getSnapshot().jobs;
+  }
+
+  protected getItems(): readonly AutomationRun[] {
+    if (!this.readModel) return [];
+    return this.readModel.getSnapshot().runs;
+  }
+
+  protected renderItem(run: AutomationRun, _index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    const jobs = this.getJobs();
+    const name = jobs.find((job) => job.id === run.jobId)?.name ?? run.jobId;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [run.status.padEnd(11), runStatusColor(run.status), bg],
+      [` ${truncateDisplay(name, 22).padEnd(22)}`, C.value, bg],
+      [` ${truncateDisplay(run.target.kind, 12).padEnd(12)}`, C.info, bg],
+      [` ${truncateDisplay(formatTime(run.queuedAt), Math.max(0, width - 49))}`, C.dim, bg],
+    ]);
+  }
+
+  protected override getEmptyStateMessage(): string {
+    return ' No automation activity recorded.';
+  }
+
+  protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
+    return [
+      { command: '/schedule add cron 0 * * * * repo sweep', summary: 'create a recurring automation job' },
+      { command: '/schedule list', summary: 'inspect jobs and run history from the shell' },
+    ];
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
     const intro = 'Automation jobs, active runs, deliveries, and failure posture across the shared control plane.';
 
     if (!this.readModel) {
@@ -99,155 +115,97 @@ export class AutomationControlPanel extends BasePanel {
 
     const snapshot = this.readModel.getSnapshot();
     const jobs = [...snapshot.jobs];
-    const runs = this.runs();
+    const runs = this.getItems();
 
-    const summarySection: PanelWorkspaceSection = {
-      title: 'Posture',
-      lines: [
-        buildKeyValueLine(width, [
-          { label: 'jobs', value: String(snapshot.totalJobs), valueColor: snapshot.totalJobs > 0 ? C.info : C.dim },
-          { label: 'runs', value: String(snapshot.totalRuns), valueColor: snapshot.totalRuns > 0 ? C.value : C.dim },
-          { label: 'active', value: String(snapshot.activeRunIds.length), valueColor: snapshot.activeRunIds.length > 0 ? C.warn : C.dim },
-          { label: 'failed', value: String(snapshot.totalFailed), valueColor: snapshot.totalFailed > 0 ? C.error : C.dim },
-        ], C),
-        buildKeyValueLine(width, [
-          { label: 'deliveries ok', value: String(snapshot.deliveryTotals.succeeded), valueColor: snapshot.deliveryTotals.succeeded > 0 ? C.ok : C.dim },
-          { label: 'delivery fail', value: String(snapshot.deliveryTotals.failed), valueColor: snapshot.deliveryTotals.failed > 0 ? C.error : C.dim },
-          { label: 'dead letters', value: String(snapshot.deliveryTotals.deadLettered), valueColor: snapshot.deliveryTotals.deadLettered > 0 ? C.warn : C.dim },
-          { label: 'sources', value: String(snapshot.sourceCount), valueColor: snapshot.sourceCount > 0 ? C.info : C.dim },
-        ], C),
-        buildGuidanceLine(width, '/schedule list', 'manage jobs and use the web or surface controls for retries, delivery, and cross-surface sessions', C),
-      ],
-    };
+    const headerLines: Line[] = [
+      buildKeyValueLine(width, [
+        { label: 'jobs', value: String(snapshot.totalJobs), valueColor: snapshot.totalJobs > 0 ? C.info : C.dim },
+        { label: 'runs', value: String(snapshot.totalRuns), valueColor: snapshot.totalRuns > 0 ? C.value : C.dim },
+        { label: 'active', value: String(snapshot.activeRunIds.length), valueColor: snapshot.activeRunIds.length > 0 ? C.warn : C.dim },
+        { label: 'failed', value: String(snapshot.totalFailed), valueColor: snapshot.totalFailed > 0 ? C.error : C.dim },
+      ], C),
+      buildKeyValueLine(width, [
+        { label: 'deliveries ok', value: String(snapshot.deliveryTotals.succeeded), valueColor: snapshot.deliveryTotals.succeeded > 0 ? C.ok : C.dim },
+        { label: 'delivery fail', value: String(snapshot.deliveryTotals.failed), valueColor: snapshot.deliveryTotals.failed > 0 ? C.error : C.dim },
+        { label: 'dead letters', value: String(snapshot.deliveryTotals.deadLettered), valueColor: snapshot.deliveryTotals.deadLettered > 0 ? C.warn : C.dim },
+        { label: 'sources', value: String(snapshot.sourceCount), valueColor: snapshot.sourceCount > 0 ? C.info : C.dim },
+      ], C),
+      buildGuidanceLine(width, '/schedule list', 'manage jobs and use the web or surface controls for retries, delivery, and cross-surface sessions', C),
+    ];
 
     if (jobs.length === 0 && runs.length === 0) {
-      const workspace = buildPanelWorkspace(width, height, {
+      return this.renderList(width, height, {
         title: 'Automation Control',
-        intro,
-        sections: [
-          summarySection,
-          {
-            lines: buildEmptyState(
-              width,
-              ' No automation activity recorded.',
-              'Create a job, run one manually, or let a watcher/surface trigger automation to populate this control room.',
-              [
-                { command: '/schedule add cron 0 * * * * repo sweep', summary: 'create a recurring automation job' },
-                { command: '/schedule list', summary: 'inspect jobs and run history from the shell' },
-              ],
-              C,
-            ),
-          },
-        ],
-        palette: C,
+        header: headerLines,
+        emptyMessage: ' No automation activity recorded.',
       });
-      while (workspace.length < height) workspace.push(createEmptyLine(width));
-      return workspace;
     }
 
-    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, runs.length - 1));
+    this.clampSelection();
     const selectedRun = runs[this.selectedIndex];
     const jobName = selectedRun ? (jobs.find((job) => job.id === selectedRun.jobId)?.name ?? selectedRun.jobId) : 'n/a';
 
-    const jobSection: PanelWorkspaceSection = {
-      title: 'Jobs',
-      lines: jobs.slice(0, 6).map((job) => buildPanelLine(width, [
-        [' ', C.label],
-        [job.enabled ? 'ENABLED ' : 'PAUSED  ', job.enabled ? C.ok : C.warn],
-        [truncateDisplay(job.name, 24).padEnd(24), C.value],
-        [` next ${truncateDisplay(formatTime(job.nextRunAt), Math.max(0, width - 43))}`, C.dim],
-      ])),
-    };
+    const footerLines: Line[] = [];
+    if (selectedRun) {
+      footerLines.push(
+        buildPanelLine(width, [
+          ['  Run: ', C.label],
+          [selectedRun.id, C.value],
+          ['  Status: ', C.label],
+          [selectedRun.status, runStatusColor(selectedRun.status)],
+        ]),
+        buildPanelLine(width, [
+          ['  Job: ', C.label],
+          [jobName, C.value],
+          ['  Agent: ', C.label],
+          [selectedRun.agentId ?? 'n/a', C.info],
+        ]),
+        buildPanelLine(width, [
+          ['  Queue: ', C.label],
+          [formatTime(selectedRun.queuedAt), C.dim],
+          ['  End: ', C.label],
+          [formatTime(selectedRun.endedAt), C.dim],
+        ]),
+        buildPanelLine(width, [
+          ['  Trigger: ', C.label],
+          [selectedRun.triggeredBy.kind, C.info],
+          ['  Target: ', C.label],
+          [selectedRun.target.kind, C.value],
+        ]),
+        buildPanelLine(width, [
+          ['  Deliveries: ', C.label],
+          [String(selectedRun.deliveryIds.length), selectedRun.deliveryIds.length > 0 ? C.info : C.dim],
+          ['  Route: ', C.label],
+          [selectedRun.routeId ?? 'n/a', C.dim],
+        ]),
+      );
+      if (selectedRun.error) {
+        footerLines.push(buildPanelLine(width, [
+          ['  Error: ', C.label],
+          [truncateDisplay(selectedRun.error, Math.max(0, width - 10)), C.error],
+        ]));
+      }
+    } else {
+      footerLines.push(buildPanelLine(width, [['  No run selected.', C.dim]]));
+    }
 
-    const detailSection: PanelWorkspaceSection = selectedRun
-      ? {
-          title: 'Selected Run',
-          lines: [
-            buildPanelLine(width, [
-              ['  Run: ', C.label],
-              [selectedRun.id, C.value],
-              ['  Status: ', C.label],
-              [selectedRun.status, runStatusColor(selectedRun.status)],
-            ]),
-            buildPanelLine(width, [
-              ['  Job: ', C.label],
-              [jobName, C.value],
-              ['  Agent: ', C.label],
-              [selectedRun.agentId ?? 'n/a', C.info],
-            ]),
-            buildPanelLine(width, [
-              ['  Queue: ', C.label],
-              [formatTime(selectedRun.queuedAt), C.dim],
-              ['  End: ', C.label],
-              [formatTime(selectedRun.endedAt), C.dim],
-            ]),
-            buildPanelLine(width, [
-              ['  Trigger: ', C.label],
-              [selectedRun.triggeredBy.kind, C.info],
-              ['  Target: ', C.label],
-              [selectedRun.target.kind, C.value],
-            ]),
-            buildPanelLine(width, [
-              ['  Deliveries: ', C.label],
-              [String(selectedRun.deliveryIds.length), selectedRun.deliveryIds.length > 0 ? C.info : C.dim],
-              ['  Route: ', C.label],
-              [selectedRun.routeId ?? 'n/a', C.dim],
-            ]),
-            ...(selectedRun.error ? [
-              buildPanelLine(width, [
-                ['  Error: ', C.label],
-                [truncateDisplay(selectedRun.error, Math.max(0, width - 10)), C.error],
-              ]),
-            ] : []),
-          ],
-        }
-      : {
-          title: 'Selected Run',
-          lines: [buildPanelLine(width, [['  No run selected.', C.dim]])],
-        };
+    // Jobs quick view
+    if (jobs.length > 0) {
+      footerLines.push(
+        ...jobs.slice(0, 6).map((job) => buildPanelLine(width, [
+          [' ', C.label],
+          [job.enabled ? 'ENABLED ' : 'PAUSED  ', job.enabled ? C.ok : C.warn],
+          [truncateDisplay(job.name, 24).padEnd(24), C.value],
+          [` next ${truncateDisplay(formatTime(job.nextRunAt), Math.max(0, width - 43))}`, C.dim],
+        ])),
+      );
+    }
+    footerLines.push(buildPanelLine(width, [['  Up/Down move through runs', C.dim]]));
 
-    const resolvedRuns = resolvePrimaryScrollableSection(width, height, {
-      intro,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through runs', C.dim]])],
-      palette: C,
-      beforeSections: [summarySection],
-      section: {
-        title: 'Recent Runs',
-        scrollableLines: runs.map((run, absolute) => {
-          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-          const name = jobs.find((job) => job.id === run.jobId)?.name ?? run.jobId;
-          return buildPanelLine(width, [
-            [' ', C.label, bg],
-            [run.status.padEnd(11), runStatusColor(run.status), bg],
-            [` ${truncateDisplay(name, 22).padEnd(22)}`, C.value, bg],
-            [` ${truncateDisplay(run.target.kind, 12).padEnd(12)}`, C.info, bg],
-            [` ${truncateDisplay(formatTime(run.queuedAt), Math.max(0, width - 49))}`, C.dim, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        guardRows: 1,
-        minRows: 5,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: [detailSection, jobSection],
-    });
-    this.scrollOffset = resolvedRuns.scrollOffset;
-
-    const sections: PanelWorkspaceSection[] = [
-      summarySection,
-      resolvedRuns.section,
-      detailSection,
-      jobSection,
-    ];
-    const lines = buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'Automation Control',
-      intro,
-      sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through runs', C.dim]])],
-      palette: C,
+      header: headerLines,
+      footer: footerLines,
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
   }
 }
