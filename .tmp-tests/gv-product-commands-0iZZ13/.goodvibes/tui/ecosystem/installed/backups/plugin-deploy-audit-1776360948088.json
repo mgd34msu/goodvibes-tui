@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "id": "plugin:deploy-audit:1776360948088",
+  "kind": "plugin",
+  "createdAt": 1776360948088,
+  "scope": "project",
+  "archivedTargetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-0iZZ13/.goodvibes/tui/ecosystem/installed/backups/plugin-deploy-audit-1776360948088",
+  "targetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-0iZZ13/.goodvibes/plugins/deploy-audit",
+  "receipt": {
+    "version": 1,
+    "id": "plugin:deploy-audit",
+    "kind": "plugin",
+    "installedAt": 1776360948087,
+    "scope": "project",
+    "entry": {
+      "id": "deploy-audit",
+      "kind": "plugin",
+      "name": "Deploy Audit",
+      "summary": "Reviews deploy surfaces before release",
+      "version": "1.0.0",
+      "author": "GoodVibes",
+      "source": "./catalog/plugins/deploy-audit",
+      "tags": [
+        "security"
+      ],
+      "provenance": "curated-local",
+      "compatibility": {
+        "minAppVersion": "0.14.0"
+      }
+    },
+    "sourcePath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-0iZZ13/catalog/plugins/deploy-audit",
+    "targetPath": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-0iZZ13/.goodvibes/plugins/deploy-audit",
+    "fingerprint": "18d8afdd872ce451bd7b35ab3591044b881b2b1bd7094c769d6e24b6bcde552c",
+    "provenanceSummary": "curated-local",
+    "compatibility": {
+      "appVersion": "0.18.33",
+      "status": "compatible",
+      "reasons": []
+    }
+  },
+  "reason": "update"
+}

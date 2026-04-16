@@ -1,0 +1,1572 @@
+{
+  "version": 2,
+  "events": [
+    {
+      "surface": "settings-sync",
+      "direction": "push",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "timestamp": 1776362569739,
+      "detail": "172 settings exported"
+    },
+    {
+      "surface": "settings-sync",
+      "direction": "pull",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "timestamp": 1776362569752,
+      "detail": "172 settings pulled"
+    },
+    {
+      "surface": "settings-sync",
+      "direction": "apply",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "timestamp": 1776362569753,
+      "detail": "Conflict resolved for provider.model using local value"
+    }
+  ],
+  "managedLocks": [],
+  "failures": [],
+  "syncedSettings": [
+    {
+      "key": "automation.catchUpWindowMinutes",
+      "value": 30,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "automation.defaultTimeoutMs",
+      "value": 900000,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "automation.deleteAfterRun",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "automation.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "automation.failureCooldownMs",
+      "value": 300000,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "automation.maxConcurrentRuns",
+      "value": 4,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "automation.runHistoryLimit",
+      "value": 100,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "behavior.autoApprove",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "behavior.autoCompactThreshold",
+      "value": 80,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "behavior.guidanceMode",
+      "value": "minimal",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "behavior.hitlMode",
+      "value": "balanced",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "behavior.notifyOnComplete",
+      "value": true,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "behavior.returnContextMode",
+      "value": "off",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "behavior.saveHistory",
+      "value": true,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "behavior.staleContextWarnings",
+      "value": true,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "behavior.suggestAlternativeOnProviderFail",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "cache.enabled",
+      "value": true,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "cache.hitRateWarningThreshold",
+      "value": 0.3,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "cache.monitorHitRate",
+      "value": true,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "cache.stableTtl",
+      "value": "1h",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "controlPlane.allowRemote",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.baseUrl",
+      "value": "http://127.0.0.1:3421",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.host",
+      "value": "127.0.0.1",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.hostMode",
+      "value": "local",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.port",
+      "value": 3421,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.streamMode",
+      "value": "sse",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.tls.certFile",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.tls.keyFile",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "controlPlane.tls.mode",
+      "value": "off",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "controlPlane.trustProxy",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "danger.daemon",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569751
+    },
+    {
+      "key": "danger.httpListener",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569751
+    },
+    {
+      "key": "display.collapseThreshold",
+      "value": 30,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "display.lineNumbers",
+      "value": "off",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "display.showReasoningSummary",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "display.showThinking",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "display.showTokenSpeed",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "display.showToolPreview",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "display.stream",
+      "value": true,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "display.theme",
+      "value": "vaporwave",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "helper.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "helper.globalModel",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "helper.globalProvider",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "httpListener.host",
+      "value": "127.0.0.1",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "httpListener.hostMode",
+      "value": "local",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "httpListener.port",
+      "value": 3422,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "httpListener.tls.certFile",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "httpListener.tls.keyFile",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "httpListener.tls.mode",
+      "value": "off",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "httpListener.trustProxy",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "network.outboundTls.allowInsecureLocalhost",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "network.outboundTls.customCaDir",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "network.outboundTls.customCaFile",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "network.outboundTls.mode",
+      "value": "bundled",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "network.remoteFetch.allowPrivateHosts",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "orchestration.maxActiveAgents",
+      "value": 8,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "orchestration.maxDepth",
+      "value": 0,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "orchestration.recursionEnabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.mode",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "permissions.tools.agent",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.analyze",
+      "value": "allow",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.delegate",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.edit",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "permissions.tools.exec",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "permissions.tools.fetch",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.find",
+      "value": "allow",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "permissions.tools.inspect",
+      "value": "allow",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.mcp",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.read",
+      "value": "allow",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "permissions.tools.registry",
+      "value": "allow",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.state",
+      "value": "allow",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.workflow",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "permissions.tools.write",
+      "value": "prompt",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "provider.embeddingProvider",
+      "value": "hashed-local",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "provider.provider",
+      "value": "openrouter",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "provider.reasoningEffort",
+      "value": "medium",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569740
+    },
+    {
+      "key": "provider.systemPromptFile",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "release.channel",
+      "value": "stable",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "sandbox.mcpIsolation",
+      "value": "disabled",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.qemuBinary",
+      "value": "qemu-system-x86_64",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.qemuExecWrapper",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.qemuGuestHost",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.qemuGuestPort",
+      "value": 2222,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.qemuGuestUser",
+      "value": "goodvibes",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.qemuImagePath",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.qemuSessionMode",
+      "value": "attach",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.qemuWorkspacePath",
+      "value": "/workspace",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.replIsolation",
+      "value": "shared-vm",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.vmBackend",
+      "value": "local",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "sandbox.windowsMode",
+      "value": "native-basic",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "service.autostart",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "service.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "service.logPath",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "service.platform",
+      "value": "auto",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "service.restartOnFailure",
+      "value": true,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "service.serviceName",
+      "value": "goodvibes",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "storage.secretPolicy",
+      "value": "preferred_secure",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569744
+    },
+    {
+      "key": "surfaces.discord.applicationId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.discord.botToken",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.discord.defaultChannelId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.discord.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.discord.guildId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.discord.publicKey",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.googleChat.appId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.googleChat.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.googleChat.spaceId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.googleChat.verificationToken",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.googleChat.webhookUrl",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.imessage.account",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "surfaces.imessage.bridgeUrl",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.imessage.defaultChatId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "surfaces.imessage.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.imessage.token",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "surfaces.ntfy.baseUrl",
+      "value": "https://ntfy.sh",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.ntfy.defaultPriority",
+      "value": 3,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.ntfy.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.ntfy.token",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.ntfy.topic",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.signal.account",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.signal.bridgeUrl",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.signal.defaultRecipient",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.signal.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.signal.token",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.slack.appToken",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "surfaces.slack.botToken",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "surfaces.slack.defaultChannel",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "surfaces.slack.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "surfaces.slack.signingSecret",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "surfaces.slack.workspaceId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "surfaces.telegram.botToken",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.telegram.botUsername",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.telegram.defaultChatId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.telegram.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.telegram.mode",
+      "value": "webhook",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.telegram.webhookSecret",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.webhook.defaultTarget",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.webhook.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.webhook.secret",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.webhook.timeoutMs",
+      "value": 10000,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569748
+    },
+    {
+      "key": "surfaces.whatsapp.accessToken",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.whatsapp.businessAccountId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.whatsapp.defaultRecipient",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.whatsapp.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.whatsapp.phoneNumberId",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.whatsapp.provider",
+      "value": "meta-cloud",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.whatsapp.signingSecret",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "surfaces.whatsapp.verifyToken",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569749
+    },
+    {
+      "key": "tools.autoHeal",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569751
+    },
+    {
+      "key": "tools.defaultTokenBudget",
+      "value": 5000,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569751
+    },
+    {
+      "key": "tools.hooksFile",
+      "value": "hooks.json",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569751
+    },
+    {
+      "key": "tools.llmEnabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569751
+    },
+    {
+      "key": "tools.llmModel",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569751
+    },
+    {
+      "key": "tools.llmProvider",
+      "value": "",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569751
+    },
+    {
+      "key": "ui.operationalMessages",
+      "value": "panel",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "ui.systemMessages",
+      "value": "panel",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "ui.voiceEnabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569745
+    },
+    {
+      "key": "ui.wrfcMessages",
+      "value": "both",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569746
+    },
+    {
+      "key": "watchers.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "watchers.heartbeatIntervalMs",
+      "value": 15000,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "watchers.pollIntervalMs",
+      "value": 60000,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "watchers.recoveryWindowMinutes",
+      "value": 10,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569750
+    },
+    {
+      "key": "web.enabled",
+      "value": false,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "web.host",
+      "value": "127.0.0.1",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "web.hostMode",
+      "value": "local",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "web.port",
+      "value": 3423,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "web.publicBaseUrl",
+      "value": "http://127.0.0.1:3423",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "web.staticAssetsDir",
+      "value": "dist/web",
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569747
+    },
+    {
+      "key": "wrfc.autoCommit",
+      "value": true,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "wrfc.maxFixAttempts",
+      "value": 5,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    },
+    {
+      "key": "wrfc.scoreThreshold",
+      "value": 9.9,
+      "source": "synced",
+      "sourceLabel": "settings-sync",
+      "detail": "Pulled from /home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "path": "/home/buzzkill/Projects/goodvibes-tui/.tmp-tests/gv-product-commands-P31qAM/artifacts/settings-sync.json",
+      "updatedAt": 1776362569752
+    }
+  ],
+  "managedSettings": [],
+  "conflicts": [],
+  "rollbackHistory": []
+}

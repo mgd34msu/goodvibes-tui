@@ -1,0 +1,61 @@
+{
+  "id": "artifact:agent-remote:1",
+  "runnerId": "agent-remote",
+  "createdAt": 1776361901830,
+  "runnerContract": {
+    "id": "runner:agent-remote",
+    "runnerId": "agent-remote",
+    "poolId": "ops-pool",
+    "taskId": "task-remote",
+    "label": "Ops Runner",
+    "sourceTransport": "acp",
+    "trustClass": "self-hosted-acp",
+    "template": "general",
+    "capabilityCeiling": {
+      "allowedTools": [
+        "read",
+        "edit"
+      ],
+      "capabilityCeilingTools": [
+        "read",
+        "edit"
+      ],
+      "executionProtocol": "gather-plan-apply",
+      "reviewMode": "wrfc",
+      "communicationLane": "parent-only",
+      "orchestrationDepth": 2,
+      "successCriteria": [
+        "clean result"
+      ],
+      "requiredEvidence": [
+        "summary"
+      ],
+      "writeScope": [
+        "src/**"
+      ]
+    },
+    "createdAt": 1776361901830,
+    "lastUpdatedAt": 1776361901830,
+    "transport": {
+      "state": "connected",
+      "connectedAt": 1776361901830,
+      "messageCount": 2,
+      "errorCount": 0
+    }
+  },
+  "task": {
+    "task": "Review release surfaces",
+    "status": "completed",
+    "startedAt": 1776361900830,
+    "completedAt": 1776361901830,
+    "summary": "Completed remote review"
+  },
+  "evidence": {
+    "toolCallCount": 3,
+    "messageCount": 2,
+    "errorCount": 0,
+    "transportState": "connected",
+    "hasKnowledgeInjections": false
+  },
+  "knowledgeInjections": []
+}

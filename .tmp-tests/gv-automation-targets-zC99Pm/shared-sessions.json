@@ -1,0 +1,83 @@
+{
+  "sessions": [
+    {
+      "id": "sess-main",
+      "title": "Main target automation",
+      "status": "active",
+      "createdAt": 1776359907356,
+      "updatedAt": 1776359907358,
+      "lastMessageAt": 1776359907357,
+      "messageCount": 1,
+      "pendingInputCount": 1,
+      "routeIds": [],
+      "surfaceKinds": [
+        "tui",
+        "service"
+      ],
+      "participants": [
+        {
+          "surfaceKind": "tui",
+          "surfaceId": "surface:tui",
+          "displayName": "Terminal UI",
+          "lastSeenAt": 1776359907356
+        },
+        {
+          "surfaceKind": "service",
+          "surfaceId": "surface:automation",
+          "externalId": "automation:auto-fa28fe3c",
+          "userId": "automation",
+          "displayName": "Automation: Main target automation",
+          "lastSeenAt": 1776359907356
+        }
+      ],
+      "activeAgentId": "agent-252",
+      "lastAgentId": "agent-252",
+      "metadata": {
+        "source": "tui"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "id": "smsg-fe37e61b",
+      "sessionId": "sess-main",
+      "role": "user",
+      "body": "Continue the main terminal workflow",
+      "createdAt": 1776359907357,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "userId": "automation",
+      "displayName": "Automation: Main target automation",
+      "metadata": {
+        "automationJobId": "auto-fa28fe3c",
+        "trigger": "manual",
+        "targetKind": "main",
+        "sessionIntent": "submit"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "sin-5d403c31",
+      "sessionId": "sess-main",
+      "intent": "submit",
+      "state": "spawned",
+      "correlationId": "session-input:sin-5d403c31",
+      "causationId": "smsg-fe37e61b",
+      "body": "Continue the main terminal workflow",
+      "createdAt": 1776359907357,
+      "updatedAt": 1776359907358,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "externalId": "automation:auto-fa28fe3c",
+      "userId": "automation",
+      "displayName": "Automation: Main target automation",
+      "metadata": {
+        "automationJobId": "auto-fa28fe3c",
+        "trigger": "manual",
+        "targetKind": "main"
+      },
+      "activeAgentId": "agent-252"
+    }
+  ]
+}

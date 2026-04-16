@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "id": "autorun-auto-654f9d27-1776360613919-73dc1b",
+      "labels": [
+        "manual"
+      ],
+      "createdAt": 1776360613919,
+      "updatedAt": 1776360613919,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "jobId": "auto-654f9d27",
+      "status": "running",
+      "triggeredBy": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776360613918,
+        "updatedAt": 1776360613919,
+        "metadata": {},
+        "lastSeenAt": 1776360613919
+      },
+      "target": {
+        "kind": "route",
+        "routeId": "route-15b5c21bcc66",
+        "preserveThread": true,
+        "threadId": "171234.5",
+        "sessionId": "sess-93618cd2"
+      },
+      "execution": {
+        "prompt": "Post the weekly route summary",
+        "target": {
+          "kind": "route",
+          "routeId": "route-15b5c21bcc66",
+          "preserveThread": true,
+          "threadId": "171234.5"
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "scheduleKind": "every",
+      "queuedAt": 1776360613919,
+      "startedAt": 1776360613919,
+      "forceRun": true,
+      "dueRun": false,
+      "attempt": 1,
+      "sessionId": "sess-93618cd2",
+      "routeId": "route-15b5c21bcc66",
+      "route": {
+        "id": "route-15b5c21bcc66",
+        "kind": "thread",
+        "surfaceKind": "slack",
+        "surfaceId": "surface:slack",
+        "externalId": "C123",
+        "sessionPolicy": "create-or-bind",
+        "threadPolicy": "preserve",
+        "deliveryGuarantee": "best-effort",
+        "threadId": "171234.5",
+        "title": "Slack thread",
+        "lastSeenAt": 1776360613919,
+        "createdAt": 1776360613918,
+        "updatedAt": 1776360613919,
+        "metadata": {
+          "channel": "#ops"
+        }
+      },
+      "continuationMode": "shared-session",
+      "executionIntent": {
+        "targetKind": "route",
+        "mode": "shared-session"
+      },
+      "deliveryIds": [],
+      "agentId": "agent-246"
+    }
+  ]
+}

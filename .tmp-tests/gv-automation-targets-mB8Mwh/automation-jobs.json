@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "auto-2f128d1a",
+      "labels": [],
+      "createdAt": 1776361871274,
+      "updatedAt": 1776361871278,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "name": "Pinned automation",
+      "description": "Summarize the session state",
+      "status": "enabled",
+      "enabled": true,
+      "schedule": {
+        "kind": "every",
+        "intervalMs": 300000
+      },
+      "execution": {
+        "prompt": "Summarize the session state",
+        "target": {
+          "kind": "pinned",
+          "createIfMissing": true,
+          "pinnedSessionId": "auto-pin-auto-2f128d1a",
+          "sessionId": "auto-pin-auto-2f128d1a"
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "delivery": {
+        "mode": "none",
+        "targets": [],
+        "fallbackTargets": [],
+        "includeSummary": true,
+        "includeTranscript": false,
+        "includeLinks": true
+      },
+      "failure": {
+        "action": "retry",
+        "maxConsecutiveFailures": 3,
+        "cooldownMs": 300000,
+        "retryPolicy": {
+          "maxAttempts": 3,
+          "delayMs": 5000,
+          "strategy": "exponential",
+          "maxDelayMs": 60000,
+          "jitterMs": 500
+        },
+        "disableAfterFailures": false
+      },
+      "source": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776361871274,
+        "updatedAt": 1776361871274,
+        "metadata": {}
+      },
+      "nextRunAt": 1776362171274,
+      "lastRunAt": 1776361871278,
+      "lastRunId": "autorun-auto-2f128d1a-1776361871278-ef3532",
+      "runCount": 2,
+      "successCount": 0,
+      "failureCount": 0,
+      "deleteAfterRun": false
+    }
+  ]
+}

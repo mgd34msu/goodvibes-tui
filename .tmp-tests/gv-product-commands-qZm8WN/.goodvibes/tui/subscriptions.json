@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "subscriptions": {},
+  "pending": {
+    "openai": {
+      "provider": "openai",
+      "state": "pending-state",
+      "verifier": "pending-verifier",
+      "redirectUri": "http://localhost:1455/auth/callback",
+      "createdAt": 1776362853434
+    }
+  }
+}

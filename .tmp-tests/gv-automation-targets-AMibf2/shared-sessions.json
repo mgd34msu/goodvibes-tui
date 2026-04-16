@@ -1,0 +1,124 @@
+{
+  "sessions": [
+    {
+      "id": "auto-pin-auto-a10d94f6",
+      "title": "Pinned automation",
+      "status": "active",
+      "createdAt": 1776361055282,
+      "updatedAt": 1776361055285,
+      "lastMessageAt": 1776361055285,
+      "messageCount": 2,
+      "pendingInputCount": 2,
+      "routeIds": [],
+      "surfaceKinds": [
+        "service"
+      ],
+      "participants": [
+        {
+          "surfaceKind": "service",
+          "surfaceId": "surface:automation",
+          "userId": "automation",
+          "displayName": "Automation: Pinned automation",
+          "lastSeenAt": 1776361055282
+        },
+        {
+          "surfaceKind": "service",
+          "surfaceId": "surface:automation",
+          "externalId": "automation:auto-a10d94f6",
+          "userId": "automation",
+          "displayName": "Automation: Pinned automation",
+          "lastSeenAt": 1776361055285
+        }
+      ],
+      "activeAgentId": "agent-2",
+      "lastAgentId": "agent-2",
+      "metadata": {
+        "source": "automation",
+        "jobId": "auto-a10d94f6",
+        "targetKind": "pinned"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "id": "smsg-34f74e32",
+      "sessionId": "auto-pin-auto-a10d94f6",
+      "role": "user",
+      "body": "Summarize the session state",
+      "createdAt": 1776361055283,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "userId": "automation",
+      "displayName": "Automation: Pinned automation",
+      "metadata": {
+        "automationJobId": "auto-a10d94f6",
+        "trigger": "manual",
+        "targetKind": "pinned",
+        "sessionIntent": "submit"
+      }
+    },
+    {
+      "id": "smsg-3f22bc69",
+      "sessionId": "auto-pin-auto-a10d94f6",
+      "role": "user",
+      "body": "Summarize the session state",
+      "createdAt": 1776361055285,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "userId": "automation",
+      "displayName": "Automation: Pinned automation",
+      "metadata": {
+        "automationJobId": "auto-a10d94f6",
+        "trigger": "manual",
+        "targetKind": "pinned",
+        "sessionIntent": "submit"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "sin-f425cf8f",
+      "sessionId": "auto-pin-auto-a10d94f6",
+      "intent": "submit",
+      "state": "spawned",
+      "correlationId": "session-input:sin-f425cf8f",
+      "causationId": "smsg-34f74e32",
+      "body": "Summarize the session state",
+      "createdAt": 1776361055284,
+      "updatedAt": 1776361055284,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "externalId": "automation:auto-a10d94f6",
+      "userId": "automation",
+      "displayName": "Automation: Pinned automation",
+      "metadata": {
+        "automationJobId": "auto-a10d94f6",
+        "trigger": "manual",
+        "targetKind": "pinned"
+      },
+      "activeAgentId": "agent-1"
+    },
+    {
+      "id": "sin-d8c1aaf4",
+      "sessionId": "auto-pin-auto-a10d94f6",
+      "intent": "submit",
+      "state": "spawned",
+      "correlationId": "session-input:sin-d8c1aaf4",
+      "causationId": "smsg-3f22bc69",
+      "body": "Summarize the session state",
+      "createdAt": 1776361055285,
+      "updatedAt": 1776361055285,
+      "surfaceKind": "service",
+      "surfaceId": "surface:automation",
+      "externalId": "automation:auto-a10d94f6",
+      "userId": "automation",
+      "displayName": "Automation: Pinned automation",
+      "metadata": {
+        "automationJobId": "auto-a10d94f6",
+        "trigger": "manual",
+        "targetKind": "pinned"
+      },
+      "activeAgentId": "agent-2"
+    }
+  ]
+}

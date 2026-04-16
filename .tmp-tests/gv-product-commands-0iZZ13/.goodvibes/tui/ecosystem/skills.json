@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "release-gate",
+      "kind": "skill",
+      "name": "Release Gate",
+      "summary": "Runs release certification and deploy checks",
+      "source": "./catalog/skills/release-gate",
+      "tags": [
+        "release"
+      ]
+    }
+  ]
+}

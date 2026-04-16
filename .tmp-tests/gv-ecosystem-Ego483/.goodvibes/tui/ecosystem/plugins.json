@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "deploy-audit",
+      "kind": "plugin",
+      "name": "Deploy Audit",
+      "summary": "Reviews deploy surfaces before release",
+      "source": "./catalog/plugins/deploy-audit",
+      "tags": [
+        "security",
+        "release"
+      ]
+    }
+  ]
+}

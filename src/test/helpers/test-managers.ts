@@ -38,6 +38,10 @@ export function createTestManagers(): TestManagers {
   const providerDataDir = join(rootDir, 'provider-data');
 
   const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
+  // Enable tools.llmEnabled by default in tests so resolveToolLLM tests can exercise
+  // the resolution logic without each test individually opting in. Production code
+  // keeps the gate off by default; tests opt in so the gate is not the thing under test.
+  configManager.set('tools.llmEnabled', true);
   const subscriptionManager = new SubscriptionManager(subscriptionsPath);
   const secretsManager = new SecretsManager({ projectRoot: workingDir, globalHome: homeDir });
   const serviceRegistry = new ServiceRegistry(servicesPath, {

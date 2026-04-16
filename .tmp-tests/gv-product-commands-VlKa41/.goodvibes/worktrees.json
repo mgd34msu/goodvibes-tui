@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "records": {
+    "/tmp/demo-worktree": {
+      "path": "/tmp/demo-worktree",
+      "kind": "manual",
+      "state": "active",
+      "sessionId": "demo-session",
+      "updatedAt": 1776362706854
+    }
+  }
+}

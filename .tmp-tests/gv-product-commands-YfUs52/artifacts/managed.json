@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "exportedAt": 1776361902062,
+  "profileName": "ops",
+  "settings": {
+    "provider.model": "model-1",
+    "provider.provider": "openai",
+    "provider.reasoningEffort": "low"
+  }
+}

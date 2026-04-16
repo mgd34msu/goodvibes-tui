@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "auto-fa28fe3c",
+      "labels": [],
+      "createdAt": 1776359907356,
+      "updatedAt": 1776359907356,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "name": "Main target automation",
+      "description": "Continue the main terminal workflow",
+      "status": "enabled",
+      "enabled": true,
+      "schedule": {
+        "kind": "every",
+        "intervalMs": 900000
+      },
+      "execution": {
+        "prompt": "Continue the main terminal workflow",
+        "target": {
+          "kind": "main",
+          "createIfMissing": false
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "delivery": {
+        "mode": "none",
+        "targets": [],
+        "fallbackTargets": [],
+        "includeSummary": true,
+        "includeTranscript": false,
+        "includeLinks": true
+      },
+      "failure": {
+        "action": "retry",
+        "maxConsecutiveFailures": 3,
+        "cooldownMs": 300000,
+        "retryPolicy": {
+          "maxAttempts": 3,
+          "delayMs": 5000,
+          "strategy": "exponential",
+          "maxDelayMs": 60000,
+          "jitterMs": 500
+        },
+        "disableAfterFailures": false
+      },
+      "source": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776359907356,
+        "updatedAt": 1776359907356,
+        "metadata": {}
+      },
+      "nextRunAt": 1776360807356,
+      "lastRunAt": 1776359907356,
+      "lastRunId": "autorun-auto-fa28fe3c-1776359907356-6627bd",
+      "runCount": 1,
+      "successCount": 0,
+      "failureCount": 0,
+      "deleteAfterRun": false
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "id": "autorun-auto-a10d94f6-1776361055285-b56294",
+      "labels": [
+        "manual"
+      ],
+      "createdAt": 1776361055285,
+      "updatedAt": 1776361055285,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "jobId": "auto-a10d94f6",
+      "status": "running",
+      "triggeredBy": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776361055280,
+        "updatedAt": 1776361055285,
+        "metadata": {},
+        "lastSeenAt": 1776361055285
+      },
+      "target": {
+        "kind": "pinned",
+        "createIfMissing": true,
+        "pinnedSessionId": "auto-pin-auto-a10d94f6",
+        "sessionId": "auto-pin-auto-a10d94f6"
+      },
+      "execution": {
+        "prompt": "Summarize the session state",
+        "target": {
+          "kind": "pinned",
+          "createIfMissing": true,
+          "pinnedSessionId": "auto-pin-auto-a10d94f6",
+          "sessionId": "auto-pin-auto-a10d94f6"
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "scheduleKind": "every",
+      "queuedAt": 1776361055285,
+      "startedAt": 1776361055285,
+      "forceRun": true,
+      "dueRun": false,
+      "attempt": 1,
+      "sessionId": "auto-pin-auto-a10d94f6",
+      "continuationMode": "shared-session",
+      "executionIntent": {
+        "targetKind": "pinned",
+        "mode": "shared-session"
+      },
+      "deliveryIds": [],
+      "agentId": "agent-2"
+    },
+    {
+      "id": "autorun-auto-a10d94f6-1776361055281-5b6822",
+      "labels": [
+        "manual"
+      ],
+      "createdAt": 1776361055281,
+      "updatedAt": 1776361055281,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "jobId": "auto-a10d94f6",
+      "status": "running",
+      "triggeredBy": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776361055280,
+        "updatedAt": 1776361055281,
+        "metadata": {},
+        "lastSeenAt": 1776361055281
+      },
+      "target": {
+        "kind": "pinned",
+        "createIfMissing": true,
+        "pinnedSessionId": "auto-pin-auto-a10d94f6",
+        "sessionId": "auto-pin-auto-a10d94f6"
+      },
+      "execution": {
+        "prompt": "Summarize the session state",
+        "target": {
+          "kind": "pinned",
+          "createIfMissing": true,
+          "pinnedSessionId": "auto-pin-auto-a10d94f6",
+          "sessionId": "auto-pin-auto-a10d94f6"
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "scheduleKind": "every",
+      "queuedAt": 1776361055281,
+      "startedAt": 1776361055281,
+      "forceRun": true,
+      "dueRun": false,
+      "attempt": 1,
+      "sessionId": "auto-pin-auto-a10d94f6",
+      "continuationMode": "shared-session",
+      "executionIntent": {
+        "targetKind": "pinned",
+        "mode": "shared-session"
+      },
+      "deliveryIds": [],
+      "agentId": "agent-1"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "auto-819fcec7",
+      "labels": [],
+      "createdAt": 1776361871283,
+      "updatedAt": 1776361871283,
+      "createdBy": "automation-manager",
+      "updatedBy": "automation-manager",
+      "name": "Current session automation",
+      "description": "Continue the active terminal workflow",
+      "status": "enabled",
+      "enabled": true,
+      "schedule": {
+        "kind": "every",
+        "intervalMs": 900000
+      },
+      "execution": {
+        "prompt": "Continue the active terminal workflow",
+        "target": {
+          "kind": "current",
+          "surfaceKind": "tui",
+          "createIfMissing": false
+        },
+        "routing": {
+          "providerSelection": "inherit-current",
+          "providerFailurePolicy": "fail"
+        },
+        "timeoutMs": 900000,
+        "sandboxMode": "inherit"
+      },
+      "delivery": {
+        "mode": "none",
+        "targets": [],
+        "fallbackTargets": [],
+        "includeSummary": true,
+        "includeTranscript": false,
+        "includeLinks": true
+      },
+      "failure": {
+        "action": "retry",
+        "maxConsecutiveFailures": 3,
+        "cooldownMs": 300000,
+        "retryPolicy": {
+          "maxAttempts": 3,
+          "delayMs": 5000,
+          "strategy": "exponential",
+          "maxDelayMs": 60000,
+          "jitterMs": 500
+        },
+        "disableAfterFailures": false
+      },
+      "source": {
+        "id": "automation-manager",
+        "kind": "schedule",
+        "label": "Automation manager",
+        "enabled": true,
+        "createdAt": 1776361871283,
+        "updatedAt": 1776361871283,
+        "metadata": {}
+      },
+      "nextRunAt": 1776362771283,
+      "lastRunAt": 1776361871283,
+      "lastRunId": "autorun-auto-819fcec7-1776361871283-fa6af9",
+      "runCount": 1,
+      "successCount": 0,
+      "failureCount": 0,
+      "deleteAfterRun": false
+    }
+  ]
+}

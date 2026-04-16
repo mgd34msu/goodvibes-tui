@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "exportedAt": 1776360948325,
+  "profiles": [
+    {
+      "name": "release",
+      "timestamp": 1776360948325,
+      "data": {
+        "display": {},
+        "provider": {},
+        "behavior": {}
+      }
+    }
+  ]
+}

@@ -1,7 +1,5 @@
 export const DOMAINS = [
-  'conversation',
   'panels',
-  'permissions',
   'ui-perf',
 ] as const;
 
