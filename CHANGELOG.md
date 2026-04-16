@@ -4,6 +4,20 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.21] — 2026-04-16
+
+### Wave 3a / Tier 2 TUI UX Consistency Infrastructure — I5
+
+Final item from Wave 3a: selection gutter and filter input UX consistency across list panels.
+
+### I5 — Selection gutter + filter input label conventions
+
+- **`src/panels/scrollable-list-panel.ts`** — `ScrollableListPanel`: added opt-in `protected showSelectionGutter = false`. When enabled, `renderList()` post-processes each item line to prepend a 2-column left gutter: `▸ ` (info color, bold) for the selected row, `  ` for all others. Line width is preserved by dropping the last 2 cells. Default off to avoid breaking panels with custom selection indicators.
+- **`src/panels/scrollable-list-panel.ts`** — `SearchableListPanel`: added `protected buildFilterInputLine(width, label, focused)`. Renders the filter line with context-sensitive label formatting: `[Filter] query_` when `focused=true` (active, bold, cursor visible), `Filter: query` when `focused=false` (dim, no cursor). Delegates to `buildSearchInputLine` from `polish.ts`.
+- **New test file `src/test/panels/scrollable-list-panel-i5.test.ts`**: 13 tests covering gutter on/off, column position of `▸`, line-width preservation, and filter label format in both focused/unfocused states.
+
+---
+
 ## [0.18.20] — 2026-04-16
 
 ### Wave 3a / Tier 2 TUI UX Consistency Infrastructure
