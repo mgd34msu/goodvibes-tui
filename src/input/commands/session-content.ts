@@ -161,7 +161,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
 
   registry.register({
     name: 'undo',
-    aliases: ['u'],
+    aliases: [],
     description: 'Undo last action. /undo file — revert last file write/edit. /undo — remove last conversation turn.',
     usage: '[file]',
     argsHint: '[file]',

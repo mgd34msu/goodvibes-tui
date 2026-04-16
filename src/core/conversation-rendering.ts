@@ -110,12 +110,14 @@ export function renderConversationAssistantMessage(
     //      determines `numWidth` (digit count) and thus `gutterW` (gutter column width).
     //   2. Render pass: render at `width - gutterW` with the gutter factored in.
     //
-    // Single-pass is not feasible here because `numWidth` depends on `totalLines`,
-    // which is unknown before rendering. The 4α commit message claim that this
-    // "eliminates double-parse when line numbers are enabled" was inaccurate:
-    // 4α eliminated the legacy `renderMarkdown()` duplicate that was used for the
-    // code-block line-number mode ('code'). The 'all' mode double-call is unavoidable
-    // by design and remains unchanged.
+    // Single-pass is not pursued here. It would require either a pessimistic
+    // `numWidth=6` (fits 999,999 lines, but wastes 3-4 gutter columns on typical
+    // messages) or rendering the numbered output into a scratch buffer and trimming.
+    // Neither is clearly better than the current two-pass measurement approach.
+    // The 4α commit message claim that this "eliminates double-parse when line
+    // numbers are enabled" was inaccurate: 4α eliminated the legacy
+    // `renderMarkdown()` duplicate used for code-block line-number mode ('code').
+    // The 'all' mode double-call is a deliberate design choice and remains unchanged.
     const measureWidth = showAllLineNumbers ? width : 0;
     const totalLines = showAllLineNumbers
       ? renderMarkdownTracked(message.content, measureWidth, { codeBlockLineNumbers: false }).lines.length

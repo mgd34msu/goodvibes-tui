@@ -17,7 +17,18 @@ export class TerminalBuffer {
 
   public setCell(x: number, y: number, cell: Partial<Cell>): void {
     if (y >= 0 && y < this.height && x >= 0 && x < this.width) {
-      this.cells[y][x] = { ...this.cells[y][x], ...cell };
+      // No-op guard: skip the dirty mark and allocation if every field in `cell`
+      // already matches the current cell value (idempotent write).
+      const current = this.cells[y][x]!;
+      let changed = false;
+      for (const k in cell) {
+        if ((cell as unknown as Record<string, unknown>)[k] !== (current as unknown as Record<string, unknown>)[k]) {
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) return;
+      this.cells[y][x] = { ...current, ...cell };
       this.dirtyRows[y] = true;
     }
   }

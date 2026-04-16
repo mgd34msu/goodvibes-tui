@@ -76,13 +76,15 @@ describe('KeybindingsManager.lookup() (α2)', () => {
 
   it('conflicting bindings: last-writer-wins (deterministic)', () => {
     // Map both 'search' and 'clear-cancel' to Ctrl+X in the config.
-    // buildLookupMap iterates actions in object entry order; whichever action
-    // is processed last overwrites the earlier one for that combo key.
-    // The test verifies the behavior is deterministic (not a throw or undefined).
+    // buildLookupMap iterates Object.entries(this.bindings) in DEFAULT_KEYBINDINGS
+    // declaration order — NOT config file order. 'clear-cancel' appears at key
+    // position 2 in DEFAULT_KEYBINDINGS; 'search' appears at position 10.
+    // Therefore 'search' is the last writer for Ctrl+X and wins.
+    // Contract: last-writer-wins is the documented conflict resolution policy.
     const dir = join(tmpdir(), `gv-kb-conflict-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     const configPath = join(dir, 'keybindings.json');
-    // Both search and clear-cancel mapped to Ctrl+X
+    // Both search and clear-cancel mapped to Ctrl+X; search is last (DEFAULT_KEYBINDINGS order)
     writeFileSync(configPath, JSON.stringify({
       search: { key: 'x', ctrl: true },
       'clear-cancel': { key: 'x', ctrl: true },
@@ -91,8 +93,8 @@ describe('KeybindingsManager.lookup() (α2)', () => {
       const km = new KeybindingsManager({ configPath });
       km.loadFromDisk();
       const result = km.lookup({ logicalName: 'x', ctrl: true });
-      // Must be one of the two bound actions (not null, not undefined)
-      expect(result === 'search' || result === 'clear-cancel').toBe(true);
+      // 'search' is the last writer (DEFAULT_KEYBINDINGS order: search after clear-cancel).
+      expect(result).toBe('search');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
