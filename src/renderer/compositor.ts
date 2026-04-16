@@ -54,24 +54,33 @@ export interface CompositeRequest {
  * Decoupled from global state — all needed data is passed as parameters.
  */
 export class Compositor {
-  private lastBuffer: TerminalBuffer | null = null;
+  /** Double-buffer reuse: back is written, front is the last-rendered reference. */
+  private frontBuffer: TerminalBuffer | null = null;
+  private backBuffer: TerminalBuffer | null = null;
   private diffEngine = new DiffEngine();
 
   constructor(private stdout: NodeJS.WriteStream) {}
 
   /** Exposed for unit tests — returns the last composited buffer. */
   public get lastBufferForTest(): TerminalBuffer | null {
-    return this.lastBuffer;
+    return this.frontBuffer;
   }
 
   public resetDiff(): void {
     this.diffEngine.reset();
-    this.lastBuffer = null;
+    this.frontBuffer = null;
+    this.backBuffer = null;
   }
 
   public composite(params: CompositeRequest): void {
     const { width, height, header, viewport, footer, selection, search, panel, panelWidth } = params;
-    const newBuffer = new TerminalBuffer(width, height);
+    // R3: Reuse back-buffer instead of allocating each frame
+    if (!this.backBuffer) {
+      this.backBuffer = new TerminalBuffer(width, height);
+    } else {
+      this.backBuffer.reset(width, height);
+    }
+    const newBuffer = this.backBuffer;
 
     const hasPanel = panel !== undefined && panelWidth !== undefined && panelWidth > 0;
     const leftWidth = hasPanel ? Math.max(1, width - panelWidth - 1) : width;
@@ -251,11 +260,15 @@ export class Compositor {
     });
 
     // 4. Diff and Render
-    const diff = this.diffEngine.diff(this.lastBuffer, newBuffer);
+    // R3: Diff against front-buffer (last-rendered), then swap front/back — no clone() needed
+    const diff = this.diffEngine.diff(this.frontBuffer, newBuffer);
     if (diff) {
       this.stdout.write(diff);
     }
 
-    this.lastBuffer = newBuffer.clone();
+    // Swap: back (just written) becomes the new front reference; old front becomes the next back
+    const swap = this.frontBuffer;
+    this.frontBuffer = this.backBuffer;
+    this.backBuffer = swap;
   }
 }

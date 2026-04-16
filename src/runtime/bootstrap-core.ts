@@ -226,8 +226,30 @@ export async function initializeBootstrapCore(
   });
 
   const renderRequestRef = { value: (): void => {} };
+  // R1: Coalescing render scheduler — collapses N same-microtask requestRender() calls into 1.
+  // Also enforces a 16ms minimum interval to cap at ~60fps during streaming.
+  let renderScheduled = false;
+  let lastRenderTime = 0;
+  const RENDER_INTERVAL_MS = 16;
   const requestRender = (): void => {
-    renderRequestRef.value();
+    if (renderScheduled) return;
+    renderScheduled = true;
+    setImmediate(() => {
+      renderScheduled = false;
+      const now = Date.now();
+      const elapsed = now - lastRenderTime;
+      if (elapsed < RENDER_INTERVAL_MS) {
+        // Too soon — debounce to the tail of the current 16ms window
+        const delay = RENDER_INTERVAL_MS - elapsed;
+        setTimeout(() => {
+          lastRenderTime = Date.now();
+          renderRequestRef.value();
+        }, delay);
+      } else {
+        lastRenderTime = now;
+        renderRequestRef.value();
+      }
+    });
   };
   const permissionPromptRef = {
     requestPermission: (async () => ({ approved: false, remember: false })) as PermissionRequestHandler,

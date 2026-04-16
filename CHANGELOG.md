@@ -4,6 +4,23 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.18] — 2026-04-16
+
+### Performance
+
+- **R1 — Render coalescing** (`src/runtime/bootstrap-core.ts`): `requestRender()` is now wrapped in a `setImmediate`-based coalescer. A burst of N synchronous `requestRender()` calls in a single microtask produces exactly one render pass. A 16ms minimum-interval gate is applied to cap rendering at ~60fps during streaming (prevents hundreds of full pipeline runs per second on LLM token bursts).
+- **R2 — Panel dirty-flag activation** (`src/renderer/panel-composite.ts`, `src/panels/base-panel.ts`, `src/panels/types.ts`): The existing `needsRender` field is now enforced. Added `invalidate(): void` and `markRendered(): void` to the `Panel` interface and `BasePanel`. `buildPanelCompositeData` routes all panel renders through a new `renderPanel()` helper backed by a per-panel `WeakMap` cache — panels that have not changed and whose dimensions are unchanged are skipped entirely. `ScrollableListPanel` and all 40+ panels that write `needsRender = true` on state mutation are compatible without changes (the contract was already partially in place; this activates it).
+- **R3 — Buffer reuse** (`src/renderer/buffer.ts`, `src/renderer/compositor.ts`): `TerminalBuffer` gains a `reset(width, height): void` method that overwrites cells in-place instead of reallocating. `Compositor` now holds two long-lived `TerminalBuffer` instances (front/back). Each `composite()` call resets the back buffer, composites into it, diffs against the front buffer (the last-rendered frame), writes the diff, then swaps front/back. The `clone()` call that doubled allocation cost every frame is eliminated. `TerminalBuffer` constructor is called twice per session (once per buffer), not once per frame.
+
+### Tests
+
+- Added `src/test/renderer/render-perf.test.ts` with 10 new tests covering R1 coalescing logic, R2 dirty-flag skip/invalidate/markRendered contract, and R3 `TerminalBuffer.reset()` behavior.
+- Extended `src/test/renderer/compositor.test.ts` with 3 new tests covering R3 double-buffer reuse correctness (buffer identity after swap, resetDiff clearing both buffers, resize handling).
+- Updated mock `Panel` objects in `src/test/renderer/panel-navigation.test.ts`, `src/test/panels/panel-manager.test.ts`, `src/test/panels/panel-list-panel.test.ts`, and `src/test/daemon/server.test.ts` to implement the new `invalidate()`/`markRendered()` interface methods.
+- Test suite: 438/438 passing, typecheck clean, architecture check green.
+
+---
+
 ## [0.18.17] — 2026-04-16
 
 ### Bug Fixes

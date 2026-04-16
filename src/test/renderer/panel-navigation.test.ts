@@ -21,6 +21,8 @@ function makePanel(id: string, name: string, icon = 'X'): Panel {
     onDeactivate() {},
     onDestroy() {},
     render: () => [],
+    invalidate() { this.needsRender = true; },
+    markRendered() { this.needsRender = false; },
   };
 }
 

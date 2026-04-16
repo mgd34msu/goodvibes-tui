@@ -52,6 +52,8 @@ function makeReg(overrides: Partial<PanelRegistration> & { id: string }): PanelR
       onDeactivate() {},
       onDestroy() {},
       render: () => [],
+      invalidate() { this.needsRender = true; },
+      markRendered() { this.needsRender = false; },
     })),
   };
 }

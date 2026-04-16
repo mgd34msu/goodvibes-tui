@@ -22,6 +22,8 @@ function makePanel(id: string, name = id): Panel & {
     onDeactivate: deactivate,
     onDestroy: destroy,
     render: () => [],
+    invalidate() { this.needsRender = true; },
+    markRendered() { this.needsRender = false; },
     activate,
     deactivate,
     destroy,
