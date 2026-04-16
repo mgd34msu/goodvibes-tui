@@ -1,4 +1,4 @@
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
 import { renderProcessIndicator } from './process-indicator.ts';
 import { UIFactory } from './ui-factory.ts';
 

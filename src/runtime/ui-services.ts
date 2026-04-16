@@ -1,7 +1,7 @@
 import type { RuntimeServices } from './services.ts';
 import type { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
 import type { RemoteSupervisor } from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
-import { createUiRuntimeEvents, type UiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import { createUiRuntimeEvents, type UiRuntimeEvents } from './ui-events.ts';
 import { createUiReadModels, type UiReadModels, type UiReadModelOptions } from './ui-read-models.ts';
 import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/index';

@@ -1,7 +1,7 @@
-import { type Line, type Cell, createStyledCell } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { renderCodeBlock } from './code-block.ts';
-import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 
 export interface MarkdownRenderOptions {

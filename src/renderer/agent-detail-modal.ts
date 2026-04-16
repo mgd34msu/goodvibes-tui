@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';

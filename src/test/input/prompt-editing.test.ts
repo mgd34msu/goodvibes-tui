@@ -3,7 +3,7 @@ import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { AutocompleteEngine } from '../../input/autocomplete.ts';
-import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
+import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import type { UndoState } from '../../input/handler-prompt-buffer.ts';
 

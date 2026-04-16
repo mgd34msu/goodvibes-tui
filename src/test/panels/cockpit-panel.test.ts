@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { CockpitPanel } from '../../panels/cockpit-panel.ts';
 import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import { createCockpitReadModel } from '../helpers/ui-read-models.ts';
 
 function linesText(lines: Line[]): string {

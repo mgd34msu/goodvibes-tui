@@ -8,7 +8,7 @@ import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/i
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 
@@ -133,10 +133,10 @@ describe('OrchestrationPanel', () => {
       providerRegistry: services.providerRegistry,
       uiServices,
       tokenAuditor: services.tokenAuditor,
-      panelHealthMonitor: services.panelHealthMonitor,
+      componentHealthMonitor: services.componentHealthMonitor,
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.panelHealthMonitor),
+      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.componentHealthMonitor),
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'orchestration')).toBe(true);
   });

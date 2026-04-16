@@ -1,5 +1,5 @@
-import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 export interface BottomBarStyle {
   readonly fg: string;

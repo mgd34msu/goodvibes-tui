@@ -407,7 +407,7 @@ export async function bootstrapRuntime(
     permissions: permissionManager,
     toolRegistry,
     providerRegistry,
-    panelHealthMonitor: services.panelHealthMonitor,
+    componentHealthMonitor: services.componentHealthMonitor,
     worktreeRegistry: services.worktreeRegistry,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
     hookDispatcher,

@@ -11,7 +11,7 @@
         "@anthropic-ai/vertex-sdk": "^0.16.0",
         "@ast-grep/napi": "^0.42.0",
         "@aws/bedrock-token-generator": "^1.1.0",
-        "@pellux/goodvibes-sdk": "0.18.28",
+        "@pellux/goodvibes-sdk": "0.18.29",
         "bash-language-server": "^5.6.0",
         "fuse.js": "^7.1.0",
         "graphql": "^16.13.2",
@@ -164,7 +164,7 @@
 
     "@one-ini/wasm": ["@one-ini/wasm@0.2.0", "", {}, "sha512-n+L/BvrwKUn7q5O3wHGo+CJZAqfewh38+37sk+eBzv/39lM9pPgPRd4sOZRvSRzo0ukLxzyXso4WlGj2oKZ5hA=="],
 
-    "@pellux/goodvibes-sdk": ["@pellux/goodvibes-sdk@0.18.28", "", { "dependencies": { "@agentclientprotocol/sdk": "^0.16.1", "@anthropic-ai/bedrock-sdk": "^0.28.1", "@anthropic-ai/sdk": "^0.82.0", "@anthropic-ai/vertex-sdk": "^0.16.0", "@ast-grep/napi": "^0.42.0", "@aws/bedrock-token-generator": "^1.1.0", "bash-language-server": "^5.6.0", "fuse.js": "^7.1.0", "graphql": "^16.13.2", "jszip": "^3.10.1", "node-edge-tts": "^1.2.10", "openai": "^6.29.0", "pyright": "^1.1.408", "simple-git": "^3.33.0", "sql.js": "^1.14.1", "sqlite-vec": "^0.1.9", "tree-sitter-css": "^0.25.0", "tree-sitter-javascript": "^0.25.0", "tree-sitter-json": "^0.24.8", "tree-sitter-python": "^0.25.0", "tree-sitter-typescript": "^0.23.2", "typescript-language-server": "^5.1.3", "vscode-langservers-extracted": "^4.10.0", "web-tree-sitter": "^0.26.7", "zustand": "^5.0.12" } }, "sha512-kiVpmTDk8VrRiv053Zewn7rHflLF9k924P2wywalh4y6zJwr4o+ELbmk/yYbWSakOy6Y0l1BqfplxYS5dHhViQ=="],
+    "@pellux/goodvibes-sdk": ["@pellux/goodvibes-sdk@0.18.29", "", { "dependencies": { "@agentclientprotocol/sdk": "^0.16.1", "@anthropic-ai/bedrock-sdk": "^0.28.1", "@anthropic-ai/sdk": "^0.82.0", "@anthropic-ai/vertex-sdk": "^0.16.0", "@ast-grep/napi": "^0.42.0", "@aws/bedrock-token-generator": "^1.1.0", "bash-language-server": "^5.6.0", "fuse.js": "^7.1.0", "graphql": "^16.13.2", "jszip": "^3.10.1", "node-edge-tts": "^1.2.10", "openai": "^6.29.0", "pyright": "^1.1.408", "simple-git": "^3.33.0", "sql.js": "^1.14.1", "sqlite-vec": "^0.1.9", "tree-sitter-css": "^0.25.0", "tree-sitter-javascript": "^0.25.0", "tree-sitter-json": "^0.24.8", "tree-sitter-python": "^0.25.0", "tree-sitter-typescript": "^0.23.2", "typescript-language-server": "^5.1.3", "vscode-langservers-extracted": "^4.10.0", "web-tree-sitter": "^0.26.7", "zustand": "^5.0.12" } }, "sha512-aGdOcoNHXDnGpaaWpb4qmj4FrtRzmCB/uLT15p1ogyUc+bVU6bR8G7gMKgHN62t5NQ/t81O16OZIIZRSl/JJKw=="],
 
     "@smithy/abort-controller": ["@smithy/abort-controller@2.2.0", "", { "dependencies": { "@smithy/types": "^2.12.0", "tslib": "^2.6.2" } }, "sha512-wRlta7GuLWpTqtFfGo+nZyOO1vEvewdNR1R4rTxpC8XU6vG/NDyrFBhwLZsqg1NUoR1noVaXJPC/7ZK47QCySw=="],
 

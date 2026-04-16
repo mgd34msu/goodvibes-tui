@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
-import { createEmptyLine, createStyledCell } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { InfiniteBuffer } from '../../core/history.ts';
+import { createEmptyLine, createStyledCell } from '../../types/grid.ts';
+import type { Line } from '../../types/grid.ts';
 
 const WIDTH = 80;
 

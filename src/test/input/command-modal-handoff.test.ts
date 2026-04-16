@@ -9,7 +9,7 @@ import { handleCommandModeToken } from '../../input/handler-command-route.ts';
 import { handlePromptTextToken } from '../../input/handler-feed-routes.ts';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
-import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
+import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { registerConfigCommand } from '../../input/commands/config.ts';

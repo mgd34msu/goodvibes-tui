@@ -1,4 +1,4 @@
-import { type Line, type Cell, createEmptyLine, createEmptyCell } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line, type Cell, createEmptyLine, createEmptyCell } from '../types/grid.ts';
 
 /**
  * TerminalBuffer - Represents a 2D grid of styled cells.

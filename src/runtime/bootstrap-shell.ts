@@ -2,9 +2,9 @@ import type { ConversationManager } from '../core/conversation';
 import type { Orchestrator } from '../core/orchestrator';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
 import type { RuntimeStore } from './store/index.ts';
 import type { RuntimeServices } from './services.ts';
-import type { MutableRuntimeState } from './context.ts';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { OpsControlPlane } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
 import { CommandRegistry } from '../input/command-registry.ts';
@@ -86,7 +86,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     completeModelSelectionSideEffect,
   } = options;
 
-  const systemMessagesPanel = new SystemMessagesPanel(configManager, services.panelHealthMonitor);
+  const systemMessagesPanel = new SystemMessagesPanel(configManager, services.componentHealthMonitor);
   const resumeSession = createResumeSessionHandler({
     runtimeBus,
     runtime,
@@ -119,7 +119,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     automationManager: services.automationManager,
     getControlPlaneRecentEvents,
     tokenAuditor: services.tokenAuditor,
-    panelHealthMonitor: services.panelHealthMonitor,
+    componentHealthMonitor: services.componentHealthMonitor,
     worktreeRegistry: services.worktreeRegistry,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
     systemMessagesPanel,
@@ -224,7 +224,6 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     opsApi,
     directTransport,
     panelManager: services.panelManager,
-    panelHealthMonitor: services.panelHealthMonitor,
     worktreeRegistry: services.worktreeRegistry,
     sandboxSessionRegistry: services.sandboxSessionRegistry,
     loadSystemPrompt: () => loadBootstrapSystemPrompt(configManager),
@@ -236,6 +235,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
       }, 50);
     },
     completeModelSelectionSideEffect,
+    componentHealthMonitor: services.componentHealthMonitor,
   });
 
   const gitStatusProvider = new GitStatusProvider(services.workingDirectory);

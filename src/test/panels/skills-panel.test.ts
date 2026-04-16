@@ -8,7 +8,7 @@ import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/i
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
@@ -78,10 +78,10 @@ describe('SkillsPanel', () => {
       providerRegistry: services.providerRegistry,
       uiServices,
       tokenAuditor: services.tokenAuditor,
-      panelHealthMonitor: services.panelHealthMonitor,
+      componentHealthMonitor: services.componentHealthMonitor,
       worktreeRegistry: services.worktreeRegistry,
       sandboxSessionRegistry: services.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.panelHealthMonitor),
+      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.componentHealthMonitor),
     });
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(true);
   });

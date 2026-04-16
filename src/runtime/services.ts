@@ -62,7 +62,7 @@ import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index
 import { IdempotencyStore } from '@pellux/goodvibes-sdk/platform/runtime/idempotency/index';
 import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
 import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
-import { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import { ComponentHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/component-health-monitor';
 import { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import { createShellPathService, type ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
@@ -133,7 +133,7 @@ export interface RuntimeServices {
   readonly channelPolicy: ChannelPolicyManager;
   readonly mcpRegistry: McpRegistry;
   readonly tokenAuditor: ApiTokenAuditor;
-  readonly panelHealthMonitor: PanelHealthMonitor;
+  readonly componentHealthMonitor: ComponentHealthMonitor;
   readonly worktreeRegistry: WorktreeRegistry;
   readonly sandboxSessionRegistry: SandboxSessionRegistry;
   readonly webhookNotifier: WebhookNotifier;
@@ -393,7 +393,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   mcpRegistry.setRuntimeBus(options.runtimeBus);
   mcpRegistry.setSandboxRuntime(configManager, sandboxSessionRegistry);
   const tokenAuditor = new ApiTokenAuditor({ managed: false });
-  const panelHealthMonitor = new PanelHealthMonitor();
+  const componentHealthMonitor = new ComponentHealthMonitor();
   const worktreeRegistry = new WorktreeRegistry(workingDirectory);
   const webhookNotifier = new WebhookNotifier();
   const replayEngine = new DeterministicReplayEngine(workingDirectory);
@@ -511,7 +511,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     channelPolicy,
     mcpRegistry,
     tokenAuditor,
-    panelHealthMonitor,
+    componentHealthMonitor,
     worktreeRegistry,
     sandboxSessionRegistry,
     webhookNotifier,

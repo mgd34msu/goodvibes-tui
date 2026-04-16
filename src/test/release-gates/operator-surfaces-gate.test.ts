@@ -88,7 +88,6 @@ describe('operator surfaces gate', () => {
       },
       workspace: {
         shellPaths: runtimeServices.shellPaths,
-        panelHealthMonitor: runtimeServices.panelHealthMonitor,
         worktreeRegistry: runtimeServices.worktreeRegistry,
         sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
         bookmarkManager: runtimeServices.bookmarkManager,
@@ -180,10 +179,10 @@ describe('operator surfaces gate', () => {
         embeddingRegistry: new MemoryEmbeddingProviderRegistry({ configManager }),
       })),
       tokenAuditor: runtimeServices.tokenAuditor,
-      panelHealthMonitor: runtimeServices.panelHealthMonitor,
+      componentHealthMonitor: runtimeServices.componentHealthMonitor,
       worktreeRegistry: runtimeServices.worktreeRegistry,
       sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
-      systemMessagesPanel: new SystemMessagesPanel(runtimeServices.configManager, runtimeServices.panelHealthMonitor),
+      systemMessagesPanel: new SystemMessagesPanel(runtimeServices.configManager, runtimeServices.componentHealthMonitor),
     });
     const ids = manager.getRegisteredTypes().map((entry) => entry.id);
 

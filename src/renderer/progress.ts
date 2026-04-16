@@ -1,6 +1,6 @@
-import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // Rich spinner frames (used by progress indicators)
 export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];

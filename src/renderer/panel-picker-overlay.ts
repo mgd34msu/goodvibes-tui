@@ -1,5 +1,5 @@
-import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { fitDisplay, getDisplayWidth, truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { type Line } from '../types/grid.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { PanelPicker } from '../panels/panel-picker.ts';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from '../panels/panel-picker.ts';
 import type { PanelCategory, PanelRegistration } from '../panels/types.ts';

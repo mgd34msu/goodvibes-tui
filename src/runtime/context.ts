@@ -16,28 +16,12 @@ import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/
 import type { RuntimeStore } from './store/index.ts';
 import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
 import type { SessionSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import type { RuntimeServices } from './services.ts';
-import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import type { ComponentHealthMonitor } from './perf/panel-health-monitor.ts';
 import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
-
-/**
- * Mutable runtime state that may be changed by slash commands or model-picker events.
- * Kept as a plain object so event handlers can close over it by reference.
- *
- * Named `MutableRuntimeState` to avoid a name collision with `RuntimeState` in
- * `src/runtime/store/state.ts`.
- */
-export interface MutableRuntimeState {
-  model: string;
-  provider: string;
-  debugMode: boolean;
-  systemPrompt: string;
-  /** Empty string if not configured. */
-  reasoningEffort: string;
-  sessionId: string;
-}
 
 /**
  * Options accepted by bootstrapRuntime().
@@ -103,8 +87,8 @@ export interface RuntimeContext {
   /** Shared provider registry owned by the runtime services graph. */
   providerRegistry: ProviderRegistry;
 
-  /** Shared panel-health monitor owned by the runtime services graph. */
-  panelHealthMonitor: PanelHealthMonitor;
+  /** Shared component-health monitor owned by the runtime services graph. */
+  componentHealthMonitor: ComponentHealthMonitor;
 
   /** Shared worktree registry owned by the runtime services graph. */
   worktreeRegistry: WorktreeRegistry;

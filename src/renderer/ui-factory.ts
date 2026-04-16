@@ -1,7 +1,7 @@
-import { type Line, type Cell, createEmptyLine, createEmptyCell } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line, type Cell, createEmptyLine, createEmptyCell } from '../types/grid.ts';
 import { LAYOUT } from './layout.ts';
 import { VERSION } from '../version.ts';
-import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
 import { GLYPHS } from './ui-primitives.ts';

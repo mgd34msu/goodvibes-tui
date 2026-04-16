@@ -1,6 +1,6 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { Orchestrator } from '../core/orchestrator';
 import { evaluateSessionMaintenance } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
 import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';

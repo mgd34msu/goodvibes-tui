@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { getDisplayWidth, truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
+import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
-import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import {
   buildEmptyState,
@@ -55,7 +55,7 @@ export interface SkillRecord {
 
 export interface SkillsPanelOptions {
   shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
-  panelHealthMonitor?: PanelHealthMonitor;
+  componentHealthMonitor?: ComponentHealthMonitor;
 }
 
 function parseFrontmatter(content: string): Record<string, string> {
@@ -243,7 +243,7 @@ export class SkillsPanel extends BasePanel {
   private cacheDirty = true;
 
   public constructor(options: SkillsPanelOptions) {
-    super('skills', 'Skills', 'K', 'monitoring', options.panelHealthMonitor);
+    super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
     this.shellPaths = options.shellPaths;
   }
 

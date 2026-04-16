@@ -2,7 +2,7 @@
 // DocsPanel — tool list, model capabilities, and keyboard shortcut reference.
 // ---------------------------------------------------------------------------
 
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, DEFAULT_PANEL_PALETTE } from './polish.ts';
 import type { ProviderModelCatalogQuery, ToolCatalogQuery } from '../runtime/ui-service-queries.ts';

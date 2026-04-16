@@ -1,6 +1,6 @@
-import { type Line, createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line, createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { LAYOUT, TOOL_STATUS } from './layout.ts';
-import { getDisplayWidth, truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 
 const TOOL_NAME_MIN_WIDTH = 8;

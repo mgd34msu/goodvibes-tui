@@ -1,27 +1,27 @@
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
 import type { Panel, PanelCategory } from './types.ts';
-import type { PanelResourceContract, PanelHealthState } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-contracts';
-import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
+import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 
 export abstract class BasePanel implements Panel {
   public needsRender = true;
   public isTransient = false;
   public isPinned = false;
-  protected readonly panelHealthMonitor?: PanelHealthMonitor;
+  protected readonly componentHealthMonitor?: ComponentHealthMonitor;
 
   /**
    * Optional resource contract for this panel.
    * Override in subclasses to declare a custom contract; leave undefined
-   * to use the category default enforced by PanelHealthMonitor.
+   * to use the category default enforced by ComponentHealthMonitor.
    */
-  public resourceContract: Readonly<PanelResourceContract> | undefined = undefined;
+  public resourceContract: Readonly<ComponentResourceContract> | undefined = undefined;
 
   /**
-   * Live health state populated by PanelHealthMonitor.
+   * Live health state populated by ComponentHealthMonitor.
    * Read-only from outside the monitor.
    */
-  public get healthState(): Readonly<PanelHealthState> | undefined {
-    return this.panelHealthMonitor?.getHealth(this.id);
+  public get healthState(): Readonly<ComponentHealthState> | undefined {
+    return this.componentHealthMonitor?.getHealth(this.id);
   }
 
   constructor(
@@ -29,9 +29,9 @@ export abstract class BasePanel implements Panel {
     public readonly name: string,
     public readonly icon: string,
     public readonly category: PanelCategory,
-    panelHealthMonitor?: PanelHealthMonitor,
+    componentHealthMonitor?: ComponentHealthMonitor,
   ) {
-    this.panelHealthMonitor = panelHealthMonitor;
+    this.componentHealthMonitor = componentHealthMonitor;
   }
 
   onActivate(): void { this.needsRender = true; }
@@ -45,7 +45,7 @@ export abstract class BasePanel implements Panel {
   /**
    * Check whether the panel is currently permitted to render.
    *
-   * Consults the shared PanelHealthMonitor. Returns true if not registered
+   * Consults the shared ComponentHealthMonitor. Returns true if not registered
    * (unthrottled) or if the monitor permits a render at this moment.
    *
    * Call this inside render() or before invoking render() to skip
@@ -59,7 +59,7 @@ export abstract class BasePanel implements Panel {
    * ```
    */
   protected canRenderNow(now: number = Date.now()): boolean {
-    return this.panelHealthMonitor?.canRender(this.id, now) ?? true;
+    return this.componentHealthMonitor?.canRender(this.id, now) ?? true;
   }
 
   /**
@@ -67,6 +67,6 @@ export abstract class BasePanel implements Panel {
    * Call this at the end of render() after measuring wall-clock cost.
    */
   protected reportRenderDuration(durationMs: number, now: number = Date.now()): void {
-    this.panelHealthMonitor?.recordRender(this.id, durationMs, now);
+    this.componentHealthMonitor?.recordRender(this.id, durationMs, now);
   }
 }

@@ -11,7 +11,8 @@ import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/pe
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
-import type { BootstrapOptions, MutableRuntimeState } from './context.ts';
+import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
+import type { BootstrapOptions } from './context.ts';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './store/index.ts';
@@ -20,7 +21,7 @@ import {
   generateUserSessionId,
 } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
 import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
-import { registerBootstrapHookBridge } from './bootstrap-hook-bridge.ts';
+import { registerBootstrapHookBridge } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-hook-bridge';
 import { registerBootstrapRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-runtime-events';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';

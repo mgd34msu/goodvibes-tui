@@ -6,12 +6,12 @@
  *
  * Open via /forensics or the panel picker.
  */
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
 import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import type { FailureReport, CausalChainEntry, PhaseTimingEntry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
 import { ForensicsDataPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/forensics';
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine } from '../types/grid.ts';
 import {
   buildEmptyState,
   buildPanelLine,

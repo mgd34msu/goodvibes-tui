@@ -4,7 +4,7 @@ import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { MutableRuntimeState } from '../runtime/context.ts';
+import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';

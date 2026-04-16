@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createHookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/index';
 import { HooksPanel } from '../../panels/hooks-panel.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import type { HookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
 import type { HookActivityRecord } from '@pellux/goodvibes-sdk/platform/hooks/activity';
 import type { HookAuthoringAction, HookSimulationResult } from '@pellux/goodvibes-sdk/platform/hooks/workbench';

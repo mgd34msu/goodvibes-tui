@@ -5,8 +5,8 @@
 
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
@@ -21,7 +21,7 @@ import {
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import { truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   type AgentDisplayRow as DisplayRow,

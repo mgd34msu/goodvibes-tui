@@ -2,10 +2,10 @@
 // ToolInspectorPanel — chronological list of tool calls with args/results.
 // ---------------------------------------------------------------------------
 
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { ToolEvent, TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -15,7 +15,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 
 const C = {
   headerBg:    '#1a1a2e',

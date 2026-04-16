@@ -1,9 +1,9 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell, type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import type { ProviderEvent, TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   type ProviderRuntimeInspectionQuery,
 } from '../runtime/ui-service-queries.ts';

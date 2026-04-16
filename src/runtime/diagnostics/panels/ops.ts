@@ -13,7 +13,7 @@ import type { PanelConfig } from '@pellux/goodvibes-sdk/platform/runtime/diagnos
 import { DEFAULT_PANEL_CONFIG, appendBounded, applyFilter } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 import type { DiagnosticFilter } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
 import type { OpsInterventionReason, OpsEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/ops';
-import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import type { UiEventFeed } from '../../ui-events.ts';
 
 // ---------------------------------------------------------------------------
 // Audit entry

@@ -1,4 +1,4 @@
-import type { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
+import type { InfiniteBuffer } from '../core/history.ts';
 
 export interface SearchMatch {
   line: number;

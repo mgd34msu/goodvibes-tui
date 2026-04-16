@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { McpPanel } from '../../panels/mcp-panel.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 
 function linesText(lines: Line[]): string {
   return lines

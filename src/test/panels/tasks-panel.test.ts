@@ -6,7 +6,7 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createInitialTasksState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import { TasksPanel } from '../../panels/tasks-panel.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import type { UiWorktreeSnapshot } from '../../runtime/ui-read-models.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';

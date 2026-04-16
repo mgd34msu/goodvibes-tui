@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { SearchManager } from '../../input/search.ts';
-import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
-import type { Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { InfiniteBuffer } from '../../core/history.ts';
+import type { Cell } from '../../types/grid.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
