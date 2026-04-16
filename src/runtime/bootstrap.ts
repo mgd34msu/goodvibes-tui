@@ -35,6 +35,7 @@ import {
 import { startBackgroundProviderRegistration } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-background';
 import { restoreSavedModel } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
 import { startExternalServices, type ExternalServicesHandle } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
+import { getOrCreateCompanionToken } from '@pellux/goodvibes-sdk/platform/pairing/companion-token';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { createDeferredStartupCoordinator } from '@pellux/goodvibes-sdk/platform/runtime/deferred-startup';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
@@ -320,11 +321,15 @@ export async function bootstrapRuntime(
   deferredStartup.schedule({
     label: 'external-services',
     run: async () => {
+      // Register the persistent companion-pairing token as the daemon's shared
+      // bearer, so tokens scanned from the /qrcode panel's QR actually
+      // authenticate against the embedded daemon this surface starts.
+      const companionTokenRecord = getOrCreateCompanionToken('tui');
       externalServicesPromise = startExternalServices(
         configManager,
         runtimeBus,
         hookDispatcher,
-        {},
+        { sharedDaemonToken: companionTokenRecord.token },
         services,
       );
       externalServices = await externalServicesPromise;
