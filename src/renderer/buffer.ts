@@ -31,4 +31,23 @@ export class TerminalBuffer {
     newBuf.cells = this.cells.map(line => line.map(cell => ({ ...cell })));
     return newBuf;
   }
+
+  /**
+   * Reset all cells in-place to empty, reusing this buffer instance.
+   * If dimensions changed, reallocates cells array.
+   */
+  public reset(width: number, height: number): void {
+    if (width !== this.width || height !== this.height) {
+      this.width = width;
+      this.height = height;
+      this.cells = Array.from({ length: height }, () => createEmptyLine(width));
+    } else {
+      for (let y = 0; y < this.height; y++) {
+        const row = this.cells[y]!;
+        for (let x = 0; x < this.width; x++) {
+          row[x] = createEmptyCell();
+        }
+      }
+    }
+  }
 }

@@ -148,6 +148,8 @@ describe('DaemonServer', () => {
         onDeactivate() {},
         onDestroy() {},
         render: () => [],
+        invalidate() { this.needsRender = true; },
+        markRendered() { this.needsRender = false; },
       }),
     });
   });

@@ -22,6 +22,12 @@ export interface Panel {
   isPinned: boolean;
   needsRender: boolean;
 
+  // Dirty-flag contract (R2: activated panel render skipping)
+  /** Mark this panel as needing a re-render on the next frame. */
+  invalidate(): void;
+  /** Called by the compositor after a successful render to clear the dirty flag. */
+  markRendered(): void;
+
   // Resource contract (optional — panels may declare resource requirements)
   resourceContract?: Readonly<ComponentResourceContract>;
 

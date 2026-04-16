@@ -40,6 +40,12 @@ export abstract class BasePanel implements Panel {
 
   abstract render(width: number, height: number): Line[];
 
+  /** R2: Mark this panel dirty — it will be re-rendered on the next compositor frame. */
+  public invalidate(): void { this.needsRender = true; }
+
+  /** R2: Called by the compositor after a successful render to clear the dirty flag. */
+  public markRendered(): void { this.needsRender = false; }
+
   protected markDirty(): void { this.needsRender = true; }
 
   /**
