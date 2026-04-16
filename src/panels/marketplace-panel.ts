@@ -81,18 +81,25 @@ export class MarketplacePanel extends BasePanel {
       this.scrollOffset = 0;
       return;
     }
-    const installedPlugins = new Set(listInstalledEcosystemEntries('plugin', this.ecosystemPaths).map((receipt) => receipt.entry.id));
-    const installedSkills = new Set(listInstalledEcosystemEntries('skill', this.ecosystemPaths).map((receipt) => receipt.entry.id));
-    const installedHookPacks = new Set(listInstalledEcosystemEntries('hook-pack', this.ecosystemPaths).map((receipt) => receipt.entry.id));
-    const installedPolicyPacks = new Set(listInstalledEcosystemEntries('policy-pack', this.ecosystemPaths).map((receipt) => receipt.entry.id));
-    const rows: MarketplaceRow[] = [
-      ...loadEcosystemCatalog('plugin', this.ecosystemPaths).map((entry) => ({ kind: 'plugin' as const, entry, installed: installedPlugins.has(entry.id) })),
-      ...loadEcosystemCatalog('skill', this.ecosystemPaths).map((entry) => ({ kind: 'skill' as const, entry, installed: installedSkills.has(entry.id) })),
-      ...loadEcosystemCatalog('hook-pack', this.ecosystemPaths).map((entry) => ({ kind: 'hook-pack' as const, entry, installed: installedHookPacks.has(entry.id) })),
-      ...loadEcosystemCatalog('policy-pack', this.ecosystemPaths).map((entry) => ({ kind: 'policy-pack' as const, entry, installed: installedPolicyPacks.has(entry.id) })),
-    ];
-    this.rows = rows.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
-    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
+    try {
+      const installedPlugins = new Set(listInstalledEcosystemEntries('plugin', this.ecosystemPaths).map((receipt) => receipt.entry.id));
+      const installedSkills = new Set(listInstalledEcosystemEntries('skill', this.ecosystemPaths).map((receipt) => receipt.entry.id));
+      const installedHookPacks = new Set(listInstalledEcosystemEntries('hook-pack', this.ecosystemPaths).map((receipt) => receipt.entry.id));
+      const installedPolicyPacks = new Set(listInstalledEcosystemEntries('policy-pack', this.ecosystemPaths).map((receipt) => receipt.entry.id));
+      const rows: MarketplaceRow[] = [
+        ...loadEcosystemCatalog('plugin', this.ecosystemPaths).map((entry) => ({ kind: 'plugin' as const, entry, installed: installedPlugins.has(entry.id) })),
+        ...loadEcosystemCatalog('skill', this.ecosystemPaths).map((entry) => ({ kind: 'skill' as const, entry, installed: installedSkills.has(entry.id) })),
+        ...loadEcosystemCatalog('hook-pack', this.ecosystemPaths).map((entry) => ({ kind: 'hook-pack' as const, entry, installed: installedHookPacks.has(entry.id) })),
+        ...loadEcosystemCatalog('policy-pack', this.ecosystemPaths).map((entry) => ({ kind: 'policy-pack' as const, entry, installed: installedPolicyPacks.has(entry.id) })),
+      ];
+      this.rows = rows.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
+      this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
+      // I2: clear any previous catalog load error on successful refresh
+      this.clearError();
+    } catch (e) {
+      // I2: surface catalog load failure
+      this.setError(`Catalog load failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   public render(width: number, height: number): Line[] {

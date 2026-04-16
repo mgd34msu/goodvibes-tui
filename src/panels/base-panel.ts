@@ -2,12 +2,83 @@ import type { Line } from '../types/grid.ts';
 import type { Panel, PanelCategory } from './types.ts';
 import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
+import { UIFactory } from '../renderer/ui-factory.ts';
+import { SPINNER_FRAMES } from '../renderer/progress.ts';
 
 export abstract class BasePanel implements Panel {
   public needsRender = true;
   public isTransient = false;
   public isPinned = false;
   protected readonly componentHealthMonitor?: ComponentHealthMonitor;
+
+  // -------------------------------------------------------------------------
+  // I2: Error surface slot
+  // -------------------------------------------------------------------------
+
+  /** Last error message to surface in the panel footer. Auto-cleared on next input. */
+  protected lastError: string | null = null;
+
+  /** Set a transient error message. Triggers a re-render. */
+  protected setError(msg: string): void {
+    this.lastError = msg;
+    this.needsRender = true;
+  }
+
+  /** Clear the current error. */
+  protected clearError(): void {
+    this.lastError = null;
+  }
+
+  /**
+   * Build a single error Line for display above the hints footer.
+   * Returns null when there is no active error.
+   *
+   * Color: bold red foreground (palette-consistent: #ef4444).
+   */
+  protected renderErrorLine(width: number): Line | null {
+    if (!this.lastError) return null;
+    return UIFactory.stringToLine(
+      ` ✕ ${this.lastError}`.padEnd(width).slice(0, width),
+      width,
+      { fg: '#ef4444', bold: true },
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // I3: Loading spinner slot
+  // -------------------------------------------------------------------------
+
+  /** Tracks the loading label for the spinner (undefined = no spinner active). */
+  protected loadingState: 'idle' | 'loading' | 'error' = 'idle';
+  private _loadingLabel = '';
+
+  /** Begin loading. Triggers a re-render. */
+  protected startLoading(label = 'Loading...'): void {
+    this.loadingState = 'loading';
+    this._loadingLabel = label;
+    this.needsRender = true;
+  }
+
+  /** End loading (returns to idle). Triggers a re-render. */
+  protected stopLoading(): void {
+    this.loadingState = 'idle';
+    this._loadingLabel = '';
+    this.needsRender = true;
+  }
+
+  /**
+   * Build a spinner Line for the loading state.
+   * Returns null when loadingState is not 'loading'.
+   *
+   * @param width  Panel width in columns.
+   * @param frame  Current animation frame index (caller increments each render).
+   */
+  protected renderLoadingLine(width: number, frame = 0): Line | null {
+    if (this.loadingState !== 'loading') return null;
+    const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? SPINNER_FRAMES[0]!;
+    const text = ` ${spinner} ${this._loadingLabel}`;
+    return UIFactory.stringToLine(text.padEnd(width).slice(0, width), width, { fg: '135', bold: true });
+  }
 
   /**
    * Optional resource contract for this panel.

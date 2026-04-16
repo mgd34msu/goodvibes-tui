@@ -54,7 +54,17 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
   }
 
   if (token.type === 'key') {
+    // I6: two-stage Escape — give the panel a chance to consume escape first
+    // (e.g. dismiss a confirm dialog or clear search). Only unfocus if the
+    // panel returns false (unconsumed) or there is no active panel.
     if (token.logicalName === 'escape') {
+      const activePanel = state.panelManager.getActive();
+      const panelConsumedEscape = activePanel?.handleInput?.('escape') ?? false;
+      if (panelConsumedEscape) {
+        state.onPanelInputConsumed?.(activePanel!, 'escape');
+        state.requestRender();
+        return { handled: true, panelFocused };
+      }
       panelFocused = false;
       state.requestRender();
       return { handled: true, panelFocused };

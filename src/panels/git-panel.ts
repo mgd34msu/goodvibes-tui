@@ -326,13 +326,18 @@ export class GitPanel extends BasePanel {
     const item = this.items[this.selectedIndex];
     if (!item || item.kind !== 'file') return;
 
+    // I3: show base-class spinner while awaiting diff
+    this.startLoading('Loading diff...');
+    this.markDirty();
     try {
       const git = new GitService(this.workingDirectory);
       const raw = await git.diffFile(item.entry.path, item.entry.staged);
+      this.stopLoading();
       this.expandedDiff = raw ? raw.split('\n') : ['(no diff available)'];
       this.scrollOffset = 0;
       this.markDirty();
     } catch (err) {
+      this.stopLoading();
       this.expandedDiff = [`Error: ${summarizeError(err)}`];
       this.scrollOffset = 0;
       this.markDirty();
@@ -349,6 +354,10 @@ export class GitPanel extends BasePanel {
     }
     if (this.error) {
       return this.renderMessage(width, height, `Git error: ${this.error}`, C.unstaged);
+    }
+    // I3: spinner during openDiff() async fetch
+    if (this.loadingState === 'loading') {
+      return this.renderMessage(width, height, 'Loading diff...', C.branch);
     }
     if (this.expandedDiff !== null) {
       return this.renderDiff(width, height);

@@ -4,6 +4,56 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.20] — 2026-04-16
+
+### Wave 3a / Tier 2 TUI UX Consistency Infrastructure
+
+Six infrastructure items that make the TUI behave consistently across all panels.
+
+### I1 — Reusable inline confirm dialog
+
+- **New file `src/panels/confirm-state.ts`**: exports `ConfirmState<T>`, `handleConfirmInput<T>`, and `renderConfirmLines<T>`. Identical y/n UX across all panels: y confirms, n/Esc cancels, any other key is absorbed while confirm is active.
+- **SkillsPanel**: 'd' key now shows an inline `Confirmation` section before surfacing the shell delete hint. Pressing Esc on the confirm panel cancels it via the generic helper.
+- **KnowledgePanel**: 's' (stale) and 'c' (contradicted) now prompt confirm before calling `registry.review()`. Error from review mutation is surfaced via I2 `setError()`.
+- **SubscriptionPanel**: 'n' and Escape now cancel a pending logout confirmation via the confirm helper.
+
+### I2 — Error surface slot on BasePanel
+
+- **`src/panels/base-panel.ts`**: added `protected lastError`, `setError()`, `clearError()`, `renderErrorLine(width)`. Auto-clear on next keypress in `ScrollableListPanel.handleInput()`.
+- **`src/panels/scrollable-list-panel.ts`**: `renderList()` prepends the error line to the `effectiveFooter` — visible in both normal and empty states.
+- **MarketplacePanel**: `refresh()` now wraps catalog load in try/catch and calls `setError()` on failure. Clears error on successful reload.
+- **KnowledgePanel**: `registry.review()` call in confirm dispatch wrapped in try/catch, wired to `setError()`.
+
+### I3 — Loading spinner slot on BasePanel
+
+- **`src/panels/base-panel.ts`**: added `loadingState: 'idle'|'loading'|'error'`, `startLoading(label?)`, `stopLoading()`, `renderLoadingLine(width, frame)`. Uses `SPINNER_FRAMES` from `src/renderer/progress.ts`.
+- **`src/panels/scrollable-list-panel.ts`**: `renderList()` short-circuits to a spinner-only view when `loadingState === 'loading'`.
+- **GitPanel**: `openDiff()` now calls `startLoading('Loading diff...')` before the await and `stopLoading()` in both success and error paths. The `render()` method checks `this.loadingState === 'loading'` to show the spinner while the diff is being fetched.
+
+### I4 — Accessible status tokens
+
+- **New file `src/renderer/status-token.ts`**: exports `buildStatusToken(state, label, opts?)` → `Cell[]`. State map: `good=✓`, `warn=⚠`, `bad=✕`, `info=○`. Glyph + color together so colorblind users can distinguish states without relying on color alone.
+- **ApprovalPanel**: recent approvals/denials/pending row now uses inline `✓ approvals (N)  ✕ denials (N)  ○ pending (N)` cells instead of bare color-only counts.
+
+### I6 — Two-stage Escape in panel focus
+
+- **`src/input/handler-feed-routes.ts`**: `handlePanelFocusToken()` now passes `'escape'` to the active panel's `handleInput()` BEFORE deciding to unfocus. If the panel returns `true` (e.g. dismisses a confirm dialog or clears a search), the panel stays focused. Only if the panel returns `false` does the router set `panelFocused = false`.
+
+### Tests
+
+- **`src/test/renderer/status-token.test.ts`** (8 tests): glyph/color/count/override coverage for `buildStatusToken`.
+- **`src/test/panels/base-panel-ux.test.ts`** (16 tests): `setError`/`clearError`/`renderErrorLine` and `startLoading`/`stopLoading`/`renderLoadingLine` state transitions.
+- **`src/test/panels/confirm-state.test.ts`** (13 tests): `handleConfirmInput` all four return values + `renderConfirmLines` width/content.
+- **`src/test/panels/knowledge-panel.test.ts`**: updated to reflect I1 two-step confirm for `'s'` (stale) action.
+
+### Tests & Checks
+
+- Test suite: 441/441 passing (3 new test files)
+- Architecture check: passing (298 non-test source files)
+- Typecheck: clean
+
+---
+
 ## [0.18.19] — 2026-04-16
 
 ### Quality bump — address sub-10 dimensions from 0.18.18 review

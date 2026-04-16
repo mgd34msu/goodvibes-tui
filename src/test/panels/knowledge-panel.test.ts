@@ -71,7 +71,12 @@ describe('KnowledgePanel', () => {
     expect(reviewed?.confidence).toBeGreaterThanOrEqual(85);
 
     expect(panel.handleInput('ArrowDown')).toBe(true);
+    // 's' now opens a confirm dialog (I1); must press 'y' to commit
     expect(panel.handleInput('s')).toBe(true);
+    // still 'reviewed' — confirm is pending
+    expect(registry.get(record.id)?.reviewState).toBe('reviewed');
+    expect(panel.handleInput('y')).toBe(true);
+    // after confirming, reviewState transitions to 'stale'
     expect(registry.get(record.id)?.reviewState).toBe('stale');
 
     panel.onDeactivate();
