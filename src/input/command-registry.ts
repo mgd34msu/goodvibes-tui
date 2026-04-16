@@ -62,6 +62,8 @@ export interface CommandUiActions {
     model: { id: string; provider: string; displayName: string; registryKey: string };
     effort: string;
     contextCap?: number | null;
+    /** Which config target to write the selected model to. Defaults to 'main'. */
+    target?: import('./model-picker.ts').ModelPickerTarget;
   }) => void;
   clearScreen?: () => void;
   activatePlan?: (planId: string, task: string) => void;

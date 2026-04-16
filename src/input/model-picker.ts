@@ -8,6 +8,14 @@ import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/
 export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap';
 
 /**
+ * Which config keys the model picker writes to on commit.
+ * 'main'   → provider.provider + provider.model (default)
+ * 'helper' → helper.globalProvider + helper.globalModel (+ helper.enabled: true)
+ * 'tool'   → tools.llmProvider + tools.llmModel (+ tools.llmEnabled: true)
+ */
+export type ModelPickerTarget = 'main' | 'helper' | 'tool';
+
+/**
  * Pricing tier filter.
  * 'paid' matches ModelDefinition tiers 'standard' and 'premium' for forward-compat
  * with future CatalogModel tiers ('free' | 'paid' | 'subscription').
@@ -129,6 +137,8 @@ export class ModelPickerModal {
 
   public active = false;
   public mode: PickerMode = 'model';
+  /** Which config target this picker session will write to on commit. */
+  public target: ModelPickerTarget = 'main';
   public searchFocused = false;
   /** Tracks the mode we came from, for back-navigation. */
   public previousMode: PickerMode | null = null;
@@ -288,6 +298,7 @@ export class ModelPickerModal {
   close(): void {
     this.active = false;
     this.mode = 'model';
+    this.target = 'main';
     this.models = [];
     this.providers = [];
     this.pendingModel = null;

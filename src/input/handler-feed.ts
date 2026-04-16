@@ -166,6 +166,12 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       searchManager: context.searchManager,
       scroll: context.scroll,
       getScrollTop: context.getScrollTop,
+      openModelPickerWithTarget: context.commandContext?.openModelPicker
+        ? (target: import('./model-picker.ts').ModelPickerTarget) => {
+            context.modelPicker.target = target;
+            context.commandContext!.openModelPicker!();
+          }
+        : undefined,
     }, token);
     context.selectionCallback = modalRoute.selectionCallback;
     context.helpOverlayActive = modalRoute.helpOverlayActive;

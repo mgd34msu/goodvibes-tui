@@ -215,7 +215,10 @@ type SettingsRouteState = {
     nextCategory: () => void;
     editBackspace: () => void;
     editChar: (char: string) => void;
+    pendingModelPickerTarget: import('./model-picker.ts').ModelPickerTarget | null;
   };
+  /** Called when the settings modal requests the model picker for a non-main target. */
+  openModelPickerWithTarget?: (target: import('./model-picker.ts').ModelPickerTarget) => void;
   requestRender: () => void;
   handleEscape: () => void;
 };
@@ -231,7 +234,14 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
     if (token.logicalName === 'enter' || (token.logicalName === 'space' && !state.settingsModal.editingMode)) {
       if (state.settingsModal.editingMode) state.settingsModal.commitEdit();
       else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
-      else state.settingsModal.activateSelected();
+      else {
+        state.settingsModal.activateSelected();
+        const pickerTarget = state.settingsModal.pendingModelPickerTarget;
+        if (pickerTarget !== null) {
+          state.settingsModal.pendingModelPickerTarget = null;
+          state.openModelPickerWithTarget?.(pickerTarget);
+        }
+      }
     } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.settingsModal.editingMode) {
       state.settingsModal.adjustSelected(token.logicalName, token.shift ? 10 : 1);
     } else if (token.logicalName === 'up') state.settingsModal.moveUp();
@@ -241,7 +251,14 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
   } else if (token.type === 'text') {
     if (token.value === ' ' && !state.settingsModal.editingMode) {
       if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
-      else state.settingsModal.activateSelected();
+      else {
+        state.settingsModal.activateSelected();
+        const pickerTarget = state.settingsModal.pendingModelPickerTarget;
+        if (pickerTarget !== null) {
+          state.settingsModal.pendingModelPickerTarget = null;
+          state.openModelPickerWithTarget?.(pickerTarget);
+        }
+      }
     } else if (state.settingsModal.editingMode) {
       state.settingsModal.editChar(token.value);
     }

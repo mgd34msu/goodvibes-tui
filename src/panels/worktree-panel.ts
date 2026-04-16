@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { buildKeyValueLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, resolvePrimaryScrollableSection, type PanelWorkspaceSection } from './polish.ts';
 import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 
@@ -22,10 +22,8 @@ function stateColor(state: WorktreeStatusRecord['state']): string {
   }
 }
 
-export class WorktreePanel extends BasePanel {
+export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
   private rows: WorktreeStatusRecord[] = [];
-  private selectedIndex = 0;
-  private scrollOffset = 0;
   private loading = false;
   private readonly worktreeRegistry: WorktreeRegistry;
 
@@ -45,18 +43,21 @@ export class WorktreePanel extends BasePanel {
       void this.refresh();
       return true;
     }
-    if (this.rows.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(this.rows.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+    return super.handleInput(key);
+  }
+
+  protected getItems(): readonly WorktreeStatusRecord[] {
+    return this.rows;
+  }
+
+  protected renderItem(row: WorktreeStatusRecord, index: number, _selected: boolean, width: number): Line {
+    const bg = index === this.selectedIndex ? C.headerBg : undefined;
+    return buildPanelLine(width, [
+      [` ${row.kind}`.padEnd(14), C.info, bg],
+      [` ${row.state}`.padEnd(16), stateColor(row.state), bg],
+      [` ${row.branch}`.padEnd(24), C.value, bg],
+      [` ${row.path}`.slice(0, Math.max(0, width - 56)), C.dim, bg],
+    ]);
   }
 
   private async refresh(): Promise<void> {
@@ -64,7 +65,7 @@ export class WorktreePanel extends BasePanel {
     this.markDirty();
     try {
       this.rows = await this.worktreeRegistry.list();
-      this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
+      this.clampSelection();
     } finally {
       this.loading = false;
       this.markDirty();
@@ -155,14 +156,14 @@ export class WorktreePanel extends BasePanel {
             ]);
           }),
           selectedIndex: this.selectedIndex,
-          scrollOffset: this.scrollOffset,
+          scrollOffset: this.scrollStart,
           guardRows: 1,
           minRows: 4,
           appendWindowSummary: { dimColor: C.dim },
         },
         afterSections: [detailSection],
       });
-      this.scrollOffset = resolvedWorktreesSection.scrollOffset;
+      this.scrollStart = resolvedWorktreesSection.scrollOffset;
       sections.push(resolvedWorktreesSection.section);
       sections.push(detailSection);
     }

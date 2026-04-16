@@ -8,6 +8,13 @@ import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listene
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import {
+  getOrCreateCompanionToken,
+  buildCompanionConnectionInfo,
+  encodeConnectionPayload,
+  formatConnectionBlock,
+} from '@pellux/goodvibes-sdk/platform/pairing/index';
+import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
 
 type DaemonCliOwnership = {
   readonly workingDirectory: string;
@@ -78,6 +85,22 @@ async function main(): Promise<void> {
     daemon: config.get('danger.daemon'),
     httpListener: config.get('danger.httpListener'),
   });
+
+  // Print companion connection info + QR code to stdout.
+  const daemonPort = Number(process.env.GOODVIBES_DAEMON_PORT ?? process.env.PORT ?? 3000);
+  const daemonHost = String(process.env.GOODVIBES_DAEMON_HOST ?? 'localhost');
+  const daemonUrl = `http://${daemonHost}:${daemonPort}`;
+  const companionTokenRecord = getOrCreateCompanionToken('tui');
+  const connectionInfo = buildCompanionConnectionInfo({
+    daemonUrl,
+    token: companionTokenRecord.token,
+    surface: 'tui',
+  });
+  const payload = encodeConnectionPayload(connectionInfo);
+  const qrMatrix = generateQrMatrix(payload);
+  const qrString = renderQrToString(qrMatrix);
+  // eslint-disable-next-line no-console
+  console.log(formatConnectionBlock(connectionInfo, qrString));
 }
 
 void main().catch(async (error) => {

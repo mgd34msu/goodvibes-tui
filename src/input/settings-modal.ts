@@ -11,6 +11,7 @@
  */
 
 import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config/schema';
+import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
@@ -84,6 +85,16 @@ export interface SubscriptionEntry {
   nextActions?: string[];
 }
 
+/**
+ * Map a config key to the model picker target it should open, or null if the
+ * setting should use the normal inline text-edit flow.
+ */
+function _modelPickerTargetForKey(key: string): ModelPickerTarget | null {
+  if (key === 'helper.globalProvider' || key === 'helper.globalModel') return 'helper';
+  if (key === 'tools.llmProvider' || key === 'tools.llmModel') return 'tool';
+  return null;
+}
+
 function roundToPrecision(value: number, precision: number): number {
   const factor = 10 ** precision;
   return Math.round(value * factor) / factor;
@@ -121,6 +132,12 @@ export class SettingsModal {
   public editBuffer = '';
   /** Server awaiting explicit allow-all confirmation, if any. */
   public mcpAllowAllConfirmationTarget: string | null = null;
+  /**
+   * Set by activateSelected() when the highlighted setting should open the
+   * model picker rather than entering inline text edit mode.
+   * Consumed and cleared by the route handler after each Enter/Space action.
+   */
+  public pendingModelPickerTarget: ModelPickerTarget | null = null;
   /** Provider awaiting explicit logout confirmation, if any. */
   public subscriptionLogoutConfirmationTarget: string | null = null;
 
@@ -306,6 +323,13 @@ export class SettingsModal {
     if (!entry || !this.configManager) return;
 
     const { setting } = entry;
+
+    // Delegate provider/model picker settings to the model picker UI
+    const pickerTarget = _modelPickerTargetForKey(setting.key);
+    if (pickerTarget !== null) {
+      this.pendingModelPickerTarget = pickerTarget;
+      return;
+    }
 
     if (setting.type === 'boolean') {
       const newVal = !entry.currentValue;
@@ -522,7 +546,9 @@ export class SettingsModal {
     }
 
     for (const setting of CONFIG_SCHEMA) {
-      const cat = setting.key.split('.')[0] as SettingsCategory;
+      const rawCat = setting.key.split('.')[0] as string;
+      // Route helper.* settings into the tools group for unified display
+      const cat = (rawCat === 'helper' ? 'tools' : rawCat) as SettingsCategory;
       if (!this.groups.has(cat)) continue;
       const currentValue = configManager.get(setting.key as ConfigKey);
       const resolved = getResolvedSettingLookup(configManager, setting.key as ConfigKey)?.entry;
@@ -702,7 +728,9 @@ export class SettingsModal {
     try {
       this.configManager.setDynamic(key, value);
       // Update the cached entry in-place — avoids full schema re-scan on each edit
-      const cat = key.split('.')[0] as SettingsCategory;
+      const rawCat = key.split('.')[0] as string;
+      // helper.* entries are stored in the tools group
+      const cat = (rawCat === 'helper' ? 'tools' : rawCat) as SettingsCategory;
       const entries = this.groups.get(cat);
       if (entries) {
         const entry = entries.find(e => e.setting.key === key);

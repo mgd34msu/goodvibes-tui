@@ -4,6 +4,55 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.14] — 2026-04-16
+
+### Panel Navigation Overhaul
+
+- Created `ScrollableListPanel<T>` and `SearchableListPanel<T>` base classes in `src/panels/scrollable-list-panel.ts`
+- Migrated 30 panels from hand-coded scroll/cursor management to the shared base classes
+- All list panels now have consistent navigation: up/down/j/k, pageup/pagedown, home/end/g/G, enter to select
+- Selection is always visible within the viewport — guaranteed by `getVisibleWindow()` from `surface-layout.ts`
+- Removed ~150 lines of duplicated scroll boilerplate across panels
+
+### Modal Viewport Fixes
+
+- Fixed modal sizing: height is exactly 45% of viewport (both min and max — all modals same size), width is 50% with 25% minimum
+- Fixed modal scroll/selection: 6 modal/overlay files updated to use shared `getVisibleWindow()` instead of inline scroll math
+- Autocomplete overlay, file picker, bookmark modal, session picker, profile picker, and live tail modal all use the same viewport function
+
+### Settings Modal: Tools Tab
+
+- Added proper tools tab UI with "Tool LLM" and "Helper Model" section headers
+- Helper config keys (`helper.enabled`, `helper.globalProvider`, `helper.globalModel`) now routed into the tools tab
+- Boolean settings display as [on]/[off] toggles
+- Selecting a provider/model setting opens the full model picker instead of a text field
+- Model picker now supports 3 target modes: main, helper, and tool
+- Selecting a helper/tool model auto-enables the feature (`helper.enabled: true` / `tools.llmEnabled: true`)
+
+### QR Code Pairing for Companion Apps
+
+- Added `/qrcode` command (aliases `/qr`, `/pair`) that opens a QR code panel
+- QR panel displays connection info (daemon URL, token, username) + scannable QR code
+- QR rendered using Unicode half-block characters (▀/▄/█) for compact terminal display
+- Supports `r` to regenerate token (invalidates old one) and `c` to copy token to clipboard
+- Daemon standalone mode (`goodvibes-daemon`) now prints QR + connection info to stdout on startup
+- Companion tokens persist to `.goodvibes/tui/companion-token.json` with `gv_` prefix
+- Built on SDK 0.18.30 pairing module
+
+### Health Monitoring Rename
+
+- Renamed `panelHealthMonitor` to `componentHealthMonitor` across 20 files to align with SDK 0.18.29's generic naming
+- Deprecated `Panel*` type aliases preserved for backward compatibility
+
+### SDK 0.18.30 Update
+
+- Updated to `@pellux/goodvibes-sdk@0.18.30`
+- Consumes new pairing module, `tools.llmEnabled` config, and all 0.18.29 boundary cleanup
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit` — 0 errors
+
 ## [0.18.13] — 2026-04-16
 
 ### SDK/TUI Boundary Separation
