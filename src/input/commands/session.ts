@@ -347,7 +347,6 @@ export const sessionCommand: SlashCommand = {
         break;
 
       case 'cancel':
-      case 'x':
         handleCancel(rest, context);
         break;
 

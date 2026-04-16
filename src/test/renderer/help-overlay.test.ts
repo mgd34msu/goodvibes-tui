@@ -61,8 +61,10 @@ describe('renderHelpOverlay', () => {
     expect(texts).toContain('Overlays And Panels');
   });
 
-  test('contains Quick Start section', () => {
-    const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 14, TALL_VIEWPORT);
+  test('contains Quick Start section when featured commands are registered', () => {
+    // Quick Start is built from the live registry: need at least one featured command.
+    const cmds: SlashCommand[] = [{ name: 'cockpit', description: 'Control room', handler: () => {} }];
+    const lines = renderHelpOverlay(W, KEYBINDINGS, cmds, 14, TALL_VIEWPORT);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Quick Start');
   });

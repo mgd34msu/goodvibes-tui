@@ -39,6 +39,9 @@ export class PanelManager {
   private _verticalSplitRatio: number = 0.5; // top gets 50% of panel height
   private _bottomPaneVisible: boolean = false;
 
+  // Cache for getWorkspaceTabs() — invalidated on every panel lifecycle event
+  private _cachedWorkspaceTabs: readonly WorkspaceTab[] | null = null;
+
   // -------------------------------------------------------------------------
   // Registration
   // -------------------------------------------------------------------------
@@ -79,6 +82,11 @@ export class PanelManager {
   // Panel lifecycle — operates on a specific pane (defaults to focused)
   // -------------------------------------------------------------------------
 
+  /** Invalidate the workspace tab cache. Call on every panel lifecycle mutation. */
+  private _invalidateWorkspaceTabs(): void {
+    this._cachedWorkspaceTabs = null;
+  }
+
   open(panelId: string, pane?: 'top' | 'bottom'): Panel {
     const existingPane = this._findPaneOf(panelId);
     if (existingPane) {
@@ -107,6 +115,7 @@ export class PanelManager {
       this._focusedPane = 'top';
     }
     panel.onActivate();
+    this._invalidateWorkspaceTabs();
     return panel;
   }
 
@@ -146,6 +155,7 @@ export class PanelManager {
       if (this.topPane.panels.length === 0 && this.bottomPane.panels.length === 0) {
         this._visible = false;
       }
+      this._invalidateWorkspaceTabs();
       return;
     }
   }
@@ -187,6 +197,7 @@ export class PanelManager {
     p.activeIndex = (p.activeIndex + 1) % p.panels.length;
     const newPanel = p.panels[p.activeIndex];
     if (newPanel) newPanel.onActivate();
+    this._invalidateWorkspaceTabs();
   }
 
   nextWorkspaceTab(): void {
@@ -216,6 +227,7 @@ export class PanelManager {
     p.activeIndex = index;
     const newPanel = p.panels[p.activeIndex];
     if (newPanel) newPanel.onActivate();
+    this._invalidateWorkspaceTabs();
   }
 
   activateById(panelId: string): void {
@@ -231,6 +243,7 @@ export class PanelManager {
   focusPane(pane: 'top' | 'bottom'): void {
     if (pane === 'bottom' && !this._bottomPaneVisible) return;
     this._focusedPane = pane;
+    this._invalidateWorkspaceTabs();
   }
 
   getFocusedPane(): 'top' | 'bottom' {
@@ -253,6 +266,7 @@ export class PanelManager {
   // -------------------------------------------------------------------------
 
   toggleBottomPane(): void {
+    this._invalidateWorkspaceTabs();
     if (this._bottomPaneVisible) {
       this._bottomPaneVisible = false;
       if (this._focusedPane === 'bottom') this._focusedPane = 'top';
@@ -329,7 +343,8 @@ export class PanelManager {
     return this._findPaneOf(panelId);
   }
 
-  getWorkspaceTabs(): WorkspaceTab[] {
+  getWorkspaceTabs(): readonly WorkspaceTab[] {
+    if (this._cachedWorkspaceTabs !== null) return this._cachedWorkspaceTabs;
     const focusedPanelId = this.getActivePanel()?.id;
     const topTabs = this.topPane.panels.map((panel) => ({
       id: panel.id,
@@ -347,7 +362,9 @@ export class PanelManager {
       active: panel.id === focusedPanelId,
       focused: panel.id === focusedPanelId,
     }));
-    return [...topTabs, ...bottomTabs];
+    const tabs = [...topTabs, ...bottomTabs] as WorkspaceTab[];
+    this._cachedWorkspaceTabs = tabs;
+    return tabs;
   }
 
   activateWorkspaceIndex(index: number): void {
@@ -357,6 +374,7 @@ export class PanelManager {
     this._focusedPane = tab.pane;
     if (tab.pane === 'bottom') this._bottomPaneVisible = true;
     this._activateByIdInPane(tab.id, tab.pane);
+    this._invalidateWorkspaceTabs();
   }
 
   // -------------------------------------------------------------------------
@@ -491,6 +509,7 @@ export class PanelManager {
       this._bottomPaneVisible = true;
     }
     this._focusedPane = dstPaneName;
+    this._invalidateWorkspaceTabs();
   }
 
   private _cycleWorkspaceTab(direction: 1 | -1): void {
@@ -533,6 +552,7 @@ export class PanelManager {
       p.activeIndex = index;
       const newPanel = p.panels[p.activeIndex];
       if (newPanel) newPanel.onActivate();
+      this._invalidateWorkspaceTabs();
     }
   }
 }
