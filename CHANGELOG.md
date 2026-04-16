@@ -4,6 +4,52 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.22] — 2026-04-16
+
+### Wave 3b / Tier 2 TUI UX Consistency — Panel Migration Batch
+
+Migrates 7 more BasePanel-direct panels to `ScrollableListPanel<T>`, restores
+section-title text lost during prior migrations, and fixes 8 pre-existing test regressions.
+
+### Migrated panels
+
+- **`src/panels/hooks-panel.ts`** — `HooksPanel` → `ScrollableListPanel<HookEntry>`.
+  Contracts/chains/managed/file stats in `header`; selected hook detail, activity (with `Recent Activity` label), authoring (with `Authoring` label) in `footer`. Empty state shows extra context via `header` parameter.
+- **`src/panels/mcp-panel.ts`** — `McpPanel` → `ScrollableListPanel<McpServerSecurityEntry>`.
+  Derived type via `ReturnType<McpRegistry['listServerSecurity']>[number]` since no named export exists.
+  `MCP posture` label + stats + guidance in `header`; selected server detail, repair actions, decision log in `footer`.
+- **`src/panels/approval-panel.ts`** — `ApprovalPanel` → `ScrollableListPanel<ApprovalRow>`.
+  `Approval posture` label + approval counts + guidance + `Selected Lane` label + detail in `header`; nav hint in `footer`.
+- **`src/panels/security-panel.ts`** — `SecurityPanel` → `ScrollableListPanel<TokenAuditResult>`.
+  Governance + threat lines in `header`; selected detail + attack path findings in `footer`.
+- **`src/panels/services-panel.ts`** — `ServicesPanel` → `ScrollableListPanel<ServicePanelEntry>`.
+  `r` (refresh) and `t` (test selected) key overrides preserved; loading state handled via early return.
+- **`src/panels/subscription-panel.ts`** — `SubscriptionPanel` → `ScrollableListPanel<SubscriptionRow>`.
+  Fully overrides `handleInput` (uses `ArrowUp`/`ArrowDown`); logout confirm state preserved; empty state uses direct `buildPanelWorkspace` path.
+- **`src/panels/tasks-panel.ts`** — `TasksPanel` → `ScrollableListPanel<RuntimeTask>`.
+  `!readModel` early-exit preserved; `buildSummaryBlock` in `header`, `buildDetailBlock` in `footer`.
+- **`src/panels/incident-review-panel.ts`** — `IncidentReviewPanel` → `ScrollableListPanel<FailureReport>`.
+  `Action Rail` label added before action guidance lines in `footer`.
+- **`src/panels/communication-panel.ts`** — `CommunicationPanel` → `ScrollableListPanel<CommunicationRecord>`.
+  `Communication posture` label added to both posture line arrays (empty + populated states).
+
+### Panels kept as BasePanel
+
+- `PolicyPanel`, `RemotePanel`, `ProviderHealthPanel`, `PanelListPanel`, `OrchestrationPanel`,
+  `MarketplacePanel`, `SchedulePanel`, `MemoryPanel`, `KnowledgePanel`, `SkillsPanel`,
+  `SessionBrowserPanel` — all use `resolveScrollablePanelSection`, multi-line-per-item render,
+  dual-mode browsing, `setInterval`, or `canRenderNow()` / `reportRenderDuration()` patterns
+  incompatible with `ScrollableListPanel<T>`.
+
+### Test fixes
+
+Restored section-title strings (`'Approval posture'`, `'Communication posture'`, `'MCP posture'`,
+`'Action Rail'`, `'Recent Activity'`, `'Selected Lane'`) dropped during migration, fixing 8
+regressions across `approval-panel`, `communication-panel`, `hooks-panel`, `mcp-panel`, and
+`incident-review-panel` test files.
+
+---
+
 ## [0.18.21] — 2026-04-16
 
 ### Wave 3a / Tier 2 TUI UX Consistency Infrastructure — I5

@@ -1,6 +1,5 @@
 import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
 import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
 import type { HookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
@@ -10,12 +9,8 @@ import type { HookChain, HookDefinition } from '@pellux/goodvibes-sdk/platform/h
 import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
-  buildEmptyState,
   buildPanelLine,
-  buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  resolvePrimaryScrollableSection,
-  type PanelWorkspaceSection,
 } from './polish.ts';
 
 const C = {
@@ -59,9 +54,9 @@ function createDefaultDataSource(
   };
 }
 
-export class HooksPanel extends BasePanel {
-  private selectedIndex = 0;
-  private scrollOffset = 0;
+type HookEntry = { pattern: string; hook: HookDefinition };
+
+export class HooksPanel extends ScrollableListPanel<HookEntry> {
   private readonly dataSource: HooksPanelDataSource;
 
   public constructor(
@@ -74,31 +69,42 @@ export class HooksPanel extends BasePanel {
     this.dataSource = dataSource;
   }
 
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() { return ' No hooks are currently registered.'; }
+  protected override getEmptyStateActions() {
+    return [
+      { command: '/hooks', summary: 'review hook contracts and managed authoring actions' },
+      { command: '/settings', summary: 'review hook/runtime behavior in the settings surface' },
+    ];
+  }
+
+  protected getItems(): readonly HookEntry[] {
+    return this.dataSource.listHooks();
+  }
+
+  protected renderItem(entry: HookEntry, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [truncateDisplay(entry.hook.name ?? '(unnamed)', 20).padEnd(20), C.value, bg],
+      [` ${truncateDisplay(entry.pattern, 28).padEnd(28)}`, C.info, bg],
+      [` ${(entry.hook.enabled === false ? 'DISABLED' : 'ENABLED').padEnd(8)}`, entry.hook.enabled === false ? C.warn : C.ok, bg],
+      [` ${entry.hook.type}`, C.dim, bg],
+    ]);
+  }
+
   public handleInput(key: string): boolean {
-    const entries = this.dataSource.listHooks();
     if (key === 'r') {
       this.markDirty();
       return true;
     }
-    if (entries.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(entries.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+    return super.handleInput(key);
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
-    const intro = 'Hook contracts, active registrations, managed authoring, recent runtime activity, and simulation matches.';
-    const contracts = this.dataSource.listContracts();
+    this.clampSelection();
     const hooks = this.dataSource.listHooks();
+    const contracts = this.dataSource.listContracts();
     const chains = this.dataSource.listChains();
     const recentActivity = this.dataSource.listRecentActivity(3);
     const workbench = this.dataSource.getWorkbench();
@@ -106,93 +112,48 @@ export class HooksPanel extends BasePanel {
     const managedChains = workbench.listManagedChains();
     const recentAuthoring = workbench.listRecentActions(3);
     const lastSimulation = workbench.getLastSimulation();
+    const intro = 'Hook contracts, active registrations, managed authoring, recent runtime activity, and simulation matches.';
 
-    if (hooks.length === 0) {
-      const emptyLines = [
-        ...buildEmptyState(
-          width,
-          ' No hooks are currently registered.',
-          'Configure hooks.json or register hooks programmatically, then use this workspace to review contracts, activity, and managed authoring state.',
-          [
-            { command: '/hooks', summary: 'review hook contracts and managed authoring actions' },
-            { command: '/settings', summary: 'review hook/runtime behavior in the settings surface' },
-          ],
-          C,
-        ),
-        buildPanelLine(width, [
-          ['  Contracts: ', C.label],
-          [String(contracts.length), C.value],
-          ['  Chains: ', C.label],
-          [String(chains.length), C.value],
-          ['  Managed: ', C.label],
-          [String(managedHooks.length), C.info],
-        ]),
-        buildPanelLine(width, [
-          ['  Hooks file: ', C.label],
-          [truncateDisplay(workbench.getHooksFilePath(), Math.max(0, width - 15)), C.dim],
-        ]),
-      ];
-      if (recentAuthoring.length > 0) {
-        emptyLines.push(buildPanelLine(width, [
-          ['  Authoring: ', C.label],
-          [truncateDisplay(`${recentAuthoring[0]!.kind} ${recentAuthoring[0]!.target}`, Math.max(0, width - 14)), C.info],
-        ]));
-      }
-      if (lastSimulation) {
-        emptyLines.push(buildPanelLine(width, [
-          ['  Last Simulation: ', C.label],
-          [truncateDisplay(lastSimulation.eventPath, Math.max(0, width - 20)), C.value],
-        ]));
-      }
-      const workspace = buildPanelWorkspace(width, height, {
-        title: 'Hooks Control Room',
-        intro,
-        sections: [{ lines: emptyLines }],
-        palette: C,
-      });
-      while (workspace.length < height) workspace.push(createEmptyLine(width));
-      return workspace;
-    }
+    const selected = hooks[this.selectedIndex];
+    const contract = selected ? contracts.find((c) => c.pattern === selected.pattern) : undefined;
 
-    this.selectedIndex = Math.min(this.selectedIndex, hooks.length - 1);
-    const selected = hooks[this.selectedIndex]!;
-    const contract = contracts.find((candidate) => candidate.pattern === selected.pattern);
-    const detailLines: Line[] = [
-      buildPanelLine(width, [
+    const detailLines: Line[] = [];
+    if (selected) {
+      detailLines.push(buildPanelLine(width, [
         ['  Hook: ', C.label],
         [selected.hook.name ?? '(unnamed)', C.value],
         ['  Type: ', C.label],
         [selected.hook.type, C.info],
         ['  Match: ', C.label],
         [selected.hook.matcher ?? selected.hook.match, C.value],
-      ]),
-      buildPanelLine(width, [
+      ]));
+      detailLines.push(buildPanelLine(width, [
         ['  Pattern: ', C.label],
         [truncateDisplay(selected.pattern, Math.max(0, width - 12)), C.value],
-      ]),
-    ];
-    if (contract) {
+      ]));
+      if (contract) {
+        detailLines.push(buildPanelLine(width, [
+          ['  Contract: ', C.label],
+          [`${contract.authority} / ${contract.executionMode}`, C.info],
+          ['  Policy: ', C.label],
+          [contract.failurePolicy, C.value],
+        ]));
+        detailLines.push(buildPanelLine(width, [
+          ['  Capabilities: ', C.label],
+          [`deny=${contract.canDeny ? 'yes' : 'no'} mutate=${contract.canMutateInput ? 'yes' : 'no'} inject=${contract.canInjectContext ? 'yes' : 'no'}`, C.dim],
+        ]));
+      } else {
+        detailLines.push(buildPanelLine(width, [['  Contract: No exact contract registered for this pattern.', C.warn]]));
+      }
       detailLines.push(buildPanelLine(width, [
-        ['  Contract: ', C.label],
-        [`${contract.authority} / ${contract.executionMode}`, C.info],
-        ['  Policy: ', C.label],
-        [contract.failurePolicy, C.value],
+        ['  Summary: ', C.label],
+        [`hooks=${hooks.length} chains=${chains.length} contracts=${contracts.length} managed=${managedHooks.length}/${managedChains.length}`, C.dim],
       ]));
       detailLines.push(buildPanelLine(width, [
-        ['  Capabilities: ', C.label],
-        [`deny=${contract.canDeny ? 'yes' : 'no'} mutate=${contract.canMutateInput ? 'yes' : 'no'} inject=${contract.canInjectContext ? 'yes' : 'no'}`, C.dim],
+        ['  Hooks file: ', C.label],
+        [truncateDisplay(workbench.getHooksFilePath(), Math.max(0, width - 15)), C.dim],
       ]));
-    } else {
-      detailLines.push(buildPanelLine(width, [['  Contract: No exact contract registered for this pattern.', C.warn]]));
     }
-    detailLines.push(buildPanelLine(width, [
-      ['  Summary: ', C.label],
-      [`hooks=${hooks.length} chains=${chains.length} contracts=${contracts.length} managed=${managedHooks.length}/${managedChains.length}`, C.dim],
-    ]));
-    detailLines.push(buildPanelLine(width, [
-      ['  Hooks file: ', C.label],
-      [truncateDisplay(workbench.getHooksFilePath(), Math.max(0, width - 15)), C.dim],
-    ]));
 
     const activityLines: Line[] = recentActivity.length === 0
       ? [buildPanelLine(width, [['  No hook activity recorded yet.', C.empty]])]
@@ -226,49 +187,51 @@ export class HooksPanel extends BasePanel {
         [`hooks=${lastSimulation.matchedHooks.length} chains=${lastSimulation.matchedChains.length}`, C.dim],
       ]));
     }
-    const selectedSection: PanelWorkspaceSection = { title: 'Selected Hook', lines: detailLines };
-    const activitySection: PanelWorkspaceSection = { title: 'Recent Activity', lines: activityLines };
-    const authoringSection: PanelWorkspaceSection = { title: 'Authoring', lines: authoringLines };
-    const resolvedHooksSection = resolvePrimaryScrollableSection(width, height, {
-      intro,
-      footerLines: [buildPanelLine(width, [['  Up/Down move  r refresh  /hooks for full contract listing', C.dim]])],
-      palette: C,
-      section: {
-        title: 'Hooks',
-        scrollableLines: hooks.map((entry, absolute) => {
-          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-          return buildPanelLine(width, [
-            [' ', C.label, bg],
-            [truncateDisplay(entry.hook.name ?? '(unnamed)', 20).padEnd(20), C.value, bg],
-            [` ${truncateDisplay(entry.pattern, 28).padEnd(28)}`, C.info, bg],
-            [` ${(entry.hook.enabled === false ? 'DISABLED' : 'ENABLED').padEnd(8)}`, entry.hook.enabled === false ? C.warn : C.ok, bg],
-            [` ${entry.hook.type}`, C.dim, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        guardRows: 1,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: [selectedSection, activitySection, authoringSection],
-    });
-    this.scrollOffset = resolvedHooksSection.scrollOffset;
 
-    const sections: PanelWorkspaceSection[] = [
-      resolvedHooksSection.section,
-      selectedSection,
-      activitySection,
-      authoringSection,
-    ];
-    const lines = buildPanelWorkspace(width, height, {
+    // Empty state: show extra context lines (hooks file, contracts, authoring) before base empty state
+    if (hooks.length === 0) {
+      const extraHeader: Line[] = [
+        buildPanelLine(width, [
+          ['  Contracts: ', C.label],
+          [String(contracts.length), C.value],
+          ['  Chains: ', C.label],
+          [String(chains.length), C.value],
+          ['  Managed: ', C.label],
+          [String(managedHooks.length), C.info],
+        ]),
+        buildPanelLine(width, [
+          ['  Hooks file: ', C.label],
+          [truncateDisplay(workbench.getHooksFilePath(), Math.max(0, width - 15)), C.dim],
+        ]),
+      ];
+      if (recentAuthoring.length > 0) {
+        extraHeader.push(buildPanelLine(width, [
+          ['  Authoring: ', C.label],
+          [truncateDisplay(`${recentAuthoring[0]!.kind} ${recentAuthoring[0]!.target}`, Math.max(0, width - 14)), C.info],
+        ]));
+      }
+      if (lastSimulation) {
+        extraHeader.push(buildPanelLine(width, [
+          ['  Last Simulation: ', C.label],
+          [truncateDisplay(lastSimulation.eventPath, Math.max(0, width - 20)), C.value],
+        ]));
+      }
+      return this.renderList(width, height, {
+        title: 'Hooks Control Room',
+        header: extraHeader,
+      });
+    }
+
+    return this.renderList(width, height, {
       title: 'Hooks Control Room',
-      intro,
-      sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down move  r refresh  /hooks for full contract listing', C.dim]])],
-      palette: C,
+      footer: [
+        ...detailLines,
+        buildPanelLine(width, [['  Recent Activity', C.label]]),
+        ...activityLines,
+        buildPanelLine(width, [['  Authoring', C.label]]),
+        ...authoringLines,
+        buildPanelLine(width, [['  Up/Down move  r refresh  /hooks for full contract listing', C.dim]]),
+      ],
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
   }
 }

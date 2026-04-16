@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiReadModel, UiWatchersSnapshot } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
@@ -10,8 +10,7 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  resolvePrimaryScrollableSection,
-  type PanelWorkspaceSection,
+  type PanelPalette,
 } from './polish.ts';
 
 const C = {
@@ -51,11 +50,11 @@ function formatTime(value?: number): string {
   return new Date(value).toLocaleString();
 }
 
-export class WatchersPanel extends BasePanel {
+type WatcherEntry = UiWatchersSnapshot['watchers'][number];
+
+export class WatchersPanel extends ScrollableListPanel<WatcherEntry> {
   private readonly readModel?: UiReadModel<UiWatchersSnapshot>;
   private readonly unsub: (() => void) | null;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
 
   public constructor(readModel?: UiReadModel<UiWatchersSnapshot>) {
     super('watchers', 'Watchers', 'W', 'monitoring');
@@ -67,29 +66,38 @@ export class WatchersPanel extends BasePanel {
     this.unsub?.();
   }
 
-  public handleInput(key: string): boolean {
-    const watchers = this.watchers();
-    if (watchers.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(watchers.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+  protected override getPalette(): PanelPalette {
+    return C;
   }
 
-  private watchers() {
+  protected getItems(): readonly WatcherEntry[] {
     if (!this.readModel) return [];
-    return [...this.readModel.getSnapshot().watchers];
+    return this.readModel.getSnapshot().watchers;
+  }
+
+  protected renderItem(watcher: WatcherEntry, _index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [watcher.state.padEnd(10), stateColor(watcher.state), bg],
+      [` ${truncateDisplay(watcher.label, 18).padEnd(18)}`, C.value, bg],
+      [` ${String(watcher.sourceStatus ?? 'unknown').padEnd(10)}`, sourceStatusColor(watcher.sourceStatus), bg],
+      [` ${truncateDisplay(formatLag(watcher.sourceLagMs), Math.max(0, width - 43))}`, C.dim, bg],
+    ]);
+  }
+
+  protected override getEmptyStateMessage(): string {
+    return ' No watchers registered.';
+  }
+
+  protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
+    return [
+      { command: '/schedule list', summary: 'review automation that will consume watcher events' },
+      { command: '/services auth-review', summary: 'validate integration credentials before enabling remote watchers' },
+    ];
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
     const intro = 'Managed watchers and source health used to trigger automation, refresh routes, and surface degraded upstream conditions.';
 
     if (!this.readModel) {
@@ -112,130 +120,73 @@ export class WatchersPanel extends BasePanel {
     }
 
     const snapshot = this.readModel.getSnapshot();
-    const watchers = this.watchers();
-    const summarySection: PanelWorkspaceSection = {
-      title: 'Posture',
-      lines: [
-        buildKeyValueLine(width, [
-          { label: 'watchers', value: String(snapshot.totalWatchers), valueColor: snapshot.totalWatchers > 0 ? C.info : C.dim },
-          { label: 'active', value: String(snapshot.activeWatcherIds.length), valueColor: snapshot.activeWatcherIds.length > 0 ? C.ok : C.dim },
-          { label: 'degraded', value: String(snapshot.totalDegraded), valueColor: snapshot.totalDegraded > 0 ? C.warn : C.dim },
-          { label: 'lagged', value: String(snapshot.totalLagged), valueColor: snapshot.totalLagged > 0 ? C.warn : C.dim },
-        ], C),
-        buildGuidanceLine(width, '/schedule list', 'verify jobs consuming these sources and use daemon APIs for watcher lifecycle control', C),
-      ],
-    };
+    const watchers = this.getItems();
+
+    const headerLines: Line[] = [
+      buildKeyValueLine(width, [
+        { label: 'watchers', value: String(snapshot.totalWatchers), valueColor: snapshot.totalWatchers > 0 ? C.info : C.dim },
+        { label: 'active', value: String(snapshot.activeWatcherIds.length), valueColor: snapshot.activeWatcherIds.length > 0 ? C.ok : C.dim },
+        { label: 'degraded', value: String(snapshot.totalDegraded), valueColor: snapshot.totalDegraded > 0 ? C.warn : C.dim },
+        { label: 'lagged', value: String(snapshot.totalLagged), valueColor: snapshot.totalLagged > 0 ? C.warn : C.dim },
+      ], C),
+      buildGuidanceLine(width, '/schedule list', 'verify jobs consuming these sources and use daemon APIs for watcher lifecycle control', C),
+    ];
 
     if (watchers.length === 0) {
-      const workspace = buildPanelWorkspace(width, height, {
+      return this.renderList(width, height, {
         title: 'Watchers',
-        intro,
-        sections: [
-          summarySection,
-          {
-            lines: buildEmptyState(
-              width,
-              ' No watchers registered.',
-              'Register daemon watchers or enable polling/integration sources to populate this control room.',
-              [
-                { command: '/schedule list', summary: 'review automation that will consume watcher events' },
-                { command: '/services auth-review', summary: 'validate integration credentials before enabling remote watchers' },
-              ],
-              C,
-            ),
-          },
-        ],
-        palette: C,
+        header: headerLines,
+        emptyMessage: ' No watchers registered.',
       });
-      while (workspace.length < height) workspace.push(createEmptyLine(width));
-      return workspace;
     }
 
-    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, watchers.length - 1));
+    this.clampSelection();
     const selected = watchers[this.selectedIndex]!;
 
-    const detailSection: PanelWorkspaceSection = {
-      title: 'Selected Watcher',
-      lines: [
-        buildPanelLine(width, [
-          ['  Watcher: ', C.label],
-          [selected.label, C.value],
-          ['  Kind: ', C.label],
-          [selected.kind, C.info],
-        ]),
-        buildPanelLine(width, [
-          ['  State: ', C.label],
-          [selected.state, stateColor(selected.state)],
-          ['  Source: ', C.label],
-          [selected.source.kind, C.value],
-        ]),
-        buildPanelLine(width, [
-          ['  Source status: ', C.label],
-          [selected.sourceStatus ?? 'unknown', sourceStatusColor(selected.sourceStatus)],
-          ['  Lag: ', C.label],
-          [formatLag(selected.sourceLagMs), selected.sourceLagMs ? C.warn : C.dim],
-        ]),
-        buildPanelLine(width, [
-          ['  Heartbeat: ', C.label],
-          [formatTime(selected.lastHeartbeatAt), C.dim],
-          ['  Checkpoint: ', C.label],
-          [truncateDisplay(selected.lastCheckpoint ?? 'n/a', Math.max(0, width - 38)), C.dim],
-        ]),
-        ...(selected.degradedReason ? [
-          buildPanelLine(width, [
-            ['  Reason: ', C.label],
-            [truncateDisplay(selected.degradedReason, Math.max(0, width - 11)), C.warn],
-          ]),
-        ] : []),
-        ...(selected.lastError ? [
-          buildPanelLine(width, [
-            ['  Error: ', C.label],
-            [truncateDisplay(selected.lastError, Math.max(0, width - 10)), C.error],
-          ]),
-        ] : []),
-      ],
-    };
-
-    const resolvedWatchers = resolvePrimaryScrollableSection(width, height, {
-      intro,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through watchers', C.dim]])],
-      palette: C,
-      beforeSections: [summarySection],
-      section: {
-        title: 'Watchers',
-        scrollableLines: watchers.map((watcher, absolute) => {
-          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-          return buildPanelLine(width, [
-            [' ', C.label, bg],
-            [watcher.state.padEnd(10), stateColor(watcher.state), bg],
-            [` ${truncateDisplay(watcher.label, 18).padEnd(18)}`, C.value, bg],
-            [` ${String(watcher.sourceStatus ?? 'unknown').padEnd(10)}`, sourceStatusColor(watcher.sourceStatus), bg],
-            [` ${truncateDisplay(formatLag(watcher.sourceLagMs), Math.max(0, width - 43))}`, C.dim, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        guardRows: 1,
-        minRows: 5,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: [detailSection],
-    });
-    this.scrollOffset = resolvedWatchers.scrollOffset;
-
-    const sections: PanelWorkspaceSection[] = [
-      summarySection,
-      resolvedWatchers.section,
-      detailSection,
+    const footerLines: Line[] = [
+      buildPanelLine(width, [
+        ['  Watcher: ', C.label],
+        [selected.label, C.value],
+        ['  Kind: ', C.label],
+        [selected.kind, C.info],
+      ]),
+      buildPanelLine(width, [
+        ['  State: ', C.label],
+        [selected.state, stateColor(selected.state)],
+        ['  Source: ', C.label],
+        [selected.source.kind, C.value],
+      ]),
+      buildPanelLine(width, [
+        ['  Source status: ', C.label],
+        [selected.sourceStatus ?? 'unknown', sourceStatusColor(selected.sourceStatus)],
+        ['  Lag: ', C.label],
+        [formatLag(selected.sourceLagMs), selected.sourceLagMs ? C.warn : C.dim],
+      ]),
+      buildPanelLine(width, [
+        ['  Heartbeat: ', C.label],
+        [formatTime(selected.lastHeartbeatAt), C.dim],
+        ['  Checkpoint: ', C.label],
+        [truncateDisplay(selected.lastCheckpoint ?? 'n/a', Math.max(0, width - 38)), C.dim],
+      ]),
     ];
-    const lines = buildPanelWorkspace(width, height, {
+    if (selected.degradedReason) {
+      footerLines.push(buildPanelLine(width, [
+        ['  Reason: ', C.label],
+        [truncateDisplay(selected.degradedReason, Math.max(0, width - 11)), C.warn],
+      ]));
+    }
+    if (selected.lastError) {
+      footerLines.push(buildPanelLine(width, [
+        ['  Error: ', C.label],
+        [truncateDisplay(selected.lastError, Math.max(0, width - 10)), C.error],
+      ]));
+    }
+    footerLines.push(buildPanelLine(width, [['  Up/Down move through watchers', C.dim]]));
+
+    return this.renderList(width, height, {
       title: 'Watchers',
-      intro,
-      sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down move through watchers', C.dim]])],
-      palette: C,
+      header: headerLines,
+      footer: footerLines,
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
   }
 }

@@ -1,6 +1,5 @@
 import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security/token-audit';
 import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.ts';
 import {
@@ -8,10 +7,9 @@ import {
   buildGuidanceLine,
   buildPanelLine,
   buildPanelWorkspace,
-  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
-  type PanelWorkspaceSection,
 } from './polish.ts';
+import { createEmptyLine } from '../types/grid.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -58,8 +56,7 @@ function severityColor(severity: 'low' | 'medium' | 'high' | 'critical'): string
   }
 }
 
-export class SecurityPanel extends BasePanel {
-  private selectedIndex = 0;
+export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   private readonly unsub: (() => void) | null;
 
   public constructor(private readonly readModel: UiReadModel<UiSecuritySnapshot>) {
@@ -71,28 +68,41 @@ export class SecurityPanel extends BasePanel {
     this.unsub?.();
   }
 
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() { return ' No API tokens are registered with the security auditor yet.'; }
+  protected override getEmptyStateActions() {
+    return [
+      { command: '/storage review', summary: 'inspect secure secret storage and environment overrides' },
+      { command: '/policy preflight', summary: 'run a live preflight posture review' },
+      { command: '/mcp trust', summary: 'inspect active MCP trust and quarantine posture' },
+    ];
+  }
+
+  protected getItems(): readonly TokenAuditResult[] {
+    return this.readModel.getSnapshot().audit.results;
+  }
+
+  protected renderItem(result: TokenAuditResult, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [result.label.padEnd(22), C.value, bg],
+      [` ${result.tokenId.padEnd(12)}`, C.info, bg],
+      [` ${result.scope.policyId.padEnd(10)}`, C.label, bg],
+      [` ${resultSummary(result).slice(0, Math.max(0, width - 49))}`, resultColor(result), bg],
+    ]);
+  }
+
   public handleInput(key: string): boolean {
-    const snapshot = this.readModel.getSnapshot();
     if (key === 'r') {
       this.markDirty();
       return true;
     }
-    if (snapshot.audit.results.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(snapshot.audit.results.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+    return super.handleInput(key);
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
+    this.clampSelection();
     const snapshot = this.readModel.getSnapshot();
     const view = snapshot.audit;
     const preflightStatus = snapshot.policy.preflightStatus;
@@ -105,9 +115,8 @@ export class SecurityPanel extends BasePanel {
     const quarantinedPlugins = snapshot.quarantinedPlugins;
     const untrustedPlugins = snapshot.untrustedPlugins;
     const attackPathReview = snapshot.attackPathReview;
-    const footerLines = [
-      buildGuidanceLine(width, '/policy preflight', 'run a proactive policy review before risky work starts', C),
-    ] as const;
+    const intro = 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.';
+    const footerLine = buildGuidanceLine(width, '/policy preflight', 'run a proactive policy review before risky work starts', C);
 
     const governanceLines: Line[] = [
       buildPanelLine(width, [
@@ -134,9 +143,6 @@ export class SecurityPanel extends BasePanel {
         ['  denied permissions ', C.label],
         [String(snapshot.deniedPermissions), snapshot.deniedPermissions > 0 ? C.warn : C.ok],
       ]),
-    ];
-
-    const threatLines: Line[] = [
       buildPanelLine(width, [
         [' quarantined MCP ', C.label],
         [String(quarantinedMcp.length), quarantinedMcp.length > 0 ? C.error : C.ok],
@@ -164,115 +170,35 @@ export class SecurityPanel extends BasePanel {
       ]),
     ];
 
+    // Empty state: no token results yet — show governance + threat posture before base empty state
     if (view.results.length === 0) {
-      const emptyLines = [
+      const emptyStateLines = [
         ...governanceLines,
-        ...threatLines,
         ...buildEmptyState(
           width,
-          ' No API tokens are registered with the security auditor yet.',
+          this.getEmptyStateMessage(),
           'The security control room can already review policy, MCP, plugin, and incident posture, but token-specific scope and rotation audit data has not been registered.',
-          [
-            { command: '/storage review', summary: 'inspect secure secret storage and environment overrides' },
-            { command: '/policy preflight', summary: 'run a live preflight posture review' },
-            { command: '/mcp trust', summary: 'inspect active MCP trust and quarantine posture' },
-          ],
+          this.getEmptyStateActions(),
           C,
         ),
       ];
       if (quarantinedMcp.length > 0) {
-        emptyLines.push(buildPanelLine(width, [[' MCP quarantine still active despite no registered tokens.', C.warn]]));
+        emptyStateLines.push(buildPanelLine(width, [[' MCP quarantine still active despite no registered tokens.', C.warn]]));
       }
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Security Control Room',
-        intro: 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.',
+        intro,
         sections: [
-          { title: 'Governance', lines: emptyLines },
+          { title: 'Governance', lines: emptyStateLines },
           { title: 'Attack Paths', lines: attackPathLines },
         ],
-        footerLines,
+        footerLines: [footerLine],
         palette: C,
       });
       while (workspace.length < height) workspace.push(createEmptyLine(width));
       return workspace.slice(0, height);
     }
 
-    this.selectedIndex = Math.min(this.selectedIndex, view.results.length - 1);
-    const selected = view.results[this.selectedIndex]!;
-    const tokenRows: Line[] = [];
-    for (let index = 0; index < view.results.length; index++) {
-      const result = view.results[index]!;
-      const bg = index === this.selectedIndex ? C.selectBg : undefined;
-      tokenRows.push(buildPanelLine(width, [
-        [' ', C.label, bg],
-        [result.label.padEnd(22), C.value, bg],
-        [` ${result.tokenId.padEnd(12)}`, C.info, bg],
-        [` ${result.scope.policyId.padEnd(10)}`, C.label, bg],
-        [` ${resultSummary(result).slice(0, Math.max(0, width - 49))}`, resultColor(result), bg],
-      ]));
-    }
-
-    const detailLines: Line[] = [
-      buildPanelLine(width, [
-        ['  Token: ', C.label],
-        [selected.label, C.value],
-        ['  Policy: ', C.label],
-        [selected.scope.policyId, C.info],
-        ['  Blocked: ', C.label],
-        [selected.blocked ? 'yes' : 'no', selected.blocked ? C.error : C.ok],
-      ]),
-      buildPanelLine(width, [
-        ['  Scope: ', C.label],
-        [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
-        ['  Excess: ', C.label],
-        [(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none').slice(0, Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
-      ]),
-      buildPanelLine(width, [
-        ['  Rotation: ', C.label],
-        [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.ok : selected.rotation.outcome === 'warning' ? C.warn : C.error],
-        ['  Due: ', C.label],
-        [new Date(selected.rotation.dueAt).toISOString(), C.value],
-        ['  Age(d): ', C.label],
-        [String(Math.floor(selected.rotation.ageMs / (24 * 60 * 60 * 1000))), C.value],
-      ]),
-      buildPanelLine(width, [[
-        `Last audit: ${view.lastAuditAt ? new Date(view.lastAuditAt).toISOString() : 'never'}  Press r to refresh.`,
-        C.dim,
-      ]]),
-    ];
-
-    if (preflightStatus !== 'n/a') {
-      detailLines.push(buildPanelLine(width, [[
-        `Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`.slice(0, width),
-        preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : C.dim,
-      ]]));
-    }
-    if (quarantinedMcp.length > 0) {
-      const server = quarantinedMcp[0]!;
-      detailLines.push(buildPanelLine(width, [[
-        `MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`.slice(0, width),
-        C.error,
-      ]]));
-    }
-    if (quarantinedPlugins.length > 0) {
-      const plugin = quarantinedPlugins[0]!;
-      detailLines.push(buildPanelLine(width, [[
-        `Plugin quarantine: ${plugin.name} (${plugin.trustTier})`.slice(0, width),
-        C.error,
-      ]]));
-    } else if (untrustedPlugins.length > 0) {
-      const plugin = untrustedPlugins[0]!;
-      detailLines.push(buildPanelLine(width, [[
-        `Plugin trust warning: ${plugin.name} remains untrusted.`.slice(0, width),
-        C.warn,
-      ]]));
-    }
-    if (latestIncident) {
-      detailLines.push(buildPanelLine(width, [[
-        `Latest incident: ${latestIncident.classification} - ${latestIncident.summary}`.slice(0, width),
-        C.warn,
-      ]]));
-    }
     if (attackPathReview.findings.length > 0) {
       attackPathLines.push(buildPanelLine(width, [[' MCP attack-path review', C.label]]));
       for (const finding of attackPathReview.findings.slice(0, 3)) {
@@ -291,39 +217,77 @@ export class SecurityPanel extends BasePanel {
       }
     }
 
-    const governanceSection: PanelWorkspaceSection = { title: 'Governance', lines: governanceLines };
-    const trustSection: PanelWorkspaceSection = { title: 'Policy And Trust', lines: threatLines };
-    const selectedSection: PanelWorkspaceSection = { title: 'Selected Token', lines: detailLines };
-    const attackPathSection: PanelWorkspaceSection = { title: 'Attack Paths', lines: attackPathLines };
-    const tokenAuditSection = resolveScrollablePanelSection(width, height, {
-      intro: 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.',
-      footerLines,
-      palette: C,
-      beforeSections: [governanceSection, trustSection],
-      section: {
-        title: 'Token Audit',
-        scrollableLines: tokenRows,
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.selectedIndex,
-        minRows: 1,
-      },
-      afterSections: [selectedSection, attackPathSection],
-    });
+    const selected = view.results[this.selectedIndex];
+    const detailLines: Line[] = [];
+    if (selected) {
+      detailLines.push(buildPanelLine(width, [
+        ['  Token: ', C.label],
+        [selected.label, C.value],
+        ['  Policy: ', C.label],
+        [selected.scope.policyId, C.info],
+        ['  Blocked: ', C.label],
+        [selected.blocked ? 'yes' : 'no', selected.blocked ? C.error : C.ok],
+      ]));
+      detailLines.push(buildPanelLine(width, [
+        ['  Scope: ', C.label],
+        [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
+        ['  Excess: ', C.label],
+        [(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none').slice(0, Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
+      ]));
+      detailLines.push(buildPanelLine(width, [
+        ['  Rotation: ', C.label],
+        [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.ok : selected.rotation.outcome === 'warning' ? C.warn : C.error],
+        ['  Due: ', C.label],
+        [new Date(selected.rotation.dueAt).toISOString(), C.value],
+        ['  Age(d): ', C.label],
+        [String(Math.floor(selected.rotation.ageMs / (24 * 60 * 60 * 1000))), C.value],
+      ]));
+      detailLines.push(buildPanelLine(width, [[
+        `Last audit: ${view.lastAuditAt ? new Date(view.lastAuditAt).toISOString() : 'never'}  Press r to refresh.`,
+        C.dim,
+      ]]));
+      if (preflightStatus !== 'n/a') {
+        detailLines.push(buildPanelLine(width, [[
+          `Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`.slice(0, width),
+          preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : C.dim,
+        ]]));
+      }
+      if (quarantinedMcp.length > 0) {
+        const server = quarantinedMcp[0]!;
+        detailLines.push(buildPanelLine(width, [[
+          `MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`.slice(0, width),
+          C.error,
+        ]]));
+      }
+      if (quarantinedPlugins.length > 0) {
+        const plugin = quarantinedPlugins[0]!;
+        detailLines.push(buildPanelLine(width, [[
+          `Plugin quarantine: ${plugin.name} (${plugin.trustTier})`.slice(0, width),
+          C.error,
+        ]]));
+      } else if (untrustedPlugins.length > 0) {
+        const plugin = untrustedPlugins[0]!;
+        detailLines.push(buildPanelLine(width, [[
+          `Plugin trust warning: ${plugin.name} remains untrusted.`.slice(0, width),
+          C.warn,
+        ]]));
+      }
+      if (latestIncident) {
+        detailLines.push(buildPanelLine(width, [[
+          `Latest incident: ${latestIncident.classification} - ${latestIncident.summary}`.slice(0, width),
+          C.warn,
+        ]]));
+      }
+    }
 
-    const lines = buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'Security Control Room',
-      intro: 'Token audit, policy posture, MCP attack-path review, plugin trust, and incident pressure.',
-      sections: [
-        governanceSection,
-        trustSection,
-        tokenAuditSection.section,
-        selectedSection,
-        attackPathSection,
-      ] satisfies readonly PanelWorkspaceSection[],
-      footerLines,
-      palette: C,
+      header: governanceLines,
+      footer: [
+        ...detailLines,
+        ...attackPathLines,
+        footerLine,
+      ],
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
   }
 }

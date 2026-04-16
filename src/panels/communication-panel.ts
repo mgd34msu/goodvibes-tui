@@ -1,6 +1,5 @@
 import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiCommunicationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
@@ -11,10 +10,9 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  resolvePrimaryScrollableSection,
-  type PanelWorkspaceSection,
+  type PanelPalette,
 } from './polish.ts';
-import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
+import { createEmptyLine } from '../types/grid.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -26,11 +24,11 @@ const C = {
   selectBg: '#0f172a',
 } as const;
 
-export class CommunicationPanel extends BasePanel {
+type CommunicationRecord = UiCommunicationSnapshot['records'][number];
+
+export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord> {
   private readonly readModel?: UiReadModel<UiCommunicationSnapshot>;
   private readonly unsub: (() => void) | null;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
 
   public constructor(readModel?: UiReadModel<UiCommunicationSnapshot>) {
     super('communication', 'Communication', 'Y', 'monitoring');
@@ -42,31 +40,40 @@ export class CommunicationPanel extends BasePanel {
     this.unsub?.();
   }
 
-  public handleInput(key: string): boolean {
-    const records = this.records();
-    if (records.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(records.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+  protected override getPalette(): PanelPalette {
+    return C;
   }
 
-  private records() {
+  protected getItems(): readonly CommunicationRecord[] {
     if (!this.readModel) return [];
-    return [...this.readModel.getSnapshot().records];
+    return this.readModel.getSnapshot().records;
+  }
+
+  protected renderItem(record: CommunicationRecord, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    const color = record.status === 'blocked' ? C.error : record.status === 'delivered' ? C.ok : C.info;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [record.status.padEnd(10), color, bg],
+      [` ${record.kind.padEnd(10)}`, C.info, bg],
+      [` ${truncateDisplay(`${record.fromId} -> ${record.toId}`, 28).padEnd(28)}`, C.value, bg],
+      [` ${truncateDisplay(record.content, Math.max(0, width - 53))}`, C.dim, bg],
+    ]);
+  }
+
+  protected override getEmptyStateMessage(): string {
+    return ' No structured communication recorded yet.';
+  }
+
+  protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
+    return [
+      { command: '/orchestration', summary: 'review graphs and recursive agent activity' },
+      { command: '/communication', summary: 'reopen this workspace once the runtime emits message traffic' },
+    ];
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
     const intro = 'Structured agent communication, routing policy outcomes, and delivery status across orchestration trees.';
-    const footerLines = [buildPanelLine(width, [['  Up/Down move through messages', C.dim]])];
 
     if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
@@ -88,104 +95,58 @@ export class CommunicationPanel extends BasePanel {
     }
 
     const snapshot = this.readModel.getSnapshot();
-    const records = this.records();
+    const records = this.getItems();
 
-    if (records.length === 0) {
-      const workspace = buildPanelWorkspace(width, height, {
-        title: 'Communication Control Room',
-        intro,
-        sections: [{
-          title: 'Communication posture',
-          lines: [
-            buildKeyValueLine(width, [
-              { label: 'sent', value: String(snapshot.totalSent), valueColor: snapshot.totalSent > 0 ? C.info : C.dim },
-              { label: 'delivered', value: String(snapshot.totalDelivered), valueColor: snapshot.totalDelivered > 0 ? C.ok : C.dim },
-              { label: 'blocked', value: String(snapshot.totalBlocked), valueColor: snapshot.totalBlocked > 0 ? C.error : C.dim },
-            ], C),
-            buildGuidanceLine(width, '/communication', 'review structured message flow, delivery posture, and blocked routing decisions', C),
-            ...buildEmptyState(
-              width,
-              ' No structured communication recorded yet.',
-              'Messages, escalations, findings, and handoffs will appear here once orchestration starts routing them through the communication policy.',
-              [
-                { command: '/orchestration', summary: 'review graphs and recursive agent activity' },
-                { command: '/communication', summary: 'reopen this workspace once the runtime emits message traffic' },
-              ],
-              C,
-            ),
-          ],
-        }],
-        palette: C,
-      });
-      while (workspace.length < height) workspace.push(createEmptyLine(width));
-      return workspace;
-    }
-
-    this.selectedIndex = Math.min(this.selectedIndex, records.length - 1);
     const postureLines: Line[] = [
+      buildPanelLine(width, [['  Communication posture', C.label]]),
       buildKeyValueLine(width, [
         { label: 'sent', value: String(snapshot.totalSent), valueColor: snapshot.totalSent > 0 ? C.info : C.dim },
         { label: 'delivered', value: String(snapshot.totalDelivered), valueColor: snapshot.totalDelivered > 0 ? C.ok : C.dim },
         { label: 'blocked', value: String(snapshot.totalBlocked), valueColor: snapshot.totalBlocked > 0 ? C.error : C.dim },
-        { label: 'selected', value: `${records[this.selectedIndex]?.fromId ?? 'n/a'} -> ${records[this.selectedIndex]?.toId ?? 'n/a'}`, valueColor: C.value },
       ], C),
       buildGuidanceLine(width, '/orchestration', 'inspect recursive routing, message handoff, and blocked broadcast posture', C),
     ];
 
-    const selected = records[this.selectedIndex]!;
-    const detailLines: Line[] = [
-      buildPanelLine(width, [['  Route: ', C.label], [`${selected.scope} / ${selected.kind}`, C.value], ['  Status: ', C.label], [selected.status, selected.status === 'blocked' ? C.error : C.ok]]),
-      buildPanelLine(width, [['  From: ', C.label], [selected.fromId, C.value], ['  To: ', C.label], [selected.toId, C.value]]),
-      buildPanelLine(width, [['  Roles: ', C.label], [`${selected.fromRole ?? 'unknown'} -> ${selected.toRole ?? 'unknown'}`, C.dim]]),
-    ];
-    if (selected.reason) {
-      detailLines.push(buildPanelLine(width, [['  Reason: ', C.label], [truncateDisplay(selected.reason, Math.max(0, width - 11)), C.warn]]));
+    if (records.length === 0) {
+      return this.renderList(width, height, {
+        title: 'Communication Control Room',
+        header: postureLines,
+      });
     }
-    detailLines.push(...buildBodyText(width, ` Content: ${selected.content}`, C));
-    const postureSection: PanelWorkspaceSection = { title: 'Communication posture', lines: postureLines };
-    const detailSection: PanelWorkspaceSection = { title: 'Selected Message', lines: detailLines };
-    const rawOverviewLines: Line[] = records.map((record, absolute) => {
-      const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-      const color = record.status === 'blocked' ? C.error : record.status === 'delivered' ? C.ok : C.info;
-      return buildPanelLine(width, [
-        [' ', C.label, bg],
-        [record.status.padEnd(10), color, bg],
-        [` ${record.kind.padEnd(10)}`, C.info, bg],
-        [` ${truncateDisplay(`${record.fromId} -> ${record.toId}`, 28).padEnd(28)}`, C.value, bg],
-        [` ${truncateDisplay(record.content, Math.max(0, width - 53))}`, C.dim, bg],
-      ]);
-    });
-    const resolvedMessagesSection = resolvePrimaryScrollableSection(width, height, {
-      intro,
-      footerLines,
-      palette: C,
-      beforeSections: [postureSection],
-      section: {
-        title: 'Recent Messages',
-        scrollableLines: rawOverviewLines,
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        guardRows: 1,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: [detailSection],
-    });
-    this.scrollOffset = resolvedMessagesSection.scrollOffset;
 
-    const sections: PanelWorkspaceSection[] = [
-      postureSection,
-      resolvedMessagesSection.section,
-      detailSection,
+    this.clampSelection();
+    const selected = records[this.selectedIndex];
+
+    // Update posture with selected info
+    const postureWithSelected: Line[] = [
+      buildPanelLine(width, [['  Communication posture', C.label]]),
+      buildKeyValueLine(width, [
+        { label: 'sent', value: String(snapshot.totalSent), valueColor: snapshot.totalSent > 0 ? C.info : C.dim },
+        { label: 'delivered', value: String(snapshot.totalDelivered), valueColor: snapshot.totalDelivered > 0 ? C.ok : C.dim },
+        { label: 'blocked', value: String(snapshot.totalBlocked), valueColor: snapshot.totalBlocked > 0 ? C.error : C.dim },
+        { label: 'selected', value: `${selected?.fromId ?? 'n/a'} -> ${selected?.toId ?? 'n/a'}`, valueColor: C.value },
+      ], C),
+      buildGuidanceLine(width, '/orchestration', 'inspect recursive routing, message handoff, and blocked broadcast posture', C),
     ];
-    const lines = buildPanelWorkspace(width, height, {
+
+    const footerLines: Line[] = [];
+    if (selected) {
+      footerLines.push(
+        buildPanelLine(width, [['  Route: ', C.label], [`${selected.scope} / ${selected.kind}`, C.value], ['  Status: ', C.label], [selected.status, selected.status === 'blocked' ? C.error : C.ok]]),
+        buildPanelLine(width, [['  From: ', C.label], [selected.fromId, C.value], ['  To: ', C.label], [selected.toId, C.value]]),
+        buildPanelLine(width, [['  Roles: ', C.label], [`${selected.fromRole ?? 'unknown'} -> ${selected.toRole ?? 'unknown'}`, C.dim]]),
+      );
+      if (selected.reason) {
+        footerLines.push(buildPanelLine(width, [['  Reason: ', C.label], [truncateDisplay(selected.reason, Math.max(0, width - 11)), C.warn]]));
+      }
+      footerLines.push(...buildBodyText(width, ` Content: ${selected.content}`, C));
+    }
+    footerLines.push(buildPanelLine(width, [['  Up/Down move through messages', C.dim]]));
+
+    return this.renderList(width, height, {
       title: 'Communication Control Room',
-      intro,
-      sections,
-      footerLines,
-      palette: C,
+      header: postureWithSelected,
+      footer: footerLines,
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
-    return lines.slice(0, height);
   }
 }

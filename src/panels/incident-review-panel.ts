@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildBodyText,
   buildEmptyState,
@@ -8,10 +8,10 @@ import {
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
-  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
-  type PanelWorkspaceSection,
+  type PanelPalette,
 } from './polish.ts';
+import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -34,11 +34,9 @@ function classificationColor(value: string): string {
   }
 }
 
-export class IncidentReviewPanel extends BasePanel {
+export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
   private readonly registry?: ForensicsRegistry;
   private readonly unsub: (() => void) | null;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
 
   public constructor(registry?: ForensicsRegistry) {
     super('incident', 'Incident Review', 'N', 'monitoring');
@@ -50,34 +48,36 @@ export class IncidentReviewPanel extends BasePanel {
     this.unsub?.();
   }
 
-  public handleInput(key: string): boolean {
-    const reports = this.registry?.getAll() ?? [];
-    if (reports.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(reports.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'home') {
-      this.selectedIndex = 0;
-      this.markDirty();
-      return true;
-    }
-    if (key === 'end') {
-      this.selectedIndex = reports.length - 1;
-      this.markDirty();
-      return true;
-    }
-    return false;
+  protected override getPalette(): PanelPalette {
+    return C;
+  }
+
+  protected getItems(): readonly FailureReport[] {
+    return this.registry?.getAll() ?? [];
+  }
+
+  protected renderItem(report: FailureReport, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [report.id.slice(0, 8).padEnd(9), C.dim, bg],
+      [report.classification.padEnd(20), classificationColor(report.classification), bg],
+      [report.summary.slice(0, Math.max(0, width - 31)), C.value, bg],
+    ]);
+  }
+
+  protected override getEmptyStateMessage(): string {
+    return ' No incidents recorded yet.';
+  }
+
+  protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
+    return [
+      { command: '/incident latest', summary: 'inspect the latest report once one exists' },
+      { command: '/recall capture incident latest', summary: 'promote incident evidence into project knowledge' },
+    ];
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
     const intro = 'Failure bundles, replay mismatches, permission fallout, and exportable review evidence.';
 
     if (!this.registry) {
@@ -100,32 +100,16 @@ export class IncidentReviewPanel extends BasePanel {
       });
     }
 
-    const reports = this.registry.getAll();
+    const reports = this.getItems();
     if (reports.length === 0) {
-      return buildPanelWorkspace(width, height, {
-        title: 'Incident Review Workspace',
-        intro,
-        sections: [{
-          lines: buildEmptyState(
-            width,
-            ' No incidents recorded yet.',
-            'The incident workspace fills automatically when failures produce forensics reports, replay mismatches, or policy-linked fallout.',
-            [
-              { command: '/incident latest', summary: 'inspect the latest report once one exists' },
-              { command: '/recall capture incident latest', summary: 'promote incident evidence into project knowledge' },
-            ],
-            C,
-          ),
-        }],
-        palette: C,
-      });
+      return this.renderList(width, height, { title: 'Incident Review Workspace' });
     }
 
-    this.selectedIndex = Math.min(this.selectedIndex, reports.length - 1);
+    this.clampSelection();
     const selected = reports[this.selectedIndex]!;
     const bundle = this.registry.buildBundle(selected.id);
 
-    const summaryLines = [
+    const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'incidents', value: String(reports.length), valueColor: C.value },
         { label: 'selected', value: `${this.selectedIndex + 1}/${reports.length}`, valueColor: C.info },
@@ -134,38 +118,38 @@ export class IncidentReviewPanel extends BasePanel {
       buildPanelLine(width, [['  Up/Down move  Home/End jump  selected incident drives the action rail below', C.dim]]),
     ];
 
-    const selectedLines: Line[] = [];
+    const footerLines: Line[] = [];
     if (bundle) {
-      selectedLines.push(buildKeyValueLine(width, [
+      footerLines.push(buildKeyValueLine(width, [
         { label: 'id', value: selected.id, valueColor: C.dim },
         { label: 'trace', value: selected.traceId, valueColor: C.dim },
       ], C));
-      selectedLines.push(...buildBodyText(width, `Root cause: ${bundle.evidence.rootCause ?? 'n/a'}`, C, C.value));
-      selectedLines.push(buildKeyValueLine(width, [
+      footerLines.push(...buildBodyText(width, `Root cause: ${bundle.evidence.rootCause ?? 'n/a'}`, C, C.value));
+      footerLines.push(buildKeyValueLine(width, [
         { label: 'Permissions denied', value: String(bundle.evidence.deniedPermissionCount), valueColor: bundle.evidence.deniedPermissionCount > 0 ? C.warn : C.dim },
         { label: 'Budget breaches', value: String(bundle.evidence.budgetBreachCount), valueColor: bundle.evidence.budgetBreachCount > 0 ? C.warn : C.dim },
         { label: 'Replay mismatches', value: String(bundle.replay.mismatchCount), valueColor: bundle.replay.mismatchCount > 0 ? C.bad : C.dim },
       ], C));
-      selectedLines.push(buildPanelLine(width, [
+      footerLines.push(buildPanelLine(width, [
         ['  Related IDs: ', C.label],
         [`turn=${bundle.evidence.relatedIds.turnId ?? 'n/a'} task=${bundle.evidence.relatedIds.taskId ?? 'n/a'} agent=${bundle.evidence.relatedIds.agentId ?? 'n/a'}`.slice(0, Math.max(0, width - 14)), C.info],
       ]));
       if (bundle.evidence.slowPhases.length > 0) {
-        selectedLines.push(buildPanelLine(width, [
+        footerLines.push(buildPanelLine(width, [
           ['  Slow phases: ', C.label],
           [bundle.evidence.slowPhases.join(', ').slice(0, Math.max(0, width - 15)), C.warn],
         ]));
       }
       const rootCause = selected.causalChain.find((entry) => entry.isRootCause);
       if (rootCause) {
-        selectedLines.push(buildPanelLine(width, [
+        footerLines.push(buildPanelLine(width, [
           ['  Root event: ', C.label],
           [`${rootCause.sourceEventType} - ${rootCause.description}`.slice(0, Math.max(0, width - 14)), C.dim],
         ]));
       }
       const denied = selected.permissionEvidence.find((entry) => entry.approved === false);
       if (denied) {
-        selectedLines.push(buildPanelLine(width, [
+        footerLines.push(buildPanelLine(width, [
           ['  Permission: ', C.label],
           [`${denied.tool} denied${denied.riskLevel ? ` (${denied.riskLevel})` : ''}${denied.summary ? ` - ${denied.summary}` : ''}`.slice(0, Math.max(0, width - 14)), C.warn],
         ]));
@@ -180,68 +164,32 @@ export class IncidentReviewPanel extends BasePanel {
         const replayDetail = ownerBreakdown.length > 0
           ? `Replay link: ${mismatch.kind}${mismatch.ownerDomain ? `/${mismatch.ownerDomain}` : ''} - ${mismatch.description}  Replay owners: ${ownerBreakdown}`
           : `Replay link: ${mismatch.kind}${mismatch.ownerDomain ? `/${mismatch.ownerDomain}` : ''} - ${mismatch.description}`;
-        selectedLines.push(buildPanelLine(width, [
+        footerLines.push(buildPanelLine(width, [
           ['  ', C.label],
           [replayDetail.slice(0, Math.max(0, width - 2)), C.bad],
         ]));
       } else {
         const ownerBreakdown = Object.entries(bundle.replay.mismatchBreakdown.byOwnerDomain)
-        .filter(([, count]) => count > 0)
-        .slice(0, 3)
-        .map(([domain, count]) => `${domain}:${count}`)
-        .join(', ');
+          .filter(([, count]) => count > 0)
+          .slice(0, 3)
+          .map(([domain, count]) => `${domain}:${count}`)
+          .join(', ');
         if (ownerBreakdown.length > 0) {
-          selectedLines.push(buildPanelLine(width, [
+          footerLines.push(buildPanelLine(width, [
             ['  Replay owners: ', C.label],
             [ownerBreakdown.slice(0, Math.max(0, width - 17)), C.info],
           ]));
         }
       }
     }
+    footerLines.push(buildPanelLine(width, [['  Action Rail', C.label]]));
+    footerLines.push(buildPanelLine(width, [[`  /incident latest   /incident export ${selected.id}   /recall capture incident ${selected.id}`, C.info]]));
+    footerLines.push(buildGuidanceLine(width, '/security', 'open the broader trust and incident posture control room', C));
 
-    const actionLines = [
-      buildPanelLine(width, [[`  /incident latest   /incident export ${selected.id}   /recall capture incident ${selected.id}`, C.info]]),
-    ];
-
-    const summarySection: PanelWorkspaceSection = { title: 'Summary', lines: summaryLines };
-    const actionSection: PanelWorkspaceSection = { title: 'Action Rail', lines: actionLines };
-    const selectedIncidentSection: PanelWorkspaceSection = { title: 'Selected Incident', lines: selectedLines };
-    const incidentsSection = resolveScrollablePanelSection(width, height, {
-      intro,
-      palette: C,
-      beforeSections: [summarySection],
-      section: {
-        title: 'Incidents',
-        scrollableLines: reports.map((report, globalIndex) => {
-          const bg = globalIndex === this.selectedIndex ? C.selectBg : undefined;
-          return buildPanelLine(width, [
-            [' ', C.label, bg],
-            [report.id.slice(0, 8).padEnd(9), C.dim, bg],
-            [report.classification.padEnd(20), classificationColor(report.classification), bg],
-            [report.summary.slice(0, Math.max(0, width - 31)), C.value, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: [actionSection, selectedIncidentSection],
-    });
-    this.scrollOffset = incidentsSection.scrollOffset;
-
-    const sections: PanelWorkspaceSection[] = [
-      summarySection,
-      incidentsSection.section,
-      actionSection,
-      selectedIncidentSection,
-    ];
-
-    return buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'Incident Review Workspace',
-      intro,
-      sections,
-      palette: C,
+      header: headerLines,
+      footer: footerLines,
     });
   }
 }
