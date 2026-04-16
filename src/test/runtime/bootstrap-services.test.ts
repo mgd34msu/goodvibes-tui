@@ -78,9 +78,12 @@ describe('startExternalServices', () => {
     expect(daemonFactory).toHaveBeenCalledTimes(1);
     expect(listenerFactory).toHaveBeenCalledTimes(1);
     expect(daemonFactory.mock.calls[0]?.[1]).toBe(listenerFactory.mock.calls[0]?.[1]);
-    expect(daemonEnable).toHaveBeenCalledWith({ daemon: true });
+    // sharedDaemonToken / sharedHttpListenerToken default to undefined when
+    // not provided in factories; enable(config, token?) is now called with
+    // the token argument explicitly.
+    expect(daemonEnable).toHaveBeenCalledWith({ daemon: true }, undefined);
     expect(daemonStart).toHaveBeenCalled();
-    expect(listenerEnable).toHaveBeenCalledWith({ httpListener: true });
+    expect(listenerEnable).toHaveBeenCalledWith({ httpListener: true }, undefined);
     expect(listenerStart).toHaveBeenCalled();
 
     await services.stop();

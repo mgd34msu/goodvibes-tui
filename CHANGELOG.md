@@ -4,6 +4,25 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.17] — 2026-04-16
+
+### Bug Fixes
+
+- **Companion pairing token registered with embedded daemon**: `src/runtime/bootstrap.ts` now loads the persistent companion-pairing token via `getOrCreateCompanionToken('tui')` and passes it as `sharedDaemonToken` to `startExternalServices`. The TUI's QR panel advertises this token as the bearer for phone pairing; before this fix, the embedded daemon was started with no shared token and rejected every scanned token with `authenticated: false, authMode: "invalid"`
+- **QR code visual alignment**: `src/renderer/qr-renderer.ts` now uses `leftPad = 1` (down from 2) and prepends a single top quiet-band row. The QR's finder patterns now register symmetrically on both axes; previous rendering was mis-aligned by one cell horizontally and had no top quiet band
+
+### Dependencies
+
+- Bumped `@pellux/goodvibes-sdk` 0.18.36 → 0.18.37, picking up: `sharedDaemonToken`/`sharedHttpListenerToken` factory options on `startHostServices`, bootstrap credential drift detection that warns when `auth-bootstrap.txt` falls out of sync with `auth-users.json`
+- Regenerated `docs/foundation-artifacts/*` against SDK 0.18.37
+
+### Tests
+
+- Updated `src/test/runtime/bootstrap-services.test.ts` `daemonEnable`/`listenerEnable` expectations to include the new second argument (`undefined` when no shared token is supplied)
+- Test suite: 437/437 passing, typecheck clean, architecture check green
+
+---
+
 ## [0.18.16] — 2026-04-16
 
 ### Bug Fixes

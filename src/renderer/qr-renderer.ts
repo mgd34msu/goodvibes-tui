@@ -32,10 +32,25 @@ export function renderQrMatrix(
 
   // Each terminal row covers two matrix rows
   const terminalRows = Math.ceil(rows / 2);
-  // Left-align with a small indent rather than centering
-  const leftPad = 2;
+  // Left-align with a single-cell indent. Visually aligns with the text above
+  // the QR when rendered with half-block characters; bumping higher
+  // mis-registers the finder patterns by a visible unit.
+  const leftPad = 1;
 
   const lines: Line[] = [];
+
+  // Prepend a single-row top quiet band of bg so the QR's first module row
+  // does not butt up against whatever chrome precedes it. Combined with the
+  // leftPad=1 on the horizontal axis, this keeps the finder-pattern square
+  // margin consistent on both axes.
+  {
+    const topBand = createEmptyLine(width);
+    const endCol = Math.min(leftPad + cols + 1, width);
+    for (let col = 0; col < endCol; col++) {
+      topBand[col] = createStyledCell(' ', { fg, bg });
+    }
+    lines.push(topBand);
+  }
 
   for (let termRow = 0; termRow < terminalRows; termRow++) {
     const matrixRowTop = termRow * 2;
