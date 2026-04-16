@@ -202,7 +202,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
 
   registry.register({
     name: 'quit',
-    aliases: ['q', ':q'],
+    aliases: [':q'],
     description: 'Exit the application',
     handler(_args, ctx) {
       ctx.exit();

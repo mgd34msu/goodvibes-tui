@@ -23,6 +23,9 @@ import { registerBuiltinCommands } from '../../input/commands.ts';
 const DESTRUCTIVE_VERBS = new Set([
   'cancel', 'delete', 'rm', 'remove', 'discard', 'clear', 'reset',
   'revoke', 'logout', 'reject', 'unpair', 'force', 'kill', 'terminate',
+  // Extended: state-reversing, exit-triggering, and bulk-destruction verbs
+  'undo', 'redo', 'exit', 'quit', 'abort', 'destroy', 'drop', 'wipe',
+  'purge', 'ban', 'unregister',
 ]);
 
 function isDestructiveName(name: string): boolean {

@@ -216,6 +216,7 @@ export class PanelManager {
     p.activeIndex = (p.activeIndex - 1 + p.panels.length) % p.panels.length;
     const newPanel = p.panels[p.activeIndex];
     if (newPanel) newPanel.onActivate();
+    this._invalidateWorkspaceTabs();
   }
 
   activateByIndex(index: number): void {
@@ -259,6 +260,7 @@ export class PanelManager {
   togglePaneFocus(): void {
     if (!this._bottomPaneVisible || this.bottomPane.panels.length === 0) return;
     this._focusedPane = this._focusedPane === 'top' ? 'bottom' : 'top';
+    this._invalidateWorkspaceTabs();
   }
 
   // -------------------------------------------------------------------------
@@ -457,6 +459,7 @@ export class PanelManager {
     this._focusedPane = 'top';
     this._bottomPaneVisible = false;
     this._visible = false;
+    this._invalidateWorkspaceTabs();
   }
 
   // -------------------------------------------------------------------------

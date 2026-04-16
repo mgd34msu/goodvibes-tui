@@ -10,6 +10,7 @@ import type { SlashCommand } from '../input/command-registry.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 import { getVisibleWindow } from './surface-layout.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 function toModalSections(rows: readonly string[]): import('./modal-factory.ts').ModalSection[] {
   return rows.map((row) => {
@@ -93,9 +94,19 @@ export function renderHelpOverlay(
   }
 
   const quickStartRows: string[] = [];
-  for (const [name, argHint, desc] of FEATURED_COMMANDS) {
-    if (!hasCommand(name)) continue; // omit if not in live registry
-    quickStartRows.push(featuredRow(name, argHint, desc));
+  try {
+    for (const [name, argHint, desc] of FEATURED_COMMANDS) {
+      if (!hasCommand(name)) continue; // omit if not in live registry
+      quickStartRows.push(featuredRow(name, argHint, desc));
+    }
+  } catch (err) {
+    // A plugin command getter threw during registry traversal. Fall back to an
+    // unfiltered quick-start list so /help remains reachable.
+    logger.warn(`[help-overlay] registry traversal error during command filter; using unfiltered list: ${err}`);
+    quickStartRows.length = 0;
+    for (const [name, argHint, desc] of FEATURED_COMMANDS) {
+      quickStartRows.push(featuredRow(name, argHint, desc));
+    }
   }
 
   const commandRows: string[] = [];

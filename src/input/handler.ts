@@ -81,7 +81,7 @@ import {
 } from './handler-picker-routes.ts';
 import { handleGlobalShortcutToken } from './handler-shortcuts.ts';
 import { feedInputTokens } from './handler-feed.ts';
-import { buildInitialFeedContext } from './feed-context-factory.ts';
+import { buildInitialFeedContext, syncFeedContextMutableFields } from './feed-context-factory.ts';
 import { handlePanelIntegrationAction as runPanelIntegrationAction } from './panel-integration-actions.ts';
 import type { Panel } from '../panels/types.ts';
 import type { UiRuntimeServices } from '../runtime/ui-services.ts';
@@ -292,15 +292,13 @@ export class InputHandler {
 
   /** Sync mutable handler fields back into feedContext after in-feed mutations. */
   private syncFeedContextMutableFields(): void {
-    const ctx = this.feedContext;
-    ctx.prompt = this.prompt; ctx.cursorPos = this.cursorPos;
-    ctx.commandMode = this.commandMode; ctx.panelFocused = this.panelFocused;
-    ctx.indicatorFocused = this.indicatorFocused;
-    ctx.helpOverlayActive = this.helpOverlayActive; ctx.helpScrollOffset = this.helpScrollOffset;
-    ctx.shortcutsOverlayActive = this.shortcutsOverlayActive; ctx.shortcutsScrollOffset = this.shortcutsScrollOffset;
-    ctx.selectionCallback = this.selectionCallback;
-    ctx.nextPasteId = this.nextPasteId; ctx.nextImageId = this.nextImageId;
-    ctx.mouseDownRow = this.mouseDownRow; ctx.mouseDownCol = this.mouseDownCol;
+    const h = this;
+    syncFeedContextMutableFields({ prompt: h.prompt, cursorPos: h.cursorPos, commandMode: h.commandMode,
+      panelFocused: h.panelFocused, indicatorFocused: h.indicatorFocused, helpOverlayActive: h.helpOverlayActive,
+      helpScrollOffset: h.helpScrollOffset, shortcutsOverlayActive: h.shortcutsOverlayActive,
+      shortcutsScrollOffset: h.shortcutsScrollOffset, selectionCallback: h.selectionCallback,
+      nextPasteId: h.nextPasteId, nextImageId: h.nextImageId, mouseDownRow: h.mouseDownRow,
+      mouseDownCol: h.mouseDownCol, contentWidth: h.contentWidth }, this.feedContext);
   }
 
   /** Wire in the InputHistory instance. Optional; disables history navigation if unset. */

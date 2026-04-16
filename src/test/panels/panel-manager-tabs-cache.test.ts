@@ -118,4 +118,35 @@ describe('PanelManager.getWorkspaceTabs() cache (β1)', () => {
     // Stable between calls
     expect(first).toBe(second);
   });
+
+  // --- cache invalidation gap fixes (audit M1) ---
+
+  test('cache is invalidated after prevPanel()', () => {
+    pm.open('alpha');
+    pm.open('beta');
+    const before = pm.getWorkspaceTabs();
+    pm.prevPanel();
+    const after = pm.getWorkspaceTabs();
+    expect(before).not.toBe(after);
+  });
+
+  test('cache is invalidated after togglePaneFocus()', () => {
+    pm.open('alpha');
+    pm.open('beta', 'bottom');
+    pm.focusPane('top');
+    const before = pm.getWorkspaceTabs();
+    pm.togglePaneFocus();
+    const after = pm.getWorkspaceTabs();
+    expect(before).not.toBe(after);
+  });
+
+  test('cache is invalidated after destroyAll()', () => {
+    pm.open('alpha');
+    pm.open('beta');
+    const before = pm.getWorkspaceTabs();
+    pm.destroyAll();
+    const after = pm.getWorkspaceTabs();
+    expect(before).not.toBe(after);
+    expect(after.length).toBe(0);
+  });
 });

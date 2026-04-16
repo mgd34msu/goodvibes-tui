@@ -120,4 +120,24 @@ describe('renderHelpOverlay', () => {
     const footerLine = lineToString(lines[lines.length - 1]);
     expect(footerLine).toContain('Up/Down');
   });
+
+  test('registry traversal crash guard: throwing command getter does not crash overlay', () => {
+    // Simulate a plugin command whose property getter throws (e.g. a broken plugin).
+    const throwingCmd = {
+      name: 'cockpit',
+      description: 'Control room',
+      handler: () => {},
+      get aliases(): string[] {
+        throw new Error('plugin getter failure');
+      },
+    } as unknown as SlashCommand;
+
+    // The overlay must not throw even when registry traversal errors occur.
+    expect(() => {
+      const lines = renderHelpOverlay(W, KEYBINDINGS, [throwingCmd], 0, TALL_VIEWPORT);
+      // Footer hints must still render (overlay is reachable).
+      const footerLine = lineToString(lines[lines.length - 1]);
+      expect(footerLine).toContain('Esc');
+    }).not.toThrow();
+  });
 });
