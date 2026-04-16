@@ -4,6 +4,56 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.13] — 2026-04-16
+
+### SDK/TUI Boundary Separation
+
+Major cleanup of the SDK/TUI boundary. The TUI is now a thin rendering/input/wiring layer built on `@pellux/goodvibes-sdk@0.18.29`. Thousands of lines of duplicated, forked, and dead code have been removed and replaced with SDK imports.
+
+#### Dead Code Removed
+
+- Deleted 4 dead daemon files that nothing imported (`facade.ts`, `facade-composition.ts`, `surface-policy.ts`, `types.ts`) — 1,291 lines removed
+- Deleted 2 dead UI read-model files (`ui-read-models-core.ts`, `ui-read-models-operations.ts`) — the barrel already delegates to SDK
+
+#### Forks Replaced with SDK Imports
+
+- Replaced `src/core/orchestrator.ts` (736 lines) with a 3-line re-export from SDK — the SDK's Orchestrator already includes `getSpinner()`
+- Replaced `src/plugins/loader.ts` (305 lines) with re-exports from SDK — the SDK now supports `additionalDirectories` and `entryDefault` options
+- Replaced `src/tools/index.ts` (187 lines) with re-export of SDK's `registerAllTools`
+- Replaced `src/config/subscription-providers.ts` (128 lines) with `export *` from SDK
+- Replaced `src/config/index.ts` API key functions with re-exports from SDK's new `config/api-keys.ts`
+- Replaced `src/permissions/prompt.ts` type definitions with imports from SDK — kept `PermissionPromptUI` class (TUI-specific rendering)
+- Replaced 4 store/runtime duplicate files with SDK re-exports (conversation domain, permissions domain, conversation reducers, lifecycle reducers)
+
+#### ConversationManager Refactored
+
+- Refactored `src/core/conversation.ts` from a 776-line standalone class to a ~450-line subclass extending SDK's `ConversationManager`
+- Removed all duplicated message management methods (CRUD, branching, persistence, compaction, undo/redo) — now inherited from SDK
+- Defined `TuiBlockMeta extends BlockMeta` with rendering fields (`blockIndex`, `startLine`, `lineCount`, `collapseKey`)
+- Kept all TUI-specific rendering methods (history buffer, block registry, collapse state, display navigation)
+
+#### Health Monitoring Renamed
+
+- Renamed `panelHealthMonitor` to `componentHealthMonitor` throughout the TUI to align with SDK 0.18.29's generic naming
+- Updated 20 files across runtime, panels, diagnostics, bootstrap, and tests
+- Added deprecated `Panel*` type aliases for backward compatibility
+
+#### RuntimeState Aligned with SDK
+
+- Updated `store/state.ts` to use SDK's `surfacePerf: SurfacePerfDomainState` instead of `uiPerf: UiPerfDomainState`
+- Updated `store/selectors/index.ts` to match SDK's selector shape
+- Health monitoring perf files rewritten as SDK re-export shims
+
+#### Clipboard Split
+
+- Created `src/utils/clipboard.ts` with TUI-specific OSC 52 `copyToClipboard` function
+- Platform clipboard paste functions remain in SDK
+
+### Verification
+
+- Full typecheck passes: `bun x tsc --noEmit` — 0 errors
+- Updated to `@pellux/goodvibes-sdk@0.18.29`
+
 ## [0.18.12] — 2026-04-15
 
 ### SDK `0.18.28` Session-Persistence Boundary Fix

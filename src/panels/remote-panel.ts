@@ -1,5 +1,5 @@
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { UiReadModel, UiRemoteSnapshot } from '../runtime/ui-read-models.ts';
 import {
@@ -14,7 +14,7 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
 const C = {

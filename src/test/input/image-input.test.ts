@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
-import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
+import { InfiniteBuffer } from '../../core/history.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
 import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { CommunicationPanel } from '../../panels/communication-panel.ts';
 import { createRuntimeStore, createDomainDispatch } from '../../runtime/store/index.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import { createCommunicationReadModel } from '../helpers/ui-read-models.ts';
 
 function linesText(lines: Line[]): string {

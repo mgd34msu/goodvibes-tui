@@ -1,5 +1,5 @@
-import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { fitDisplay, getDisplayWidth, truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { type Line } from '../types/grid.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers/effort-levels';
 import { getQualityTier, getQualityTierFromScore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';

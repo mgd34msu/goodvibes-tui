@@ -31,7 +31,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     icon: 'L',
     category: 'session',
     description: 'Browse all registered panels grouped by category, with open/closed status and Enter-to-open',
-    factory: () => new PanelListPanel(manager, deps.panelHealthMonitor),
+    factory: () => new PanelListPanel(manager, deps.componentHealthMonitor),
   });
 
   manager.registerType({

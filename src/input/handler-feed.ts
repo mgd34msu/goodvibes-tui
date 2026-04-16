@@ -1,5 +1,5 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
-import type { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
+import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandContext, CommandRegistry } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';

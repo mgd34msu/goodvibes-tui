@@ -97,7 +97,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     category: 'monitoring',
     description: 'Project-local and global skill discovery with origin and dependency details',
     factory: () => new SkillsPanel({
-      panelHealthMonitor: deps.panelHealthMonitor,
+      componentHealthMonitor: deps.componentHealthMonitor,
       shellPaths: ui.environment.shellPaths,
     }),
   });

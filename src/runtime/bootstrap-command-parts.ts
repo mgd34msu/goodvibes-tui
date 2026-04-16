@@ -8,8 +8,8 @@ import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp/mcp-api';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
 import type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
+import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { MutableRuntimeState } from './context.ts';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
@@ -23,7 +23,6 @@ import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/ru
 import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import type { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins/manager';
 import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
-import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
 import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 import type { UiReadModels } from './ui-read-models.ts';
@@ -117,7 +116,6 @@ export interface BootstrapCommandSectionOptions {
   readonly mcpApi?: McpApi;
   readonly opsApi?: OpsApi;
   readonly directTransport?: DirectTransport;
-  readonly panelHealthMonitor: PanelHealthMonitor;
   readonly worktreeRegistry: WorktreeRegistry;
   readonly sandboxSessionRegistry: SandboxSessionRegistry;
 }

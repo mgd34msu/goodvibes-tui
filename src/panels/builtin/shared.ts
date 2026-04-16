@@ -21,7 +21,7 @@ import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/ses
 import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
 import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
-import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import type { ComponentHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
 import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
 import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
 
@@ -72,8 +72,8 @@ export interface BuiltinPanelDeps {
   getControlPlaneRecentEvents?: (limit: number) => readonly ControlPlaneRecentEvent[];
   /** Token auditor for the security control-room panel. */
   tokenAuditor: ApiTokenAuditor;
-  /** Shared panel-health monitor for rate-limited panels and diagnostics. */
-  panelHealthMonitor: PanelHealthMonitor;
+  /** Shared component-health monitor for rate-limited panels and diagnostics. */
+  componentHealthMonitor: ComponentHealthMonitor;
   /** Shared worktree registry for worktree surfaces. */
   worktreeRegistry: WorktreeRegistry;
   /** Shared sandbox session registry for sandbox surfaces and tools. */

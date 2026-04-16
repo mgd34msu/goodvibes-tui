@@ -4,8 +4,8 @@
  */
 
 import { BasePanel } from './base-panel.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { PanelHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
+import type { Line } from '../types/grid.ts';
+import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import {
   buildBodyText,
   buildEmptyState,
@@ -54,8 +54,8 @@ export class SystemMessagesPanel extends BasePanel {
   private _scrollOffset = 0;
   private readonly configManager: ConfigManager;
 
-  constructor(configManager: ConfigManager, panelHealthMonitor?: PanelHealthMonitor) {
-    super('system-messages', 'System Messages', 'J', 'monitoring', panelHealthMonitor);
+  constructor(configManager: ConfigManager, componentHealthMonitor?: ComponentHealthMonitor) {
+    super('system-messages', 'System Messages', 'J', 'monitoring', componentHealthMonitor);
     this.configManager = configManager;
   }
 

@@ -1,15 +1,14 @@
-import { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
-import { createEmptyLine, type Line, type Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { SplashOptions } from '@pellux/goodvibes-sdk/platform/utils/splash-lines';
+import { InfiniteBuffer } from './history.ts';
+import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
+import type { SplashOptions } from '../utils/splash-lines.ts';
 import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
 import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
-import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
-import { buildTranscriptEventIndex } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
 import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
-import { compactConversation } from '@pellux/goodvibes-sdk/platform/core/conversation-compaction';
+import {
+  ConversationManager as SdkConversationManager,
+  type BlockMeta as SdkBlockMeta,
+} from '@pellux/goodvibes-sdk/platform/core/conversation';
 import {
   addConversationSplashScreen,
   appendConversationMessages,
@@ -21,64 +20,42 @@ import {
   renderConversationUserMessage,
 } from './conversation-rendering.ts';
 import { renderMarkdown } from '../renderer/markdown.ts';
-import {
-  cloneBranchMap,
-  cloneMessages,
-  deriveConversationTitle,
-  messagesToInternal,
-  restoreBranchMap,
-} from '@pellux/goodvibes-sdk/platform/core/conversation-utils';
-import { applyDiffContent, parseDiffForApply } from '@pellux/goodvibes-sdk/platform/core/conversation-diff';
 
 /**
- * ConversationManager - Owns conversation messages and the rendered history buffer.
- * Supports tool-use messages (assistant with tool calls, tool results).
- *
- * History is rebuilt lazily: a dirty flag is set on every message mutation and
- * the buffer is only actually reconstructed when getDisplayBlocks() is called
- * or when the width changes. This avoids O(n) rebuilds per turn in long sessions.
+ * ConversationManager - TUI subclass of the SDK's ConversationManager.
+ * Adds InfiniteBuffer history, block registry, collapse state, width tracking,
+ * dirty flag, display methods, splash screen, error/event navigation, and
+ * Line[]-based rendering atop the SDK's message management.
  */
-export type TokenUsage = { inputTokens: number; outputTokens: number; cacheReadTokens?: number; cacheWriteTokens?: number };
 
-type AssistantMessage = { role: 'assistant'; content: string; toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage; model?: string; provider?: string };
+// Re-export SDK types for backward compatibility
+export type {
+  TokenUsage,
+  ConversationMessageSnapshot,
+  ConversationTitleSource,
+} from '@pellux/goodvibes-sdk/platform/core/conversation';
 
-export type ConversationMessageSnapshot =
-  | { role: 'user'; content: string | ContentPart[]; cancelled?: boolean }
-  | AssistantMessage
-  | { role: 'system'; content: string }
-  | { role: 'tool'; callId: string; content: string; toolName?: string };
+export type { SdkBlockMeta };
 
-type Message = ConversationMessageSnapshot;
-export type ConversationTitleSource = 'system' | 'user';
-
-/** Metadata for a rendered block (code, tool, or diff). */
-export interface BlockMeta {
+/** TUI extends the SDK BlockMeta with rendering position fields. */
+export interface BlockMeta extends SdkBlockMeta {
   /** Index of this block (increments per renderable block). */
   blockIndex: number;
-  /** Type of block content. */
-  type: 'tool' | 'code' | 'diff' | 'thinking';
   /** First rendered line index in the history buffer. */
   startLine: number;
   /** Number of rendered lines (when not collapsed). */
   lineCount: number;
-  /** Raw text content (code source, tool output, diff text). */
-  rawContent: string;
   /** Stable key for collapse state persistence across rebuilds (e.g. msg_N). */
   collapseKey: string;
-  /** File path for diff blocks. */
-  filePath?: string;
-  /** Parsed diff for apply: original/updated sections. */
-  diffOriginal?: string;
-  diffUpdated?: string;
 }
 
-export class ConversationManager {
+// Import internal types needed for rendering helpers
+import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core/conversation';
+type Message = ConversationMessageSnapshot;
+
+export class ConversationManager extends SdkConversationManager {
   public history = new InfiniteBuffer();
-  /** Auto-generated or manually set conversation title. */
-  private _title = '';
-  private _titleSource: ConversationTitleSource = 'system';
-  private messages: Message[] = [];
-  private getWidth: () => number;
+  private _getWidth: () => number;
   /** Tracks the rendered width; a change invalidates the full history. */
   private lastRenderedWidth = 0;
   /** When true the buffer needs to be rebuilt before the next display. */
@@ -86,11 +63,7 @@ export class ConversationManager {
   /** Index of the first message not yet appended to the buffer. */
   private appendedUpTo = 0;
   /** Optional config manager for display settings. */
-  private configManager: ConfigManager | null = null;
-  /** Session memory store wired by the runtime composition root. */
-  private sessionMemoryStore: Pick<SessionMemoryStore, 'list'> | null = null;
-  /** Session lineage tracker wired by the runtime composition root. */
-  private sessionLineageTracker: SessionLineageTracker = new SessionLineageTracker();
+  private _configManager: ConfigManager | null = null;
   /** Collapse state: stable key (msg_N) -> collapsed (true = collapsed). */
   private collapseState: Map<string, boolean> = new Map();
   /** Block registry: track rendered blocks for copy/apply. */
@@ -101,196 +74,96 @@ export class ConversationManager {
   private errorLineRegistry: number[] = [];
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
-  /** Undo stack: each entry is a turn (user msg + all subsequent non-user msgs until next user). */
-  private undoStack: Message[][] = [];
-  /** Branch storage: named snapshots of messages[]. */
-  private branches: Map<string, Message[]> = new Map();
-  /** Name of the currently active branch. */
-  private currentBranch: string = 'main';
+
+  public suppressSplash: boolean = false;
+  public splashOptions: SplashOptions = {};
 
   constructor(
     getWidth: () => number = () => process.stdout.columns || 80,
     configManager?: ConfigManager,
   ) {
-    this.getWidth = getWidth;
-    this.configManager = configManager ?? null;
+    super();
+    this._getWidth = getWidth;
+    this._configManager = configManager ?? null;
   }
 
   /** Wire in a config manager after construction (e.g. from main.ts). */
   public setConfigManager(cm: ConfigManager): void {
-    this.configManager = cm;
-  }
-
-  /** Wire in the session memory store used for compaction summaries. */
-  public setSessionMemoryStore(store: Pick<SessionMemoryStore, 'list'>): void {
-    this.sessionMemoryStore = store;
-  }
-
-  /** Wire in the session lineage tracker used for compaction output. */
-  public setSessionLineageTracker(tracker: SessionLineageTracker): void {
-    this.sessionLineageTracker = tracker;
-  }
-
-  /** Read the session memory store used for compaction summaries. */
-  public getSessionMemoryStore(): Pick<SessionMemoryStore, 'list'> | null {
-    return this.sessionMemoryStore;
-  }
-
-  /** Read the session lineage tracker used for compaction output. */
-  public getSessionLineageTracker(): SessionLineageTracker {
-    return this.sessionLineageTracker;
+    this._configManager = cm;
   }
 
   /** Update the width provider so shell layout can own transcript width. */
   public setWidthProvider(getWidth: () => number): void {
-    this.getWidth = getWidth;
+    this._getWidth = getWidth;
     this.markDirty();
   }
 
-  /** Returns messages formatted for LLM provider consumption. */
-  public getMessagesForLLM(): ProviderMessage[] {
-    const result: ProviderMessage[] = [];
-    for (const m of this.messages) {
-      if (m.role === 'system') continue; // System messages go via systemPrompt param
-      if (m.role === 'user') {
-        result.push({ role: 'user', content: m.content as string | ContentPart[] });
-      } else if (m.role === 'assistant') {
-        result.push({ role: 'assistant', content: m.content, toolCalls: m.toolCalls });
-      } else if (m.role === 'tool') {
-        result.push({ role: 'tool', callId: m.callId, content: m.content, ...(m.toolName ? { name: m.toolName } : {}) });
-      }
-    }
+  // -------------------------------------------------------------------------
+  // Overrides: add markDirty() to message mutations
+  // -------------------------------------------------------------------------
+
+  public override addUserMessage(content: string | ContentPart[]): void {
+    super.addUserMessage(content);
+    this.markDirty();
+  }
+
+  public override addAssistantMessage(
+    content: string,
+    opts?: {
+      toolCalls?: ToolCall[];
+      reasoningContent?: string;
+      reasoningSummary?: string;
+      usage?: import('@pellux/goodvibes-sdk/platform/core/conversation').TokenUsage;
+      model?: string;
+      provider?: string;
+    },
+  ): void {
+    super.addAssistantMessage(content, opts);
+    this.markDirty();
+  }
+
+  public override addToolResults(results: ToolResult[]): void {
+    super.addToolResults(results);
+    this.markDirty();
+  }
+
+  public override addSystemMessage(content: string): void {
+    super.addSystemMessage(content);
+    this.markDirty();
+  }
+
+  public override undo(): boolean {
+    const result = super.undo();
+    if (result) this.markDirty();
     return result;
   }
 
-  private findToolName(callId: string): string | undefined {
-    for (let i = this.messages.length - 1; i >= 0; i--) {
-      const message = this.messages[i];
-      if (message.role !== 'assistant' || !message.toolCalls?.length) continue;
-      const match = message.toolCalls.find((call) => call.id === callId);
-      if (match?.name) return match.name;
-    }
-    return undefined;
+  public override redo(): boolean {
+    const result = super.redo();
+    if (result) this.markDirty();
+    return result;
   }
 
-  public addUserMessage(content: string | ContentPart[]): void {
-    // Auto-generate title from first user message if not already set
-    if (this._title === '' && typeof content === 'string' && content.trim().length > 0) {
-      this.setSystemTitle(deriveConversationTitle(content));
-    }
-    this.messages.push({ role: 'user', content });
-    // Clear undo stack when new user input is added (can't redo past new input)
-    this.undoStack = [];
+  public override removeMessagesAfter(count: number): void {
+    super.removeMessagesAfter(count);
     this.markDirty();
   }
 
-  /** Add an assistant message, optionally with tool calls (when the LLM invoked tools). */
-  public addAssistantMessage(content: string, opts?: { toolCalls?: ToolCall[]; reasoningContent?: string; reasoningSummary?: string; usage?: TokenUsage; model?: string; provider?: string }): void {
-    this.messages.push({ role: 'assistant', content, toolCalls: opts?.toolCalls, reasoningContent: opts?.reasoningContent, reasoningSummary: opts?.reasoningSummary, usage: opts?.usage, model: opts?.model, provider: opts?.provider });
+  public override markLastUserMessageCancelled(): void {
+    super.markLastUserMessageCancelled();
     this.markDirty();
   }
 
-  /** Add a batch of tool results after tool calls have been executed. */
-  public addToolResults(results: ToolResult[]): void {
-    for (const r of results) {
-      const content = r.success
-        ? (r.output ?? 'Tool completed successfully.')
-        : `Error: ${r.error ?? 'Unknown error'}`;
-      const toolName = this.findToolName(r.callId);
-      this.messages.push({
-        role: 'tool',
-        callId: r.callId,
-        content,
-        ...(toolName ? { toolName } : {}),
-      });
-    }
-    this.markDirty();
-  }
-
-  /**
-   * undo - Remove the last complete turn (the last user message and all subsequent
-   * non-user messages). Pushes the removed messages onto the undo stack.
-   * Returns true if a turn was removed, false if there was nothing to undo.
-   */
-  public undo(): boolean {
-    // Find the index of the last user message
-    let lastUserIdx = -1;
-    for (let i = this.messages.length - 1; i >= 0; i--) {
-      if (this.messages[i].role === 'user') {
-        lastUserIdx = i;
-        break;
-      }
-    }
-    if (lastUserIdx === -1) return false;
-
-    // Collect the turn: user message + everything that follows (assistant, tool)
-    const turn = this.messages.splice(lastUserIdx);
-    this.undoStack.push(turn);
-    this.markDirty();
-    return true;
-  }
-
-  /**
-   * redo - Restore the most recently undone turn.
-   * Returns true if a turn was restored, false if the undo stack is empty.
-   */
-  public redo(): boolean {
-    if (this.undoStack.length === 0) return false;
-    const turn = this.undoStack.pop()!;
-    this.messages.push(...turn);
-    this.markDirty();
-    return true;
-  }
-
-  /**
-   * getLastUserMessage - Returns the content of the last user message, or null
-   * if there are no user messages or the content is not a plain string.
-   */
-  public getLastUserMessage(): string | null {
-    for (let i = this.messages.length - 1; i >= 0; i--) {
-      if (this.messages[i].role === 'user') {
-        const content = this.messages[i].content;
-        return typeof content === 'string' ? content : null;
-      }
-    }
-    return null;
-  }
-
-  /** Returns the current number of messages (for rollback tracking). */
-  public getMessageCount(): number {
-    return this.messages.length;
-  }
-
-  /** Remove all messages after the given index (for cancellation rollback). */
-  public removeMessagesAfter(count: number): void {
-    if (count < this.messages.length) {
-      this.messages.length = count;
-      this.markDirty();
-    }
-  }
-
-  /** Mark the last user message as cancelled (red + strikethrough in display). */
-  public markLastUserMessageCancelled(): void {
-    for (let i = this.messages.length - 1; i >= 0; i--) {
-      if (this.messages[i].role === 'user') {
-        (this.messages[i] as { cancelled?: boolean }).cancelled = true;
-        this.markDirty();
-        return;
-      }
-    }
-  }
-
-  public addSystemMessage(content: string): void {
-    this.messages.push({ role: 'system', content });
-    this.markDirty();
-  }
+  // -------------------------------------------------------------------------
+  // Streaming overrides: add rendering tracking
+  // -------------------------------------------------------------------------
 
   /**
    * startStreamingBlock - Add a placeholder assistant message for incremental display.
    * Called when streaming begins.
    */
-  public startStreamingBlock(): void {
-    this.messages.push({ role: 'assistant', content: '' });
+  public override startStreamingBlock(): void {
+    super.startStreamingBlock();
     this.markDirty();
     // Record the line where the streaming block starts so updates can be incremental
     this.flushHistory();
@@ -302,19 +175,14 @@ export class ConversationManager {
    * Called per-delta during streaming. Does NOT trigger a full rebuild — instead it
    * directly updates the history buffer from streamingStartLine onward.
    */
-  public updateStreamingBlock(content: string): void {
-    for (let i = this.messages.length - 1; i >= 0; i--) {
-      if (this.messages[i].role === 'assistant') {
-        (this.messages[i] as { role: 'assistant'; content: string }).content = content;
-        // Incrementally update the history buffer instead of full rebuild
-        if (this.streamingStartLine >= 0) {
-          const width = this.getWidth();
-          this.history.truncateToLine(this.streamingStartLine);
-          const rendered = renderMarkdown(content, width);
-          this.history.addLines(rendered);
-        }
-        return;
-      }
+  public override updateStreamingBlock(content: string): void {
+    super.updateStreamingBlock(content);
+    // Incrementally update the history buffer instead of full rebuild
+    if (this.streamingStartLine >= 0) {
+      const width = this._getWidth();
+      this.history.truncateToLine(this.streamingStartLine);
+      const rendered = renderMarkdown(content, width);
+      this.history.addLines(rendered);
     }
   }
 
@@ -322,16 +190,89 @@ export class ConversationManager {
    * finalizeStreamingBlock - Remove the streaming placeholder.
    * The orchestrator calls addAssistantMessage immediately after with the final content.
    */
-  public finalizeStreamingBlock(): void {
-    for (let i = this.messages.length - 1; i >= 0; i--) {
-      if (this.messages[i].role === 'assistant') {
-        this.messages.splice(i, 1);
-        break;
-      }
-    }
+  public override finalizeStreamingBlock(): void {
+    super.finalizeStreamingBlock();
     this.streamingStartLine = -1;
     this.markDirty();
   }
+
+  // -------------------------------------------------------------------------
+  // Overrides: reset / replace / branch operations that also affect display
+  // -------------------------------------------------------------------------
+
+  /**
+   * resetAll - Clear both the display buffer and all conversation messages.
+   * This is a full reset; the LLM context is wiped.
+   */
+  public override resetAll(): void {
+    super.resetAll();
+    this.history.clear();
+    this.appendedUpTo = 0;
+    this.lastRenderedWidth = 0;
+    this.dirty = true;
+    this.collapseState.clear();
+    this.blockRegistry = [];
+    this.messageLineRegistry = [];
+    this.errorLineRegistry = [];
+    this.streamingStartLine = -1;
+  }
+
+  /**
+   * replaceMessagesForLLM - Replace the conversation's LLM-visible messages with a new set.
+   * Used by small-window compaction to swap in truncated messages without an LLM call.
+   * System messages are always preserved at the front.
+   *
+   * @param newMessages - Replacement ProviderMessage array (user/assistant/tool roles only)
+   */
+  public override replaceMessagesForLLM(newMessages: ProviderMessage[]): void {
+    super.replaceMessagesForLLM(newMessages);
+    this.history.clear();
+    this.appendedUpTo = 0;
+    this.lastRenderedWidth = 0;
+    this.dirty = true;
+  }
+
+  /**
+   * switchBranch - Replace the active messages with the stored branch snapshot.
+   * Returns true on success, false if the branch does not exist.
+   */
+  public override switchBranch(name: string): boolean {
+    const result = super.switchBranch(name);
+    if (result) this.markDirty();
+    return result;
+  }
+
+  /**
+   * mergeBranch - Append all messages from the named branch that come after
+   * the fork point.
+   * Returns true on success, false if the branch does not exist.
+   */
+  public override mergeBranch(name: string): boolean {
+    const result = super.mergeBranch(name);
+    if (result) this.markDirty();
+    return result;
+  }
+
+  /**
+   * fromJSON - Restore conversation from persisted data.
+   */
+  public override fromJSON(data: {
+    messages: Message[];
+    branches?: Record<string, Message[]>;
+    currentBranch?: string;
+    title?: string;
+    titleSource?: import('@pellux/goodvibes-sdk/platform/core/conversation').ConversationTitleSource;
+  }): void {
+    super.fromJSON(data);
+    this.history.clear();
+    this.appendedUpTo = 0;
+    this.lastRenderedWidth = 0;
+    this.dirty = true;
+  }
+
+  // -------------------------------------------------------------------------
+  // TUI-only display methods
+  // -------------------------------------------------------------------------
 
   public getDisplayBlocks(): Line[] {
     this.flushHistory();
@@ -348,14 +289,15 @@ export class ConversationManager {
     this.blockRegistry = [];
     this.messageLineRegistry = [];
     this.errorLineRegistry = [];
-    const width = this.getWidth();
+    const width = this._getWidth();
     this.lastRenderedWidth = width;
     this.dirty = false;
 
     // Tool messages ARE rendered (as collapsed blocks); this filter is only
     // for determining whether to show the splash screen (tool-only messages
     // don't count as visible conversation content for splash purposes).
-    const displayMessages = this.messages.filter(
+    const snapshot = this.getMessageSnapshot();
+    const displayMessages = snapshot.filter(
       (m) => m.role !== 'tool' && m.role !== 'system',
     );
 
@@ -364,8 +306,8 @@ export class ConversationManager {
       return;
     }
 
-    this.appendMessages(this.messages, width);
-    this.appendedUpTo = this.messages.length;
+    this.appendMessages(snapshot, width);
+    this.appendedUpTo = snapshot.length;
   }
 
   /**
@@ -373,7 +315,7 @@ export class ConversationManager {
    * Falls back to a full rebuild when the terminal width has changed.
    */
   public flushHistory(): void {
-    const currentWidth = this.getWidth();
+    const currentWidth = this._getWidth();
     if (!this.dirty && currentWidth === this.lastRenderedWidth) return;
     this.rebuildHistory();
   }
@@ -388,7 +330,7 @@ export class ConversationManager {
       blockRegistry: this.blockRegistry,
       collapseState: this.collapseState,
       errorLineRegistry: this.errorLineRegistry,
-      configManager: this.configManager,
+      configManager: this._configManager,
       splashOptions: this.splashOptions,
     };
   }
@@ -547,28 +489,6 @@ export class ConversationManager {
     return before ?? lines[lines.length - 1]!;
   }
 
-  public suppressSplash: boolean = false;
-  public splashOptions: SplashOptions = {};
-
-  public get title(): string {
-    return this._title;
-  }
-
-  public set title(value: string) {
-    this._title = String(value ?? '');
-    this._titleSource = this._title.trim().length > 0 ? 'user' : 'system';
-  }
-
-  public getTitleSource(): ConversationTitleSource {
-    return this._titleSource;
-  }
-
-  public setSystemTitle(value: string): void {
-    if (this._titleSource === 'user') return;
-    this._title = String(value ?? '');
-    this._titleSource = 'system';
-  }
-
   public setSplashSuppressed(suppressed: boolean): void {
     if (this.suppressSplash === suppressed) return;
     this.suppressSplash = suppressed;
@@ -584,7 +504,7 @@ export class ConversationManager {
   }
 
   public log(text: string, style: Partial<Cell> = {}, indent = '      '): void {
-    logConversationText(this.renderingContext(), this.getWidth(), text, style, indent);
+    logConversationText(this.renderingContext(), this._getWidth(), text, style, indent);
   }
 
   /**
@@ -596,180 +516,13 @@ export class ConversationManager {
     this.appendedUpTo = 0;
     this.dirty = true;
     // Re-render from existing messages to rebuild buffer
-    const width = this.getWidth();
+    const width = this._getWidth();
     this.lastRenderedWidth = width;
     this.dirty = false;
-    this.appendMessages(this.messages, width);
-    this.appendedUpTo = this.messages.length;
-  }
-
-  /**
-   * resetAll - Clear both the display buffer and all conversation messages.
-   * This is a full reset; the LLM context is wiped.
-   */
-  public resetAll(): void {
-    this.messages = [];
-    this._title = '';
-    this._titleSource = 'system';
-    this.undoStack = [];
-    this.branches.clear();
-    this.currentBranch = 'main';
-    this.history.clear();
-    this.appendedUpTo = 0;
-    this.lastRenderedWidth = 0;
-    this.dirty = true;
-    this.collapseState.clear();
-    this.blockRegistry = [];
-    this.streamingStartLine = -1;
-  }
-
-  public getMessageSnapshot(): ConversationMessageSnapshot[] {
-    return cloneMessages(this.messages);
-  }
-
-  public getTranscriptEventIndex() {
-    return buildTranscriptEventIndex(this.getMessageSnapshot());
-  }
-
-  /**
-   * replaceMessagesForLLM - Replace the conversation's LLM-visible messages with a new set.
-   * Used by small-window compaction to swap in truncated messages without an LLM call.
-   * System messages are always preserved at the front.
-   *
-   * @param newMessages - Replacement ProviderMessage array (user/assistant/tool roles only)
-   */
-  public replaceMessagesForLLM(newMessages: ProviderMessage[]): void {
-    const originalSystemMessages = this.messages.filter(m => m.role === 'system');
-    const convertedMessages = messagesToInternal(newMessages);
-    this.messages = [...originalSystemMessages, ...convertedMessages];
-    this.history.clear();
-    this.appendedUpTo = 0;
-    this.lastRenderedWidth = 0;
-    this.dirty = true;
-  }
-
-  /**
-   * compact - Reduce conversation state to a structured handoff payload.
-   *
-   * @param registry - Provider registry
-   * @param modelId - Model to use for summarization
-   * @param trigger - 'manual' (from /compact command) or 'auto' (from threshold check)
-   * @param provider - Provider name for model disambiguation
-   * @param context - Structured compaction context
-  */
-  public async compact(
-    registry: import('@pellux/goodvibes-sdk/platform/providers/registry').ProviderRegistry,
-    modelId: string,
-    trigger: 'auto' | 'manual' = 'manual',
-    provider?: string,
-    context?: import('@pellux/goodvibes-sdk/platform/core/context-compaction').CompactionContext,
-  ): Promise<void> {
-    return compactConversation(this, registry, modelId, trigger, provider, context);
-  }
-
-  /**
-   * forkBranch - Save a deep-copy of the current messages under a named branch.
-   * If no name is provided a timestamp-based name is used.
-   * Returns the name used.
-   */
-  public forkBranch(name?: string, force = false): string {
-    const branchName = name?.trim() || `branch-${Date.now()}`;
-    if (!force && this.branches.has(branchName)) {
-      logger.warn(`forkBranch: branch '${branchName}' already exists; use force=true to overwrite`);
-    }
-    this.branches.set(branchName, cloneMessages(this.messages));
-    return branchName;
-  }
-
-  /**
-   * listBranches - Return the names and message counts of all saved branches.
-   */
-  public listBranches(): Array<{ name: string; messageCount: number; isCurrent: boolean }> {
-    const result: Array<{ name: string; messageCount: number; isCurrent: boolean }> = [];
-    // Always include current branch even if it hasn't been stored in the map yet
-    const currentInMap = this.branches.has(this.currentBranch);
-    if (!currentInMap) {
-      result.push({ name: this.currentBranch, messageCount: this.messages.length, isCurrent: true });
-    }
-    for (const [name, msgs] of this.branches) {
-      result.push({ name, messageCount: msgs.length, isCurrent: name === this.currentBranch });
-    }
-    return result;
-  }
-
-  /**
-   * switchBranch - Replace the active messages with the stored branch snapshot.
-   * Returns true on success, false if the branch does not exist.
-   */
-  public switchBranch(name: string): boolean {
-    const stored = this.branches.get(name);
-    if (!stored) return false;
-    // Save current branch state before switching to prevent data loss
-    this.branches.set(this.currentBranch, cloneMessages(this.messages));
-    this.messages = cloneMessages(stored);
-    this.currentBranch = name;
-    this.undoStack = [];
-    this.markDirty();
-    return true;
-  }
-
-  /**
-   * mergeBranch - Append all messages from the named branch that come after
-   * the fork point (messages not already present in the current conversation).
-   * Simple strategy: append all branch messages after current messages.
-   * Returns true on success, false if the branch does not exist.
-   */
-  public mergeBranch(name: string): boolean {
-    const stored = this.branches.get(name);
-    if (!stored) return false;
-    // Use length-based fork point detection: the branch was cloned from a known
-    // snapshot so we use the shorter of the two lengths as the common prefix,
-    // then append any messages the branch has beyond that point.
-    const commonLen = Math.min(this.messages.length, stored.length);
-    const toAppend = stored.slice(commonLen);
-    if (toAppend.length === 0) return true;
-    this.messages.push(...cloneMessages(toAppend));
-    this.undoStack = [];
-    this.markDirty();
-    return true;
-  }
-
-  /** Returns the name of the currently active branch. */
-  public getCurrentBranch(): string {
-    return this.currentBranch;
-  }
-
-  /**
-   * toJSON - Serialize conversation for persistence.
-   */
-  public toJSON(): object {
-    // Serialize branches map as a plain object for persistence
-    const branchesObj = cloneBranchMap(this.branches);
-    return {
-      messages: cloneMessages(this.messages),
-      timestamp: Date.now(),
-      title: this._title,
-      titleSource: this._titleSource,
-      branches: branchesObj,
-      currentBranch: this.currentBranch,
-    };
-  }
-
-  /**
-   * fromJSON - Restore conversation from persisted data.
-   */
-  public fromJSON(data: { messages: Message[]; branches?: Record<string, Message[]>; currentBranch?: string; title?: string; titleSource?: ConversationTitleSource }): void {
-    this.messages = data.messages ?? [];
-    this._title = typeof data.title === 'string' ? data.title : '';
-    this._titleSource = data.titleSource === 'user' || data.titleSource === 'system'
-      ? data.titleSource
-      : (this._title ? 'user' : 'system');
-    this.branches = restoreBranchMap(data.branches);
-    this.currentBranch = data.currentBranch ?? 'main';
-    this.history.clear();
-    this.appendedUpTo = 0;
-    this.lastRenderedWidth = 0;
-    this.dirty = true;
+    const snapshot = this.getMessageSnapshot();
+    this.appendMessages(snapshot, width);
+    this.appendedUpTo = snapshot.length;
   }
 }
+
 export { parseDiffForApply, applyDiffContent } from '@pellux/goodvibes-sdk/platform/core/conversation-diff';

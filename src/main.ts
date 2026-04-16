@@ -4,7 +4,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Compositor } from './renderer/compositor.ts';
-import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator';
 import { InputHandler } from './input/handler.ts';

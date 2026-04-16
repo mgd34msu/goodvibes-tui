@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { getSplashLines } from '@pellux/goodvibes-sdk/platform/utils/splash-lines';
-import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { getSplashLines } from '../../utils/splash-lines.ts';
+import { getDisplayWidth } from '../../utils/terminal-width.ts';
 
 describe('splash lines', () => {
   test('keeps the full-size splash instead of switching to a compact fallback', () => {

@@ -2,8 +2,8 @@
 // DiffPanel — unified diff view of agent file changes
 // ---------------------------------------------------------------------------
 
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
+import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import {
   buildBodyText,

@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import { PanelListPanel } from '../../panels/panel-list-panel.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import type { Panel, PanelRegistration } from '../../panels/types.ts';

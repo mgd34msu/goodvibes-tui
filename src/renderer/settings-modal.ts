@@ -10,11 +10,11 @@
  *   - Footer hints: [Tab] Category  [↑↓] Navigate  [Enter] Edit/Toggle  [Esc] Close
  */
 
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { SettingsModal, SettingEntry, FlagEntry, McpEntry, SubscriptionEntry } from '../input/settings-modal.ts';
 import { SETTINGS_CATEGORIES } from '../input/settings-modal.ts';
-import { fitDisplay, truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { getVisibleWindow } from './surface-layout.ts';
 

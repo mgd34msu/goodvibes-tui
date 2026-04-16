@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { fitDisplay, getDisplayWidth, padDisplayEnd, truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { fitDisplay, getDisplayWidth, padDisplayEnd, truncateDisplay } from '../../utils/terminal-width.ts';
 
 describe('terminal width helpers', () => {
   test('truncateDisplay respects wide characters', () => {

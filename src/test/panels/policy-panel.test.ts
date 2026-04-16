@@ -5,7 +5,7 @@ import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/per
 import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import { PolicyPanel } from '../../panels/policy-panel.ts';
 import type { PolicyRule } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions/analysis';
 
 function linesText(lines: Line[]): string {

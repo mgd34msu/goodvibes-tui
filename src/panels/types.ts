@@ -1,5 +1,5 @@
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import type { PanelResourceContract, PanelHealthState } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-contracts';
+import type { Line } from '../types/grid.ts';
+import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
 
 export type PanelCategory = 'development' | 'agent' | 'monitoring' | 'session' | 'ai';
 
@@ -23,10 +23,10 @@ export interface Panel {
   needsRender: boolean;
 
   // Resource contract (optional — panels may declare resource requirements)
-  resourceContract?: Readonly<PanelResourceContract>;
+  resourceContract?: Readonly<ComponentResourceContract>;
 
-  // Health state (optional — set by PanelHealthMonitor when panel is registered)
-  healthState?: Readonly<PanelHealthState>;
+  // Health state (optional — set by ComponentHealthMonitor when panel is registered)
+  healthState?: Readonly<ComponentHealthState>;
 
   // Input (optional)
   handleInput?(key: string): boolean;

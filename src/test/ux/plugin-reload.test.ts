@@ -224,8 +224,8 @@ describe('ux:plugin-reload — plugin reload while panels subscribed', () => {
   describe('panel subscriptions survive plugin reload', () => {
     test('open panels remain open through plugin reload cycle', () => {
       const plugins = [makePlugin('my-plugin')];
-      const openPanels = makeOpenPanelsState(state.panels);
-      const withBoth: RuntimeState = { ...state, panels: openPanels, plugins: makePluginState(plugins) };
+      const openPanels = makeOpenPanelsState(selectPanels(state));
+      const withBoth: RuntimeState = { ...state, panels: openPanels as unknown as Record<string, unknown>, plugins: makePluginState(plugins) };
 
       const { unloading, loading, reloaded } = applyPluginReload(withBoth, 'my-plugin');
 
@@ -238,8 +238,8 @@ describe('ux:plugin-reload — plugin reload while panels subscribed', () => {
 
     test('focused panel does not change during plugin reload', () => {
       const plugins = [makePlugin('my-plugin')];
-      const openPanels = makeOpenPanelsState(state.panels);
-      const withBoth: RuntimeState = { ...state, panels: openPanels, plugins: makePluginState(plugins) };
+      const openPanels = makeOpenPanelsState(selectPanels(state));
+      const withBoth: RuntimeState = { ...state, panels: openPanels as unknown as Record<string, unknown>, plugins: makePluginState(plugins) };
 
       const { unloading, loading, reloaded } = applyPluginReload(withBoth, 'my-plugin');
 
@@ -250,8 +250,8 @@ describe('ux:plugin-reload — plugin reload while panels subscribed', () => {
 
     test('active panels count is unchanged by plugin reload', () => {
       const plugins = [makePlugin('my-plugin')];
-      const openPanels = makeOpenPanelsState(state.panels);
-      const withBoth: RuntimeState = { ...state, panels: openPanels, plugins: makePluginState(plugins) };
+      const openPanels = makeOpenPanelsState(selectPanels(state));
+      const withBoth: RuntimeState = { ...state, panels: openPanels as unknown as Record<string, unknown>, plugins: makePluginState(plugins) };
       const initialActiveCount = selectActivePanels(withBoth).length;
 
       const { reloaded } = applyPluginReload(withBoth, 'my-plugin');

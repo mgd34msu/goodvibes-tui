@@ -11,10 +11,10 @@
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 import {
-  PanelHealthMonitor,
-} from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-health-monitor';
-import { buildContract } from '@pellux/goodvibes-sdk/platform/runtime/perf/panel-contracts';
-import { PanelResourcesPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/panel-resources';
+  ComponentHealthMonitor,
+} from '../../../runtime/perf/panel-health-monitor.ts';
+import { buildContract } from '../../../runtime/perf/panel-contracts.ts';
+import { PanelResourcesPanel } from '../../../runtime/diagnostics/panels/panel-resources.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,7 +33,7 @@ function tightContract(panelId: string) {
 
 /** Advance a fake clock and simulate N render requests. Returns permit count. */
 function simulateRequests(
-  monitor: PanelHealthMonitor,
+  monitor: ComponentHealthMonitor,
   panelId: string,
   count: number,
   startMs: number,
@@ -56,11 +56,11 @@ function simulateRequests(
 // Core contract enforcement
 // ---------------------------------------------------------------------------
 
-describe('PanelHealthMonitor: contract enforcement', () => {
-  let monitor: PanelHealthMonitor;
+describe('ComponentHealthMonitor: contract enforcement', () => {
+  let monitor: ComponentHealthMonitor;
 
   beforeEach(() => {
-    monitor = new PanelHealthMonitor();
+    monitor = new ComponentHealthMonitor();
   });
 
   test('unregistered panel is always permitted', () => {
@@ -119,11 +119,11 @@ describe('PanelHealthMonitor: contract enforcement', () => {
 // Render cost budget
 // ---------------------------------------------------------------------------
 
-describe('PanelHealthMonitor: render cost enforcement', () => {
-  let monitor: PanelHealthMonitor;
+describe('ComponentHealthMonitor: render cost enforcement', () => {
+  let monitor: ComponentHealthMonitor;
 
   beforeEach(() => {
-    monitor = new PanelHealthMonitor();
+    monitor = new ComponentHealthMonitor();
   });
 
   test('cheap renders do not degrade panel', () => {
@@ -176,9 +176,9 @@ describe('PanelHealthMonitor: render cost enforcement', () => {
 // Render storm containment
 // ---------------------------------------------------------------------------
 
-describe('PanelHealthMonitor: render storm containment', () => {
+describe('ComponentHealthMonitor: render storm containment', () => {
   test('100 rapid requests from one panel are contained without cascading', () => {
-    const monitor = new PanelHealthMonitor();
+    const monitor = new ComponentHealthMonitor();
     // Register multiple panels — only the storming panel should be affected
     monitor.register('storm-panel', 'monitoring', {
       maxUpdatesPerSecond: 2,
@@ -212,7 +212,7 @@ describe('PanelHealthMonitor: render storm containment', () => {
   });
 
   test('degraded panel respects degradedIntervalMs floor', () => {
-    const monitor = new PanelHealthMonitor();
+    const monitor = new ComponentHealthMonitor();
     monitor.register('degraded-panel', 'monitoring', {
       maxUpdatesPerSecond: 1,
       throttleIntervalMs: 50,
@@ -241,7 +241,7 @@ describe('PanelHealthMonitor: render storm containment', () => {
   });
 
   test('multiple storming panels do not block each other', () => {
-    const monitor = new PanelHealthMonitor();
+    const monitor = new ComponentHealthMonitor();
     for (let p = 0; p < 5; p++) {
       monitor.register(`storm-${p}`, 'monitoring', {
         maxUpdatesPerSecond: 1,
@@ -271,7 +271,7 @@ describe('PanelHealthMonitor: render storm containment', () => {
   });
 
   test('resetHealth clears throttle state', () => {
-    const monitor = new PanelHealthMonitor();
+    const monitor = new ComponentHealthMonitor();
     monitor.register('reset-test', 'monitoring', {
       maxUpdatesPerSecond: 1,
       throttleIntervalMs: 200,
@@ -299,7 +299,7 @@ describe('PanelHealthMonitor: render storm containment', () => {
 
 describe('PanelResourcesPanel: diagnostics snapshot', () => {
   test('empty snapshot when no panels are registered', () => {
-    const monitor = new PanelHealthMonitor();
+    const monitor = new ComponentHealthMonitor();
     const panel = new PanelResourcesPanel(monitor);
     const snap = panel.getSnapshot();
     expect(snap.panels).toHaveLength(0);
@@ -311,7 +311,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
   });
 
   test('refresh builds snapshot from shared monitor state', () => {
-    const monitor = new PanelHealthMonitor();
+    const monitor = new ComponentHealthMonitor();
     monitor.register('diag-panel-1', 'development');
     monitor.register('diag-panel-2', 'monitoring');
 
@@ -323,13 +323,13 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
     const snap = provider.refresh(2000);
 
     expect(snap.panels).toHaveLength(2);
-    expect(snap.panels.some((p) => p.panelId === 'diag-panel-1')).toBe(true);
+    expect(snap.panels.some((p) => p.componentId === 'diag-panel-1')).toBe(true);
     expect(snap.capturedAt).toBe(2000);
     provider.dispose();
   });
 
   test('overloaded panels sort before healthy in snapshot', () => {
-    const monitor = new PanelHealthMonitor();
+    const monitor = new ComponentHealthMonitor();
 
     // Heavy panel — will be overloaded
     monitor.register('heavy-diag', 'monitoring', {
@@ -350,8 +350,8 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
     const snap = provider.refresh(700);
 
     expect(snap.panels.length).toBeGreaterThanOrEqual(1);
-    const heavyIdx = snap.panels.findIndex((p) => p.panelId === 'heavy-diag');
-    const calmIdx = snap.panels.findIndex((p) => p.panelId === 'calm-diag');
+    const heavyIdx = snap.panels.findIndex((p) => p.componentId === 'heavy-diag');
+    const calmIdx = snap.panels.findIndex((p) => p.componentId === 'calm-diag');
     if (heavyIdx !== -1 && calmIdx !== -1) {
       expect(heavyIdx).toBeLessThan(calmIdx);
     }
@@ -359,7 +359,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
   });
 
   test('totalSuppressed aggregates across all panels', () => {
-    const monitor = new PanelHealthMonitor();
+    const monitor = new ComponentHealthMonitor();
 
     monitor.register('a', 'monitoring', { maxUpdatesPerSecond: 1, throttleIntervalMs: 100, degradeAfterViolations: 10 });
     monitor.register('b', 'monitoring', { maxUpdatesPerSecond: 1, throttleIntervalMs: 100, degradeAfterViolations: 10 });
@@ -372,8 +372,8 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
     const provider = new PanelResourcesPanel(monitor);
     const snap = provider.refresh(1300);
 
-    const aEntry = snap.panels.find((p) => p.panelId === 'a');
-    const bEntry = snap.panels.find((p) => p.panelId === 'b');
+    const aEntry = snap.panels.find((p) => p.componentId === 'a');
+    const bEntry = snap.panels.find((p) => p.componentId === 'b');
     const indivSum = (aEntry?.totalSuppressed ?? 0) + (bEntry?.totalSuppressed ?? 0);
     expect(snap.totalSuppressed).toBe(indivSum);
     provider.dispose();
@@ -387,7 +387,7 @@ describe('PanelResourcesPanel: diagnostics snapshot', () => {
 describe('buildContract', () => {
   test('inherits category defaults', () => {
     const c = buildContract('p', 'monitoring');
-    expect(c.panelId).toBe('p');
+    expect(c.componentId).toBe('p');
     expect(c.maxUpdatesPerSecond).toBe(2); // monitoring default
   });
 

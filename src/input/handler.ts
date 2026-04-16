@@ -1,6 +1,6 @@
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import { SelectionManager } from './selection.ts';
-import type { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
+import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
 import { FilePickerModal } from './file-picker.ts';

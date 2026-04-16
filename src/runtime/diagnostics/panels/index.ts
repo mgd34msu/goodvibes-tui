@@ -19,6 +19,6 @@ export { TransportPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnosti
 export type { TransportPanelSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/transport';
 export { OpsPanel } from './ops.ts';
 export type { OpsAuditEntry } from './ops.ts';
-export { PanelResourcesPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/panel-resources';
+export { PanelResourcesPanel } from './panel-resources.ts';
 export { SecurityPanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/security';
 export type { SecurityPanelSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/security';

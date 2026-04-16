@@ -3,7 +3,7 @@ import { SecurityPanel } from '../../panels/security-panel.ts';
 import {
   ApiTokenAuditor,
 } from '@pellux/goodvibes-sdk/platform/security/token-audit';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../../types/grid.ts';
 import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';

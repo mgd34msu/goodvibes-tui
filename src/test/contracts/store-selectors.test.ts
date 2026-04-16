@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
+import type { PanelDomainState } from '../../runtime/store/domains/panels.ts';
 import {
   // Primary domain selectors
   selectSession,
@@ -66,7 +67,8 @@ describe('store-selectors contract', () => {
 
     test('selectPanels returns panels domain', () => {
       const panels = selectPanels(state);
-      expect(panels).toBe(state.panels);
+      // panels selector returns Record<string, unknown> (SDK generic); runtime value is PanelDomainState
+      expect(panels === (state.panels as unknown)).toBe(true);
     });
 
     test('selectPermissions returns permissions domain', () => {
@@ -137,7 +139,7 @@ describe('store-selectors contract', () => {
 
     test('selectUiPerf returns UI perf domain', () => {
       const uiPerf = selectUiPerf(state);
-      expect(uiPerf).toBe(state.uiPerf);
+      expect(uiPerf).toBe(state.surfacePerf);
     });
   });
 

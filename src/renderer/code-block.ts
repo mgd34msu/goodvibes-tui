@@ -1,6 +1,6 @@
-import { type Line, type Cell, createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line, type Cell, createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { SyntaxHighlighter, type SyntaxToken as HLToken } from './syntax-highlighter.ts';
 

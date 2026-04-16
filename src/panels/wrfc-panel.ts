@@ -1,9 +1,9 @@
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
 import type { WrfcChain, WrfcState, QualityGateResult } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
 import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
 import { BasePanel } from './base-panel.ts';
 import type { WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildPanelLine,
   buildPanelWorkspace,
@@ -14,7 +14,7 @@ import {
   buildStyledPanelLine,
   buildEmptyState,
 } from './polish.ts';
-import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // ---------------------------------------------------------------------------
 // Colour palette

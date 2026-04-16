@@ -32,43 +32,19 @@ import { getConfigSnapshot } from '../config/index.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { ConversationManager } from './conversation';
 import type { SystemMessagesPanel, SystemMessagePriority } from '../panels/system-messages-panel.ts';
+import {
+  classifySystemMessageKind,
+  classifySystemMessagePriority,
+  defaultSystemMessageTarget,
+  resolveSystemMessageDelivery,
+  type SystemMessageKind,
+  type SystemMessageTarget,
+} from '@pellux/goodvibes-sdk/platform/runtime/system-message-policy';
 
-// ---------------------------------------------------------------------------
-// Priority classification patterns
-// ---------------------------------------------------------------------------
-
-/**
- * Patterns that identify HIGH-priority messages:
- * fatal errors, model/provider switches, session save/load, compaction.
- */
-const HIGH_PRIORITY_RE =
-  /\bfatal\b|\bcrash\w*|\bunhandled exception\b|\[Model\]|\[Provider\].*switch|\[Session\].*(?:saved|loaded|restored)|\[Compaction\]|\[Recovery\].*Failed/i;
-
-/**
- * Classify a message as high or low priority based on content.
- * Used by routeAuto() when the caller doesn't specify priority.
- *
- * @internal
- */
-function classifyPriority(message: string): SystemMessagePriority {
-  return HIGH_PRIORITY_RE.test(message) ? 'high' : 'low';
-}
-
-export type SystemMessageKind = 'system' | 'operational' | 'wrfc';
-export type SystemMessageTarget = 'conversation' | 'panel' | 'both';
-
-function defaultTargetForKind(kind: SystemMessageKind): SystemMessageTarget {
-  if (kind === 'wrfc') return 'both';
-  return 'panel';
-}
-
-function classifyKind(message: string): SystemMessageKind {
-  if (/^\[WRFC\]/i.test(message)) return 'wrfc';
-  if (/^\[(Scan|Local|Agents|MCP|Plugin|Hook|Tool|Exec|Remote|Bridge|Approval)\]/i.test(message)) {
-    return 'operational';
-  }
-  return 'system';
-}
+export type {
+  SystemMessageKind,
+  SystemMessageTarget,
+} from '@pellux/goodvibes-sdk/platform/runtime/system-message-policy';
 
 function targetForKind(
   configManager: Pick<ConfigManager, 'getRaw'>,
@@ -78,21 +54,6 @@ function targetForKind(
   if (kind === 'wrfc') return ui.wrfcMessages;
   if (kind === 'operational') return ui.operationalMessages;
   return ui.systemMessages;
-}
-
-function resolveDelivery(
-  target: SystemMessageTarget,
-  hasPanel: boolean,
-): { readonly toPanel: boolean; readonly toConversation: boolean } {
-  if (target === 'both') {
-    return { toPanel: hasPanel, toConversation: true };
-  }
-  if (target === 'conversation') {
-    return { toPanel: false, toConversation: true };
-  }
-  return hasPanel
-    ? { toPanel: true, toConversation: false }
-    : { toPanel: false, toConversation: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +68,7 @@ export class SystemMessageRouter {
   constructor(
     private readonly conversation: ConversationManager,
     private panel: SystemMessagesPanel | null,
-    private readonly getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultTargetForKind,
+    private readonly getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultSystemMessageTarget,
   ) {}
 
   // ── Public API ────────────────────────────────────────────────────────────
@@ -127,7 +88,7 @@ export class SystemMessageRouter {
     kind: SystemMessageKind,
   ): void {
     const target = this.getTargetForKind(kind);
-    const delivery = resolveDelivery(target, this.panel !== null);
+    const delivery = resolveSystemMessageDelivery(target, this.panel !== null);
     if (delivery.toPanel) {
       this.panel?.push(message, priority);
     }
@@ -137,7 +98,7 @@ export class SystemMessageRouter {
   }
 
   routeSystemMessage(message: string, priority: SystemMessagePriority): void {
-    this.routeTypedSystemMessage(message, priority, classifyKind(message));
+    this.routeTypedSystemMessage(message, priority, classifySystemMessageKind(message));
   }
 
   /**
@@ -149,8 +110,8 @@ export class SystemMessageRouter {
    * @param message - Message text.
    */
   routeAuto(message: string): void {
-    const priority = classifyPriority(message);
-    this.routeTypedSystemMessage(message, priority, classifyKind(message));
+    const priority: SystemMessagePriority = classifySystemMessagePriority(message);
+    this.routeTypedSystemMessage(message, priority, classifySystemMessageKind(message));
   }
 
   /**
@@ -204,7 +165,7 @@ export class SystemMessageRouter {
 export function createSystemMessageRouter(
   conversation: ConversationManager,
   panel: SystemMessagesPanel | null = null,
-  getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultTargetForKind,
+  getTargetForKind: (kind: SystemMessageKind) => SystemMessageTarget = defaultSystemMessageTarget,
 ): SystemMessageRouter {
   return new SystemMessageRouter(conversation, panel, getTargetForKind);
 }

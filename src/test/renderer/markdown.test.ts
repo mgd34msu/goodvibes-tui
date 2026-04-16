@@ -8,7 +8,7 @@ const WIDTH = 80;
 const lineText = lineToString;
 
 /** Get all non-empty text lines from a render result. */
-function textLines(lines: import('@pellux/goodvibes-sdk/platform/types/grid').Line[]): string[] {
+function textLines(lines: import('../../types/grid.ts').Line[]): string[] {
   return linesToText(lines).filter((t) => t.length > 0);
 }
 

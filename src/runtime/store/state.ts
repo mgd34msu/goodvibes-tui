@@ -33,6 +33,9 @@ import type { GitDomainState } from '@pellux/goodvibes-sdk/platform/runtime/stor
 import type { DiscoveryDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/discovery';
 import type { IntelligenceDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/intelligence';
 import type { UiPerfDomainState } from './domains/ui-perf.ts';
+// UiPerfDomainState is structurally identical to SDK's SurfacePerfDomainState.
+// Export as SurfacePerfDomainState alias for SDK compatibility.
+export type { UiPerfDomainState };
 
 import { createInitialSessionState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/session';
 import { createInitialModelState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
@@ -73,7 +76,11 @@ export interface RuntimeState {
   model: ModelDomainState;
   conversation: ConversationDomainState;
   overlays: OverlayDomainState;
-  panels: PanelDomainState;
+  /**
+   * TUI panel state. Typed as Record<string,unknown> for SDK RuntimeState
+   * compatibility. Use selectPanels() which casts to PanelDomainState.
+   */
+  panels: Record<string, unknown>;
   permissions: PermissionDomainState;
   tasks: TaskDomainState;
   agents: AgentDomainState;
@@ -95,7 +102,8 @@ export interface RuntimeState {
   git: GitDomainState;
   discovery: DiscoveryDomainState;
   intelligence: IntelligenceDomainState;
-  uiPerf: UiPerfDomainState;
+  /** Surface/UI performance metrics. SDK-compatible field name. */
+  surfacePerf: UiPerfDomainState;
 }
 
 /**
@@ -110,7 +118,7 @@ export function createInitialRuntimeState(): RuntimeState {
     model: createInitialModelState(),
     conversation: createInitialConversationState(),
     overlays: createInitialOverlaysState(),
-    panels: createInitialPanelsState(),
+    panels: createInitialPanelsState() as unknown as Record<string, unknown>,
     permissions: createInitialPermissionsState(),
     tasks: createInitialTasksState(),
     agents: createInitialAgentsState(),
@@ -132,6 +140,6 @@ export function createInitialRuntimeState(): RuntimeState {
     git: createInitialGitState(),
     discovery: createInitialDiscoveryState(),
     intelligence: createInitialIntelligenceState(),
-    uiPerf: createInitialUiPerfState(),
+    surfacePerf: createInitialUiPerfState(),
   };
 }

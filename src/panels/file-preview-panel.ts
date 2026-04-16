@@ -1,10 +1,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Line, Cell } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { createStyledCell, createEmptyLine } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line, Cell } from '../types/grid.ts';
+import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { SyntaxHighlighter, type SyntaxToken } from '../renderer/syntax-highlighter.ts';
-import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
   buildPanelLine,

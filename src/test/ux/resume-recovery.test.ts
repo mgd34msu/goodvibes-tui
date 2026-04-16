@@ -26,7 +26,7 @@ const TEST_TIMESTAMP = 1700000000000;
 
 /** Build a panel state map with given panels open/focused. */
 function makePanelState(openPanelIds: PanelId[], focusedPanelId: PanelId): PanelDomainState {
-  const base = createInitialRuntimeState().panels;
+  const base = selectPanels(createInitialRuntimeState());
   const panelMap = new Map(base.panels);
 
   for (const [id, panel] of panelMap) {
@@ -52,7 +52,8 @@ function makePanelState(openPanelIds: PanelId[], focusedPanelId: PanelId): Panel
 
 /** Simulate a suspended state — panels closed, session status suspended. */
 function buildSuspendedState(activeState: RuntimeState): RuntimeState {
-  const closedPanels = new Map(activeState.panels.panels);
+  const activePanelState = selectPanels(activeState);
+  const closedPanels = new Map(activePanelState.panels);
   for (const [id, panel] of closedPanels) {
     closedPanels.set(id, { ...panel, open: false, focused: false });
   }
@@ -60,12 +61,12 @@ function buildSuspendedState(activeState: RuntimeState): RuntimeState {
   return {
     ...activeState,
     panels: {
-      ...activeState.panels,
+      ...activePanelState,
       panels: closedPanels,
-      revision: activeState.panels.revision + 1,
+      revision: activePanelState.revision + 1,
       lastUpdatedAt: TEST_TIMESTAMP,
       source: 'suspend',
-    },
+    } as unknown as Record<string, unknown>,
     session: {
       ...activeState.session,
       status: 'suspended',
@@ -88,10 +89,10 @@ function applyResume(
     ...suspendedState,
     panels: {
       ...snapshot.panels,
-      revision: suspendedState.panels.revision + 1,
+      revision: selectPanels(suspendedState).revision + 1,
       lastUpdatedAt: TEST_TIMESTAMP,
       source: 'resume',
-    },
+    } as unknown as Record<string, unknown>,
     session: {
       ...suspendedState.session,
       ...(snapshot.session ?? {}),
@@ -116,7 +117,7 @@ describe('ux:resume-recovery — restore session with active panels and overlays
 
   describe('panel state restoration', () => {
     test('open panels are restored from snapshot after resume', () => {
-      const panels = createInitialRuntimeState().panels;
+      const panels = selectPanels(createInitialRuntimeState());
       const panelIds = [...panels.panels.keys()] as PanelId[];
 
       // Pick 2 panels to be open
@@ -126,7 +127,7 @@ describe('ux:resume-recovery — restore session with active panels and overlays
       const activePanel = makePanelState(openIds, focusId);
 
       // Suspend (close all)
-      const suspended = buildSuspendedState({ ...state, panels: activePanel });
+      const suspended = buildSuspendedState({ ...state, panels: activePanel as unknown as Record<string, unknown> });
       const allClosed = [...selectPanels(suspended).panels.values()].every((p) => !p.open);
       expect(allClosed).toBe(true);
 
@@ -141,25 +142,25 @@ describe('ux:resume-recovery — restore session with active panels and overlays
     });
 
     test('focused panel is restored correctly after resume', () => {
-      const panels = createInitialRuntimeState().panels;
+      const panels = selectPanels(createInitialRuntimeState());
       const panelIds = [...panels.panels.keys()] as PanelId[];
       const focusId = panelIds[1]!;
       const openIds = panelIds.slice(0, 3);
 
       const activePanel = makePanelState(openIds, focusId);
-      const suspended = buildSuspendedState({ ...state, panels: activePanel });
+      const suspended = buildSuspendedState({ ...state, panels: activePanel as unknown as Record<string, unknown> });
       const resumed = applyResume(suspended, { panels: activePanel });
 
       expect(selectPanels(resumed).focusedPanelId).toBe(focusId);
     });
 
     test('activePanels selector returns correct panels after resume', () => {
-      const panels = createInitialRuntimeState().panels;
+      const panels = selectPanels(createInitialRuntimeState());
       const panelIds = [...panels.panels.keys()] as PanelId[];
       const openIds = panelIds.slice(0, 3);
 
       const activePanel = makePanelState(openIds, openIds[0]!);
-      const suspended = buildSuspendedState({ ...state, panels: activePanel });
+      const suspended = buildSuspendedState({ ...state, panels: activePanel as unknown as Record<string, unknown> });
       const resumed = applyResume(suspended, { panels: activePanel });
 
       const activePanels = selectActivePanels(resumed);
@@ -170,7 +171,7 @@ describe('ux:resume-recovery — restore session with active panels and overlays
     });
 
     test('panels not in open list remain closed after resume', () => {
-      const panels = createInitialRuntimeState().panels;
+      const panels = selectPanels(createInitialRuntimeState());
       const panelIds = [...panels.panels.keys()] as PanelId[];
 
       // Open only first 2, the rest should be closed
@@ -178,7 +179,7 @@ describe('ux:resume-recovery — restore session with active panels and overlays
       const closedIds = panelIds.slice(2);
 
       const activePanel = makePanelState(openIds, openIds[0]!);
-      const suspended = buildSuspendedState({ ...state, panels: activePanel });
+      const suspended = buildSuspendedState({ ...state, panels: activePanel as unknown as Record<string, unknown> });
       const resumed = applyResume(suspended, { panels: activePanel });
 
       for (const id of closedIds) {
@@ -193,7 +194,7 @@ describe('ux:resume-recovery — restore session with active panels and overlays
       expect(selectAnyOverlayVisible(state)).toBe(false);
 
       const suspended = buildSuspendedState(state);
-      const resumed = applyResume(suspended, { panels: state.panels });
+      const resumed = applyResume(suspended, { panels: selectPanels(state) });
       expect(selectAnyOverlayVisible(resumed)).toBe(false);
     });
   });
@@ -202,7 +203,7 @@ describe('ux:resume-recovery — restore session with active panels and overlays
     test('session ID is preserved across resume', () => {
       const sessionId = state.session.id;
       const suspended = buildSuspendedState(state);
-      const resumed = applyResume(suspended, { panels: state.panels, session: { id: sessionId } });
+      const resumed = applyResume(suspended, { panels: selectPanels(state), session: { id: sessionId } });
       expect(selectSession(resumed).id).toBe(sessionId);
     });
 
@@ -210,13 +211,13 @@ describe('ux:resume-recovery — restore session with active panels and overlays
       const suspended = buildSuspendedState(state);
       const suspendedRev = selectPanels(suspended).revision;
 
-      const resumed = applyResume(suspended, { panels: state.panels });
+      const resumed = applyResume(suspended, { panels: selectPanels(state) });
       expect(selectPanels(resumed).revision).toBeGreaterThan(suspendedRev);
     });
 
     test('source is set to resume after recovery', () => {
       const suspended = buildSuspendedState(state);
-      const resumed = applyResume(suspended, { panels: state.panels });
+      const resumed = applyResume(suspended, { panels: selectPanels(state) });
       expect(selectPanels(resumed).source).toBe('resume');
       expect(selectSession(resumed).source).toBe('resume');
     });
@@ -225,25 +226,25 @@ describe('ux:resume-recovery — restore session with active panels and overlays
       const suspended = buildSuspendedState(state);
       expect(selectSession(suspended).status).toBe('suspended');
 
-      const resumed = applyResume(suspended, { panels: state.panels });
+      const resumed = applyResume(suspended, { panels: selectPanels(state) });
       expect(selectSession(resumed).status).toBe('active');
     });
 
     test('isResumed flag is set after recovery', () => {
       const suspended = buildSuspendedState(state);
-      const resumed = applyResume(suspended, { panels: state.panels });
+      const resumed = applyResume(suspended, { panels: selectPanels(state) });
       expect(selectSession(resumed).isResumed).toBe(true);
     });
 
     test('multiple resume cycles produce correct final state', () => {
-      const panels = createInitialRuntimeState().panels;
+      const panels = selectPanels(createInitialRuntimeState());
       const panelIds = [...panels.panels.keys()] as PanelId[];
       const openIds = panelIds.slice(0, 2);
       const panelSnapshot = makePanelState(openIds, openIds[0]!);
 
       let current = state;
       for (let i = 0; i < 5; i++) {
-        current = { ...current, panels: panelSnapshot };
+        current = { ...current, panels: panelSnapshot as unknown as Record<string, unknown> };
         current = buildSuspendedState(current);
         current = applyResume(current, { panels: panelSnapshot });
       }

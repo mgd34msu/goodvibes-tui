@@ -1,5 +1,5 @@
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { getDisplayWidth } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import type { Line } from '../types/grid.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { buildStyledPanelLine, type StyledPanelSegment } from '../panels/polish.ts';
 
 export interface TabStripItem {

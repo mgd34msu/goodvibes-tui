@@ -1,5 +1,5 @@
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
-import { fitDisplay, getDisplayWidth, truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import type { Line } from '../types/grid.ts';
+import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
 import { createBottomBarLine, writeBottomBarText } from './bottom-bar.ts';
 

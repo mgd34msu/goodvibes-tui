@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { copyToClipboard, pasteFromClipboard, pasteImageFromClipboard } from '@pellux/goodvibes-sdk/platform/utils/clipboard';
-import type { InfiniteBuffer } from '@pellux/goodvibes-sdk/platform/core/history';
+import { copyToClipboard, pasteFromClipboard, pasteImageFromClipboard } from '../utils/clipboard.ts';
+import type { InfiniteBuffer } from '../core/history.ts';
 import type { ConversationManager } from '../core/conversation';
 import type { PermissionCategory } from '@pellux/goodvibes-sdk/platform/permissions/manager';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';

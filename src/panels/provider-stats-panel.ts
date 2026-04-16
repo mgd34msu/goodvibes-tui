@@ -1,7 +1,7 @@
 import { BasePanel } from './base-panel.ts';
-import type { Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import type { Line } from '../types/grid.ts';
 import type { ProviderEvent, TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { UiEventFeed } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { UiProvidersSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import {
   buildEmptyState,
@@ -11,7 +11,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '@pellux/goodvibes-sdk/platform/utils/terminal-width';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 
 // ---------------------------------------------------------------------------
 // Constants

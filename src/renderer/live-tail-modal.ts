@@ -1,4 +1,4 @@
-import { type Line } from '@pellux/goodvibes-sdk/platform/types/grid';
+import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
 import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
