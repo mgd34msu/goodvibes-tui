@@ -138,11 +138,14 @@ function resolveKeybindingsPath(options?: KeybindingsManagerOptions): string {
 export class KeybindingsManager {
   private bindings: Record<KeyAction, KeyCombo[]>;
   private configPath: string;
+  /** Inverted lookup map: composite key → KeyAction. Built in buildLookupMap(). */
+  private lookupMap = new Map<string, KeyAction>();
 
   constructor(options: KeybindingsManagerOptions) {
     this.configPath = resolveKeybindingsPath(options);
     // Start with deep copy of defaults
     this.bindings = this.cloneDefaults();
+    this.buildLookupMap();
   }
 
   private cloneDefaults(): Record<KeyAction, KeyCombo[]> {
@@ -184,6 +187,33 @@ export class KeybindingsManager {
     } catch (err) {
       logger.debug('keybindings: failed to load config file', { path: this.configPath, err: summarizeError(err) });
     }
+    this.buildLookupMap();
+  }
+
+  /**
+   * buildLookupMap — Rebuild the inverted lookup map from the current bindings table.
+   * Called after constructor init and after loadFromDisk().
+   * Map key format: "logicalName:ctrl:shift:alt" (booleans as 0/1).
+   * Last writer wins for duplicate combos (deterministic: iterate actions in order).
+   */
+  private buildLookupMap(): void {
+    this.lookupMap.clear();
+    for (const [action, combos] of Object.entries(this.bindings) as [KeyAction, KeyCombo[]][]) {
+      for (const combo of combos) {
+        const key = `${combo.key}:${combo.ctrl ? 1 : 0}:${combo.shift ? 1 : 0}:${combo.alt ? 1 : 0}`;
+        this.lookupMap.set(key, action);
+      }
+    }
+  }
+
+  /**
+   * lookup — O(1) keybinding lookup by token.
+   * Returns the matching KeyAction, or null if no binding matches.
+   */
+  lookup(token: { logicalName?: string; ctrl?: boolean; shift?: boolean; alt?: boolean }): KeyAction | null {
+    if (!token.logicalName) return null;
+    const key = `${token.logicalName}:${token.ctrl ? 1 : 0}:${token.shift ? 1 : 0}:${token.alt ? 1 : 0}`;
+    return this.lookupMap.get(key) ?? null;
   }
 
   private validateCombos(combos: unknown[]): combos is KeyCombo[] {

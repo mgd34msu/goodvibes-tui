@@ -13,6 +13,9 @@ function buildState(overrides: Partial<GlobalShortcutRouteState> = {}): GlobalSh
     keybindingsManager: {
       matches: (action: string, token: { logicalName?: string; ctrl?: boolean }) =>
         action === 'panel-picker' && token.logicalName === 'p' && !!token.ctrl,
+      // lookup: O(1) inverted-map equivalent used by the refactored handler.
+      lookup: (token: { logicalName?: string; ctrl?: boolean }) =>
+        token.logicalName === 'p' && !!token.ctrl ? 'panel-picker' : null,
     } as unknown as GlobalShortcutRouteState['keybindingsManager'],
     prompt: '',
     cursorPos: 0,

@@ -1,5 +1,5 @@
 import { UIFactory } from '../renderer/ui-factory.ts';
-import { renderMarkdown, renderMarkdownTracked } from '../renderer/markdown.ts';
+import { renderMarkdownTracked } from '../renderer/markdown.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
 import { renderSystemMessage } from '../renderer/system-message.ts';
@@ -102,10 +102,12 @@ export function renderConversationAssistantMessage(
   if (message.content) {
     const showAllLineNumbers = lineNumberMode === 'all';
     const showCodeBlockLineNumbers = lineNumberMode === 'all' ? false : lineNumberMode === 'code';
-    const preRendered = showAllLineNumbers
-      ? renderMarkdown(message.content, width, { codeBlockLineNumbers: false })
-      : null;
-    const totalLines = preRendered?.length ?? 0;
+    // First pass with a wide render to measure totalLines for gutter sizing.
+    // When line numbers are off, skip the measurement pass entirely.
+    const measureWidth = showAllLineNumbers ? width : 0;
+    const totalLines = showAllLineNumbers
+      ? renderMarkdownTracked(message.content, measureWidth, { codeBlockLineNumbers: false }).lines.length
+      : 0;
     const numWidth = Math.max(3, String(totalLines).length);
     const gutterW = numWidth + 3;
     const contentWidth = showAllLineNumbers ? width - gutterW : width;
@@ -239,7 +241,7 @@ export function renderConversationToolMessage(
         // Leave invalid JSON as-is.
       }
     }
-    context.history.addLines(renderMarkdown(contentToRender, width));
+    context.history.addLines(renderMarkdownTracked(contentToRender, width).lines);
   }
 
   const renderedLineCount = context.history.getLineCount() - startLine;

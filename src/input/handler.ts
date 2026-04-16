@@ -112,6 +112,8 @@ export class InputHandler {
   private pasteRegistry = new Map<string, string>();
   private nextPasteId = 1;
   private lastCtrlCTime = 0;
+  /** Long-lived feed context — reused across every feed() call to avoid per-keystroke allocation. */
+  private feedContext!: import('./handler-feed.ts').InputFeedContext;
   private commandRegistry: CommandRegistry | null = null;
   private commandContext: CommandContext | undefined = undefined;
   public autocomplete: AutocompleteEngine | null = null;
@@ -208,6 +210,115 @@ export class InputHandler {
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager);
     this.profilePickerModal = new ProfilePickerModal(uiServices.shell.profileManager);
+    this.initFeedContext();
+  }
+
+  /**
+   * initFeedContext — Build the long-lived InputFeedContext once.
+   * Stable (readonly) fields are set here and never reallocated.
+   * Mutable scalar fields are synced at the top of every feed() call.
+   */
+  private initFeedContext(): void {
+    // Placeholder requestRender — will be swapped to bufferedRequestRender inside feed().
+    const noop = (): void => {};
+    this.feedContext = {
+      // --- mutable scalars (synced per feed) ---
+      prompt: this.prompt,
+      cursorPos: this.cursorPos,
+      commandMode: this.commandMode,
+      panelFocused: this.panelFocused,
+      indicatorFocused: this.indicatorFocused,
+      helpOverlayActive: this.helpOverlayActive,
+      helpScrollOffset: this.helpScrollOffset,
+      shortcutsOverlayActive: this.shortcutsOverlayActive,
+      shortcutsScrollOffset: this.shortcutsScrollOffset,
+      nextPasteId: this.nextPasteId,
+      nextImageId: this.nextImageId,
+      mouseDownRow: this.mouseDownRow,
+      mouseDownCol: this.mouseDownCol,
+      contentWidth: this.contentWidth,
+      selectionCallback: this.selectionCallback,
+      // --- requestRender: swapped per-feed to buffered version ---
+      requestRender: noop,
+      // --- stable readonly refs ---
+      pasteRegistry: this.pasteRegistry,
+      imageRegistry: this.imageRegistry,
+      selection: this.selection,
+      selectionModal: this.selectionModal,
+      bookmarkModal: this.bookmarkModal,
+      settingsModal: this.settingsModal,
+      sessionPickerModal: this.sessionPickerModal,
+      profilePickerModal: this.profilePickerModal,
+      historySearch: this.historySearch,
+      commandRegistry: this.commandRegistry,
+      commandContext: this.commandContext,
+      autocomplete: this.autocomplete,
+      filePicker: this.filePicker,
+      modelPicker: this.modelPicker,
+      processModal: this.processModal,
+      liveTailModal: this.liveTailModal,
+      agentDetailModal: this.agentDetailModal,
+      contextInspectorModal: this.contextInspectorModal,
+      blockActionsMenu: this.blockActionsMenu,
+      searchManager: this.searchManager,
+      modalStack: this.modalStack,
+      inputHistory: this.inputHistory,
+      conversationManager: this.conversationManager,
+      panelManager: this.uiServices.shell.panelManager,
+      keybindingsManager: this.uiServices.shell.keybindingsManager,
+      getHistory: this.getHistory,
+      getViewportHeight: this.getViewportHeight,
+      getScrollTop: this.getScrollTop,
+      scroll: this.scroll,
+      exitApp: this.exitApp,
+      // --- stable bound-method closures ---
+      modalOpened: (name: string) => this.modalOpened(name),
+      handleEscape: () => { this.handleEscape(); this.syncFeedContextMutableFields(); },
+      handleCopy: () => this.handleCopy(),
+      handleCtrlC: () => { this.handleCtrlC(); this.syncFeedContextMutableFields(); },
+      handleBlockCopy: () => this.handleBlockCopy(),
+      handleBookmark: () => this.handleBookmark(),
+      handleBlockSave: () => this.handleBlockSave(),
+      handleDiffApply: () => this.handleDiffApply(),
+      handleUndo: () => { this.handleUndo(); this.syncFeedContextMutableFields(); },
+      handleRedo: () => { this.handleRedo(); this.syncFeedContextMutableFields(); },
+      handlePaste: () => { this.handlePaste(); this.syncFeedContextMutableFields(); },
+      saveUndoState: () => this.saveUndoState(),
+      ensureInputCursorVisible: (contentWidth?: number) => this.ensureInputCursorVisible(contentWidth),
+      registerPaste: (content: string) => this.registerPaste(content),
+      executeBlockAction: (id: string) => this.executeBlockAction(id),
+      cyclePanelTab: (direction: 'next' | 'prev') => this.cyclePanelTab(direction),
+      onPanelInputConsumed: (activePanel: Panel | null, key: string) => this.handlePanelIntegrationAction(activePanel, key),
+      getWrappedPromptInfo: (contentWidth: number) => this.getWrappedPromptInfo(contentWidth),
+      moveCursorVertical: (direction: -1 | 1) => this.moveCursorVertical(direction),
+      handlePathCompletion: () => this.handlePathCompletion(),
+      handleBlockToggle: () => this.handleBlockToggle(),
+      findMarkerAtPos: (pos: number) => this.findMarkerAtPos(pos),
+      cleanupMarkerRegistry: (text: string) => this.cleanupMarkerRegistry(text),
+      expandPrompt: (text: string) => this.expandPrompt(text),
+    };
+  }
+
+  /**
+   * syncFeedContextMutableFields — Copy mutable InputHandler scalar fields back into feedContext.
+   * Called from within action closures that mutate handler state during a feed.
+   */
+  private syncFeedContextMutableFields(): void {
+    const ctx = this.feedContext;
+    ctx.prompt = this.prompt;
+    ctx.cursorPos = this.cursorPos;
+    ctx.commandMode = this.commandMode;
+    ctx.panelFocused = this.panelFocused;
+    ctx.indicatorFocused = this.indicatorFocused;
+    ctx.helpOverlayActive = this.helpOverlayActive;
+    ctx.helpScrollOffset = this.helpScrollOffset;
+    ctx.shortcutsOverlayActive = this.shortcutsOverlayActive;
+    ctx.shortcutsScrollOffset = this.shortcutsScrollOffset;
+    ctx.selectionCallback = this.selectionCallback;
+    ctx.nextPasteId = this.nextPasteId;
+    ctx.nextImageId = this.nextImageId;
+    ctx.mouseDownRow = this.mouseDownRow;
+    ctx.mouseDownCol = this.mouseDownCol;
   }
 
   /**
@@ -464,6 +575,7 @@ export class InputHandler {
 
   /**
    * feed - Process raw stdin data through the tokenizer.
+   * Reuses the long-lived this.feedContext to avoid per-keystroke object allocation.
    */
   public feed(data: string): void {
     const immediateRequestRender = this.requestRender;
@@ -479,111 +591,31 @@ export class InputHandler {
 
     this.requestRender = bufferedRequestRender;
     try {
-      let context!: import('./handler-feed.ts').InputFeedContext;
-      const syncFeedContextFromHandler = (): void => {
-        context.prompt = this.prompt;
-        context.cursorPos = this.cursorPos;
-        context.commandMode = this.commandMode;
-        context.panelFocused = this.panelFocused;
-        context.indicatorFocused = this.indicatorFocused;
-        context.helpOverlayActive = this.helpOverlayActive;
-        context.helpScrollOffset = this.helpScrollOffset;
-        context.shortcutsOverlayActive = this.shortcutsOverlayActive;
-        context.shortcutsScrollOffset = this.shortcutsScrollOffset;
-        context.selectionCallback = this.selectionCallback;
-        context.nextPasteId = this.nextPasteId;
-        context.nextImageId = this.nextImageId;
-        context.mouseDownRow = this.mouseDownRow;
-        context.mouseDownCol = this.mouseDownCol;
-      };
-
-      context = {
-        prompt: this.prompt,
-        cursorPos: this.cursorPos,
-        commandMode: this.commandMode,
-        panelFocused: this.panelFocused,
-        indicatorFocused: this.indicatorFocused,
-        helpOverlayActive: this.helpOverlayActive,
-        helpScrollOffset: this.helpScrollOffset,
-        shortcutsOverlayActive: this.shortcutsOverlayActive,
-        shortcutsScrollOffset: this.shortcutsScrollOffset,
-        nextPasteId: this.nextPasteId,
-        nextImageId: this.nextImageId,
-        mouseDownRow: this.mouseDownRow,
-        mouseDownCol: this.mouseDownCol,
-        contentWidth: this.contentWidth,
-        pasteRegistry: this.pasteRegistry,
-        imageRegistry: this.imageRegistry,
-        selection: this.selection,
-        selectionModal: this.selectionModal,
-        selectionCallback: this.selectionCallback,
-        bookmarkModal: this.bookmarkModal,
-        settingsModal: this.settingsModal,
-        sessionPickerModal: this.sessionPickerModal,
-        profilePickerModal: this.profilePickerModal,
-        historySearch: this.historySearch,
-        commandRegistry: this.commandRegistry,
-        commandContext: this.commandContext,
-        autocomplete: this.autocomplete,
-        filePicker: this.filePicker,
-        modelPicker: this.modelPicker,
-        processModal: this.processModal,
-        liveTailModal: this.liveTailModal,
-        agentDetailModal: this.agentDetailModal,
-        contextInspectorModal: this.contextInspectorModal,
-        blockActionsMenu: this.blockActionsMenu,
-        searchManager: this.searchManager,
-        modalStack: this.modalStack,
-        inputHistory: this.inputHistory,
-        conversationManager: this.conversationManager,
-        getHistory: this.getHistory,
-        getViewportHeight: this.getViewportHeight,
-        getScrollTop: this.getScrollTop,
-        scroll: this.scroll,
-        requestRender: bufferedRequestRender,
-        modalOpened: (name: string) => this.modalOpened(name),
-        handleEscape: () => {
-          this.handleEscape();
-          syncFeedContextFromHandler();
-        },
-        handleCopy: () => this.handleCopy(),
-        handleCtrlC: () => {
-          this.handleCtrlC();
-          syncFeedContextFromHandler();
-        },
-        handleBlockCopy: () => this.handleBlockCopy(),
-        handleBookmark: () => this.handleBookmark(),
-        handleBlockSave: () => this.handleBlockSave(),
-        handleDiffApply: () => this.handleDiffApply(),
-        handleUndo: () => {
-          this.handleUndo();
-          syncFeedContextFromHandler();
-        },
-        handleRedo: () => {
-          this.handleRedo();
-          syncFeedContextFromHandler();
-        },
-        handlePaste: () => {
-          this.handlePaste();
-          syncFeedContextFromHandler();
-        },
-        saveUndoState: () => this.saveUndoState(),
-        ensureInputCursorVisible: (contentWidth?: number) => this.ensureInputCursorVisible(contentWidth),
-        registerPaste: (content: string) => this.registerPaste(content),
-        executeBlockAction: (id: string) => this.executeBlockAction(id),
-        cyclePanelTab: (direction: 'next' | 'prev') => this.cyclePanelTab(direction),
-        onPanelInputConsumed: (activePanel: Panel | null, key: string) => this.handlePanelIntegrationAction(activePanel, key),
-        panelManager: this.uiServices.shell.panelManager,
-        keybindingsManager: this.uiServices.shell.keybindingsManager,
-        getWrappedPromptInfo: (contentWidth: number) => this.getWrappedPromptInfo(contentWidth),
-        moveCursorVertical: (direction: -1 | 1) => this.moveCursorVertical(direction),
-        handlePathCompletion: () => this.handlePathCompletion(),
-        handleBlockToggle: () => this.handleBlockToggle(),
-        findMarkerAtPos: (pos: number) => this.findMarkerAtPos(pos),
-        cleanupMarkerRegistry: (text: string) => this.cleanupMarkerRegistry(text),
-        expandPrompt: (text: string) => this.expandPrompt(text),
-        exitApp: this.exitApp,
-      };
+      const context = this.feedContext;
+      // Sync mutable scalars from handler into the reused context.
+      context.prompt = this.prompt;
+      context.cursorPos = this.cursorPos;
+      context.commandMode = this.commandMode;
+      context.panelFocused = this.panelFocused;
+      context.indicatorFocused = this.indicatorFocused;
+      context.helpOverlayActive = this.helpOverlayActive;
+      context.helpScrollOffset = this.helpScrollOffset;
+      context.shortcutsOverlayActive = this.shortcutsOverlayActive;
+      context.shortcutsScrollOffset = this.shortcutsScrollOffset;
+      context.selectionCallback = this.selectionCallback;
+      context.nextPasteId = this.nextPasteId;
+      context.nextImageId = this.nextImageId;
+      context.mouseDownRow = this.mouseDownRow;
+      context.mouseDownCol = this.mouseDownCol;
+      context.contentWidth = this.contentWidth;
+      // Sync semi-stable refs that may be wired after construction.
+      context.commandRegistry = this.commandRegistry;
+      context.commandContext = this.commandContext;
+      context.autocomplete = this.autocomplete;
+      context.inputHistory = this.inputHistory;
+      context.conversationManager = this.conversationManager;
+      // Swap requestRender to buffered version for this feed.
+      context.requestRender = bufferedRequestRender;
       this.syncFeedSelectionCallback = (callback) => {
         context.selectionCallback = callback;
       };
