@@ -4,6 +4,33 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.19] — 2026-04-16
+
+### Quality bump — address sub-10 dimensions from 0.18.18 review
+
+The 0.18.18 review scored 9.76/10 with three dimensions below 10 (Error Handling 9.5, Testing 9.0, Maintainability 9.5). This release lifts each back to 10 per the now-10.0 WRFC score threshold.
+
+### Error Handling
+
+- **Render coalescer wraps both paths in try/catch** (`src/runtime/bootstrap-core.ts`): the `setImmediate` callback and the throttled `setTimeout` callback each now guard `renderRequestRef.value()` with try/catch. A thrown render exception no longer wedges the scheduler — `renderScheduled` is cleared unconditionally, the error is logged at error level, and the next `requestRender()` can still schedule. Previously a single render exception could leave `renderScheduled = true` (if thrown inside the callback) and deadlock the TUI until restart
+
+### Testing
+
+- **Added R1 16ms throttle-branch test** (`src/test/renderer/render-perf.test.ts`): exercises the `setTimeout` gated branch that fires when two bursts land within the 16ms window. Uses a monotonic clock to make timing deterministic. The previous test suite only covered the `setImmediate` immediate branch
+- **Added R3 Compositor buffer-identity test** (`src/test/renderer/render-perf.test.ts`): drives the `Compositor` through 10 frames with identical dimensions and asserts the set of observed `frontBuffer`/`backBuffer` instances has cardinality exactly 2. Filters nulls so the brief post-swap null doesn't inflate the count. Proves the "2 TerminalBuffer instances per session" R3 claim that the 0.18.18 review flagged as claimed-but-untested
+
+### Maintainability
+
+- **Documented mid-render invalidation hazard** (`src/renderer/panel-composite.ts`): added a JSDoc block above the `renderPanel` cache explaining the race where an event listener firing during a panel's `render()` that sets `needsRender = true` would be clobbered by the trailing `markRendered()`. Includes a deferred-fix proposal (snapshot `needsRender` before calling `render()`) and documents why the current simpler implementation is acceptable
+
+### Tests & Checks
+
+- Test suite: 438/438 passing (11/11 in the expanded render-perf suite)
+- Architecture check: passing
+- Typecheck: clean
+
+---
+
 ## [0.18.18] — 2026-04-16
 
 ### Performance

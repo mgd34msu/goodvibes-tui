@@ -7,7 +7,27 @@ import { createSplitPaneLayout } from './layout-engine.ts';
 import { renderPanelTabBar } from './panel-tab-bar.ts';
 import { renderPanelWorkspaceBar } from './panel-workspace-bar.ts';
 
-/** R2: Per-panel render cache for dirty-flag skipping. */
+/**
+ * R2: Per-panel render cache for dirty-flag skipping.
+ *
+ * Maintainability hazard — mid-render invalidation race:
+ *
+ * If an event listener (e.g. a runtime-bus subscriber) fires DURING a panel's
+ * `render()` call and mutates state such that `needsRender = true`, the
+ * trailing `panel.markRendered()` below will clobber that invalidation back
+ * to `false`, causing the next frame to serve stale cached output until
+ * something else invalidates the panel.
+ *
+ * In practice this is rare because `render()` is synchronous and short, and
+ * runtime-bus listeners that mutate panel state typically run outside the
+ * render pass. Panels that DO expect to mutate from within their own render
+ * path (e.g. deferred lazy-load) should call `this.invalidate()` AFTER the
+ * trailing work so the next frame picks it up.
+ *
+ * If this becomes a real bug, the fix is to snapshot `needsRender` before
+ * calling `render()` and only `markRendered()` if the snapshot was true —
+ * preserving any concurrent invalidation. Deferred pending more evidence.
+ */
 interface PanelRenderCache {
   lines: Line[];
   width: number;

@@ -1,5 +1,6 @@
 import { ConversationManager } from '../core/conversation';
 import { SelectionManager } from '../input/selection.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { ConfigManager, getConfiguredSystemPrompt } from '../config/index.ts';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
@@ -235,19 +236,33 @@ export async function initializeBootstrapCore(
     if (renderScheduled) return;
     renderScheduled = true;
     setImmediate(() => {
+      // Error Handling: the scheduler flag MUST be cleared even if the render
+      // callback throws; otherwise a single render exception would wedge the
+      // entire TUI (no future requestRender() call would schedule anything).
       renderScheduled = false;
       const now = Date.now();
       const elapsed = now - lastRenderTime;
-      if (elapsed < RENDER_INTERVAL_MS) {
-        // Too soon — debounce to the tail of the current 16ms window
-        const delay = RENDER_INTERVAL_MS - elapsed;
-        setTimeout(() => {
-          lastRenderTime = Date.now();
+      try {
+        if (elapsed < RENDER_INTERVAL_MS) {
+          // Too soon — debounce to the tail of the current 16ms window
+          const delay = RENDER_INTERVAL_MS - elapsed;
+          setTimeout(() => {
+            try {
+              lastRenderTime = Date.now();
+              renderRequestRef.value();
+            } catch (err) {
+              // Throttled-render error: swallow but log at error so the next
+              // requestRender() call can still schedule. The renderer itself
+              // is expected to surface failures via its own error path.
+              logger.error('Throttled render threw; next requestRender will reschedule', { error: String(err) });
+            }
+          }, delay);
+        } else {
+          lastRenderTime = now;
           renderRequestRef.value();
-        }, delay);
-      } else {
-        lastRenderTime = now;
-        renderRequestRef.value();
+        }
+      } catch (err) {
+        logger.error('Immediate render threw; next requestRender will reschedule', { error: String(err) });
       }
     });
   };
