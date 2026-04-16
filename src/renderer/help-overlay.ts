@@ -64,35 +64,44 @@ export function renderHelpOverlay(
     '',
   ];
 
-  const commandRows: string[] = [
-    '  Quick Start',
-    '  ' + '\u2500'.repeat(40),
-    '  /setup onboarding     Guided first-run review and environment posture',
-    '  /cockpit              Unified runtime control room',
-    '  /settings             Settings and config browser',
-    '',
-    '  Build And Operate',
-    '  ' + '\u2500'.repeat(40),
-    '  /provider             Choose provider or model family',
-    '  /subscription         Review provider logins and subscriptions',
-    '  /marketplace open     Browse plugins, skills, and packs',
-    '  /remote setup         Review remote, bridge, and tunnel flows',
-    '  /sandbox review       Inspect secure execution posture',
-    '',
-    '  Review And Govern',
-    '  ' + '\u2500'.repeat(40),
-    '  /security             Security review workspace',
-    '  /policy               Simulation, lint, and preflight review',
-    '  /incident             Incident workspace and export flows',
-    '  /knowledge            Durable knowledge and review queue',
-    '',
-    '  Power Surfaces',
-    '  ' + '\u2500'.repeat(40),
-    '  /hooks                Hook workbench and runtime activity',
-    '  /orchestration        Graph and recursive-agent control room',
-    '  /communication        Structured agent communication workspace',
-    '  /tasks                Task surface for list/show/pause/resume/output',
+  // Featured commands shown in the Quick Start section.
+  // Each entry is [commandName, subcommandOrArgHint, description].
+  // Commands not registered in the live registry are omitted at render time.
+  const FEATURED_COMMANDS: Array<[name: string, argHint: string, desc: string]> = [
+    ['setup',        'onboarding', 'Guided first-run review and environment posture'],
+    ['cockpit',      '',           'Unified runtime control room'],
+    ['settings',     '',           'Settings and config browser'],
+    ['provider',     '',           'Choose provider or model family'],
+    ['subscription', '',           'Review provider logins and subscriptions'],
+    ['marketplace',  'open',       'Browse plugins, skills, and packs'],
+    ['remote',       'setup',      'Review remote, bridge, and tunnel flows'],
+    ['sandbox',      'review',     'Inspect secure execution posture'],
+    ['security',     '',           'Security review workspace'],
+    ['policy',       '',           'Simulation, lint, and preflight review'],
+    ['incident',     '',           'Incident workspace and export flows'],
+    ['knowledge',    '',           'Durable knowledge and review queue'],
+    ['hooks',        '',           'Hook workbench and runtime activity'],
+    ['orchestration','',           'Graph and recursive-agent control room'],
+    ['communication','',           'Structured agent communication workspace'],
+    ['tasks',        '',           'Task surface for list/show/pause/resume/output'],
   ];
+
+  // Build command rows from featured list, filtering out unregistered commands.
+  function featuredRow(name: string, argHint: string, desc: string): string {
+    const invocation = argHint ? `/${name} ${argHint}` : `/${name}`;
+    return `  ${invocation.padEnd(23)}  ${desc}`;
+  }
+
+  const quickStartRows: string[] = [];
+  for (const [name, argHint, desc] of FEATURED_COMMANDS) {
+    if (!hasCommand(name)) continue; // omit if not in live registry
+    quickStartRows.push(featuredRow(name, argHint, desc));
+  }
+
+  const commandRows: string[] = [];
+  if (quickStartRows.length > 0) {
+    commandRows.push('  Quick Start', '  ' + '\u2500'.repeat(40), ...quickStartRows, '');
+  }
 
   if (commands && commands.length > 0) {
     commandRows.push('', '  Available Slash Commands', '  ' + '\u2500'.repeat(40));
