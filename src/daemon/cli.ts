@@ -87,7 +87,8 @@ async function main(): Promise<void> {
   });
 
   // Print companion connection info + QR code to stdout.
-  const daemonPort = Number(process.env.GOODVIBES_DAEMON_PORT ?? process.env.PORT ?? 3000);
+  // Use the config-driven control plane port, not a hardcoded default.
+  const daemonPort = config.get('controlPlane.port');
   const daemonHost = String(process.env.GOODVIBES_DAEMON_HOST ?? 'localhost');
   const daemonUrl = `http://${daemonHost}:${daemonPort}`;
   const companionTokenRecord = getOrCreateCompanionToken('tui');

@@ -22,7 +22,7 @@ const C = {
  * Populated at construction; updated when the token is regenerated.
  */
 export interface QrPanelConnectionInfo {
-  /** Full connection URL (e.g. http://localhost:3000) */
+  /** Full connection URL (e.g. http://localhost:3141) */
   readonly url: string;
   /** Auth token (will be truncated for display) */
   readonly token: string;
