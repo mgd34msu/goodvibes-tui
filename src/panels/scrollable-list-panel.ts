@@ -1,15 +1,17 @@
 import type { Line } from '../types/grid.ts';
-import { createEmptyLine } from '../types/grid.ts';
+import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { PanelCategory } from './types.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import {
   buildEmptyState,
   buildPanelWorkspace,
+  buildSearchInputLine,
   DEFAULT_PANEL_PALETTE,
   resolveScrollablePanelSection,
   type PanelPalette,
 } from './polish.ts';
+import { GLYPHS } from '../renderer/ui-primitives.ts';
 import {
   isPanelSearchBackspace,
   isPanelSearchCancel,
@@ -47,6 +49,12 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   protected selectedIndex = 0;
   /** Tracks the first visible row index; kept in sync with resolveScrollablePanelSection. */
   protected scrollStart = 0;
+  /**
+   * When true, prepends a 2-column `▸ ` gutter on the selected row.
+   * Unselected rows get `  ` (two spaces) to maintain alignment.
+   * Opt-in; default false to avoid breaking existing panel layouts.
+   */
+  protected showSelectionGutter = false;
 
   constructor(
     id: string,
@@ -250,6 +258,23 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
       this.renderItem(item, index, index === this.selectedIndex, width),
     );
 
+    // I5: prepend selection gutter when opted in
+    if (this.showSelectionGutter) {
+      const infoColor = this.getPalette().info ?? DEFAULT_PANEL_PALETTE.info;
+      const dimColor = this.getPalette().dim;
+      for (let i = 0; i < scrollableLines.length; i++) {
+        const line = scrollableLines[i]!;
+        const isSelected = i === this.selectedIndex;
+        // Shift all cells right by 2, drop the last 2 to preserve width
+        const shifted = line.slice(0, width - 2);
+        const gutterChar = isSelected ? GLYPHS.navigation.selected : ' ';
+        const gutterFg = isSelected ? infoColor : dimColor;
+        const g0 = createStyledCell(gutterChar, { fg: gutterFg, bold: isSelected });
+        const g1 = createStyledCell(' ', { fg: gutterFg });
+        scrollableLines[i] = [g0, g1, ...shifted] as Line;
+      }
+    }
+
     // Empty state
     if (scrollableLines.length === 0) {
       const emptyLines = buildEmptyState(
@@ -411,21 +436,23 @@ export abstract class SearchableListPanel<T> extends ScrollableListPanel<T> {
   }
 
   /**
-   * Build the search input `Line` suitable for use in a panel header.
+   * Build the filter input `Line` for use in a panel header section.
    *
-   * Import `buildSearchInputLine` from `./polish.ts` and call it with
-   * `this.searchQuery`. Convenience wrapper:
+   * Renders the filter label and current query with context-sensitive formatting:
    *
-   * ```ts
-   * import { buildSearchInputLine } from './polish.ts';
+   * - **Focused** (`focused = true`): `[Filter] query_`  — active, bold, cursor visible
+   * - **Unfocused** (`focused = false`): `Filter: query`  — dim, no cursor
    *
-   * private buildHeader(width: number): Line[] {
-   *   return [buildSearchInputLine(width, 'Filter', this.searchQuery, this.getPalette(), {})];
-   * }
-   * ```
-   *
-   * This method is intentionally left as a documentation reference rather
-   * than a concrete implementation to avoid coupling the base class to a
-   * specific label or search-input layout.
+   * @param width   Panel width in columns.
+   * @param label   Label text (default: `'Filter'`).
+   * @param focused Whether the filter input is currently active.
    */
+  protected buildFilterInputLine(width: number, label = 'Filter', focused: boolean): Line {
+    const palette = this.getPalette();
+    const formattedLabel = focused ? `[${label}] ` : `${label}: `;
+    const value = focused
+      ? `${this.searchQuery}_`
+      : this.searchQuery;
+    return buildSearchInputLine(width, formattedLabel, value, palette, { active: focused });
+  }
 }
