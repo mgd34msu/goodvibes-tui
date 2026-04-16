@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
-import { getTestFileUndoManager, resetTestRuntimeServices } from '../../test/helpers/runtime-services.ts';
+import { getTestFileUndoManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
