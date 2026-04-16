@@ -40,6 +40,44 @@ import { SelectionManager } from './selection.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 
+/**
+ * InputFeedContext — The single long-lived context object passed to feedInputTokens
+ * on every keystroke. Allocated once at InputHandler construction; mutated in place
+ * per-feed to avoid per-keystroke GC pressure from ~80-field object allocation.
+ *
+ * **Mutable per-feed** (synced from handler at the top of every feed() call, and
+ * updated inside action closures via syncFeedContextMutableFields):
+ *   - `prompt`, `cursorPos` — current text buffer state
+ *   - `commandMode`, `panelFocused`, `indicatorFocused` — focus-mode flags
+ *   - `helpOverlayActive`, `helpScrollOffset` — help overlay visibility and scroll
+ *   - `shortcutsOverlayActive`, `shortcutsScrollOffset` — shortcuts overlay state
+ *   - `nextPasteId`, `nextImageId` — monotonically increasing ID counters
+ *   - `mouseDownRow`, `mouseDownCol` — drag-tracking coordinates
+ *   - `contentWidth` — reflow width (semi-stable; synced at feed() entry only)
+ *   - `selectionCallback` — current in-flight selection modal callback (nullable)
+ *   - `requestRender` — swapped per-feed to a buffered version, restored after
+ *
+ * **Stable service handles** (set once at construction, never reallocated):
+ *   - `commandRegistry`, `commandContext` — wired via setCommandRegistry() after
+ *     construction; synced at feed() entry (not per-action) since no action changes them
+ *   - `autocomplete` — wired after construction; synced at feed() entry
+ *   - `inputHistory`, `conversationManager` — late-wired service handles; synced at
+ *     feed() entry only since no in-feed action rewires them
+ *   - `pasteRegistry`, `imageRegistry` — owned Maps, never replaced
+ *   - `selectionModal`, `bookmarkModal`, `settingsModal`, `sessionPickerModal`,
+ *     `profilePickerModal` — modal objects constructed once in InputHandler constructor
+ *   - `filePicker`, `modelPicker`, `processModal`, `liveTailModal`, `agentDetailModal`,
+ *     `contextInspectorModal`, `blockActionsMenu`, `searchManager`, `historySearch` —
+ *     service objects constructed once
+ *   - `panelManager`, `keybindingsManager` — from uiServices, stable for app lifetime
+ *   - `modalStack` — reference to the handler's shared array (mutated in place)
+ *   - `getHistory`, `getViewportHeight`, `getScrollTop`, `scroll`, `exitApp` — stable
+ *     callbacks bound in the InputHandler constructor
+ *   - All method closures (`modalOpened`, `handleEscape`, etc.) — bound once at init
+ *
+ * **Rationale:** per-feed mutation avoids per-keystroke allocation cost; stable
+ * references are service handles whose identity never changes after construction.
+ */
 export interface InputFeedContext {
   prompt: string;
   cursorPos: number;

@@ -77,7 +77,7 @@ describe('InputFeedContext reuse (α1)', () => {
       getHistory as unknown as () => import('../../core/history.ts').InfiniteBuffer,
       scroll,
       exitApp,
-      uiServices as unknown as Parameters<typeof InputHandler>[7],
+      uiServices as unknown as import('../../runtime/ui-services.ts').UiRuntimeServices,
     );
 
     // Feed 100 single-character keystrokes (each is one token).
@@ -94,6 +94,76 @@ describe('InputFeedContext reuse (α1)', () => {
     for (let i = 1; i < capturedContextRefs.length; i++) {
       expect(capturedContextRefs[i]).toBe(firstRef);
     }
+
+    spy.mockRestore();
+  });
+
+  test('mutable fields on the context reflect updated handler state between feeds', () => {
+    // This test verifies that per-feed sync correctly propagates prompt/cursorPos
+    // changes between feeds — i.e., the context is not stale after the first feed.
+    const capturedContexts: Array<{ prompt: string; cursorPos: number }> = [];
+    const spy = spyOn(handlerFeedModule, 'feedInputTokens').mockImplementation(
+      (ctx: InputFeedContext) => {
+        // Simulate what feedInputTokens does: mutate context fields
+        ctx.prompt = ctx.prompt + 'x';
+        ctx.cursorPos = ctx.prompt.length;
+        capturedContexts.push({ prompt: ctx.prompt, cursorPos: ctx.cursorPos });
+      },
+    );
+
+    const { InputHandler } = require('../../input/handler.ts') as typeof import('../../input/handler.ts');
+    const { SelectionManager } = require('../../input/selection.ts') as typeof import('../../input/selection.ts');
+
+    const uiServices = {
+      agents: {
+        agentManager: { getAllAgents: () => [], on: () => {}, off: () => {} } as unknown,
+        agentMessageBus: { on: () => {}, off: () => {} } as unknown,
+        wrfcController: { on: () => {}, off: () => {} } as unknown,
+      },
+      environment: {
+        shellPaths: {
+          homeDirectory: '/tmp',
+          workingDirectory: '/tmp',
+          resolveProjectPath: (...parts: string[]) => parts.join('/'),
+        },
+      },
+      providers: {
+        favoritesStore: { getAll: () => [] } as unknown,
+        benchmarkStore: { getAll: () => [] } as unknown,
+        providerRegistry: { getAll: () => [] } as unknown,
+      },
+      sessions: { sessionManager: { getAll: () => [] } as unknown },
+      shell: {
+        processManager: { getAll: () => [] } as unknown,
+        bookmarkManager: { getAll: () => [] } as unknown,
+        profileManager: { getAll: () => [] } as unknown,
+        panelManager: { isVisible: () => false, getAllOpen: () => [] } as unknown,
+        keybindingsManager: { matches: () => false, lookup: () => null } as unknown,
+      },
+    };
+
+    const selection = new SelectionManager();
+    const handler = new InputHandler(
+      () => {},
+      selection,
+      () => 0,
+      () => 24,
+      (() => ({ getLineCount: () => 0 })) as unknown as () => import('../../core/history.ts').InfiniteBuffer,
+      () => {},
+      () => {},
+      uiServices as unknown as import('../../runtime/ui-services.ts').UiRuntimeServices,
+    );
+
+    // Feed keystroke 'a' — mock simulates ctx.prompt becoming 'x', cursorPos=1
+    handler.feed('a');
+    expect(capturedContexts[0]?.prompt).toBe('x');
+    expect(capturedContexts[0]?.cursorPos).toBe(1);
+
+    // Feed keystroke 'b' — handler syncs ctx.prompt='x' from handler.prompt (set after 1st feed).
+    // The mock will then append another 'x', making prompt='xx', cursorPos=2.
+    handler.feed('b');
+    expect(capturedContexts[1]?.prompt).toBe('xx');
+    expect(capturedContexts[1]?.cursorPos).toBe(2);
 
     spy.mockRestore();
   });

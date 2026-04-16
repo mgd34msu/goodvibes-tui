@@ -4,6 +4,66 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.23] — 2026-04-16
+
+### Wave 4α+β performance bundle + α review follow-ups + regression fixes
+
+Bundles Wave 4α (conversation-rendering double-parse elimination) and Wave 4β
+(feed-context object reuse) into a single release, adds documentation and test
+follow-ups from the 4α review, and fixes two regressions surfaced during that
+review.
+
+### Performance (Wave 4α — conversation-rendering)
+
+- **`src/core/conversation-rendering.ts`** — eliminates the legacy `renderMarkdown()`
+  duplicate call used for `'code'` mode line counting. The 'all' mode retain its
+  intentional measurement pass (see inline comment for rationale); the 'code' mode
+  now derives its gutter width from the single `renderMarkdownTracked()` call.
+
+### Performance (Wave 4β — feed-context object reuse)
+
+- **`src/input/handler.ts`** — `InputHandler` now allocates a single `InputFeedContext`
+  at startup (`initFeedContext()`) and mutates only the 14 mutable fields before
+  each `feedInputTokens()` call via `syncFeedContextMutableFields()`. Stable service
+  handles, closures, and callbacks are wired once and never re-assigned. Eliminates
+  per-keystroke allocations on the hot input path.
+- **`src/input/feed-context-factory.ts`** (new) — extracts `buildInitialFeedContext()`
+  and the `FeedContextMutableInit` / `FeedContextStableRefs` / `FeedContextClosures`
+  interfaces out of `handler.ts` to keep `handler.ts` under the 800-line architecture
+  cap.
+
+### Regression fixes
+
+- **R1 — `handler.ts` architecture cap** — `handler.ts` was 830 lines after Wave 4β.
+  Extracted factory functions into `src/input/feed-context-factory.ts`; `handler.ts`
+  is now exactly 800 lines. `bun run architecture:check` passes.
+- **R2 — `SearchableListPanel.buildFilterInputLine` cursor glyph** — the focused
+  filter line (`[Label] query_`) was rendering the trailing `_` as the block cursor
+  glyph `█` because `buildSearchInputLine` substitutes `_` → `█` when `active:true`.
+  Fixed by passing `active:false` with explicit `inputBg`/`info` colors; the
+  `[Label] ` bracket format provides the focused visual affordance without triggering
+  the substitution. Fixes the pre-existing test failure from 0.18.22.
+
+### Quality bumps (Wave 4α review follow-ups)
+
+- **F1** — `src/test/input/feed-context-reuse.test.ts`: added mutable-field assertion
+  verifying `ctx.prompt` and `ctx.cursorPos` update between feeds (feeds 'a' → 'b',
+  asserts accumulated mutation).
+- **F2** — `src/test/input/keybinding-lookup.test.ts`: replaced no-op reload test
+  with a real temp-file config override (remaps `search` → Ctrl+G, verifies Ctrl+F
+  returns null); added a second test for conflicting bindings (two actions mapped to
+  same combo resolves to one of them, not null).
+- **F3** — `src/input/handler-feed.ts`: added JSDoc to `InputFeedContext` interface
+  documenting all mutable-per-feed fields vs. stable service handles and explaining
+  the reuse rationale.
+- **F4** — `src/input/feed-context-factory.ts`: `syncFeedContextMutableFields()` has
+  full JSDoc listing every synced field and documenting intentional exclusions.
+- **F5** — `src/core/conversation-rendering.ts`: added inline comment block explaining
+  why 'all' mode requires a double-call to `renderMarkdownTracked` (Option B) and
+  why single-pass is not feasible.
+
+---
+
 ## [0.18.22] — 2026-04-16
 
 ### Wave 3b / Tier 2 TUI UX Consistency — Panel Migration Batch

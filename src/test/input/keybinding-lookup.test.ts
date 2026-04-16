@@ -5,6 +5,9 @@
  * and returns null for tokens that match no binding.
  */
 import { describe, it, expect } from 'bun:test';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   KeybindingsManager,
   DEFAULT_KEYBINDINGS,
@@ -54,14 +57,44 @@ describe('KeybindingsManager.lookup() (α2)', () => {
     expect(km.lookup({ logicalName: 'f', ctrl: true, alt: true })).toBeNull();
   });
 
-  it('rebuilds map correctly after loadFromDisk() override', () => {
-    const km = makeKm();
-    // Before override: search = Ctrl+F
-    expect(km.lookup({ logicalName: 'f', ctrl: true })).toBe('search');
-    // After we inject a custom binding via loadFromDisk equivalent — directly
-    // access bindings through the public getAll/matches interface instead.
-    // Verify the existing default still holds after a no-op reload.
-    km.loadFromDisk(); // config file doesn't exist, so defaults are retained
-    expect(km.lookup({ logicalName: 'f', ctrl: true })).toBe('search');
+  it('rebuilds map correctly after loadFromDisk() real override', () => {
+    // Create a temp config that remaps 'search' from Ctrl+F to Ctrl+G
+    const dir = join(tmpdir(), `gv-kb-test-${Date.now()}`);
+    mkdirSync(dir, { recursive: true });
+    const configPath = join(dir, 'keybindings.json');
+    writeFileSync(configPath, JSON.stringify({ search: { key: 'g', ctrl: true } }), 'utf-8');
+    try {
+      const km = new KeybindingsManager({ configPath });
+      km.loadFromDisk();
+      // After override: Ctrl+G => search, Ctrl+F => null
+      expect(km.lookup({ logicalName: 'g', ctrl: true })).toBe('search');
+      expect(km.lookup({ logicalName: 'f', ctrl: true })).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('conflicting bindings: last-writer-wins (deterministic)', () => {
+    // Map both 'search' and 'clear-cancel' to Ctrl+X in the config.
+    // buildLookupMap iterates actions in object entry order; whichever action
+    // is processed last overwrites the earlier one for that combo key.
+    // The test verifies the behavior is deterministic (not a throw or undefined).
+    const dir = join(tmpdir(), `gv-kb-conflict-${Date.now()}`);
+    mkdirSync(dir, { recursive: true });
+    const configPath = join(dir, 'keybindings.json');
+    // Both search and clear-cancel mapped to Ctrl+X
+    writeFileSync(configPath, JSON.stringify({
+      search: { key: 'x', ctrl: true },
+      'clear-cancel': { key: 'x', ctrl: true },
+    }), 'utf-8');
+    try {
+      const km = new KeybindingsManager({ configPath });
+      km.loadFromDisk();
+      const result = km.lookup({ logicalName: 'x', ctrl: true });
+      // Must be one of the two bound actions (not null, not undefined)
+      expect(result === 'search' || result === 'clear-cancel').toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

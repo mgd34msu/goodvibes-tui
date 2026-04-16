@@ -102,8 +102,20 @@ export function renderConversationAssistantMessage(
   if (message.content) {
     const showAllLineNumbers = lineNumberMode === 'all';
     const showCodeBlockLineNumbers = lineNumberMode === 'all' ? false : lineNumberMode === 'code';
-    // First pass with a wide render to measure totalLines for gutter sizing.
+    // First pass: measure totalLines for gutter sizing (only when line-numbers='all').
     // When line numbers are off, skip the measurement pass entirely.
+    //
+    // NOTE: The 'all' mode intentionally calls renderMarkdownTracked twice:
+    //   1. Measure pass: render at full `width` to get the total line count, which
+    //      determines `numWidth` (digit count) and thus `gutterW` (gutter column width).
+    //   2. Render pass: render at `width - gutterW` with the gutter factored in.
+    //
+    // Single-pass is not feasible here because `numWidth` depends on `totalLines`,
+    // which is unknown before rendering. The 4α commit message claim that this
+    // "eliminates double-parse when line numbers are enabled" was inaccurate:
+    // 4α eliminated the legacy `renderMarkdown()` duplicate that was used for the
+    // code-block line-number mode ('code'). The 'all' mode double-call is unavoidable
+    // by design and remains unchanged.
     const measureWidth = showAllLineNumbers ? width : 0;
     const totalLines = showAllLineNumbers
       ? renderMarkdownTracked(message.content, measureWidth, { codeBlockLineNumbers: false }).lines.length
