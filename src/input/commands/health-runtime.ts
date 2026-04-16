@@ -1,4 +1,4 @@
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
 import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';

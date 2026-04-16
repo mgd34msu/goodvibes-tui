@@ -4,7 +4,7 @@ import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config/oauth-local-listener';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
 import type { OAuthProviderConfig, ProviderSubscription } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '../../config/subscription-providers.ts';
+import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
 import { inspectProviderAuth } from '@pellux/goodvibes-sdk/platform/runtime/auth/inspection';
 import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils/open-external';
 import { requireSecretsManager, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';

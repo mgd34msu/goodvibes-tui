@@ -92,7 +92,7 @@ export interface BootstrapCommandSectionOptions {
   readonly benchmarkStore?: import('@pellux/goodvibes-sdk/platform/providers/model-benchmarks').BenchmarkStore;
   readonly subscriptionManager?: import('@pellux/goodvibes-sdk/platform/config/subscriptions').SubscriptionManager;
   readonly secretsManager?: import('../config/secrets.ts').SecretsManager;
-  readonly serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
+  readonly serviceRegistry?: import('@pellux/goodvibes-sdk/platform/config/service-registry').ServiceRegistry;
   readonly localUserAuthManager?: import('@pellux/goodvibes-sdk/platform/security/user-auth').UserAuthManager;
   readonly tokenAuditor?: import('@pellux/goodvibes-sdk/platform/security/token-audit').ApiTokenAuditor;
   readonly replayEngine?: import('@pellux/goodvibes-sdk/platform/core/deterministic-replay').DeterministicReplayEngine;

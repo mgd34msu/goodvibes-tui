@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { handleSelectionModalToken } from '../../input/handler-modal-routes.ts';
 import { handleModelPickerToken } from '../../input/handler-picker-routes.ts';

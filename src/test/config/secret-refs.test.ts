@@ -9,7 +9,7 @@ import {
   type SecretCommandRunner,
 } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 function makeTmpDir(): string {

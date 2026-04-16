@@ -1,7 +1,7 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/index';
 import { buildKnowledgeInjectionPrompt, selectKnowledgeForTask } from '@pellux/goodvibes-sdk/platform/state/knowledge-injection';
-import { listBuiltinSubscriptionProviders } from '../../config/subscription-providers.ts';
+import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
 import { requireReadModels, requireSubscriptionManager, requireTokenAuditor } from './runtime-services.ts';
 import { getMemoryApi } from './recall-query.ts';
 

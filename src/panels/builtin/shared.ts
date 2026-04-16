@@ -1,5 +1,5 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { ServiceRegistry } from '../../config/service-registry.ts';
+import type { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import type { Orchestrator } from '../../core/orchestrator';

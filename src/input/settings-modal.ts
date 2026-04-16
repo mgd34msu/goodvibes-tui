@@ -14,7 +14,7 @@ import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagSt
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { listBuiltinSubscriptionProviders } from '../config/subscription-providers.ts';
+import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
 import type { ProviderAuthFreshness, ProviderAuthRoute } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
 import { getResolvedSettingLookup } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';

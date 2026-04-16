@@ -82,7 +82,7 @@ export type CreateBootstrapCommandContextOptions = {
   providerApi?: ProviderApi;
   subscriptionManager?: import('@pellux/goodvibes-sdk/platform/config/subscriptions').SubscriptionManager;
   secretsManager?: import('../config/secrets.ts').SecretsManager;
-  serviceRegistry?: import('../config/service-registry.ts').ServiceRegistry;
+  serviceRegistry?: import('@pellux/goodvibes-sdk/platform/config/service-registry').ServiceRegistry;
   localUserAuthManager?: import('@pellux/goodvibes-sdk/platform/security/user-auth').UserAuthManager;
   tokenAuditor?: import('@pellux/goodvibes-sdk/platform/security/token-audit').ApiTokenAuditor;
   replayEngine?: import('@pellux/goodvibes-sdk/platform/core/deterministic-replay').DeterministicReplayEngine;

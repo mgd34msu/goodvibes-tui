@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { getBuiltinSubscriptionProvider } from '../../config/subscription-providers.ts';
+import { getBuiltinSubscriptionProvider } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 describe('subscription providers', () => {

@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 const originalFetch = globalThis.fetch;

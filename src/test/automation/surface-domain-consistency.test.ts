@@ -10,7 +10,7 @@ import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/auto
 import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
