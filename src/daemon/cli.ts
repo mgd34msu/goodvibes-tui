@@ -92,8 +92,13 @@ async function main(): Promise<void> {
   });
   const { daemonToken, httpToken } = readDaemonCliTokens(process.env);
 
-  daemon.enable({ daemon: true }, daemonToken);
-  listener.enable({ httpListener: true }, httpToken);
+  // If no explicit daemon token is set, use the companion token so mobile apps can connect.
+  const companionTokenRecord = getOrCreateCompanionToken('tui');
+  const effectiveDaemonToken = daemonToken ?? companionTokenRecord.token;
+  const effectiveHttpToken = httpToken ?? effectiveDaemonToken;
+
+  daemon.enable({ daemon: true }, effectiveDaemonToken);
+  listener.enable({ httpListener: true }, effectiveHttpToken);
 
   await Promise.all([
     daemon.start(),
@@ -118,7 +123,6 @@ async function main(): Promise<void> {
   const daemonPort = config.get('controlPlane.port');
   const daemonHost = String(process.env.GOODVIBES_DAEMON_HOST ?? getLocalNetworkIp());
   const daemonUrl = `http://${daemonHost}:${daemonPort}`;
-  const companionTokenRecord = getOrCreateCompanionToken('tui');
   const bootstrapPassword = readBootstrapPassword(userAuth.getBootstrapCredentialPath());
   const connectionInfo = buildCompanionConnectionInfo({
     daemonUrl,
