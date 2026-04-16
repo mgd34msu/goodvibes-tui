@@ -4,6 +4,36 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.18.15] — 2026-04-16
+
+### Correctness Fix
+
+- **daemon SIGINT/SIGTERM drain**: `src/daemon/cli.ts` — added AbortController signaling for in-flight requests, 15-second `Promise.race` shutdown deadline, hard `process.exit(1)` if deadline exceeded, debounced double-signal guard (`shutdownInFlight` flag)
+
+### Dead Code Removal (Tier 3 items 15-17)
+
+- Deleted 15 TUI mirror files with zero external importers:
+  - `src/runtime/diagnostics/index.ts`, `provider.ts`, `actions.ts`
+  - `src/runtime/diagnostics/panels/agents.ts`, `events.ts`, `health.ts`, `tasks.ts`, `tool-calls.ts`
+  - `src/runtime/store/helpers/reducers.ts` (barrel) and 4 sub-reducers
+  - `src/runtime/store/domains/permissions.ts`, `conversation.ts`
+- Updated `src/runtime/diagnostics/panels/index.ts` to re-export deleted panels from SDK
+
+### Config Re-export Shim Inlining (Tier 3 item 18)
+
+- Deleted `src/config/service-registry.ts` and `src/config/subscription-providers.ts` (1-line SDK re-exports)
+- Updated 29 call sites to import directly from `@pellux/goodvibes-sdk/platform/config/*`
+
+### SDK Consolidation — UI Read Models (Tier 3 items 19-20)
+
+- Converted 9 TUI mirror files to 1-line SDK re-exports (preserving all call-site import paths):
+  - `ui-events.ts`, `ui-service-queries.ts`, `ui-read-model-helpers.ts`
+  - `ui-read-models-observability.ts` and 4 observability sub-files (maintenance, options, remote, security, system)
+- Skipped (TUI-specific divergence): `ui-services.ts` (uses TUI `SecretsManager` subclass), `ui-read-models.ts` (depends on TUI `RuntimeServices`)
+- panel-resources drift: TUI version (119 lines) uses `panel-health-monitor.ts`; SDK version (152 lines) uses `component-health-monitor.js` — different monitor interfaces, TUI-specific binding kept
+
+---
+
 ## [0.18.14] — 2026-04-16
 
 ### Panel Navigation Overhaul
