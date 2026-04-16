@@ -105,13 +105,32 @@ async function main(): Promise<void> {
     config.get('danger.httpListener') ? listener.start() : Promise.resolve(),
   ]);
 
+  const abortController = new AbortController();
+
   const shutdown = async (): Promise<void> => {
-    await Promise.allSettled([listener.stop(), daemon.stop()]);
+    abortController.abort();
+    const SHUTDOWN_DEADLINE_MS = 15_000;
+    const timeout = new Promise<'timeout'>((resolve) =>
+      setTimeout(() => resolve('timeout'), SHUTDOWN_DEADLINE_MS)
+    );
+    const stop = Promise.allSettled([listener.stop(), daemon.stop()]).then(() => 'done' as const);
+    const result = await Promise.race([stop, timeout]);
+    if (result === 'timeout') {
+      logger.warn('shutdown deadline exceeded — forcing exit');
+      process.exit(1);
+    }
     process.exit(0);
   };
 
-  process.on('SIGINT', () => void shutdown());
-  process.on('SIGTERM', () => void shutdown());
+  let shutdownInFlight = false;
+  const handleSignal = (): void => {
+    if (shutdownInFlight) return;
+    shutdownInFlight = true;
+    void shutdown();
+  };
+
+  process.on('SIGINT', handleSignal);
+  process.on('SIGTERM', handleSignal);
 
   logger.info('goodvibes daemon host started', {
     daemon: config.get('danger.daemon'),
