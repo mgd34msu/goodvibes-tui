@@ -13,7 +13,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/providers/local-context-ingestion';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { enrichModelEntries } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/health-enrichment';
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';

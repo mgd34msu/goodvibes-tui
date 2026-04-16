@@ -11,7 +11,7 @@ import type { UiWorktreeSnapshot } from '../../runtime/ui-read-models.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 import { createStaticUiReadModel, createTasksReadModel } from '../helpers/ui-read-models.ts';

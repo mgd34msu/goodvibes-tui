@@ -4,7 +4,7 @@
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SecretsManager } from '../../config/secrets.ts';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';

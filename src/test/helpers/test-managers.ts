@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SecretsManager } from '../../config/secrets.ts';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';

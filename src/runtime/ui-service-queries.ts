@@ -2,7 +2,7 @@ import type {
   ServiceConfig,
   ServiceConnectionTestResult,
   ServiceInspection,
-} from '../config/service-registry.ts';
+} from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import type {
   PendingSubscriptionLogin,
   ProviderSubscription,

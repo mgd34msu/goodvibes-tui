@@ -5,7 +5,7 @@ import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/p
 import { LMStudioProvider } from '@pellux/goodvibes-sdk/platform/providers/lm-studio';
 import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '../../config/service-registry.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 
 function sse(events: Array<{ event: string; data: Record<string, unknown> }>): string {
