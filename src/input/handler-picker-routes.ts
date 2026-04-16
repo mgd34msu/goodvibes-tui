@@ -57,9 +57,11 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
           if (selected.reasoningEffort && selected.reasoningEffort.length > 0) {
             state.modelPicker.showEffortPicker(selected, currentEffort);
           } else {
+            const target = state.modelPicker.target;
             state.commandContext?.completeModelSelection?.({
               model: selected,
               effort: currentEffort,
+              target,
             });
             state.modelPicker.close();
             if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
@@ -76,7 +78,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
       } else if (mode === 'effort') {
         const model = state.modelPicker.pendingModel;
         const effort = state.modelPicker.effortLevels[idx];
-        if (model && effort) state.commandContext?.completeModelSelection?.({ model, effort });
+        if (model && effort) state.commandContext?.completeModelSelection?.({ model, effort, target: state.modelPicker.target });
         state.modelPicker.close();
         if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
       } else if (mode === 'contextCap') {
@@ -86,7 +88,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
           const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
           const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
           const effort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
-          state.commandContext?.completeModelSelection?.({ model: capModel, effort, contextCap: validCap });
+          state.commandContext?.completeModelSelection?.({ model: capModel, effort, contextCap: validCap, target: state.modelPicker.target });
         }
         state.modelPicker.close();
         if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();

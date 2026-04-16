@@ -109,6 +109,14 @@ const SETTING_LABELS: Partial<Record<string, string>> = {
   'sandbox.qemuBinary': 'QEMU Binary',
   'sandbox.qemuImagePath': 'QEMU Image',
   'sandbox.qemuExecWrapper': 'QEMU Wrapper',
+  'tools.llmProvider': 'Tool LLM Provider',
+  'tools.llmModel': 'Tool LLM Model',
+  'tools.autoHeal': 'Auto-Heal',
+  'tools.defaultTokenBudget': 'Default Token Budget',
+  'tools.hooksFile': 'Hooks File',
+  'helper.enabled': 'Helper Enabled',
+  'helper.globalProvider': 'Helper Provider',
+  'helper.globalModel': 'Helper Model',
 };
 
 function getSettingLabel(entry: SettingEntry): string {
@@ -161,6 +169,7 @@ export function renderSettingsModal(
   const isSubscriptionsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'subscriptions';
   const isFlagsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'flags';
   const isUiTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'ui';
+  const isToolsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'tools';
   let persistentHelpers: import('./modal-factory.ts').ModalHelperRow[] | undefined;
   sections.push({
     type: 'text',
@@ -174,7 +183,9 @@ export function renderSettingsModal(
             ? 'Control shell presentation, including where operational and WRFC updates render across conversation and panels.'
           : isFlagsTab
             ? 'Feature flags control staged or experimental behavior. Some changes may require restart.'
-            : 'Browse and adjust operator-facing runtime settings by category.',
+            : isToolsTab
+              ? 'Configure tool LLM routing and helper model. Provider and model fields are optional — empty means use the active provider.'
+              : 'Browse and adjust operator-facing runtime settings by category.',
     style: { fg: '246', dim: true },
   });
 
@@ -511,6 +522,138 @@ export function renderSettingsModal(
     }
 
     const hints = ['[Tab] Category', '[Up/Down] Navigate', '[Enter] Review / Confirm', '[Esc] Close'];
+    return ModalFactory.createModal(
+      {
+        title: 'Settings',
+        width: boxW,
+        margin: boxMargin,
+        targetContentRows,
+        tabs: SETTINGS_CATEGORIES.map((category, index) => ({
+          label: CATEGORY_LABELS[category],
+          active: index === modal.categoryIndex,
+        })),
+        sections,
+        hints,
+        helpers: persistentHelpers,
+      },
+      width,
+    );
+  }
+
+  // ── Tools tab ─────────────────────────────────────────────────
+  if (isToolsTab) {
+    const toolsItems = modal.currentItems; // includes helper.* entries routed into tools group
+
+    if (toolsItems.length === 0) {
+      sections.push({
+        type: 'text',
+        content: '(no tool or helper settings available)',
+        style: { fg: '240', dim: true },
+      });
+    } else {
+      const labelW = Math.floor(contentW * 0.38);
+      const valW = Math.floor(contentW * 0.30);
+      const srcW = Math.max(0, contentW - labelW - valW - 4);
+
+      sections.push({
+        type: 'text',
+        content: `${fitDisplay('Setting', labelW)}  ${fitDisplay('Value', valW)}  Source`,
+        style: { fg: '240', dim: true },
+      });
+      sections.push({ type: 'separator' });
+
+      const window = getVisibleWindow(toolsItems.length, modal.selectedIndex, maxVisibleRows);
+      const visibleItems = toolsItems.slice(window.start, window.end);
+
+      // Render each entry as an individual text row so section headers can interleave.
+      // Section headers are emitted when the key prefix changes (tools.* vs helper.*).
+      let lastGroupPrefix = '';
+      for (let i = 0; i < visibleItems.length; i++) {
+        const entry = visibleItems[i]!;
+        const isSelected = window.start + i === modal.selectedIndex;
+        const isEditing = isSelected && modal.editingMode;
+        const prefix = entry.setting.key.split('.')[0]!;
+
+        // Emit a section header when the group prefix changes
+        if (prefix !== lastGroupPrefix) {
+          lastGroupPrefix = prefix;
+          const sectionLabel = prefix === 'helper' ? '── Helper Model ──' : '── Tool LLM ──';
+          sections.push({
+            type: 'text',
+            content: fitDisplay(sectionLabel, contentW),
+            style: { fg: '243', dim: true },
+          });
+        }
+
+        const label = getSettingLabel(entry);
+        const labelStr = fitDisplay(label, labelW);
+
+        let valueStr: string;
+        if (entry.setting.type === 'boolean') {
+          const boolVal = Boolean(entry.currentValue);
+          valueStr = isEditing ? `${modal.editBuffer}\u2588` : (boolVal ? '[on]' : '[off]');
+        } else if (isEditing) {
+          valueStr = `${modal.editBuffer}\u2588`;
+        } else {
+          valueStr = formatValue(entry);
+        }
+
+        const valStr = fitDisplay(valueStr, valW);
+        const sourceText = entry.effectiveSource ?? 'default';
+        const srcStr = fitDisplay(sourceText, srcW);
+        const rowLabel = `${labelStr}  ${valStr}  ${srcStr}`;
+
+        // Render as a single-item list so the ModalFactory applies selection highlight
+        sections.push({
+          type: 'list',
+          items: [{
+            label: rowLabel,
+            selected: isSelected,
+            style: isSelected ? undefined : { fg: valueColor(entry) },
+          }],
+        });
+      }
+
+      if (toolsItems.length > maxVisibleRows) {
+        sections.push({
+          type: 'text',
+          content: `[${window.start + 1}-${window.end} of ${toolsItems.length}]`,
+          style: { fg: '244', dim: true },
+        });
+      }
+
+      // Description of selected entry
+      const selected = modal.getSelected();
+      if (selected) {
+        sections.push({ type: 'separator' });
+        sections.push({
+          type: 'text',
+          content: truncateDisplay(selected.setting.description, contentW),
+          style: { fg: '246', dim: true },
+        });
+        if (selected.setting.type === 'boolean') {
+          sections.push({
+            type: 'text',
+            content: truncateDisplay(`Currently ${Boolean(selected.currentValue) ? 'enabled' : 'disabled'}. Press Enter or Space to toggle.`, contentW),
+            style: { fg: '#38bdf8', dim: true },
+          });
+        } else {
+          const emptyNote = selected.currentValue === '' || selected.currentValue === null || selected.currentValue === undefined
+            ? ' (empty = use active provider default)'
+            : '';
+          sections.push({
+            type: 'text',
+            content: truncateDisplay(`Current: ${formatValue(selected)}${emptyNote}`, contentW),
+            style: { fg: '#38bdf8', dim: true },
+          });
+        }
+      }
+    }
+
+    const hints = modal.editingMode
+      ? ['[Enter] Confirm', '[Esc] Cancel']
+      : ['[Tab] Category', '[\u2191\u2193] Navigate', '[Enter] Toggle / Edit', '[Esc] Close'];
+
     return ModalFactory.createModal(
       {
         title: 'Settings',

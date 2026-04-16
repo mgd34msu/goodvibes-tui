@@ -272,6 +272,7 @@ describe('modal space actions', () => {
         commitEdit: () => {},
         toggleSelectedFlag: () => {},
         activateSelected: () => {},
+        pendingModelPickerTarget: null,
         adjustSelected: (direction, step) => { calls.push({ direction, step }); },
         moveUp: () => {},
         moveDown: () => {},

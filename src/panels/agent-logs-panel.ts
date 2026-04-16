@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, watch, type FSWatcher } from 'fs';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
@@ -38,7 +38,7 @@ export interface AgentLogsPanelDeps {
 // AgentLogsPanel
 // ---------------------------------------------------------------------------
 
-export class AgentLogsPanel extends BasePanel {
+export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   // ── Agent state ─────────────────────────────────────────────────────────
   private agents: AgentRecord[] = [];
   private selectedAgentIndex = 0;
@@ -47,7 +47,6 @@ export class AgentLogsPanel extends BasePanel {
   private allEntries: LogEntry[] = []; // raw parsed JSONL for selected agent
   private filteredEntries: LogEntry[] = []; // after filter applied
   private lastFileSize = 0;
-  private scrollOffset = 0;
 
   // ── Modes ────────────────────────────────────────────────────────────────
   private autoFollow = true;
@@ -66,6 +65,16 @@ export class AgentLogsPanel extends BasePanel {
     this._refreshAgents();
     this._startPolling();
     this._subscribeEvents();
+  }
+
+  // ── ScrollableListPanel<LogEntry> contract ────────────────────────────────
+
+  protected getItems(): readonly LogEntry[] {
+    return this.filteredEntries;
+  }
+
+  protected renderItem(entry: LogEntry, _index: number, _selected: boolean, width: number): Line {
+    return this._renderEntry(entry, width);
   }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -100,7 +109,7 @@ export class AgentLogsPanel extends BasePanel {
         this._cycleFilter();
         return true;
       case 'g': // g — jump to top
-        this.scrollOffset = 0;
+        this.selectedIndex = 0;
         this.autoFollow = false;
         this.markDirty();
         return true;
@@ -109,19 +118,8 @@ export class AgentLogsPanel extends BasePanel {
         this._clampScroll();
         this.markDirty();
         return true;
-      case 'k': // k / up
-      case '\x1b[A':
-        this.autoFollow = false;
-        this.scrollOffset = Math.max(0, this.scrollOffset - 1);
-        this.markDirty();
-        return true;
-      case 'j': // j / down
-      case '\x1b[B':
-        this.scrollOffset++;
-        this.markDirty();
-        return true;
       default:
-        return false;
+        return super.handleInput(key);
     }
   }
 
@@ -205,7 +203,7 @@ export class AgentLogsPanel extends BasePanel {
 
     const focusIndex = this.autoFollow
       ? Math.max(0, this.filteredEntries.length - 1)
-      : Math.min(this.scrollOffset, Math.max(0, this.filteredEntries.length - 1));
+      : Math.min(this.selectedIndex, Math.max(0, this.filteredEntries.length - 1));
     const summarySection = { title: 'Summary', lines: summaryLines } as const;
     const agentsSection = { title: 'Agents', lines: [selectorLine] } as const;
     const logStreamSection = resolveScrollablePanelSection(width, height, {
@@ -217,11 +215,11 @@ export class AgentLogsPanel extends BasePanel {
         title: 'Log Stream',
         scrollableLines: this.filteredEntries.map((entry) => this._renderEntry(entry, width)),
         selectedIndex: focusIndex,
-        scrollOffset: this.scrollOffset,
+        scrollOffset: this.scrollStart,
         minRows: 8,
       },
     });
-    this.scrollOffset = logStreamSection.scrollOffset;
+    this.scrollStart = logStreamSection.scrollOffset;
 
     return buildPanelWorkspace(width, height, {
       title: ' Agents',
@@ -273,7 +271,7 @@ export class AgentLogsPanel extends BasePanel {
       this.allEntries = parseAgentJsonl(content);
       this._applyFilter();
       if (this.autoFollow) {
-        this.scrollOffset = Math.max(0, this.filteredEntries.length - 1);
+        this.selectedIndex = Math.max(0, this.filteredEntries.length - 1);
       }
       this.markDirty();
     } catch {
@@ -373,7 +371,8 @@ export class AgentLogsPanel extends BasePanel {
     this.allEntries = [];
     this.filteredEntries = [];
     this.lastFileSize = 0;
-    this.scrollOffset = 0;
+    this.selectedIndex = 0;
+    this.scrollStart = 0;
     this.autoFollow = true;
     const agent = this._selectedAgent();
     if (agent) {
@@ -406,7 +405,7 @@ export class AgentLogsPanel extends BasePanel {
       this.allEntries = parseAgentJsonl(content);
       this._applyFilter();
       if (this.autoFollow) {
-        this.scrollOffset = Math.max(0, this.filteredEntries.length - 1);
+        this.selectedIndex = Math.max(0, this.filteredEntries.length - 1);
       }
     } catch {
       this.allEntries = [];
@@ -438,7 +437,7 @@ export class AgentLogsPanel extends BasePanel {
     this.filter = FILTER_CYCLE[(idx + 1) % FILTER_CYCLE.length]!;
     this._applyFilter();
     if (this.autoFollow) {
-      this.scrollOffset = Math.max(0, this.filteredEntries.length - 1);
+      this.selectedIndex = Math.max(0, this.filteredEntries.length - 1);
     }
     this.markDirty();
   }
@@ -449,7 +448,7 @@ export class AgentLogsPanel extends BasePanel {
   }
 
   private _clampScroll(): void {
-    this.scrollOffset = Math.min(this.scrollOffset, Math.max(0, this.filteredEntries.length - 1));
+    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredEntries.length - 1));
   }
 
   // ── Private: rendering helpers ─────────────────────────────────────────────

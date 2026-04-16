@@ -182,25 +182,41 @@ export function createBootstrapCommandActions(
     clearScreen: () => unwiredShellAction('clearScreen'),
     activatePlan,
     requestPermission: (request) => requestPermission(request),
-    completeModelSelection: ({ model, effort, contextCap }) => {
+    completeModelSelection: ({ model, effort, contextCap, target }) => {
       if (!model) return;
       const def = model;
       const key = def.registryKey ?? `${def.provider}:${def.id}`;
+      const resolvedTarget = target ?? 'main';
       try {
-        if (contextCap != null && contextCap > 0) {
-          providerRegistry.setModelContextCap(key, contextCap);
+        if (resolvedTarget === 'helper') {
+          // Write to helper config keys and enable the helper
+          configManager.set('helper.globalProvider', def.provider);
+          configManager.set('helper.globalModel', key);
+          configManager.set('helper.enabled', true);
+          conversation.log(`Helper model set to: ${def.displayName} (${def.provider})`, { fg: '135' });
+        } else if (resolvedTarget === 'tool') {
+          // Write to tool LLM config keys and enable the tool LLM
+          configManager.set('tools.llmProvider', def.provider);
+          configManager.set('tools.llmModel', key);
+          configManager.setDynamic('tools.llmEnabled' as never, true);
+          conversation.log(`Tool LLM set to: ${def.displayName} (${def.provider})`, { fg: '135' });
+        } else {
+          // Default: main provider/model
+          if (contextCap != null && contextCap > 0) {
+            providerRegistry.setModelContextCap(key, contextCap);
+          }
+          providerRegistry.setCurrentModel(key);
+          runtime.model = key;
+          runtime.provider = def.provider;
+          runtime.reasoningEffort = effort as 'instant' | 'low' | 'medium' | 'high';
+          configManager.set('provider.model', key);
+          configManager.set('provider.provider', def.provider);
+          configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
+          const ctxNote = contextCap != null && contextCap > 0
+            ? `, context cap: ${contextCap.toLocaleString()}`
+            : '';
+          conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}${ctxNote}`, { fg: '135' });
         }
-        providerRegistry.setCurrentModel(key);
-        runtime.model = key;
-        runtime.provider = def.provider;
-        runtime.reasoningEffort = effort as 'instant' | 'low' | 'medium' | 'high';
-        configManager.set('provider.model', key);
-        configManager.set('provider.provider', def.provider);
-        configManager.set('provider.reasoningEffort', effort as 'instant' | 'low' | 'medium' | 'high');
-        const ctxNote = contextCap != null && contextCap > 0
-          ? `, context cap: ${contextCap.toLocaleString()}`
-          : '';
-        conversation.log(`Switched to model: ${def.displayName} (${def.provider}), effort: ${effort}${ctxNote}`, { fg: '135' });
       } catch (e) {
         conversation.log(`Error switching model: ${summarizeError(e)}`, { fg: '#ef4444' });
       }

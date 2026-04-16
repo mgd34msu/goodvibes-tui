@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
@@ -29,11 +29,9 @@ const C = {
   selectBg: '#1e293b',
 } as const;
 
-export class ProviderAccountsPanel extends BasePanel {
+export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRecord> {
   private records: ProviderAccountRecord[] = [];
   private loading = false;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
   private readonly providerAccounts: ProviderAccountSnapshotQuery;
 
   public constructor(deps: ProviderAccountsPanelDeps) {
@@ -47,22 +45,26 @@ export class ProviderAccountsPanel extends BasePanel {
     if (!this.loading) void this.refresh();
   }
 
+  protected getItems(): readonly ProviderAccountRecord[] {
+    return this.records;
+  }
+
+  protected renderItem(item: ProviderAccountRecord, _index: number, selected: boolean, width: number): Line {
+    return buildPanelListRow(width, [
+      { text: item.providerId.padEnd(16), fg: item.active ? C.good : C.value },
+      { text: ` ${item.activeRoute.padEnd(14)}`, fg: item.activeRoute === 'subscription' ? C.info : item.activeRoute === 'api-key' ? C.warn : item.activeRoute === 'service-oauth' ? C.value : C.dim },
+      { text: ` models=${String(item.modelCount).padEnd(4)}`, fg: C.dim },
+      { text: ` ${item.authFreshness.padEnd(10)}`, fg: item.authFreshness === 'expired' ? C.bad : item.authFreshness === 'expiring' || item.authFreshness === 'pending' ? C.warn : C.dim },
+      { text: ` issues=${String(item.issues.length).padEnd(2)}`, fg: item.issues.length > 0 ? C.bad : C.good },
+    ], C, { selected });
+  }
+
   public handleInput(key: string): boolean {
     if (key === 'r') {
       void this.refresh();
       return true;
     }
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(Math.max(0, this.records.length - 1), this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+    return super.handleInput(key);
   }
 
   private async refresh(): Promise<void> {
@@ -70,7 +72,7 @@ export class ProviderAccountsPanel extends BasePanel {
     this.markDirty();
     const snapshot = await this.buildSnapshot();
     this.records = [...snapshot.providers];
-    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.records.length - 1));
+    this.clampSelection();
     this.loading = false;
     this.markDirty();
   }
@@ -177,15 +179,9 @@ export class ProviderAccountsPanel extends BasePanel {
     }
     const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Provider posture', postureLines, C) };
     const detailsSection: PanelWorkspaceSection = { lines: buildDetailBlock(width, 'Selected provider', detailRows, C) };
-    const rawProviderLines: Line[] = this.records.map((record, absolute) => {
-      return buildPanelListRow(width, [
-        { text: record.providerId.padEnd(16), fg: record.active ? C.good : C.value },
-        { text: ` ${record.activeRoute.padEnd(14)}`, fg: record.activeRoute === 'subscription' ? C.info : record.activeRoute === 'api-key' ? C.warn : record.activeRoute === 'service-oauth' ? C.value : C.dim },
-        { text: ` models=${String(record.modelCount).padEnd(4)}`, fg: C.dim },
-        { text: ` ${record.authFreshness.padEnd(10)}`, fg: record.authFreshness === 'expired' ? C.bad : record.authFreshness === 'expiring' || record.authFreshness === 'pending' ? C.warn : C.dim },
-        { text: ` issues=${String(record.issues.length).padEnd(2)}`, fg: record.issues.length > 0 ? C.bad : C.good },
-      ], C, { selected: absolute === this.selectedIndex });
-    });
+    const rawProviderLines: Line[] = this.records.map((record, absolute) =>
+      this.renderItem(record, absolute, absolute === this.selectedIndex, width),
+    );
     const resolvedProvidersSection = resolvePrimaryScrollableSection(width, height, {
       intro,
       footerLines,
@@ -195,14 +191,14 @@ export class ProviderAccountsPanel extends BasePanel {
         title: 'Providers',
         scrollableLines: rawProviderLines,
         selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
+        scrollOffset: this.scrollStart,
         guardRows: 1,
         minRows: 4,
         appendWindowSummary: { dimColor: C.dim },
       },
       afterSections: [detailsSection],
     });
-    this.scrollOffset = resolvedProvidersSection.scrollOffset;
+    this.scrollStart = resolvedProvidersSection.scrollOffset;
     const sections: PanelWorkspaceSection[] = [
       postureSection,
       resolvedProvidersSection.section,

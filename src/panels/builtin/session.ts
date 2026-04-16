@@ -1,12 +1,47 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { SessionBrowserPanel } from '../session-browser-panel.ts';
+import { QrPanel } from '../qr-panel.ts';
 import { DocsPanel } from '../docs-panel.ts';
 import { PanelListPanel } from '../panel-list-panel.ts';
 import { TokenBudgetPanel } from '../token-budget-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireUiServices } from './shared.ts';
+import {
+  getOrCreateCompanionToken,
+  regenerateCompanionToken,
+  buildCompanionConnectionInfo,
+} from '@pellux/goodvibes-sdk/platform/pairing/index';
+import { copyToClipboard } from '../../utils/clipboard.ts';
 
 export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
+  manager.registerType({
+    id: 'qr-code',
+    name: 'QR Code',
+    icon: 'Q',
+    category: 'session',
+    description: 'QR code for companion app pairing — scan to connect a mobile or desktop companion',
+    factory: () => {
+      const tokenRecord = getOrCreateCompanionToken('tui');
+      const daemonPort = Number(process.env['GOODVIBES_DAEMON_PORT'] ?? process.env['PORT'] ?? 3000);
+      const daemonHost = String(process.env['GOODVIBES_DAEMON_HOST'] ?? 'localhost');
+      const daemonUrl = `http://${daemonHost}:${daemonPort}`;
+      const connectionInfo = buildCompanionConnectionInfo({
+        daemonUrl,
+        token: tokenRecord.token,
+        surface: 'tui',
+      });
+      const regenerate = (): typeof connectionInfo => {
+        const newRecord = regenerateCompanionToken('tui');
+        return buildCompanionConnectionInfo({
+          daemonUrl,
+          token: newRecord.token,
+          surface: 'tui',
+        });
+      };
+      return new QrPanel(connectionInfo, regenerate, copyToClipboard);
+    },
+  });
+
   manager.registerType({
     id: 'sessions',
     name: 'Sessions',

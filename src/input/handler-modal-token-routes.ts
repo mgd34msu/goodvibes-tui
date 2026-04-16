@@ -72,6 +72,8 @@ export type ModalTokenRouteState = {
   searchManager: SearchManager;
   scroll: (delta: number) => void;
   getScrollTop: () => number;
+  /** Callback to open the model picker with a specific target (helper or tool). Optional — only wired when available. */
+  openModelPickerWithTarget?: (target: import('./model-picker.ts').ModelPickerTarget) => void;
 };
 
 export function handleModalTokenRoutes(state: ModalTokenRouteState, token: InputToken): {
@@ -117,6 +119,7 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
 
   if (handleSettingsModalToken({
     settingsModal: state.settingsModal,
+    openModelPickerWithTarget: state.openModelPickerWithTarget,
     requestRender: state.requestRender,
     handleEscape: state.handleEscape,
   }, token)) {
