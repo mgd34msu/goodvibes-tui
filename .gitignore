@@ -23,6 +23,7 @@ vendor/
 # Artifacts
 scripts/reset-suite.sh
 .test-tmp/
+.tmp-tests/
 test-tmp-hooks/
 test-tmp*
 tmp/

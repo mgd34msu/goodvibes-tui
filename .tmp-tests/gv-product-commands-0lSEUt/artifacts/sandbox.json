@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "exportedAt": 1776360185922,
-  "review": {
-    "reviewText": "Sandbox Review\n  repl isolation: shared-vm\n  mcp isolation: disabled\n  windows mode: native-basic\n  vm backend: local\n  qemu binary: qemu-system-x86_64\n  qemu image: (not configured)\n  qemu wrapper: (not configured)\n  qemu guest host: (not configured)\n  qemu guest port: 2222\n  qemu guest user: goodvibes\n  qemu workspace: /workspace\n  qemu session mode: attach\n  resolved backend: local\n  platform: linux\n  secure sandbox mode: available",
-    "recommendationText": "Sandbox Recommendation\n  current repl isolation: shared-vm\n  current mcp isolation: disabled\n  recommendation: keep REPLs in per-runtime-vm mode\n  recommendation: use hybrid or per-server-vm for MCP isolation",
-    "profilesText": "Sandbox Profiles\n  eval-js  [eval/shared]  vm=yes  JavaScript Eval\n  eval-ts  [eval/shared]  vm=yes  TypeScript Eval\n  eval-py  [eval/dedicated]  vm=yes  Python Eval\n  eval-sql  [eval/shared]  vm=yes  SQL Eval\n  eval-graphql  [eval/shared]  vm=yes  GraphQL Eval\n  mcp-shared  [mcp/shared]  vm=no  Shared MCP Sandbox\n  mcp-per-server  [mcp/dedicated]  vm=no  Per-Server MCP Sandbox"
-  }
-}

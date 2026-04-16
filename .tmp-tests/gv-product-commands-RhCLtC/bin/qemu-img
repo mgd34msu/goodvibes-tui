@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-: "${4:?missing image path}"
-mkdir -p "$(dirname "$4")"
-: > "$4"

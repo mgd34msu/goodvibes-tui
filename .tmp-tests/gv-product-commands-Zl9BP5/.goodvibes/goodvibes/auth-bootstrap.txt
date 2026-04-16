@@ -1,5 +1,0 @@
-GoodVibes bootstrap auth
-username=admin
-password=78cfc27efa42dd79d3b39d3beb6f9407
-purpose=Use these credentials only for local daemon/http listener /login routes when those surfaces are enabled.
-note=Normal SDK host usage does not require these credentials.
