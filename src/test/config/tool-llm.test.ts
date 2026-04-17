@@ -19,7 +19,7 @@ function makeProvider(name: string, response: string = 'ok'): LLMProvider & { ca
         content: response,
         toolCalls: [],
         usage: { inputTokens: 1, outputTokens: 1 },
-        stopReason: 'end',
+        stopReason: 'completed',
       };
     },
     calls,

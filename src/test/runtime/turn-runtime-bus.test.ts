@@ -82,25 +82,24 @@ describe('runtime turn substrate', () => {
         content: 'hello back',
         toolCalls: [],
         usage: { inputTokens: 10, outputTokens: 5 },
-        stopReason: 'end',
+        stopReason: 'completed',
       })),
     };
 
-    const orchestrator = new Orchestrator(conversation,
-      () => 24,
-      () => {},
+    const orchestrator = new Orchestrator({
+      conversation,
+      getViewportHeight: () => 24,
+      scrollToEnd: () => {},
       toolRegistry,
-      permissions,
-      () => '',
-      null,
-      null,
-      () => {},
+      permissionManager: permissions,
+      getSystemPrompt: () => '',
+      requestRender: () => {},
       runtimeBus,
-      {
+      services: {
         agentManager: new AgentManager({ configManager }),
         wrfcController: { listChains: () => [] },
       },
-    );
+    });
     orchestrator.setCoreServices({
       providerRegistry,
       configManager,

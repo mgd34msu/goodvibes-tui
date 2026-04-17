@@ -94,7 +94,7 @@ describe('builtin image understanding provider', () => {
           content: '{"description":"A login form screenshot","text":"Sign in","labels":["ui","login"]}',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 8 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
       },
     });
@@ -165,7 +165,7 @@ describe('builtin image understanding provider', () => {
           content: '{"description":"openai selection","text":"","labels":["openai"]}',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 4 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
       },
     });
@@ -182,7 +182,7 @@ describe('builtin image understanding provider', () => {
           content: '{"description":"local selection","text":"","labels":["local"]}',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 4 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
       },
     });

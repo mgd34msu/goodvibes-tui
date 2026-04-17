@@ -33,7 +33,7 @@ const DUMMY_RESPONSE: ChatResponse = {
   content: 'ok',
   toolCalls: [],
   usage: { inputTokens: 5, outputTokens: 3 },
-  stopReason: 'end',
+  stopReason: 'completed',
 };
 
 /** Create a mock provider that always succeeds. Encodes provider name in content. */

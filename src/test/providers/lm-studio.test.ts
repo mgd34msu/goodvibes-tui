@@ -181,7 +181,7 @@ describe('LMStudioProvider', () => {
       },
     });
 
-    expect(response.stopReason).toBe('tool_use');
+    expect(response.stopReason).toBe('tool_call');
     expect(response.toolCalls).toEqual([
       { id: 'call_1', name: 'read', arguments: { path: 'README.md' } },
     ]);
@@ -198,7 +198,7 @@ describe('LMStudioProvider', () => {
           content: 'compat fallback',
           toolCalls: [],
           usage: { inputTokens: 1, outputTokens: 1 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
         fallbackCalls.push(result);
         return result;
@@ -244,7 +244,7 @@ describe('LMStudioProvider', () => {
         content: 'ok',
         toolCalls: [],
         usage: { inputTokens: 1, outputTokens: 1 },
-        stopReason: 'end',
+        stopReason: 'completed',
       }),
       embed: async () => ({
         vector: Float32Array.from([0.1, 0.2, 0.3]),
