@@ -40,7 +40,7 @@ export class MockLLMProvider implements LLMProvider {
       content: resp.content,
       toolCalls: resp.toolCalls ?? [],
       usage: { inputTokens: 10, outputTokens: 5 },
-      stopReason: (resp.toolCalls?.length ?? 0) > 0 ? 'tool_use' : 'end',
+      stopReason: (resp.toolCalls?.length ?? 0) > 0 ? 'tool_call' : 'completed',
     };
   }
 

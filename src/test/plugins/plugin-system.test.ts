@@ -628,7 +628,7 @@ describe('createPluginAPI', () => {
           content: 'ok',
           toolCalls: [],
           usage: { inputTokens: 1, outputTokens: 1 },
-          stopReason: 'end',
+          stopReason: 'completed',
         }),
       },
       models: [{

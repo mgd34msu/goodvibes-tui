@@ -89,7 +89,7 @@ describe('OllamaProvider', () => {
       }],
     });
 
-    expect(response.stopReason).toBe('tool_use');
+    expect(response.stopReason).toBe('tool_call');
     expect(response.toolCalls).toEqual([
       { id: 'ollama_call_0', name: 'read', arguments: { path: 'README.md' } },
     ]);
@@ -105,7 +105,7 @@ describe('OllamaProvider', () => {
           content: 'compat fallback',
           toolCalls: [],
           usage: { inputTokens: 1, outputTokens: 1 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
         fallbackCalls.push(result);
         return result;
@@ -142,7 +142,7 @@ describe('OllamaProvider', () => {
         content: 'continued via compat',
         toolCalls: [],
         usage: { inputTokens: 2, outputTokens: 2 },
-        stopReason: 'end',
+        stopReason: 'completed',
       }),
     };
 

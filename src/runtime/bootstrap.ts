@@ -177,13 +177,13 @@ export async function bootstrapRuntime(
     requestRender: (): void => { requestRender(); },
   };
 
-  const orchestrator = new Orchestrator(
+  const orchestrator = new Orchestrator({
     conversation,
-    () => orchestratorRefs.getViewportHeight(),
-    (vHeight: number) => orchestratorRefs.scrollToEnd(vHeight),
+    getViewportHeight: () => orchestratorRefs.getViewportHeight(),
+    scrollToEnd: (vHeight: number) => orchestratorRefs.scrollToEnd(vHeight),
     toolRegistry,
     permissionManager,
-    () => {
+    getSystemPrompt: () => {
       const currentModel = providerRegistry.getCurrentModel();
       const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
       const tier = getTierForContextWindow(contextWindow);
@@ -191,14 +191,13 @@ export async function bootstrapRuntime(
       return supplement ? runtime.systemPrompt + '\n\n' + supplement : runtime.systemPrompt;
     },
     hookDispatcher,
-    null,
-    () => orchestratorRefs.requestRender(),
+    requestRender: () => orchestratorRefs.requestRender(),
     runtimeBus,
-    {
+    services: {
       agentManager: services.agentManager,
       wrfcController: services.wrfcController,
     },
-  );
+  });
   conversationFollowUpRef.value = (item) => orchestrator.enqueueConversationFollowUp(item);
   orchestrator.setCoreServices({
     configManager,

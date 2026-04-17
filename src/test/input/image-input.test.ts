@@ -223,9 +223,18 @@ describe('Orchestrator capability check for non-multimodal models', () => {
     const configManager = createConfigManager();
     const policyRuntimeState = new PolicyRuntimeState();
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, null, runtimeBus, {
-      agentManager: new AgentManager({ configManager }),
-      wrfcController: { listChains: () => [] },
+    const orch = new Orchestrator({
+      conversation: cm,
+      getViewportHeight: () => 24,
+      scrollToEnd: () => {},
+      toolRegistry,
+      permissionManager: pm,
+      getSystemPrompt: () => '',
+      runtimeBus,
+      services: {
+        agentManager: new AgentManager({ configManager }),
+        wrfcController: { listChains: () => [] },
+      },
     });
     orch.setCoreServices({
       providerRegistry: getTestProviderRegistry(),
@@ -261,7 +270,7 @@ describe('Orchestrator capability check for non-multimodal models', () => {
       content: 'ok',
       toolCalls: [],
       usage: { inputTokens: 1, outputTokens: 1 },
-      stopReason: 'end' as const,
+      stopReason: 'completed' as const,
     });
 
     const content = [

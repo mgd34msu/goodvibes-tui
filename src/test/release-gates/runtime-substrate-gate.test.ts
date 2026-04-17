@@ -77,22 +77,21 @@ function buildHarness(options: { hookResult?: HookResult } = {}) {
   runtimeBus.onDomain('turn', (env) => dispatch.dispatchTurnEvent(env.payload));
   runtimeBus.onDomain('tools', (env) => dispatch.dispatchToolEvent(env.payload));
 
-  const orchestrator = new Orchestrator(
+  const orchestrator = new Orchestrator({
     conversation,
-    () => 24,
-    () => {},
+    getViewportHeight: () => 24,
+    scrollToEnd: () => {},
     toolRegistry,
-    permissions,
-    () => '',
+    permissionManager: permissions,
+    getSystemPrompt: () => '',
     hookDispatcher,
-    null,
-    () => {},
+    requestRender: () => {},
     runtimeBus,
-    {
+    services: {
       agentManager: new AgentManager({ configManager }),
       wrfcController: { listChains: () => [] },
     },
-  );
+  });
   orchestrator.setCoreServices({
     configManager,
     providerRegistry: testManagers.providerRegistry,
@@ -126,7 +125,7 @@ describe('runtime substrate gate', () => {
         content: 'should not run',
         toolCalls: [],
         usage: { inputTokens: 1, outputTokens: 1 },
-        stopReason: 'end',
+        stopReason: 'completed',
       })),
     };
 
@@ -153,7 +152,7 @@ describe('runtime substrate gate', () => {
         content: 'should not run',
         toolCalls: [],
         usage: { inputTokens: 1, outputTokens: 1 },
-        stopReason: 'end',
+        stopReason: 'completed',
       })),
     };
 
@@ -222,7 +221,7 @@ describe('runtime substrate gate', () => {
         content: '',
         toolCalls: [{ id: `call-${Date.now()}-${Math.random()}`, name: 'missing_tool', arguments: {} }],
         usage: { inputTokens: 5, outputTokens: 1 },
-        stopReason: 'tool_use',
+        stopReason: 'tool_call',
       })),
     };
 

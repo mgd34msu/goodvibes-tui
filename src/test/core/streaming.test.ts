@@ -185,9 +185,17 @@ describe('Orchestrator: abort during streaming cleanup', () => {
     const policyRuntimeState = new PolicyRuntimeState();
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const tr = new ToolRegistry();
-    const orch = new Orchestrator(cm, () => 24, () => {}, tr, pm, () => '', null, null, null, null, {
-      agentManager: new AgentManager({ configManager }),
-      wrfcController: { listChains: () => [] },
+    const orch = new Orchestrator({
+      conversation: cm,
+      getViewportHeight: () => 24,
+      scrollToEnd: () => {},
+      toolRegistry: tr,
+      permissionManager: pm,
+      getSystemPrompt: () => '',
+      services: {
+        agentManager: new AgentManager({ configManager }),
+        wrfcController: { listChains: () => [] },
+      },
     });
     return { orch, cm };
   }

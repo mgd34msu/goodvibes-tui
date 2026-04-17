@@ -61,7 +61,7 @@ function makeMockProvider(
         content: resp.content,
         toolCalls,
         usage: { inputTokens: 10, outputTokens: 5 },
-        stopReason: toolCalls.length > 0 ? 'tool_use' : 'end',
+        stopReason: toolCalls.length > 0 ? 'tool_call' : 'completed',
       };
     }),
   };
@@ -338,7 +338,7 @@ describe('AgentOrchestrator context-window awareness', () => {
           content: 'done',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 5 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
       }),
     };

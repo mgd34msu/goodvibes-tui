@@ -49,7 +49,7 @@ function makeMockProvider(
         content: resp.content,
         toolCalls,
         usage: { inputTokens: 10, outputTokens: 5 },
-        stopReason: toolCalls.length > 0 ? 'tool_use' : 'end',
+        stopReason: toolCalls.length > 0 ? 'tool_call' : 'completed',
       };
     }),
   };
@@ -124,7 +124,7 @@ describe('AgentOrchestrator', () => {
           content: 'Task done.',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 5 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
       }),
     };
@@ -273,7 +273,7 @@ describe('AgentOrchestrator', () => {
             content: 'Task done.',
             toolCalls: [],
             usage: { inputTokens: 10, outputTokens: 5 },
-            stopReason: 'end',
+            stopReason: 'completed',
           };
         }),
       };
@@ -423,7 +423,7 @@ describe('AgentOrchestrator', () => {
           content: `Fallback used ${params.model}`,
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 5 },
-          stopReason: 'end',
+          stopReason: 'completed',
         })),
       };
       const reg = getActualRegistry();
@@ -458,7 +458,7 @@ describe('AgentOrchestrator', () => {
           content: 'Fallback used',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 5 },
-          stopReason: 'end',
+          stopReason: 'completed',
         })),
       };
       const reg = getActualRegistry();
@@ -633,7 +633,7 @@ describe('AgentOrchestrator', () => {
               content: '',
               toolCalls: [{ id: 'call-1', name: 'noop', arguments: {} }],
               usage: { inputTokens: 11, outputTokens: 7, cacheReadTokens: 2, cacheWriteTokens: 1 },
-              stopReason: 'tool_use',
+              stopReason: 'tool_call',
               reasoningSummary: 'plan',
             };
           }
@@ -641,7 +641,7 @@ describe('AgentOrchestrator', () => {
             content: 'Done.',
             toolCalls: [],
             usage: { inputTokens: 5, outputTokens: 3, cacheReadTokens: 1 },
-            stopReason: 'end',
+            stopReason: 'completed',
           };
         }),
       };
@@ -684,7 +684,7 @@ describe('AgentOrchestrator', () => {
             content: '',
             toolCalls: [{ id: `call-${callCount}`, name: 'noop', arguments: {} }],
             usage: { inputTokens: 10, outputTokens: 5 },
-            stopReason: 'tool_use',
+            stopReason: 'tool_call',
           };
         }),
       };
@@ -730,7 +730,7 @@ describe('AgentOrchestrator', () => {
         models: ['mock-model'],
         chat: mock(async (params: ChatRequest): Promise<ChatResponse> => {
           receivedTools = (params.tools ?? []).map((t) => t.name);
-          return { content: 'Done.', toolCalls: [], usage: { inputTokens: 5, outputTokens: 3 }, stopReason: 'end' };
+          return { content: 'Done.', toolCalls: [], usage: { inputTokens: 5, outputTokens: 3 }, stopReason: 'completed' };
         }),
       };
 
@@ -782,7 +782,7 @@ describe('AgentOrchestrator', () => {
               content: 'Done.',
               toolCalls: [],
               usage: { inputTokens: 10, outputTokens: 5 },
-              stopReason: 'end',
+              stopReason: 'completed',
             };
           }
           return {
@@ -792,7 +792,7 @@ describe('AgentOrchestrator', () => {
             // The double cast bypasses TypeScript here to simulate the runtime scenario where frozen arrays reach this code path.
             toolCalls: frozenToolCalls as unknown as Array<{ id: string; name: string; arguments: Record<string, unknown> }>,
             usage: { inputTokens: 10, outputTokens: 5 },
-            stopReason: 'tool_use',
+            stopReason: 'tool_call',
           };
         }),
       };

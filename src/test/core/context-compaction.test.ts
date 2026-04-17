@@ -266,7 +266,7 @@ function makeMockProvider(summaryContent: string): LLMProvider {
       content: summaryContent,
       toolCalls: [],
       usage: { inputTokens: 10, outputTokens: 10 },
-      stopReason: 'end',
+      stopReason: 'completed',
     }),
   };
 }
@@ -400,7 +400,7 @@ describe('compactMessages', () => {
           content: '• truncation verified',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 10 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
       },
     };

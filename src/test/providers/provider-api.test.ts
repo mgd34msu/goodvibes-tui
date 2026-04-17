@@ -31,7 +31,7 @@ function makeProvider(
         content: '',
         toolCalls: [],
         usage: { inputTokens: 0, outputTokens: 0 },
-        stopReason: 'end',
+        stopReason: 'completed',
       };
     },
   };

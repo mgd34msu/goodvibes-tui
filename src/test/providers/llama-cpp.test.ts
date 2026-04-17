@@ -64,7 +64,7 @@ describe('LlamaCppProvider', () => {
       stream: false,
       enable_thinking: true,
     });
-    expect(response.stopReason).toBe('tool_use');
+    expect(response.stopReason).toBe('tool_call');
     expect(response.toolCalls).toEqual([
       {
         id: 'call-1',
@@ -96,7 +96,7 @@ describe('LlamaCppProvider', () => {
           content: 'streamed compat',
           toolCalls: [],
           usage: { inputTokens: 1, outputTokens: 1 },
-          stopReason: 'end',
+          stopReason: 'completed',
         };
         return result;
       },
@@ -139,7 +139,7 @@ describe('LlamaCppProvider', () => {
             content: 'should not happen',
             toolCalls: [],
             usage: { inputTokens: 0, outputTokens: 0 },
-            stopReason: 'end',
+            stopReason: 'completed',
           };
         },
       },

@@ -21,7 +21,7 @@ interface MockChatResponse {
   content: string;
   toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>;
   usage: { inputTokens: number; outputTokens: number };
-  stopReason: 'end' | 'tool_use';
+  stopReason: 'completed' | 'tool_call';
 }
 
 // MockLLMProvider is imported from setup.ts for shared usage.
@@ -77,9 +77,19 @@ describe('Orchestrator', () => {
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const agentManager = new AgentManager({ configManager });
     // hookDispatcher is still optional; services are injected explicitly.
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', null, null, renderRequest, runtimeBus, {
-      agentManager,
-      wrfcController: { listChains: () => [] },
+    const orch = new Orchestrator({
+      conversation: cm,
+      getViewportHeight: () => 24,
+      scrollToEnd: () => {},
+      toolRegistry,
+      permissionManager: pm,
+      getSystemPrompt: () => '',
+      requestRender: renderRequest,
+      runtimeBus,
+      services: {
+        agentManager,
+        wrfcController: { listChains: () => [] },
+      },
     });
     orch.setCoreServices({
       providerRegistry: testManagers.providerRegistry,
@@ -95,9 +105,19 @@ describe('Orchestrator', () => {
     const policyRuntimeState = new PolicyRuntimeState();
     const pm = new PermissionManager(async () => ({ approved: true }), createPermissionConfigReader(configManager), policyRuntimeState);
     const agentManager = new AgentManager({ configManager });
-    const orch = new Orchestrator(cm, () => 24, () => {}, toolRegistry, pm, () => '', hookDispatcher, null, null, runtimeBus, {
-      agentManager,
-      wrfcController: { listChains: () => [] },
+    const orch = new Orchestrator({
+      conversation: cm,
+      getViewportHeight: () => 24,
+      scrollToEnd: () => {},
+      toolRegistry,
+      permissionManager: pm,
+      getSystemPrompt: () => '',
+      hookDispatcher,
+      runtimeBus,
+      services: {
+        agentManager,
+        wrfcController: { listChains: () => [] },
+      },
     });
     orch.setCoreServices({
       providerRegistry: testManagers.providerRegistry,
@@ -253,7 +273,7 @@ describe('Orchestrator', () => {
             content: 'hello world',
             toolCalls: [],
             usage: { inputTokens: 42, outputTokens: 11 },
-            stopReason: 'end',
+            stopReason: 'completed',
           };
         }),
       };
@@ -301,7 +321,7 @@ describe('Orchestrator', () => {
             content: 'done',
             toolCalls: [],
             usage: { inputTokens: 12, outputTokens: 6 },
-            stopReason: 'end',
+            stopReason: 'completed',
           };
         }),
       };
@@ -343,7 +363,7 @@ describe('Orchestrator', () => {
           content: 'done',
           toolCalls: [],
           usage: { inputTokens: 15000, outputTokens: 80, cacheReadTokens: 14900 },
-          stopReason: 'end',
+          stopReason: 'completed',
         })),
       };
 
@@ -390,7 +410,7 @@ describe('Orchestrator', () => {
           content: 'done',
           toolCalls: [],
           usage: { inputTokens: 10, outputTokens: 5 },
-          stopReason: 'end',
+          stopReason: 'completed',
         })),
       };
 
@@ -798,7 +818,7 @@ describe('Orchestrator', () => {
               },
             }],
             usage: { inputTokens: 10, outputTokens: 5 },
-            stopReason: 'tool_use',
+            stopReason: 'tool_call',
           };
         }),
       };
@@ -843,7 +863,7 @@ describe('Orchestrator', () => {
               arguments: { mode: 'spawn', task: 'Write tests' },
             }],
             usage: { inputTokens: 10, outputTokens: 5 },
-            stopReason: 'tool_use',
+            stopReason: 'tool_call',
           };
         }),
       };
@@ -891,7 +911,7 @@ describe('Orchestrator', () => {
                 arguments: { mode: 'status', agentId: 'agent-123' },
               }],
               usage: { inputTokens: 10, outputTokens: 5 },
-              stopReason: 'tool_use',
+              stopReason: 'tool_call',
             };
           }
           // Second call: finish cleanly
@@ -899,7 +919,7 @@ describe('Orchestrator', () => {
             content: 'Status checked.',
             toolCalls: [],
             usage: { inputTokens: 10, outputTokens: 5 },
-            stopReason: 'end',
+            stopReason: 'completed',
           };
         }),
       };
