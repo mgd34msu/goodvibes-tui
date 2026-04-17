@@ -28,7 +28,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-displ
 // Types
 // ---------------------------------------------------------------------------
 
-export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'storage' | 'permissions' | 'mcp' | 'sandbox' | 'danger' | 'tools' | 'flags';
+export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'storage' | 'permissions' | 'mcp' | 'sandbox' | 'danger' | 'tools' | 'flags' | 'network';
 
 export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'display',
@@ -43,6 +43,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'danger',
   'tools',
   'flags',
+  'network',
 ];
 
 export interface SettingEntry {
@@ -151,6 +152,13 @@ export class SettingsModal {
   /** Provider subscription entries (populated when subscriptions tab is active). */
   public subscriptionEntries: SubscriptionEntry[] = [];
 
+  /**
+   * Set after a network-category save that touches controlPlane or httpListener
+   * config keys.  Renderer reads this to display a transient restart notice.
+   * Cleared on next open() or close().
+   */
+  public lastSaveTriggeredRestart: 'control-plane' | 'http-listener' | 'web' | null = null;
+
   private configManager: ConfigManager | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
   private mcpRegistry: McpRegistry | null = null;
@@ -185,6 +193,7 @@ export class SettingsModal {
     this.editBuffer = '';
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
+    this.lastSaveTriggeredRestart = null;
     this.active = true;
   }
 
@@ -194,6 +203,7 @@ export class SettingsModal {
     this.editBuffer = '';
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
+    this.lastSaveTriggeredRestart = null;
     this.serviceRegistry = null;
   }
 
@@ -548,7 +558,15 @@ export class SettingsModal {
     for (const setting of CONFIG_SCHEMA) {
       const rawCat = setting.key.split('.')[0] as string;
       // Route helper.* settings into the tools group for unified display
-      const cat = (rawCat === 'helper' ? 'tools' : rawCat) as SettingsCategory;
+      // Route controlPlane.* and httpListener.* into the network group
+      let cat: SettingsCategory;
+      if (rawCat === 'helper') {
+        cat = 'tools';
+      } else if (rawCat === 'controlPlane' || rawCat === 'httpListener' || rawCat === 'web') {
+        cat = 'network';
+      } else {
+        cat = rawCat as SettingsCategory;
+      }
       if (!this.groups.has(cat)) continue;
       const currentValue = configManager.get(setting.key as ConfigKey);
       const resolved = getResolvedSettingLookup(configManager, setting.key as ConfigKey)?.entry;
@@ -720,17 +738,62 @@ export class SettingsModal {
   /** Returns [] for the flags category (flags use flagEntries instead). */
   private _currentItems(): SettingEntry[] {
     if (this.currentCategory === 'flags' || this.currentCategory === 'mcp' || this.currentCategory === 'subscriptions') return [];
-    return this.groups.get(this.currentCategory) ?? [];
+    const items = this.groups.get(this.currentCategory) ?? [];
+    if (this.currentCategory === 'network') {
+      // Hide host fields when the corresponding hostMode is not 'custom'
+      return items.filter(entry => {
+        if (entry.setting.key === 'controlPlane.host') {
+          const hostMode = this.configManager?.get('controlPlane.hostMode');
+          return hostMode === 'custom';
+        }
+        if (entry.setting.key === 'httpListener.host') {
+          const hostMode = this.configManager?.get('httpListener.hostMode');
+          return hostMode === 'custom';
+        }
+        if (entry.setting.key === 'web.host') {
+          const hostMode = this.configManager?.get('web.hostMode');
+          return hostMode === 'custom';
+        }
+        return true;
+      });
+    }
+    return items;
   }
 
   private _setValue(key: ConfigKey, value: unknown): void {
     if (!this.configManager) return;
+    // Diff previous value before writing — avoids false restart notices on no-op saves
+    const previousValue = this.configManager.get(key);
+    const isRestartKey = ['host', 'port', 'hostMode', 'enabled'].includes(key.split('.')[1] ?? '');
     try {
       this.configManager.setDynamic(key, value);
       // Update the cached entry in-place — avoids full schema re-scan on each edit
       const rawCat = key.split('.')[0] as string;
-      // helper.* entries are stored in the tools group
-      const cat = (rawCat === 'helper' ? 'tools' : rawCat) as SettingsCategory;
+      // Resolve the display category from the key prefix
+      let cat: SettingsCategory;
+      if (rawCat === 'helper') {
+        cat = 'tools';
+      } else if (rawCat === 'controlPlane') {
+        cat = 'network';
+        // SDK auto-restarts the daemon server on controlPlane binding changes
+        if (isRestartKey && previousValue !== value) {
+          this.lastSaveTriggeredRestart = 'control-plane';
+        }
+      } else if (rawCat === 'httpListener') {
+        cat = 'network';
+        // SDK auto-restarts the HTTP listener on binding changes
+        if (isRestartKey && previousValue !== value) {
+          this.lastSaveTriggeredRestart = 'http-listener';
+        }
+      } else if (rawCat === 'web') {
+        cat = 'network';
+        // SDK auto-restarts the web server on binding changes
+        if (isRestartKey && previousValue !== value) {
+          this.lastSaveTriggeredRestart = 'web';
+        }
+      } else {
+        cat = rawCat as SettingsCategory;
+      }
       const entries = this.groups.get(cat);
       if (entries) {
         const entry = entries.find(e => e.setting.key === key);

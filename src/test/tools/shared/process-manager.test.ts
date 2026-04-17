@@ -37,8 +37,8 @@ describe('ProcessManager — construction', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProcessManager — spawn', () => {
-  test('returns a process_id and pid', () => {
-    const result = processManager.spawn('echo hello', undefined, undefined);
+  test('returns a process_id and pid', async () => {
+    const result = await processManager.spawn('echo hello', undefined, undefined);
     expect(typeof result.process_id).toBe('string');
     expect(result.process_id!.startsWith('bg_')).toBe(true);
     expect(typeof result.pid).toBe('number');
@@ -47,19 +47,19 @@ describe('ProcessManager — spawn', () => {
     expect(result.exit_code).toBeNull();
   });
 
-  test('process appears in list() immediately after spawn', () => {
-    processManager.spawn('sleep 5', undefined, undefined);
+  test('process appears in list() immediately after spawn', async () => {
+    await processManager.spawn('sleep 5', undefined, undefined);
     expect(processManager.list()).toHaveLength(1);
   });
 
-  test('spawning multiple processes gives unique IDs', () => {
-    const r1 = processManager.spawn('echo a', undefined, undefined);
-    const r2 = processManager.spawn('echo b', undefined, undefined);
+  test('spawning multiple processes gives unique IDs', async () => {
+    const r1 = await processManager.spawn('echo a', undefined, undefined);
+    const r2 = await processManager.spawn('echo b', undefined, undefined);
     expect(r1.process_id).not.toBe(r2.process_id);
   });
 
   test('process completes and marks done=true', async () => {
-    const result = processManager.spawn('echo done_check', undefined, undefined);
+    const result = await processManager.spawn('echo done_check', undefined, undefined);
     const id = result.process_id!;
 
     await new Promise<void>((r) => setTimeout(r, 500));
@@ -76,8 +76,8 @@ describe('ProcessManager — spawn', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProcessManager — getStatus', () => {
-  test('returns entry for known process', () => {
-    const result = processManager.spawn('sleep 5', undefined, undefined);
+  test('returns entry for known process', async () => {
+    const result = await processManager.spawn('sleep 5', undefined, undefined);
     const entry = processManager.getStatus(result.process_id!);
     expect(entry).toBeDefined();
     expect(entry!.id).toBe(result.process_id as string);
@@ -99,7 +99,7 @@ describe('ProcessManager — getOutput', () => {
   });
 
   test('returns stdout after process completes', async () => {
-    const result = processManager.spawn('echo output_check', undefined, undefined);
+    const result = await processManager.spawn('echo output_check', undefined, undefined);
     const id = result.process_id!;
 
     await new Promise<void>((r) => setTimeout(r, 500));
@@ -119,8 +119,8 @@ describe('ProcessManager — stop', () => {
     expect(processManager.stop('bg_nonexistent')).toBe(false);
   });
 
-  test('returns true and removes the process', () => {
-    const result = processManager.spawn('sleep 10', undefined, undefined);
+  test('returns true and removes the process', async () => {
+    const result = await processManager.spawn('sleep 10', undefined, undefined);
     const id = result.process_id!;
 
     expect(processManager.stop(id)).toBe(true);
@@ -138,9 +138,9 @@ describe('ProcessManager — list', () => {
     expect(processManager.list()).toEqual([]);
   });
 
-  test('lists running processes with status=running', () => {
-    processManager.spawn('sleep 5', undefined, undefined);
-    processManager.spawn('sleep 5', undefined, undefined);
+  test('lists running processes with status=running', async () => {
+    await processManager.spawn('sleep 5', undefined, undefined);
+    await processManager.spawn('sleep 5', undefined, undefined);
     const list = processManager.list();
     expect(list).toHaveLength(2);
     expect(list[0].status).toBe('running');
@@ -148,7 +148,7 @@ describe('ProcessManager — list', () => {
   });
 
   test('lists done processes with status containing exit code', async () => {
-    const result = processManager.spawn('true', undefined, undefined);
+    const result = await processManager.spawn('true', undefined, undefined);
     const id = result.process_id!;
 
     await new Promise<void>((r) => setTimeout(r, 400));
@@ -180,8 +180,8 @@ describe('ProcessManager — handleCommand', () => {
     expect(result!.stderr).toContain('Unknown process');
   });
 
-  test('bg_status: returns running status for active process', () => {
-    const spawnResult = processManager.spawn('sleep 5', undefined, undefined);
+  test('bg_status: returns running status for active process', async () => {
+    const spawnResult = await processManager.spawn('sleep 5', undefined, undefined);
     const id = spawnResult.process_id!;
 
     const result = processManager.handleCommand(`bg_status ${id}`);
@@ -193,7 +193,7 @@ describe('ProcessManager — handleCommand', () => {
   });
 
   test('bg_status: returns done status after completion', async () => {
-    const spawnResult = processManager.spawn('echo completed', undefined, undefined);
+    const spawnResult = await processManager.spawn('echo completed', undefined, undefined);
     const id = spawnResult.process_id!;
 
     await new Promise<void>((r) => setTimeout(r, 400));
@@ -212,7 +212,7 @@ describe('ProcessManager — handleCommand', () => {
   });
 
   test('bg_output: returns stdout/stderr after completion', async () => {
-    const spawnResult = processManager.spawn('echo output_via_cmd; echo err_via_cmd >&2', undefined, undefined);
+    const spawnResult = await processManager.spawn('echo output_via_cmd; echo err_via_cmd >&2', undefined, undefined);
     const id = spawnResult.process_id!;
 
     await new Promise<void>((r) => setTimeout(r, 400));
@@ -231,8 +231,8 @@ describe('ProcessManager — handleCommand', () => {
     expect(result!.exit_code).toBe(1);
   });
 
-  test('bg_stop: stops the process and removes it', () => {
-    const spawnResult = processManager.spawn('sleep 10', undefined, undefined);
+  test('bg_stop: stops the process and removes it', async () => {
+    const spawnResult = await processManager.spawn('sleep 10', undefined, undefined);
     const id = spawnResult.process_id!;
 
     const stopResult = processManager.handleCommand(`bg_stop ${id}`);
@@ -250,9 +250,9 @@ describe('ProcessManager — handleCommand', () => {
     expect(JSON.parse(result!.stdout)).toEqual([]);
   });
 
-  test('bg_list: returns all tracked processes', () => {
-    processManager.spawn('sleep 5', undefined, undefined);
-    processManager.spawn('sleep 5', undefined, undefined);
+  test('bg_list: returns all tracked processes', async () => {
+    await processManager.spawn('sleep 5', undefined, undefined);
+    await processManager.spawn('sleep 5', undefined, undefined);
 
     const result = processManager.handleCommand('bg_list');
     expect(result).not.toBeNull();
@@ -268,8 +268,8 @@ describe('ProcessManager — handleCommand', () => {
 // ---------------------------------------------------------------------------
 
 describe('BackgroundProcess — interface shape', () => {
-  test('spawned entry has all required fields', () => {
-    const result = processManager.spawn('echo shape_test', undefined, undefined);
+  test('spawned entry has all required fields', async () => {
+    const result = await processManager.spawn('echo shape_test', undefined, undefined);
     const entry = processManager.getStatus(result.process_id!) as BackgroundProcess;
 
     expect(typeof entry.id).toBe('string');

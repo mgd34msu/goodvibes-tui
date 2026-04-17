@@ -63,6 +63,7 @@ export function renderSettingsModal(
   const isFlagsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'flags';
   const isUiTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'ui';
   const isToolsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'tools';
+  const isNetworkTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'network';
   let persistentHelpers: import('./modal-factory.ts').ModalHelperRow[] | undefined;
   sections.push({
     type: 'text',
@@ -78,11 +79,27 @@ export function renderSettingsModal(
             ? 'Feature flags control staged or experimental behavior. Some changes may require restart.'
             : isToolsTab
               ? 'Configure tool LLM routing and helper model. Provider and model fields are optional — empty means use the active provider.'
-              : 'Browse and adjust operator-facing runtime settings by category.',
+              : isNetworkTab
+                ? 'Configure control-plane and HTTP-listener binding. hostMode local/network use preset hosts; custom enables the host field. Changes trigger auto-restart.'
+                : 'Browse and adjust operator-facing runtime settings by category.',
     style: { fg: '246', dim: true },
   });
 
   sections.push({ type: 'separator' });
+
+  // ── Network tab restart notice ─────────────────────────────────
+  if (isNetworkTab && modal.lastSaveTriggeredRestart !== null) {
+    const restartTarget = modal.lastSaveTriggeredRestart === 'control-plane'
+      ? 'control-plane server'
+      : modal.lastSaveTriggeredRestart === 'http-listener'
+        ? 'HTTP listener'
+        : 'web server';
+    sections.push({
+      type: 'text',
+      content: truncateDisplay(`Restarting ${restartTarget}… server will reconnect momentarily.`, contentW),
+      style: { fg: '#38bdf8' },
+    });
+  }
 
   // ── Flags tab ──────────────────────────────────────────────────
   if (isFlagsTab) {

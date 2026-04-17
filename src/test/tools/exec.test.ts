@@ -219,8 +219,9 @@ describe('exec tool — expectations: stdout/stderr contains', () => {
 // ---------------------------------------------------------------------------
 
 describe('exec tool — retry', () => {
-  test('retries on failure up to max and returns last result', async () => {
-    // false always fails
+  test('non-transient failure (exit_code 1) is not retried — reports retries=0', async () => {
+    // `false` exits with code 1 which is not a transient error (not network/lock/busy),
+    // so the SDK retry mechanism does not re-run it. retries remains 0.
     const result = await execTool.execute(withWorkingDir({
       commands: [{
         cmd: 'false',
@@ -229,7 +230,7 @@ describe('exec tool — retry', () => {
     }));
     expect(result.success).toBe(false);
     const out = parseOutput(result.output);
-    expect(out.retries).toBe(2);
+    expect(out.retries).toBe(0);
   }, 5000);
 
   test('does not retry on success', async () => {

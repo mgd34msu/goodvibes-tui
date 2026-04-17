@@ -78,6 +78,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   danger: 'Danger',
   tools: 'Tools',
   flags: 'Flags',
+  network: 'Network',
 };
 
 export const SETTING_LABELS: Partial<Record<string, string>> = {
@@ -102,6 +103,32 @@ export const SETTING_LABELS: Partial<Record<string, string>> = {
   'helper.enabled': 'Helper Enabled',
   'helper.globalProvider': 'Helper Provider',
   'helper.globalModel': 'Helper Model',
+  // Control Plane
+  'controlPlane.enabled': 'CP Enabled',
+  'controlPlane.hostMode': 'CP Host Mode',
+  'controlPlane.host': 'CP Host',
+  'controlPlane.port': 'CP Port',
+  'controlPlane.baseUrl': 'CP Base URL',
+  'controlPlane.streamMode': 'CP Stream Mode',
+  'controlPlane.allowRemote': 'CP Allow Remote',
+  'controlPlane.trustProxy': 'CP Trust Proxy',
+  'controlPlane.tls.mode': 'CP TLS Mode',
+  'controlPlane.tls.certFile': 'CP TLS Cert',
+  'controlPlane.tls.keyFile': 'CP TLS Key',
+  // HTTP Listener
+  'httpListener.hostMode': 'HTTP Host Mode',
+  'httpListener.host': 'HTTP Host',
+  'httpListener.port': 'HTTP Port',
+  'httpListener.trustProxy': 'HTTP Trust Proxy',
+  'httpListener.tls.mode': 'HTTP TLS Mode',
+  'httpListener.tls.certFile': 'HTTP TLS Cert',
+  // Web Server
+  'web.enabled': 'Web Enabled',
+  'web.hostMode': 'Web Host Mode',
+  'web.host': 'Web Host',
+  'web.port': 'Web Port',
+  'web.publicBaseUrl': 'Web Public Base URL',
+  'web.staticAssetsDir': 'Web Static Assets Dir',
 };
 
 export function getSettingLabel(entry: SettingEntry): string {

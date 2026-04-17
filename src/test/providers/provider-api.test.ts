@@ -202,6 +202,13 @@ function createHarness() {
         return provider;
       },
       getCostFromCatalog: (modelId: string) => pricing.get(modelId) ?? { input: 0, output: 0 },
+      has: (id: string) => providers.has(id),
+      require: (id: string) => {
+        const provider = providers.get(id);
+        if (!provider) throw new Error(`Unknown provider: ${id}`);
+        return provider;
+      },
+      tryGet: (id: string) => providers.get(id),
     },
     favoritesStore: {
       load: async () => cloneFavorites(favoritesState),
