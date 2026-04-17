@@ -120,9 +120,9 @@ describe('LiveTailModal state', () => {
     expect(out).toBe('(process not found)');
   });
 
-  test('getOutput() returns exec output for exec entries', () => {
+  test('getOutput() returns exec output for exec entries', async () => {
     const pm = getTestProcessManager();
-    const result = pm.spawn('echo hello', undefined, undefined);
+    const result = await pm.spawn('echo hello', undefined, undefined);
     const id = result.process_id!;
     const modal = createLiveTailModal();
     modal.open(makeEntry({ id, type: 'exec', label: 'echo hello' }));
@@ -144,9 +144,9 @@ describe('LiveTailModal state', () => {
     expect(typeof result).toBe('boolean');
   });
 
-  test('killProcess() delegates to ProcessManager for exec entries', () => {
+  test('killProcess() delegates to ProcessManager for exec entries', async () => {
     const pm = getTestProcessManager();
-    const result = pm.spawn('sleep 100', undefined, undefined);
+    const result = await pm.spawn('sleep 100', undefined, undefined);
     const id = result.process_id!;
     const modal = createLiveTailModal();
     modal.open(makeEntry({ id, type: 'exec' }));
