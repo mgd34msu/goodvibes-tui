@@ -39,6 +39,7 @@ import {
   isPanelSearchCommit,
   isPanelSearchPrintable,
 } from './search-focus.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -163,7 +164,7 @@ export class PanelListPanel extends BasePanel {
           try {
             this.panelManager.open(selectedPanel.reg.id);
           } catch (err) {
-            console.debug('[panel-list] failed to open panel:', err);
+            logger.warn(`[panel-list] failed to open panel: ${err}`);
           }
         }
         this.markDirty();
@@ -205,7 +206,7 @@ export class PanelListPanel extends BasePanel {
         try {
           this.panelManager.open(selectedPanel.reg.id);
         } catch (err) {
-          console.debug('[panel-list] failed to open panel:', err);
+          logger.warn(`[panel-list] failed to open panel: ${err}`);
         }
         this.markDirty();
       }
@@ -221,7 +222,7 @@ export class PanelListPanel extends BasePanel {
           pm.open(selectedPanel.reg.id, pane);
           pm.show();
         } catch (err) {
-          console.debug('[panel-list] failed to place panel:', err);
+          logger.warn(`[panel-list] failed to place panel: ${err}`);
         }
         this.markDirty();
       }
@@ -234,7 +235,7 @@ export class PanelListPanel extends BasePanel {
         try {
           this.panelManager.moveToOtherPane(selectedPanel.reg.id);
         } catch (err) {
-          console.debug('[panel-list] failed to move panel:', err);
+          logger.warn(`[panel-list] failed to move panel: ${err}`);
         }
         this.markDirty();
       }

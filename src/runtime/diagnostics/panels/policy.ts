@@ -19,6 +19,7 @@ import type { PermissionAuditEntry } from '@pellux/goodvibes-sdk/platform/runtim
 import type { PolicyLintFinding } from '@pellux/goodvibes-sdk/platform/runtime/permissions/lint';
 import type { PolicySimulationSummary } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation-scenarios';
 import type { PolicyPreflightReview } from '@pellux/goodvibes-sdk/platform/runtime/permissions/preflight';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 
 /**
  * A point-in-time snapshot of policy state for diagnostics rendering.
@@ -169,7 +170,7 @@ export class PolicyPanel {
       try {
         cb();
       } catch (err) {
-        console.debug('[PolicyPanel] subscriber error:', err);
+        logger.warn(`[PolicyPanel] subscriber error: ${err}`);
       }
     }
   }

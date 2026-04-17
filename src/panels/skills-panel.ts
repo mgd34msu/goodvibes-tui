@@ -368,11 +368,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   }
 
   public render(width: number, height: number): Line[] {
-    if (!this.canRenderNow()) {
-      return Array.from({ length: height }, () => createEmptyLine(width));
-    }
-
-    const start = Date.now();
+    return this.trackedRender(() => {
     this.needsRender = false;
 
     // I1: show confirm dialog in place of normal content
@@ -384,7 +380,6 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
         palette: C,
       });
       while (lines.length < height) lines.push(createEmptyLine(width));
-      this.reportRenderDuration(Date.now() - start);
       return lines.slice(0, height);
     }
 
@@ -411,7 +406,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
       header: [filterLine],
       footer: detailLines,
     });
-    this.reportRenderDuration(Date.now() - start);
     return lines;
+    });
   }
 }

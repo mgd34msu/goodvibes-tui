@@ -109,12 +109,8 @@ export class SystemMessagesPanel extends BasePanel {
   }
 
   override render(width: number, height: number): Line[] {
-    if (!this.canRenderNow()) {
-      return Array.from({ length: height }, () => buildPanelLine(width, [['', C.dim]]));
-    }
-
-    const start = Date.now();
-    const intro = 'Operational system traffic routed out of the main conversation to reduce noise and keep runtime status reviewable.';
+    return this.trackedRender(() => {
+    const intro = 'Operational system traffic routed out of the main conversation to reduce noise and keep runtime status reviewable.'
 
     if (this._messages.length === 0) {
       const lines = buildPanelWorkspace(width, height, {
@@ -137,7 +133,6 @@ export class SystemMessagesPanel extends BasePanel {
         ],
         palette: C,
       });
-      this.reportRenderDuration(Date.now() - start);
       return lines;
     }
 
@@ -218,7 +213,7 @@ export class SystemMessagesPanel extends BasePanel {
       ],
       palette: C,
     });
-    this.reportRenderDuration(Date.now() - start);
     return lines;
+    });
   }
 }
