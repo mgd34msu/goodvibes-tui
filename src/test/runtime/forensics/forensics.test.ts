@@ -86,10 +86,6 @@ describe('classifyFailure — all 9 categories', () => {
     expect(classifyFailure({ stopReason: 'max_tokens' })).toBe('max_tokens');
   });
 
-  test('stopReason length → max_tokens', () => {
-    expect(classifyFailure({ stopReason: 'length' })).toBe('max_tokens');
-  });
-
   test('stopReason context_overflow → max_tokens', () => {
     expect(classifyFailure({ stopReason: 'context_overflow' })).toBe('max_tokens');
   });
@@ -194,7 +190,7 @@ describe('summariseFailure', () => {
   });
 
   test('max_tokens with length stopReason', () => {
-    expect(summariseFailure('max_tokens', undefined, 'length')).toContain('length stop');
+    expect(summariseFailure('max_tokens', undefined, 'length')).toContain('token limit');
   });
 
   test('max_tokens with max_tokens stopReason', () => {

@@ -53,6 +53,9 @@ let cacheFixture: ReturnType<typeof createProviderCacheFixture>;
 function loadCatalog(models: CatalogModel[]): void {
   writeModelCatalogCache(models, cacheFixture.cacheDir, FIXTURE_CATALOG.fetchedAt);
   providerRegistry.initCatalog();
+  // initCatalog() updates catalogModels but does not invalidate the model registry
+  // cache — explicitly flush it so subsequent getModelRegistry() calls see the new catalog.
+  (providerRegistry as any)._invalidateModelRegistry();
 }
 
 function getCatalogModelDefinitions() {
