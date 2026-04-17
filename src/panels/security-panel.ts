@@ -7,6 +7,7 @@ import {
   buildGuidanceLine,
   buildPanelLine,
   buildPanelWorkspace,
+  buildStatusPill,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 import { createEmptyLine } from '../types/grid.ts';
@@ -61,6 +62,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
 
   public constructor(private readonly readModel: UiReadModel<UiSecuritySnapshot>) {
     super('security', 'Security', 'U', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.unsub = this.readModel.subscribe(() => this.markDirty());
   }
 
@@ -125,46 +127,46 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         ['  tokens ', C.label],
         [String(view.totalTokens), C.value],
         ['  blocked ', C.label],
-        [String(view.blocked.length), view.blocked.length > 0 ? C.error : C.ok],
+        ...buildStatusPill(view.blocked.length > 0 ? 'bad' : 'good', String(view.blocked.length)),
         ['  scope violations ', C.label],
-        [String(view.scopeViolations.length), view.scopeViolations.length > 0 ? C.error : C.ok],
+        ...buildStatusPill(view.scopeViolations.length > 0 ? 'bad' : 'good', String(view.scopeViolations.length)),
         ['  overdue ', C.label],
-        [String(view.rotationOverdue.length), view.rotationOverdue.length > 0 ? C.error : C.ok],
+        ...buildStatusPill(view.rotationOverdue.length > 0 ? 'bad' : 'good', String(view.rotationOverdue.length)),
         ['  warnings ', C.label],
-        [String(view.rotationWarnings.length), view.rotationWarnings.length > 0 ? C.warn : C.ok],
+        ...buildStatusPill(view.rotationWarnings.length > 0 ? 'warn' : 'good', String(view.rotationWarnings.length)),
       ]),
       buildPanelLine(width, [
         [' preflight ', C.label],
-        [preflightStatus.toUpperCase(), preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : preflightStatus === 'pass' ? C.ok : C.dim],
+        ...buildStatusPill(preflightStatus === 'block' ? 'bad' : preflightStatus === 'warn' ? 'warn' : preflightStatus === 'pass' ? 'good' : 'info', preflightStatus.toUpperCase()),
         ['  issues ', C.label],
-        [String(preflightIssueCount), preflightIssueCount > 0 ? C.warn : C.ok],
+        ...buildStatusPill(preflightIssueCount > 0 ? 'warn' : 'good', String(preflightIssueCount)),
         ['  lint ', C.label],
-        [String(lintFindingCount), lintFindingCount > 0 ? C.warn : C.ok],
+        ...buildStatusPill(lintFindingCount > 0 ? 'warn' : 'good', String(lintFindingCount)),
         ['  denied permissions ', C.label],
-        [String(snapshot.deniedPermissions), snapshot.deniedPermissions > 0 ? C.warn : C.ok],
+        ...buildStatusPill(snapshot.deniedPermissions > 0 ? 'warn' : 'good', String(snapshot.deniedPermissions)),
       ]),
       buildPanelLine(width, [
         [' quarantined MCP ', C.label],
-        [String(quarantinedMcp.length), quarantinedMcp.length > 0 ? C.error : C.ok],
+        ...buildStatusPill(quarantinedMcp.length > 0 ? 'bad' : 'good', String(quarantinedMcp.length)),
         ['  elevated MCP ', C.label],
-        [String(elevatedMcp.length), elevatedMcp.length > 0 ? C.warn : C.ok],
+        ...buildStatusPill(elevatedMcp.length > 0 ? 'warn' : 'good', String(elevatedMcp.length)),
         ['  quarantined plugins ', C.label],
-        [String(quarantinedPlugins.length), quarantinedPlugins.length > 0 ? C.error : C.ok],
+        ...buildStatusPill(quarantinedPlugins.length > 0 ? 'bad' : 'good', String(quarantinedPlugins.length)),
         ['  untrusted plugins ', C.label],
-        [String(untrustedPlugins.length), untrustedPlugins.length > 0 ? C.warn : C.ok],
+        ...buildStatusPill(untrustedPlugins.length > 0 ? 'warn' : 'good', String(untrustedPlugins.length)),
       ]),
       buildPanelLine(width, [
         ['  incidents ', C.label],
-        [String(incidents.length), incidents.length > 0 ? C.warn : C.ok],
+        ...buildStatusPill(incidents.length > 0 ? 'warn' : 'good', String(incidents.length)),
       ]),
     ];
 
     const attackPathLines: Line[] = [
       buildPanelLine(width, [
         ['  attack paths ', C.label],
-        [String(attackPathReview.criticalFindings), attackPathReview.criticalFindings > 0 ? C.error : C.ok],
+        ...buildStatusPill(attackPathReview.criticalFindings > 0 ? 'bad' : 'good', String(attackPathReview.criticalFindings)),
         [' critical ', C.label],
-        [String(attackPathReview.incoherentFindings), attackPathReview.incoherentFindings > 0 ? C.warn : C.ok],
+        ...buildStatusPill(attackPathReview.incoherentFindings > 0 ? 'warn' : 'good', String(attackPathReview.incoherentFindings)),
         [' review ', C.label],
         [attackPathReview.summary.slice(0, Math.max(0, width - 36)), C.dim],
       ]),

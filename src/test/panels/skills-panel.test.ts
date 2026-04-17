@@ -194,7 +194,8 @@ describe('SkillsPanel', () => {
     panel.handleInput('up');
     panel.handleInput('b');
     let text = linesText(panel.render(120, 16));
-    expect(text).toContain('query: b█');
+    // SearchableListPanel renders focused filter as '[Filter] {query}_' (not old 'query: {q}█' format)
+    expect(text).toContain('[Filter] b');
 
     panel.handleInput('down');
     panel.handleInput('down');

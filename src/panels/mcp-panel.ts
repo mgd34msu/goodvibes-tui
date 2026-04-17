@@ -9,6 +9,7 @@ import {
   buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
+  buildStatusPill,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
@@ -62,6 +63,7 @@ export class McpPanel extends ScrollableListPanel<McpServerSecurityEntry> {
 
   public constructor(registry: McpRegistry) {
     super('mcp', 'MCP', 'Z', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.registry = registry;
   }
 
@@ -83,7 +85,7 @@ export class McpPanel extends ScrollableListPanel<McpServerSecurityEntry> {
     return buildPanelLine(width, [
       [' ', C.label, bg],
       [entry.name.padEnd(20), C.value, bg],
-      [` ${(entry.connected ? 'CONNECTED' : 'DISCONNECTED').padEnd(13)}`, entry.connected ? C.ok : C.error, bg],
+      ...buildStatusPill(entry.connected ? 'good' : 'bad', ` ${(entry.connected ? 'CONNECTED' : 'DISCONNECTED').padEnd(13)}`, { bg }),
       [` ${entry.trustMode.padEnd(12)}`, modeColor(entry.trustMode), bg],
       [` ${entry.role.padEnd(10)}`, C.info, bg],
       [` ${entry.schemaFreshness}`, freshnessColor(entry.schemaFreshness), bg],

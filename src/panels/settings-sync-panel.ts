@@ -5,6 +5,7 @@ import {
   buildGuidanceLine,
   buildPanelListRow,
   buildPanelLine,
+  buildStatusPill,
   buildSummaryBlock,
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
@@ -26,6 +27,7 @@ type ResolvedEntry = ReturnType<typeof getSettingsControlPlaneSnapshot>['resolve
 export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
   public constructor(private readonly configManager: ConfigManager) {
     super('settings-sync', 'Settings Sync', 'S', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
   }
 
   protected override getPalette(): PanelPalette {
@@ -52,7 +54,7 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
     const snapshot = getSettingsControlPlaneSnapshot(this.configManager);
 
     const postureLines: Line[] = [
-      buildPanelLine(width, [[' resolved keys ', C.label], [String(snapshot.resolvedEntries.length), C.value], ['  conflicts ', C.label], [String(snapshot.conflicts.length), snapshot.conflicts.length > 0 ? C.error : C.good], ['  failures ', C.label], [String(snapshot.recentFailures.length), snapshot.recentFailures.length > 0 ? C.warn : C.good]]),
+      buildPanelLine(width, [[' resolved keys ', C.label], [String(snapshot.resolvedEntries.length), C.value], ['  conflicts ', C.label], ...buildStatusPill(snapshot.conflicts.length > 0 ? 'bad' : 'good', String(snapshot.conflicts.length)), ['  failures ', C.label], ...buildStatusPill(snapshot.recentFailures.length > 0 ? 'warn' : 'good', String(snapshot.recentFailures.length))]),
       buildPanelLine(width, [[' managed locks ', C.label], [String(snapshot.managedLockCount), snapshot.managedLockCount > 0 ? C.warn : C.dim], ['  staged bundle ', C.label], [snapshot.stagedManagedBundle ? snapshot.stagedManagedBundle.profileName : 'none', snapshot.stagedManagedBundle ? C.info : C.dim]]),
       buildGuidanceLine(width, '/settingssync conflicts', 'review conflicting synced values before they silently shape effective configuration', C),
       buildGuidanceLine(width, '/managed review', 'inspect staged managed changes, risk posture, and rollback records', C),

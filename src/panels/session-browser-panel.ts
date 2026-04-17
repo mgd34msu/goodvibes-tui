@@ -26,6 +26,7 @@ import {
   isPanelSearchCommit,
   isPanelSearchPrintable,
 } from './search-focus.ts';
+import { type ConfirmState, handleConfirmInput } from './confirm-state.ts';
 
 const C = {
   headerBg:   '#1a1a2e',
@@ -79,7 +80,7 @@ function formatReturnContextLines(returnContext: SessionInfo['returnContext']): 
 // ---------------------------------------------------------------------------
 // Confirmation state for deletion
 // ---------------------------------------------------------------------------
-type ConfirmState = { sessionName: string } | null;
+// ConfirmState<string> — subject holds the session name to delete
 
 export class SessionBrowserPanel extends BasePanel {
   private sessions: SessionInfo[] = [];
@@ -88,7 +89,7 @@ export class SessionBrowserPanel extends BasePanel {
   private searching = false; // true when user is actively typing a search
   private cursorIndex = 0;
   private scrollOffset = 0;
-  private confirm: ConfirmState = null;
+  private confirm: ConfirmState<string> | null = null;
   private deleteError = '';
   private loadError = '';
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -114,18 +115,18 @@ export class SessionBrowserPanel extends BasePanel {
   }
 
   handleInput(key: string): boolean {
-    // Confirmation dialog
-    if (this.confirm) {
-      if (key === 'y') {
-        this._deleteConfirmed();
-        return true;
-      } else if (key === 'n' || key === 'escape') {
-        this.confirm = null;
-        this.markDirty();
-        return true;
-      }
+    // Confirmation dialog — use shared handleConfirmInput for y/n/Esc UX
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      this._deleteConfirmed();
       return true;
     }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
 
     // Search mode
     if (this.searching) {
@@ -200,7 +201,7 @@ export class SessionBrowserPanel extends BasePanel {
           {
             title: 'Confirmation',
             lines: [
-              buildPanelLine(width, [[` Delete "${this.confirm.sessionName}"?`, DEFAULT_PANEL_PALETTE.warn]]),
+              buildPanelLine(width, [[` Delete "${this.confirm.subject}"?`, DEFAULT_PANEL_PALETTE.warn]]),
               buildPanelLine(width, [[' y', DEFAULT_PANEL_PALETTE.info], ['  confirm delete', DEFAULT_PANEL_PALETTE.dim], ['   n / Esc', DEFAULT_PANEL_PALETTE.info], ['  cancel', DEFAULT_PANEL_PALETTE.dim]]),
             ],
           },
@@ -378,13 +379,13 @@ export class SessionBrowserPanel extends BasePanel {
   private _promptDelete(): void {
     const sess = this.filtered[this.cursorIndex];
     if (!sess) return;
-    this.confirm = { sessionName: sess.name };
+    this.confirm = { subject: sess.name, label: sess.name };
     this.markDirty();
   }
 
   private _deleteConfirmed(): void {
     if (!this.confirm) return;
-    const name = this.confirm.sessionName;
+    const name = this.confirm.subject;
     this.confirm = null;
     try {
       this.sessionManager.delete(name);

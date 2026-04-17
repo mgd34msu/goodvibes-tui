@@ -13,15 +13,11 @@
 
 import type { Cell } from '../types/grid.ts';
 import { DEFAULT_PANEL_PALETTE } from '../panels/polish.ts';
+import { type StatusState, STATE_GLYPHS } from './status-glyphs.ts';
 
-export type StatusState = 'good' | 'warn' | 'bad' | 'info';
-
-const STATE_GLYPHS: Record<StatusState, string> = {
-  good: '\u2713', // ✓
-  warn: '\u26a0', // ⚠
-  bad:  '\u2715', // ✕
-  info: '\u25cb', // ○
-};
+// Re-export for downstream consumers that import from this module.
+export type { StatusState } from './status-glyphs.ts';
+export { STATE_GLYPHS } from './status-glyphs.ts';
 
 const STATE_COLORS: Record<StatusState, string> = {
   good: DEFAULT_PANEL_PALETTE.good,

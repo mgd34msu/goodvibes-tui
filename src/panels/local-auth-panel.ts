@@ -33,6 +33,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
 
   public constructor(authManager: LocalAuthInspectionQuery) {
     super('local-auth', 'Local Auth', 'U', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.authManager = authManager;
   }
 

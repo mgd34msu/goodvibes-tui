@@ -43,6 +43,7 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
 
   public constructor(private readonly readModel?: UiReadModel<UiControlPlaneSnapshot>) {
     super('control-plane', 'Control Plane', 'C', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
 

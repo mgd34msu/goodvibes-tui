@@ -11,6 +11,7 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  buildStatusPill,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
@@ -78,6 +79,7 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
     subscriptionManager: SubscriptionAccessQuery,
   ) {
     super('services', 'Services', 'V', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.registry = registry;
     this.subscriptionManager = subscriptionManager;
     void this.refresh();
@@ -188,16 +190,16 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
       ]));
       detailLines.push(buildPanelLine(width, [
         ['  Primary credential: ', C.label],
-        [inspect.hasPrimaryCredential ? 'present' : 'missing', inspect.hasPrimaryCredential ? C.ok : C.error],
+        ...buildStatusPill(inspect.hasPrimaryCredential ? 'good' : 'bad', inspect.hasPrimaryCredential ? 'present' : 'missing'),
         ['  Webhook URL: ', C.label],
-        [inspect.hasWebhookUrl ? 'present' : 'missing', inspect.hasWebhookUrl ? C.ok : C.dim],
+        ...buildStatusPill(inspect.hasWebhookUrl ? 'good' : 'info', inspect.hasWebhookUrl ? 'present' : 'missing'),
         ['  Signing secret: ', C.label],
-        [inspect.hasSigningSecret ? 'present' : 'missing', inspect.hasSigningSecret ? C.ok : C.dim],
+        ...buildStatusPill(inspect.hasSigningSecret ? 'good' : 'info', inspect.hasSigningSecret ? 'present' : 'missing'),
       ]));
       if (selected.lastTest) {
         detailLines.push(buildPanelLine(width, [
           ['  Last test: ', C.label],
-          [selected.lastTest.ok ? 'ok' : 'failed', selected.lastTest.ok ? C.ok : C.error],
+          ...buildStatusPill(selected.lastTest.ok ? 'good' : 'bad', selected.lastTest.ok ? 'ok' : 'failed'),
           ['  Status: ', C.label],
           [selected.lastTest.status != null ? String(selected.lastTest.status) : 'n/a', C.value],
           ['  URL: ', C.label],

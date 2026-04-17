@@ -61,6 +61,7 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
 
   constructor(agentEvents: UiEventFeed<AgentEvent>, private readonly deps: AgentLogsPanelDeps) {
     super('agent-logs', 'Agents', 'A', 'agent');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.agentEvents = agentEvents;
     this._refreshAgents();
     this._startPolling();

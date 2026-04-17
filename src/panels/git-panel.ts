@@ -326,18 +326,16 @@ export class GitPanel extends BasePanel {
     const item = this.items[this.selectedIndex];
     if (!item || item.kind !== 'file') return;
 
-    // I3: show base-class spinner while awaiting diff
-    this.startLoading('Loading diff...');
-    this.markDirty();
+    // I3: withLoading guarantees spinner is cleared even if diffFile throws
     try {
-      const git = new GitService(this.workingDirectory);
-      const raw = await git.diffFile(item.entry.path, item.entry.staged);
-      this.stopLoading();
+      const raw = await this.withLoading('Loading diff…', async () => {
+        const git = new GitService(this.workingDirectory);
+        return git.diffFile(item.entry.path, item.entry.staged);
+      });
       this.expandedDiff = raw ? raw.split('\n') : ['(no diff available)'];
       this.scrollOffset = 0;
       this.markDirty();
     } catch (err) {
-      this.stopLoading();
       this.expandedDiff = [`Error: ${summarizeError(err)}`];
       this.scrollOffset = 0;
       this.markDirty();
