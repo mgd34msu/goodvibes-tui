@@ -15,6 +15,7 @@ import {
   buildSearchInputLine,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
+  extendPalette,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
@@ -26,8 +27,7 @@ import {
   isPanelSearchPrintable,
 } from './search-focus.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   header: '#94a3b8',
   headerBg: '#1e293b',
   decision: '#38bdf8',
@@ -42,7 +42,7 @@ const C = {
   selected: '#1e3a5f',
   searchBg: '#0f172a',
   searchFg: '#e2e8f0',
-} as const;
+});
 
 function fmtTime(ts: number): string {
   const d = new Date(ts);

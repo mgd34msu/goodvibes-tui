@@ -182,4 +182,33 @@ export abstract class BasePanel implements Panel {
   protected reportRenderDuration(durationMs: number, now: number = Date.now()): void {
     this.componentHealthMonitor?.recordRender(this.id, durationMs, now);
   }
+
+  /** Cache of the most recent lines produced by trackedRender. */
+  private _lastTrackedLines: Line[] = [];
+
+  /**
+   * Wrap a render body with canRenderNow throttle check, wall-clock timing,
+   * and automatic reportRenderDuration.
+   *
+   * When throttled, returns the previously cached lines (stale but correctly
+   * sized) rather than empty lines, avoiding a flicker on every skipped frame.
+   *
+   * Usage:
+   * ```ts
+   * render(width: number, height: number): Line[] {
+   *   return this.trackedRender(() => {
+   *     // expensive render logic
+   *     return lines;
+   *   });
+   * }
+   * ```
+   */
+  protected trackedRender(fn: () => Line[]): Line[] {
+    if (!this.canRenderNow()) return this._lastTrackedLines;
+    const start = Date.now();
+    const lines = fn();
+    this.reportRenderDuration(Date.now() - start);
+    this._lastTrackedLines = lines;
+    return lines;
+  }
 }

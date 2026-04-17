@@ -43,13 +43,36 @@ export const DEFAULT_PANEL_PALETTE: Readonly<Required<PanelPalette>> = {
   selectBg: UI_TONES.bg.selected,
 } as const;
 
+/**
+ * Extend the base panel palette with domain-specific colors.
+ *
+ * Convention: raw hex colors may only live inside a palette constant declared
+ * at the top of a panel file, not inline in render calls.
+ *
+ * @example
+ * ```ts
+ * const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+ *   decision: '#38bdf8',
+ *   incident: '#ef4444',
+ * });
+ * ```
+ */
+export function extendPalette<T extends Record<string, string>>(
+  base: typeof DEFAULT_PANEL_PALETTE,
+  extras: T,
+): typeof DEFAULT_PANEL_PALETTE & T {
+  return { ...base, ...extras };
+}
+
 export function buildPanelLine(
   width: number,
-  segments: Array<[string, string, string?]>,
+  segments: Array<StyledPanelSegment | [string, string, string?]>,
 ): Line {
   return buildStyledPanelLine(
     width,
-    segments.map(([text, fg, bg]) => ({ text, fg, bg })),
+    segments.map((seg) =>
+      Array.isArray(seg) ? { text: seg[0], fg: seg[1], bg: seg[2] } : seg,
+    ),
   );
 }
 
@@ -257,29 +280,21 @@ export function buildSearchInputLine(
   ], { fillBg: bg });
 }
 
-// ---------------------------------------------------------------------------
-// buildStatusPill — glyph + color status segment for use in buildPanelLine.
-//
-// Returns Array<[string, string, string?]> compatible with buildPanelLine so
-// that callers can spread it inline:
-//   buildPanelLine(width, [['  count ', C.label], ...buildStatusPill('bad', '3')])
-//
-// Mirrors buildStatusToken semantics (always glyph + color) but produces
-// plain text+color tuples rather than Cell[] for direct buildPanelLine use.
-//
-// ---------------------------------------------------------------------------
-
 /**
- * TODO(consolidation): buildStatusPill (tuple form) and buildStatusToken (Cell[]
- * form) are parallel APIs. Long-term, consider extending buildPanelLine to accept
- * Cell[] segments so buildStatusToken can become the single source of truth.
- * For now the pill variant exists to bridge tuple-based buildPanelLine consumers.
+ * Build a status pill segment (glyph + label) for use in buildPanelLine.
+ *
+ * Returns StyledPanelSegment[] — spread directly into a buildPanelLine segments
+ * array:
+ *   buildPanelLine(width, [['  count ', C.label], ...buildStatusPill('bad', '3')])
+ *
+ * Convention: raw hex colors may only live inside a palette constant declared at
+ * the top of a panel file; buildStatusPill derives its color from the palette.
  */
 export function buildStatusPill(
   state: StatusState,
   label: string,
   opts?: { glyph?: string; bg?: string; count?: number },
-): Array<[string, string, string?]> {
+): StyledPanelSegment[] {
   const glyph = opts?.glyph ?? STATE_GLYPHS[state];
   const color = state === 'good' ? DEFAULT_PANEL_PALETTE.good
     : state === 'warn' ? DEFAULT_PANEL_PALETTE.warn
@@ -287,9 +302,7 @@ export function buildStatusPill(
     : DEFAULT_PANEL_PALETTE.info;
   const bg = opts?.bg;
   const text = opts?.count !== undefined ? `${glyph} ${label} (${opts.count})` : `${glyph} ${label}`;
-  return [
-    [text, color, bg],
-  ];
+  return [{ text, fg: color, bg }];
 }
 
 export function buildStatPill(
