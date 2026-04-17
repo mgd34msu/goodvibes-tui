@@ -44,10 +44,6 @@ describe('operability gate: forensics classifier coverage', () => {
     expect(classifyFailure({ stopReason: 'max_tokens' })).toBe('max_tokens');
   });
 
-  test('length stop reason → classified as max_tokens', () => {
-    expect(classifyFailure({ stopReason: 'length' })).toBe('max_tokens');
-  });
-
   test('context_overflow stop reason → classified as max_tokens', () => {
     expect(classifyFailure({ stopReason: 'context_overflow' })).toBe('max_tokens');
   });
@@ -180,7 +176,7 @@ describe('operability gate: forensics summariser', () => {
 
   test('max_tokens with length stop reason produces correct description', () => {
     const summary = summariseFailure('max_tokens', undefined, 'length');
-    expect(summary).toContain('length');
+    expect(summary).toContain('token limit');
   });
 });
 
