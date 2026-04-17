@@ -76,6 +76,7 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
 
   public constructor(eventFeed: UiEventFeed<OpsEvent>) {
     super('ops-control', 'Ops Control', 'Q', 'agent');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this._opsPanel = new OpsPanel(eventFeed);
     this._unsub = this._opsPanel.subscribe(() => this.markDirty());
   }

@@ -15,10 +15,20 @@ export abstract class BasePanel implements Panel {
   // I2: Error surface slot
   // -------------------------------------------------------------------------
 
-  /** Last error message to surface in the panel footer. Auto-cleared on next input. */
+  /**
+   * Last error message to surface in the panel footer.
+   * Auto-cleared on the next keystroke by `ScrollableListPanel.handleInput()` (and any
+   * subclass that calls `super.handleInput()` or manually calls `this.clearError()` at
+   * the start of its handler). BasePanel itself does NOT auto-clear — only subclasses
+   * that opt into the contract do.
+   */
   protected lastError: string | null = null;
 
-  /** Set a transient error message. Triggers a re-render. */
+  /**
+   * Set a transient error message. Triggers a re-render.
+   * The error will be auto-cleared on the next keystroke if the panel extends
+   * `ScrollableListPanel` (which calls `clearError()` at the top of `handleInput()`).
+   */
   protected setError(msg: string): void {
     this.lastError = msg;
     this.needsRender = true;
@@ -64,6 +74,32 @@ export abstract class BasePanel implements Panel {
     this.loadingState = 'idle';
     this._loadingLabel = '';
     this.needsRender = true;
+  }
+
+  /**
+   * Run an async operation with the panel's loading spinner visible.
+   * The spinner is always cleared on completion, whether the operation succeeds or throws
+   * (uses try/finally). Rethrows any error so callers can handle it or forward to setError.
+   *
+   * @param label Optional label shown next to the spinner.
+   * @param fn    The async work to run.
+   *
+   * @example
+   * ```ts
+   * try {
+   *   await this.withLoading('Loading diff…', () => this.fetchDiff());
+   * } catch (err) {
+   *   this.setError(summarizeError(err));
+   * }
+   * ```
+   */
+  protected async withLoading<T>(label: string | undefined, fn: () => Promise<T>): Promise<T> {
+    this.startLoading(label);
+    try {
+      return await fn();
+    } finally {
+      this.stopLoading();
+    }
   }
 
   /**

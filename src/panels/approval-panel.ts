@@ -33,6 +33,7 @@ export class ApprovalPanel extends ScrollableListPanel<ApprovalRow> {
 
   public constructor(policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>) {
     super('approval', 'Approval', 'A', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.policyRuntimeState = policyRuntimeState;
   }
 

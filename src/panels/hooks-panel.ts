@@ -10,6 +10,7 @@ import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workben
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildPanelLine,
+  buildStatusPill,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
@@ -66,6 +67,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
     dataSource: HooksPanelDataSource = createDefaultDataSource(hookDispatcher, hookWorkbench, hookActivityTracker),
   ) {
     super('hooks', 'Hooks', 'H', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.dataSource = dataSource;
   }
 
@@ -88,7 +90,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
       [' ', C.label, bg],
       [truncateDisplay(entry.hook.name ?? '(unnamed)', 20).padEnd(20), C.value, bg],
       [` ${truncateDisplay(entry.pattern, 28).padEnd(28)}`, C.info, bg],
-      [` ${(entry.hook.enabled === false ? 'DISABLED' : 'ENABLED').padEnd(8)}`, entry.hook.enabled === false ? C.warn : C.ok, bg],
+      ...buildStatusPill(entry.hook.enabled === false ? 'warn' : 'good', ` ${(entry.hook.enabled === false ? 'DISABLED' : 'ENABLED').padEnd(8)}`, { bg }),
       [` ${entry.hook.type}`, C.dim, bg],
     ]);
   }

@@ -32,6 +32,7 @@ export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord>
 
   public constructor(readModel?: UiReadModel<UiCommunicationSnapshot>) {
     super('communication', 'Communication', 'Y', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }

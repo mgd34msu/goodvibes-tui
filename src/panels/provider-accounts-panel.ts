@@ -36,6 +36,7 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
 
   public constructor(deps: ProviderAccountsPanelDeps) {
     super('accounts', 'Accounts', 'Q', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.providerAccounts = deps.providerAccounts;
     void this.refresh();
   }

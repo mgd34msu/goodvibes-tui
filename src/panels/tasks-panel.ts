@@ -156,6 +156,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
     worktrees?: UiReadModel<UiWorktreeSnapshot>,
   ) {
     super('tasks', 'Tasks', 'J', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.readModel = readModel;
     this.worktrees = worktrees;
     this.unsubscribers = [

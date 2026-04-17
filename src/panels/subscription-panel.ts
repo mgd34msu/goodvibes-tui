@@ -64,6 +64,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
     subscriptionManager: SubscriptionAccessQuery,
   ) {
     super('subscription', 'Subscriptions', 'B', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.serviceRegistry = serviceRegistry;
     this.subscriptionManager = subscriptionManager;
   }

@@ -122,9 +122,26 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   // Navigation — consistent across ALL panels
   // -------------------------------------------------------------------------
 
+  /**
+   * Handle keyboard input for list navigation.
+   *
+   * **Auto-clearError contract**: At the top of this method, `lastError` is cleared if
+   * non-null. This means any transient error set via `setError()` is dismissed on the
+   * very next keystroke the user presses. Subclasses that override `handleInput()` should
+   * either:
+   *   1. Call `super.handleInput(key)` as a fallback (preferred), which will clear the
+   *      error when navigation keys are pressed, or
+   *   2. Manually call `this.clearError()` at the top of their override to maintain
+   *      the same contract for their handled keys.
+   *
+   * Returns `true` if the key was consumed, `false` to let the panel manager try another
+   * handler.
+   */
   handleInput(key: string): boolean {
-    // I2: auto-clear error on next keypress
-    if (this.lastError) this.clearError();
+    // I2: auto-clear transient errors on the next keystroke so stale errors don't linger.
+    // Subclasses that override handleInput should call super.handleInput(key) OR manually
+    // call this.clearError() at the start of their handler.
+    if (this.lastError !== null) this.clearError();
 
     const items = this.getItems();
     const total = items.length;

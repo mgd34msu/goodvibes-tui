@@ -8,6 +8,7 @@ import {
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
+  buildStatusPill,
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
@@ -40,6 +41,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
 
   public constructor(registry?: ForensicsRegistry) {
     super('incident', 'Incident Review', 'N', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.registry = registry;
     this.unsub = registry ? registry.subscribe(() => this.markDirty()) : null;
   }
@@ -137,7 +139,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
       if (bundle.evidence.slowPhases.length > 0) {
         footerLines.push(buildPanelLine(width, [
           ['  Slow phases: ', C.label],
-          [bundle.evidence.slowPhases.join(', ').slice(0, Math.max(0, width - 15)), C.warn],
+          ...buildStatusPill('warn', bundle.evidence.slowPhases.join(', ').slice(0, Math.max(0, width - 15))),
         ]));
       }
       const rootCause = selected.causalChain.find((entry) => entry.isRootCause);
@@ -166,7 +168,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
           : `Replay link: ${mismatch.kind}${mismatch.ownerDomain ? `/${mismatch.ownerDomain}` : ''} - ${mismatch.description}`;
         footerLines.push(buildPanelLine(width, [
           ['  ', C.label],
-          [replayDetail.slice(0, Math.max(0, width - 2)), C.bad],
+          ...buildStatusPill('bad', replayDetail.slice(0, Math.max(0, width - 2))),
         ]));
       } else {
         const ownerBreakdown = Object.entries(bundle.replay.mismatchBreakdown.byOwnerDomain)

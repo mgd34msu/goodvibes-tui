@@ -45,6 +45,7 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
 
   public constructor(readModel?: UiReadModel<UiAutomationSnapshot>) {
     super('automation', 'Automation', 'M', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }

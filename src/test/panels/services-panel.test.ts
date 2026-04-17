@@ -67,7 +67,7 @@ describe('ServicesPanel', () => {
     expect(text).toContain('Service Control Room');
     expect(text).toContain('slack');
     expect(text).toContain('CONFIGURED');
-    expect(text).toContain('Primary credential: present');
+    expect(text).toContain('Primary credential: ✓ present');
   });
 
   test('runs connection tests for the selected service', async () => {
@@ -82,7 +82,7 @@ describe('ServicesPanel', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       const text = linesText(panel.render(120, 14));
       expect(text).toContain('HEALTHY');
-      expect(text).toContain('Last test: ok');
+      expect(text).toContain('Last test: ✓ ok');
       expect(fetchMock).toHaveBeenCalled();
     } finally {
       globalThis.fetch = originalFetch;

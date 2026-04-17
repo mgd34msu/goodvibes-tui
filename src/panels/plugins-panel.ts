@@ -52,6 +52,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
 
   public constructor(manager: PluginManagerObserver) {
     super('plugins', 'Plugins', 'P', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.manager = manager;
     this.unsub = manager.subscribe(() => this.markDirty());
   }

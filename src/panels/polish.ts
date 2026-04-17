@@ -3,6 +3,7 @@ import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { getSurfaceContentRows, getTrackedVisibleWindow, getVisibleWindow, type VisibleWindow } from '../renderer/surface-layout.ts';
 import { GLYPHS, UI_TONES } from '../renderer/ui-primitives.ts';
+import { type StatusState, STATE_GLYPHS } from '../renderer/status-glyphs.ts';
 
 export interface PanelPalette {
   readonly label: string;
@@ -254,6 +255,41 @@ export function buildSearchInputLine(
     { text: `${label}`, fg: palette.label, bg },
     { text: content, fg, bg, bold: active },
   ], { fillBg: bg });
+}
+
+// ---------------------------------------------------------------------------
+// buildStatusPill — glyph + color status segment for use in buildPanelLine.
+//
+// Returns Array<[string, string, string?]> compatible with buildPanelLine so
+// that callers can spread it inline:
+//   buildPanelLine(width, [['  count ', C.label], ...buildStatusPill('bad', '3')])
+//
+// Mirrors buildStatusToken semantics (always glyph + color) but produces
+// plain text+color tuples rather than Cell[] for direct buildPanelLine use.
+//
+// ---------------------------------------------------------------------------
+
+/**
+ * TODO(consolidation): buildStatusPill (tuple form) and buildStatusToken (Cell[]
+ * form) are parallel APIs. Long-term, consider extending buildPanelLine to accept
+ * Cell[] segments so buildStatusToken can become the single source of truth.
+ * For now the pill variant exists to bridge tuple-based buildPanelLine consumers.
+ */
+export function buildStatusPill(
+  state: StatusState,
+  label: string,
+  opts?: { glyph?: string; bg?: string; count?: number },
+): Array<[string, string, string?]> {
+  const glyph = opts?.glyph ?? STATE_GLYPHS[state];
+  const color = state === 'good' ? DEFAULT_PANEL_PALETTE.good
+    : state === 'warn' ? DEFAULT_PANEL_PALETTE.warn
+    : state === 'bad'  ? DEFAULT_PANEL_PALETTE.bad
+    : DEFAULT_PANEL_PALETTE.info;
+  const bg = opts?.bg;
+  const text = opts?.count !== undefined ? `${glyph} ${label} (${opts.count})` : `${glyph} ${label}`;
+  return [
+    [text, color, bg],
+  ];
 }
 
 export function buildStatPill(

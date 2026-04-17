@@ -9,6 +9,7 @@ import {
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
+  buildStatusPill,
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
@@ -37,6 +38,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
 
   public constructor(readModel?: UiReadModel<UiRoutesSnapshot>) {
     super('routes', 'Routes', 'R', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
@@ -60,7 +62,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
       [' ', C.label, bg],
       [binding.surfaceKind.padEnd(9), C.info, bg],
       [` ${truncateDisplay(binding.title ?? binding.externalId, 22).padEnd(22)}`, C.value, bg],
-      [` ${truncateDisplay(binding.sessionId ?? binding.runId ?? 'unbound', 18).padEnd(18)}`, binding.sessionId ? C.ok : C.warn, bg],
+      ...buildStatusPill(binding.sessionId ? 'good' : 'warn', ` ${truncateDisplay(binding.sessionId ?? binding.runId ?? 'unbound', 18).padEnd(18)}`, { bg }),
       [` ${truncateDisplay(formatTime(binding.lastSeenAt), Math.max(0, width - 54))}`, C.dim, bg],
     ]);
   }

@@ -58,6 +58,7 @@ export class WatchersPanel extends ScrollableListPanel<WatcherEntry> {
 
   public constructor(readModel?: UiReadModel<UiWatchersSnapshot>) {
     super('watchers', 'Watchers', 'W', 'monitoring');
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }

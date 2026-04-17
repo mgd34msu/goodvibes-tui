@@ -4,23 +4,17 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
-import { BasePanel } from './base-panel.ts';
+import { SearchableListPanel } from './scrollable-list-panel.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import {
-  buildEmptyState,
   buildPanelLine,
-  buildSearchInputLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  resolvePrimaryScrollableSection,
-  type PanelWorkspaceSection,
 } from './polish.ts';
 import {
   getPanelSearchFocusTransition,
-  isPanelSearchBackspace,
   isPanelSearchCancel,
-  isPanelSearchPrintable,
 } from './search-focus.ts';
 
 const C = {
@@ -234,12 +228,10 @@ function originColor(origin: SkillOrigin): string {
   }
 }
 
-export class SkillsPanel extends BasePanel {
+export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   private readonly shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
-  private query = '';
+  /** Whether the filter input row is focused for typing (vs. list navigation). */
   private filterFocused = false;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
   private cached: SkillRecord[] | null = null;
   private cacheDirty = true;
   // I1: confirm state for destructive delete
@@ -247,15 +239,67 @@ export class SkillsPanel extends BasePanel {
 
   public constructor(options: SkillsPanelOptions) {
     super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
+    this.showSelectionGutter = true; // I5: non-color selection affordance
     this.shellPaths = options.shellPaths;
+  }
+
+  // -------------------------------------------------------------------------
+  // SearchableListPanel implementation
+  // -------------------------------------------------------------------------
+
+  protected getAllItems(): readonly SkillRecord[] {
+    if (this.cached === null || this.cacheDirty) {
+      this.cached = discoverSkills(this.shellPaths);
+      this.cacheDirty = false;
+    }
+    return this.cached;
+  }
+
+  protected matchesSearch(skill: SkillRecord, query: string): boolean {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const haystack = [
+      skill.name,
+      skill.description,
+      skill.path,
+      skill.origin,
+      skill.dependencies.join(' '),
+      skill.includes.join(' '),
+    ].join(' ').toLowerCase();
+    return haystack.includes(q);
+  }
+
+  protected renderItem(skill: SkillRecord, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    const dot = skill.origin === 'project-local' ? '\u25c6' : '\u2022';
+    const desc = skill.description || 'No description provided.';
+    const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
+    const descLines = wordWrap(desc, descWidth);
+    return buildPanelLine(width, [
+      [selected ? '\u25b8' : ' ', C.selectedFg, bg],
+      [' ', C.dim, bg],
+      [dot, originColor(skill.origin), bg],
+      [' ', C.dim, bg],
+      [skill.name, selected ? C.selectedFg : C.value, bg],
+      ['  ', C.dim, bg],
+      [descLines[0] ?? '', selected ? C.selectedFg : C.dim, bg],
+    ]);
+  }
+
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() { return ' No skills discovered.'; }
+  protected override getEmptyStateActions() {
+    return [
+      { command: '.goodvibes/skills', summary: 'place skill .md files here (project-local) or ~/.goodvibes/skills (global)' },
+      { command: '/registry search skills', summary: 'inspect the same skill directories from the shell' },
+    ];
   }
 
   public override onActivate(): void {
     super.onActivate();
-    this.query = '';
+    this.searchQuery = '';
+    this.invalidateFilter();
     this.filterFocused = false;
-    this.selectedIndex = 0;
-    this.scrollOffset = 0;
     this.cacheDirty = true;
   }
 
@@ -280,102 +324,47 @@ export class SkillsPanel extends BasePanel {
     }
     if (confirmResult === 'absorbed') return true;
 
-    const records = this._filteredSkills();
+    const items = this.getItems();
+
+    // Filter-focus mode: typing goes into the search query
     if (this.filterFocused) {
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: records.length });
+      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
       if (transition === 'focus-list') {
         this.filterFocused = false;
-        this.selectedIndex = 0;
-        this.scrollOffset = 0;
         this.markDirty();
         return true;
       }
-      if (isPanelSearchBackspace(key)) {
-        if (this.query.length === 0) return true;
-        this.query = this.query.slice(0, -1);
-        this.selectedIndex = 0;
-        this.scrollOffset = 0;
-        this.markDirty();
-        return true;
-      }
+      // Escape: also blur filter focus (clear + return to list navigation)
       if (isPanelSearchCancel(key)) {
         this.filterFocused = false;
-        this.markDirty();
-        return true;
+        // Delegate to super to clear the query. If the query is empty, super
+        // returns false and escape propagates to the panel dismissal handler —
+        // this is the intentional double-escape UX (blur filter, then close).
+        return super.handleInput(key);
       }
-      if (isPanelSearchPrintable(key)) {
-        this.query += key;
-        this.selectedIndex = 0;
-        this.scrollOffset = 0;
-        this.markDirty();
-        return true;
-      }
-      return false;
+      // Delegate backspace/printable to SearchableListPanel.handleInput
+      return super.handleInput(key);
     }
 
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: records.length });
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
     if (transition === 'focus-search') {
       this.filterFocused = true;
       this.markDirty();
       return true;
     }
 
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(Math.max(0, records.length - 1), this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'home') {
-      this.selectedIndex = 0;
-      this.markDirty();
-      return true;
-    }
-    if (key === 'end') {
-      this.selectedIndex = Math.max(0, records.length - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'pageup') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 5);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'pagedown') {
-      this.selectedIndex = Math.min(Math.max(0, records.length - 1), this.selectedIndex + 5);
-      this.markDirty();
-      return true;
-    }
     // I1: 'd' prompts delete confirmation
     if (key === 'd') {
-      const skill = records[this.selectedIndex];
+      const skill = items[this.selectedIndex];
       if (skill) {
         this.confirm = { subject: skill.path, label: skill.name };
         this.markDirty();
       }
       return true;
     }
-    if (isPanelSearchBackspace(key)) {
-      if (this.query.length === 0) return false;
-      this.query = this.query.slice(0, -1);
-      this.selectedIndex = 0;
-      this.scrollOffset = 0;
-      this.markDirty();
-      return true;
-    }
-    if (isPanelSearchCancel(key)) {
-      if (this.query.length === 0) return false;
-      this.query = '';
-      this.selectedIndex = 0;
-      this.scrollOffset = 0;
-      this.markDirty();
-      return true;
-    }
-    return false;
+
+    // Navigation + search: delegate to SearchableListPanel (up/down/g/G/page/enter + backspace/escape)
+    return super.handleInput(key);
   }
 
   public render(width: number, height: number): Line[] {
@@ -399,46 +388,12 @@ export class SkillsPanel extends BasePanel {
       return lines.slice(0, height);
     }
 
-    const intro = 'Discover project-local and global skill packs, filter by name or description, and inspect path, dependencies, and includes.';
-    const skills = this._filteredSkills();
+    // Build filter input line (provided by SearchableListPanel base)
+    const filterLine = this.buildFilterInputLine(width, 'Filter', this.filterFocused);
 
-    if (skills.length === 0) {
-      const lines = buildPanelWorkspace(width, height, {
-        title: 'Skills - discover project-local and global skill packs',
-        intro,
-        sections: [{
-          title: 'Filter',
-          lines: [buildSearchInputLine(width, ' query: ', `${this.query}${this.filterFocused ? '_' : ''}`, C, {
-            active: this.filterFocused,
-            emptyLabel: this.filterFocused ? '(type to filter)' : '(/ or up at top)',
-            valueColor: this.query ? C.searchFg : undefined,
-          })],
-        }, {
-          lines: buildEmptyState(
-            width,
-            ' No skills discovered.',
-            'Create .goodvibes/skills or .goodvibes/tui/skills in this repo, or ~/.goodvibes/skills and ~/.goodvibes/tui/skills for global packs.',
-            [{ command: '/registry search skills', summary: 'inspect the same skill directories from the shell' }],
-            C,
-          ),
-        }],
-        palette: C,
-      });
-      while (lines.length < height) lines.push(createEmptyLine(width));
-      this.reportRenderDuration(Date.now() - start);
-      return lines.slice(0, height);
-    }
-
-    this._clampSelection(skills);
-    const selected = skills[this.selectedIndex];
-    const fixedDiscoveryLines: Line[] = [
-      buildSearchInputLine(width, ' query: ', `${this.query}${this.filterFocused ? '_' : ''}`, C, {
-        active: this.filterFocused,
-        emptyLabel: this.filterFocused ? '(type to filter)' : '(/ or up at top)',
-        valueColor: this.query ? C.searchFg : undefined,
-      }),
-    ];
-
+    // Build detail footer for the currently selected skill
+    const items = this.getItems();
+    const selected = items[this.selectedIndex];
     const detailLines: Line[] = [];
     if (selected) {
       detailLines.push(
@@ -448,99 +403,15 @@ export class SkillsPanel extends BasePanel {
         buildPanelLine(width, [['  Depends: ', C.label], [selected.dependencies.length > 0 ? selected.dependencies.join(', ') : 'none', C.dim]]),
         buildPanelLine(width, [['  Includes: ', C.label], [selected.includes.length > 0 ? selected.includes.join(', ') : 'none', C.dim]]),
       );
-    } else {
-      detailLines.push(buildPanelLine(width, [[' No selection.', C.dim]]));
     }
-    const detailSection: PanelWorkspaceSection = { title: 'Selected Skill', lines: detailLines };
-    const resolvedDiscoverySection = resolvePrimaryScrollableSection(width, height, {
-      intro,
-      footerLines: [buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.hint]])],
-      palette: C,
-      section: {
-        title: 'Discovery',
-        fixedLines: fixedDiscoveryLines,
-        scrollableLines: skills.map((skill, absolute) => {
-          const isSelected = absolute === this.selectedIndex;
-          const bg = isSelected ? C.selectBg : undefined;
-          const dot = skill.origin === 'project-local' ? '◆' : '•';
-          const desc = skill.description || 'No description provided.';
-          const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
-          const descLines = wordWrap(desc, descWidth);
-          return buildPanelLine(width, [
-            [isSelected ? '▸' : ' ', C.selectedFg, bg],
-            [' ', C.dim, bg],
-            [dot, originColor(skill.origin), bg],
-            [' ', C.dim, bg],
-            [skill.name, isSelected ? C.selectedFg : C.value, bg],
-            ['  ', C.dim, bg],
-            [descLines[0] ?? '', isSelected ? C.selectedFg : C.dim, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        guardRows: 1,
-        minRows: 4,
-        appendWindowSummary: {
-          dimColor: C.dim,
-          formatter: (window) => buildPanelLine(width, [[`  showing ${window.start + 1}-${window.end} of ${window.total}`, C.dim]]),
-        },
-      },
-      afterSections: [detailSection],
-    });
-    this.scrollOffset = resolvedDiscoverySection.scrollOffset;
-    this._clampScroll(skills, resolvedDiscoverySection.window.count);
+    detailLines.push(buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.hint]]));
 
-    const sections: PanelWorkspaceSection[] = [
-      resolvedDiscoverySection.section,
-      detailSection,
-    ];
-    const lines = buildPanelWorkspace(width, height, {
+    const lines = this.renderList(width, height, {
       title: 'Skills - discover project-local and global skill packs',
-      intro,
-      sections,
-      footerLines: [buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.hint]])],
-      palette: C,
+      header: [filterLine],
+      footer: detailLines,
     });
-    while (lines.length < height) lines.push(createEmptyLine(width));
     this.reportRenderDuration(Date.now() - start);
-    return lines.slice(0, height);
-  }
-
-  private _filteredSkills(): SkillRecord[] {
-    if (this.cached === null || this.cacheDirty) {
-      this.cached = discoverSkills(this.shellPaths);
-      this.cacheDirty = false;
-    }
-    const q = this.query.trim().toLowerCase();
-    if (!q) return this.cached;
-    return this.cached.filter((skill) => {
-      const haystack = [
-        skill.name,
-        skill.description,
-        skill.path,
-        skill.origin,
-        skill.dependencies.join(' '),
-        skill.includes.join(' '),
-      ].join(' ').toLowerCase();
-      return haystack.includes(q);
-    });
-  }
-
-  private _clampSelection(records: SkillRecord[]): void {
-    if (records.length === 0) {
-      this.selectedIndex = 0;
-      return;
-    }
-    this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, records.length - 1));
-  }
-
-  private _clampScroll(records: SkillRecord[], listHeight: number): void {
-    const maxScroll = Math.max(0, records.length - listHeight);
-    if (this.selectedIndex < this.scrollOffset) {
-      this.scrollOffset = this.selectedIndex;
-    } else if (this.selectedIndex >= this.scrollOffset + listHeight) {
-      this.scrollOffset = this.selectedIndex - listHeight + 1;
-    }
-    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
+    return lines;
   }
 }
