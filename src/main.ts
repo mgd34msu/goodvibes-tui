@@ -80,6 +80,49 @@ function resolveShellEntrypointOwnership(): ShellEntrypointOwnership {
   };
 }
 
+// ---------------------------------------------------------------------------
+// CLI flag parsing (TUI shell entry point)
+// ---------------------------------------------------------------------------
+
+type TuiCliFlags = {
+  readonly provider: string | undefined;
+  readonly model: string | undefined;
+};
+
+function parseTuiCliFlags(argv: readonly string[]): TuiCliFlags {
+  let provider: string | undefined;
+  let model: string | undefined;
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--help' || arg === '-h') {
+      // eslint-disable-next-line no-console
+      console.log([
+        'Usage: goodvibes [options]',
+        '',
+        'Options:',
+        '  --provider <id>          Override the provider from settings.json at startup',
+        '  --model <registryKey>    Override the model from settings.json at startup',
+        '                           Format: provider:modelId (e.g. inception:mercury-2)',
+        '                           If provider:modelId format is used, --provider is inferred',
+        '  --help, -h               Show this help message',
+      ].join('\n'));
+      process.exit(0);
+    }
+    if (arg === '--provider' && argv[i + 1] !== undefined) {
+      provider = argv[++i];
+    } else if (arg === '--model' && argv[i + 1] !== undefined) {
+      model = argv[++i];
+      // Infer provider from registryKey format (provider:modelId) if --provider not given
+      if (typeof model === 'string' && model.includes(':') && provider === undefined) {
+        provider = model.split(':')[0];
+      }
+    }
+  }
+
+  return { provider, model };
+}
+
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
@@ -94,6 +137,15 @@ async function main() {
     surfaceRoot: 'tui',
   });
   new GlobalNetworkTransportInstaller().install(configManager);
+
+  // Apply CLI flags — override settings.json before the provider registry is constructed
+  const cliFlags = parseTuiCliFlags(process.argv.slice(2));
+  if (cliFlags.provider !== undefined) {
+    configManager.set('provider.provider', cliFlags.provider);
+  }
+  if (cliFlags.model !== undefined) {
+    configManager.set('provider.model', cliFlags.model);
+  }
 
   // ── Bootstrap all runtime subsystems ─────────────────────────────────────
   // bootstrapRuntime initializes all subsystems in dependency order and returns

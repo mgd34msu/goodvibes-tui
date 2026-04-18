@@ -4,6 +4,38 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.1] — 2026-04-17
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` from 0.21.1 to 0.21.6 — includes secrets-tier
+  `configuredVia` discriminator, HTTP `/api/providers` + `/api/providers/current` (GET/PATCH),
+  reactive `model.changed` SSE event, `BUILTIN_LABEL_MAP` brand-accurate provider labels,
+  and clean unconfigured-provider errors instead of silent 401 pass-through.
+
+### Added
+- `--provider <id>` and `--model <registryKey>` CLI flags for daemon startup
+  (`goodvibes-daemon`) and TUI shell startup (`goodvibes`). Both override
+  `~/.goodvibes/tui/settings.json` provider/model values for the session.
+  If `--model provider:modelId` format is used, `--provider` is inferred automatically.
+- TUI model picker now populates `configuredVia` per provider and renders it as
+  a badge (`[env]`, `[sub]`, `[anon]`) in the provider-browse view, derived from
+  env-var presence and active OAuth subscription sessions.
+
+### Fixed
+- **Venice-picking diagnosis**: the silent 401 Venice fallback was caused by the
+  pre-0.21.2 SDK passing unconfigured-provider requests through to the upstream API
+  unchanged. As of 0.21.2 (included in 0.21.6), `createCompanionProviderAdapter` now
+  checks `provider.isConfigured()` before `provider.chat()` and yields a structured
+  error immediately. The in-registry fallback to first-selectable-model (which may
+  resolve to venice on some installs) only triggers when `getCurrentModel()` cannot
+  find the stored `currentModelId` in the model registry — typically an old daemon
+  instance with stale config. Restarting the daemon after a settings.json change
+  resolves this; the `--model` CLI flag eliminates the need to edit settings.json
+  manually. ConfigManager reactivity (live disk-change → registry update) is out of
+  scope: the PATCH `/api/providers/current` route is the correct live-switch path
+  (calls `setCurrentModel()` + `configManager.set()` atomically).
+
+
 ## [0.19.0] — 2026-04-18
 
 ### Changed

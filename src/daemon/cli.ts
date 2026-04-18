@@ -22,6 +22,49 @@ type DaemonCliOwnership = {
   readonly homeDirectory: string;
 };
 
+// ---------------------------------------------------------------------------
+// CLI flag parsing
+// ---------------------------------------------------------------------------
+
+type DaemonCliFlags = {
+  readonly provider: string | undefined;
+  readonly model: string | undefined;
+};
+
+function parseDaemonCliFlags(argv: readonly string[]): DaemonCliFlags {
+  let provider: string | undefined;
+  let model: string | undefined;
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--help' || arg === '-h') {
+      // eslint-disable-next-line no-console
+      console.log([
+        'Usage: goodvibes-daemon [options]',
+        '',
+        'Options:',
+        '  --provider <id>          Override the provider from settings.json at startup',
+        '  --model <registryKey>    Override the model from settings.json at startup',
+        '                           Format: provider:modelId (e.g. inception:mercury-2)',
+        '                           If provider:modelId format is used, --provider is inferred',
+        '  --help, -h               Show this help message',
+      ].join('\n'));
+      process.exit(0);
+    }
+    if (arg === '--provider' && argv[i + 1] !== undefined) {
+      provider = argv[++i];
+    } else if (arg === '--model' && argv[i + 1] !== undefined) {
+      model = argv[++i];
+      // Infer provider from registryKey format (provider:modelId) if --provider not given
+      if (typeof model === 'string' && model.includes(':') && provider === undefined) {
+        provider = model.split(':')[0];
+      }
+    }
+  }
+
+  return { provider, model };
+}
+
 type DaemonCliTokens = {
   readonly daemonToken: string | undefined;
   readonly httpToken: string | undefined;
@@ -72,6 +115,17 @@ async function main(): Promise<void> {
   const { workingDirectory: workingDir, homeDirectory } = resolveDaemonCliOwnership();
   const config = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
   new GlobalNetworkTransportInstaller().install(config);
+
+  // Apply CLI flags — override settings.json before the provider registry is constructed
+  const cliFlags = parseDaemonCliFlags(process.argv.slice(2));
+  if (cliFlags.provider !== undefined) {
+    config.set('provider.provider', cliFlags.provider);
+    logger.info('daemon: --provider flag applied', { provider: cliFlags.provider });
+  }
+  if (cliFlags.model !== undefined) {
+    config.set('provider.model', cliFlags.model);
+    logger.info('daemon: --model flag applied', { model: cliFlags.model });
+  }
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
   const runtimeServices = createRuntimeServices({

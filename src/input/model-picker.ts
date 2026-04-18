@@ -99,6 +99,8 @@ export interface PickerItem {
   isFree?: boolean;
   /** True when this provider item has a configured API key. */
   isConfigured?: boolean;
+  /** How the provider is configured — shown as a badge in provider mode. */
+  configuredVia?: 'env' | 'secrets' | 'subscription' | 'anonymous';
 }
 
 /** Provider IDs treated as "Popular" in the provider picker. */
@@ -166,6 +168,8 @@ export class ModelPickerModal {
   public availableOnly = true;
   /** Set of provider names that have a configured key (used for availableOnly filter). */
   public configuredProviders: Set<string> = new Set();
+  /** How each provider is configured — drives badge display in provider mode. */
+  public configuredViaMap: Map<string, 'env' | 'secrets' | 'subscription' | 'anonymous'> = new Map();
   /** IDs of pinned/favorite models — shown at top of list. */
   public pinnedIds: Set<string> = new Set();
   /** IDs of recently used models — shown after pinned, before the rest. */
@@ -612,13 +616,13 @@ export class ModelPickerModal {
       if (filteredPopular.length > 0) {
         providerItems.push({ id: '__header__popular', label: 'Popular', isGroupHeader: true });
         for (const p of filteredPopular) {
-          providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p) });
+          providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p), configuredVia: this.configuredViaMap.get(p) });
         }
       }
       if (filteredAll.length > 0) {
         providerItems.push({ id: '__header__all', label: 'All Providers', isGroupHeader: true });
         for (const p of filteredAll) {
-          providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p) });
+          providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p), configuredVia: this.configuredViaMap.get(p) });
         }
       }
 

@@ -27,6 +27,42 @@ type WireShellUiOpenersOptions = {
   render: () => void;
 };
 
+/**
+ * Derive the configuredVia tier for a provider.
+ * Checks env-vars first (env tier), then falls back to subscription (from configuredIds
+ * that aren't env-keyed). Returns undefined when not configured.
+ */
+function deriveConfiguredVia(
+  providerId: string,
+  configuredIds: Set<string>,
+  subscriptionManager: SubscriptionManager,
+): 'env' | 'secrets' | 'subscription' | 'anonymous' | undefined {
+  if (!configuredIds.has(providerId)) return undefined;
+
+  // Check if a subscription session is active for this provider
+  const subs = subscriptionManager.list();
+  if (subs.some((s) => s.provider === providerId)) return 'subscription';
+
+  // Assume env-var backed (anonymous providers don't appear in configuredIds)
+  return 'env';
+}
+
+/**
+ * Build a configuredViaMap for the given provider list.
+ */
+function buildConfiguredViaMap(
+  providers: string[],
+  configuredIds: Set<string>,
+  subscriptionManager: SubscriptionManager,
+): Map<string, 'env' | 'secrets' | 'subscription' | 'anonymous'> {
+  const map = new Map<string, 'env' | 'secrets' | 'subscription' | 'anonymous'>();
+  for (const p of providers) {
+    const via = deriveConfiguredVia(p, configuredIds, subscriptionManager);
+    if (via !== undefined) map.set(p, via);
+  }
+  return map;
+}
+
 export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   const {
     commandContext,
@@ -47,7 +83,10 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openModelPicker = () => {
     const models = providerRegistry.getSelectableModels();
-    input.modelPicker.configuredProviders = new Set(getConfiguredProviderIds());
+    const configuredIds = new Set(getConfiguredProviderIds());
+    input.modelPicker.configuredProviders = configuredIds;
+    const providerIds = [...new Set(models.map((m) => m.provider))];
+    input.modelPicker.configuredViaMap = buildConfiguredViaMap(providerIds, configuredIds, subscriptionManager);
     void getPinned().then((pinned) => {
       input.modelPicker.pinnedIds = new Set(pinned);
     });
@@ -59,7 +98,9 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openProviderPicker = () => {
     const providers = [...new Set(providerRegistry.listModels().map((model) => model.provider))];
-    input.modelPicker.configuredProviders = new Set(getConfiguredProviderIds());
+    const configuredIds = new Set(getConfiguredProviderIds());
+    input.modelPicker.configuredProviders = configuredIds;
+    input.modelPicker.configuredViaMap = buildConfiguredViaMap(providers, configuredIds, subscriptionManager);
     input.modalOpened('modelPicker');
     input.modelPicker.openProviders(providers, runtime.provider);
     render();
