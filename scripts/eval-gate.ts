@@ -16,14 +16,9 @@
 
 import { EvalRunner } from '@pellux/goodvibes-sdk/platform/runtime/eval/runner';
 import { BUILTIN_SUITES } from '@pellux/goodvibes-sdk/platform/runtime/eval/suites';
-import {
-  loadBaseline,
-  captureBaseline,
-  writeBaseline,
-  formatSuiteResult,
-  formatGateResult,
-  formatScorecard,
-} from '@pellux/goodvibes-sdk/platform/runtime/eval/index';
+import { loadBaseline, captureBaseline, writeBaseline } from '@pellux/goodvibes-sdk/platform/runtime/eval/baseline';
+import { formatSuiteResult, formatGateResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/format';
+import { formatScorecard } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 
