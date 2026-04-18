@@ -4,6 +4,40 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.0] — 2026-04-18
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` from 0.19.6 to 0.21.1 (soak-period release).
+  TUI adaptation required: regenerated `docs/foundation-artifacts/operator-contract.json`
+  to match the updated `buildOperatorContract()` output in the new SDK version.
+  `peer-contract.json`, `knowledge-graphql.graphql`, and `knowledge-store.sql` were
+  unchanged by this SDK bump.
+
+### Added
+- Wave B panel migration: migrated 5 panels (knowledge, marketplace, memory,
+  system-messages, orchestration) to `ScrollableListPanel<T>`/`SearchableListPanel<T>`
+  generics; added `docs/panel-authoring.md` as the canonical panel authoring guide.
+- Wave C-α reliability pass: F-perf-01 (trackedRender on 5 hot panels),
+  F-perf-02 (async panel fs + skills-panel de-blocking), F-perf-03 (timer registry
+  + 5-panel zombie-timer leak prevention), F-errors-02 (observable async failures —
+  no silent `.catch(() => {})`), F-sec-02 (ANSI escape sanitization at
+  tool-call untrusted-content entry points).
+- `src/input/settings-modal-types.ts`: extracted `SettingsCategory`,
+  `SETTINGS_CATEGORIES`, `SettingEntry`, `FlagEntry`, `McpEntry`,
+  `SubscriptionEntry` type definitions out of the settings-modal module.
+
+### Security
+- Postinstall patcher from `@pellux/goodvibes-sdk@0.21.1` mitigates three
+  minimatch ReDoS advisories in the consumer install tree.
+- Added `overrides: { minimatch: ^10.2.5 }` to TUI's own `package.json`
+  so `npm audit` reports clean for the TUI install tree independently.
+
+### Fixed
+- Foundation artifacts gate now passes: `operator-contract.json` updated to
+  match SDK 0.21.1 `buildOperatorContract()` canonical output.
+
+---
+
 ## [0.18.23] — 2026-04-16
 
 ### Wave 4α+β performance bundle + α review follow-ups + regression fixes
