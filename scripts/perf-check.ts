@@ -14,7 +14,8 @@
  *   1 — one or more budgets exceeded tolerance
  */
 
-import { createPerfMonitor, formatReport, exitCode } from '@pellux/goodvibes-sdk/platform/runtime/perf/index';
+import { PerfMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
+import { formatReport, exitCode } from '@pellux/goodvibes-sdk/platform/runtime/perf/reporter';
 import { createInitialSurfacePerfState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surface-perf';
 import type { PerfSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
 
@@ -55,7 +56,7 @@ function buildCiSnapshot(): PerfSnapshot {
  * Main entry point.
  */
 function main(): void {
-  const monitor = createPerfMonitor();
+  const monitor = new PerfMonitor();
   const snapshot = buildCiSnapshot();
 
   // Run a single evaluation pass
