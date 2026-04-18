@@ -1,6 +1,4 @@
 #!/usr/bin/env bun
-// Main shell entrypoint. Composition-heavy startup remains here, with
-// lower-level session/bootstrap/input helpers extracted into focused modules.
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Compositor } from './renderer/compositor.ts';
@@ -54,7 +52,7 @@ import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
 import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-
+import { parseCliFlags } from './cli-flags.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -80,49 +78,6 @@ function resolveShellEntrypointOwnership(): ShellEntrypointOwnership {
   };
 }
 
-// ---------------------------------------------------------------------------
-// CLI flag parsing (TUI shell entry point)
-// ---------------------------------------------------------------------------
-
-type TuiCliFlags = {
-  readonly provider: string | undefined;
-  readonly model: string | undefined;
-};
-
-function parseTuiCliFlags(argv: readonly string[]): TuiCliFlags {
-  let provider: string | undefined;
-  let model: string | undefined;
-
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === '--help' || arg === '-h') {
-      // eslint-disable-next-line no-console
-      console.log([
-        'Usage: goodvibes [options]',
-        '',
-        'Options:',
-        '  --provider <id>          Override the provider from settings.json at startup',
-        '  --model <registryKey>    Override the model from settings.json at startup',
-        '                           Format: provider:modelId (e.g. inception:mercury-2)',
-        '                           If provider:modelId format is used, --provider is inferred',
-        '  --help, -h               Show this help message',
-      ].join('\n'));
-      process.exit(0);
-    }
-    if (arg === '--provider' && argv[i + 1] !== undefined) {
-      provider = argv[++i];
-    } else if (arg === '--model' && argv[i + 1] !== undefined) {
-      model = argv[++i];
-      // Infer provider from registryKey format (provider:modelId) if --provider not given
-      if (typeof model === 'string' && model.includes(':') && provider === undefined) {
-        provider = model.split(':')[0];
-      }
-    }
-  }
-
-  return { provider, model };
-}
-
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
@@ -139,7 +94,7 @@ async function main() {
   new GlobalNetworkTransportInstaller().install(configManager);
 
   // Apply CLI flags — override settings.json before the provider registry is constructed
-  const cliFlags = parseTuiCliFlags(process.argv.slice(2));
+  const cliFlags = parseCliFlags(process.argv.slice(2), 'goodvibes');
   if (cliFlags.provider !== undefined) {
     configManager.set('provider.provider', cliFlags.provider);
   }
@@ -147,10 +102,7 @@ async function main() {
     configManager.set('provider.model', cliFlags.model);
   }
 
-  // ── Bootstrap all runtime subsystems ─────────────────────────────────────
-  // bootstrapRuntime initializes all subsystems in dependency order and returns
-  // a fully-wired BootstrapContext. main.ts owns terminal setup, the render loop,
-  // stdin input, and signal handlers — everything else is in bootstrap.
+  // ── Bootstrap runtime subsystems via bootstrapRuntime.
   const ctx: BootstrapContext = await bootstrapRuntime(stdout, {
     configManager,
     workingDir: bootstrapWorkingDir,
@@ -180,7 +132,7 @@ async function main() {
   } = ctx;
   const workingDir = ctx.services.workingDirectory;
   const homeDirectory = ctx.services.homeDirectory;
-  const { approvalBroker, agentManager, modeManager, processManager, providerRegistry } = ctx.services;
+  const { approvalBroker, agentManager, modeManager, processManager, providerRegistry, secretsManager, subscriptionManager } = ctx.services;
   conversation.setSessionMemoryStore(ctx.services.sessionMemoryStore);
   conversation.setSessionLineageTracker(ctx.services.sessionLineageTracker);
   orchestrator.setCoreServices({
@@ -433,9 +385,6 @@ async function main() {
     });
 
   // ── InputHandler — created here so getViewportHeight can reference it ──────
-  // orchestratorRefs.getViewportHeight and .scrollToEnd are patched immediately after.
-
-  // ── InputHandler ────────────────────────────────────────────────────────
   const input: InputHandler = new InputHandler(
     () => render(),
     selection,
@@ -502,7 +451,6 @@ async function main() {
     toolCount,
   };
 
-  // Sessions start fresh — use /session resume to load a previous session
 
   // --- Render function ---
   const render = () => {
@@ -513,7 +461,6 @@ async function main() {
     const currentModel = providerRegistry.getCurrentModel();
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
-
 
     // Build header and footer FIRST so we know the exact viewport height
     const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfoRef.value);
@@ -735,8 +682,8 @@ async function main() {
     runtime,
     featureFlags: ctx.featureFlags,
     mcpRegistry: ctx.services.mcpRegistry,
-    subscriptionManager: ctx.services.subscriptionManager,
-    secretsManager: ctx.services.secretsManager,
+    subscriptionManager,
+    secretsManager,
     serviceRegistry: ctx.services.serviceRegistry,
     getConfiguredProviderIds: ctx._getConfiguredProviderIds,
     getPinned: ctx._getPinned,
@@ -744,6 +691,7 @@ async function main() {
   });
 
   // --- Streaming speed + tool preview wiring ---
+  const refreshGit = () => gitStatusProvider.refresh().then((info) => { lastGitInfoRef.value = info; render(); }).catch(() => { /* non-fatal */ });
   // Refresh git status after each turn completes or after tool results arrive
   unsubs.push(uiServices.events.turns.on('TURN_COMPLETED', () => {
     // Auto-save after every LLM turn so kills don't lose the session
@@ -760,22 +708,13 @@ async function main() {
       );
       hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: summarizeError(err) }));
     } catch (e) { logger.debug('auto-save on turn:complete failed', { error: summarizeError(e) }); }
-    gitStatusProvider.refresh().then((info) => {
-      lastGitInfoRef.value = info;
-      render();
-    }).catch(() => { /* non-fatal */ });
+    refreshGit();
   }));
   unsubs.push(uiServices.events.tools.on('TOOL_SUCCEEDED', () => {
-    gitStatusProvider.refresh().then((info) => {
-      lastGitInfoRef.value = info;
-      render();
-    }).catch(() => { /* non-fatal */ });
+    refreshGit();
   }));
   unsubs.push(uiServices.events.tools.on('TOOL_FAILED', () => {
-    gitStatusProvider.refresh().then((info) => {
-      lastGitInfoRef.value = info;
-      render();
-    }).catch(() => { /* non-fatal */ });
+    refreshGit();
   }));
 
   unsubs.push(uiServices.events.turns.on('STREAM_START', () => {
