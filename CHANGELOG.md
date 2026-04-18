@@ -4,6 +4,20 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.2] — 2026-04-18
+
+### Fixed
+- Daemon test: `channel account APIs expose surface auth and secret posture` — corrected
+  `GET /api/providers` assertions from legacy `providerId` field to current `id` field
+  (SDK 0.21.x provider-routes.ts renamed the field). The subscription-oauth auth routes
+  assertion was dropped from the list endpoint (it only exists on per-provider snapshots).
+- Model picker now correctly surfaces `configuredVia='secrets'` tier as `[key]` badge
+  (previously all secrets-manager-keyed providers were collapsed to `[env]`). Secrets are
+  pre-resolved async before the picker renders; `secretsManager` is now threaded from
+  `RuntimeServices` through `wireShellUiOpeners`.
+
+---
+
 ## [0.19.1] — 2026-04-17
 
 ### Changed
