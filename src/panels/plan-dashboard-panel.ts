@@ -80,6 +80,7 @@ export class PlanDashboardPanel extends BasePanel {
   // --------------------------------------------------------------------------
 
   render(width: number, height: number): Line[] {
+    return this.trackedRender(() => {
     const plan = this.planManager.getActive();
     if (!plan) {
       return buildPanelWorkspace(width, height, {
@@ -100,6 +101,7 @@ export class PlanDashboardPanel extends BasePanel {
       });
     }
     return this.renderPlan(plan, width, height);
+    });
   }
 
   // --------------------------------------------------------------------------

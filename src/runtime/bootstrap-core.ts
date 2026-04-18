@@ -362,7 +362,7 @@ export async function initializeBootstrapCore(
       displayName: 'Terminal UI',
       lastSeenAt: Date.now(),
     },
-  }).catch(() => {});
+  }).catch((err) => { logger.debug('session broker create session failed at bootstrap', { err }); });
 
   domainDispatch.syncSessionState({
     id: userSessionId,

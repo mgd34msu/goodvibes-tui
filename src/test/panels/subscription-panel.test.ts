@@ -49,7 +49,7 @@ describe('SubscriptionPanel', () => {
 
     try {
       const manager = subscriptionManager;
-      manager.beginOAuthLogin('openai', {
+      await manager.beginOAuthLogin('openai', {
         authUrl: 'https://auth.openai.com/oauth/authorize',
         tokenUrl: 'https://auth.openai.com/oauth/token',
         clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',
@@ -90,7 +90,7 @@ describe('SubscriptionPanel', () => {
 
     try {
       const manager = subscriptionManager;
-      manager.beginOAuthLogin('openai', {
+      await manager.beginOAuthLogin('openai', {
         authUrl: 'https://auth.openai.com/oauth/authorize',
         tokenUrl: 'https://auth.openai.com/oauth/token',
         clientId: 'app_EMoamEEZ73f0CkXaXp7hrann',

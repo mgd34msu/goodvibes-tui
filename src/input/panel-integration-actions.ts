@@ -1,4 +1,5 @@
 import type { CommandContext } from './command-registry.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { Panel } from '../panels/types.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import { FileExplorerPanel } from '../panels/file-explorer-panel.ts';
@@ -69,7 +70,7 @@ export function handlePanelIntegrationAction(
     const parts = command.replace(/^\//, '').split(/\s+/).filter(Boolean);
     const [name, ...args] = parts;
     if (!name) return false;
-    void commandContext.executeCommand(name, args).catch(() => {});
+    void commandContext.executeCommand(name, args).catch((err) => { logger.debug('approval panel command dispatch failed', { err }); });
     return true;
   }
 

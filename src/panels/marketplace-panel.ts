@@ -1,12 +1,11 @@
 import type { Line } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
-  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
@@ -36,10 +35,8 @@ function statusColor(installed: boolean): string {
   return installed ? C.good : C.dim;
 }
 
-export class MarketplacePanel extends BasePanel {
+export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
   private rows: MarketplaceRow[] = [];
-  private selectedIndex = 0;
-  private scrollOffset = 0;
   private readonly unsub: (() => void) | null;
 
   public constructor(
@@ -59,26 +56,45 @@ export class MarketplacePanel extends BasePanel {
     this.refresh();
   }
 
-  public handleInput(key: string): boolean {
-    if (this.rows.length === 0) return false;
-    if (key === 'ArrowUp' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'ArrowDown' || key === 'j') {
-      this.selectedIndex = Math.min(this.rows.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
+  // ---------------------------------------------------------------------------
+  // ScrollableListPanel implementation
+  // ---------------------------------------------------------------------------
+
+  protected getItems(): readonly MarketplaceRow[] {
+    return this.rows;
+  }
+
+  protected renderItem(row: MarketplaceRow, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    const provenance = row.entry.provenance ?? 'local';
+    return buildPanelLine(width, [
+      ['  ', C.label, bg],
+      [row.kind.padEnd(11), C.info, bg],
+      [row.entry.name.slice(0, 20).padEnd(20), C.value, bg],
+      [` ${provenance.slice(0, 16).padEnd(16)}`, provenance === 'local' ? C.dim : C.info, bg],
+      [` ${(row.installed ? 'INSTALLED' : 'CURATED').padEnd(9)} `, statusColor(row.installed), bg],
+      [` ${row.entry.version ?? 'n/a'}`, C.dim, bg],
+    ]);
+  }
+
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() {
+    return this.ecosystemPaths
+      ? ' No curated marketplace entries found yet.'
+      : ' Marketplace catalog paths are not wired into this panel yet.';
+  }
+  protected override getEmptyStateActions() {
+    return [
+      { command: '/marketplace bundle import <path>', summary: 'import a curated marketplace bundle' },
+      { command: '/marketplace catalog review', summary: 'inspect the current local catalog posture' },
+      { command: '/marketplace publish <kind> <path>', summary: 'publish local ecosystem entries back into the curated catalog' },
+    ];
   }
 
   private refresh(): void {
     if (!this.ecosystemPaths) {
       this.rows = [];
-      this.selectedIndex = 0;
-      this.scrollOffset = 0;
+      this.clampSelection();
       return;
     }
     try {
@@ -93,7 +109,7 @@ export class MarketplacePanel extends BasePanel {
         ...loadEcosystemCatalog('policy-pack', this.ecosystemPaths).map((entry) => ({ kind: 'policy-pack' as const, entry, installed: installedPolicyPacks.has(entry.id) })),
       ];
       this.rows = rows.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
-      this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
+      this.clampSelection();
       // I2: clear any previous catalog load error on successful refresh
       this.clearError();
     } catch (e) {
@@ -103,7 +119,7 @@ export class MarketplacePanel extends BasePanel {
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
+    this.clampSelection();
     this.refresh();
 
     const intro = 'Curated local-first ecosystem with provenance, compatibility, rollback history, and receipt-aware lifecycle review.';
@@ -159,22 +175,22 @@ export class MarketplacePanel extends BasePanel {
       ? startupIssues.slice(0, 4).map((issue) => buildPanelLine(width, [['  ', C.label], [issue.slice(0, Math.max(0, width - 2)), C.warn]]))
       : [buildPanelLine(width, [['  No startup or lifecycle issues are currently pushing marketplace repair recommendations.', C.dim]])];
 
-    const selected = this.rows[this.selectedIndex];
+    const selectedRow = this.rows[this.selectedIndex];
     const selectedLines: Line[] = [];
-    if (selected) {
-      const review = reviewEcosystemCatalogEntry(selected.entry, this.ecosystemPaths!);
+    if (selectedRow) {
+      const review = reviewEcosystemCatalogEntry(selectedRow.entry, this.ecosystemPaths!);
       selectedLines.push(buildPanelLine(width, [
         ['  Provenance: ', C.label],
-        [(selected.entry.provenance ?? '(none)').slice(0, Math.max(0, width - 15)), selected.entry.provenance ? C.info : C.dim],
+        [(selectedRow.entry.provenance ?? '(none)').slice(0, Math.max(0, width - 15)), selectedRow.entry.provenance ? C.info : C.dim],
       ]));
       selectedLines.push(buildPanelLine(width, [
         ['  Source: ', C.label],
-        [selected.entry.source.slice(0, Math.max(0, width - 11)), C.value],
+        [selectedRow.entry.source.slice(0, Math.max(0, width - 11)), C.value],
       ]));
       selectedLines.push(buildKeyValueLine(width, [
         { label: 'Compatibility', value: review.compatibility.status, valueColor: review.compatibility.status === 'compatible' ? C.good : C.warn },
         { label: 'Risk', value: review.riskLevel, valueColor: review.riskLevel === 'low' ? C.good : C.warn },
-        { label: 'State', value: selected.installed ? 'installed' : 'curated', valueColor: statusColor(selected.installed) },
+        { label: 'State', value: selectedRow.installed ? 'installed' : 'curated', valueColor: statusColor(selectedRow.installed) },
       ], C));
       selectedLines.push(buildGuidanceLine(width, '/marketplace review <id>', 'inspect full compatibility and receipt detail for the selected entry', C));
     }
@@ -182,49 +198,15 @@ export class MarketplacePanel extends BasePanel {
     const postureSection: PanelWorkspaceSection = { title: 'Marketplace posture', lines: postureLines };
     const startupIssuesSection: PanelWorkspaceSection = { title: 'Startup Issues', lines: startupIssueLines };
     const recommendationsSection: PanelWorkspaceSection = { title: 'Recommendations', lines: recommendationLines };
-    const selectedSection: PanelWorkspaceSection = { title: 'Selected', lines: selectedLines };
-    const catalogSection = resolveScrollablePanelSection(width, height, {
-      intro,
-      palette: C,
-      beforeSections: [postureSection, startupIssuesSection, recommendationsSection],
-      section: {
-        title: 'Catalog',
-        scrollableLines: this.rows.map((row, globalIndex) => {
-          const bg = globalIndex === this.selectedIndex ? C.selectBg : undefined;
-          const provenance = row.entry.provenance ?? 'local';
-          return buildPanelLine(width, [
-            ['  ', C.label, bg],
-            [row.kind.padEnd(11), C.info, bg],
-            [row.entry.name.slice(0, 20).padEnd(20), C.value, bg],
-            [` ${provenance.slice(0, 16).padEnd(16)}`, provenance === 'local' ? C.dim : C.info, bg],
-            [` ${(row.installed ? 'INSTALLED' : 'CURATED').padEnd(9)} `, statusColor(row.installed), bg],
-            [` ${row.entry.version ?? 'n/a'}`, C.dim, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: selectedLines.length > 0 && height >= 20 ? [selectedSection] : [],
-    });
-    this.scrollOffset = catalogSection.scrollOffset;
 
-    const sections: PanelWorkspaceSection[] = [
-      postureSection,
-      startupIssuesSection,
-      recommendationsSection,
-      catalogSection.section,
-    ];
-    if (selectedLines.length > 0 && height >= 20) {
-      sections.push(selectedSection);
-    }
-
-    return buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'Marketplace Control Room',
-      intro,
-      sections,
-      palette: C,
+      header: [
+        ...postureLines,
+        ...startupIssueLines,
+        ...recommendationLines,
+      ],
+      footer: selectedLines.length > 0 && height >= 20 ? selectedLines : [],
     });
   }
 }

@@ -22,7 +22,7 @@ export async function buildSetupReviewSnapshot(ctx: CommandContext): Promise<Set
     }
   }
 
-  const skills = discoverSkills(shellPaths);
+  const skills = await discoverSkills(shellPaths);
   const security = requireReadModels(ctx).security.getSnapshot();
   const plugins = security.plugins;
   const mcpServers = security.mcpServers;

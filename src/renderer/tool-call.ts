@@ -2,6 +2,7 @@ import { type Line, createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { LAYOUT, TOOL_STATUS } from './layout.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { stripDangerousAnsi } from './ansi-sanitize.ts';
 
 const TOOL_NAME_MIN_WIDTH = 8;
 const TOOL_NAME_MAX_WIDTH = 20;
@@ -194,11 +195,11 @@ export function renderToolCallBlock(
   const rawName = toolCall.name.includes('__')
     ? toolCall.name.split('__').pop()!
     : toolCall.name;
-  const keyArg = extractKeyArg(toolCall);
+  const keyArg = stripDangerousAnsi(extractKeyArg(toolCall));
   const suffixText = status === 'error' && errorMsg
-    ? `- ${errorMsg.slice(0, 40)}`
+    ? `- ${stripDangerousAnsi(errorMsg).slice(0, 40)}`
     : status === 'done' && resultSummary
-      ? `(${resultSummary})`
+      ? `(${stripDangerousAnsi(resultSummary)})`
       : '';
   const leftBudget = Math.max(0, leftEndExclusive - col);
   const leftSegments = buildLeftSegments(rawName, keyArg, suffixText, leftBudget);

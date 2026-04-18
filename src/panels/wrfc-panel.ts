@@ -170,6 +170,7 @@ export class WrfcPanel extends BasePanel {
   // Render
   // -------------------------------------------------------------------------
   render(width: number, height: number): Line[] {
+    return this.trackedRender(() => {
     const activeCount  = this.chains.filter(c => !['passed', 'failed'].includes(c.state)).length;
     const passedCount  = this.chains.filter(c => c.state === 'passed').length;
     const failedCount  = this.chains.filter(c => c.state === 'failed').length;
@@ -274,6 +275,7 @@ export class WrfcPanel extends BasePanel {
         buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
       ],
       palette: DEFAULT_PANEL_PALETTE,
+    });
     });
   }
 

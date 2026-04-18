@@ -37,7 +37,7 @@ describe('subscription providers', () => {
     expect(provider).not.toBeNull();
 
     const manager = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
-    const started = manager.beginOAuthLogin('openai', provider!.oauth);
+    const started = await manager.beginOAuthLogin('openai', provider!.oauth);
     const authUrl = new URL(started.authorizationUrl);
     expect(authUrl.searchParams.get('originator')).toBe('pi');
     expect(authUrl.searchParams.get('redirect_uri')).toBe('http://localhost:1455/auth/callback');

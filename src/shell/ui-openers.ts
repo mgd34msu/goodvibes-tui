@@ -51,7 +51,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     void getPinned().then((pinned) => {
       input.modelPicker.pinnedIds = new Set(pinned);
     });
-    void input.modelPicker.loadRecentModels().catch(() => {});
+    void input.modelPicker.loadRecentModels().catch(() => {}); // best-effort: prefetch for UI, failure is non-visible
     input.modalOpened('modelPicker');
     input.modelPicker.openAllModels(models, runtime.model);
     render();

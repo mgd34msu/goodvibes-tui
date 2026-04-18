@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import type { CommandRegistry } from '../command-registry.ts';
 import { requirePanelManager, requireSessionChangeTracker, requireShellPaths } from './runtime-services.ts';
 
@@ -86,7 +87,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
             return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
           })();
           if (workingChangedFiles.length > 0) {
-            enrichSemanticDiff(diffPanel, workingChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch(() => {});
+            enrichSemanticDiff(diffPanel, workingChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
           }
           break;
         }
@@ -111,7 +112,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
               return (await new Response(stagedProc.stdout).text()).trim().split('\n').filter(Boolean);
             })();
             if (stagedChangedFiles.length > 0) {
-              enrichSemanticDiff(diffPanel, stagedChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch(() => {});
+              enrichSemanticDiff(diffPanel, stagedChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
             }
           }
           break;
@@ -126,7 +127,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
             return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
           })();
           if (headChangedFiles.length > 0) {
-            enrichSemanticDiff(diffPanel, headChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch(() => {});
+            enrichSemanticDiff(diffPanel, headChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
           }
           break;
         }
@@ -137,7 +138,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
             ctx.print(`Loading session diff (${sessionFiles.length} file${sessionFiles.length === 1 ? '' : 's'} changed this session)...`);
             await diffPanel.showFileDiffs(sessionFiles, 'HEAD');
             ctx.print(`Diff panel updated: ${sessionFiles.length} session file${sessionFiles.length === 1 ? '' : 's'}.`);
-            enrichSemanticDiff(diffPanel, sessionFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch(() => {});
+            enrichSemanticDiff(diffPanel, sessionFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
           } else {
             ctx.print('No session changes tracked yet. Showing diff vs HEAD...');
             await diffPanel.showGitDiff('HEAD');
@@ -148,7 +149,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
               return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
             })();
             if (fallbackFiles.length > 0) {
-              enrichSemanticDiff(diffPanel, fallbackFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch(() => {});
+              enrichSemanticDiff(diffPanel, fallbackFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
             }
           }
           break;

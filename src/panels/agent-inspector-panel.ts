@@ -97,7 +97,7 @@ export class AgentInspectorPanel extends BasePanel {
   private cursorIndex = 0;
 
   // Refresh timer (active only while panel is active)
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private refreshTimerId: ReturnType<typeof setInterval> | null = null;
 
   // Row cache — cleared on markDirty(), computed once per render cycle
   private _cachedRows: DisplayRow[] | null = null;
@@ -131,7 +131,7 @@ export class AgentInspectorPanel extends BasePanel {
     this.cursorIndex = 0;
     this.timeline = [];
     this.markDirty();
-    this._refreshTimeline().catch(() => {});
+    this._refreshTimeline().catch((err) => { logger.debug('agent inspector timeline refresh failed', { err }); });
   }
 
   // -------------------------------------------------------------------------
@@ -149,6 +149,7 @@ export class AgentInspectorPanel extends BasePanel {
 
   override onDestroy(): void {
     this._stopRefresh();
+    super.onDestroy();
   }
 
   // -------------------------------------------------------------------------
@@ -461,16 +462,16 @@ export class AgentInspectorPanel extends BasePanel {
   }
 
   private _startRefresh(): void {
-    if (this.refreshTimer) return;
-    this.refreshTimer = setInterval(() => {
-      this._refreshTimeline().catch(() => {});
-    }, REFRESH_MS);
+    if (this.refreshTimerId) return;
+    this.refreshTimerId = this.registerTimer(setInterval(() => {
+      this._refreshTimeline().catch((err) => { logger.debug('agent inspector timeline refresh tick failed', { err }); });
+    }, REFRESH_MS));
   }
 
   private _stopRefresh(): void {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
+    if (this.refreshTimerId) {
+      this.clearTimer(this.refreshTimerId);
+      this.refreshTimerId = null;
     }
   }
 

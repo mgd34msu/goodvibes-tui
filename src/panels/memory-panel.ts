@@ -1,30 +1,24 @@
 /**
  * MemoryPanel — project memory substrate TUI panel.
+ *
+ * Migrated to SearchableListPanel<MemoryRecord> (Wave B1).
  */
 
 import type { Line } from '../types/grid.ts';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import type { MemoryRecord, MemoryClass } from '@pellux/goodvibes-sdk/platform/state/memory-store';
-import { BasePanel } from './base-panel.ts';
+import { SearchableListPanel } from './scrollable-list-panel.ts';
 import {
   buildBodyText,
-  buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
-  buildSearchInputLine,
-  buildPanelWorkspace,
-  resolveScrollablePanelSection,
   extendPalette,
   DEFAULT_PANEL_PALETTE,
-  type PanelWorkspaceSection,
 } from './polish.ts';
 import {
   getPanelSearchFocusTransition,
-  isPanelSearchBackspace,
   isPanelSearchCancel,
-  isPanelSearchCommit,
-  isPanelSearchPrintable,
 } from './search-focus.ts';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
@@ -63,13 +57,9 @@ function classColor(cls: MemoryClass): string {
   }
 }
 
-export class MemoryPanel extends BasePanel {
+export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   private registry: MemoryRegistry;
-  private records: MemoryRecord[] = [];
-  private selectedIdx = 0;
-  private scrollOffset = 0;
-  private searchMode = false;
-  private searchQuery = '';
+  private filterFocused = false;
   private unsubscribe?: () => void;
 
   constructor(registry: MemoryRegistry) {
@@ -79,9 +69,11 @@ export class MemoryPanel extends BasePanel {
 
   onActivate(): void {
     super.onActivate();
-    this.reload();
+    this.searchQuery = '';
+    this.invalidateFilter();
+    this.filterFocused = false;
     this.unsubscribe = this.registry.subscribe(() => {
-      this.reload();
+      this.invalidateFilter();
       this.markDirty();
     });
   }
@@ -95,134 +87,112 @@ export class MemoryPanel extends BasePanel {
     this.unsubscribe = undefined;
   }
 
-  private reload(): void {
-    const filter = this.searchQuery.trim()
-      ? { query: this.searchQuery.trim(), limit: 100 }
-      : { limit: 100 };
-    this.records = this.registry.search(filter);
-    this.selectedIdx = Math.min(this.selectedIdx, Math.max(0, this.records.length - 1));
+  // ---------------------------------------------------------------------------
+  // SearchableListPanel implementation
+  // ---------------------------------------------------------------------------
+
+  protected getAllItems(): readonly MemoryRecord[] {
+    return this.registry.search({ limit: 100 });
+  }
+
+  protected matchesSearch(record: MemoryRecord, query: string): boolean {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    const haystack = [
+      record.summary,
+      record.detail ?? '',
+      record.cls,
+      record.scope,
+      record.tags.join(' '),
+    ].join(' ').toLowerCase();
+    return haystack.includes(q);
+  }
+
+  protected renderItem(record: MemoryRecord, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selected : undefined;
+    return buildPanelLine(width, [
+      ['  ', C.label, bg],
+      [`[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] `, classColor(record.cls), bg],
+      [record.id.slice(-8), C.dim, bg],
+      ['  ', C.label, bg],
+      [fmtTime(record.createdAt), C.dim, bg],
+      ['  ', C.label, bg],
+      [record.summary.slice(0, Math.max(0, width - 33)), C.value, bg],
+    ]);
+  }
+
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() {
+    return this.searchQuery
+      ? ` No records matching "${this.searchQuery}"`
+      : ' No memory records. Use /recall add <class> <summary> to create one.';
+  }
+  protected override getEmptyStateActions() {
+    return [
+      { command: '/recall add fact <summary>', summary: 'capture a durable fact directly' },
+      { command: '/recall capture incident latest', summary: 'promote the latest incident into memory' },
+    ];
   }
 
   handleInput(key: string): boolean {
-    if (this.searchMode) return this.handleSearchInput(key);
-
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIdx, itemCount: this.records.length });
-    if (transition === 'focus-search') {
-      this.searchMode = true;
-      this.markDirty();
-      return true;
-    }
-
-    switch (key) {
-      case 'ArrowUp':
-      case 'k':
-        if (this.selectedIdx > 0) {
-          this.selectedIdx--;
-          this.markDirty();
-        }
-        return true;
-      case 'ArrowDown':
-      case 'j':
-        if (this.selectedIdx < this.records.length - 1) {
-          this.selectedIdx++;
-          this.markDirty();
-        }
-        return true;
-      case 'Escape':
-        if (this.searchQuery) {
-          this.searchQuery = '';
-          this.reload();
-          this.markDirty();
-        }
-        return true;
-      case 'r':
-        this.reload();
+    // Filter-focus mode: typing goes into the search query
+    if (this.filterFocused) {
+      const items = this.getItems();
+      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
+      if (transition === 'focus-list') {
+        this.filterFocused = false;
         this.markDirty();
         return true;
+      }
+      if (isPanelSearchCancel(key)) {
+        this.filterFocused = false;
+        return super.handleInput(key);
+      }
+      return super.handleInput(key);
     }
-    return false;
-  }
 
-  private handleSearchInput(key: string): boolean {
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIdx, itemCount: this.records.length });
-    if (transition === 'focus-list') {
-      this.searchMode = false;
-      this.selectedIdx = 0;
+    const items = this.getItems();
+    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
+    if (transition === 'focus-search') {
+      this.filterFocused = true;
       this.markDirty();
       return true;
     }
-    if (isPanelSearchCommit(key) || isPanelSearchCancel(key)) {
-      this.searchMode = false;
-      this.reload();
+
+    if (key === 'r') {
+      this.invalidateFilter();
       this.markDirty();
       return true;
     }
-    if (isPanelSearchBackspace(key)) {
-      this.searchQuery = this.searchQuery.slice(0, -1);
-      this.markDirty();
-      return true;
-    }
-    if (isPanelSearchPrintable(key)) {
-      this.searchQuery += key;
-      this.markDirty();
-      return true;
-    }
-    return false;
+
+    return super.handleInput(key);
   }
 
   render(width: number, height: number): Line[] {
+    this.clampSelection();
     const intro = 'Durable project memory across decisions, constraints, incidents, patterns, risks, runbooks, and related provenance.';
 
-    if (!this.records.length && !this.searchQuery) {
-      this.reload();
-    }
-
-    if (!this.records.length) {
-      const message = this.searchQuery
-        ? `No records matching "${this.searchQuery}"`
-        : 'No memory records. Use /recall add <class> <summary> to create one.';
-      return buildPanelWorkspace(width, height, {
-        title: 'Memory',
-        intro,
-        sections: [{
-          lines: buildEmptyState(
-            width,
-            ` ${message}`,
-            'Memory becomes useful once durable facts, incidents, and decisions are promoted into the project substrate.',
-            [
-              { command: '/recall add fact <summary>', summary: 'capture a durable fact directly' },
-              { command: '/recall capture incident latest', summary: 'promote the latest incident into memory' },
-            ],
-            C,
-          ),
-        }],
-        footerLines: [
-          buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload', C.dim]]),
-        ],
-        palette: C,
-      });
-    }
-
+    const records = this.getItems();
     const byClass = new Map<MemoryClass, number>();
-    for (const record of this.records) {
+    for (const record of records) {
       byClass.set(record.cls, (byClass.get(record.cls) ?? 0) + 1);
     }
 
-    const summaryLines = [
+    const filterLine = this.buildFilterInputLine(width, 'Filter', this.filterFocused);
+
+    const summaryLines: Line[] = [
       buildKeyValueLine(width, [
-        { label: 'records', value: String(this.records.length), valueColor: C.value },
+        { label: 'records', value: String(records.length), valueColor: C.value },
         { label: 'facts', value: String(byClass.get('fact') ?? 0), valueColor: C.fact },
         { label: 'decisions', value: String(byClass.get('decision') ?? 0), valueColor: C.decision },
         { label: 'incidents', value: String(byClass.get('incident') ?? 0), valueColor: C.incident },
         { label: 'runbooks', value: String(byClass.get('runbook') ?? 0), valueColor: C.runbook },
       ], C),
-      ...(this.searchMode || this.searchQuery
-        ? [buildSearchInputLine(width, '', `${this.searchMode ? '/ ' : '~ '}${this.searchQuery}${this.searchMode ? '_' : ''}`, C, { active: this.searchMode, bg: C.searchBg, valueColor: C.searchFg })]
-        : []),
+      filterLine,
       buildGuidanceLine(width, '/recall review', 'review durable knowledge and queue posture from the command surface', C),
     ];
 
-    const selected = this.records[this.selectedIdx];
+    const selected = records[this.selectedIndex];
     const selectedLines: Line[] = [];
     if (selected) {
       selectedLines.push(buildKeyValueLine(width, [
@@ -243,51 +213,13 @@ export class MemoryPanel extends BasePanel {
       }
     }
 
-    const summarySection: PanelWorkspaceSection = { title: 'Summary', lines: summaryLines };
-    const selectedSection: PanelWorkspaceSection = selectedLines.length > 0 ? { title: 'Selected', lines: selectedLines } : { title: 'Selected', lines: [] };
-    const recordsSection = resolveScrollablePanelSection(width, height, {
-      intro,
-      footerLines: [
-        buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload  Esc clear search', C.dim]]),
-      ],
-      palette: C,
-      beforeSections: [summarySection],
-      section: {
-        title: 'Records',
-        scrollableLines: this.records.map((record, globalIndex) => {
-          const bg = globalIndex === this.selectedIdx ? C.selected : undefined;
-          return buildPanelLine(width, [
-            ['  ', C.label, bg],
-            [`[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] `, classColor(record.cls), bg],
-            [record.id.slice(-8), C.dim, bg],
-            ['  ', C.label, bg],
-            [fmtTime(record.createdAt), C.dim, bg],
-            ['  ', C.label, bg],
-            [record.summary.slice(0, Math.max(0, width - 33)), C.value, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIdx,
-        scrollOffset: this.scrollOffset,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: selectedLines.length > 0 ? [selectedSection] : [],
-    });
-    this.scrollOffset = recordsSection.scrollOffset;
-    const sections: PanelWorkspaceSection[] = [
-      summarySection,
-      recordsSection.section,
-    ];
-    if (selectedLines.length > 0) sections.push(selectedSection);
-
-    return buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'Memory',
-      intro,
-      sections,
-      footerLines: [
+      header: summaryLines,
+      footer: [
+        ...selectedLines,
         buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload  Esc clear search', C.dim]]),
       ],
-      palette: C,
     });
   }
 }

@@ -240,7 +240,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       if (sub === 'maintenance') {
         const session = readModels.session.getSnapshot();
         const providerApi = requireProviderApi(ctx);
-        const currentModel = await providerApi.getCurrentModel().catch(() => null);
+        const currentModel = await providerApi.getCurrentModel().catch(() => null); // best-effort: null handled as unknown context window
         const llmMessages = typeof ctx.session.conversationManager.getMessagesForLLM === 'function'
           ? ctx.session.conversationManager.getMessagesForLLM()
           : [];
@@ -369,7 +369,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
 
       const session = readModels.session.getSnapshot();
       const providerApi = requireProviderApi(ctx);
-      const currentModel = await providerApi.getCurrentModel().catch(() => null);
+      const currentModel = await providerApi.getCurrentModel().catch(() => null); // best-effort: null handled as unknown context window
       const llmMessages = typeof ctx.session.conversationManager.getMessagesForLLM === 'function'
         ? ctx.session.conversationManager.getMessagesForLLM()
         : [];

@@ -92,7 +92,7 @@ export class SessionBrowserPanel extends BasePanel {
   private confirm: ConfirmState<string> | null = null;
   private deleteError = '';
   private loadError = '';
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private refreshTimerId: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly sessionManager: SessionBrowserQuery,
@@ -104,11 +104,11 @@ export class SessionBrowserPanel extends BasePanel {
   override onActivate(): void {
     super.onActivate();
     this._load();
-    this.refreshTimer = setInterval(() => { this._load(); }, 5000);
+    this.refreshTimerId = this.registerTimer(setInterval(() => { this._load(); }, 5000));
   }
 
   override onDeactivate(): void {
-    if (this.refreshTimer) { clearInterval(this.refreshTimer); this.refreshTimer = null; }
+    if (this.refreshTimerId !== null) { this.clearTimer(this.refreshTimerId); this.refreshTimerId = null; }
     this.searching = false;
     this.confirm = null;
     super.onDeactivate();

@@ -19,7 +19,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
     aliases: ['skill'],
     description: 'Inspect installed skill packs',
     usage: '[open|list|show <name>|origins|browse [query]|installed|catalog-review <id>|publish-local <id> <path> <summary...>|unpublish <id>|install-hint <catalog-id>|install <id> [project|user]|update <id> [project|user]|uninstall <id> [project|user]]',
-    handler(args, ctx) {
+    async handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
         if (ctx.showPanel) ctx.showPanel('skills');
@@ -31,7 +31,7 @@ export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {
         }
         return;
       }
-      const skills = discoverSkills(requireShellPaths(ctx));
+      const skills = await discoverSkills(requireShellPaths(ctx));
       const ecosystemPaths = requireEcosystemCatalogPaths(ctx);
       if (sub === 'list') {
         if (skills.length === 0) {

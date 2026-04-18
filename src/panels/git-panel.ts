@@ -103,7 +103,7 @@ export class GitPanel extends BasePanel {
   /** Scroll offset for both main view and diff view. */
   private scrollOffset = 0;
 
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private refreshTimerId: ReturnType<typeof setInterval> | null = null;
   private loading = true;
   private error: string | null = null;
 
@@ -119,20 +119,21 @@ export class GitPanel extends BasePanel {
   override onActivate(): void {
     super.onActivate();
     void this.refresh();
-    this.refreshTimer = setInterval(() => {
+    this.refreshTimerId = this.registerTimer(setInterval(() => {
       void this.refresh();
-    }, 5_000);
+    }, 5_000));
   }
 
   override onDeactivate(): void {
-    if (this.refreshTimer !== null) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
+    if (this.refreshTimerId !== null) {
+      this.clearTimer(this.refreshTimerId);
+      this.refreshTimerId = null;
     }
   }
 
   override onDestroy(): void {
     this.onDeactivate();
+    super.onDestroy();
   }
 
   // ---------------------------------------------------------------------------

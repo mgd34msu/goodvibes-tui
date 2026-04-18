@@ -174,7 +174,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
           const openBrowser = !flags.has('--no-browser');
           const useManualMode = flags.has('--manual');
           if (provider === 'openai' && resolved.source === 'builtin') {
-            const started = beginOpenAICodexLogin();
+            const started = await beginOpenAICodexLogin();
             manager.savePending({
               provider,
               state: started.state,
@@ -191,7 +191,7 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
                   host: '127.0.0.1',
                   port: 1455,
                   path: '/auth/callback',
-                }).catch(() => null);
+                }).catch(() => null); // best-effort: listener creation is optional; null triggers manual flow
               } catch {
                 listener = null;
               }
@@ -272,14 +272,14 @@ export function registerSubscriptionRuntimeCommands(registry: CommandRegistry): 
               host: resolved.oauth.localCallback.host,
               port: resolved.oauth.localCallback.port,
               path: resolved.oauth.localCallback.path,
-            }).catch(() => null);
+            }).catch(() => null); // best-effort: local callback listener is optional; null falls back to manual redirect
           }
 
           if (listener) {
             activeConfig = { ...activeConfig, redirectUri: listener.redirectUri };
           }
 
-          const started = manager.beginOAuthLogin(provider, activeConfig);
+          const started = await manager.beginOAuthLogin(provider, activeConfig);
           if (listener) {
             listener.setExpectedState(started.pending.state);
           }

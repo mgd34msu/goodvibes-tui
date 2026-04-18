@@ -25,6 +25,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Release and publishing](release-and-publishing.md)
   Release validation, GitHub CD, compiled binary releases, npm distribution, and the GitHub Packages mirror.
 
+- [Panel authoring](panel-authoring.md)
+  Class hierarchy, canonical example, palette convention, rendering utilities, input handling, performance instrumentation, and contract test registration for contributors building new TUI panels.
+
 - [Release notes](releases/0.18.10.md)
   Version-specific release notes for shipped TUI releases.
 

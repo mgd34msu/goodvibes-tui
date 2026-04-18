@@ -1,7 +1,16 @@
+/**
+ * OrchestrationPanel — displays task graphs, node contracts, recursion guards,
+ * and WRFC-visible orchestration state.
+ *
+ * Migrated (Wave B2): extends ScrollableListPanel<OrchestrationGraphRecord>.
+ * Navigation (up/down/j/k) is handled by the base class.
+ */
+
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiOrchestrationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
+import type { OrchestrationGraphRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -10,11 +19,12 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
+  type PanelPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   header: '#94a3b8',
   headerBg: '#1e293b',
   running: '#22c55e',
@@ -23,30 +33,22 @@ const C = {
   failed: '#ef4444',
   completed: '#a78bfa',
   selectBg: '#0f172a',
-} as const;
+} as const);
 
 function statusColor(status: string): string {
   switch (status) {
-    case 'ready':
-      return C.ready;
-    case 'running':
-      return C.running;
-    case 'blocked':
-      return C.blocked;
-    case 'failed':
-      return C.failed;
-    case 'completed':
-      return C.completed;
-    default:
-      return C.dim;
+    case 'ready':     return C.ready;
+    case 'running':   return C.running;
+    case 'blocked':   return C.blocked;
+    case 'failed':    return C.failed;
+    case 'completed': return C.completed;
+    default:          return C.dim;
   }
 }
 
-export class OrchestrationPanel extends BasePanel {
+export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRecord> {
   private readonly readModel?: UiReadModel<UiOrchestrationSnapshot>;
   private readonly unsub: (() => void) | null;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
 
   public constructor(readModel?: UiReadModel<UiOrchestrationSnapshot>) {
     super('orchestration', 'Orchestration', 'Q', 'monitoring');
@@ -58,32 +60,52 @@ export class OrchestrationPanel extends BasePanel {
     this.unsub?.();
   }
 
-  public handleInput(key: string): boolean {
-    const graphs = this._graphs();
-    if (graphs.length === 0) return false;
-    if (key === 'up' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'down' || key === 'j') {
-      this.selectedIndex = Math.min(graphs.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
-    return false;
-  }
+  // ---------------------------------------------------------------------------
+  // ScrollableListPanel contract
+  // ---------------------------------------------------------------------------
 
-  private _graphs() {
+  protected getItems(): readonly OrchestrationGraphRecord[] {
     if (!this.readModel) return [];
     return [...this.readModel.getSnapshot().graphs].sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  protected renderItem(
+    graph: OrchestrationGraphRecord,
+    index: number,
+    selected: boolean,
+    width: number,
+  ): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      [' ', C.label, bg],
+      [graph.status.padEnd(10), statusColor(graph.status), bg],
+      [` ${graph.mode.padEnd(17)}`, C.value, bg],
+      [` ${graph.id.slice(0, 8)} `, C.dim, bg],
+      [graph.title.slice(0, Math.max(0, width - 39)), C.value, bg],
+    ]);
+  }
+
+  protected override getPalette(): PanelPalette {
+    return C;
+  }
+
+  protected override getEmptyStateMessage(): string {
+    return ' No orchestration graphs recorded yet.';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Input — base class handles all navigation (up/down/j/k/pageup/pagedown/g/G)
+  // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+  // Render — multi-section layout (posture + scrollable graphs + detail + nodes)
+  // ---------------------------------------------------------------------------
+
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
     const intro = 'Task graphs, node contracts, recursion guards, and WRFC-visible orchestration state.';
 
     if (!this.readModel) {
+      this.needsRender = false;
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Orchestration Control Room',
         intro,
@@ -103,7 +125,7 @@ export class OrchestrationPanel extends BasePanel {
     }
 
     const snapshot = this.readModel.getSnapshot();
-    const graphs = this._graphs();
+    const graphs = this.getItems();
     const postureLines = [
       buildKeyValueLine(width, [
         { label: 'graphs', value: String(snapshot.totalGraphs), valueColor: snapshot.totalGraphs > 0 ? C.value : C.dim },
@@ -115,6 +137,7 @@ export class OrchestrationPanel extends BasePanel {
       buildGuidanceLine(width, '/orchestration', 'inspect recursive execution posture, graph health, and node contract flow', C),
     ];
     if (graphs.length === 0) {
+      this.needsRender = false;
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Orchestration Control Room',
         intro,
@@ -124,7 +147,7 @@ export class OrchestrationPanel extends BasePanel {
             ...postureLines,
             ...buildEmptyState(
               width,
-              ' No orchestration graphs recorded yet.',
+              this.getEmptyStateMessage(),
               'Graphs, nodes, child contracts, and recursion guard trips will appear here as orchestration starts.',
               [
                 { command: '/tasks', summary: 'create or inspect task flows that feed orchestration graphs' },
@@ -140,7 +163,7 @@ export class OrchestrationPanel extends BasePanel {
       return workspace;
     }
 
-    this.selectedIndex = Math.min(this.selectedIndex, graphs.length - 1);
+    this.clampSelection();
     const selected = graphs[this.selectedIndex]!;
     const detailLines: Line[] = [
       buildPanelLine(width, [
@@ -208,6 +231,10 @@ export class OrchestrationPanel extends BasePanel {
           ]);
         });
 
+    const scrollableLines: Line[] = graphs.map((graph, index) =>
+      this.renderItem(graph, index, index === this.selectedIndex, width),
+    );
+
     const postureSection: PanelWorkspaceSection = { title: 'Orchestration posture', lines: postureLines };
     const selectedGraphSection: PanelWorkspaceSection = { title: 'Selected Graph', lines: detailLines };
     const nodesSection: PanelWorkspaceSection = { title: 'Nodes', lines: nodeLines };
@@ -217,24 +244,15 @@ export class OrchestrationPanel extends BasePanel {
       beforeSections: [postureSection],
       section: {
         title: 'Graphs',
-        scrollableLines: graphs.map((graph, absolute) => {
-          const bg = absolute === this.selectedIndex ? C.selectBg : undefined;
-          return buildPanelLine(width, [
-            [' ', C.label, bg],
-            [graph.status.padEnd(10), statusColor(graph.status), bg],
-            [` ${graph.mode.padEnd(17)}`, C.value, bg],
-            [` ${graph.id.slice(0, 8)} `, C.dim, bg],
-            [graph.title.slice(0, Math.max(0, width - 39)), C.value, bg],
-          ]);
-        }),
+        scrollableLines,
         selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
+        scrollOffset: this.scrollStart,
         minRows: 4,
         appendWindowSummary: { dimColor: C.dim },
       },
       afterSections: [selectedGraphSection, nodesSection],
     });
-    this.scrollOffset = graphsSection.scrollOffset;
+    this.scrollStart = graphsSection.scrollOffset;
 
     const sections: PanelWorkspaceSection[] = [
       postureSection,
@@ -242,6 +260,7 @@ export class OrchestrationPanel extends BasePanel {
       selectedGraphSection,
       nodesSection,
     ];
+    this.needsRender = false;
     const lines = buildPanelWorkspace(width, height, {
       title: 'Orchestration Control Room',
       intro,

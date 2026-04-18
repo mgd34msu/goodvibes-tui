@@ -64,7 +64,7 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
       }
 
       const providerApi = requireProviderApi(ctx);
-      const currentModel = await providerApi.getCurrentModel().catch(() => null);
+      const currentModel = await providerApi.getCurrentModel().catch(() => null); // best-effort: null handled as unknown context window
       const llmMessages = ctx.session.conversationManager.getMessagesForLLM();
       const readModels = requireReadModels(ctx);
       const session = readModels.session.getSnapshot();

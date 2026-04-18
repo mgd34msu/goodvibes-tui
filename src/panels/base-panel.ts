@@ -12,6 +12,36 @@ export abstract class BasePanel implements Panel {
   protected readonly componentHealthMonitor?: ComponentHealthMonitor;
 
   // -------------------------------------------------------------------------
+  // Timer registry
+  // -------------------------------------------------------------------------
+
+  /** All timers registered via registerTimer(). Cleared automatically on onDestroy(). */
+  private readonly _timers: Set<ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>> = new Set();
+
+  /**
+   * Register a timer id (from setInterval or setTimeout) so it is
+   * automatically cleared when the panel is destroyed. Returns the id
+   * unchanged so the call can be chained inline:
+   *
+   * ```ts
+   * this.registerTimer(setInterval(() => this.refresh(), 5_000));
+   * ```
+   */
+  protected registerTimer<T extends ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>>(id: T): T {
+    this._timers.add(id);
+    return id;
+  }
+
+  /**
+   * Clear a specific timer and remove it from the registry.
+   * Safe to call with an id that was never registered or already cleared.
+   */
+  protected clearTimer(id: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>): void {
+    clearInterval(id as ReturnType<typeof setInterval>);
+    this._timers.delete(id);
+  }
+
+  // -------------------------------------------------------------------------
   // I2: Error surface slot
   // -------------------------------------------------------------------------
 
@@ -143,7 +173,17 @@ export abstract class BasePanel implements Panel {
 
   onActivate(): void { this.needsRender = true; }
   onDeactivate(): void {}
-  onDestroy(): void {}
+
+  /**
+   * Called when the panel is permanently removed. Subclasses should call
+   * `super.onDestroy()` to ensure all registered timers are cleared.
+   */
+  onDestroy(): void {
+    for (const id of this._timers) {
+      clearInterval(id as ReturnType<typeof setInterval>);
+    }
+    this._timers.clear();
+  }
 
   abstract render(width: number, height: number): Line[];
 
