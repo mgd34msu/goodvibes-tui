@@ -8,10 +8,15 @@ All notable changes to GoodVibes TUI.
 
 ### Changed
 - Upgraded `@pellux/goodvibes-sdk` from 0.19.6 to 0.21.1 (soak-period release).
-  TUI adaptation required: regenerated `docs/foundation-artifacts/operator-contract.json`
-  to match the updated `buildOperatorContract()` output in the new SDK version.
-  `peer-contract.json`, `knowledge-graphql.graphql`, and `knowledge-store.sql` were
-  unchanged by this SDK bump.
+  TUI adaptations required:
+  1. `docs/foundation-artifacts/operator-contract.json` — regenerated to match
+     updated `buildOperatorContract()` output (`peer-contract.json`, knowledge
+     artifacts unchanged).
+  2. `scripts/perf-check.ts` — `platform/runtime/perf/index` barrel removed;
+     `createPerfMonitor()` factory removed; migrated to `new PerfMonitor()` with
+     imports split to `perf/monitor` and `perf/reporter` sub-paths.
+  3. `scripts/eval-gate.ts` — `platform/runtime/eval/index` barrel removed;
+     imports split to `eval/baseline`, `eval/format`, and `eval/scorecard`.
 
 ### Added
 - Wave B panel migration: migrated 5 panels (knowledge, marketplace, memory,
