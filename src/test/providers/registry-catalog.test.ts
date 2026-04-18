@@ -55,7 +55,8 @@ function loadCatalog(models: CatalogModel[]): void {
   providerRegistry.initCatalog();
   // initCatalog() updates catalogModels but does not invalidate the model registry
   // cache — explicitly flush it so subsequent getModelRegistry() calls see the new catalog.
-  (providerRegistry as any)._invalidateModelRegistry();
+  const invalidate = Reflect.get(providerRegistry as object, '_invalidateModelRegistry') as (() => void) | undefined;
+  invalidate?.call(providerRegistry);
 }
 
 function getCatalogModelDefinitions() {

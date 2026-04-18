@@ -199,6 +199,7 @@ export class TokenBudgetPanel extends BasePanel {
   // ---------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
+    return this.trackedRender(() => {
     const sections: PanelWorkspaceSection[] = [];
 
     if (this.contextWindow > 0) {
@@ -257,6 +258,7 @@ export class TokenBudgetPanel extends BasePanel {
       intro: 'Live context pressure, session token composition, cache usage, and recent turn deltas.',
       sections,
       palette: DEFAULT_PANEL_PALETTE,
+    });
     });
   }
 

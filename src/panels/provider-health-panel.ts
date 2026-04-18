@@ -362,7 +362,7 @@ function buildProviderRuntimeRecord(
  */
 export class ProviderHealthPanel extends BasePanel {
   private _unsubs: Array<() => void> = [];
-  private _refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private _refreshTimerId: ReturnType<typeof setInterval> | null = null;
   private _selectedIndex = 0;
   private _scrollOffset = 0;
   private _accountRecords = new Map<string, ProviderRuntimeRecord>();
@@ -461,23 +461,21 @@ export class ProviderHealthPanel extends BasePanel {
   }
 
   override onDestroy(): void {
-    if (this._refreshTimer !== null) {
-      clearInterval(this._refreshTimer);
-      this._refreshTimer = null;
-    }
+    super.onDestroy();
+    this._refreshTimerId = null;
     for (const unsub of this._unsubs) unsub();
     this._unsubs = [];
   }
 
   private _ensureRefreshTimer(): void {
-    if (this._refreshTimer !== null) return;
-    this._refreshTimer = setInterval(() => {
+    if (this._refreshTimerId !== null) return;
+    this._refreshTimerId = this.registerTimer(setInterval(() => {
       if (Date.now() - this._accountRefreshAt > 30_000) {
         void this._refreshAccountPosture();
       }
       this.markDirty();
       this.requestRender();
-    }, 1_000);
+    }, 1_000));
   }
 
   handleInput(key: string): boolean {

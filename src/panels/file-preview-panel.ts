@@ -1,4 +1,5 @@
-import * as fs from 'node:fs';
+import type { Stats } from 'node:fs';
+import { promises as fsPromises, readFileSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import type { Line, Cell } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
@@ -68,7 +69,7 @@ export class FilePreviewPanel extends BasePanel {
   // ─── Public API ─────────────────────────────────────────────────────────────
 
   /**
-   * Load a file into the preview. Reads synchronously (small files only).
+   * Load a file into the preview. Reads asynchronously.
    * Files larger than 100 KB show a warning instead of content.
    */
   openFile(filePath: string): void {
@@ -79,51 +80,72 @@ export class FilePreviewPanel extends BasePanel {
 
     this.filePath = filePath;
     this.oversized = false;
-    this.fileLines = [];
-    this.fenceTag = '';
+    this.fenceTag = extToFenceTag(filePath);
 
     // Restore scroll position for this file, or start at top
     this.scrollOffset = this.scrollMemory.get(filePath) ?? 0;
 
-    let stat: fs.Stats;
+    // Synchronously pre-populate fileLines for small files so that callers
+    // (e.g. syncSymbolOutlineFromPreview) can read getSource() immediately.
     try {
-      stat = fs.statSync(filePath);
+      const stat = statSync(filePath);
+      if (stat.size <= MAX_FILE_SIZE) {
+        const content = readFileSync(filePath, 'utf-8');
+        this.fileLines = content.split('\n');
+      } else {
+        this.fileLines = [];
+        this.oversized = true;
+      }
     } catch {
       this.fileLines = [`(cannot open: ${filePath})`];
-      this.markDirty();
-      return;
     }
 
-    if (stat.size > MAX_FILE_SIZE) {
-      this.oversized = true;
-      this.markDirty();
-      return;
-    }
+    void this._loadFileAsync(filePath);
+  }
 
-    let content: string;
+  private async _loadFileAsync(filePath: string): Promise<void> {
     try {
-      content = fs.readFileSync(filePath, 'utf-8');
-    } catch {
-      this.fileLines = [`(read error: ${filePath})`];
-      this.markDirty();
-      return;
+      await this.withLoading('Loading…', async () => {
+        let stat: Stats;
+        try {
+          stat = await fsPromises.stat(filePath);
+        } catch {
+          this.fileLines = [`(cannot open: ${filePath})`];
+          return;
+        }
+
+        if (stat.size > MAX_FILE_SIZE) {
+          this.oversized = true;
+          return;
+        }
+
+        let content: string;
+        try {
+          content = await fsPromises.readFile(filePath, 'utf-8');
+        } catch {
+          this.fileLines = [`(read error: ${filePath})`];
+          return;
+        }
+
+        this.fileLines = content.split('\n');
+        // Strip trailing empty line from final newline
+        if (this.fileLines.length > 0 && this.fileLines[this.fileLines.length - 1] === '') {
+          this.fileLines.pop();
+        }
+
+        this.fenceTag = extToFenceTag(filePath);
+
+        // Kick off async tree-sitter parse so subsequent renders get highlighting
+        if (this.fenceTag) {
+          this.syntaxHighlighter.highlight(content, this.fenceTag);
+        }
+
+        // Clamp scroll in case the new file is shorter
+        this.clampScroll(0);
+      });
+    } catch (err) {
+      this.setError(err instanceof Error ? err.message : String(err));
     }
-
-    this.fileLines = content.split('\n');
-    // Strip trailing empty line from final newline
-    if (this.fileLines.length > 0 && this.fileLines[this.fileLines.length - 1] === '') {
-      this.fileLines.pop();
-    }
-
-    this.fenceTag = extToFenceTag(filePath);
-
-    // Kick off async tree-sitter parse so subsequent renders get highlighting
-    if (this.fenceTag) {
-      this.syntaxHighlighter.highlight(content, this.fenceTag);
-    }
-
-    // Clamp scroll in case the new file is shorter
-    this.clampScroll(0);
     this.markDirty();
   }
 

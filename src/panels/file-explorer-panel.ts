@@ -2,7 +2,7 @@
 // FileExplorerPanel — collapsible project tree view
 // ---------------------------------------------------------------------------
 
-import { readdirSync, statSync } from 'node:fs';
+import { promises as fsPromises } from 'node:fs';
 import { join, relative, basename } from 'node:path';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
@@ -120,6 +120,7 @@ export class FileExplorerPanel extends BasePanel {
   private rootPath: string;
   private readonly workingDirectory: string;
   private cacheValid: boolean = false;
+  private readyPromise: Promise<void> | null = null;
 
   // --- navigation ---
   private cursor: number = 0;
@@ -139,7 +140,9 @@ export class FileExplorerPanel extends BasePanel {
 
   override onActivate(): void {
     super.onActivate();
-    if (!this.cacheValid) this._buildTree();
+    if (!this.cacheValid) {
+      void this._buildTreeAsync();
+    }
   }
 
   override onDestroy(): void {
@@ -153,8 +156,7 @@ export class FileExplorerPanel extends BasePanel {
   /** Force a full tree refresh from disk. */
   refresh(): void {
     this.cacheValid = false;
-    this._buildTree();
-    this.markDirty();
+    void this._buildTreeAsync();
   }
 
   /** Currently focused node (or null). */
@@ -197,7 +199,6 @@ export class FileExplorerPanel extends BasePanel {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   render(width: number, height: number): Line[] {
-    if (!this.cacheValid) this._buildTree();
     this.needsRender = false;
     const searchLine = this.searchMode
       ? `/ ${this.searchQuery}_`
@@ -324,14 +325,29 @@ export class FileExplorerPanel extends BasePanel {
 
   // ── Private: tree building ─────────────────────────────────────────────────
 
-  private _buildTree(): void {
-    this.root = this._scanDir(this.rootPath, 0);
-    this._rebuildFlat();
-    this.cacheValid = true;
-    this.markDirty();
+  private _buildTreeAsync(): Promise<void> {
+    const p = (async () => {
+      try {
+        await this.withLoading('Scanning directory\u2026', async () => {
+          this.root = await this._scanDirAsync(this.rootPath, 0);
+          this._rebuildFlat();
+          this.cacheValid = true;
+        });
+      } catch (err) {
+        this.setError(err instanceof Error ? err.message : String(err));
+      }
+      this.markDirty();
+    })();
+    this.readyPromise = p;
+    return p;
   }
 
-  private _scanDir(dirPath: string, depth: number): TreeNode {
+  /** Resolves when the current tree build has settled. */
+  public awaitReady(): Promise<void> {
+    return this.readyPromise ?? Promise.resolve();
+  }
+
+  private async _scanDirAsync(dirPath: string, depth: number): Promise<TreeNode> {
     const name = basename(dirPath);
     const node: TreeNode = {
       path: dirPath,
@@ -339,7 +355,7 @@ export class FileExplorerPanel extends BasePanel {
       isDir: true,
       depth,
       size: 0,
-      expanded: depth === 0, // root starts expanded
+      expanded: depth === 0,
       children: [],
       loaded: false,
     };
@@ -348,7 +364,7 @@ export class FileExplorerPanel extends BasePanel {
 
     let entries: string[];
     try {
-      entries = readdirSync(dirPath);
+      entries = await fsPromises.readdir(dirPath);
     } catch {
       return node;
     }
@@ -356,31 +372,35 @@ export class FileExplorerPanel extends BasePanel {
     node.loaded = true;
 
     // Sort: dirs first, then files, alphabetically within each group
-    const sorted = entries
-      .filter(e => !shouldSkip(e))
-      .sort((a, b) => {
-        let aIsDir = false;
-        let bIsDir = false;
-        try { aIsDir = statSync(join(dirPath, a)).isDirectory(); } catch { /* ignore */ }
-        try { bIsDir = statSync(join(dirPath, b)).isDirectory(); } catch { /* ignore */ }
-        if (aIsDir !== bIsDir) return aIsDir ? -1 : 1;
-        return a.localeCompare(b);
-      });
+    const filtered = entries.filter(e => !shouldSkip(e));
+    const statResults = await Promise.all(
+      filtered.map(async (e) => {
+        try {
+          const s = await fsPromises.stat(join(dirPath, e));
+          return { name: e, isDir: s.isDirectory(), size: s.size, stat: s };
+        } catch {
+          return { name: e, isDir: false, size: 0, stat: null };
+        }
+      }),
+    );
+
+    const sorted = statResults.sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
 
     for (const entry of sorted) {
-      const fullPath = join(dirPath, entry);
-      let stat;
-      try { stat = statSync(fullPath); } catch { continue; }
-
-      if (stat.isDirectory()) {
-        node.children.push(this._scanDir(fullPath, depth + 1));
+      if (entry.stat === null) continue;
+      const fullPath = join(dirPath, entry.name);
+      if (entry.isDir) {
+        node.children.push(await this._scanDirAsync(fullPath, depth + 1));
       } else {
         node.children.push({
           path: fullPath,
-          name: entry,
+          name: entry.name,
           isDir: false,
           depth: depth + 1,
-          size: stat.size,
+          size: entry.size,
           expanded: false,
           children: [],
           loaded: true,

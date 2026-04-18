@@ -19,6 +19,7 @@ vendor/
 !.goodvibes/agents/
 !.goodvibes/GOODVIBES.md
 .codex
+.claude/
 
 # Artifacts
 scripts/reset-suite.sh

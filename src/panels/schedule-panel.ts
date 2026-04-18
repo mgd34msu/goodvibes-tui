@@ -87,7 +87,7 @@ export class SchedulePanel extends BasePanel {
   private items: ViewItem[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
-  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+  private refreshTimerId: ReturnType<typeof setInterval> | null = null;
   private readonly automationManager: ScheduleAutomationManager;
 
   constructor(automationManager: ScheduleAutomationManager) {
@@ -106,21 +106,22 @@ export class SchedulePanel extends BasePanel {
       this.markDirty();
     });
     this.rebuild();
-    this.refreshTimer = setInterval(() => {
+    this.refreshTimerId = this.registerTimer(setInterval(() => {
       this.rebuild();
       this.markDirty();
-    }, 5_000);
+    }, 5_000));
   }
 
   override onDeactivate(): void {
-    if (this.refreshTimer !== null) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
+    if (this.refreshTimerId !== null) {
+      this.clearTimer(this.refreshTimerId);
+      this.refreshTimerId = null;
     }
   }
 
   override onDestroy(): void {
     this.onDeactivate();
+    super.onDestroy();
   }
 
   // -------------------------------------------------------------------------

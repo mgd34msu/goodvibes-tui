@@ -86,7 +86,7 @@ describe('SkillsPanel', () => {
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'skills')).toBe(true);
   });
 
-  test('discovers project-local skills before global skills and renders origin path', () => {
+  test('discovers project-local skills before global skills and renders origin path', async () => {
     const projectPath = writeSkill(
       cwd,
       '.goodvibes/skills/alpha.md',
@@ -125,7 +125,7 @@ describe('SkillsPanel', () => {
     );
 
     const shellPaths = makeShellPaths(cwd, homeDir);
-    const skills = discoverSkills(shellPaths);
+    const skills = await discoverSkills(shellPaths);
     expect(skills).toHaveLength(2);
     expect(skills[0]?.name).toBe('alpha');
     expect(skills[0]?.path).toBe(projectPath);
@@ -134,6 +134,8 @@ describe('SkillsPanel', () => {
     expect(skills.map((skill) => skill.path)).not.toContain(globalPath);
 
     const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
+    panel.onActivate();
+    await panel.awaitReady();
     const text = linesText(panel.render(120, 16));
     expect(text).toContain('Skills - discover project-local and global skill packs');
     expect(text).toContain('alpha');
@@ -143,7 +145,7 @@ describe('SkillsPanel', () => {
     expect(text).toContain('Includes: include-alpha');
   });
 
-  test('supports filtering and navigation', () => {
+  test('supports filtering and navigation', async () => {
     writeSkill(
       cwd,
       '.goodvibes/tui/skills/alpha/SKILL.md',
@@ -161,6 +163,8 @@ describe('SkillsPanel', () => {
     );
 
     const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
+    panel.onActivate();
+    await panel.awaitReady();
     panel.handleInput('/');
     for (const ch of 'needle-42') {
       expect(panel.handleInput(ch)).toBe(true);
@@ -178,7 +182,7 @@ describe('SkillsPanel', () => {
     expect(second).toContain('Up/Down navigate');
   });
 
-  test('up at top focuses filter and down returns to list navigation', () => {
+  test('up at top focuses filter and down returns to list navigation', async () => {
     writeSkill(
       cwd,
       '.goodvibes/tui/skills/alpha/SKILL.md',
@@ -191,6 +195,8 @@ describe('SkillsPanel', () => {
     );
 
     const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
+    panel.onActivate();
+    await panel.awaitReady();
     panel.handleInput('up');
     panel.handleInput('b');
     let text = linesText(panel.render(120, 16));

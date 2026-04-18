@@ -51,7 +51,7 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
       if (meta?.model) options.runtime.model = meta.model;
       if (meta?.provider) options.runtime.provider = meta.provider;
       options.writeLastSessionPointer(sessionId);
-      void options.sharedSessionBroker.reopenSession(sessionId).catch(() => {});
+      void options.sharedSessionBroker.reopenSession(sessionId).catch((err) => { logger.debug('session broker reopen session failed', { err }); });
       options.conversation.log(`Resumed session: ${sessionId}`, { fg: '135' });
       const reopenedPanels: string[] = [];
       if (meta.returnContext?.openPanels?.length) {

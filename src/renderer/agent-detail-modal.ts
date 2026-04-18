@@ -53,11 +53,11 @@ export class AgentDetailModal {
     this.active = true;
     this.logEntries = [];
     this.logTotal = 0;
-    this.loadLog().catch(() => {});
+    this.loadLog().catch((err) => { logger.debug('agent detail log load failed', { err }); });
     // Auto-refresh log every 500ms while modal is open
     if (this.refreshTimer) clearInterval(this.refreshTimer);
     this.refreshTimer = setInterval(() => {
-      this.loadLog().then(() => this.onRefresh?.()).catch(() => {});
+      this.loadLog().then(() => this.onRefresh?.()).catch((err) => { logger.debug('agent detail log refresh tick failed', { err }); });
     }, 500);
   }
 

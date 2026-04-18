@@ -1,4 +1,4 @@
-import { readFileSync, existsSync, watch, type FSWatcher } from 'fs';
+import { promises as fsPromises, watch, type FSWatcher } from 'fs';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
@@ -257,14 +257,22 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   }
 
   private _pollCurrentAgent(): void {
+    void this._pollCurrentAgentAsync();
+  }
+
+  private async _pollCurrentAgentAsync(): Promise<void> {
     const agent = this._selectedAgent();
     if (!agent) return;
 
     const sessionFile = this._sessionFilePath(agent.id);
-    if (!existsSync(sessionFile)) return;
+    try {
+      await fsPromises.access(sessionFile);
+    } catch {
+      return;
+    }
 
     try {
-      const content = readFileSync(sessionFile, 'utf-8');
+      const content = await fsPromises.readFile(sessionFile, 'utf-8');
       if (content.length === this.lastFileSize) return;
       this.lastFileSize = content.length;
 
@@ -285,7 +293,9 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   private _watchAgent(agentId: string): void {
     this._stopWatcher();
     const sessionFile = this._sessionFilePath(agentId);
-    if (!existsSync(sessionFile)) return;
+    // Start watching immediately; the watcher setup itself is synchronous,
+    // the file-existence check is skipped to avoid blocking — if the file
+    // does not yet exist watch() will throw and we catch it below.
     try {
       this.fsWatcher = watch(sessionFile, () => {
         if (!this.paused) {
@@ -393,24 +403,33 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   }
 
   private _reloadAgent(agent: AgentRecord): void {
+    void this._reloadAgentAsync(agent);
+  }
+
+  private async _reloadAgentAsync(agent: AgentRecord): Promise<void> {
     const sessionFile = this._sessionFilePath(agent.id);
-    if (!existsSync(sessionFile)) {
+    try {
+      await fsPromises.access(sessionFile);
+    } catch {
       this.allEntries = [];
       this.filteredEntries = [];
       this.lastFileSize = 0;
+      this.markDirty();
       return;
     }
     try {
-      const content = readFileSync(sessionFile, 'utf-8');
+      const content = await fsPromises.readFile(sessionFile, 'utf-8');
       this.lastFileSize = content.length;
       this.allEntries = parseAgentJsonl(content);
       this._applyFilter();
       if (this.autoFollow) {
         this.selectedIndex = Math.max(0, this.filteredEntries.length - 1);
       }
+      this.markDirty();
     } catch {
       this.allEntries = [];
       this.filteredEntries = [];
+      this.markDirty();
     }
   }
 

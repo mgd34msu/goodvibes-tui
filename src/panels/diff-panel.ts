@@ -345,6 +345,7 @@ export class DiffPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   render(width: number, height: number): Line[] {
+    return this.trackedRender(() => {
     if (height <= 0 || width <= 0) return [];
 
     if (this.entries.length === 0) {
@@ -439,6 +440,7 @@ export class DiffPanel extends BasePanel {
       },
       sections,
       footerLines: [this.renderStatusBar(width, entry)],
+    });
     });
   }
 

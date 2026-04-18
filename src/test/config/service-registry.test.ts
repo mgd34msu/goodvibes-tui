@@ -195,7 +195,7 @@ describe('ServiceRegistry - resolveAuth bearer', () => {
       redirectUri: 'http://127.0.0.1/callback',
       scopes: ['chat'],
     } as const;
-    subscriptionManager.beginOAuthLogin('openai', oauth);
+    await subscriptionManager.beginOAuthLogin('openai', oauth);
     globalThis.fetch = ((async () => ({
       ok: true,
       json: async () => ({ access_token: 'subscription-token', token_type: 'Bearer' }),

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { promises as fsPromises } from 'node:fs';
 import { join } from 'node:path';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
@@ -75,11 +75,10 @@ function getSkillDirectories(cwd: string, homeDir: string): Array<{ root: string
   ];
 }
 
-function readSkillFile(path: string, origin: SkillOrigin): SkillRecord | null {
-  if (!existsSync(path)) return null;
+async function readSkillFile(path: string, origin: SkillOrigin): Promise<SkillRecord | null> {
   let content = '';
   try {
-    content = readFileSync(path, 'utf-8');
+    content = await fsPromises.readFile(path, 'utf-8');
   } catch {
     return null;
   }
@@ -109,11 +108,10 @@ function readSkillFile(path: string, origin: SkillOrigin): SkillRecord | null {
   };
 }
 
-function scanSkillDirectory(root: string, origin: SkillOrigin): SkillRecord[] {
-  if (!existsSync(root)) return [];
+async function scanSkillDirectory(root: string, origin: SkillOrigin): Promise<SkillRecord[]> {
   let entries: string[] = [];
   try {
-    entries = readdirSync(root);
+    entries = await fsPromises.readdir(root);
   } catch {
     return [];
   }
@@ -121,27 +119,27 @@ function scanSkillDirectory(root: string, origin: SkillOrigin): SkillRecord[] {
   const records: SkillRecord[] = [];
   for (const entry of entries.sort((a, b) => a.localeCompare(b))) {
     if (entry.endsWith('.md')) {
-      const record = readSkillFile(join(root, entry), origin);
+      const record = await readSkillFile(join(root, entry), origin);
       if (record) records.push(record);
       continue;
     }
 
     const markerPath = join(root, entry, 'SKILL.md');
-    const record = readSkillFile(markerPath, origin);
+    const record = await readSkillFile(markerPath, origin);
     if (record) records.push(record);
   }
 
   return records;
 }
 
-export function discoverSkills(shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>): SkillRecord[] {
+export async function discoverSkills(shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>): Promise<SkillRecord[]> {
   const cwd = shellPaths.workingDirectory;
   const homeDir = shellPaths.homeDirectory;
   const seen = new Set<string>();
   const records: SkillRecord[] = [];
 
   for (const { root, origin } of getSkillDirectories(cwd, homeDir)) {
-    for (const record of scanSkillDirectory(root, origin)) {
+    for (const record of await scanSkillDirectory(root, origin)) {
       if (seen.has(record.name.toLowerCase())) continue;
       seen.add(record.name.toLowerCase());
       records.push(record);
@@ -236,6 +234,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   private cacheDirty = true;
   // I1: confirm state for destructive delete
   private confirm: ConfirmState | null = null;
+  private readyPromise: Promise<void> | null = null;
 
   public constructor(options: SkillsPanelOptions) {
     super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
@@ -248,11 +247,29 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   // -------------------------------------------------------------------------
 
   protected getAllItems(): readonly SkillRecord[] {
-    if (this.cached === null || this.cacheDirty) {
-      this.cached = discoverSkills(this.shellPaths);
-      this.cacheDirty = false;
-    }
-    return this.cached;
+    return this.cached ?? [];
+  }
+
+  private _loadSkillsAsync(): Promise<void> {
+    const p = (async () => {
+      try {
+        await this.withLoading('Scanning skills\u2026', async () => {
+          this.cached = await discoverSkills(this.shellPaths);
+          this.cacheDirty = false;
+          this.invalidateFilter();
+        });
+      } catch (err) {
+        this.setError(err instanceof Error ? err.message : String(err));
+      }
+      this.markDirty();
+    })();
+    this.readyPromise = p;
+    return p;
+  }
+
+  /** Resolves when the current load cycle has settled. */
+  public awaitReady(): Promise<void> {
+    return this.readyPromise ?? Promise.resolve();
   }
 
   protected matchesSearch(skill: SkillRecord, query: string): boolean {
@@ -301,6 +318,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     this.invalidateFilter();
     this.filterFocused = false;
     this.cacheDirty = true;
+    void this._loadSkillsAsync();
   }
 
   public override onDestroy(): void {}

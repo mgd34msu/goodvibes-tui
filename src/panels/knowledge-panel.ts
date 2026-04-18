@@ -1,5 +1,5 @@
 import type { Line } from '../types/grid.ts';
-import { BasePanel } from './base-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import type { MemoryClass, MemoryRecord, MemoryRegistry, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state/memory-store';
 import {
@@ -9,9 +9,7 @@ import {
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
-  resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
-  type PanelWorkspaceSection,
 } from './polish.ts';
 
 function summarize(records: MemoryRecord[], cls: MemoryClass): MemoryRecord[] {
@@ -42,11 +40,9 @@ function formatConfidence(confidence: number): string {
   return `${confidence.toString().padStart(3, ' ')}%`;
 }
 
-export class KnowledgePanel extends BasePanel {
+export class KnowledgePanel extends ScrollableListPanel<MemoryRecord> {
   private readonly registry: MemoryRegistry;
   private unsubscribe?: () => void;
-  private selectedIndex = 0;
-  private scrollOffset = 0;
   private records: MemoryRecord[] = [];
   // I1: confirm for destructive review-state mutations
   private confirm: ConfirmState<{ id: string; action: 'stale' | 'contradicted' }> | null = null;
@@ -73,6 +69,38 @@ export class KnowledgePanel extends BasePanel {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
   }
+
+  // ---------------------------------------------------------------------------
+  // ScrollableListPanel implementation
+  // ---------------------------------------------------------------------------
+
+  protected getItems(): readonly MemoryRecord[] {
+    return this.records;
+  }
+
+  protected renderItem(record: MemoryRecord, index: number, selected: boolean, width: number): Line {
+    const bg = selected ? C.selectBg : undefined;
+    return buildPanelLine(width, [
+      ['  ', C.label, bg],
+      [record.reviewState.padEnd(13), reviewStateColor(record.reviewState), bg],
+      [` ${formatConfidence(record.confidence)} `, C.value, bg],
+      [record.summary.slice(0, Math.max(0, width - 26)), C.value, bg],
+    ]);
+  }
+
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() { return 'No durable project knowledge'; }
+  protected override getEmptyStateActions() {
+    return [
+      { command: '/recall add fact <summary>', summary: 'capture a durable fact directly' },
+      { command: '/recall capture incident latest', summary: 'promote the latest incident into project memory' },
+      { command: '/recall capture policy', summary: 'store the current policy posture as durable evidence' },
+    ];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Input
+  // ---------------------------------------------------------------------------
 
   public handleInput(key: string): boolean {
     // I1: y/n confirm for stale/contradict
@@ -116,25 +144,13 @@ export class KnowledgePanel extends BasePanel {
       if (result === 'absorbed') return true;
     }
 
-    // I2: auto-clear error on next keypress
-    if (this.lastError) this.clearError();
-
-    if (this.records.length === 0) return false;
-    if (key === 'ArrowUp' || key === 'k') {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.markDirty();
-      return true;
-    }
-    if (key === 'ArrowDown' || key === 'j') {
-      this.selectedIndex = Math.min(this.records.length - 1, this.selectedIndex + 1);
-      this.markDirty();
-      return true;
-    }
+    // I2: auto-clear error on next keypress (inherited via super.handleInput)
+    if (this.records.length === 0) return super.handleInput(key);
 
     const selected = this.records[this.selectedIndex];
-    if (!selected) return false;
 
-    if (key === 'Enter' || key === 'r') {
+    if (key === 'Enter' || key === 'return' || key === 'r') {
+      if (!selected) return false;
       this.registry.review(selected.id, {
         state: 'reviewed',
         confidence: Math.max(selected.confidence, 85),
@@ -145,18 +161,21 @@ export class KnowledgePanel extends BasePanel {
       return true;
     }
     if (key === 's') {
+      if (!selected) return false;
       // I1: prompt confirm before marking stale
       this.confirm = { subject: { id: selected.id, action: 'stale' }, label: selected.summary.slice(0, 40) };
       this.markDirty();
       return true;
     }
     if (key === 'c') {
+      if (!selected) return false;
       // I1: prompt confirm before marking contradicted
       this.confirm = { subject: { id: selected.id, action: 'contradicted' }, label: selected.summary.slice(0, 40) };
       this.markDirty();
       return true;
     }
     if (key === 'f') {
+      if (!selected) return false;
       this.registry.review(selected.id, {
         state: 'fresh',
         confidence: Math.max(selected.confidence, 60),
@@ -167,17 +186,20 @@ export class KnowledgePanel extends BasePanel {
       return true;
     }
 
-    return false;
+    // Normalize arrow keys to base class format
+    if (key === 'ArrowUp') return super.handleInput('up');
+    if (key === 'ArrowDown') return super.handleInput('down');
+    return super.handleInput(key);
   }
 
   private refresh(): void {
     const queue = this.registry.reviewQueue(24);
     this.records = queue.length > 0 ? queue : this.registry.search({ limit: 24 });
-    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.records.length - 1));
+    this.clampSelection();
   }
 
   public render(width: number, height: number): Line[] {
-    this.needsRender = false;
+    this.clampSelection();
 
     // I1: show confirm dialog in place of normal content
     if (this.confirm) {
@@ -196,26 +218,9 @@ export class KnowledgePanel extends BasePanel {
     const records = this.registry.search({ limit: 200 });
 
     if (records.length === 0) {
-      return buildPanelWorkspace(width, height, {
+      return this.renderList(width, height, {
         title: 'Knowledge Control Room',
-        intro,
-        sections: [{
-          lines: buildEmptyState(
-            width,
-            ' No durable project knowledge has been recorded yet.',
-            'The knowledge system is empty. It becomes useful once session, incident, task, and operator evidence are promoted into durable records.',
-            [
-              { command: '/recall add fact <summary>', summary: 'capture a durable fact directly' },
-              { command: '/recall capture incident latest', summary: 'promote the latest incident into project memory' },
-              { command: '/recall capture policy', summary: 'store the current policy posture as durable evidence' },
-            ],
-            C,
-          ),
-        }],
-        footerLines: [
-          buildPanelLine(width, [[' Review keys: Up/Down move  r/Enter review  s stale  c contradicted  f fresh', C.dim]]),
-        ],
-        palette: C,
+        footer: [buildPanelLine(width, [[' Review keys: Up/Down move  r/Enter review  s stale  c contradicted  f fresh', C.dim]])],
       });
     }
 
@@ -252,7 +257,7 @@ export class KnowledgePanel extends BasePanel {
         ['  fresh ', C.label], [String(byReview.get('fresh') ?? 0), C.info],
         ['  stale ', C.label], [String(byReview.get('stale') ?? 0), C.warn],
         ['  contradicted ', C.label], [String(byReview.get('contradicted') ?? 0), C.bad],
-        ['  review queue ', C.label], [String(queue.length), queue.length > 0 ? C.warn : C.good],
+        ['  Review Queue ', C.label], [String(queue.length), queue.length > 0 ? C.warn : C.good],
       ]),
       buildPanelLine(width, [
         [' session ', C.label], [String(byScope.get('session') ?? 0), C.info],
@@ -285,93 +290,56 @@ export class KnowledgePanel extends BasePanel {
       }
     }
 
-    const selected = this.records[this.selectedIndex];
+    const selectedRecord = this.records[this.selectedIndex];
     const selectedLines: Line[] = [];
-    if (selected) {
+    if (selectedRecord) {
+      selectedLines.push(buildPanelLine(width, [['  Selected', C.label]]));
       selectedLines.push(buildKeyValueLine(width, [
-        { label: 'Class', value: selected.cls, valueColor: C.value },
-        { label: 'Scope', value: selected.scope, valueColor: C.info },
-        { label: 'Review', value: selected.reviewState, valueColor: reviewStateColor(selected.reviewState) },
-        { label: 'Confidence', value: formatConfidence(selected.confidence), valueColor: C.value },
+        { label: 'Class', value: selectedRecord.cls, valueColor: C.value },
+        { label: 'Scope', value: selectedRecord.scope, valueColor: C.info },
+        { label: 'Review', value: selectedRecord.reviewState, valueColor: reviewStateColor(selectedRecord.reviewState) },
+        { label: 'Confidence', value: formatConfidence(selectedRecord.confidence), valueColor: C.value },
       ], C));
-      selectedLines.push(...buildBodyText(width, `Summary: ${selected.summary}`, C, C.value));
-      if (selected.detail) selectedLines.push(...buildBodyText(width, `Detail: ${selected.detail}`, C, C.dim));
-      if (selected.provenance.length) {
+      selectedLines.push(...buildBodyText(width, `Summary: ${selectedRecord.summary}`, C, C.value));
+      if (selectedRecord.detail) selectedLines.push(...buildBodyText(width, `Detail: ${selectedRecord.detail}`, C, C.dim));
+      if (selectedRecord.provenance.length) {
         selectedLines.push(...buildBodyText(
           width,
-          `Provenance: ${selected.provenance.map((p) => `${p.kind}:${p.ref}`).join(', ')}`,
+          `Provenance: ${selectedRecord.provenance.map((p) => `${p.kind}:${p.ref}`).join(', ')}`,
           C,
           C.dim,
         ));
       }
-      if (selected.staleReason) {
+      if (selectedRecord.staleReason) {
         selectedLines.push(...buildBodyText(
           width,
-          `Stale reason: ${selected.staleReason}`,
+          `Stale reason: ${selectedRecord.staleReason}`,
           C,
-          selected.reviewState === 'contradicted' ? C.bad : C.warn,
+          selectedRecord.reviewState === 'contradicted' ? C.bad : C.warn,
         ));
       }
-      if (selected.reviewedAt) {
+      if (selectedRecord.reviewedAt) {
         selectedLines.push(buildPanelLine(width, [
           ['  Reviewed: ', C.label],
-          [new Date(selected.reviewedAt).toLocaleString(), C.dim],
+          [new Date(selectedRecord.reviewedAt).toLocaleString(), C.dim],
         ]));
-        if (selected.reviewedBy) {
+        if (selectedRecord.reviewedBy) {
           selectedLines.push(buildPanelLine(width, [
             ['  Reviewer: ', C.label],
-            [selected.reviewedBy, C.dim],
+            [selectedRecord.reviewedBy, C.dim],
           ]));
         }
       }
     }
 
-    const footerLines = [
-      buildPanelLine(width, [['  Up/Down move  r/Enter reviewed  s stale  c contradicted  f fresh', C.dim]]),
-    ];
-    const classesSection: PanelWorkspaceSection = { title: 'Classes', lines: classLines };
-    const reviewStateSection: PanelWorkspaceSection = { title: 'Review State', lines: reviewLines };
-    const selectedSection: PanelWorkspaceSection = selectedLines.length > 0 ? { title: 'Selected', lines: selectedLines } : { title: 'Selected', lines: [] };
-    const recentSection: PanelWorkspaceSection = { title: 'Recent Risks / Runbooks / Architecture Notes', lines: recentSummaryLines };
-    const queueSection = resolveScrollablePanelSection(width, height, {
-      intro,
-      footerLines,
-      palette: C,
-      beforeSections: [classesSection, reviewStateSection],
-      section: {
-        title: 'Review Queue',
-        scrollableLines: this.records.map((record, globalIndex) => {
-          const bg = globalIndex === this.selectedIndex ? C.selectBg : undefined;
-          return buildPanelLine(width, [
-            ['  ', C.label, bg],
-            [record.reviewState.padEnd(13), reviewStateColor(record.reviewState), bg],
-            [` ${formatConfidence(record.confidence)} `, C.value, bg],
-            [record.summary.slice(0, Math.max(0, width - 26)), C.value, bg],
-          ]);
-        }),
-        selectedIndex: this.selectedIndex,
-        scrollOffset: this.scrollOffset,
-        minRows: 4,
-        appendWindowSummary: { dimColor: C.dim },
-      },
-      afterSections: selectedLines.length > 0 ? [selectedSection, recentSection] : [recentSection],
-    });
-    this.scrollOffset = queueSection.scrollOffset;
-
-    const sections: PanelWorkspaceSection[] = [
-      classesSection,
-      reviewStateSection,
-      queueSection.section,
-    ];
-    if (selectedLines.length > 0) sections.push(selectedSection);
-    sections.push(recentSection);
-
-    return buildPanelWorkspace(width, height, {
+    return this.renderList(width, height, {
       title: 'Knowledge Control Room',
-      intro,
-      sections,
-      footerLines,
-      palette: C,
+      header: [...classLines, ...reviewLines],
+      footer: [
+        ...(selectedLines.length > 0 ? selectedLines : []),
+        ...recentSummaryLines,
+        buildPanelLine(width, [['  Up/Down move  r/Enter reviewed  s stale  c contradicted  f fresh', C.dim]]),
+      ],
     });
   }
 }

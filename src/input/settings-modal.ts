@@ -23,68 +23,23 @@ import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runt
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import {
+  SETTINGS_CATEGORIES,
+  type FlagEntry,
+  type McpEntry,
+  type SettingEntry,
+  type SettingsCategory,
+  type SubscriptionEntry,
+} from './settings-modal-types.ts';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'storage' | 'permissions' | 'mcp' | 'sandbox' | 'danger' | 'tools' | 'flags' | 'network';
-
-export const SETTINGS_CATEGORIES: SettingsCategory[] = [
-  'display',
-  'ui',
-  'provider',
-  'subscriptions',
-  'behavior',
-  'storage',
-  'permissions',
-  'mcp',
-  'sandbox',
-  'danger',
-  'tools',
-  'flags',
-  'network',
-];
-
-export interface SettingEntry {
-  setting: ConfigSetting;
-  currentValue: unknown;
-  isDefault: boolean;
-  effectiveSource?: 'default' | 'local' | 'synced' | 'managed';
-  locked?: boolean;
-  conflict?: boolean;
-  sourceLabel?: string;
-  lockReason?: string;
-}
-
-/** A single feature flag entry for the flags tab. */
-export interface FlagEntry {
-  flag: FeatureFlag;
-  state: FlagState;
-}
-
-export interface McpEntry {
-  name: string;
-  connected: boolean;
-  role: 'general' | 'docs' | 'filesystem' | 'git' | 'database' | 'browser' | 'automation' | 'ops' | 'remote';
-  trustMode: 'constrained' | 'ask-on-risk' | 'allow-all' | 'blocked';
-  allowedPaths: string[];
-  allowedHosts: string[];
-}
-
-export interface SubscriptionEntry {
-  provider: string;
-  state: 'active' | 'pending' | 'available';
-  tokenType?: string;
-  expiresAt?: number;
-  oauthConfigured: boolean;
-  activeRoute?: ProviderAuthRoute;
-  preferredRoute?: ProviderAuthRoute;
-  authFreshness?: ProviderAuthFreshness;
-  routeReason?: string;
-  issues?: string[];
-  nextActions?: string[];
-}
+export {
+  SETTINGS_CATEGORIES,
+  type FlagEntry,
+  type McpEntry,
+  type SettingEntry,
+  type SettingsCategory,
+  type SubscriptionEntry,
+} from './settings-modal-types.ts';
 
 /**
  * Map a config key to the model picker target it should open, or null if the

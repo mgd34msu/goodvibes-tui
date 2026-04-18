@@ -72,6 +72,7 @@ export class ContextVisualizerPanel extends BasePanel {
   }
 
   render(width: number, height: number): Line[] {
+    return this.trackedRender(() => {
     if (height <= 0 || width <= 0) return [];
 
     const input = this.snapshot.input;
@@ -130,6 +131,7 @@ export class ContextVisualizerPanel extends BasePanel {
         },
       ],
       palette: DEFAULT_PANEL_PALETTE,
+    });
     });
   }
 

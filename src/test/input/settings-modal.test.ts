@@ -277,12 +277,6 @@ describe('SettingsModal', () => {
 
   test('subscriptions category requires confirmation before sign out', () => {
     const manager = subscriptionManager;
-    const started = manager.beginOAuthLogin('openai', {
-      authUrl: 'https://auth.openai.test/authorize',
-      tokenUrl: 'https://auth.openai.test/token',
-      clientId: 'openai-client',
-      redirectUri: 'http://127.0.0.1/callback',
-    });
     manager.saveSubscription({
       provider: 'openai',
       accessToken: 'token',
@@ -292,7 +286,6 @@ describe('SettingsModal', () => {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
-    void started;
 
     modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
     while (modal.currentCategory !== 'subscriptions') modal.nextCategory();

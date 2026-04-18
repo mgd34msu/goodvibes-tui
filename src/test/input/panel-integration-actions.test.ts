@@ -18,7 +18,7 @@ describe('panel integration actions', () => {
     mock.restore();
   });
 
-  test('explorer selection opens the file in preview and syncs symbols', () => {
+  test('explorer selection opens the file in preview and syncs symbols', async () => {
     const root = mkdtempSync(join(tmpdir(), 'gv-panel-bridge-'));
     const filePath = join(root, 'demo.ts');
     writeFileSync(filePath, 'export function alpha() {}\nexport const beta = 1;\n');
@@ -46,6 +46,7 @@ describe('panel integration actions', () => {
 
     const explorer = new FileExplorerPanel(root, root);
     explorer.onActivate();
+    await explorer.awaitReady();
 
     expect(handlePanelIntegrationAction(panelManager, explorer, 'enter')).toBe(true);
 
