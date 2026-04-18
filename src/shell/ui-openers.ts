@@ -8,6 +8,7 @@ import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config/secrets';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 
 type WireShellUiOpenersOptions = {
@@ -21,6 +22,7 @@ type WireShellUiOpenersOptions = {
   featureFlags: FeatureFlagManager;
   mcpRegistry: McpRegistry;
   subscriptionManager: SubscriptionManager;
+  secretsManager?: Pick<SecretsManager, 'get'>;
   serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
   getConfiguredProviderIds: () => string[];
   getPinned: () => Promise<string[]>;
@@ -29,35 +31,43 @@ type WireShellUiOpenersOptions = {
 
 /**
  * Derive the configuredVia tier for a provider.
- * Checks env-vars first (env tier), then falls back to subscription (from configuredIds
- * that aren't env-keyed). Returns undefined when not configured.
+ * Tier order mirrors SDK provider-routes.ts: env → secrets → subscription → undefined.
+ * The preResolvedSecretKeys set is pre-fetched async before the sync picker render cycle.
  */
 function deriveConfiguredVia(
   providerId: string,
   configuredIds: Set<string>,
   subscriptionManager: SubscriptionManager,
+  preResolvedSecretKeys?: ReadonlySet<string>,
 ): 'env' | 'secrets' | 'subscription' | 'anonymous' | undefined {
   if (!configuredIds.has(providerId)) return undefined;
 
-  // Check if a subscription session is active for this provider
+  // Tier 1: subscription check (most specific — subscription overrides env for this provider)
   const subs = subscriptionManager.list();
   if (subs.some((s) => s.provider === providerId)) return 'subscription';
 
-  // Assume env-var backed (anonymous providers don't appear in configuredIds)
+  // Tier 2: env-var present (process.env check; anonymous providers don't appear in configuredIds)
+  // We don't have BUILTIN_PROVIDER_ENV_KEYS here; if env was used the configuredIds path covers it.
+  // The presence in configuredIds and no subscription → either env or secrets.
+  // Tier 3: secrets-manager backed (pre-resolved async batch)
+  if (preResolvedSecretKeys && preResolvedSecretKeys.has(providerId)) return 'secrets';
+
   return 'env';
 }
 
 /**
  * Build a configuredViaMap for the given provider list.
+ * Pass preResolvedSecretKeys (from an async SecretsManager batch) to surface the 'secrets' tier.
  */
 function buildConfiguredViaMap(
   providers: string[],
   configuredIds: Set<string>,
   subscriptionManager: SubscriptionManager,
+  preResolvedSecretKeys?: ReadonlySet<string>,
 ): Map<string, 'env' | 'secrets' | 'subscription' | 'anonymous'> {
   const map = new Map<string, 'env' | 'secrets' | 'subscription' | 'anonymous'>();
   for (const p of providers) {
-    const via = deriveConfiguredVia(p, configuredIds, subscriptionManager);
+    const via = deriveConfiguredVia(p, configuredIds, subscriptionManager, preResolvedSecretKeys);
     if (via !== undefined) map.set(p, via);
   }
   return map;
@@ -75,35 +85,61 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     featureFlags,
     mcpRegistry,
     subscriptionManager,
+    secretsManager,
     serviceRegistry,
     getConfiguredProviderIds,
     getPinned,
     render,
   } = options;
 
-  commandContext.openModelPicker = () => {
-    const models = providerRegistry.getSelectableModels();
+  /**
+   * Pre-resolve which provider IDs have secrets-manager keys (async batch, SDK tier pattern).
+   * Returns a set of provider IDs (not env var names) that are secrets-backed.
+   * Falls back to empty set if secretsManager is not provided.
+   */
+  async function resolveSecretProviderIds(): Promise<ReadonlySet<string>> {
+    if (!secretsManager) return new Set<string>();
     const configuredIds = new Set(getConfiguredProviderIds());
-    input.modelPicker.configuredProviders = configuredIds;
-    const providerIds = [...new Set(models.map((m) => m.provider))];
-    input.modelPicker.configuredViaMap = buildConfiguredViaMap(providerIds, configuredIds, subscriptionManager);
-    void getPinned().then((pinned) => {
-      input.modelPicker.pinnedIds = new Set(pinned);
-    });
-    void input.modelPicker.loadRecentModels().catch(() => {}); // best-effort: prefetch for UI, failure is non-visible
-    input.modalOpened('modelPicker');
-    input.modelPicker.openAllModels(models, runtime.model);
-    render();
+    // For each configured provider, check if secretsManager has a key for it by provider ID.
+    // We use provider ID as the lookup key since we don't have BUILTIN_PROVIDER_ENV_KEYS here.
+    const results = await Promise.all(
+      [...configuredIds].map(async (providerId) => {
+        const val = await secretsManager.get(providerId).catch(() => null);
+        return val !== null ? providerId : null;
+      }),
+    );
+    return new Set(results.filter((v): v is string => v !== null));
+  }
+
+  commandContext.openModelPicker = () => {
+    void (async () => {
+      const models = providerRegistry.getSelectableModels();
+      const configuredIds = new Set(getConfiguredProviderIds());
+      input.modelPicker.configuredProviders = configuredIds;
+      const providerIds = [...new Set(models.map((m) => m.provider))];
+      const secretProviderIds = await resolveSecretProviderIds();
+      input.modelPicker.configuredViaMap = buildConfiguredViaMap(providerIds, configuredIds, subscriptionManager, secretProviderIds);
+      void getPinned().then((pinned) => {
+        input.modelPicker.pinnedIds = new Set(pinned);
+      });
+      void input.modelPicker.loadRecentModels().catch(() => {}); // best-effort: prefetch for UI, failure is non-visible
+      input.modalOpened('modelPicker');
+      input.modelPicker.openAllModels(models, runtime.model);
+      render();
+    })();
   };
 
   commandContext.openProviderPicker = () => {
-    const providers = [...new Set(providerRegistry.listModels().map((model) => model.provider))];
-    const configuredIds = new Set(getConfiguredProviderIds());
-    input.modelPicker.configuredProviders = configuredIds;
-    input.modelPicker.configuredViaMap = buildConfiguredViaMap(providers, configuredIds, subscriptionManager);
-    input.modalOpened('modelPicker');
-    input.modelPicker.openProviders(providers, runtime.provider);
-    render();
+    void (async () => {
+      const providers = [...new Set(providerRegistry.listModels().map((model) => model.provider))];
+      const configuredIds = new Set(getConfiguredProviderIds());
+      input.modelPicker.configuredProviders = configuredIds;
+      const secretProviderIds = await resolveSecretProviderIds();
+      input.modelPicker.configuredViaMap = buildConfiguredViaMap(providers, configuredIds, subscriptionManager, secretProviderIds);
+      input.modalOpened('modelPicker');
+      input.modelPicker.openProviders(providers, runtime.provider);
+      render();
+    })();
   };
 
   commandContext.openSelection = (title, items, opts, callback) => {

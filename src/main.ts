@@ -736,6 +736,7 @@ async function main() {
     featureFlags: ctx.featureFlags,
     mcpRegistry: ctx.services.mcpRegistry,
     subscriptionManager: ctx.services.subscriptionManager,
+    secretsManager: ctx.services.secretsManager,
     serviceRegistry: ctx.services.serviceRegistry,
     getConfiguredProviderIds: ctx._getConfiguredProviderIds,
     getPinned: ctx._getPinned,
