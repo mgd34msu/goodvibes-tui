@@ -4,6 +4,19 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.3] - 2026-04-18
+
+### Fixed
+- Extracted CLI flag parsing (`--provider`, `--model`) from `src/main.ts` and `src/daemon/cli.ts` into a shared `src/cli-flags.ts` module. `src/main.ts` now passes the 800-line architecture-check gate that was tripped in 0.19.1 and 0.19.2 (CI failures on both prior releases).
+
+### Changed
+- No user-visible behavior change. Pure structural refactor.
+
+### Note
+- `v0.19.1` and `v0.19.2` GitHub releases have 0 binary assets due to the architecture-check CI failure. Consumers should upgrade to `0.19.3` for access to the binaries + consistent release state.
+
+---
+
 ## [0.19.2] — 2026-04-18
 
 ### Fixed
