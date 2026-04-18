@@ -294,12 +294,19 @@ export function renderModelPickerOverlay(
         const isSelected = selectableIdx === picker.selectedIndex;
         const indicator = isSelected ? `${OVERLAY_GLYPHS.selected} ` : '  ';
         const checkmark = item.isConfigured ? '✓ ' : '  ';
-        const labelW = contentW - 2 - 2; // indicator(2) + checkmark(2)
+        // configuredVia badge: right-aligned short label (env/sub/anon)
+        const viaBadge = item.configuredVia === 'env' ? ' [env]'
+          : item.configuredVia === 'secrets' ? ' [key]'
+          : item.configuredVia === 'subscription' ? ' [sub]'
+          : item.configuredVia === 'anonymous' ? ' [anon]'
+          : '';
+        const badgeW = viaBadge.length;
+        const labelW = contentW - 2 - 2 - badgeW; // indicator(2) + checkmark(2) + badge
         const labelStr = item.label.length > labelW
           ? item.label.slice(0, labelW - 3) + '...'
           : item.label.padEnd(labelW);
         const row = createOverlayContentLine(width, layout, borderFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg);
-        const rowText = indicator + checkmark + labelStr;
+        const rowText = indicator + checkmark + labelStr + viaBadge;
         putRowText(row, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rowText, contentW), contentW), isSelected ? titleFg : bodyFg, isSelected ? selectedBg : DEFAULT_OVERLAY_PALETTE.bodyBg, isSelected);
         lines.push(row);
       }
