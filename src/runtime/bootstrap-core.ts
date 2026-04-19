@@ -285,6 +285,18 @@ export async function initializeBootstrapCore(
     wrfcController: services.wrfcController,
   });
 
+  // Subscribe to companion follow-up messages received from the daemon's HTTP layer.
+  // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus (added in SDK 0.21.10)
+  // after persisting the message, so the TUI conversation view can render it immediately.
+  // Cast needed while the SDK dep is pinned to 0.21.9; upgrade to 0.21.10 removes this.
+  runtimeUnsubs.push(runtimeBus.on(
+    'COMPANION_MESSAGE_RECEIVED' as Parameters<typeof runtimeBus.on>[0],
+    (envelope: { payload: { body: string } }) => {
+      conversation.addUserMessage(envelope.payload.body);
+      requestRender();
+    },
+  ));
+
   providerRegistry.startWatching(runtimeBus);
 
   const webhookUrls = (configManager.getCategory('notifications') as { webhookUrls?: string[] }).webhookUrls ?? [];
