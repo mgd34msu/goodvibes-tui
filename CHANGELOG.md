@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.10] - 2026-04-19
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` to 0.21.16. Picks up the discovered-provider configuration fix: network-discovered providers (LM Studio, Ollama, vLLM, llama.cpp, TGI, LocalAI) are now reported as configured by `GET /api/providers` and accepted by `PATCH /api/providers/current` without a fake API-key requirement.
+
+### Fixed
+- `PATCH /api/providers/current` with a discovered provider's registryKey (e.g. `"LM Studio (192.168.0.85):qwen3.6-35b-a3b@q2_k_xl"`) no longer returns `PROVIDER_NOT_CONFIGURED` with a placeholder `<API key for X>` message. The daemon accepts the switch and the turn uses the discovered provider.
+
 ## [0.19.9] - 2026-04-19
 
 ### Fixed
