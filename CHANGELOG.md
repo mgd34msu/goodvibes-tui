@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.6] - 2026-04-18
+
+### Fixed
+- Bumped `@pellux/goodvibes-sdk` to 0.21.10 (up from 0.21.8 which was pinned by mistake in 0.19.5). 0.19.5 subscribed to the `COMPANION_MESSAGE_RECEIVED` runtime event but remained on an SDK version that didn't emit it, so the "companion main-chat messages render in TUI" fix from 0.19.5 didn't actually work. 0.19.6 corrects the dep so the subscription is live against an SDK that emits the event. Removed the `as Parameters<typeof runtimeBus.on>[0]` type cast that was hiding the version gap.
+
+---
+
 ## [0.19.5] - 2026-04-18
 
 ### Fixed
