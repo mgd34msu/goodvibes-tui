@@ -4,6 +4,31 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.7] - 2026-04-18
+
+### Changed
+- Bumped `@pellux/goodvibes-sdk` from 0.21.10 to 0.21.12.
+
+### Investigation: No TUI-side changes required
+
+SDK 0.21.12 ships three additive changes to the daemon:
+
+1. **`kind: 'message'` at `POST /api/sessions/:id/messages`** now calls `sessionBroker.submitMessage()` (previously called `appendCompanionMessage` + `publishConversationFollowup` only). A real turn is started and the full agent event chain (TURN_STARTED, STREAM_DELTA, TURN_COMPLETED) streams back.
+
+2. **`kind: 'followup'`** — new kind value that always spawns an agent. Full agent event chain streams to companion SSE.
+
+3. **`GET /api/sessions/:id/events`** — new session-scoped SSE endpoint for companion consumption.
+
+4. **`'turn'` added to `DEFAULT_DOMAINS`** in the control-plane gateway — turn events are now auto-delivered to all SSE subscribers.
+
+Investigation of the TUI's `COMPANION_MESSAGE_RECEIVED` subscription in `src/runtime/bootstrap-core.ts` found **no double-render risk**: SDK 0.21.12 emits `COMPANION_MESSAGE_RECEIVED` _before_ calling `submitMessage`, so the user message is shown once (via the existing subscription), and the AI response streams in via the existing `uiServices.events.turns` path. These are distinct content on distinct code paths. No deduplication needed.
+
+The `'turn'` addition to `DEFAULT_DOMAINS` affects external SSE subscribers (companion app). The TUI consumes turn events in-process via the runtime bus — unaffected.
+
+Updated `docs/foundation-artifacts/operator-contract.json` SDK version field to `0.21.12`.
+
+---
+
 ## [0.19.6] - 2026-04-18
 
 ### Fixed
