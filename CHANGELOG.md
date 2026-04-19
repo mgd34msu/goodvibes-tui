@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.4] - 2026-04-18
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` from 0.21.6 to 0.21.8. This carries the **bare-model-id fix** (0.21.7): the companion-chat adapter now correctly passes the bare model id (e.g. `"mercury-2"`) to provider `.chat()` calls instead of the compound registry key (e.g. `"inception:mercury-2"`). Upstream compat APIs (InceptionLabs, Venice, Cerebras, Groq, etc.) only accept bare ids. Resolves `400 invalid_request_error` reported by companion apps.
+- Also includes 0.21.8's internal rename nit fix (cosmetic only).
+
 ## [0.19.3] - 2026-04-18
 
 ### Fixed
