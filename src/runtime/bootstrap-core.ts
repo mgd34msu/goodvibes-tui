@@ -16,6 +16,7 @@ import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime
 import type { BootstrapOptions } from './context.ts';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { SessionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './store/index.ts';
 import { ForensicsCollector, ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
 import {
@@ -286,13 +287,12 @@ export async function initializeBootstrapCore(
   });
 
   // Subscribe to companion follow-up messages received from the daemon's HTTP layer.
-  // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus (added in SDK 0.21.10)
+  // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus (SDK 0.21.10+)
   // after persisting the message, so the TUI conversation view can render it immediately.
-  // Cast needed while the SDK dep is pinned to 0.21.9; upgrade to 0.21.10 removes this.
-  runtimeUnsubs.push(runtimeBus.on(
-    'COMPANION_MESSAGE_RECEIVED' as Parameters<typeof runtimeBus.on>[0],
-    (envelope: { payload: { body: string } }) => {
-      conversation.addUserMessage(envelope.payload.body);
+  runtimeUnsubs.push(runtimeBus.on<Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>>(
+    'COMPANION_MESSAGE_RECEIVED',
+    ({ payload }) => {
+      conversation.addUserMessage(payload.body);
       requestRender();
     },
   ));
