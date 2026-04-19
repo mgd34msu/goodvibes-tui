@@ -50,6 +50,12 @@ export interface BootstrapCoreState {
   readonly permissionPromptRef: { requestPermission: PermissionRequestHandler };
   readonly systemMessageRouterRef: { value: SystemMessageRouter | null };
   readonly conversationFollowUpRef: { value: ((item: ConversationFollowUpItem) => void) | null };
+  /**
+   * Mutable ref patched by bootstrap.ts after the Orchestrator is constructed.
+   * When non-null, COMPANION_MESSAGE_RECEIVED fires a real LLM turn via
+   * orchestrator.handleUserInput() instead of only appending the user message.
+   */
+  readonly orchestratorHandleUserInputRef: { value: ((text: string) => void) | null };
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
@@ -286,20 +292,30 @@ export async function initializeBootstrapCore(
     wrfcController: services.wrfcController,
   });
 
-  // Subscribe to companion follow-up messages received from the daemon's HTTP layer.
-  // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus (SDK 0.21.10+).
-  // In SDK 0.21.12, kind='message' at POST /api/sessions/:id/messages now also calls
-  // sessionBroker.submitMessage(), starting a real turn. COMPANION_MESSAGE_RECEIVED
-  // still fires BEFORE submitMessage so the user message appears immediately in the
-  // conversation view, and the AI response streams in via the normal turn path.
-  // No double-render: COMPANION_MESSAGE_RECEIVED adds the user message once; the turn
-  // path adds the AI response. Both paths are correctly wired with no changes required.
-  // after persisting the message, so the TUI conversation view can render it immediately.
+  // Subscribe to companion main-chat messages received from the daemon's HTTP layer.
+  // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus when a companion
+  // POST /api/sessions/:id/messages with kind='message' arrives.
+  //
+  // bootstrap.ts patches orchestratorHandleUserInputRef.value after the Orchestrator
+  // is constructed. When that ref is set, we delegate to orchestrator.handleUserInput()
+  // which (a) adds the user message to the conversation view and (b) fires a real LLM
+  // turn whose STREAM_DELTA / TURN_COMPLETED events flow to both TUI and companion SSE.
+  //
+  // The fallback (ref not yet set) adds the message to the conversation view only —
+  // this path is unreachable in practice because the event bus is not connected to
+  // any live HTTP traffic until after the orchestrator is wired in bootstrap.ts.
+  const orchestratorHandleUserInputRef: { value: ((text: string) => void) | null } = { value: null };
   runtimeUnsubs.push(runtimeBus.on<Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>>(
     'COMPANION_MESSAGE_RECEIVED',
     ({ payload }) => {
-      conversation.addUserMessage(payload.body);
-      requestRender();
+      if (orchestratorHandleUserInputRef.value) {
+        // Delegate to the orchestrator: adds user message + fires a real LLM turn.
+        orchestratorHandleUserInputRef.value(payload.body);
+      } else {
+        // Fallback: render the user message immediately (orchestrator not yet ready).
+        conversation.addUserMessage(payload.body);
+        requestRender();
+      }
     },
   ));
 
@@ -424,6 +440,7 @@ export async function initializeBootstrapCore(
     permissionPromptRef,
     systemMessageRouterRef,
     conversationFollowUpRef,
+    orchestratorHandleUserInputRef,
     requestRender,
     setRenderRequest: (fn) => {
       renderRequestRef.value = fn;

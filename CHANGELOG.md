@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.8] - 2026-04-19
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` from 0.21.10 to 0.21.15. Carries the companion main-chat routing fix: `POST /api/sessions/:id/messages` with `kind: 'message'` now short-circuits the daemon's WRFC engineer-chain fall-through. The TUI wires `orchestrator.handleUserInput()` into the `COMPANION_MESSAGE_RECEIVED` runtime bus subscriber, so companion main-chat sends fire a real LLM turn via the same entry point as the TUI input box. Turn `STREAM_DELTA` / `TURN_COMPLETED` events stream back to both TUI and companion SSE.
+
+### Fixed
+- Companion main-chat no longer produces engineer-agent acknowledgement boilerplate ("Update noted", "WRFC chain has passed all gates"). The message is received by the daemon, persisted, rendered in the TUI, and answered by a normal chat turn.
 ## [0.19.7] - 2026-04-18
 
 ### Changed

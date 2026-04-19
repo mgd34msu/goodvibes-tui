@@ -155,6 +155,7 @@ export async function bootstrapRuntime(
     permissionPromptRef,
     systemMessageRouterRef,
     conversationFollowUpRef,
+    orchestratorHandleUserInputRef,
     requestRender,
     setRenderRequest,
     runtimeSessionIdRef,
@@ -199,6 +200,12 @@ export async function bootstrapRuntime(
     },
   });
   conversationFollowUpRef.value = (item) => orchestrator.enqueueConversationFollowUp(item);
+  // Wire orchestratorHandleUserInputRef so COMPANION_MESSAGE_RECEIVED fires a real LLM turn.
+  orchestratorHandleUserInputRef.value = (text: string) => {
+    orchestrator.handleUserInput(text).catch((err: unknown) => {
+      logger.debug('companion handleUserInput safety catch', { error: String(err) });
+    });
+  };
   orchestrator.setCoreServices({
     configManager,
     providerRegistry,
