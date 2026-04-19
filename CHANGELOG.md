@@ -4,6 +4,10 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.9] - 2026-04-19
+
+### Fixed
+- Regenerated `docs/foundation-artifacts/operator-contract.json` after the 0.19.8 SDK bump; the foundation-artifacts-gate test failed on the 0.19.8 CI because the JSON was not regenerated. 0.19.8 tag has no npm artifact; 0.19.9 supersedes.
 ## [0.19.8] - 2026-04-19
 
 ### Changed
