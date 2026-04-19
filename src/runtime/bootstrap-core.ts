@@ -287,7 +287,13 @@ export async function initializeBootstrapCore(
   });
 
   // Subscribe to companion follow-up messages received from the daemon's HTTP layer.
-  // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus (SDK 0.21.10+)
+  // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus (SDK 0.21.10+).
+  // In SDK 0.21.12, kind='message' at POST /api/sessions/:id/messages now also calls
+  // sessionBroker.submitMessage(), starting a real turn. COMPANION_MESSAGE_RECEIVED
+  // still fires BEFORE submitMessage so the user message appears immediately in the
+  // conversation view, and the AI response streams in via the normal turn path.
+  // No double-render: COMPANION_MESSAGE_RECEIVED adds the user message once; the turn
+  // path adds the AI response. Both paths are correctly wired with no changes required.
   // after persisting the message, so the TUI conversation view can render it immediately.
   runtimeUnsubs.push(runtimeBus.on<Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>>(
     'COMPANION_MESSAGE_RECEIVED',
