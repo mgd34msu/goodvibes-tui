@@ -4,6 +4,16 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.5] - 2026-04-18
+
+### Fixed
+- Companion-app messages sent via POST `/api/sessions/:id/messages` (kind `message`) are now rendered in the TUI conversation view immediately upon receipt. Previously the 202 was acknowledged and the message was persisted (SDK 0.21.9), but the TUI conversation never displayed it. The fix subscribes to the new `COMPANION_MESSAGE_RECEIVED` runtime bus event (emitted by the daemon's HTTP router after persistence, added in SDK 0.21.10) and calls `conversation.addUserMessage()` to surface the message inline.
+
+### Changed
+- SDK dependency remains `@pellux/goodvibes-sdk@0.21.8` (published); the `COMPANION_MESSAGE_RECEIVED` event type is cast at the call-site until SDK 0.21.10 is available on npm.
+
+---
+
 ## [0.19.4] - 2026-04-18
 
 ### Changed
