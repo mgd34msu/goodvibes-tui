@@ -1,4 +1,5 @@
-import { networkInterfaces } from 'node:os';
+import { networkInterfaces, homedir } from 'node:os';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import type { PanelManager } from '../panel-manager.ts';
 import { SessionBrowserPanel } from '../session-browser-panel.ts';
@@ -49,7 +50,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     category: 'session',
     description: 'QR code for companion app pairing — scan to connect a mobile or desktop companion',
     factory: () => {
-      const tokenRecord = getOrCreateCompanionToken('tui');
+      const tokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir: join(homedir(), '.goodvibes', 'daemon') });
       const daemonPort = deps.configManager.get('controlPlane.port');
       const daemonHost = String(process.env['GOODVIBES_DAEMON_HOST'] ?? getLocalNetworkIp());
       const daemonUrl = `http://${daemonHost}:${daemonPort}`;
@@ -61,7 +62,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
         surface: 'tui',
       });
       const regenerate = (): typeof connectionInfo => {
-        const newRecord = regenerateCompanionToken('tui');
+        const newRecord = regenerateCompanionToken('tui', { daemonHomeDir: join(homedir(), '.goodvibes', 'daemon') });
         return buildCompanionConnectionInfo({
           daemonUrl,
           token: newRecord.token,

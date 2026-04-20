@@ -4,7 +4,25 @@ All notable changes to GoodVibes TUI.
 
 ---
 
-## [UNRELEASED]
+## [0.19.11] - 2026-04-19
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` to 0.21.23. Picks up: (1) runtime default config includes `runtime.companionChatLimiter.perSessionLimit: 10`, closing the "section 'runtime' does not exist" regression that caused 29 assertions across 9 test files to fail; (2) `buildOperatorContract` now consumes catalog via `toMethodContract`/`toEventContract` projectors, populating `methods`, `events`, and `coverage` from the live catalog rather than a static baked contract; (3) `RuntimeEventDomain` includes `'workspace'` domain (27 total) sourced from generated file; (4) browser tests guard with `skipIf(typeof window === 'undefined')`.
+
+### Fixed
+- `method-catalog.test.ts` `buildOperatorContract` assertion restored to strict form: `contract.operator.events` now asserts `toHaveLength(catalog.listEvents().length)` (was loosened to `toBeGreaterThan(0)` during SDK 0.21.20–0.21.21 regression). Failure tracker entry `sdk-buildoperatorcontract-regression-0-21-20` closed (`resolved_in: @pellux/goodvibes-sdk@0.21.22`, `resolved_by_sdk_version: 0.21.23`).
+- All 29 previously-failing assertions across 9 test files caused by missing `runtime` section in SDK default config are now green (fixed by SDK 0.21.23 runtime default config inclusion).
+- Regenerated foundation artifacts to reflect SDK 0.21.23 operator contract (30 events, 27 domains, includes `workspace` domain). Full test suite: 7490 pass / 0 fail.
+
+### Changed (SDK 0.21.21)
+- Upgraded `@pellux/goodvibes-sdk` to 0.21.21. Picks up `rerootStores(newWorkingDir: string): Promise<void>` on `RuntimeServices` (workspace swap support), `WorkspaceEvent` domain in `AnyRuntimeEvent` and `DomainEventMap`, F3 companion token `daemonHomeDir` option for global (non-workspace-scoped) token storage at `~/.goodvibes/daemon/operator-tokens.json`, and state tool well-known keys `runtime.workingDir` / `daemon.homeDir`.
+- F3: `getOrCreateCompanionToken` / `regenerateCompanionToken` calls in `src/daemon/cli.ts` and `src/panels/builtin/session.ts` now pass `daemonHomeDir: join(homeDirectory, '.goodvibes', 'daemon')` to use the new global token path (was workspace-scoped).
+- Implemented `rerootStores` in `src/runtime/services.ts`: delegates to `memoryStore.reroot(newMemoryDbPath)` and `projectIndex.reroot(newWorkingDir)` so `WorkspaceSwapManager` can migrate path-bound stores on workspace swap without a process restart.
+
+### Fixed
+- `EventEnvelope` cast in `policy-and-budget-evidence-gate.test.ts`, `runtime-certification-gate.test.ts`, and `forensics.test.ts`: SDK 0.21.21 added `WorkspaceEvent` to `AnyRuntimeEvent`, widening `Parameters<RuntimeEventBus['emit']>[1]` beyond what the domain-specific `emit('turn', ...)` overload accepts. Fixed by casting through `createEventEnvelope(payload['type'] as TurnEvent['type'], payload as TurnEvent, ...)` (and `TaskEvent` for `emitTask`), which produces a precisely-typed envelope without `as unknown as`.
+- `method-catalog.test.ts`: comment updated — `buildOperatorContract` regression (`void catalog;` at operator-contract.js:119) is still present in 0.21.21; loosened assertion remains.
+- Foundation artifacts: `docs/foundation-artifacts/operator-contract.json` regenerated via `bun run foundation:artifacts` to reflect SDK 0.21.21 operator contract.
 
 ### Changed
 - Upgraded `@pellux/goodvibes-sdk` to 0.21.20. Picks up `swapManager: WorkspaceSwapManagerLike | null` field in `DaemonSystemRouteContext`; test mocks updated accordingly.

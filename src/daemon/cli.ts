@@ -1,4 +1,5 @@
 import { homedir, networkInterfaces } from 'node:os';
+import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
@@ -146,7 +147,7 @@ async function main(): Promise<void> {
   const { daemonToken, httpToken } = readDaemonCliTokens(process.env);
 
   // If no explicit daemon token is set, use the companion token so mobile apps can connect.
-  const companionTokenRecord = getOrCreateCompanionToken('tui');
+  const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir: join(homeDirectory, '.goodvibes', 'daemon') });
   const effectiveDaemonToken = daemonToken ?? companionTokenRecord.token;
   const effectiveHttpToken = httpToken ?? effectiveDaemonToken;
 

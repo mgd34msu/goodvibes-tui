@@ -13,8 +13,9 @@ import { describe, test, expect, mock } from 'bun:test';
 import { classifyFailure, summariseFailure } from '@pellux/goodvibes-sdk/platform/runtime/forensics/classifier';
 import { ForensicsRegistry, DEFAULT_REGISTRY_LIMIT } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import { ForensicsCollector } from '@pellux/goodvibes-sdk/platform/runtime/forensics/collector';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
 
 // ---------------------------------------------------------------------------
@@ -49,10 +50,10 @@ function emitTurn(bus: RuntimeEventBus, payload: Record<string, unknown>, sessio
   bus.emit(
     'turn',
     createEventEnvelope(
-      payload['type'] as string,
-      payload,
+      payload['type'] as TurnEvent['type'],
+      payload as TurnEvent,
       { sessionId, source: 'test', traceId },
-    ) as Parameters<RuntimeEventBus['emit']>[1],
+    ),
   );
 }
 
@@ -61,10 +62,10 @@ function emitTask(bus: RuntimeEventBus, payload: Record<string, unknown>, sessio
   bus.emit(
     'tasks',
     createEventEnvelope(
-      payload['type'] as string,
-      payload,
+      payload['type'] as TaskEvent['type'],
+      payload as TaskEvent,
       { sessionId, source: 'test', traceId },
-    ) as Parameters<RuntimeEventBus['emit']>[1],
+    ),
   );
 }
 
