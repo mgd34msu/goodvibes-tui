@@ -39,15 +39,18 @@ export function renderQrMatrix(
 
   const lines: Line[] = [];
 
-  // Prepend a single-row top quiet band of bg so the QR's first module row
-  // does not butt up against whatever chrome precedes it. Combined with the
-  // leftPad=1 on the horizontal axis, this keeps the finder-pattern square
-  // margin consistent on both axes.
+  // Prepend a half-height top quiet band: the BOTTOM half of this terminal row
+  // is white (QR bg) flush against the QR's first module row below; the TOP half
+  // is the terminal's default background (chrome). Using '▄' (LOWER HALF BLOCK)
+  // with fg = QR bg and no bg override achieves the half-height effect.
+  // Combined with the leftPad=1 on the horizontal axis, this keeps the
+  // finder-pattern square margin consistent on both axes without stealing a
+  // full row of vertical space.
   {
     const topBand = createEmptyLine(width);
     const endCol = Math.min(leftPad + cols + 1, width);
     for (let col = 0; col < endCol; col++) {
-      topBand[col] = createStyledCell(' ', { fg, bg });
+      topBand[col] = createStyledCell('▄', { fg: bg });
     }
     lines.push(topBand);
   }

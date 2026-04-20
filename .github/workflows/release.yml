@@ -90,21 +90,16 @@ jobs:
           bun-version: "1.3.10"
       - name: Install dependencies
         run: bun install
-      - name: Sync build surfaces
-        run: bun run scripts/prebuild.ts
       - name: Build binary (${{ matrix.target }})
-        run: |
-          mkdir -p dist
-          bun build src/main.ts \
-            --compile \
-            --target=${{ matrix.bun_target }} \
-            --outfile dist/${{ matrix.app_artifact }}
-          bun build src/daemon/cli.ts \
-            --compile \
-            --target=${{ matrix.bun_target }} \
-            --outfile dist/${{ matrix.daemon_artifact }}
+        # Delegates to scripts/build.ts which runs prebuild, applies
+        # --external sqlite-vec flags (F5), copies native addons, and
+        # builds both TUI and daemon binaries for the given target.
+        run: bun run scripts/build.ts --target ${{ matrix.target }}
       - name: Report binary size
         run: ls -lh dist/${{ matrix.app_artifact }} dist/${{ matrix.daemon_artifact }}
+      - name: Post-build smoke test (linux-x64 only)
+        if: matrix.target == 'linux-x64'
+        run: bun run smoke:daemon
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -112,6 +107,7 @@ jobs:
           path: |
             dist/${{ matrix.app_artifact }}
             dist/${{ matrix.daemon_artifact }}
+            dist/lib/
           retention-days: 1
 
   install-smoke:

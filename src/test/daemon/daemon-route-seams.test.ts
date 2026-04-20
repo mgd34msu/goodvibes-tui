@@ -127,6 +127,8 @@ describe('daemon route seams', () => {
         stopWatcher: () => null,
         runWatcherNow: async () => null,
       },
+      // SDK 0.21.20: swapManager added to DaemonSystemRouteContext
+      swapManager: null,
     }, new Request('http://127.0.0.1/api/system/status'));
 
     const response = await handlers.getServiceStatus();

@@ -1,5 +1,5 @@
 import { execSync, spawnSync } from 'child_process';
-import { statSync, mkdirSync, existsSync } from 'fs';
+import { statSync, mkdirSync, existsSync, copyFileSync } from 'fs';
 import { join } from 'path';
 
 /**
@@ -20,17 +20,35 @@ import { join } from 'path';
 const root = process.cwd();
 const distDir = join(root, 'dist');
 
-const TARGETS: Record<string, { bunTarget: string; outfile: string }> = {
-  'linux-x64': { bunTarget: 'bun-linux-x64', outfile: 'goodvibes-linux-x64' },
-  'linux-arm64': { bunTarget: 'bun-linux-arm64', outfile: 'goodvibes-linux-arm64' },
-  'darwin-x64': { bunTarget: 'bun-darwin-x64', outfile: 'goodvibes-macos-x64' },
-  'darwin-arm64': { bunTarget: 'bun-darwin-arm64', outfile: 'goodvibes-macos-arm64' },
+const TARGETS: Record<string, { bunTarget: string; outfile: string; sqliteVecPackage: string }> = {
+  'linux-x64': { bunTarget: 'bun-linux-x64', outfile: 'goodvibes-linux-x64', sqliteVecPackage: 'sqlite-vec-linux-x64' },
+  'linux-arm64': { bunTarget: 'bun-linux-arm64', outfile: 'goodvibes-linux-arm64', sqliteVecPackage: 'sqlite-vec-linux-arm64' },
+  'darwin-x64': { bunTarget: 'bun-darwin-x64', outfile: 'goodvibes-macos-x64', sqliteVecPackage: 'sqlite-vec-darwin-x64' },
+  'darwin-arm64': { bunTarget: 'bun-darwin-arm64', outfile: 'goodvibes-macos-arm64', sqliteVecPackage: 'sqlite-vec-darwin-arm64' },
+};
+
+// F5: sqlite-vec native addon must be shipped alongside binaries.
+// Map from package name to the .so/.dylib filename inside that package.
+const SQLITE_VEC_NATIVE_FILENAMES: Record<string, string> = {
+  'sqlite-vec-linux-x64': 'vec0.so',
+  'sqlite-vec-linux-arm64': 'vec0.so',
+  'sqlite-vec-darwin-x64': 'vec0.dylib',
+  'sqlite-vec-darwin-arm64': 'vec0.dylib',
 };
 
 const args = process.argv.slice(2);
 const buildAll = args.includes('--all');
+const daemonOnly = args.includes('--daemon-only');
 const targetIdx = args.indexOf('--target');
 const specificTarget = targetIdx !== -1 ? args[targetIdx + 1] : null;
+
+// Daemon-only aliases: "daemon-linux-x64" → "linux-x64" in daemon-only mode
+const DAEMON_ONLY_ALIASES: Record<string, string> = {
+  'daemon-linux-x64': 'linux-x64',
+  'daemon-linux-arm64': 'linux-arm64',
+  'daemon-macos-x64': 'darwin-x64',
+  'daemon-macos-arm64': 'darwin-arm64',
+};
 
 // Ensure dist/ exists
 if (!existsSync(distDir)) {
@@ -51,35 +69,79 @@ function getFileSize(filePath: string): number {
   }
 }
 
-function buildTarget(name: string, config: { bunTarget: string; outfile: string }): boolean {
+function buildTarget(
+  name: string,
+  config: { bunTarget: string; outfile: string; sqliteVecPackage: string },
+  opts: { daemonOnly?: boolean } = {},
+): boolean {
   const outPath = join(distDir, config.outfile);
-  const cmd = [
-    'bun build src/main.ts',
+
+  // F5: External flag prevents sqlite-vec .so from being bundled into the single-file
+  // binary (Bun compile cannot embed native addons). The .so is copied to dist/lib/
+  // and shipped in a tarball alongside the binary.
+  const externalFlags = [
+    '--external', 'sqlite-vec',
+    '--external', config.sqliteVecPackage,
+  ];
+
+  console.log(`\nBuilding ${name}${opts.daemonOnly ? ' (daemon only)' : ''} → dist/${config.outfile}`);
+
+  if (!opts.daemonOnly) {
+    const tuiResult = spawnSync('bun', [
+      'build', 'src/main.ts',
+      '--compile',
+      `--target=${config.bunTarget}`,
+      '--outfile', outPath,
+      ...externalFlags,
+    ], { cwd: root, stdio: 'inherit' });
+
+    if (tuiResult.status !== 0) {
+      console.error(`  TUI FAILED (exit ${tuiResult.status})`);
+      return false;
+    }
+  }
+
+  // Derive daemon outfile from TUI outfile: strip 'goodvibes-' prefix from config.outfile
+  // and prefix with 'goodvibes-daemon-' so the mapping stays in one place (TARGETS).
+  const daemonSuffix = config.outfile.replace(/^goodvibes-/, '');
+  const daemonOutfile = `goodvibes-daemon-${daemonSuffix}`;
+  const daemonOutPathFull = join(distDir, daemonOutfile);
+
+  console.log(`  Building daemon → dist/${daemonOutfile}`);
+  const daemonResult = spawnSync('bun', [
+    'build', 'src/daemon/cli.ts',
     '--compile',
     `--target=${config.bunTarget}`,
-    `--outfile ${outPath}`,
-  ].join(' ');
-
-  console.log(`\nBuilding ${name} → dist/${config.outfile}`);
-  console.log(`  ${cmd}`);
-
-  const result = spawnSync('bun', [
-    'build', 'src/main.ts',
-    '--compile',
-    `--target=${config.bunTarget}`,
-    '--outfile', outPath,
+    '--outfile', daemonOutPathFull,
+    ...externalFlags,
   ], { cwd: root, stdio: 'inherit' });
 
-  if (result.status !== 0) {
-    console.error(`  FAILED (exit ${result.status})`);
+  if (daemonResult.status !== 0) {
+    console.error(`  DAEMON FAILED (exit ${daemonResult.status})`);
     return false;
   }
 
-  const size = getFileSize(outPath);
-  if (size >= 0) {
-    console.log(`  OK — ${formatBytes(size)}`);
-  } else {
-    console.log('  OK (size unknown)');
+  // F5: Copy sqlite-vec native addon to dist/lib/<package>/<filename>
+  const nativeFilename = SQLITE_VEC_NATIVE_FILENAMES[config.sqliteVecPackage];
+  if (nativeFilename !== undefined) {
+    const srcAddon = join(root, 'node_modules', config.sqliteVecPackage, nativeFilename);
+    const libDir = join(distDir, 'lib', config.sqliteVecPackage);
+    mkdirSync(libDir, { recursive: true });
+    if (existsSync(srcAddon)) {
+      copyFileSync(srcAddon, join(libDir, nativeFilename));
+      console.log(`  Copied native addon: lib/${config.sqliteVecPackage}/${nativeFilename}`);
+    } else {
+      console.warn(`  WARN: native addon not found at ${srcAddon} — sqlite-vec will be unavailable`);
+    }
+  }
+
+  if (!opts.daemonOnly) {
+    const size = getFileSize(outPath);
+    if (size >= 0) {
+      console.log(`  TUI OK — ${formatBytes(size)}`);
+    } else {
+      console.log('  TUI OK (size unknown)');
+    }
   }
 
   return true;
@@ -90,16 +152,25 @@ console.log('Running prebuild...');
 execSync('bun run scripts/prebuild.ts', { cwd: root, stdio: 'inherit' });
 
 // --- Determine targets to build ---
-let targetsToBuild: [string, { bunTarget: string; outfile: string }][];
+let targetsToBuild: [string, { bunTarget: string; outfile: string; sqliteVecPackage: string }][];
+
+// Resolve daemon-only alias if provided
+let resolvedTarget = specificTarget;
+let isDaemonOnly = daemonOnly;
+if (specificTarget && DAEMON_ONLY_ALIASES[specificTarget]) {
+  resolvedTarget = DAEMON_ONLY_ALIASES[specificTarget];
+  isDaemonOnly = true;
+}
 
 if (buildAll) {
   targetsToBuild = Object.entries(TARGETS);
-} else if (specificTarget) {
-  if (!TARGETS[specificTarget]) {
-    console.error(`Unknown target '${specificTarget}'. Available: ${Object.keys(TARGETS).join(', ')}`);
+} else if (resolvedTarget) {
+  if (!TARGETS[resolvedTarget]) {
+    const available = [...Object.keys(TARGETS), ...Object.keys(DAEMON_ONLY_ALIASES)].join(', ');
+    console.error(`Unknown target '${specificTarget}'. Available: ${available}`);
     process.exit(1);
   }
-  targetsToBuild = [[specificTarget, TARGETS[specificTarget]]];
+  targetsToBuild = [[resolvedTarget, TARGETS[resolvedTarget]]];
 } else {
   // Default: build native platform binary
   const platform = process.platform;
@@ -122,7 +193,7 @@ console.log(`\nBuilding ${targetsToBuild.length} target(s)...`);
 const results: { name: string; success: boolean; size: number }[] = [];
 
 for (const [name, config] of targetsToBuild) {
-  const success = buildTarget(name, config);
+  const success = buildTarget(name, config, { daemonOnly: isDaemonOnly });
   const outPath = join(distDir, config.outfile);
   results.push({ name, success, size: getFileSize(outPath) });
 }

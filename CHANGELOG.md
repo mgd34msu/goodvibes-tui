@@ -4,6 +4,41 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [UNRELEASED]
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` to 0.21.20. Picks up `swapManager: WorkspaceSwapManagerLike | null` field in `DaemonSystemRouteContext`; test mocks updated accordingly.
+- `build:daemon:*` convenience scripts in `package.json` now delegate to `scripts/build.ts` (with `--target daemon-<platform>` aliases) so daemon-only builds include `--external sqlite-vec` flags and native addon copy. Previously these scripts bypassed the build script and omitted externalization.
+- Added `--daemon-home=<path>` and `--working-dir=<path>` CLI flags to `src/cli-flags.ts` and `src/daemon/cli.ts`. Flags set `GOODVIBES_DAEMON_HOME` and `GOODVIBES_WORKING_DIR` env vars before directory resolution, enabling per-launch home and workspace overrides without env var pre-flight.
+- Added `smoke:daemon` script (`scripts/post-build-smoke.ts`) that spawns the linux-x64 daemon binary, polls `/api/health`, curls `/api/memory/vector`, and asserts no sqlite-vec error in the response or stderr. Exits 0/1. Wired into `.github/workflows/release.yml` after the linux-x64 binary build step.
+
+### Fixed
+- **smoke** — `scripts/post-build-smoke.ts` port contract corrected: ConfigManager reads port from `homeDir/.goodvibes/tui/settings.json` (not `GOODVIBES_CONTROL_PLANE_PORT` env var). Smoke test now writes a tmp settings.json with port 47921 and passes `GOODVIBES_DAEMON_HOME` to the daemon process. Health check readiness tightened to `status === 200 || status === 401` (drops loose `< 500`).
+- **M-3** — `src/cli-flags.ts` `--help` text now documents flag precedence explicitly: `flag > env var > system default`.
+- **M-4** — `.github/workflows/release.yml` inline build step replaced with `bun run scripts/build.ts --target ${{ matrix.target }}` to eliminate ~35-line duplication with `scripts/build.ts`. Redundant darwin case block in the shell `case` statement removed.
+- **M-5 (scope)** — `README.md` version badge updated to 0.19.10 to match `package.json`. `docs/foundation-artifacts/operator-contract.json` regenerated as a side-effect of SDK 0.21.20 bump (no TUI logic change).
+- **M-5 (qr)** — `src/renderer/qr-renderer.ts`: top quiet band changed from a full-height space row to a half-height lower-block row (`▄` with fg = QR background, no bg override). Saves one terminal row of vertical space without disturbing finder-pattern alignment.
+- **C-3** — Added `src/test/cli-flags.test.ts` with 9 tests covering `--daemon-home`, `--working-dir`, precedence semantics, combined parsing, help text content, and existing flag regression.
+- **W-x (test)** — `standalone-routes.test.ts`: corrected 4 test assertions that used wrong API shapes (`GET /api/companion/chat/sessions` list route does not exist; `POST` returns `{sessionId, createdAt}` not `{id}`; `GET /api/providers/current` returns `{model, configured}` not `{currentModel, provider}`; replaced non-existent `GET /api/sessions/:id/events` with verified `GET /api/sessions`). Replaced WebSocket control-plane test with correct HTTP `GET /api/control-plane` (the route is HTTP, not WS).
+- **W-x (types)** — `daemon-route-seams.test.ts`: added `swapManager: null` to `DaemonSystemRouteContext` mock to satisfy SDK 0.21.20 type addition.
+- **Foundation artifacts gate** — regenerated `docs/foundation-artifacts/operator-contract.json` after SDK bump (was pinned to 0.21.16).
+
+---
+
+<!-- Prior [UNRELEASED] content from SDK 0.21.18 cycle merged below -->
+
+### Changed (SDK 0.21.18)
+- Upgraded `@pellux/goodvibes-sdk` to 0.21.18. Picks up `DaemonApiRouteExtension` type on `dispatchDaemonApiRoutes`; `providers` and `turn` are confirmed in `DEFAULT_DOMAINS` for all daemon postures.
+
+### Fixed
+- **F2** — Standalone daemon (`goodvibes-daemon-*`) now loads persisted providers from disk at startup via `loadPersistedProviders()` and registers them with `ProviderRegistry`. A background LAN scan runs on startup and merges discovered servers into the registry. Provider count on a fresh standalone daemon is now non-zero when providers have been previously discovered.
+- **F5** — Both TUI and daemon binaries are now compiled with `--external sqlite-vec --external sqlite-vec-<platform>` so the native addon is not embedded (Bun compile cannot embed `.so`/`.dylib`). The native addon is copied to `dist/lib/<platform-package>/` alongside the binary. GitHub release workflow updated to include `dist/lib/` in uploaded artifacts.
+- **F11** — Documented that `.goodvibes/memory/` is workspace-scoped and only created when `runtime_state` tool is invoked in `mode: memory` during an orchestrator session. Not a bug for TUI-only workspaces.
+- **F12** — Documented that `DELETE /api/companion/chat/sessions/:id` is an audit-friendly soft-close returning `{status:"closed"}`; session record remains readable. This is intentional SDK behavior, not a bug.
+- **F13** — Documented that companion-chat messages use `{content}` (not `{body}`) because `CompanionChatMessage` is a pure-text interface distinct from `SharedSessionMessage`. Both field names are intentional and reflect different message schemas.
+- **F14** — Confirmed `providers` and `turn` are in `DEFAULT_DOMAINS` at SDK level for both daemon postures. UAT Run 2 discrepancy traced to explicit `?domains=` query param in test client, not a bug in the daemon.
+- **F15** — Documented that `CompanionChatRateLimiter` is wired correctly (10/min per session, 30/min per client by default). Rate limit is not reachable via sequential HTTP due to test RTT. Concurrent `Promise.all` approach documented in UAT-VALIDATION.md. SDK gap for env-based threshold override tracked in decisions.md.
+
 ## [0.19.10] - 2026-04-19
 
 ### Changed
