@@ -58,6 +58,7 @@ describe('daemon telemetry routes', () => {
 
     const handlers = createDaemonTelemetryRouteHandlers({
       telemetryApi,
+      ingestSink: null,
       resolveAuthenticatedPrincipal: (req: Request) => {
         const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
         return token === 'test-token'
@@ -105,6 +106,7 @@ describe('daemon telemetry routes', () => {
 
     const handlers = createDaemonTelemetryRouteHandlers({
       telemetryApi,
+      ingestSink: null,
       resolveAuthenticatedPrincipal: (req: Request) => {
         const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? '';
         return token === 'limited-token'

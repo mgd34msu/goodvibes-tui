@@ -4,6 +4,21 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.16] - 2026-04-20
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` to 0.21.27. Picks up three F-closures (all internal to the SDK; TUI requires zero active wiring):
+  1. **F7 closed** — OTLP POST receivers implemented at `/api/v1/telemetry/otlp/v1/{logs,traces,metrics}`. JSON-only (`application/json`); protobuf returns 415. `ingestSink` wired to `TelemetryApiService` in daemon router (not null). Ingested records enter the ring buffer (~500 events) with `source: 'otlp-ingest'` and are observable on `GET /api/v1/telemetry/events`. Note: prior "by design" framing for this failure was incorrect — it was a missing implementation.
+  2. **F5b closed** — SDK runtime sqlite-vec resolver (`resolveSqliteVecPath()` in `memory-vector-store.js`) now detects the bundled-executable case (`import.meta.url.includes('$bunfs')`) and resolves the addon from `dirname(process.execPath)/lib/sqlite-vec-<os>-<arch>/vec0.<suffix>`. Completes the full chain with F5a (build-side `.so` copy to `dist/lib/`, landed TUI 0.19.12). Smoke-confirmed: `GET /api/memory/vector` returns 200.
+  3. **F-PROV-009 closed** — `secretsResolutionSkipped: true` now actually emitted on `GET /api/providers` when `secretsManager` is null, plumbed end-to-end in 0.21.27. Prior 0.21.25 claim of this fix was incomplete.
+- TUI version bumped to 0.19.16.
+- Regenerated `docs/foundation-artifacts/operator-contract.json` — now includes `telemetry.otlp.logs`, `telemetry.otlp.metrics`, `telemetry.otlp.traces` method entries reflecting SDK 0.21.27 OTLP ingest surface.
+
+### Fixed
+- `src/test/daemon/telemetry-routes.test.ts`: added `ingestSink: null` to both `createDaemonTelemetryRouteHandlers` invocations to satisfy the new required-but-nullable `TelemetryRouteContext.ingestSink` field introduced in SDK 0.21.27.
+
+---
+
 ## [0.19.15] - 2026-04-20
 
 ### Fixed
