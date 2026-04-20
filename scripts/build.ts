@@ -131,7 +131,11 @@ function buildTarget(
       copyFileSync(srcAddon, join(libDir, nativeFilename));
       console.log(`  Copied native addon: lib/${config.sqliteVecPackage}/${nativeFilename}`);
     } else {
-      console.warn(`  WARN: native addon not found at ${srcAddon} — sqlite-vec will be unavailable`);
+      throw new Error(
+        `Build failed: native addon not found at ${srcAddon}.\n` +
+        `Platform: ${config.sqliteVecPackage}\n` +
+        `Run 'bun install' to ensure ${config.sqliteVecPackage} is installed in node_modules/.`
+      );
     }
   }
 

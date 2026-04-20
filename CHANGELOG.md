@@ -4,6 +4,19 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.14] - 2026-04-20
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` to 0.21.26. Picks up: (1) **F16b end-to-end fix** — daemon facade now derives `resolveDefaultProviderModel` internally from `providerRegistry.getCurrentModel()`; TUI requires zero active wiring; companion-chat session creation auto-resolves current provider/model or returns `400 NO_MODEL_CONFIGURED`; (2) **scheduler.capacity in method catalog** — `scheduler.capacity` descriptor added to `builtinGatewayRuntimeMethodDescriptors`; now appears in regenerated `operator-contract.json`; (3) **CI flake fixed** — `cache-invariants.test.ts` rewritten to synchronous emit pattern (no TUI impact).
+- TUI version bumped to 0.19.14.
+- Regenerated `docs/foundation-artifacts/operator-contract.json` — now includes `scheduler.capacity` method entry reflecting SDK 0.21.26 builtin catalog.
+
+### Fixed
+- **F16b** — Marked resolved in SDK 0.21.26 / TUI 0.19.14. Daemon facade derives the provider/model resolver internally; no TUI wiring required. `.goodvibes/memory/failures.json` flipped from `partially-resolved` to `resolved`.
+- **build.ts hardening** — `scripts/build.ts`: native `.so` missing from `node_modules/` now throws `Error` (hard fail) instead of emitting `console.warn` and continuing. Prevents silent builds that produce non-functional binaries. Descriptive error includes the expected source path and the platform package name. Belt-and-suspenders smoke-test hard-fail at `scripts/post-build-smoke.ts:87-90` retained.
+
+---
+
 ## [0.19.13] - 2026-04-20
 
 ### Changed
