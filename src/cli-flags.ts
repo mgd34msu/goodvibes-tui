@@ -34,7 +34,7 @@ export function parseCliFlags(argv: readonly string[], binary = 'goodvibes'): Cl
         '                           Format: provider:modelId (e.g. inception:mercury-2)',
         '                           If provider:modelId format is used, --provider is inferred',
         '  --daemon-home=<path>     Override daemon home (precedence: flag > GOODVIBES_DAEMON_HOME env > ~/.goodvibes/daemon)',
-        '  --working-dir=<path>     Override working directory (precedence: flag > GOODVIBES_WORKING_DIR env > process.cwd())',
+        '  --working-dir=<path>     Override working directory (precedence: flag > GOODVIBES_WORKING_DIR env > <cwd>)',
         '  --help, -h               Show this help message',
       ].join('\n'));
       process.exit(0);

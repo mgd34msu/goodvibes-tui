@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.12] - 2026-04-19
+
+### Fixed
+- **Architecture gate** — `src/panels/builtin/session.ts`: removed ambient `homedir()` calls in the `qr-code` panel factory. `daemonHomeDir` is now injected via `BuiltinPanelDeps` and resolved at the composition root (`src/runtime/bootstrap-shell.ts`) as `join(services.homeDirectory, '.goodvibes', 'daemon')`. Satisfies the `no-ambient-root-discovery-in-reusable-code` architecture rule.
+- **Architecture gate** — `src/cli-flags.ts`: `--help` text contained the literal string `process.cwd()` which matched the architecture rule pattern `/\bprocess\.cwd\(\)/`. Changed to `<cwd>` — functionally equivalent documentation, no match.
+- **CI orphan** — TUI 0.19.11 (tag `v0.19.11`, commit `26becbb`) was pushed but both CI workflows failed at `architecture:check`. No npm artifact was published. Per project pattern, retag is avoided; bumping to 0.19.12 instead.
+
+---
+
 ## [0.19.11] - 2026-04-19
 
 ### Changed

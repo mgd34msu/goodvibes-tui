@@ -78,6 +78,11 @@ export interface BuiltinPanelDeps {
   worktreeRegistry: WorktreeRegistry;
   /** Shared sandbox session registry for sandbox surfaces and tools. */
   sandboxSessionRegistry: SandboxSessionRegistry;
+  /**
+   * Resolved daemon home directory (e.g. `~/.goodvibes/daemon`) — owned by the composition root
+   * and passed explicitly so panel factories do not discover cwd/home implicitly.
+   */
+  daemonHomeDir?: string;
   /** Session memory store for context and token budget panels. */
   sessionMemoryStore?: SessionMemoryStore;
   /** Execution plan manager for plan dashboard panels. */
