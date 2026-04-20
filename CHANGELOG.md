@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.15] - 2026-04-20
+
+### Fixed
+- **CI orphan recovery** — 0.19.14 was tagged and pushed (`370f94c`, tag `v0.19.14`) but the Release CI matrix failed at the `Build darwin-arm64` and `Build linux-arm64` steps; no npm artifact was published. Bumped to 0.19.15 per project pattern (no retag).
+- **Cross-target build conditional** — `scripts/build.ts`: the hard-fail on missing sqlite-vec native addon is now conditional on whether the build target matches the runner's own platform. Same-platform builds still throw (`Error`) — the addon must be present for a native build to succeed. Cross-platform builds (e.g. linux-x64 runner targeting linux-arm64 or darwin-arm64) now emit `console.warn(...)` and continue — those platforms' addons are not installed by `bun install` on a different-architecture runner; the target-native CI runner is responsible for that step.
+
+---
+
 ## [0.19.14] - 2026-04-20
 
 ### Changed
