@@ -16,6 +16,11 @@ import {
   formatConnectionBlock,
 } from '@pellux/goodvibes-sdk/platform/pairing/index';
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
+import {
+  scan,
+  loadPersistedProviders,
+  persistProviders,
+} from '@pellux/goodvibes-sdk/platform/discovery/index';
 
 import { parseCliFlags } from '../cli-flags.ts';
 type DaemonCliOwnership = {
@@ -58,8 +63,8 @@ function readBootstrapPassword(credentialPath: string): string | undefined {
 
 function resolveDaemonCliOwnership(): DaemonCliOwnership {
   return {
-    workingDirectory: process.cwd(),
-    homeDirectory: homedir(),
+    workingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
+    homeDirectory: process.env['GOODVIBES_DAEMON_HOME'] ?? homedir(),
   };
 }
 
@@ -72,12 +77,23 @@ function readDaemonCliTokens(env: NodeJS.ProcessEnv): DaemonCliTokens {
 }
 
 async function main(): Promise<void> {
+  // Parse CLI flags first so --daemon-home and --working-dir env vars are set
+  // before resolveDaemonCliOwnership() reads them.
+  const cliFlags = parseCliFlags(process.argv.slice(2), 'goodvibes-daemon');
+  if (cliFlags.daemonHome !== undefined) {
+    process.env['GOODVIBES_DAEMON_HOME'] = cliFlags.daemonHome;
+    logger.info('daemon: --daemon-home flag applied', { daemonHome: cliFlags.daemonHome });
+  }
+  if (cliFlags.workingDir !== undefined) {
+    process.env['GOODVIBES_WORKING_DIR'] = cliFlags.workingDir;
+    logger.info('daemon: --working-dir flag applied', { workingDir: cliFlags.workingDir });
+  }
+
   const { workingDirectory: workingDir, homeDirectory } = resolveDaemonCliOwnership();
   const config = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
   new GlobalNetworkTransportInstaller().install(config);
 
-  // Apply CLI flags — override settings.json before the provider registry is constructed
-  const cliFlags = parseCliFlags(process.argv.slice(2), 'goodvibes-daemon');
+  // Apply remaining CLI flags — override settings.json before the provider registry is constructed
   if (cliFlags.provider !== undefined) {
     config.set('provider.provider', cliFlags.provider);
     logger.info('daemon: --provider flag applied', { provider: cliFlags.provider });
@@ -95,6 +111,29 @@ async function main(): Promise<void> {
     getConversationTitle: () => 'goodvibes daemon',
     workingDir,
     homeDirectory,
+  });
+
+  // F2: Load persisted providers from disk so the provider registry is pre-populated
+  // on standalone daemon startup (same machinery the TUI uses after /scan).
+  const discoveryRoots = { homeDirectory, surfaceRoot: 'tui' };
+  const persistedProviders = loadPersistedProviders(discoveryRoots);
+  if (persistedProviders.length > 0) {
+    runtimeServices.providerRegistry.registerDiscoveredProviders(persistedProviders);
+    logger.info('daemon: loaded persisted providers', { count: persistedProviders.length });
+  }
+
+  // F2: Run a background LAN scan (non-blocking). Discovered servers are registered
+  // and persisted so subsequent daemon restarts benefit from the warm cache.
+  void scan().then((result) => {
+    if (result.servers.length > 0) {
+      runtimeServices.providerRegistry.registerDiscoveredProviders(result.servers);
+      persistProviders(discoveryRoots, result.servers);
+      logger.info('daemon: LAN scan complete', { found: result.servers.length });
+    } else {
+      logger.info('daemon: LAN scan found no servers');
+    }
+  }).catch((err: unknown) => {
+    logger.warn('daemon: LAN scan failed', { error: summarizeError(err) });
   });
 
   const userAuth = runtimeServices.localUserAuthManager;
