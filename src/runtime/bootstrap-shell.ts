@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import type { ConversationManager } from '../core/conversation';
 import type { Orchestrator } from '../core/orchestrator';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
@@ -130,6 +131,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     hookActivityTracker: services.hookActivityTracker,
     hookWorkbench: services.hookWorkbench,
     mcpRegistry: services.mcpRegistry,
+    daemonHomeDir: join(services.homeDirectory, '.goodvibes', 'daemon'),
   });
   services.panelManager.prewarmRegistered();
 
