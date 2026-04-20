@@ -166,6 +166,13 @@ export interface RuntimeServices {
   readonly modeManager: ModeManager;
   readonly fileUndoManager: FileUndoManager;
   readonly integrationHelpers: IntegrationHelperService;
+  /**
+   * Re-root path-bound stores (MemoryStore, ProjectIndex) to a new working directory.
+   * Called by WorkspaceSwapManager after the new directory has been verified.
+   * Stores that require a process restart emit a warn-level log; they continue serving
+   * the old path until the daemon restarts with the new --working-dir.
+   */
+  rerootStores(newWorkingDir: string): Promise<void>;
 }
 
 export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeServices {
@@ -544,5 +551,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     modeManager,
     fileUndoManager,
     integrationHelpers,
+    async rerootStores(newWorkingDir: string): Promise<void> {
+      const newMemoryDbPath = join(newWorkingDir, '.goodvibes', 'tui', 'memory.sqlite');
+      await memoryStore.reroot(newMemoryDbPath);
+      await projectIndex.reroot(newWorkingDir);
+    },
   };
 }

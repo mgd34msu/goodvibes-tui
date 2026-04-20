@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { ForensicsCollector } from '@pellux/goodvibes-sdk/platform/runtime/forensics/collector';
 import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import { PhasedToolExecutor } from '@pellux/goodvibes-sdk/platform/runtime/tools/phased-executor';
@@ -17,10 +18,10 @@ function emitTurn(
   bus.emit(
     'turn',
     createEventEnvelope(
-      payload['type'] as string,
-      payload,
+      payload['type'] as TurnEvent['type'],
+      payload as TurnEvent,
       { sessionId, source: 'test', traceId },
-    ) as Parameters<RuntimeEventBus['emit']>[1],
+    ),
   );
 }
 
