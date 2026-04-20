@@ -131,11 +131,28 @@ function buildTarget(
       copyFileSync(srcAddon, join(libDir, nativeFilename));
       console.log(`  Copied native addon: lib/${config.sqliteVecPackage}/${nativeFilename}`);
     } else {
-      throw new Error(
-        `Build failed: native addon not found at ${srcAddon}.\n` +
-        `Platform: ${config.sqliteVecPackage}\n` +
-        `Run 'bun install' to ensure ${config.sqliteVecPackage} is installed in node_modules/.`
-      );
+      // Determine whether this build target matches the runner's own platform.
+      // A cross-target build (e.g. linux-x64 runner building linux-arm64 or darwin-arm64)
+      // will not have the target platform's addon installed by `bun install`.
+      // In that case we warn and continue — the target-native CI runner owns that binary.
+      // For same-platform builds the addon MUST be present; we hard-fail.
+      const runnerPlatform = process.platform; // 'linux' | 'darwin' | 'win32'
+      const runnerArch = process.arch;         // 'x64' | 'arm64'
+      const runnerKey = `${runnerPlatform}-${runnerArch === 'arm64' ? 'arm64' : 'x64'}`;
+      const isSamePlatform = name === runnerKey;
+      if (isSamePlatform) {
+        throw new Error(
+          `Build failed: native addon not found at ${srcAddon}.\n` +
+          `Platform: ${config.sqliteVecPackage}\n` +
+          `Run 'bun install' to ensure ${config.sqliteVecPackage} is installed in node_modules/.`
+        );
+      } else {
+        console.warn(
+          `  [WARN] Cross-target build: native addon for ${config.sqliteVecPackage} not found at ${srcAddon}.` +
+          ` This runner (${runnerKey}) cannot bundle addons for target '${name}'.` +
+          ` The target-native runner is responsible for copying this addon.`
+        );
+      }
     }
   }
 
