@@ -4,6 +4,23 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.13] - 2026-04-20
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` to 0.21.25 (0.21.24 was CI-orphaned; 0.21.25 is the actual release). Picks up: (1) F16b — `resolveDefaultProviderModel` callback hook added to companion-chat-routes session-create handler (router plumbing pending, see below); (2) F17 — `POST /inputs/:iid/cancel` on non-queued state now returns `409 CANCEL_NOT_ALLOWED`; (3) F19 — `PATCH /api/channels/policies/:surface` handler restored; (4) F-PROV-009 — `secretsResolutionSkipped:true` on provider response when secrets store unavailable; (5) `GET /api/runtime/scheduler` capacity observability endpoint added.
+- TUI version bumped to 0.19.13.
+
+### Fixed
+- **F18** — `docs/uat/UAT-PLAN.md` UAT-WATCH-001 corrected: watcher creation body uses `label` field (not `name`). Steps now show `{"label":"<name>","kind":"poll","intervalMs":60000}` and note that the watcher `id` is derived from the `label` value. F18 note added to the test case.
+- **Failure tracker** — `.goodvibes/memory/failures.json` updated: F17, F19, F-PROV-009 marked resolved in SDK 0.21.25; F18 marked resolved in TUI 0.19.13; F16b marked partially-resolved (SDK hook merged, router plumbing incomplete — TUI wiring blocked pending SDK 0.21.26+); F5 already resolved in TUI 0.19.12.
+- **Foundation artifacts** — `docs/foundation-artifacts/operator-contract.json` regenerated to reflect SDK 0.21.25 (version field updated from 0.21.23 to 0.21.25).
+
+### Notes
+- **F16b wiring status**: SDK 0.21.25 added `resolveDefaultProviderModel` only to the companion-chat-routes handler. `DaemonHttpRouter` (router.js) does not yet thread this field from `DaemonHttpRouterContext` to `dispatchCompanionChatRoutes`. TUI cannot wire this without SDK completing the router context plumbing. No TUI code change is required until SDK exposes the hook in a public API surface (expected in a future SDK release).
+- **F5 build fix**: Already implemented in TUI 0.19.12 (`scripts/build.ts` + `scripts/post-build-smoke.ts`). The sqlite-vec native addon is copied to `dist/lib/sqlite-vec-linux-x64/vec0.so` at build time and the smoke test hard-fails if the file is absent.
+
+---
+
 ## [0.19.12] - 2026-04-19
 
 ### Fixed

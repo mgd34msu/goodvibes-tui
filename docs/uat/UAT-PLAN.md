@@ -1255,9 +1255,10 @@ The original plan covered auth, providers, sessions, chat, middleware, realtime,
 
 ## UAT-WATCH-001 | Watchers CRUD + start / stop / run
 **Surface:** Daemon HTTP 🟢
-**Steps:** `GET /api/watchers`; `POST /api/watchers` with a spec; `PATCH /api/watchers/:id`; `POST /api/watchers/:id/start|stop|run`; `DELETE /api/watchers/:id`.
-**Expected:** Lifecycle works. Run fires the watcher once and returns outcome.
+**Steps:** `GET /api/watchers`; `POST /api/watchers` with a spec (body: `{"label":"<name>","kind":"poll","intervalMs":60000}` — **field is `label`, not `name`**); `PATCH /api/watchers/:id`; `POST /api/watchers/:id/start|stop|run`; `DELETE /api/watchers/:id`.
+**Expected:** Lifecycle works. Run fires the watcher once and returns outcome. POST returns `{id, kind, label, state, ...}` — watcher id is derived from the `label` value.
 **Status:** [ ]
+**Note (F18):** The watcher creation body requires `label` (not `name`). Posting `{"name":...}` will be accepted but the `name` field is ignored; the response will include `label` not `name`.
 
 ## UAT-WS-001 | Web search query
 **Surface:** Daemon HTTP 🟢
