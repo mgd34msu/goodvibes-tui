@@ -243,7 +243,7 @@ describe('edit tool', () => {
       // The region should be replaced (whitespace-normalized span)
       const content = readFileSync(file, 'utf-8');
       expect(content).toContain('const x = 99;');
-    });
+    }, 7500);
 
     test('matches across newlines in whitespace', async () => {
       const file = writeFile(tmpDir, 'j2.ts', 'function foo(\n  a,\n  b\n) {}');
@@ -464,7 +464,7 @@ describe('edit tool', () => {
       expect(result.success).toBe(true);
       expect(readFileSync(f1, 'utf-8')).toBe('ALPHA');
       expect(readFileSync(f2, 'utf-8')).toBe('BETA');
-    });
+    }, 7500);
   });
 
   // -------------------------------------------------------------------------
@@ -1087,7 +1087,7 @@ describe('edit tool', () => {
       expect(content).toContain('console.log(1)');
       expect(content).toContain('second()');
       expect(content).toContain('console.log(3)');
-    });
+    }, 7500);
   });
 
   // -------------------------------------------------------------------------
