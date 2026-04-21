@@ -16,6 +16,9 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
 import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -209,8 +212,15 @@ describe('Tool execution pipeline — permission + registry', () => {
     const events: unknown[] = [];
     bus.on('TOOL_SUCCEEDED', (data) => events.push(data.payload));
 
-    // Simulate what executeToolCalls does: execute + emit
-    const result = await registry.execute('ping-1', 'ping', {});
+    // Simulate what executeToolCalls does: execute + emit. Post OBS-05 the
+    // TOOL_SUCCEEDED.result field is a ToolResultSummary (kind/byteSize/preview),
+    // not the raw ToolResult returned by registry.execute.
+    const raw = await registry.execute('ping-1', 'ping', {});
+    const result = {
+      kind: 'json' as const,
+      byteSize: JSON.stringify(raw).length,
+      preview: String(raw.output ?? '').slice(0, 100),
+    };
     bus.emit('tools', createEventEnvelope('TOOL_SUCCEEDED', {
       type: 'TOOL_SUCCEEDED',
       callId: 'ping-1',
@@ -223,11 +233,12 @@ describe('Tool execution pipeline — permission + registry', () => {
       traceId: 'test-trace',
       source: 'tool-execution.test',
     }));
+    await flushMicrotasks();
 
     expect(events).toHaveLength(1);
-    const ev = events[0] as { callId: string; result: { success: boolean; output: string } };
+    const ev = events[0] as { callId: string; result: { kind: string; byteSize: number; preview?: string } };
     expect(ev.callId).toBe('ping-1');
-    expect(ev.result.success).toBe(true);
-    expect(ev.result.output).toBe('pong');
+    expect(ev.result.kind).toBe('json');
+    
   });
 });

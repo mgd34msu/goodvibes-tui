@@ -3,15 +3,18 @@ import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/plat
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { TelemetryApiService } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
 
+
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 describe('TelemetryApiService', () => {
   let service: TelemetryApiService | null = null;
 
-  afterEach(() => {
+  afterEach(async () => {
     service?.dispose();
     service = null;
   });
 
-  test('captures canonical telemetry, normalized errors, synthesized spans, and OTLP views', () => {
+  test('captures canonical telemetry, normalized errors, synthesized spans, and OTLP views', async () => {
     const runtimeBus = new RuntimeEventBus();
     const runtimeStore = createRuntimeStore();
 
@@ -72,6 +75,7 @@ describe('TelemetryApiService', () => {
       traceId: '123e4567-e89b-12d3-a456-426614174000',
     }));
 
+    await flushMicrotasks();
     const snapshot = service.getSnapshot({ limit: 5 });
     expect(snapshot.capabilities.signals.events).toBe(true);
     expect(snapshot.runtime.sessionId).toBe('session-telemetry');

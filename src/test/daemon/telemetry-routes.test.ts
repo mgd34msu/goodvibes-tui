@@ -4,10 +4,13 @@ import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/plat
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { TelemetryApiService } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
 
+
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 describe('daemon telemetry routes', () => {
   let telemetryApi: TelemetryApiService | null = null;
 
-  afterEach(() => {
+  afterEach(async () => {
     telemetryApi?.dispose();
     telemetryApi = null;
   });
@@ -56,6 +59,7 @@ describe('daemon telemetry routes', () => {
       turnId: 'turn-route',
     }));
 
+    await flushMicrotasks();
     const handlers = createDaemonTelemetryRouteHandlers({
       telemetryApi,
       ingestSink: null,

@@ -382,17 +382,16 @@ export class ToolInspectorPanel extends BasePanel {
       this.markDirty();
     }));
 
+    // NOTE: After SDK OBS-05 (0.21.31), TOOL_SUCCEEDED/TOOL_FAILED.result is a ToolResultSummary
+    // ({ kind, byteSize, preview? }) rather than the raw ToolResult object. The previous
+    // `_policyAudit` extraction is no longer reachable via this event — policy audit metadata
+    // must be sourced from a different channel (approval broker / tool result store) if the
+    // Tool Inspector is to display it in future.
     this.unsubs.push(this.toolEvents.on('TOOL_SUCCEEDED', (data) => {
       const rec = this.records.findLast(r => r.callId === data.callId);
       if (rec) {
         rec.endMs = Date.now();
         rec.result = data.result;
-        if (data.result && typeof data.result === 'object') {
-          const audit = (data.result as { _policyAudit?: { actionTaken?: string; spillBackend?: string; policyId?: string } })._policyAudit;
-          rec.policyAction = audit?.actionTaken;
-          rec.spillBackend = audit?.spillBackend;
-          rec.outputClass = audit?.policyId ?? rec.outputClass;
-        }
         rec.resultSummary = summarizeResult(data.result);
       }
       this.markDirty();
@@ -404,12 +403,6 @@ export class ToolInspectorPanel extends BasePanel {
         rec.endMs = Date.now();
         rec.result = data.result;
         rec.error = data.error;
-        if (data.result && typeof data.result === 'object') {
-          const audit = (data.result as { _policyAudit?: { actionTaken?: string; spillBackend?: string; policyId?: string } })._policyAudit;
-          rec.policyAction = audit?.actionTaken;
-          rec.spillBackend = audit?.spillBackend;
-          rec.outputClass = audit?.policyId ?? rec.outputClass;
-        }
         rec.resultSummary = summarizeResult(data.result) ?? data.error;
       }
       this.markDirty();

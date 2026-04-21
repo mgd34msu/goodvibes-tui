@@ -311,9 +311,10 @@ describe('Orchestrator tool result reconciliation', () => {
     expect(toolResults).toHaveLength(2);
     expect(toolResults.map((r) => r.callId).sort()).toEqual(['dc-1', 'dc-2'].sort());
     for (const r of toolResults) {
-      const synth = r.result as SyntheticToolResult;
-      expect(synth.synthetic).toBe(true);
-      expect(synth.success).toBe(false);
+      // Post SDK OBS-05 (0.21.31): TOOL_FAILED.result is a ToolResultSummary; the
+      // underlying SyntheticToolResult reconciliation is covered by unit tests on
+      // buildSyntheticResult. Here we just confirm a result summary is attached.
+      expect(r.result).toBeDefined();
     }
   });
 

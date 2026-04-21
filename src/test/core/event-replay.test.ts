@@ -3,11 +3,14 @@ import { EventReplayQueue } from '@pellux/goodvibes-sdk/platform/core/event-repl
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
 
+
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 describe('EventReplayQueue', () => {
   let runtimeBus: RuntimeEventBus;
   let queue: EventReplayQueue;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     runtimeBus = new RuntimeEventBus();
     queue = new EventReplayQueue();
   });
@@ -16,7 +19,7 @@ describe('EventReplayQueue', () => {
   // enqueue
   // ---------------------------------------------------------------------------
   describe('enqueue', () => {
-    test('returns a unique string ID', () => {
+    test('returns a unique string ID', async () => {
       const id1 = queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       const id2 = queue.enqueue('AGENT_COMPLETED', { id: 'a2' });
       expect(typeof id1).toBe('string');
@@ -24,7 +27,7 @@ describe('EventReplayQueue', () => {
       expect(id1).not.toBe(id2);
     });
 
-    test('enqueued event shows in stats as pending', () => {
+    test('enqueued event shows in stats as pending', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       const stats = queue.getStats();
       expect(stats.queued).toBe(1);
@@ -32,7 +35,7 @@ describe('EventReplayQueue', () => {
       expect(stats.acknowledged).toBe(0);
     });
 
-    test('multiple events accumulate', () => {
+    test('multiple events accumulate', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.enqueue('AGENT_FAILED', { id: 'a2', error: new Error('boom') });
       queue.enqueue('WORKFLOW_CHAIN_FAILED', { chainId: 'w1', reason: 'timeout' });
@@ -44,7 +47,7 @@ describe('EventReplayQueue', () => {
   // acknowledge
   // ---------------------------------------------------------------------------
   describe('acknowledge', () => {
-    test('marks event as acknowledged by ID', () => {
+    test('marks event as acknowledged by ID', async () => {
       const id = queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.acknowledge(id);
       const stats = queue.getStats();
@@ -52,18 +55,18 @@ describe('EventReplayQueue', () => {
       expect(stats.pending).toBe(0);
     });
 
-    test('acknowledge with unknown ID does not throw', () => {
+    test('acknowledge with unknown ID does not throw', async () => {
       expect(() => queue.acknowledge('nonexistent-id')).not.toThrow();
     });
 
-    test('acknowledging twice is idempotent', () => {
+    test('acknowledging twice is idempotent', async () => {
       const id = queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.acknowledge(id);
       queue.acknowledge(id);
       expect(queue.getStats().acknowledged).toBe(1);
     });
 
-    test('acknowledged events are not returned by onTurnComplete', () => {
+    test('acknowledged events are not returned by onTurnComplete', async () => {
       const id = queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.acknowledge(id);
       queue.onTurnComplete(); // turn 1 — past grace
@@ -77,7 +80,7 @@ describe('EventReplayQueue', () => {
   // acknowledgeWhere
   // ---------------------------------------------------------------------------
   describe('acknowledgeWhere', () => {
-    test('acknowledges matching events and returns count', () => {
+    test('acknowledges matching events and returns count', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'agent-abc' });
       queue.enqueue('AGENT_COMPLETED', { id: 'agent-def' });
       queue.enqueue('WORKFLOW_CHAIN_FAILED', { chainId: 'w1', reason: 'err' });
@@ -92,20 +95,20 @@ describe('EventReplayQueue', () => {
       expect(queue.getStats().pending).toBe(2);
     });
 
-    test('returns 0 when no events match', () => {
+    test('returns 0 when no events match', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'agent-abc' });
       const count = queue.acknowledgeWhere(() => false);
       expect(count).toBe(0);
     });
 
-    test('already-acknowledged events are skipped in count', () => {
+    test('already-acknowledged events are skipped in count', async () => {
       const id = queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.acknowledge(id);
       const count = queue.acknowledgeWhere(() => true);
       expect(count).toBe(0); // already acknowledged, not counted again
     });
 
-    test('can acknowledge by chainId predicate', () => {
+    test('can acknowledge by chainId predicate', async () => {
       queue.enqueue('WORKFLOW_STATE_CHANGED', { chainId: 'chain-123', from: 'engineering', to: 'reviewing' });
       queue.enqueue('WORKFLOW_CHAIN_FAILED', { chainId: 'chain-456', reason: 'err' });
 
@@ -121,14 +124,14 @@ describe('EventReplayQueue', () => {
   // onTurnComplete — turn mechanics
   // ---------------------------------------------------------------------------
   describe('onTurnComplete', () => {
-    test('no replays returned within grace period (turn 1, grace=1)', () => {
+    test('no replays returned within grace period (turn 1, grace=1)', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       // Turn 1: only 1 turn elapsed = grace period, no replay
       const replays = queue.onTurnComplete();
       expect(replays).toHaveLength(0);
     });
 
-    test('replay returned after grace period expires (turn 2)', () => {
+    test('replay returned after grace period expires (turn 2)', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete(); // turn 1: grace
       const replays = queue.onTurnComplete(); // turn 2: replay
@@ -136,7 +139,7 @@ describe('EventReplayQueue', () => {
       expect(replays[0].eventName).toBe('AGENT_COMPLETED');
     });
 
-    test('increments replayCount on each replay', () => {
+    test('increments replayCount on each replay', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete(); // grace
       const r1 = queue.onTurnComplete(); // replay 1
@@ -145,7 +148,7 @@ describe('EventReplayQueue', () => {
       expect(r2[0].replayCount).toBe(2);
     });
 
-    test('only unacknowledged events are replayed', () => {
+    test('only unacknowledged events are replayed', async () => {
       const id1 = queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.enqueue('AGENT_FAILED', { id: 'a2', error: new Error('x') });
       queue.acknowledge(id1);
@@ -155,7 +158,7 @@ describe('EventReplayQueue', () => {
       expect((replays[0].payload as Record<string, unknown>).id).toBe('a2');
     });
 
-    test('custom graceTurns=2 delays replay by 2 turns', () => {
+    test('custom graceTurns=2 delays replay by 2 turns', async () => {
       const slowQueue = new EventReplayQueue(3, 2);
       slowQueue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       slowQueue.onTurnComplete(); // turn 1: within grace
@@ -170,7 +173,7 @@ describe('EventReplayQueue', () => {
   // replay limits and dropping
   // ---------------------------------------------------------------------------
   describe('replay limits', () => {
-    test('event is dropped after maxReplays (default 3)', () => {
+    test('event is dropped after maxReplays (default 3)', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete(); // grace
       queue.onTurnComplete(); // replay 1
@@ -183,7 +186,7 @@ describe('EventReplayQueue', () => {
       expect(queue.getStats().queued).toBe(0);
     });
 
-    test('custom maxReplays=1 drops after single replay', () => {
+    test('custom maxReplays=1 drops after single replay', async () => {
       const strictQueue = new EventReplayQueue(1, 1);
       strictQueue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       strictQueue.onTurnComplete(); // grace
@@ -194,7 +197,7 @@ describe('EventReplayQueue', () => {
       expect(strictQueue.getStats().queued).toBe(0);
     });
 
-    test('dropped events do not re-appear in future turns', () => {
+    test('dropped events do not re-appear in future turns', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete(); // grace
       for (let i = 0; i < 5; i++) queue.onTurnComplete(); // exhaust and drop
@@ -203,7 +206,7 @@ describe('EventReplayQueue', () => {
       expect(late).toHaveLength(0);
     });
 
-    test('droppedCount accumulates across multiple events', () => {
+    test('droppedCount accumulates across multiple events', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.enqueue('AGENT_FAILED', { id: 'a2', error: new Error('x') });
       queue.onTurnComplete(); // grace for both
@@ -216,7 +219,7 @@ describe('EventReplayQueue', () => {
   // formatReplays
   // ---------------------------------------------------------------------------
   describe('formatReplays', () => {
-    test('first replay has [Replay] prefix only', () => {
+    test('first replay has [Replay] prefix only', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'agent-fa247908' });
       queue.onTurnComplete(); // grace
       const replays = queue.onTurnComplete(); // replay 1
@@ -225,7 +228,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).not.toMatch(/URGENT|Action Required/);
     });
 
-    test('second replay has [Replay][Action Required] prefix', () => {
+    test('second replay has [Replay][Action Required] prefix', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete(); // grace
       queue.onTurnComplete(); // replay 1
@@ -234,7 +237,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toMatch(/^\[Replay\]\[Action Required\]/);
     });
 
-    test('third replay has [Replay][URGENT] prefix', () => {
+    test('third replay has [Replay][URGENT] prefix', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete(); // grace
       queue.onTurnComplete(); // replay 1
@@ -244,7 +247,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toMatch(/^\[Replay\]\[URGENT\]/);
     });
 
-    test('AGENT_COMPLETED message includes agent ID', () => {
+    test('AGENT_COMPLETED message includes agent ID', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'agent-fa247908' });
       queue.onTurnComplete();
       const replays = queue.onTurnComplete();
@@ -253,7 +256,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toContain('completed');
     });
 
-    test('AGENT_FAILED message includes agent ID and error', () => {
+    test('AGENT_FAILED message includes agent ID and error', async () => {
       queue.enqueue('AGENT_FAILED', { id: 'agent-err', error: new Error('disk full') });
       queue.onTurnComplete();
       const replays = queue.onTurnComplete();
@@ -263,7 +266,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toContain('failed');
     });
 
-    test('WORKFLOW_STATE_CHANGED message includes chainId, from, to', () => {
+    test('WORKFLOW_STATE_CHANGED message includes chainId, from, to', async () => {
       queue.enqueue('WORKFLOW_STATE_CHANGED', { chainId: 'wrfc-f00ef799', from: 'engineering', to: 'reviewing' });
       queue.onTurnComplete();
       const replays = queue.onTurnComplete();
@@ -273,7 +276,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toContain('reviewing');
     });
 
-    test('WORKFLOW_CHAIN_PASSED message includes chainId', () => {
+    test('WORKFLOW_CHAIN_PASSED message includes chainId', async () => {
       queue.enqueue('WORKFLOW_CHAIN_PASSED', { chainId: 'wrfc-abc' });
       queue.onTurnComplete();
       const replays = queue.onTurnComplete();
@@ -282,7 +285,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toContain('passed');
     });
 
-    test('WORKFLOW_CHAIN_FAILED message includes chainId and reason', () => {
+    test('WORKFLOW_CHAIN_FAILED message includes chainId and reason', async () => {
       queue.enqueue('WORKFLOW_CHAIN_FAILED', { chainId: 'wrfc-f00ef799', reason: 'max attempts exceeded' });
       queue.onTurnComplete();
       const replays = queue.onTurnComplete();
@@ -291,7 +294,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toContain('max attempts exceeded');
     });
 
-    test('message includes turns-ago count', () => {
+    test('message includes turns-ago count', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete(); // turn 1
       queue.onTurnComplete(); // turn 2 — replay 1 (2 turns elapsed)
@@ -300,7 +303,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toContain('turns ago');
     });
 
-    test('formatReplays with empty array returns empty array', () => {
+    test('formatReplays with empty array returns empty array', async () => {
       expect(queue.formatReplays([])).toEqual([]);
     });
   });
@@ -309,7 +312,7 @@ describe('EventReplayQueue', () => {
   // getStats
   // ---------------------------------------------------------------------------
   describe('getStats', () => {
-    test('initial stats are all zero', () => {
+    test('initial stats are all zero', async () => {
       expect(queue.getStats()).toEqual({
         queued: 0,
         acknowledged: 0,
@@ -319,14 +322,14 @@ describe('EventReplayQueue', () => {
       });
     });
 
-    test('replayed count tracks events that have been replayed at least once', () => {
+    test('replayed count tracks events that have been replayed at least once', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete(); // grace
       queue.onTurnComplete(); // replay 1
       expect(queue.getStats().replayed).toBe(1);
     });
 
-    test('stats remain consistent across multiple enqueue/ack cycles', () => {
+    test('stats remain consistent across multiple enqueue/ack cycles', async () => {
       const id1 = queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.enqueue('AGENT_FAILED', { id: 'a2', error: new Error('x') });
       queue.acknowledge(id1);
@@ -342,7 +345,7 @@ describe('EventReplayQueue', () => {
   // clear
   // ---------------------------------------------------------------------------
   describe('clear', () => {
-    test('clear resets all state', () => {
+    test('clear resets all state', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       queue.onTurnComplete();
       queue.onTurnComplete();
@@ -357,7 +360,7 @@ describe('EventReplayQueue', () => {
       });
     });
 
-    test('after clear, new events start fresh', () => {
+    test('after clear, new events start fresh', async () => {
       queue.enqueue('AGENT_COMPLETED', { id: 'a1' });
       for (let i = 0; i < 5; i++) queue.onTurnComplete();
       queue.clear();
@@ -375,7 +378,7 @@ describe('EventReplayQueue', () => {
   // EventReplayQueue.attachToRuntimeBus
   // ---------------------------------------------------------------------------
   describe('attachToRuntimeBus', () => {
-    test('auto-enqueues AGENT_COMPLETED events from runtime bus', () => {
+    test('auto-enqueues AGENT_COMPLETED events from runtime bus', async () => {
       const detach = EventReplayQueue.attachToRuntimeBus(runtimeBus, queue);
       runtimeBus.emit('agents', createEventEnvelope('AGENT_COMPLETED', {
         type: 'AGENT_COMPLETED',
@@ -388,11 +391,12 @@ describe('EventReplayQueue', () => {
         traceId: 'test-trace',
         source: 'event-replay.test',
       }));
+      await flushMicrotasks();
       expect(queue.getStats().queued).toBe(1);
       detach();
     });
 
-    test('auto-enqueues AGENT_FAILED events from runtime bus', () => {
+    test('auto-enqueues AGENT_FAILED events from runtime bus', async () => {
       const detach = EventReplayQueue.attachToRuntimeBus(runtimeBus, queue);
       runtimeBus.emit('agents', createEventEnvelope('AGENT_FAILED', {
         type: 'AGENT_FAILED',
@@ -404,11 +408,12 @@ describe('EventReplayQueue', () => {
         traceId: 'test-trace',
         source: 'event-replay.test',
       }));
+      await flushMicrotasks();
       expect(queue.getStats().queued).toBe(1);
       detach();
     });
 
-    test('detach function stops further enqueuing', () => {
+    test('detach function stops further enqueuing', async () => {
       const detach = EventReplayQueue.attachToRuntimeBus(runtimeBus, queue);
       detach();
       runtimeBus.emit('agents', createEventEnvelope('AGENT_COMPLETED', {
@@ -422,10 +427,11 @@ describe('EventReplayQueue', () => {
         traceId: 'test-trace',
         source: 'event-replay.test',
       }));
+      await flushMicrotasks();
       expect(queue.getStats().queued).toBe(0);
     });
 
-    test('multiple tracked events each enqueue independently', () => {
+    test('multiple tracked events each enqueue independently', async () => {
       const detach = EventReplayQueue.attachToRuntimeBus(runtimeBus, queue);
       runtimeBus.emit('agents', createEventEnvelope('AGENT_COMPLETED', {
         type: 'AGENT_COMPLETED',
@@ -448,6 +454,7 @@ describe('EventReplayQueue', () => {
         traceId: 'test-trace',
         source: 'event-replay.test',
       }));
+      await flushMicrotasks();
       expect(queue.getStats().queued).toBe(2);
       detach();
     });
@@ -457,7 +464,7 @@ describe('EventReplayQueue', () => {
   // formatReplays — low maxReplays
   // ---------------------------------------------------------------------------
   describe('formatReplays with low maxReplays', () => {
-    test('maxReplays=1: first replay has [Replay] prefix (replayCount=1 >= URGENT threshold)', () => {
+    test('maxReplays=1: first replay has [Replay] prefix (replayCount=1 >= URGENT threshold)', async () => {
       // With maxReplays=1: URGENT threshold = 1, Action Required = ceil(1*2/3)=1
       // Both thresholds equal 1, so URGENT wins
       const strictQueue = new EventReplayQueue(1, 1);
@@ -468,7 +475,7 @@ describe('EventReplayQueue', () => {
       expect(msgs[0]).toMatch(/^\[Replay\]\[URGENT\]/);
     });
 
-    test('maxReplays=2: first replay has [Replay] prefix, second has [Action Required]', () => {
+    test('maxReplays=2: first replay has [Replay] prefix, second has [Action Required]', async () => {
       // With maxReplays=2: URGENT threshold=2, Action Required=ceil(2*2/3)=ceil(1.33)=2
       // Both equal 2 — first replay (replayCount=1) gets plain [Replay]
       const twoQueue = new EventReplayQueue(2, 1);

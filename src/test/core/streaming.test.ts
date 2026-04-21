@@ -5,6 +5,9 @@ import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permi
 import { createTestConfigManager } from '../helpers/test-managers.ts';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
+
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 // ---------------------------------------------------------------------------
 // ConversationManager streaming block lifecycle
 // ---------------------------------------------------------------------------
@@ -12,11 +15,11 @@ import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 describe('ConversationManager streaming block lifecycle', () => {
   let cm: ConversationManager;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     cm = new ConversationManager(() => 80, createTestConfigManager());
   });
 
-  test('startStreamingBlock adds an empty assistant message', () => {
+  test('startStreamingBlock adds an empty assistant message', async () => {
     cm.addUserMessage('hello');
     cm.startStreamingBlock();
     const msgs = cm.getMessagesForLLM();
@@ -25,14 +28,14 @@ describe('ConversationManager streaming block lifecycle', () => {
     expect(msgs[1]).toMatchObject({ role: 'assistant', content: '' });
   });
 
-  test('updateStreamingBlock updates the last assistant message content', () => {
+  test('updateStreamingBlock updates the last assistant message content', async () => {
     cm.startStreamingBlock();
     cm.updateStreamingBlock('hello');
     const msgs = cm.getMessagesForLLM();
     expect(msgs[0]).toMatchObject({ role: 'assistant', content: 'hello' });
   });
 
-  test('updateStreamingBlock replaces content on each call (accumulated from caller)', () => {
+  test('updateStreamingBlock replaces content on each call (accumulated from caller)', async () => {
     cm.startStreamingBlock();
     cm.updateStreamingBlock('hel');
     cm.updateStreamingBlock('hello world');
@@ -40,7 +43,7 @@ describe('ConversationManager streaming block lifecycle', () => {
     expect((msgs[0] as { content: string }).content).toBe('hello world');
   });
 
-  test('finalizeStreamingBlock removes the streaming placeholder', () => {
+  test('finalizeStreamingBlock removes the streaming placeholder', async () => {
     cm.addUserMessage('hi');
     cm.startStreamingBlock();
     expect(cm.getMessagesForLLM()).toHaveLength(2);
@@ -49,7 +52,7 @@ describe('ConversationManager streaming block lifecycle', () => {
     expect(cm.getMessagesForLLM()).toHaveLength(1);
   });
 
-  test('full sequence: start -> multiple updates -> finalize -> addAssistantMessage', () => {
+  test('full sequence: start -> multiple updates -> finalize -> addAssistantMessage', async () => {
     cm.addUserMessage('question');
     cm.startStreamingBlock();
     cm.updateStreamingBlock('part ');
@@ -65,14 +68,14 @@ describe('ConversationManager streaming block lifecycle', () => {
     expect(msgs[1]).toMatchObject({ role: 'assistant', content: 'part one two' });
   });
 
-  test('startStreamingBlock when no messages adds assistant placeholder as first message', () => {
+  test('startStreamingBlock when no messages adds assistant placeholder as first message', async () => {
     cm.startStreamingBlock();
     const msgs = cm.getMessagesForLLM();
     expect(msgs).toHaveLength(1);
     expect(msgs[0]).toMatchObject({ role: 'assistant', content: '' });
   });
 
-  test('finalizeStreamingBlock only removes the last assistant message', () => {
+  test('finalizeStreamingBlock only removes the last assistant message', async () => {
     cm.addAssistantMessage('previous response');
     cm.addUserMessage('follow-up');
     cm.startStreamingBlock();
@@ -92,31 +95,34 @@ describe('ConversationManager streaming block lifecycle', () => {
 describe('RuntimeEventBus stream events', () => {
   let bus: RuntimeEventBus;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     bus = new RuntimeEventBus();
   });
 
-  test('turn:stream-start emits and is received by listener', () => {
+  test('turn:stream-start emits and is received by listener', async () => {
     let fired = false;
     bus.on('STREAM_START', () => { fired = true; });
     bus.emit('turn', createEventEnvelope('STREAM_START', { type: 'STREAM_START', turnId: 'turn-1' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
+    await flushMicrotasks();
     expect(fired).toBe(true);
   });
 
-  test('turn:stream-end emits and is received by listener', () => {
+  test('turn:stream-end emits and is received by listener', async () => {
     let fired = false;
     bus.on('STREAM_END', () => { fired = true; });
     bus.emit('turn', createEventEnvelope('STREAM_END', { type: 'STREAM_END', turnId: 'turn-1' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
+    await flushMicrotasks();
     expect(fired).toBe(true);
   });
 
-  test('turn:stream-delta emits content and accumulated values', () => {
+  test('turn:stream-delta emits content and accumulated values', async () => {
     const events: Array<{ content: string; accumulated: string }> = [];
     const cleanup = bus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload }) => events.push({ content: payload.content, accumulated: payload.accumulated }));
 
     bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'hello', accumulated: 'hello' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
     bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: ' world', accumulated: 'hello world' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
 
+    await flushMicrotasks();
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({ content: 'hello', accumulated: 'hello' });
     expect(events[1]).toMatchObject({ content: ' world', accumulated: 'hello world' });
@@ -124,7 +130,7 @@ describe('RuntimeEventBus stream events', () => {
     cleanup();
   });
 
-  test('turn:stream-start -> turn:stream-delta -> turn:stream-end sequence', () => {
+  test('turn:stream-start -> turn:stream-delta -> turn:stream-end sequence', async () => {
     let startCount = 0;
     let endCount = 0;
     const deltaEvents: Array<{ content: string; accumulated: string }> = [];
@@ -138,6 +144,7 @@ describe('RuntimeEventBus stream events', () => {
     bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'chunk2', accumulated: 'chunk1chunk2' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
     bus.emit('turn', createEventEnvelope('STREAM_END', { type: 'STREAM_END', turnId: 'turn-1' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
 
+    await flushMicrotasks();
     expect(startCount).toBe(1);
     expect(deltaEvents).toHaveLength(2);
     expect(endCount).toBe(1);
@@ -145,7 +152,7 @@ describe('RuntimeEventBus stream events', () => {
     cleanup();
   });
 
-  test('multiple listeners receive the same stream-delta event', () => {
+  test('multiple listeners receive the same stream-delta event', async () => {
     const received1: string[] = [];
     const received2: string[] = [];
 
@@ -154,18 +161,21 @@ describe('RuntimeEventBus stream events', () => {
 
     bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'test', accumulated: 'test' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
 
+    await flushMicrotasks();
     expect(received1).toEqual(['test']);
     expect(received2).toEqual(['test']);
   });
 
-  test('unsubscribed listener does not receive further events', () => {
+  test('unsubscribed listener does not receive further events', async () => {
     const received: string[] = [];
     const unsub = bus.on<Extract<TurnEvent, { type: 'STREAM_DELTA' }>>('STREAM_DELTA', ({ payload }) => received.push(payload.content));
 
     bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'before', accumulated: 'before' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
+    await flushMicrotasks();
     unsub();
     bus.emit('turn', createEventEnvelope('STREAM_DELTA', { type: 'STREAM_DELTA', turnId: 'turn-1', content: 'after', accumulated: 'before after' }, { sessionId: 'test', traceId: 'trace', source: 'streaming.test' }));
 
+    await flushMicrotasks();
     expect(received).toEqual(['before']);
   });
 });

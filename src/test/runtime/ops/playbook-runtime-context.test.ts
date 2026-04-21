@@ -4,6 +4,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
 import { createStuckTurnPlaybook } from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/stuck-turn';
@@ -101,6 +104,7 @@ describe('ops playbook runtime context', () => {
         { sessionId: 'sess-1', source: 'test' },
       ));
 
+      await flushMicrotasks();
       const playbook = createSessionUnrecoverablePlaybook(() => runtimeContext);
       const attemptsCheck = playbook.checks.find((check) => check.id === 'session.recovery-attempts');
       const stateFileCheck = playbook.checks.find((check) => check.id === 'session.state-file');
