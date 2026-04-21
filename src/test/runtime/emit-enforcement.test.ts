@@ -25,6 +25,9 @@ import { describe, test, expect } from 'bun:test';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
+
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 // ---------------------------------------------------------------------------
 // Allowlist — files permitted to call RuntimeEventBus.emit() directly
 // ---------------------------------------------------------------------------
@@ -104,7 +107,7 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
     : [];
   const hasLocalEmitters = localEmitterFiles.length > 0;
 
-  test('zero raw RuntimeEventBus.emit() calls outside the allowlist', () => {
+  test('zero raw RuntimeEventBus.emit() calls outside the allowlist', async () => {
     const violations: string[] = [];
 
     for (const absPath of allFiles) {
@@ -145,7 +148,7 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
     expect(violations).toHaveLength(0);
   });
 
-  test('local emitter wrapper boundary matches the live tree', () => {
+  test('local emitter wrapper boundary matches the live tree', async () => {
     const legacyEmitterFiles = allFiles
       .map((absPath) => relative(projectRoot, absPath))
       .filter((relPath) => relPath.startsWith(`${LOCAL_EMITTERS_PATH}/`));
@@ -158,7 +161,7 @@ describe('GC-ARCH-002: typed emission enforcement', () => {
     expect(legacyEmitterFiles.length).toBeGreaterThan(0);
   });
 
-  test('every emitter in src/runtime/emitters/ exports typed wrapper functions', () => {
+  test('every emitter in src/runtime/emitters/ exports typed wrapper functions', async () => {
     if (!hasLocalEmitters) {
       expect(hasLocalEmitters).toBeFalse();
       return;

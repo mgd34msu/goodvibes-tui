@@ -6,6 +6,9 @@ import { createOperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/ope
 import { createInitialTasksState, type RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
+
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 async function waitFor<T>(fn: () => T | undefined | null, timeoutMs = 500, intervalMs = 5): Promise<T> {
   const startedAt = Date.now();
   for (;;) {
@@ -23,7 +26,7 @@ describe('operator client', () => {
   let operatorServices: ReturnType<typeof createOperatorClientServices>;
   let client: ReturnType<typeof createOperatorClient>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     resetTestRuntimeServices();
     runtimeServices = getTestRuntimeServices();
     operatorServices = createOperatorClientServices(runtimeServices, {
@@ -37,7 +40,7 @@ describe('operator client', () => {
     client = createOperatorClient(operatorServices);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     resetTestRuntimeServices();
   });
 
@@ -86,7 +89,7 @@ describe('operator client', () => {
     expect(client.shellPaths.resolveProjectPath('tui', 'sessions')).toBe(join(runtimeServices.shellPaths.resolveProjectPath('tui'), 'sessions'));
   });
 
-  test('tasks are surfaced as a stable read model', () => {
+  test('tasks are surfaced as a stable read model', async () => {
     const task: RuntimeTask = {
       id: 'task-1',
       kind: 'scheduler',
@@ -126,7 +129,7 @@ describe('operator client', () => {
     expect(snapshot.authInspection.secretKeyCount).toBeGreaterThanOrEqual(0);
   });
 
-  test('events are direct in-process feeds over the runtime bus', () => {
+  test('events are direct in-process feeds over the runtime bus', async () => {
     const runtimeBus = new RuntimeEventBus();
     const eventServices = createOperatorClientServices({
       ...runtimeServices,
@@ -149,6 +152,7 @@ describe('operator client', () => {
       source: 'operator-client-test',
     }));
 
+    await flushMicrotasks();
     expect(seen).toEqual([{
       type: 'PROVIDERS_CHANGED',
       added: ['openai'],

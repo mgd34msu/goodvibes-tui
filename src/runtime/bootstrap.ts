@@ -9,6 +9,7 @@
  *   - main.ts: terminal setup, render loop, stdin/stdout handlers
  *   - lifecycle.ts: save/shutdown helpers
  */
+import { join } from 'node:path';
 import { Orchestrator } from '../core/orchestrator.ts';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
 import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers/tier-prompts';
@@ -330,7 +331,7 @@ export async function bootstrapRuntime(
       // Register the persistent companion-pairing token as the daemon's shared
       // bearer, so tokens scanned from the /qrcode panel's QR actually
       // authenticate against the embedded daemon this surface starts.
-      const companionTokenRecord = getOrCreateCompanionToken('tui');
+      const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir: join(services.homeDirectory, '.goodvibes', 'daemon') });
       externalServicesPromise = startExternalServices(
         configManager,
         runtimeBus,
