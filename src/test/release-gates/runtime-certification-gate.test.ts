@@ -9,12 +9,15 @@ import { PhasedToolExecutor } from '@pellux/goodvibes-sdk/platform/runtime/tools
 import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
 import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 
-function emitTurn(
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
+async function emitTurn(
   bus: RuntimeEventBus,
   payload: Record<string, unknown>,
   sessionId = 'sess-runtime-certification',
   traceId = 'trace-runtime-certification',
-): void {
+): Promise<void> {
   bus.emit(
     'turn',
     createEventEnvelope(
@@ -23,6 +26,7 @@ function emitTurn(
       { sessionId, source: 'test', traceId },
     ),
   );
+  await flushMicrotasks();
 }
 
 function makeContext(
@@ -65,7 +69,7 @@ function makeContext(
 }
 
 describe('runtime certification gate', () => {
-  test('critical release gates and chaos packs exist', () => {
+  test('critical release gates and chaos packs exist', async () => {
     const root = join(import.meta.dir, '..');
     const required = [
       ['release-gates', 'runtime-substrate-gate.test.ts'],
@@ -100,7 +104,7 @@ describe('runtime certification gate', () => {
       execute: async () => ({ callId: 'call-runtime-certification', success: true }),
     } as never;
 
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'turn-runtime-certification', prompt: 'write a file' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'turn-runtime-certification', prompt: 'write a file' });
     const result = await executor.execute(call, tool, makeContext(bus, {
       permissionManager: {
         check: async () => false,
@@ -108,7 +112,7 @@ describe('runtime certification gate', () => {
       } as never,
     }));
     expect(result.success).toBe(false);
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 'turn-runtime-certification', error: result.error ?? 'permission denied' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 'turn-runtime-certification', error: result.error ?? 'permission denied' });
 
     const report = registry.latest()!;
     const bundle = registry.buildBundle(report.id)!;

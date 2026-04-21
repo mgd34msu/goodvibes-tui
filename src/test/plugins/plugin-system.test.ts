@@ -28,6 +28,9 @@ import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 function makeTempDir(): string {
   return makeProjectTempDir('gv-plugin-test');
 }
@@ -262,14 +265,14 @@ describe('loadPlugin', () => {
   let pluginDir: string;
   let deps: ReturnType<typeof makeFakeDeps>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tempDir = makeTempDir();
     pluginDir = join(tempDir, 'my-plugin');
     mkdirSync(pluginDir, { recursive: true });
     deps = makeFakeDeps();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -797,20 +800,20 @@ describe('discoverPlugins manifest validation', () => {
   // We test the field-level rules by constructing manifests and calling the
   // manifest validation logic directly (or relying on integration tests above).
 
-  test('manifest with non-string name is rejected by type check', () => {
+  test('manifest with non-string name is rejected by type check', async () => {
     // Simulate what discoverPlugins would see if name is a number
     const manifest = { name: 123, version: '1.0.0', description: 'test' };
     expect(typeof manifest.name === 'string').toBe(false);
   });
 
-  test('manifest with absolute main path would be rejected', () => {
+  test('manifest with absolute main path would be rejected', async () => {
     const { isAbsolute } = require('path');
     expect(isAbsolute('/etc/passwd')).toBe(true);
     expect(isAbsolute('./index.ts')).toBe(false);
     expect(isAbsolute('index.ts')).toBe(false);
   });
 
-  test('manifest with relative main path is valid', () => {
+  test('manifest with relative main path is valid', async () => {
     const { isAbsolute } = require('path');
     expect(isAbsolute('index.ts')).toBe(false);
     expect(isAbsolute('./lib/entry.ts')).toBe(false);
@@ -823,13 +826,13 @@ describe('loadPlugin path traversal guard', () => {
   let tempDir: string;
   let pluginDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tempDir = makeTempDir();
     pluginDir = join(tempDir, 'safe-plugin');
     mkdirSync(pluginDir, { recursive: true });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 

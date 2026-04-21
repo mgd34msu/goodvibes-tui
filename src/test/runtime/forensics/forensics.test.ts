@@ -22,6 +22,9 @@ import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/foren
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 function makeRegistry(limit?: number) {
   return new ForensicsRegistry(limit);
 }
@@ -46,7 +49,7 @@ function makeReport(id: string, overrides: Partial<FailureReport> = {}): Failure
 }
 
 /** Emit a turn event envelope onto the bus. */
-function emitTurn(bus: RuntimeEventBus, payload: Record<string, unknown>, sessionId = 'sess-1', traceId = 'trace-1') {
+async function emitTurn(bus: RuntimeEventBus, payload: Record<string, unknown>, sessionId = 'sess-1', traceId = 'trace-1'): Promise<void> {
   bus.emit(
     'turn',
     createEventEnvelope(
@@ -55,10 +58,11 @@ function emitTurn(bus: RuntimeEventBus, payload: Record<string, unknown>, sessio
       { sessionId, source: 'test', traceId },
     ),
   );
+  await flushMicrotasks();
 }
 
 /** Emit a task event envelope onto the bus. */
-function emitTask(bus: RuntimeEventBus, payload: Record<string, unknown>, sessionId = 'sess-1', traceId = 'trace-1') {
+async function emitTask(bus: RuntimeEventBus, payload: Record<string, unknown>, sessionId = 'sess-1', traceId = 'trace-1'): Promise<void> {
   bus.emit(
     'tasks',
     createEventEnvelope(
@@ -67,6 +71,7 @@ function emitTask(bus: RuntimeEventBus, payload: Record<string, unknown>, sessio
       { sessionId, source: 'test', traceId },
     ),
   );
+  await flushMicrotasks();
 }
 
 // ---------------------------------------------------------------------------
@@ -74,7 +79,7 @@ function emitTask(bus: RuntimeEventBus, payload: Record<string, unknown>, sessio
 // ---------------------------------------------------------------------------
 
 describe('classifyFailure — all 9 categories', () => {
-  test('wasCancelled → cancelled (highest priority)', () => {
+  test('wasCancelled → cancelled (highest priority)', async () => {
     expect(classifyFailure({
       wasCancelled: true,
       hasToolFailure: true,
@@ -83,15 +88,15 @@ describe('classifyFailure — all 9 categories', () => {
     })).toBe('cancelled');
   });
 
-  test('stopReason max_tokens → max_tokens', () => {
+  test('stopReason max_tokens → max_tokens', async () => {
     expect(classifyFailure({ stopReason: 'max_tokens' })).toBe('max_tokens');
   });
 
-  test('stopReason context_overflow → max_tokens', () => {
+  test('stopReason context_overflow → max_tokens', async () => {
     expect(classifyFailure({ stopReason: 'context_overflow' })).toBe('max_tokens');
   });
 
-  test('hasCompactionError → compaction_error (outranks permission/tool)', () => {
+  test('hasCompactionError → compaction_error (outranks permission/tool)', async () => {
     expect(classifyFailure({
       hasCompactionError: true,
       hasPermissionDenial: true,
@@ -99,26 +104,26 @@ describe('classifyFailure — all 9 categories', () => {
     })).toBe('compaction_error');
   });
 
-  test('hasPermissionDenial → permission_denied (outranks tool)', () => {
+  test('hasPermissionDenial → permission_denied (outranks tool)', async () => {
     expect(classifyFailure({
       hasPermissionDenial: true,
       hasToolFailure: true,
     })).toBe('permission_denied');
   });
 
-  test('stopReason hook_denied → permission_denied', () => {
+  test('stopReason hook_denied → permission_denied', async () => {
     expect(classifyFailure({ stopReason: 'hook_denied' })).toBe('permission_denied');
   });
 
-  test('hasToolFailure → tool_failure', () => {
+  test('hasToolFailure → tool_failure', async () => {
     expect(classifyFailure({ hasToolFailure: true })).toBe('tool_failure');
   });
 
-  test('stopReason tool_loop_circuit_breaker → tool_failure', () => {
+  test('stopReason tool_loop_circuit_breaker → tool_failure', async () => {
     expect(classifyFailure({ stopReason: 'tool_loop_circuit_breaker' })).toBe('tool_failure');
   });
 
-  test('hasCascadeEvents → cascade_failure', () => {
+  test('hasCascadeEvents → cascade_failure', async () => {
     expect(classifyFailure({ hasCascadeEvents: true })).toBe('cascade_failure');
   });
 
@@ -138,83 +143,83 @@ describe('classifyFailure — all 9 categories', () => {
     expect(classifyFailure({ errorMessage: 'HTTP 503 Service Unavailable' })).toBe('llm_error');
   });
 
-  test('stopReason error → llm_error', () => {
+  test('stopReason error → llm_error', async () => {
     expect(classifyFailure({ stopReason: 'error' })).toBe('llm_error');
   });
 
-  test('stopReason provider_exhausted → llm_error', () => {
+  test('stopReason provider_exhausted → llm_error', async () => {
     expect(classifyFailure({ stopReason: 'provider_exhausted' })).toBe('llm_error');
   });
 
-  test('stopReason provider_error → llm_error', () => {
+  test('stopReason provider_error → llm_error', async () => {
     expect(classifyFailure({ stopReason: 'provider_error' })).toBe('llm_error');
   });
 
-  test('stopReason content_filter → llm_error', () => {
+  test('stopReason content_filter → llm_error', async () => {
     expect(classifyFailure({ stopReason: 'content_filter' })).toBe('llm_error');
   });
 
-  test('no signals → unknown', () => {
+  test('no signals → unknown', async () => {
     expect(classifyFailure({})).toBe('unknown');
   });
 });
 
 describe('classifyFailure — priority ordering', () => {
-  test('cancelled beats compaction_error', () => {
+  test('cancelled beats compaction_error', async () => {
     expect(classifyFailure({ wasCancelled: true, hasCompactionError: true })).toBe('cancelled');
   });
 
-  test('max_tokens beats compaction_error', () => {
+  test('max_tokens beats compaction_error', async () => {
     expect(classifyFailure({ stopReason: 'max_tokens', hasCompactionError: true })).toBe('max_tokens');
   });
 
-  test('compaction_error beats permission_denied', () => {
+  test('compaction_error beats permission_denied', async () => {
     expect(classifyFailure({ hasCompactionError: true, hasPermissionDenial: true })).toBe('compaction_error');
   });
 
-  test('permission_denied beats tool_failure', () => {
+  test('permission_denied beats tool_failure', async () => {
     expect(classifyFailure({ hasPermissionDenial: true, hasToolFailure: true })).toBe('permission_denied');
   });
 
-  test('tool_failure beats cascade_failure', () => {
+  test('tool_failure beats cascade_failure', async () => {
     expect(classifyFailure({ hasToolFailure: true, hasCascadeEvents: true })).toBe('tool_failure');
   });
 });
 
 describe('summariseFailure', () => {
-  test('llm_error with message', () => {
+  test('llm_error with message', async () => {
     expect(summariseFailure('llm_error', 'API rate limit exceeded')).toContain('LLM API error');
   });
 
-  test('llm_error without message', () => {
+  test('llm_error without message', async () => {
     expect(summariseFailure('llm_error')).toBe('LLM API call failed');
   });
 
-  test('max_tokens with length stopReason', () => {
+  test('max_tokens with length stopReason', async () => {
     expect(summariseFailure('max_tokens', undefined, 'length')).toContain('token limit');
   });
 
-  test('max_tokens with max_tokens stopReason', () => {
+  test('max_tokens with max_tokens stopReason', async () => {
     expect(summariseFailure('max_tokens', undefined, 'max_tokens')).toContain('max_tokens');
   });
 
-  test('cancelled', () => {
+  test('cancelled', async () => {
     expect(summariseFailure('cancelled')).toBe('Entity was explicitly cancelled');
   });
 
-  test('permission_denied', () => {
+  test('permission_denied', async () => {
     expect(summariseFailure('permission_denied')).toBe('Tool call denied by permission policy');
   });
 
-  test('compaction_error', () => {
+  test('compaction_error', async () => {
     expect(summariseFailure('compaction_error')).toBe('Context compaction failed');
   });
 
-  test('unknown with message', () => {
+  test('unknown with message', async () => {
     expect(summariseFailure('unknown', 'Some weird error')).toContain('Some weird error');
   });
 
-  test('unknown without message', () => {
+  test('unknown without message', async () => {
     expect(summariseFailure('unknown')).toContain('inspect causal chain');
   });
 });
@@ -224,21 +229,21 @@ describe('summariseFailure', () => {
 // ---------------------------------------------------------------------------
 
 describe('ForensicsRegistry — push and retrieve', () => {
-  test('push adds a report retrievable by getById', () => {
+  test('push adds a report retrievable by getById', async () => {
     const reg = makeRegistry();
     const r = makeReport('abc123');
     reg.push(r);
     expect(reg.getById('abc123')).toBe(r);
   });
 
-  test('latest returns the most recently pushed report', () => {
+  test('latest returns the most recently pushed report', async () => {
     const reg = makeRegistry();
     reg.push(makeReport('r1'));
     reg.push(makeReport('r2'));
     expect(reg.latest()?.id).toBe('r2');
   });
 
-  test('getAll returns reports newest-first', () => {
+  test('getAll returns reports newest-first', async () => {
     const reg = makeRegistry();
     reg.push(makeReport('r1'));
     reg.push(makeReport('r2'));
@@ -247,25 +252,25 @@ describe('ForensicsRegistry — push and retrieve', () => {
     expect(all.map(r => r.id)).toEqual(['r3', 'r2', 'r1']);
   });
 
-  test('count returns number of retained reports', () => {
+  test('count returns number of retained reports', async () => {
     const reg = makeRegistry();
     reg.push(makeReport('r1'));
     reg.push(makeReport('r2'));
     expect(reg.count()).toBe(2);
   });
 
-  test('getById returns undefined for unknown ID', () => {
+  test('getById returns undefined for unknown ID', async () => {
     const reg = makeRegistry();
     expect(reg.getById('nope')).toBeUndefined();
   });
 
-  test('latest returns undefined when empty', () => {
+  test('latest returns undefined when empty', async () => {
     expect(makeRegistry().latest()).toBeUndefined();
   });
 });
 
 describe('ForensicsRegistry — eviction', () => {
-  test('evicts oldest report when at capacity', () => {
+  test('evicts oldest report when at capacity', async () => {
     const reg = makeRegistry(3);
     reg.push(makeReport('r1'));
     reg.push(makeReport('r2'));
@@ -276,7 +281,7 @@ describe('ForensicsRegistry — eviction', () => {
     expect(reg.getById('r4')).toBeDefined();
   });
 
-  test('default limit is DEFAULT_REGISTRY_LIMIT', () => {
+  test('default limit is DEFAULT_REGISTRY_LIMIT', async () => {
     const reg = makeRegistry();
     for (let i = 0; i < DEFAULT_REGISTRY_LIMIT + 5; i++) {
       reg.push(makeReport(`r${i}`));
@@ -284,7 +289,7 @@ describe('ForensicsRegistry — eviction', () => {
     expect(reg.count()).toBe(DEFAULT_REGISTRY_LIMIT);
   });
 
-  test('evicted report is removed from ID index', () => {
+  test('evicted report is removed from ID index', async () => {
     const reg = makeRegistry(2);
     reg.push(makeReport('old'));
     reg.push(makeReport('mid'));
@@ -294,7 +299,7 @@ describe('ForensicsRegistry — eviction', () => {
 });
 
 describe('ForensicsRegistry — subscribe', () => {
-  test('subscriber is called on push', () => {
+  test('subscriber is called on push', async () => {
     const reg = makeRegistry();
     let called = 0;
     reg.subscribe(() => { called++; });
@@ -302,7 +307,7 @@ describe('ForensicsRegistry — subscribe', () => {
     expect(called).toBe(1);
   });
 
-  test('unsubscribe stops notifications', () => {
+  test('unsubscribe stops notifications', async () => {
     const reg = makeRegistry();
     let called = 0;
     const unsub = reg.subscribe(() => { called++; });
@@ -311,7 +316,7 @@ describe('ForensicsRegistry — subscribe', () => {
     expect(called).toBe(0);
   });
 
-  test('exportAsJson returns JSON for known ID', () => {
+  test('exportAsJson returns JSON for known ID', async () => {
     const reg = makeRegistry();
     const r = makeReport('r1');
     reg.push(r);
@@ -321,11 +326,11 @@ describe('ForensicsRegistry — subscribe', () => {
     expect(parsed.id).toBe('r1');
   });
 
-  test('exportAsJson returns undefined for unknown ID', () => {
+  test('exportAsJson returns undefined for unknown ID', async () => {
     expect(makeRegistry().exportAsJson('nope')).toBeUndefined();
   });
 
-  test('buildBundle derives incident evidence summary from the report', () => {
+  test('buildBundle derives incident evidence summary from the report', async () => {
     const reg = makeRegistry();
     reg.push(makeReport('r-bundle', {
       turnId: 'turn-123',
@@ -367,7 +372,7 @@ describe('ForensicsRegistry — subscribe', () => {
     expect(bundle!.replay.mismatchBreakdown.byKind).toEqual({});
   });
 
-  test('buildBundle attaches replay evidence and matching turn summary when available', () => {
+  test('buildBundle attaches replay evidence and matching turn summary when available', async () => {
     const reg = makeRegistry();
     reg.push(makeReport('r-replay', { turnId: 'turn-1' }));
 
@@ -414,7 +419,7 @@ describe('ForensicsRegistry — subscribe', () => {
     expect(bundle!.replay.mismatchBreakdown.byOwnerDomain.turn).toBe(1);
   });
 
-  test('exportBundleAsJson returns bundle JSON for known ID', () => {
+  test('exportBundleAsJson returns bundle JSON for known ID', async () => {
     const reg = makeRegistry();
     reg.push(makeReport('r-bundle-json', { turnId: 'turn-7' }));
     const json = reg.exportBundleAsJson('r-bundle-json');
@@ -426,7 +431,7 @@ describe('ForensicsRegistry — subscribe', () => {
     expect(parsed.replay.relatedMismatches).toEqual([]);
   });
 
-  test('exportBundleAsJson returns undefined for unknown ID', () => {
+  test('exportBundleAsJson returns undefined for unknown ID', async () => {
     expect(makeRegistry().exportBundleAsJson('nope')).toBeUndefined();
   });
 });
@@ -443,71 +448,71 @@ describe('ForensicsCollector — turn lifecycle', () => {
     return { bus, registry, collector };
   }
 
-  test('TURN_ERROR produces a report in the registry', () => {
+  test('TURN_ERROR produces a report in the registry', async () => {
     const { bus, registry } = makeCollector();
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't1', prompt: 'hello' });
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 't1', error: 'stream failed' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't1', prompt: 'hello' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 't1', error: 'stream failed' });
     expect(registry.count()).toBe(1);
   });
 
-  test('TURN_ERROR report is classified correctly', () => {
+  test('TURN_ERROR report is classified correctly', async () => {
     const { bus, registry } = makeCollector();
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't1', prompt: 'hello' });
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 't1', error: 'Request timed out' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't1', prompt: 'hello' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 't1', error: 'Request timed out' });
     const report = registry.latest()!;
     expect(report.classification).toBe('turn_timeout');
     expect(report.errorMessage).toBe('Request timed out');
     expect(report.turnId).toBe('t1');
   });
 
-  test('TURN_ERROR report includes ordered phase ledger entries', () => {
+  test('TURN_ERROR report includes ordered phase ledger entries', async () => {
     const { bus, registry } = makeCollector();
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'ledger-turn', prompt: 'hello' });
-    emitTurn(bus, { type: 'PREFLIGHT_OK', turnId: 'ledger-turn' });
-    emitTurn(bus, { type: 'STREAM_START', turnId: 'ledger-turn' });
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 'ledger-turn', error: 'network reset' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'ledger-turn', prompt: 'hello' });
+    await emitTurn(bus, { type: 'PREFLIGHT_OK', turnId: 'ledger-turn' });
+    await emitTurn(bus, { type: 'STREAM_START', turnId: 'ledger-turn' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 'ledger-turn', error: 'network reset' });
     const report = registry.latest()!;
     expect(report.phaseLedger.map((entry) => entry.phase)).toEqual(['SUBMITTED', 'PREFLIGHT', 'STREAM']);
     expect(report.phaseLedger.at(-1)?.outcome).toBe('failed');
     expect(report.phaseLedger.at(-1)?.exitEventType).toBe('TURN_ERROR');
   });
 
-  test('TURN_CANCEL produces a report classified as cancelled', () => {
+  test('TURN_CANCEL produces a report classified as cancelled', async () => {
     const { bus, registry } = makeCollector();
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't2', prompt: 'hello' });
-    emitTurn(bus, { type: 'TURN_CANCEL', turnId: 't2', reason: 'user abort' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't2', prompt: 'hello' });
+    await emitTurn(bus, { type: 'TURN_CANCEL', turnId: 't2', reason: 'user abort' });
     const report = registry.latest()!;
     expect(report.classification).toBe('cancelled');
     expect(report.turnId).toBe('t2');
   });
 
-  test('PREFLIGHT_FAIL produces a report', () => {
+  test('PREFLIGHT_FAIL produces a report', async () => {
     const { bus, registry } = makeCollector();
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't3', prompt: 'hello' });
-    emitTurn(bus, { type: 'PREFLIGHT_FAIL', turnId: 't3', reason: 'no provider' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't3', prompt: 'hello' });
+    await emitTurn(bus, { type: 'PREFLIGHT_FAIL', turnId: 't3', reason: 'no provider' });
     expect(registry.count()).toBe(1);
     expect(registry.latest()!.turnId).toBe('t3');
   });
 
-  test('TURN_COMPLETED does NOT produce a report', () => {
+  test('TURN_COMPLETED does NOT produce a report', async () => {
     const { bus, registry } = makeCollector();
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't4', prompt: 'hello' });
-    emitTurn(bus, { type: 'TURN_COMPLETED', turnId: 't4' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't4', prompt: 'hello' });
+    await emitTurn(bus, { type: 'TURN_COMPLETED', turnId: 't4' });
     expect(registry.count()).toBe(0);
   });
 
-  test('TURN_ERROR without prior TURN_SUBMITTED produces no report', () => {
+  test('TURN_ERROR without prior TURN_SUBMITTED produces no report', async () => {
     const { bus, registry } = makeCollector();
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 'ghost', error: 'late' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 'ghost', error: 'late' });
     expect(registry.count()).toBe(0);
   });
 
-  test('TURN_ERROR emits FORENSICS_REPORT_CREATED on the bus', () => {
+  test('TURN_ERROR emits FORENSICS_REPORT_CREATED on the bus', async () => {
     const { bus, registry } = makeCollector();
     const received: unknown[] = [];
     bus.onDomain('forensics', (env) => { received.push(env.payload); });
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't5', prompt: 'hello' });
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 't5', error: 'oops' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't5', prompt: 'hello' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 't5', error: 'oops' });
     expect(received.length).toBe(1);
     const payload = received[0] as { type: string; reportId: string; classification: string; turnId: string };
     expect(payload.type).toBe('FORENSICS_REPORT_CREATED');
@@ -516,22 +521,22 @@ describe('ForensicsCollector — turn lifecycle', () => {
     expect(payload.turnId).toBe('t5');
   });
 
-  test('causal chain includes turn error entry', () => {
+  test('causal chain includes turn error entry', async () => {
     const { bus, registry } = makeCollector();
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't6', prompt: 'hello' });
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 't6', error: 'network reset' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't6', prompt: 'hello' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 't6', error: 'network reset' });
     const report = registry.latest()!;
     expect(report.causalChain.length).toBeGreaterThan(0);
     expect(report.causalChain[0].sourceEventType).toBe('TURN_ERROR');
   });
 
-  test('dispose removes all subscriptions (no further reports)', () => {
+  test('dispose removes all subscriptions (no further reports)', async () => {
     const bus = new RuntimeEventBus();
     const registry = makeRegistry();
     const collector = new ForensicsCollector(bus, registry);
     collector.dispose();
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't7', prompt: 'hello' });
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 't7', error: 'after dispose' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 't7', prompt: 'hello' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 't7', error: 'after dispose' });
     expect(registry.count()).toBe(0);
   });
 });
@@ -548,64 +553,64 @@ describe('ForensicsCollector — task lifecycle', () => {
     return { bus, registry, collector };
   }
 
-  test('TASK_FAILED produces a report in the registry', () => {
+  test('TASK_FAILED produces a report in the registry', async () => {
     const { bus, registry } = makeCollector();
-    emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-1' });
-    emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-1', error: 'agent crashed' });
+    await emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-1' });
+    await emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-1', error: 'agent crashed' });
     expect(registry.count()).toBe(1);
   });
 
-  test('TASK_FAILED report has taskId and errorMessage', () => {
+  test('TASK_FAILED report has taskId and errorMessage', async () => {
     const { bus, registry } = makeCollector();
-    emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-2' });
-    emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-2', error: 'agent crashed' });
+    await emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-2' });
+    await emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-2', error: 'agent crashed' });
     const report = registry.latest()!;
     expect(report.taskId).toBe('task-2');
     expect(report.errorMessage).toBe('agent crashed');
   });
 
-  test('TASK_FAILED report includes ordered phase ledger entries', () => {
+  test('TASK_FAILED report includes ordered phase ledger entries', async () => {
     const { bus, registry } = makeCollector();
-    emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-ledger' });
-    emitTask(bus, { type: 'TASK_STARTED', taskId: 'task-ledger' });
-    emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-ledger', error: 'agent crashed' });
+    await emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-ledger' });
+    await emitTask(bus, { type: 'TASK_STARTED', taskId: 'task-ledger' });
+    await emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-ledger', error: 'agent crashed' });
     const report = registry.latest()!;
     expect(report.phaseLedger.map((entry) => entry.phase)).toEqual(['CREATED', 'RUNNING']);
     expect(report.phaseLedger.at(-1)?.outcome).toBe('failed');
     expect(report.phaseLedger.at(-1)?.domain).toBe('task');
   });
 
-  test('TASK_CANCELLED produces a report classified as cancelled', () => {
+  test('TASK_CANCELLED produces a report classified as cancelled', async () => {
     const { bus, registry } = makeCollector();
-    emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-3' });
-    emitTask(bus, { type: 'TASK_CANCELLED', taskId: 'task-3', reason: 'timeout' });
+    await emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-3' });
+    await emitTask(bus, { type: 'TASK_CANCELLED', taskId: 'task-3', reason: 'timeout' });
     const report = registry.latest()!;
     expect(report.classification).toBe('cancelled');
     expect(report.taskId).toBe('task-3');
   });
 
-  test('TASK_COMPLETED does NOT produce a report', () => {
+  test('TASK_COMPLETED does NOT produce a report', async () => {
     const { bus, registry } = makeCollector();
-    emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-4' });
-    emitTask(bus, { type: 'TASK_COMPLETED', taskId: 'task-4' });
+    await emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-4' });
+    await emitTask(bus, { type: 'TASK_COMPLETED', taskId: 'task-4' });
     expect(registry.count()).toBe(0);
   });
 
-  test('TASK_FAILED emits FORENSICS_REPORT_CREATED on the bus', () => {
+  test('TASK_FAILED emits FORENSICS_REPORT_CREATED on the bus', async () => {
     const { bus, registry } = makeCollector();
     const received: unknown[] = [];
     bus.onDomain('forensics', (env) => { received.push(env.payload); });
-    emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-5' });
-    emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-5', error: 'crash' });
+    await emitTask(bus, { type: 'TASK_CREATED', taskId: 'task-5' });
+    await emitTask(bus, { type: 'TASK_FAILED', taskId: 'task-5', error: 'crash' });
     expect(received.length).toBe(1);
     const payload = received[0] as { type: string; taskId: string };
     expect(payload.type).toBe('FORENSICS_REPORT_CREATED');
     expect(payload.taskId).toBe('task-5');
   });
 
-  test('TASK_FAILED without prior TASK_CREATED produces no report', () => {
+  test('TASK_FAILED without prior TASK_CREATED produces no report', async () => {
     const { bus, registry } = makeCollector();
-    emitTask(bus, { type: 'TASK_FAILED', taskId: 'ghost-task', error: 'late' });
+    await emitTask(bus, { type: 'TASK_FAILED', taskId: 'ghost-task', error: 'late' });
     expect(registry.count()).toBe(0);
   });
 });
@@ -615,23 +620,23 @@ describe('ForensicsCollector — task lifecycle', () => {
 // ---------------------------------------------------------------------------
 
 describe('ForensicsCollector — tracker size cap', () => {
-  test('orphaned turn trackers are capped at 500 (evicts oldest)', () => {
+  test('orphaned turn trackers are capped at 500 (evicts oldest)', async () => {
     const bus = new RuntimeEventBus();
     const registry = makeRegistry();
     new ForensicsCollector(bus, registry);
 
     // Add 501 turns without ever terminating them
     for (let i = 0; i < 501; i++) {
-      emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: `orphan-${i}`, prompt: 'p' });
+      await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: `orphan-${i}`, prompt: 'p' });
     }
 
     // Now terminate the first turn (orphan-0) — it should have been evicted
     // so no report is generated
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 'orphan-0', error: 'late error' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 'orphan-0', error: 'late error' });
     expect(registry.count()).toBe(0);
 
     // The most recent turn (orphan-500) should still be tracked
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 'orphan-500', error: 'error' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 'orphan-500', error: 'error' });
     expect(registry.count()).toBe(1);
   });
 });
