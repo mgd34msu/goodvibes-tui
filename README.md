@@ -6,6 +6,8 @@
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
+> ⚠️ **Active early development — pre-1.0.** This project is under active early development. CLI flags, config keys, slash commands, key bindings, daemon routes, and on-disk layouts can and do change quickly — sometimes across patch releases. There are no legacy/compat shims. Documentation always describes the **current** behavior, not historical behavior. When 1.0.0 ships the project freezes to enterprise-grade stability guarantees (semver, deprecation windows, migration guides). Until then: pin exact versions and read `CHANGELOG.md` before upgrading.
+
 <!-- screenshot -->
 
 ---
