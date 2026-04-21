@@ -16,6 +16,9 @@ import { createRuntimeStore } from '../../../runtime/store/index.ts';
 import { createTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/index';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -84,7 +87,7 @@ describe('cancelTask', () => {
     expect(() => env.plane.cancelTask(task.id)).toThrow(OpsIllegalActionError);
   });
 
-  test('emits ops audit event on success', () => {
+  test('emits ops audit event on success', async () => {
     const env = makeEnv();
     const task = makeTask(env);
     const received: unknown[] = [];
@@ -92,16 +95,18 @@ describe('cancelTask', () => {
 
     env.plane.cancelTask(task.id);
 
+    await flushMicrotasks();
     expect(received.length).toBeGreaterThanOrEqual(2); // action + audit
   });
 
-  test('emits rejected audit event on failure', () => {
+  test('emits rejected audit event on failure', async () => {
     const env = makeEnv();
     const task = makeTask(env, { cancellable: false });
     const received: unknown[] = [];
     env.bus.onDomain('ops', (evt) => received.push(evt));
 
     expect(() => env.plane.cancelTask(task.id)).toThrow();
+    await flushMicrotasks();
     expect(received.length).toBeGreaterThanOrEqual(1);
   });
 });
@@ -215,7 +220,7 @@ describe('retryTask', () => {
     expect(retried?.endedAt).toBeUndefined();
   });
 
-  test('emits audit event on success', () => {
+  test('emits audit event on success', async () => {
     const env = makeEnv();
     const task = makeTask(env);
     env.taskManager.startTask(task.id);
@@ -225,6 +230,7 @@ describe('retryTask', () => {
 
     env.plane.retryTask(task.id);
 
+    await flushMicrotasks();
     expect(received.length).toBeGreaterThanOrEqual(2);
   });
 });

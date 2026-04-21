@@ -7,6 +7,9 @@ import type { OrchestrationEvent } from '@pellux/goodvibes-sdk/platform/runtime/
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -55,7 +58,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('spawn mode', () => {
-  test('cohort spawn emits orchestration graph events on the runtime bus', () => {
+  test('cohort spawn emits orchestration graph events on the runtime bus', async () => {
     const bus = new RuntimeEventBus();
     const manager = harness.manager;
     manager.setRuntimeBus(bus);
@@ -73,6 +76,7 @@ describe('spawn mode', () => {
       tools: [],
     });
 
+    await flushMicrotasks();
     unsub();
     expect(seen).toContain('ORCHESTRATION_GRAPH_CREATED');
     expect(seen).toContain('ORCHESTRATION_NODE_ADDED');
@@ -260,7 +264,7 @@ describe('spawn mode', () => {
     expect(result.error).toContain('recursive orchestration is disabled');
   });
 
-  test('grandchild spawn is blocked when depth exceeds policy and emits recursion guard evidence', () => {
+  test('grandchild spawn is blocked when depth exceeds policy and emits recursion guard evidence', async () => {
     const bus = new RuntimeEventBus();
     const manager = harness.manager;
     manager.setRuntimeBus(bus);
@@ -302,11 +306,12 @@ describe('spawn mode', () => {
       orchestrationNodeId: 'grandchild-node',
     })).toThrow(/depth/i);
 
+    await flushMicrotasks();
     unsub();
     expect(seen.some((entry) => entry.includes('cohort:alpha'))).toBe(true);
   });
 
-  test('cohort spawn emits orchestration node contracts on the runtime bus', () => {
+  test('cohort spawn emits orchestration node contracts on the runtime bus', async () => {
     const bus = new RuntimeEventBus();
     const manager = harness.manager;
     manager.setRuntimeBus(bus);
@@ -331,6 +336,7 @@ describe('spawn mode', () => {
       communicationLane: 'parent-only',
     });
 
+    await flushMicrotasks();
     unsub();
     const node = payloads[0];
     expect(node).toBeDefined();

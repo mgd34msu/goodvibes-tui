@@ -23,6 +23,9 @@ import {
   isRuntimeEventDomain,
 } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 describe('new runtime event domains', () => {
   test('exports the canonical runtime domain vocabulary', () => {
     expect([...RUNTIME_EVENT_DOMAINS]).toEqual([
@@ -74,7 +77,7 @@ describe('new runtime event domains', () => {
     }
   });
 
-  test('emits the new domains through the runtime bus', () => {
+  test('emits the new domains through the runtime bus', async () => {
     const bus = new RuntimeEventBus();
     const seen: string[] = [];
 
@@ -94,6 +97,7 @@ describe('new runtime event domains', () => {
     emitWatcherStarted(bus, ctx, { watcherId: 'watcher-1', sourceKind: 'poll', name: 'github-issues' });
     emitSurfaceEnabled(bus, ctx, { surfaceKind: 'discord', surfaceId: 'surface-1', accountId: 'acct-1' });
 
+    await flushMicrotasks();
     expect(seen).toContain('AUTOMATION_JOB_CREATED');
     expect(seen).toContain('ROUTE_BINDING_CREATED');
     expect(seen).toContain('CONTROL_PLANE_CLIENT_CONNECTED');
@@ -158,7 +162,7 @@ describe('new runtime event domains', () => {
     }).valid).toBe(true);
   });
 
-  test('ui and security event domains have typed emitter wrappers', () => {
+  test('ui and security event domains have typed emitter wrappers', async () => {
     const bus = new RuntimeEventBus();
     const seen: string[] = [];
     const ctx = { sessionId: 'session-1', source: 'test', traceId: 'trace-1' };
@@ -173,6 +177,7 @@ describe('new runtime event domains', () => {
       reason: 'rotation_overdue',
     });
 
+    await flushMicrotasks();
     expect(seen).toEqual(['UI_RENDER_REQUEST', 'TOKEN_BLOCKED']);
   });
 });

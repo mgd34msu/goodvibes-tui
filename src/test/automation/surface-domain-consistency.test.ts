@@ -17,6 +17,9 @@ import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/i
 import type { DeliveryEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/deliveries';
 import type { RouteEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/routes';
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 describe('surface domain consistency', () => {
   let root = '';
 
@@ -54,6 +57,7 @@ describe('surface domain consistency', () => {
 
     const resolved = routeBindings.resolve('service', 'daemon-1');
 
+    await flushMicrotasks();
     expect(resolved?.sessionId).toBe('session-service');
     expect(seen.some((event) => event.type === 'ROUTE_BINDING_CREATED' && event.surfaceKind === 'service')).toBe(true);
     expect(seen.some((event) => event.type === 'ROUTE_BINDING_CREATED' && event.surfaceKind === 'tui')).toBe(true);
@@ -127,6 +131,7 @@ describe('surface domain consistency', () => {
     ]);
 
     expect(attempts[0]?.status).toBe('dead_lettered');
+    await flushMicrotasks();
     expect(seen.some((event) => event.type === 'DELIVERY_QUEUED' && event.surfaceKind === 'service')).toBe(true);
     expect(seen.some((event) => event.type === 'DELIVERY_STARTED' && event.surfaceKind === 'service')).toBe(true);
     expect(seen.some((event) => event.type === 'DELIVERY_FAILED' && event.surfaceKind === 'service')).toBe(true);

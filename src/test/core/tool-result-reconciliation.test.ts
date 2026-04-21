@@ -29,6 +29,9 @@ import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permi
 import { createTestConfigManager } from '../helpers/test-managers.ts';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 // ---------------------------------------------------------------------------
 // Unit tests for reconciliation helpers
 // ---------------------------------------------------------------------------
@@ -216,12 +219,13 @@ describe('Orchestrator tool result reconciliation', () => {
       reason: 'malformed-stop-reason',
       timestamp: Date.now(),
     });
+    await flushMicrotasks();
     expect(reconEvents).toHaveLength(1);
     expect(reconEvents[0]?.reason).toBe('malformed-stop-reason');
     expect(reconEvents[0]?.count).toBe(0);
   });
 
-  test('malformed-stop-reason event includes isMalformed flag', () => {
+  test('malformed-stop-reason event includes isMalformed flag', async () => {
     const reconEvents: Array<Extract<ToolEvent, { type: 'TOOL_RECONCILED' }>> = [];
     runtimeBus.on<Extract<ToolEvent, { type: 'TOOL_RECONCILED' }>>('TOOL_RECONCILED', (evt) => reconEvents.push(evt.payload));
 
@@ -236,6 +240,7 @@ describe('Orchestrator tool result reconciliation', () => {
       isMalformed: true,
     });
 
+    await flushMicrotasks();
     expect(reconEvents).toHaveLength(1);
     expect(reconEvents[0]?.isMalformed).toBe(true);
   });
@@ -280,6 +285,7 @@ describe('Orchestrator tool result reconciliation', () => {
     (orch as unknown as { reconcileUnresolvedToolCalls: (r: ToolResult[], reason: ReconciliationReason) => void })
       .reconcileUnresolvedToolCalls([], 'exception-before-results');
 
+    await flushMicrotasks();
     // Reconciliation event emitted
     expect(reconEvents).toHaveLength(1);
     const evt = reconEvents[0];
@@ -308,6 +314,7 @@ describe('Orchestrator tool result reconciliation', () => {
     (orch as unknown as { reconcileUnresolvedToolCalls: (r: ToolResult[], reason: ReconciliationReason) => void })
       .reconcileUnresolvedToolCalls([], 'loop-exit-with-tool-use');
 
+    await flushMicrotasks();
     expect(toolResults).toHaveLength(2);
     expect(toolResults.map((r) => r.callId).sort()).toEqual(['dc-1', 'dc-2'].sort());
     for (const r of toolResults) {
@@ -336,6 +343,7 @@ describe('Orchestrator tool result reconciliation', () => {
     (orch as unknown as { reconcileUnresolvedToolCalls: (r: ToolResult[], reason: ReconciliationReason) => void })
       .reconcileUnresolvedToolCalls(resolved, 'loop-exit-with-tool-use');
 
+    await flushMicrotasks();
     expect(reconEvents).toHaveLength(1);
     // Only r2 was unresolved
     expect(reconEvents[0]?.count).toBe(1);

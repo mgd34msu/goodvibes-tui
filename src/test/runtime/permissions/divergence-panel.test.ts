@@ -14,6 +14,9 @@ import { PermissionSimulator } from '@pellux/goodvibes-sdk/platform/runtime/perm
 import { DivergenceDashboard } from '@pellux/goodvibes-sdk/platform/runtime/permissions/divergence-dashboard';
 import { DivergencePanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/divergence';
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 function makeSimulator() {
@@ -137,15 +140,16 @@ describe('DivergencePanel — dispose', () => {
 // ── error handling in _notify ─────────────────────────────────────────────────
 
 describe('DivergencePanel — subscriber error handling', () => {
-  it('a throwing subscriber does not crash the panel', () => {
+  it('a throwing subscriber does not crash the panel', async () => {
     const panel = makePanel();
     panel.subscribe(() => {
       throw new Error('subscriber failure');
     });
     expect(() => panel.recordTrendEntry()).not.toThrow();
+    await flushMicrotasks();
   });
 
-  it('subsequent subscribers are still called when an earlier one throws', () => {
+  it('subsequent subscribers are still called when an earlier one throws', async () => {
     const panel = makePanel();
     const cb = mock(() => {});
     panel.subscribe(() => {
@@ -153,6 +157,7 @@ describe('DivergencePanel — subscriber error handling', () => {
     });
     panel.subscribe(cb);
     panel.recordTrendEntry();
+    await flushMicrotasks();
     expect(cb).toHaveBeenCalledTimes(1);
   });
 });
