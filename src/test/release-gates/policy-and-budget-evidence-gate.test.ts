@@ -8,12 +8,15 @@ import { PhasedToolExecutor } from '@pellux/goodvibes-sdk/platform/runtime/tools
 import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
 import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
 
-function emitTurn(
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
+async function emitTurn(
   bus: RuntimeEventBus,
   payload: Record<string, unknown>,
   sessionId = 'sess-policy-budget-gate',
   traceId = 'trace-policy-budget-gate',
-): void {
+): Promise<void> {
   bus.emit(
     'turn',
     createEventEnvelope(
@@ -22,6 +25,7 @@ function emitTurn(
       { sessionId, source: 'test', traceId },
     ),
   );
+  await flushMicrotasks();
 }
 
 function makeContext(
@@ -81,7 +85,7 @@ describe('policy and budget evidence gate', () => {
       execute: async () => ({ callId: 'call-perm', success: true }),
     } as never;
 
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'turn-policy-budget-gate', prompt: 'write a file' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'turn-policy-budget-gate', prompt: 'write a file' });
 
     const result = await executor.execute(call, tool, makeContext(bus, {
       permissionManager: {
@@ -91,7 +95,7 @@ describe('policy and budget evidence gate', () => {
     }));
 
     expect(result.success).toBe(false);
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 'turn-policy-budget-gate', error: result.error ?? 'permission denied' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 'turn-policy-budget-gate', error: result.error ?? 'permission denied' });
 
     const report = registry.latest()!;
     const bundle = registry.buildBundle(report.id)!;
@@ -122,14 +126,14 @@ describe('policy and budget evidence gate', () => {
       execute: async () => ({ callId: 'call-budget', success: true, tokenCount: 5000 }),
     } as never;
 
-    emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'turn-policy-budget-gate', prompt: 'analyze with token budget' });
+    await emitTurn(bus, { type: 'TURN_SUBMITTED', turnId: 'turn-policy-budget-gate', prompt: 'analyze with token budget' });
 
     const result = await executor.execute(call, tool, makeContext(bus, {
       budget: { maxTokens: 10 },
     }));
 
     expect(result.success).toBe(false);
-    emitTurn(bus, { type: 'TURN_ERROR', turnId: 'turn-policy-budget-gate', error: result.error ?? 'budget exceeded' });
+    await emitTurn(bus, { type: 'TURN_ERROR', turnId: 'turn-policy-budget-gate', error: result.error ?? 'budget exceeded' });
 
     const report = registry.latest()!;
     const bundle = registry.buildBundle(report.id)!;
