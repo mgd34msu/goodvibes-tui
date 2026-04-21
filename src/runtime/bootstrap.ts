@@ -36,7 +36,8 @@ import {
 import { startBackgroundProviderRegistration } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-background';
 import { restoreSavedModel } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
 import { startExternalServices, type ExternalServicesHandle } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
-import { getOrCreateCompanionToken } from '@pellux/goodvibes-sdk/platform/pairing/companion-token';
+import { getOrCreateCompanionToken, pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing/companion-token';
+import { workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
 import { createDeferredStartupCoordinator } from '@pellux/goodvibes-sdk/platform/runtime/deferred-startup';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
@@ -331,7 +332,23 @@ export async function bootstrapRuntime(
       // Register the persistent companion-pairing token as the daemon's shared
       // bearer, so tokens scanned from the /qrcode panel's QR actually
       // authenticate against the embedded daemon this surface starts.
-      const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir: join(services.homeDirectory, '.goodvibes', 'daemon') });
+      const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
+      const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
+      // F3 resolution (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
+      // token files so only the canonical <daemonHomeDir>/operator-tokens.json survives.
+      // The prune is best-effort — it silently skips missing files, no-ops when tokens
+      // already match, and records un-deletable candidates in `failedPaths` for logging.
+      // See `pruneStaleOperatorTokens` in the SDK for semantics.
+      const prune = pruneStaleOperatorTokens({
+        daemonHomeDir,
+        candidatePaths: workspaceOperatorTokenCandidates(services.workingDirectory),
+      });
+      if (prune.prunedPaths.length > 0) {
+        logger.info(`[bootstrap] Pruned ${prune.prunedPaths.length} stale operator-token file(s): ${prune.prunedPaths.join(', ')}`);
+      }
+      if (prune.failedPaths.length > 0) {
+        logger.warn(`[bootstrap] Failed to prune ${prune.failedPaths.length} stale operator-token file(s) (permission/race): ${prune.failedPaths.join(', ')}`);
+      }
       externalServicesPromise = startExternalServices(
         configManager,
         runtimeBus,

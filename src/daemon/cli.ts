@@ -12,11 +12,13 @@ import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import {
   getOrCreateCompanionToken,
+  pruneStaleOperatorTokens,
   buildCompanionConnectionInfo,
   encodeConnectionPayload,
   formatConnectionBlock,
 } from '@pellux/goodvibes-sdk/platform/pairing/index';
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
+import { workspaceOperatorTokenCandidates } from '../runtime/operator-token-cleanup.ts';
 import {
   scan,
   loadPersistedProviders,
@@ -147,7 +149,20 @@ async function main(): Promise<void> {
   const { daemonToken, httpToken } = readDaemonCliTokens(process.env);
 
   // If no explicit daemon token is set, use the companion token so mobile apps can connect.
-  const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir: join(homeDirectory, '.goodvibes', 'daemon') });
+  const daemonHomeDir = join(homeDirectory, '.goodvibes', 'daemon');
+  const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
+  // F3 resolution (TUI 0.19.20): remove stale pre-0.21.28 workspace-scoped operator
+  // token files so only the canonical <daemonHomeDir>/operator-tokens.json survives.
+  const prune = pruneStaleOperatorTokens({
+    daemonHomeDir,
+    candidatePaths: workspaceOperatorTokenCandidates(workingDir),
+  });
+  if (prune.prunedPaths.length > 0) {
+    logger.info('daemon: pruned stale operator-token files', { count: prune.prunedPaths.length, paths: prune.prunedPaths });
+  }
+  if (prune.failedPaths.length > 0) {
+    logger.warn('daemon: failed to prune stale operator-token files (permission/race)', { count: prune.failedPaths.length, paths: prune.failedPaths });
+  }
   const effectiveDaemonToken = daemonToken ?? companionTokenRecord.token;
   const effectiveHttpToken = httpToken ?? effectiveDaemonToken;
 
