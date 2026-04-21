@@ -565,12 +565,14 @@ describe('createPluginAPI', () => {
       },
     );
     bus.emit('session', sessionStartedEnvelope);
+    await flushMicrotasks();
     expect(received).toBe(true);
 
     // Unsubscribe via returned function
     unsub();
     received = false;
     bus.emit('session', sessionStartedEnvelope);
+    await flushMicrotasks();
     expect(received).toBe(false);
 
     // cleanup also tracks the unsub
