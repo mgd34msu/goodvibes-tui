@@ -75,14 +75,16 @@ function truncateJson(val: unknown, maxLen = 120): string {
 }
 
 function summarizeResult(result: unknown): string | undefined {
+  // SDK OBS-05 (0.21.31+): TOOL_SUCCEEDED/TOOL_FAILED.result is a ToolResultSummary
+  // { kind: 'text' | 'json' | 'binary' | 'error' | 'empty'; byteSize: number; preview?: string }.
   if (!result || typeof result !== 'object') return undefined;
   const record = result as Record<string, unknown>;
-  if (typeof record.output === 'string' && record.output.trim()) {
-    const compact = record.output.replace(/\s+/g, ' ').trim();
+  if (typeof record.preview === 'string' && record.preview.trim()) {
+    const compact = record.preview.replace(/\s+/g, ' ').trim();
     return compact.length > 72 ? `${compact.slice(0, 69)}\u2026` : compact;
   }
-  if (typeof record.error === 'string' && record.error.trim()) {
-    return record.error;
+  if (typeof record.kind === 'string' && typeof record.byteSize === 'number') {
+    return `${record.kind} (${record.byteSize}B)`;
   }
   return undefined;
 }

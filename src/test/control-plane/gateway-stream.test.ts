@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 
+// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
+const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+
 function decodeChunk(chunk: Uint8Array | undefined): string {
   return chunk ? new TextDecoder().decode(chunk) : '';
 }
@@ -23,6 +26,8 @@ async function readStreamText(
 
 describe('ControlPlaneGateway event streams', () => {
   test('replays recent events with ids and resumes after Last-Event-ID', async () => {
+    // OBS-14: bus.emit now async; give stream subscriptions and replay buffer time to settle.
+    await flushMicrotasks();
     const gateway = new ControlPlaneGateway({
       runtimeBus: new RuntimeEventBus(),
     });
@@ -30,6 +35,7 @@ describe('ControlPlaneGateway event streams', () => {
     gateway.publishEvent('agents', { type: 'AGENT_STARTED', payload: { id: 'a1' } });
     gateway.publishEvent('agents', { type: 'AGENT_COMPLETED', payload: { id: 'a1' } });
 
+    await flushMicrotasks();
     const firstAbort = new AbortController();
     const firstResponse = gateway.createEventStream(
       new Request('http://127.0.0.1/api/control-plane/events?domains=agents', {
@@ -38,6 +44,7 @@ describe('ControlPlaneGateway event streams', () => {
       { domains: ['agents'] },
     );
     const firstReader = firstResponse.body?.getReader();
+    await flushMicrotasks();
     const firstChunk = await readStreamText(firstReader, (text) => (text.match(/^id:\s+/gm)?.length ?? 0) >= 2);
     firstAbort.abort();
 
@@ -56,10 +63,11 @@ describe('ControlPlaneGateway event streams', () => {
       { domains: ['agents'] },
     );
     const secondReader = secondResponse.body?.getReader();
+    await flushMicrotasks();
     const secondChunk = await readStreamText(secondReader, (text) => text.includes(`id: ${replayIds[1]}`));
     secondAbort.abort();
 
     expect(secondChunk).not.toContain(`id: ${replayIds[0]}`);
     expect(secondChunk).toContain(`id: ${replayIds[1]}`);
-  });
+  }, 15_000);
 });

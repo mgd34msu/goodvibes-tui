@@ -4,6 +4,29 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.18] - 2026-04-21
+
+SDK 0.21.27 → 0.21.35 upgrade. Captures all OBS-05, OBS-06, OBS-14, F3, QA-14, and PERF-08 consumer-side migrations; no 0.19.17 was ever published (tests failed in CI) — this release closes out all of that work.
+
+### Changed
+- Upgraded `@pellux/goodvibes-sdk` from 0.21.27 to 0.21.35. Wave 4 closeout + Wave 5 + PERF-08 SSE backpressure rebuild.
+- `src/runtime/bootstrap.ts`: `getOrCreateCompanionToken('tui')` call migrated to the F3 signature `getOrCreateCompanionToken('tui', { daemonHomeDir })` with `daemonHomeDir` resolved from `services.homeDirectory`.
+- `src/panels/tool-inspector-panel.ts`:
+  - TOOL_SUCCEEDED / TOOL_FAILED handlers simplified after OBS-05. Post-0.21.31 the `.result` field on these events is a `ToolResultSummary` (`{ kind, byteSize, preview? }`), not the raw tool result, so the prior `_policyAudit` extraction is no longer reachable from this event path. Dead lookup removed with an inline note pointing future readers at the approval broker / tool result store as the new channel for policy audit metadata.
+  - `summarizeResult()` rewritten to read `preview` (string) with a `${kind} (${byteSize}B)` fallback. Previously read `.output` / `.error` from the raw result shape, which silently returned `undefined` for every post-OBS-05 event. Detail line "Summary" now renders correctly in the Tool Inspector again.
+- `docs/foundation-artifacts/operator-contract.json`: regenerated via `bun run foundation:artifacts` (SDK 0.21.35 bumped the embedded `product.version` string).
+
+### Fixed
+- **OBS-14 test migration** across 17 test files. SDK 0.21.32+ `RuntimeEventBus.emit(...)` dispatches listeners via `queueMicrotask`. Tests that emitted a bus event and asserted synchronously on subscriber-populated state now drain queued microtasks first. Injected a local `flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }` helper in each affected file; converted sync test callbacks to `async () => {}` where needed, and inserted `await flushMicrotasks();` after bus-emitting calls before each dependent assertion. Wrapper emission helpers (`emitTurn`, `emitTask`, `emitAgentCompleted`, `emitAgentFailed`, `emitToolRuntimeEvent`) promoted to `async function(): Promise<void>` in test files that needed them; all callers awaited. Files touched: `src/test/core/event-replay.test.ts`, `streaming.test.ts`, `qol-features.test.ts`, `tool-result-reconciliation.test.ts`, `src/test/daemon/telemetry-routes.test.ts`, `src/test/agents/wrfc-controller.test.ts`, `src/test/integration/tool-execution.test.ts`, `src/test/plugins/plugin-system.test.ts`, `src/test/panels/workspace-migration.test.ts`, `src/test/panels/provider-health-panel.test.ts`, `src/test/runtime/ops/playbook-runtime-context.test.ts`, `src/test/runtime/forensics/forensics.test.ts`, `src/test/runtime/operator-client.test.ts`, `src/test/runtime/telemetry-api.test.ts`, `src/test/release-gates/policy-and-budget-evidence-gate.test.ts`, `src/test/release-gates/runtime-certification-gate.test.ts`, `src/test/runtime/emit-enforcement.test.ts`.
+- **OBS-05 tool result fixture** in `src/test/integration/tool-execution.test.ts`: TOOL_SUCCEEDED fixture constructs a `ToolResultSummary` shape (`{ kind: 'json', byteSize, preview }`) rather than the raw tool result.
+- **OBS-06 redaction import path** in `src/test/export/session-export.test.ts`: `redactSensitiveData` now imported from `@pellux/goodvibes-sdk/platform/utils/redaction`.
+- **PERF-08 SSE backpressure** (via SDK): `src/test/control-plane/gateway-stream.test.ts` "replays recent events with ids and resumes after Last-Event-ID" now passes against SDK 0.21.35. Test additions: `flushMicrotasks` drains between `publishEvent`/`createEventStream`/`reader.read()` to let async dispatch settle; test timeout raised to 15s for headroom (completes in ~65ms with the SDK fix).
+
+### Notes
+- No 0.19.17 entry — 0.19.17 was committed and pushed but its Release CI never produced an npm artifact (tests failed on the microtask-dispatch regressions before the SDK 0.21.35 backpressure fix landed). 0.19.18 subsumes all of that work in a single ship.
+
+---
+
 ## [0.19.16] - 2026-04-20
 
 ### Changed
