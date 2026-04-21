@@ -21,6 +21,9 @@ vendor/
 .codex
 .claude/
 
+# UAT validation reports — local-only; live-daemon smoke results, not canonical
+docs/uat/
+
 # Artifacts
 scripts/reset-suite.sh
 .test-tmp/
