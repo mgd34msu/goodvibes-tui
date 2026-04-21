@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.19] — 2026-04-21
+
+### Changes
+- 476d9d7 docs: add UAT validation reports for runs 3 (0.19.12) and 4 (0.19.14)
+- 77f155d release: TUI 0.19.18 — SDK 0.21.35 (PERF-08 SSE backpressure + OBS-05/14 closeout)
+- e213c30 fix: regen operator-contract artifact + plugin-system microtask flush
+- 27632c3 fix(tests): migrate remaining reverted test files for OBS-14 microtask dispatch
+- bfe0e62 release: TUI 0.19.17 — SDK 0.21.33 bump + OBS-14 microtask test migration
+
 ## [0.19.18] - 2026-04-21
 
 SDK 0.21.27 → 0.21.35 upgrade. Captures all OBS-05, OBS-06, OBS-14, F3, QA-14, and PERF-08 consumer-side migrations; no 0.19.17 was ever published (tests failed in CI) — this release closes out all of that work.
