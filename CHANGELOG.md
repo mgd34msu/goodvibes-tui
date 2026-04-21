@@ -4,6 +4,23 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.21] — 2026-04-21
+
+Maintenance release: SDK 0.22.0 bump + README/gitignore hygiene + test-timeout polish. No consumer-facing feature or behavior changes.
+
+### Changed
+- **SDK dep bumped to `@pellux/goodvibes-sdk@0.22.0`.** Picks up the SDK's contract-artifact refresh pipeline, documentation audit, and test-suite cleanup. No TUI code paths change; the bump is source-compatible.
+- **Active-early-development banner** added near the top of `README.md`. Signals that CLI flags, config keys, slash commands, key bindings, daemon routes, and on-disk layouts can change across patch releases pre-1.0; no legacy/compat shims; docs describe current behavior only. 1.0.0 is the stability freeze.
+
+### Fixed
+- Raised timeouts on three flaky edit-tool tests from the default 5 s to 7.5 s (`edit tool > fuzzy matching > matches despite extra whitespace`, `edit tool > batch edits on different files > applies edits to multiple files`, `edit tool > ast_pattern mode > respects occurrence number selector`). These were intermittently tripping on heavily-loaded CI runners despite the underlying operation completing well under 5 s on fast hardware.
+
+### Internal
+- `docs/uat/` added to `.gitignore` and existing UAT reports untracked (kept on disk locally). UAT validation reports are live-daemon smoke results, not canonical documentation.
+- `:memory:` filename added to `.gitignore` — prevents regression of an SQLite-sentinel-as-path test leak.
+
+---
+
 ## [0.19.20] — 2026-04-21
 
 ### Changes
