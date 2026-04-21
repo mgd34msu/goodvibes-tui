@@ -33,3 +33,6 @@ test-tmp*
 tmp/
 tmp*
 src/test/providers/__favorites_tmp__/
+
+# Test leak: code that passes literal ':memory:' as a filesystem path instead of SQLite's in-memory sentinel
+:memory:
