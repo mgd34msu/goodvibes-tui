@@ -4,9 +4,22 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.22] — 2026-04-21
+
+Hotfix release: regenerates foundation artifacts against SDK 0.22.0 after 0.19.21's release pipeline failed the `foundation artifacts gate` test. No consumer-facing feature changes beyond what 0.19.21 carried.
+
+### Fixed
+- **`docs/foundation-artifacts/operator-contract.json` regenerated against SDK 0.22.0.** The 0.19.21 tag shipped with an artifact stamped `"version": "0.21.36"` while consuming SDK 0.22.0 — the `foundation artifacts gate` release-gates test detected this drift and failed the release workflow on the `Tests` step, blocking the npm publish. 0.19.22 contains the regenerated artifact (one-line version-stamp update) and ships cleanly.
+- **CI: composite `./.github/actions/setup` action** shared across every `ci.yml` and `release.yml` job: pins Bun 1.3.10, restores `~/.bun/install/cache` via `actions/cache@v4`, runs `bun install`. Eliminates ~60 lines of duplicated setup boilerplate and gives every job a warm dep cache.
+
+### Internal
+- Reconciliation sweep against SDK 0.22.0 confirmed no other TUI drift: typecheck clean, architecture check clean, 456/456 test files pass.
+
+---
+
 ## [0.19.21] — 2026-04-21
 
-Maintenance release: SDK 0.22.0 bump + README/gitignore hygiene + test-timeout polish. No consumer-facing feature or behavior changes.
+Maintenance release: SDK 0.22.0 bump + README/gitignore hygiene + test-timeout polish. **Did not publish** — the release workflow's foundation-artifacts gate detected stale artifact drift against SDK 0.22.0; see 0.19.22 for the shipped fix. No consumer-facing feature or behavior changes.
 
 ### Changed
 - **SDK dep bumped to `@pellux/goodvibes-sdk@0.22.0`.** Picks up the SDK's contract-artifact refresh pipeline, documentation audit, and test-suite cleanup. No TUI code paths change; the bump is source-compatible.
