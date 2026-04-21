@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.20] — 2026-04-21
+
+### Changes
+- b587765 feat: consume SDK 0.21.36 (F3 prune helper + UAT Run 5 fixes)
+- 119da57 docs: UAT validation report — Run 5 against TUI 0.19.19 / SDK 0.21.35
+
 ## [0.19.19] — 2026-04-21
 
 ### Changes
