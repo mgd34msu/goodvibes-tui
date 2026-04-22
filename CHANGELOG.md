@@ -4,6 +4,22 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.24] — 2026-04-22
+
+Four correctness and honesty fixes from an external architecture review. No SDK change (pinned at 0.23.2).
+
+### Fixed
+
+- **`/clear` now actually clears the display** (`src/core/conversation.ts`). The original `clearDisplay()` immediately rebuilt the display buffer from `this.messages`, so `getDisplayBlocks().length` was unchanged before and after the call — `/clear` was a no-op. The fix introduces a `_displayFromMessageIndex` watermark: `clearDisplay()` records the current message count and clears the buffer without re-rendering; `rebuildHistory()` now only renders messages added *after* the watermark, so the screen is blank until the next message arrives. The full LLM context (`getMessagesForLLM()`, `getMessageSnapshot()`) is untouched. `resetAll()` zeroes the watermark so a full reset continues to work. Regression tests added to `src/test/core/conversation.test.ts` (4 new tests).
+
+- **Workspace tab bar shows active state on the unfocused pane** (`src/panels/panel-manager.ts`, `src/renderer/panel-workspace-bar.ts`). `getWorkspaceTabs()` previously set both `active` and `focused` from the single globally-focused panel, so the unfocused pane's selected tab lost its active marker entirely when focus moved to the other pane. The fix splits the two semantics: `active` is now true for the currently-selected tab in *its own pane* (derived from `pane.activeIndex`, independent of keyboard focus); `focused` is true only for the one tab in the globally-focused pane. The workspace bar renderer uses the `focused` flag to append a `▸` glyph to the focused tab's label, making keyboard-focus distinct from pane-level selection. Both panes now show their selected tab highlighted regardless of which has focus. Regression tests added to `src/test/panels/panel-manager.test.ts` (2 new tests).
+
+- **Panel render cache race guard** (`src/renderer/panel-composite.ts`). The documented hazard in the R2 cache — where a mid-render `invalidate()` call would be silently clobbered by the trailing `markRendered()` — has been resolved. The fix wraps each panel's `invalidate()` the first time it enters `renderPanel()` to maintain a per-panel generation counter (stored in a module-level `WeakMap`). The generation is snapshotted before `render()` and compared after: `markRendered()` is only called when the generation is unchanged, meaning no concurrent invalidation fired. If the generation changed, `needsRender` stays `true` and the next frame re-renders with the fresh state. Backward-compatible: existing panels that don't invalidate during render are unaffected. New test file `src/test/renderer/panel-composite.test.ts` (4 tests).
+
+- **Release gate filenames renamed to match what the tests actually verify** (`src/test/release-gates/`). `runtime-certification-gate.test.ts` was renamed to `runtime-contract-shape-gate.test.ts` and its `describe()` block updated to `'runtime contract shape gate'`. `foundation-surfaces-gate.test.ts` was renamed to `foundation-surface-stability-gate.test.ts` and its `describe()` block updated to `'foundation surface stability gate'`. The test content (assertions, helpers) is unchanged — this is an honesty rename only, removing the implication that the tests verify runtime behavior certification when they actually verify structural shape preservation.
+
+---
+
 ## [0.19.23] — 2026-04-22
 
 SDK 0.23.x constraint-propagation reconciliation. Surfaces the new per-chain constraint data across the WRFC panel, process modal, agent inspector, and agent detail modal; adds system-message notifications for constraint enumeration and violations; exposes the WRFC-injected `systemPromptAddendum` so operators can see the engineer addendum was applied.

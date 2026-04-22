@@ -74,6 +74,13 @@ export class ConversationManager extends SdkConversationManager {
   private errorLineRegistry: number[] = [];
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
+  /**
+   * Message index at the time of the last clearDisplay() call.
+   * rebuildHistory() renders only messages at or after this index, so the
+   * display stays blank for messages added before the clear while LLM history
+   * is fully preserved. Reset to 0 on resetAll() or rebuildHistory() width change.
+   */
+  private _displayFromMessageIndex = 0;
 
   public suppressSplash: boolean = false;
   public splashOptions: SplashOptions = {};
@@ -215,6 +222,7 @@ export class ConversationManager extends SdkConversationManager {
     this.messageLineRegistry = [];
     this.errorLineRegistry = [];
     this.streamingStartLine = -1;
+    this._displayFromMessageIndex = 0; // full reset — show everything on next render
   }
 
   /**
@@ -293,20 +301,27 @@ export class ConversationManager extends SdkConversationManager {
     this.lastRenderedWidth = width;
     this.dirty = false;
 
+    const snapshot = this.getMessageSnapshot();
+    // When _displayFromMessageIndex > 0, clearDisplay() was called. Only render
+    // messages added after the clear — the pre-clear history stays off-screen.
+    // On a full rebuild (e.g. width change), reset the display-start to 0 so the
+    // user can scroll back to the full history if needed.
+    const displayStart = this._displayFromMessageIndex;
+    const visibleSnapshot = displayStart > 0 ? snapshot.slice(displayStart) : snapshot;
+
     // Tool messages ARE rendered (as collapsed blocks); this filter is only
     // for determining whether to show the splash screen (tool-only messages
     // don't count as visible conversation content for splash purposes).
-    const snapshot = this.getMessageSnapshot();
-    const displayMessages = snapshot.filter(
+    const displayMessages = visibleSnapshot.filter(
       (m) => m.role !== 'tool' && m.role !== 'system',
     );
 
-    if (displayMessages.length === 0 && !this.suppressSplash) {
+    if (displayMessages.length === 0 && displayStart === 0 && !this.suppressSplash) {
       this.addSplashScreen(width);
       return;
     }
 
-    this.appendMessages(snapshot, width);
+    this.appendMessages(visibleSnapshot, width);
     this.appendedUpTo = snapshot.length;
   }
 
@@ -509,19 +524,27 @@ export class ConversationManager extends SdkConversationManager {
 
   /**
    * clearDisplay - Clear the visual history buffer without touching the LLM context messages.
-   * The next render will show a blank conversation area.
+   * The next render will show a blank conversation area. Subsequent message additions
+   * rebuild the display incrementally from that point forward.
+   *
+   * Contract:
+   * - getDisplayBlocks() returns an empty array immediately after this call.
+   * - getMessageSnapshot() is unaffected — full LLM history is preserved.
+   * - resetAll() (which clears both display and messages) continues to work.
+   * - rebuildHistory() can be called by callers that need a full display rebuild.
    */
   public clearDisplay(): void {
     this.history.clear();
-    this.appendedUpTo = 0;
-    this.dirty = true;
-    // Re-render from existing messages to rebuild buffer
-    const width = this._getWidth();
-    this.lastRenderedWidth = width;
+    this.blockRegistry = [];
+    this.messageLineRegistry = [];
+    this.errorLineRegistry = [];
+    // Advance _displayFromMessageIndex to exclude all current messages from display.
+    // rebuildHistory() will only render messages added AFTER this point.
+    this._displayFromMessageIndex = this.getMessageSnapshot().length;
+    this.appendedUpTo = this._displayFromMessageIndex;
     this.dirty = false;
-    const snapshot = this.getMessageSnapshot();
-    this.appendMessages(snapshot, width);
-    this.appendedUpTo = snapshot.length;
+    // Do NOT re-render here — display stays blank until the next message is added.
+    // The lastRenderedWidth is kept so subsequent appends use the correct width.
   }
 }
 

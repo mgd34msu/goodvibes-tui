@@ -92,4 +92,83 @@ describe('PanelManager', () => {
     expect(manager.getFocusedPane()).toBe('bottom');
     expect(manager.getActivePanel()?.id).toBe('wrfc');
   });
+
+  test('getWorkspaceTabs active is per-pane-independent of keyboard focus', () => {
+    // Open A (top), B (top second), C (bottom).
+    // Activate B in top pane. Focus top. Then switch focus to bottom.
+    // B must remain active=true even after focus moves to bottom.
+    const manager = new PanelManager();
+    const panelA = makePanel('panel-a', 'A');
+    const panelB = makePanel('panel-b', 'B');
+    const panelC = makePanel('panel-c', 'C');
+
+    manager.registerType({ id: 'panel-a', name: 'A', icon: 'A', category: 'monitoring', description: '', factory: () => panelA });
+    manager.registerType({ id: 'panel-b', name: 'B', icon: 'B', category: 'monitoring', description: '', factory: () => panelB });
+    manager.registerType({ id: 'panel-c', name: 'C', icon: 'C', category: 'monitoring', description: '', factory: () => panelC });
+
+    manager.open('panel-a', 'top');
+    manager.open('panel-b', 'top');
+    manager.open('panel-c', 'bottom');
+
+    // After opening panel-b last in top pane, it should be active there.
+    // Focus top pane explicitly.
+    manager.focusPane('top');
+
+    const tabsTopFocused = manager.getWorkspaceTabs();
+    const tabA = tabsTopFocused.find((t) => t.id === 'panel-a')!;
+    const tabB = tabsTopFocused.find((t) => t.id === 'panel-b')!;
+    const tabC = tabsTopFocused.find((t) => t.id === 'panel-c')!;
+
+    // B is active in top pane (last opened there), has keyboard focus.
+    expect(tabB.active).toBe(true);
+    expect(tabB.focused).toBe(true);
+    // C is active in its own pane (only panel there), but NOT focused.
+    expect(tabC.active).toBe(true);
+    expect(tabC.focused).toBe(false);
+    // A is in top pane but not the active one.
+    expect(tabA.active).toBe(false);
+    expect(tabA.focused).toBe(false);
+
+    // Move focus to bottom pane.
+    manager.focusPane('bottom');
+    const tabsBottomFocused = manager.getWorkspaceTabs();
+    const tabBAfter = tabsBottomFocused.find((t) => t.id === 'panel-b')!;
+    const tabCAfter = tabsBottomFocused.find((t) => t.id === 'panel-c')!;
+
+    // B stays active (still selected in top pane) but loses focused.
+    expect(tabBAfter.active).toBe(true);
+    expect(tabBAfter.focused).toBe(false);
+    // C gains focused (it's the active panel in the now-focused bottom pane).
+    expect(tabCAfter.active).toBe(true);
+    expect(tabCAfter.focused).toBe(true);
+  });
+
+  test('getWorkspaceTabs renderer: both panes show selected tab with active indicator after focus switch', () => {
+    // Snapshot-style: after switching focus, both active tabs show their indicator
+    // (active=true) so the renderer can distinguish them from non-selected tabs.
+    const manager = new PanelManager();
+    const panelA = makePanel('snap-a', 'SnapA');
+    const panelB = makePanel('snap-b', 'SnapB');
+
+    manager.registerType({ id: 'snap-a', name: 'SnapA', icon: 'A', category: 'monitoring', description: '', factory: () => panelA });
+    manager.registerType({ id: 'snap-b', name: 'SnapB', icon: 'B', category: 'monitoring', description: '', factory: () => panelB });
+
+    manager.open('snap-a', 'top');
+    manager.open('snap-b', 'bottom');
+
+    // Focus top, then switch to bottom
+    manager.focusPane('top');
+    manager.focusPane('bottom');
+
+    const tabs = manager.getWorkspaceTabs();
+    const activeTabCount = tabs.filter((t) => t.active).length;
+    // One active tab per pane that has panels = 2 active tabs total
+    expect(activeTabCount).toBe(2);
+    // Exactly one focused tab globally
+    const focusedTabCount = tabs.filter((t) => t.focused).length;
+    expect(focusedTabCount).toBe(1);
+    // The focused tab is in the bottom pane
+    const focusedTab = tabs.find((t) => t.focused)!;
+    expect(focusedTab.pane).toBe('bottom');
+  });
 });

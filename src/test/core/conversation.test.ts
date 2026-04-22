@@ -155,6 +155,56 @@ describe('ConversationManager', () => {
     });
   });
 
+  describe('clearDisplay', () => {
+    test('clearDisplay zeros getDisplayBlocks', () => {
+      cm.addUserMessage('hello');
+      cm.addAssistantMessage('world');
+      // Force display to be populated
+      expect(cm.getDisplayBlocks().length).toBeGreaterThan(0);
+
+      cm.clearDisplay();
+      expect(cm.getDisplayBlocks().length).toBe(0);
+    });
+
+    test('clearDisplay leaves LLM message history intact', () => {
+      cm.addUserMessage('hello');
+      cm.addAssistantMessage('world');
+      const snapshotBefore = cm.getMessageSnapshot();
+
+      cm.clearDisplay();
+
+      const snapshotAfter = cm.getMessageSnapshot();
+      expect(snapshotAfter.length).toBe(snapshotBefore.length);
+    });
+
+    test('after clearDisplay, a new message adds only that message to the display', () => {
+      cm.addUserMessage('hello');
+      cm.addAssistantMessage('world');
+      cm.clearDisplay();
+      expect(cm.getDisplayBlocks().length).toBe(0);
+
+      cm.addUserMessage('new message after clear');
+      // Display now contains lines from the new message only
+      const blocks = cm.getDisplayBlocks();
+      expect(blocks.length).toBeGreaterThan(0);
+      const displayText = blocks.map((line) => line.map((cell) => cell.char).join('')).join('\n');
+      expect(displayText).toContain('new message after clear');
+      // The old messages should NOT appear in display after clear
+      expect(displayText).not.toContain('hello');
+      expect(displayText).not.toContain('world');
+    });
+
+    test('getMessagesForLLM is unaffected by clearDisplay', () => {
+      cm.addUserMessage('persistent user');
+      cm.addAssistantMessage('persistent assistant');
+      cm.clearDisplay();
+      const msgs = cm.getMessagesForLLM();
+      expect(msgs).toHaveLength(2);
+      expect(msgs[0]).toMatchObject({ role: 'user', content: 'persistent user' });
+      expect(msgs[1]).toMatchObject({ role: 'assistant', content: 'persistent assistant' });
+    });
+  });
+
   describe('toJSON / fromJSON', () => {
     test('toJSON returns serializable object with messages', () => {
       cm.addUserMessage('hi');
