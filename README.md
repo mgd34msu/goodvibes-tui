@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.19.22-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.19.23-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -159,6 +159,12 @@ The TUI now consumes the extracted `@pellux/goodvibes-sdk` platform layer for sh
 - Archetype registry that supports built-ins and user-defined markdown archetypes
 - Task lifecycle tracking across exec, agent, MCP, plugin, integration, daemon, scheduler, and ACP work
 - Automated WRFC loops with review/fix/check chains, configurable gates, and explicit evidence in completion reports
+- WRFC panel renders a constraint badge (`c:N/M`) per chain, colored by aggregate satisfaction status
+- Expanded chain detail shows each constraint with status marker `[SAT]`, `[UNS CRIT|MAJOR|MINOR]` (unsatisfied, severity-tagged), or `[UNV]` (unverified), with ` *` suffix for inherited constraints
+- Selected-chain summary shows satisfied/total/inherited counts at a glance
+- Controller-flagged synthetic issues render above reviewer issues as `[CRITICAL]` "Controller flags"
+- Agent-detail modal surfaces `systemPromptAddendum` (WRFC engineer addendum) when present on the agent record
+- System-message router surfaces `WORKFLOW_CONSTRAINTS_ENUMERATED` as an operator-visible message when constraints are loaded
 - Built-in planning/strategy layer with execution plans, adaptive plan modes, and status/explain/override controls
 
 ### Tools And Intelligence
@@ -1235,7 +1241,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/fork [name]` | `/branch-save` | Save a named snapshot of the current conversation |
 | `/merge <name>` | — | Append messages from a branch after the fork point |
 | `/agents` | — | List active and completed agents |
-| `/wrfc` | — | Show WRFC chain status |
+| `/wrfc` | — | Show WRFC chain status, constraint satisfaction counts, and per-constraint `[SAT]`/`[UNS]`/`[UNV]` breakdown |
 | `/health [action]` | — | Unified runtime health review and repair entry point |
 | `/guidance [action]` | — | Contextual operational guidance without cluttering the conversation |
 | `/remote [action]` | — | Distributed peer, node-host contract, work-queue, and artifact control room |

@@ -60,7 +60,11 @@ function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
     const attemptMatch = task.match(/Fix attempt:\s*(\d+)/);
     const attempt = attemptMatch ? attemptMatch[1] : '?';
     const desc = truncateFirst(originalTask ?? 'fix in progress', 45);
-    return `[Fix #${attempt}] ${desc}  (${fromScore} \u2192 ${toScore}/10)`;
+    // Show constraint count when the chain has constraints to target (SDK 0.23.0)
+    const chain = rec.wrfcId ? (() => { try { return deps.wrfcController.getChain(rec.wrfcId!); } catch { return null; } })() : null;
+    const constraintCount = chain && chain.constraints.length > 0 ? chain.constraints.length : 0;
+    const constraintSuffix = constraintCount > 0 ? `  [${constraintCount}c]` : '';
+    return `[Fix #${attempt}] ${desc}  (${fromScore} \u2192 ${toScore}/10)${constraintSuffix}`;
   }
 
   // Regular agent — show template and truncated first line

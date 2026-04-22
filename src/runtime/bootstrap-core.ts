@@ -292,6 +292,64 @@ export async function initializeBootstrapCore(
     wrfcController: services.wrfcController,
   });
 
+  // ── TUI-specific WRFC constraint-propagation event subscriptions (SDK 0.23.0) ──
+  // These supplement the SDK's registerBootstrapRuntimeEvents which handles the
+  // core WORKFLOW_REVIEW_COMPLETED / WORKFLOW_CHAIN_CREATED messages.
+  // The SDK does not surface constraint-specific system messages; the TUI layer
+  // adds them here so operators can observe constraint enumeration and violations
+  // in the SystemMessagesPanel and main conversation.
+  runtimeUnsubs.push(
+    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').WorkflowEvent, { type: 'WORKFLOW_CONSTRAINTS_ENUMERATED' }>>(
+      'WORKFLOW_CONSTRAINTS_ENUMERATED',
+      ({ payload }) => {
+        const router = systemMessageRouterRef.value;
+        if (!router) return;
+        const count = payload.constraints.length;
+        if (count > 0) {
+          router.wrfc(
+            `[WRFC] Engineer enumerated ${count} constraint${count !== 1 ? 's' : ''} for chain ${payload.chainId.slice(0, 12)}`,
+            'low',
+          );
+        }
+        requestRender();
+      },
+    ),
+  );
+  runtimeUnsubs.push(
+    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').WorkflowEvent, { type: 'WORKFLOW_FIX_ATTEMPTED' }>>(
+      'WORKFLOW_FIX_ATTEMPTED',
+      ({ payload }) => {
+        const router = systemMessageRouterRef.value;
+        if (!router) return;
+        const targetIds = payload.targetConstraintIds;
+        if (targetIds && targetIds.length > 0) {
+          router.wrfc(
+            `[WRFC] Fix #${payload.attempt} targeting ${targetIds.length} constraint${targetIds.length !== 1 ? 's' : ''} on chain ${payload.chainId.slice(0, 12)}`,
+            'low',
+          );
+          requestRender();
+        }
+      },
+    ),
+  );
+  runtimeUnsubs.push(
+    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').WorkflowEvent, { type: 'WORKFLOW_REVIEW_COMPLETED' }>>(
+      'WORKFLOW_REVIEW_COMPLETED',
+      ({ payload }) => {
+        const router = systemMessageRouterRef.value;
+        if (!router) return;
+        const unsatisfied = payload.unsatisfiedConstraintIds;
+        if (!payload.passed && unsatisfied && unsatisfied.length > 0) {
+          router.wrfc(
+            `[WRFC] ✗ Chain ${payload.chainId.slice(0, 12)}: ${unsatisfied.length} constraint violation${unsatisfied.length !== 1 ? 's' : ''} forced failure`,
+            'high',
+          );
+          requestRender();
+        }
+      },
+    ),
+  );
+
   // Subscribe to companion main-chat messages received from the daemon's HTTP layer.
   // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus when a companion
   // POST /api/sessions/:id/messages with kind='message' arrives.

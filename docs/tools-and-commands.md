@@ -76,6 +76,21 @@ Many commands also have matching panels and control rooms. High-signal examples:
 - MCP trust and reconnect posture
 - approvals, policy, security, and diagnostics
 - tasks, orchestration, worktrees, and agents
+- WRFC chain state and constraint satisfaction
+
+## WRFC constraint visibility
+
+The WRFC panel surfaces constraint state at every level of a running chain:
+
+- Each chain renders a constraint badge (`c:N/M`) colored by aggregate satisfaction status (green = all satisfied, grey = unverified, red = unsatisfied; yellow when some constraints are verified and some are still pending).
+- Expanding a chain shows each constraint with a status marker: `[SAT]` (satisfied), `[UNS CRIT]` / `[UNS MAJOR]` / `[UNS MINOR]` (unsatisfied, severity-tagged), or `[UNV]` (unverified). Inherited constraints are marked with a trailing ` *`.
+- Fix-attempt process-modal rows append `[Nc]` to indicate the number of constraints the fix is targeting.
+- The selected-chain summary line shows satisfied/total/inherited counts.
+- Controller-flagged synthetic issues (raised by the workflow controller rather than a reviewer) render above reviewer issues under a `[CRITICAL]` "Controller flags" header.
+- The agent-detail modal surfaces the `systemPromptAddendum` field from the agent record when it contains a WRFC engineer addendum, so the full constraint injection is visible without leaving the TUI.
+- When constraints are loaded, the system-message router emits a `WORKFLOW_CONSTRAINTS_ENUMERATED` operator-visible message. This is routed through the standard `ui.wrfcMessages` setting (`panel`, `conversation`, or `both`).
+
+The `/wrfc` command opens the chain-status view directly. Constraint counts are also visible in the orchestration panel and in `/wrfc` output without opening the full panel.
 
 ## Workflow-oriented commands
 

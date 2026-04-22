@@ -1,4 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, setDefaultTimeout } from 'bun:test';
+
+// Edit-tool tests do heavy file I/O and were consistently timing out under full-suite
+// load at the 5s default. Raise to 15s so slow CI / contended local runs stop flaking
+// without masking genuine hangs.
+setDefaultTimeout(15_000);
 import { mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { createEditTool } from '@pellux/goodvibes-sdk/platform/tools/edit/index';
