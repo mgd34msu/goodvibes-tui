@@ -1,9 +1,9 @@
-import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
 import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
 import { formatDuration } from './modal-utils.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
@@ -19,6 +19,8 @@ export interface AgentDetailModalDeps {
   readonly agentManager: Pick<AgentManager, 'getStatus'>;
   readonly agentMessageBus: Pick<AgentMessageBus, 'getMessages'>;
   readonly sessionLogPathResolver: (agentId: string) => string;
+  /** Optional — when supplied, constraint data from the agent's WRFC chain is shown (SDK 0.23.0). */
+  readonly wrfcController?: Pick<WrfcController, 'getChain'>;
 }
 
 // ─── AgentDetailModal ─────────────────────────────────────────────────────────
@@ -175,6 +177,51 @@ export function renderAgentDetailModal(
   // Metrics
   sections.push({ type: 'text', content: `Tool calls : ${rec.toolCallCount}` });
   sections.push({ type: 'text', content: `Est tokens : ~${tokenEst.toLocaleString()}` });
+
+  // SDK 0.23.0: systemPromptAddendum indicator — confirms WRFC constraint addendum was injected
+  if (rec.systemPromptAddendum) {
+    sections.push({
+      type: 'text',
+      content: 'Addendum   : yes (WRFC constraint layer injected)',
+      style: { fg: '#aaffee' },
+    });
+  }
+
+  // SDK 0.23.0: constraint data from WRFC chain (engineer constraints + reviewer findings)
+  if (rec.wrfcId && modal.deps.wrfcController) {
+    try {
+      const chain = modal.deps.wrfcController.getChain(rec.wrfcId);
+      if (chain && chain.constraints.length > 0) {
+        sections.push({ type: 'separator' });
+        sections.push({
+          type: 'text',
+          content: `Constraints (${chain.constraints.length}):`,
+          style: { dim: true },
+        });
+        for (const c of chain.constraints) {
+          const src = c.source === 'inherited' ? ' [inherited]' : '';
+          const text = c.text.length > 80 ? c.text.slice(0, 77) + '…' : c.text;
+          sections.push({
+            type: 'text',
+            content: `  [${c.id}]${src} ${text}`,
+            style: { fg: '246' },
+          });
+        }
+        // Reviewer constraint findings (if review has completed)
+        const findings = chain.reviewerReport?.constraintFindings;
+        if (findings && findings.length > 0) {
+          const unsatisfied = findings.filter((f) => !f.satisfied);
+          sections.push({
+            type: 'text',
+            content: `Findings   : ${findings.length} checked, ${unsatisfied.length} unsatisfied`,
+            style: { fg: unsatisfied.length > 0 ? '#ff6666' : '#44ff88' },
+          });
+        }
+      }
+    } catch {
+      // wrfcController.getChain throws when chain not found — normal during teardown
+    }
+  }
 
   // Progress
   if (rec.progress) {

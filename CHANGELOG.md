@@ -4,6 +4,50 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.23] — 2026-04-22
+
+SDK 0.23.x constraint-propagation reconciliation. Surfaces the new per-chain constraint data across the WRFC panel, process modal, agent inspector, and agent detail modal; adds system-message notifications for constraint enumeration and violations; exposes the WRFC-injected `systemPromptAddendum` so operators can see the engineer addendum was applied.
+
+### Changed
+
+- **SDK dep bumped to `@pellux/goodvibes-sdk@0.23.2`.** Picks up constraint-propagation additions from 0.23.0 (feature), the 0.23.1 cleanup (removed opt-in golden-prompt suite that was skipped by default), and the 0.23.2 docs bundle (the complete `docs/wrfc-constraint-propagation.md` + reference-runtime-events + observability + error-kinds + migration docs shipped with the feature). New types consumed by this TUI release: `Constraint` and `ConstraintFinding` from `platform/agents/completion-report`; three new fields on `WrfcChain` (`constraints`, `constraintsEnumerated`, `syntheticIssues`); `WORKFLOW_CONSTRAINTS_ENUMERATED` runtime event; optional constraint summary fields on `WORKFLOW_REVIEW_COMPLETED` (`constraintsSatisfied`, `constraintsTotal`, `unsatisfiedConstraintIds`) and `WORKFLOW_FIX_ATTEMPTED` (`targetConstraintIds`); optional `constraints?` on `EngineerReport`; optional `constraintFindings?` on `ReviewerReport`; `AgentRecord.systemPromptAddendum?`.
+
+### Added
+
+- **`WORKFLOW_CONSTRAINTS_ENUMERATED` system message** (`src/runtime/bootstrap-core.ts`). When an engineer agent enumerates one or more constraints, a low-priority `[WRFC] Engineer enumerated N constraint(s) for chain <chainId>` message is routed to the SystemMessagesPanel. Zero-constraint chains produce no message (backward-compatible).
+- **Constraint-violation system message on review failure** (`src/runtime/bootstrap-core.ts`). When `WORKFLOW_REVIEW_COMPLETED` fires with `passed: false` and `unsatisfiedConstraintIds` is non-empty, a high-priority `[WRFC] ✗ Chain <chainId>: N constraint violation(s) forced failure` message is emitted to both the main conversation and the SystemMessagesPanel. Complements the existing SDK-level score/threshold message.
+- **`WORKFLOW_FIX_ATTEMPTED` constraint-targeting message** (`src/runtime/bootstrap-core.ts`). When a fix agent is spawned to address specific constraints (`targetConstraintIds` present), a low-priority `[WRFC] Fix #N targeting N constraint(s) on chain <chainId>` message is routed to the SystemMessagesPanel. Only fires when `targetConstraintIds` is non-empty.
+- **Constraint count in Fix agent process-modal label** (`src/renderer/process-modal.ts`). When a running fix agent's WRFC chain has constraints, the Background Processes modal label gains a compact `[Nc]` suffix (e.g. `[Fix #2] my task  (7.8 → 9.9/10)  [3c]`). Chains with zero constraints are unchanged.
+- **`systemPromptAddendum` indicator in Agent Inspector** (`src/panels/agent-inspector-panel.ts`). The per-agent summary line in the Inspector panel now includes an `Addendum yes` field when the selected agent's `AgentRecord.systemPromptAddendum` is set. This lets operators confirm that the WRFC constraint addendum was injected into the engineer's system prompt. Agents without an addendum are unchanged.
+- **Constraint data in Agent Detail modal** (`src/renderer/agent-detail-modal.ts`). The agent detail modal (opened from the Background Processes modal with Enter) now surfaces three additional SDK 0.23.x fields when available: (1) an `Addendum: yes` line when `AgentRecord.systemPromptAddendum` is set; (2) a `Constraints (N):` block listing each constraint id/text/source from the agent's WRFC chain; (3) a `Findings: N checked, N unsatisfied` summary from the reviewer's `constraintFindings`. An optional `wrfcController` dep was added to `AgentDetailModalDeps` — backward-compatible, existing callers without it continue working unchanged. Zero-constraint chains and agents not in a WRFC chain render byte-identically to pre-0.23.
+- **WRFC panel constraint badge** (`src/panels/wrfc-panel.ts`). Each chain row renders a compact `c:N/M` badge showing satisfied/total constraints when present, colored by aggregate state: green when all satisfied, red on any unsatisfied finding, grey when no findings yet, yellow for mixed verified/unverified. Omitted entirely for zero-constraint chains.
+- **WRFC panel expanded constraint detail** (`src/panels/wrfc-panel.ts`). Expanding a chain now shows per-constraint lines with a severity-tagged status marker: `[SAT]` (satisfied), `[UNS CRIT]` / `[UNS MAJOR]` / `[UNS MINOR]` (unsatisfied with severity), or `[UNV]` (unverified). Inherited constraints — those carried from a parent chain after gate-failure retry — are suffixed with ` *`. List caps at 10 with a `(+N more)` tail and respects the panel's `maxLines` budget.
+- **WRFC panel selected-chain summary** (`src/panels/wrfc-panel.ts`). The selected-chain summary row now shows `N sat / M total (K inherited)` when the focused chain has constraints, giving the operator at-a-glance status without expanding the row.
+- **WRFC panel controller-flags block** (`src/panels/wrfc-panel.ts`). When the controller injects synthetic issues on the chain (e.g. fixer constraint-continuity violations), a `Controller flags` section renders above the reviewer Issues block with a `[CRITICAL]` prefix, so operators see why a chain went back to fixing even when the reviewer didn't flag anything.
+
+### Surface Audit — Per-Surface Verdict
+
+| Surface | File | Verdict |
+|---------|------|---------|
+| WRFC chain panel | `src/panels/wrfc-panel.ts` | Reconciled — constraint badge `c:N/M`, expanded-detail severity-tagged markers (`[SAT]` / `[UNS CRIT|MAJOR|MINOR]` / `[UNV]`) with inherited ` *` suffix, selected-chain summary, controller-flags block, `WORKFLOW_CONSTRAINTS_ENUMERATED` subscription |
+| System message router | `src/core/system-message-router.ts` | Not applicable — routing infrastructure, no direct event handling |
+| Bootstrap runtime events | `src/runtime/bootstrap-core.ts` | Reconciled — 3 new subscriptions added |
+| Process modal | `src/renderer/process-modal.ts` | Reconciled — Fix label shows constraint count |
+| Agent Inspector panel | `src/panels/agent-inspector-panel.ts` | Reconciled — systemPromptAddendum indicator |
+| Agent Logs panel | `src/panels/agent-logs-panel.ts` | Not applicable — log tail only, no report/constraint fields |
+| Agent Detail modal | `src/renderer/agent-detail-modal.ts` | Reconciled — systemPromptAddendum indicator, constraint list, reviewer findings |
+| Orchestration panel | `src/panels/orchestration-panel.ts` | Not applicable — reads `OrchestrationGraphRecord` from store domain, no constraint fields |
+| Agent builtin panel registry | `src/panels/builtin/agent.ts` | Not applicable — registration only, no rendering |
+| Tasks panel | `src/panels/builtin/operations.ts` | Not applicable — no WRFC chain rendering |
+| Eval panel | `src/panels/eval-panel.ts` | Not applicable — eval suite scores, not WRFC constraint data |
+| UI events plumbing | `src/runtime/ui-events.ts` | Not applicable — re-exports SDK; `WorkflowEvent` union already includes new event |
+| Config command | `src/input/commands/config.ts` | Not applicable — no new SDK 0.23.0 config knobs |
+| Runtime services | `src/runtime/services.ts` | Not applicable — no new service instantiation required |
+| Bootstrap core | `src/runtime/bootstrap-core.ts` | Reconciled (see above) |
+| Docs | `docs/` | Not applicable — TUI docs have minimal WRFC prose; no legacy content to update |
+
+---
+
 ## [0.19.22] — 2026-04-21
 
 Hotfix release: regenerates foundation artifacts against SDK 0.22.0 after 0.19.21's release pipeline failed the `foundation artifacts gate` test. No consumer-facing feature changes beyond what 0.19.21 carried.

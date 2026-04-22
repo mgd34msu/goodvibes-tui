@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import type { WrfcChain, WrfcState, QualityGateResult } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
+import type { Constraint, ConstraintFinding } from '@pellux/goodvibes-sdk/platform/agents/completion-report';
 import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
 import { BasePanel } from './base-panel.ts';
 import type { WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
@@ -48,6 +49,10 @@ const C = {
   issueSug:   '#6b7280',
   gatePass:   '#22c55e',
   gateFail:   '#ef4444',
+  // constraint status
+  constraintSat:  '#22c55e', // green — satisfied
+  constraintUnsat:'#ef4444', // red — unsatisfied
+  constraintUnv:  '#4b5563', // grey — unverified (no finding yet)
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -115,6 +120,37 @@ function issuePrefix(severity: string): string {
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max - 3) + '...';
+}
+
+// ---------------------------------------------------------------------------
+// Constraint helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns display tag, foreground colour, and dim flag for a single constraint
+ * based on whether a reviewer finding exists for it.
+ */
+export function constraintStatusMarker(
+  constraint: Constraint,
+  findings: ConstraintFinding[] | undefined,
+): { tag: string; fg: string; dim: boolean } {
+  const finding = findings?.find(f => f.constraintId === constraint.id);
+  if (!finding) {
+    return { tag: '[UNV]', fg: C.constraintUnv, dim: true };
+  }
+  if (finding.satisfied) {
+    return { tag: '[SAT]', fg: C.constraintSat, dim: false };
+  }
+  // Unsatisfied — use severity to pick colour and tag text
+  const sev = finding.severity ?? 'major';
+  let sevTag: string;
+  let fg: string;
+  switch (sev) {
+    case 'critical': sevTag = '[UNS CRIT]';  fg = C.issueCrit; break;
+    case 'minor':    sevTag = '[UNS MINOR]'; fg = C.issueMin;  break;
+    default:         sevTag = '[UNS MAJOR]'; fg = C.issueMaj;  break;
+  }
+  return { tag: sevTag, fg, dim: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +264,22 @@ export class WrfcPanel extends BasePanel {
             ['   Scores ', DEFAULT_PANEL_PALETTE.label],
             [selectedChain.reviewScores.length > 0 ? selectedChain.reviewScores.map((score) => score.toFixed(0)).join(' -> ') : 'none', DEFAULT_PANEL_PALETTE.info],
           ]),
+          ...(selectedChain.constraints.length > 0 ? [
+            buildPanelLine(width, (() => {
+              const total = selectedChain.constraints.length;
+              const findings = selectedChain.reviewerReport?.constraintFindings;
+              const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
+              const inherited = selectedChain.constraints.filter(c => c.source === 'inherited').length;
+              const inheritedPart = inherited > 0 ? ` (${inherited} inherited)` : '';
+              const satFg = !findings || findings.length === 0
+                ? DEFAULT_PANEL_PALETTE.dim
+                : satisfied === total ? C.constraintSat : C.constraintUnsat;
+              return [
+                [' Constraints ', DEFAULT_PANEL_PALETTE.label],
+                [`${satisfied} sat / ${total} total${inheritedPart}`, satFg],
+              ] as Array<[string, string]>;
+            })()),
+          ] : []),
         ]
       : [];
 
@@ -300,7 +352,15 @@ export class WrfcPanel extends BasePanel {
     const latestScore = chain.reviewScores.length > 0
       ? ` ${chain.reviewScores[chain.reviewScores.length - 1].toFixed(1)}/10`
       : '';
-    const rightInfo  = `${latestScore}${fixes}${cycles} `;
+    // Constraint badge: c:sat/total — only when constraints exist
+    let constraintBadge = '';
+    if (chain.constraints.length > 0) {
+      const total = chain.constraints.length;
+      const findings = chain.reviewerReport?.constraintFindings;
+      const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
+      constraintBadge = ` c:${satisfied}/${total}`;
+    }
+    const rightInfo  = `${latestScore}${fixes}${cycles}${constraintBadge} `;
 
     // Compute how much space the task text can use, then check if rightInfo fits.
     // If the terminal is narrow and rightInfo would overflow, omit it entirely
@@ -319,7 +379,32 @@ export class WrfcPanel extends BasePanel {
     ];
     if (remaining >= rightInfo.length + 1) {
       // Right-align rightInfo in the remaining space
-      segments.push({ text: rightInfo.padStart(remaining), fg: isSelected ? fg : C.label });
+      // Colour the constraint badge separately when present
+      if (chain.constraints.length > 0 && !isSelected) {
+        const total = chain.constraints.length;
+        const findings = chain.reviewerReport?.constraintFindings;
+        const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
+        // Determine badge colour
+        let badgeFg: string;
+        if (!findings || findings.length === 0) {
+          badgeFg = C.constraintUnv;
+        } else if (satisfied === total) {
+          badgeFg = C.constraintSat;
+        } else if (findings.some(f => !f.satisfied)) {
+          badgeFg = C.constraintUnsat;
+        } else {
+          badgeFg = C.reviewing; // some unverified but none failed
+        }
+        // Split: everything before the badge, then the badge
+        const badgeText = ` c:${satisfied}/${total}`;
+        const beforeBadge = rightInfo.slice(0, rightInfo.length - badgeText.length - 1);
+        const padding = remaining - rightInfo.length;
+        segments.push({ text: beforeBadge.padStart(padding + beforeBadge.length), fg: isSelected ? fg : C.label });
+        segments.push({ text: badgeText, fg: badgeFg });
+        segments.push({ text: ' ', fg: '' });
+      } else {
+        segments.push({ text: rightInfo.padStart(remaining), fg: isSelected ? fg : C.label });
+      }
     }
     // else: no room — makeSegmentedLine will pad with spaces to fill width
 
@@ -358,6 +443,35 @@ export class WrfcPanel extends BasePanel {
       ]));
     }
 
+    // Constraints section (between Cycles and Gates)
+    if (chain.constraints.length > 0 && lines.length < maxLines) {
+      lines.push(buildStyledPanelLine(width, [{ text: `${indent}Constraints`, fg: C.label }]));
+      const MAX_CONSTRAINTS = 10;
+      const findings = chain.reviewerReport?.constraintFindings;
+      const displayed = chain.constraints.slice(0, MAX_CONSTRAINTS);
+      for (const constraint of displayed) {
+        if (lines.length >= maxLines) break;
+        const marker = constraintStatusMarker(constraint, findings);
+        const inheritedMark = constraint.source === 'inherited' ? ' *' : '';
+        const statusTag = `${marker.tag}${inheritedMark}`;
+        const rowPrefix = `${indent}  ${statusTag}  `;
+        const textMax = Math.max(8, width - rowPrefix.length);
+        const constraintText = truncate(constraint.text, textMax);
+        lines.push(buildStyledPanelLine(width, [
+          { text: `${indent}  `, fg: C.dim },
+          { text: statusTag,      fg: marker.fg, dim: marker.dim, bold: !marker.dim },
+          { text: '  ',           fg: '' },
+          { text: constraintText, fg: C.value },
+        ]));
+      }
+      const remaining = chain.constraints.length - MAX_CONSTRAINTS;
+      if (remaining > 0 && lines.length < maxLines) {
+        lines.push(buildStyledPanelLine(width, [
+          { text: `${indent}  (+${remaining} more)`, fg: C.dim, dim: true },
+        ]));
+      }
+    }
+
     // Quality gate results
     if (chain.gateResults && chain.gateResults.length > 0) {
       lines.push(buildStyledPanelLine(width, [{ text: `${indent}Gates`, fg: C.label }]));
@@ -371,6 +485,21 @@ export class WrfcPanel extends BasePanel {
     if (chain.state === 'gating' || chain.state === 'awaiting_gates') {
       if (!chain.gateResults || chain.gateResults.length === 0) {
         lines.push(buildStyledPanelLine(width, [{ text: `${indent}Gates   awaiting...`, fg: C.gating, dim: true }]));
+      }
+    }
+
+    // Synthetic issues injected by controller (continuity violations)
+    if (chain.syntheticIssues && chain.syntheticIssues.length > 0 && lines.length < maxLines) {
+      lines.push(buildStyledPanelLine(width, [{ text: `${indent}Controller flags`, fg: C.issueCrit, bold: true }]));
+      for (const synthetic of chain.syntheticIssues) {
+        if (lines.length >= maxLines) break;
+        const prefix = `${indent}  [CRIT] `;
+        const descMax = Math.max(8, width - prefix.length);
+        const desc = truncate(synthetic.description, descMax);
+        lines.push(buildStyledPanelLine(width, [
+          { text: prefix, fg: C.issueCrit, bold: true },
+          { text: desc,   fg: C.value },
+        ]));
       }
     }
 
@@ -458,6 +587,7 @@ export class WrfcPanel extends BasePanel {
       this.workflowEvents.on('WORKFLOW_CHAIN_FAILED', refresh),
       this.workflowEvents.on('WORKFLOW_AUTO_COMMITTED', refresh),
       this.workflowEvents.on('WORKFLOW_CASCADE_ABORTED', refresh),
+      this.workflowEvents.on('WORKFLOW_CONSTRAINTS_ENUMERATED', refresh),
     );
   }
 

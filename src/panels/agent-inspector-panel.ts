@@ -317,6 +317,10 @@ export class AgentInspectorPanel extends BasePanel {
       [formatMs(elapsed), DEFAULT_PANEL_PALETTE.value],
       ['   Tools ', DEFAULT_PANEL_PALETTE.label],
       [String(rec.toolCallCount), DEFAULT_PANEL_PALETTE.info],
+      // SDK 0.23.0: show addendum indicator when WRFC injected a constraint addendum
+      ...(rec.systemPromptAddendum
+        ? [['   Addendum ', DEFAULT_PANEL_PALETTE.label] as [string, string], ['yes', DEFAULT_PANEL_PALETTE.info] as [string, string]]
+        : []),
       ['   Task ', DEFAULT_PANEL_PALETTE.label],
       [taskDisplay, DEFAULT_PANEL_PALETTE.value],
     ]);
