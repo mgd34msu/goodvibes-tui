@@ -17,7 +17,11 @@ export function renderPanelWorkspaceBar(
   return renderTabStrip({
     width,
     tabs: tabs.map((tab) => ({
-      label: `${tab.pane === 'bottom' ? 'v' : '^'} ${tab.icon} ${tab.name}`,
+      // tab.active = selected in its own pane (drives highlighted background).
+      // tab.focused = has keyboard focus (drives brighter text / focus indicator).
+      // A tab can be active-but-not-focused (selected in the unfocused pane) or
+      // active-and-focused (selected in the focused pane).
+      label: `${tab.pane === 'bottom' ? 'v' : '^'} ${tab.icon} ${tab.name}${tab.focused ? ' ▸' : ''}`,
       active: tab.active,
     })),
     prefixLabel: ' PANELS ',

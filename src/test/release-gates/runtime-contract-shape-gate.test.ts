@@ -68,7 +68,7 @@ function makeContext(
   };
 }
 
-describe('runtime certification gate', () => {
+describe('runtime contract shape gate', () => {
   test('critical release gates and chaos packs exist', async () => {
     const root = join(import.meta.dir, '..');
     const required = [

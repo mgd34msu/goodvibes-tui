@@ -347,13 +347,17 @@ export class PanelManager {
 
   getWorkspaceTabs(): readonly WorkspaceTab[] {
     if (this._cachedWorkspaceTabs !== null) return this._cachedWorkspaceTabs;
+    // `active` = the currently selected tab in its own pane (independent of focus).
+    // `focused` = true only for the one tab in the globally focused pane that is active.
     const focusedPanelId = this.getActivePanel()?.id;
+    const topActivePanelId = this.topPane.panels[this.topPane.activeIndex]?.id;
+    const bottomActivePanelId = this.bottomPane.panels[this.bottomPane.activeIndex]?.id;
     const topTabs = this.topPane.panels.map((panel) => ({
       id: panel.id,
       name: panel.name,
       icon: panel.icon,
       pane: 'top' as const,
-      active: panel.id === focusedPanelId,
+      active: panel.id === topActivePanelId,
       focused: panel.id === focusedPanelId,
     }));
     const bottomTabs = this.bottomPane.panels.map((panel) => ({
@@ -361,7 +365,7 @@ export class PanelManager {
       name: panel.name,
       icon: panel.icon,
       pane: 'bottom' as const,
-      active: panel.id === focusedPanelId,
+      active: panel.id === bottomActivePanelId,
       focused: panel.id === focusedPanelId,
     }));
     const tabs = [...topTabs, ...bottomTabs] as WorkspaceTab[];

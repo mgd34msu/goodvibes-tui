@@ -24,9 +24,9 @@ import { renderPanelWorkspaceBar } from './panel-workspace-bar.ts';
  * path (e.g. deferred lazy-load) should call `this.invalidate()` AFTER the
  * trailing work so the next frame picks it up.
  *
- * If this becomes a real bug, the fix is to snapshot `needsRender` before
- * calling `render()` and only `markRendered()` if the snapshot was true —
- * preserving any concurrent invalidation. Deferred pending more evidence.
+ * The fix (now applied): snapshot `needsRender` before calling `render()` and
+ * only call `markRendered()` when no concurrent invalidation occurred during
+ * the render pass — preserving any mid-render invalidation.
  */
 interface PanelRenderCache {
   lines: Line[];
@@ -34,15 +34,52 @@ interface PanelRenderCache {
   height: number;
 }
 const panelRenderCache = new WeakMap<Panel, PanelRenderCache>();
+/**
+ * Per-panel render-generation counter. Incremented whenever invalidate() fires
+ * on the panel (tracked here externally since Panel does not expose a version).
+ * We monkey-patch each panel the first time it enters renderPanel() by wrapping
+ * its invalidate() to bump the counter stored in this map.
+ *
+ * Race-guard: snapshot the generation before render(), compare after. If it
+ * changed, a mid-render invalidation occurred — leave needsRender=true.
+ */
+const panelRenderGen = new WeakMap<Panel, { gen: number }>();
+
+function getRenderGenState(panel: Panel): { gen: number } {
+  let state = panelRenderGen.get(panel);
+  if (!state) {
+    state = { gen: 0 };
+    panelRenderGen.set(panel, state);
+    // Wrap invalidate() to bump generation counter.
+    const origInvalidate = panel.invalidate.bind(panel);
+    panel.invalidate = () => {
+      state!.gen++;
+      origInvalidate();
+    };
+  }
+  return state;
+}
 
 /** R2: Render a panel, skipping if nothing changed. Returns cached lines on a skip. */
-function renderPanel(panel: Panel, width: number, height: number): Line[] {
+export function renderPanel(panel: Panel, width: number, height: number): Line[] {
   const cached = panelRenderCache.get(panel);
   if (cached && !panel.needsRender && cached.width === width && cached.height === height) {
     return cached.lines;
   }
+  // Snapshot render-generation counter BEFORE calling render(). If an event
+  // listener fires during render() and calls panel.invalidate(), the generation
+  // counter will be bumped. We compare after render to detect mid-render races.
+  const genState = getRenderGenState(panel);
+  const genBefore = genState.gen;
   const lines = panel.render(width, height);
-  panel.markRendered();
+  // Only call markRendered() when no mid-render invalidation occurred.
+  // If the generation changed during render(), a concurrent invalidate() fired —
+  // leave needsRender=true so the next frame re-renders with the new state.
+  if (genState.gen === genBefore) {
+    panel.markRendered();
+  }
+  // If gen changed, needsRender is already true (invalidate() set it); do not
+  // call markRendered() — the next frame will pick it up.
   panelRenderCache.set(panel, { lines, width, height });
   return lines;
 }

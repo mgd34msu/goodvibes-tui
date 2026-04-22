@@ -37,7 +37,7 @@ function sortedKeys(value: object): string[] {
   return Object.keys(value).slice().sort((left, right) => left.localeCompare(right));
 }
 
-describe('foundation surfaces gate', () => {
+describe('foundation surface stability gate', () => {
   beforeEach(() => {
     resetTestRuntimeServices();
   });
