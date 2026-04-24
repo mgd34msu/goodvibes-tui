@@ -21,6 +21,7 @@ import { inspectProviderAuth } from '@pellux/goodvibes-sdk/platform/runtime/auth
 import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing/index';
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
 import type { GoodVibesCliParseResult } from './types.ts';
+import { classifyProviderSetup } from './provider-classification.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { applyRuntimeEndpointFlagOverrides } from './config-overrides.ts';
 import type { RuntimeEndpointId } from './endpoints.ts';
@@ -424,9 +425,16 @@ async function renderProviders(runtime: CliCommandRuntime): Promise<string> {
       if (!provider) return 'Usage: goodvibes providers inspect <provider>';
       const snapshot = snapshots.find((candidate) => candidate.providerId === provider);
       if (!snapshot) return `No provider found: ${provider}`;
-      return formatJsonOrText(runtime.cli)(snapshot, [
+      const setup = classifyProviderSetup({
+        providerId: snapshot.providerId,
+        authMode: snapshot.runtime.auth?.mode,
+        configured: snapshot.runtime.auth?.configured ?? true,
+        modelCount: snapshot.modelCount,
+      });
+      return formatJsonOrText(runtime.cli)({ ...snapshot, setup }, [
         `Provider ${snapshot.providerId}`,
         `  active: ${yesNo(snapshot.active)}`,
+        `  setup: ${setup.setupLabel}`,
         `  configured: ${yesNo(snapshot.runtime.auth?.configured ?? true)}`,
         `  via: ${snapshot.runtime.auth?.mode ?? 'unknown'}`,
         `  models: ${snapshot.modelCount}`,
@@ -435,6 +443,12 @@ async function renderProviders(runtime: CliCommandRuntime): Promise<string> {
     }
     if (sub !== 'list') return 'Usage: goodvibes providers [list|current|inspect <provider>|use <provider> [modelRegistryKey]]';
     const value = snapshots.map((snapshot) => ({
+      ...classifyProviderSetup({
+        providerId: snapshot.providerId,
+        authMode: snapshot.runtime.auth?.mode,
+        configured: snapshot.runtime.auth?.configured ?? true,
+        modelCount: snapshot.modelCount,
+      }),
       provider: snapshot.providerId,
       active: snapshot.active,
       configured: snapshot.runtime.auth?.configured ?? true,
@@ -446,7 +460,7 @@ async function renderProviders(runtime: CliCommandRuntime): Promise<string> {
     return formatJsonOrText(runtime.cli)(value, [
       'GoodVibes providers',
       ...value.map((provider) =>
-        `  ${provider.current ? '*' : ' '} ${provider.provider.padEnd(18)} configured=${yesNo(provider.configured)} via=${provider.configuredVia ?? 'n/a'} models=${provider.models} ${provider.detail ?? ''}`.trimEnd(),
+        `  ${provider.current ? '*' : ' '} ${provider.provider.padEnd(18)} setup=${provider.setupClass} configured=${yesNo(provider.configured)} via=${provider.configuredVia ?? 'n/a'} models=${provider.models} ${provider.detail ?? ''}`.trimEnd(),
       ),
     ].join('\n'));
   });
@@ -456,19 +470,35 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
   return await withRuntimeServices(runtime, async (services) => {
     const [subOrFilter, ...rest] = runtime.cli.commandArgs;
     const current = services.providerRegistry.getCurrentModel().registryKey;
+    const providerSnapshots = await listProviderRuntimeSnapshots(services.providerRegistry);
+    const classifyModelProvider = (providerId: string) => {
+      const snapshot = providerSnapshots.find((candidate) => candidate.providerId === providerId);
+      return classifyProviderSetup({
+        providerId,
+        authMode: snapshot?.runtime.auth?.mode,
+        configured: snapshot?.runtime.auth?.configured,
+        modelCount: snapshot?.modelCount,
+      });
+    };
     if (subOrFilter === 'current') {
       const model = services.providerRegistry.getCurrentModel();
+      const setup = classifyModelProvider(model.provider);
+      const providerSnapshot = providerSnapshots.find((candidate) => candidate.providerId === model.provider);
       const value = {
         registryKey: model.registryKey,
         provider: model.provider,
         id: model.id,
         displayName: model.displayName,
         contextWindow: services.providerRegistry.getContextWindowForModel(model),
+        providerConfigured: providerSnapshot?.runtime.auth?.configured ?? true,
+        setup,
       };
       return formatJsonOrText(runtime.cli)(value, [
         'GoodVibes current model',
         `  model: ${model.registryKey}`,
         `  provider: ${model.provider}`,
+        `  setup: ${setup.setupLabel}`,
+        `  provider configured: ${yesNo(value.providerConfigured)}`,
         `  context: ${value.contextWindow.toLocaleString()}`,
       ].join('\n'));
     }
@@ -519,6 +549,7 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
     const value = models.map((model) => ({
       registryKey: model.registryKey,
       provider: model.provider,
+      ...classifyModelProvider(model.provider),
       id: model.id,
       displayName: model.displayName,
       contextWindow: services.providerRegistry.getContextWindowForModel(model),
@@ -526,7 +557,7 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
     }));
     return formatJsonOrText(runtime.cli)(value, [
       `GoodVibes models${filter ? ` (${filter})` : ''}`,
-      ...value.map((model) => `  ${model.current ? '*' : ' '} ${model.registryKey.padEnd(42)} ctx=${model.contextWindow.toLocaleString()} ${model.displayName}`),
+      ...value.map((model) => `  ${model.current ? '*' : ' '} ${model.registryKey.padEnd(42)} setup=${model.setupClass} ctx=${model.contextWindow.toLocaleString()} ${model.displayName}`),
     ].join('\n'));
   });
 }
