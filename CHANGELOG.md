@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.25] — 2026-04-24
+
+### Changes
+- 705a19b feat: add onboarding wizard and CLI management
+
 ## [0.19.24] — 2026-04-22
 
 Four correctness and honesty fixes from an external architecture review. No SDK change (pinned at 0.23.2).
