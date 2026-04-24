@@ -83,4 +83,11 @@ describe('wireShellUiOpeners', () => {
     expect(input.panelFocused).toBe(true);
     expect(conversation.setSplashSuppressed).toHaveBeenCalledWith(true);
   });
+
+  test('openOnboardingWizard delegates through the shared opener seam', () => {
+    input.openOnboardingWizard = mock(() => {});
+    (commandContext.openOnboardingWizard as (mode?: 'new' | 'edit') => void)('new');
+    expect(input.openOnboardingWizard).toHaveBeenCalledWith('new');
+    expect(render).not.toHaveBeenCalled();
+  });
 });

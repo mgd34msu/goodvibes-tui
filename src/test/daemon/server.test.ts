@@ -9,6 +9,7 @@ import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listene
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/index';
@@ -83,6 +84,26 @@ describe('DaemonServer', () => {
   let configDir: string;
   let runtimeServices: ReturnType<typeof createRuntimeServices>;
   const makeConfig = () => new ConfigManager({ surfaceRoot: 'tui',  configDir, workingDir, homeDir });
+  const makeFeatureFlags = () => {
+    const featureFlags = createFeatureFlagManager();
+    const flags = Object.fromEntries([
+      'automation-domain',
+      'control-plane-gateway',
+      'delivery-engine',
+      'hitl-ux-modes',
+      'permission-divergence-dashboard',
+      'policy-as-code',
+      'route-binding',
+      'service-management',
+      'slack-surface',
+      'unified-runtime-task',
+      'watcher-framework',
+      'web-surface',
+      'webhook-surface',
+    ].map((flag) => [flag, 'enabled' as const]));
+    featureFlags.loadFromConfig({ flags });
+    return featureFlags;
+  };
   const makeUserAuth = () => new UserAuthManager({
     bootstrapFilePath: join(homeDir, 'auth-users.json'),
     bootstrapCredentialPath: join(homeDir, 'auth-bootstrap.txt'),
@@ -96,20 +117,26 @@ describe('DaemonServer', () => {
     readonly runtimeBus?: RuntimeEventBus | null;
     readonly port?: number;
     readonly host?: string;
-  } = {}): DaemonServer => new DaemonServer({
-    port: options.port ?? 39421,
-    host: options.host ?? '127.0.0.1',
-    userAuth: options.userAuth ?? makeUserAuth(),
-    ...(options.runtimeServices
-      ? { runtimeServices: options.runtimeServices }
-      : {
-          configManager: options.configManager ?? makeConfig(),
-          workingDir,
-          homeDirectory: homeDir,
-        }),
-    ...(options.serveFactory ? { serveFactory: options.serveFactory } : {}),
-    ...(options.runtimeBus !== undefined ? { runtimeBus: options.runtimeBus } : {}),
-  });
+  } = {}): DaemonServer => {
+    const configManager = options.configManager ?? makeConfig();
+    const services = options.runtimeServices ?? createRuntimeServices({
+      runtimeStore: createRuntimeStore(),
+      runtimeBus: options.runtimeBus ?? new RuntimeEventBus(),
+      configManager,
+      workingDir,
+      homeDirectory: homeDir,
+      featureFlags: makeFeatureFlags(),
+      getConversationTitle: () => 'Daemon Test',
+    });
+    return new DaemonServer({
+      port: options.port ?? 39421,
+      host: options.host ?? '127.0.0.1',
+      userAuth: options.userAuth ?? makeUserAuth(),
+      runtimeServices: services,
+      ...(options.serveFactory ? { serveFactory: options.serveFactory } : {}),
+      ...(options.runtimeBus !== undefined ? { runtimeBus: options.runtimeBus } : {}),
+    });
+  };
 
   beforeEach(() => {
     resetTestRuntimeServices();
@@ -127,6 +154,7 @@ describe('DaemonServer', () => {
       configManager: makeConfig(),
       workingDir,
       homeDirectory: homeDir,
+      featureFlags: makeFeatureFlags(),
       getConversationTitle: () => 'Daemon Test',
     });
     daemon = createTestDaemon({ userAuth, runtimeServices });

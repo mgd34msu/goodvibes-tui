@@ -53,6 +53,7 @@ import { registerLocalAuthRuntimeCommands } from './commands/local-auth-runtime.
 import { registerIntelligenceRuntimeCommands } from './commands/intelligence-runtime.ts';
 import { registerConversationRuntimeCommands } from './commands/conversation-runtime.ts';
 import { registerQrcodeRuntimeCommands } from './commands/qrcode-runtime.ts';
+import { registerOnboardingRuntimeCommands } from './commands/onboarding-runtime.ts';
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -100,6 +101,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerIntelligenceRuntimeCommands(registry);
   registerConversationRuntimeCommands(registry);
   registerQrcodeRuntimeCommands(registry);
+  registerOnboardingRuntimeCommands(registry);
   registerLocalRuntimeCommands(registry);
   registerSessionWorkflowCommands(registry);
   registerDiscoveryRuntimeCommands(registry);

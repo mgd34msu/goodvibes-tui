@@ -10,6 +10,7 @@
  *   - lifecycle.ts: save/shutdown helpers
  */
 import { join } from 'node:path';
+import net from 'node:net';
 import { Orchestrator } from '../core/orchestrator.ts';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
 import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers/tier-prompts';
@@ -292,6 +293,83 @@ export async function bootstrapRuntime(
 
   const deferredStartup = createDeferredStartupCoordinator();
 
+  interface ExternalServiceBindingSnapshot {
+    readonly daemon: {
+      readonly host: string;
+      readonly port: number;
+    };
+    readonly httpListener: {
+      readonly host: string;
+      readonly port: number;
+    };
+  }
+
+  interface ExternalServicePortState {
+    readonly daemonPortInUse: boolean;
+    readonly httpListenerPortInUse: boolean;
+  }
+
+  const readExternalServiceBindings = (): ExternalServiceBindingSnapshot => ({
+    daemon: {
+      host: String(configManager.get('controlPlane.host') ?? '127.0.0.1'),
+      port: Number(configManager.get('controlPlane.port') ?? 3421),
+    },
+    httpListener: {
+      host: String(configManager.get('httpListener.host') ?? '127.0.0.1'),
+      port: Number(configManager.get('httpListener.port') ?? 3422),
+    },
+  });
+
+  const getProbeHosts = (host: string): readonly string[] => {
+    const normalized = host.trim().toLowerCase();
+    if (normalized === '0.0.0.0') return ['127.0.0.1'];
+    if (normalized === '::' || normalized === '[::]') return ['::1'];
+    if (normalized.length === 0) return ['127.0.0.1'];
+    return [host];
+  };
+
+  const isTcpPortInUse = async (host: string, port: number): Promise<boolean> => new Promise((resolve) => {
+    const socket = new net.Socket();
+    let settled = false;
+    const finish = (result: boolean): void => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(result);
+    };
+
+    socket.setTimeout(250);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+    socket.connect(port, host);
+  });
+
+  const inspectExternalPorts = async (
+    bindings: readonly ExternalServiceBindingSnapshot[],
+  ): Promise<ExternalServicePortState> => {
+    const daemonTargets = new Map<string, { readonly host: string; readonly port: number }>();
+    const listenerTargets = new Map<string, { readonly host: string; readonly port: number }>();
+    for (const binding of bindings) {
+      for (const host of getProbeHosts(binding.daemon.host)) {
+        daemonTargets.set(`${host}:${binding.daemon.port}`, { host, port: binding.daemon.port });
+      }
+      for (const host of getProbeHosts(binding.httpListener.host)) {
+        listenerTargets.set(`${host}:${binding.httpListener.port}`, { host, port: binding.httpListener.port });
+      }
+    }
+
+    const [daemonResults, listenerResults] = await Promise.all([
+      Promise.all([...daemonTargets.values()].map((target) => isTcpPortInUse(target.host, target.port))),
+      Promise.all([...listenerTargets.values()].map((target) => isTcpPortInUse(target.host, target.port))),
+    ]);
+
+    return {
+      daemonPortInUse: daemonResults.some(Boolean),
+      httpListenerPortInUse: listenerResults.some(Boolean),
+    };
+  };
+
   let externalServices: ExternalServicesHandle = {
     daemonServer: null,
     httpListener: null,
@@ -299,6 +377,49 @@ export async function bootstrapRuntime(
     async stop(): Promise<void> {},
   };
   let externalServicesPromise: Promise<ExternalServicesHandle> | null = null;
+  let externalServiceBindings = readExternalServiceBindings();
+  let externalServicePortState: ExternalServicePortState = {
+    daemonPortInUse: false,
+    httpListenerPortInUse: false,
+  };
+  const inspectExternalServices = () => ({
+    daemonRunning: externalServices.daemonServer !== null,
+    daemonPortInUse: externalServicePortState.daemonPortInUse,
+    httpListenerRunning: externalServices.httpListener !== null,
+    httpListenerPortInUse: externalServicePortState.httpListenerPortInUse,
+  });
+  const platformExternalServices = uiServices.platform as typeof uiServices.platform & {
+    externalServices: NonNullable<typeof uiServices.platform.externalServices>;
+  };
+  platformExternalServices.externalServices = {
+    inspect: inspectExternalServices,
+    restart: async () => {
+      if (externalServicesPromise) {
+        try {
+          externalServices = await externalServicesPromise;
+        } catch {
+          // A failed previous startup should not prevent a restart attempt.
+        }
+      }
+      await externalServices.stop();
+      const previousBindings = externalServiceBindings;
+      externalServiceBindings = readExternalServiceBindings();
+      const daemonHomeDir = join(services.homeDirectory, '.goodvibes', 'daemon');
+      const companionTokenRecord = getOrCreateCompanionToken('tui', { daemonHomeDir });
+      externalServicesPromise = startExternalServices(
+        configManager,
+        runtimeBus,
+        hookDispatcher,
+        { sharedDaemonToken: companionTokenRecord.token },
+        services,
+      );
+      externalServices = await externalServicesPromise;
+      controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
+      externalServicePortState = await inspectExternalPorts([previousBindings, externalServiceBindings]);
+      requestRender();
+      return inspectExternalServices();
+    },
+  };
   deferredStartup.schedule({
     label: 'plugins',
     run: async () => {
@@ -349,6 +470,7 @@ export async function bootstrapRuntime(
       if (prune.failedPaths.length > 0) {
         logger.warn(`[bootstrap] Failed to prune ${prune.failedPaths.length} stale operator-token file(s) (permission/race): ${prune.failedPaths.join(', ')}`);
       }
+      externalServiceBindings = readExternalServiceBindings();
       externalServicesPromise = startExternalServices(
         configManager,
         runtimeBus,
@@ -358,6 +480,7 @@ export async function bootstrapRuntime(
       );
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
+      externalServicePortState = await inspectExternalPorts([externalServiceBindings]);
       requestRender();
     },
     onError: (error) => {

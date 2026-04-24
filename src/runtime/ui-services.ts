@@ -48,12 +48,27 @@ export interface UiPlatformServices {
   readonly localUserAuthManager: RuntimeServices['localUserAuthManager'];
   readonly mcpRegistry: RuntimeServices['mcpRegistry'];
   readonly serviceRegistry: RuntimeServices['serviceRegistry'];
+  readonly surfaceRegistry: RuntimeServices['surfaceRegistry'];
   readonly subscriptionManager: RuntimeServices['subscriptionManager'];
   readonly secretsManager: SecretsManager;
   readonly tokenAuditor: RuntimeServices['tokenAuditor'];
   readonly replayEngine: RuntimeServices['replayEngine'];
   readonly webhookNotifier: RuntimeServices['webhookNotifier'];
   readonly policyRuntimeState: RuntimeServices['policyRuntimeState'];
+  readonly externalServices?: {
+    inspect(): {
+      readonly daemonRunning: boolean;
+      readonly daemonPortInUse?: boolean;
+      readonly httpListenerRunning: boolean;
+      readonly httpListenerPortInUse?: boolean;
+    };
+    restart(): Promise<{
+      readonly daemonRunning: boolean;
+      readonly daemonPortInUse?: boolean;
+      readonly httpListenerRunning: boolean;
+      readonly httpListenerPortInUse?: boolean;
+    }>;
+  };
 }
 
 export interface UiPlanningServices {
@@ -138,6 +153,7 @@ export function createUiRuntimeServices(
       localUserAuthManager: runtimeServices.localUserAuthManager,
       mcpRegistry: runtimeServices.mcpRegistry,
       serviceRegistry: runtimeServices.serviceRegistry,
+      surfaceRegistry: runtimeServices.surfaceRegistry,
       subscriptionManager: runtimeServices.subscriptionManager,
       secretsManager: runtimeServices.secretsManager,
       tokenAuditor: runtimeServices.tokenAuditor,

@@ -18,6 +18,8 @@ import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
+import type { OnboardingWizardController } from './onboarding/onboarding-wizard.ts';
+import type { OnboardingWizardAction } from './onboarding/onboarding-wizard.ts';
 import {
   IMAGE_EXTENSIONS,
   formatFileSize,
@@ -39,6 +41,7 @@ import { handlePanelIntegrationAction } from './panel-integration-actions.ts';
 import { SelectionManager } from './selection.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
+import type { ModelPickerTarget } from './model-picker.ts';
 
 /**
  * InputFeedContext — The single long-lived context object passed to feedInputTokens
@@ -66,8 +69,8 @@ import type { KeybindingsManager } from './keybindings.ts';
  *   - `pasteRegistry`, `imageRegistry` — owned Maps, never replaced
  *   - `selectionModal`, `bookmarkModal`, `settingsModal`, `sessionPickerModal`,
  *     `profilePickerModal` — modal objects constructed once in InputHandler constructor
- *   - `filePicker`, `modelPicker`, `processModal`, `liveTailModal`, `agentDetailModal`,
- *     `contextInspectorModal`, `blockActionsMenu`, `searchManager`, `historySearch` —
+ *   - `filePicker`, `modelPicker`, `onboardingWizard`, `processModal`, `liveTailModal`,
+ *     `agentDetailModal`, `contextInspectorModal`, `blockActionsMenu`, `searchManager`, `historySearch` —
  *     service objects constructed once
  *   - `panelManager`, `keybindingsManager` — from uiServices, stable for app lifetime
  *   - `modalStack` — reference to the handler's shared array (mutated in place)
@@ -108,6 +111,7 @@ export interface InputFeedContext {
   autocomplete: AutocompleteEngine | null;
   readonly filePicker: FilePickerModal;
   readonly modelPicker: ModelPickerModal;
+  readonly onboardingWizard: OnboardingWizardController;
   readonly processModal: ProcessModal;
   readonly liveTailModal: LiveTailModal;
   readonly agentDetailModal: AgentDetailModal;
@@ -148,6 +152,9 @@ export interface InputFeedContext {
   readonly findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   readonly cleanupMarkerRegistry: (text: string) => void;
   readonly expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[];
+  readonly openModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
+  readonly onModelPickerCommit: () => boolean;
+  readonly onOnboardingAction: (action: OnboardingWizardAction) => void;
   readonly exitApp: () => void;
 }
 
@@ -173,6 +180,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       settingsModal: context.settingsModal,
       sessionPickerModal: context.sessionPickerModal,
       profilePickerModal: context.profilePickerModal,
+      onboardingWizard: context.onboardingWizard,
       helpOverlayActive: context.helpOverlayActive,
       helpScrollOffset: context.helpScrollOffset,
       shortcutsOverlayActive: context.shortcutsOverlayActive,
@@ -204,12 +212,9 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       searchManager: context.searchManager,
       scroll: context.scroll,
       getScrollTop: context.getScrollTop,
-      openModelPickerWithTarget: context.commandContext?.openModelPicker
-        ? (target: import('./model-picker.ts').ModelPickerTarget) => {
-            context.modelPicker.target = target;
-            context.commandContext!.openModelPicker!();
-          }
-        : undefined,
+      openModelPickerWithTarget: context.openModelPickerWithTarget,
+      onModelPickerCommit: context.onModelPickerCommit,
+      onOnboardingAction: context.onOnboardingAction,
     }, token);
     context.selectionCallback = modalRoute.selectionCallback;
     context.helpOverlayActive = modalRoute.helpOverlayActive;

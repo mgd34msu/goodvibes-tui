@@ -18,8 +18,8 @@ function makeTmpDir(): string {
   return dir;
 }
 
-function jsonRef(value: unknown): string {
-  return `secretref:${JSON.stringify(value)}`;
+function goodVibesRef(source: string, id: string): string {
+  return `goodvibes://secrets/${source}/${encodeURIComponent(id)}`;
 }
 
 describe('secret refs', () => {
@@ -31,6 +31,7 @@ describe('secret refs', () => {
 
   afterEach(() => {
     delete process.env.GV_SECRET_REF_TEST;
+    delete process.env.GV_EXTERNAL_REF_TEST;
     delete process.env.GV_BW_SESSION;
     delete process.env.GV_VAULTWARDEN_SERVER;
     delete process.env.GV_BWS_TOKEN;
@@ -38,19 +39,19 @@ describe('secret refs', () => {
   });
 
   test('normalizes first-class provider refs', () => {
-    expect(normalizeSecretRef('op://Private/GoodVibes/API%20Key')?.source).toBe('1password');
-    expect(normalizeSecretRef('bw://GoodVibes%20Slack/password?sessionEnv=BW_SESSION')).toMatchObject({
+    expect(normalizeSecretRef('goodvibes://secrets/1password?vault=Private&item=GoodVibes&field=API%20Key')?.source).toBe('1password');
+    expect(normalizeSecretRef('goodvibes://secrets/bitwarden?item=GoodVibes%20Slack&field=password&sessionEnv=BW_SESSION')).toMatchObject({
       source: 'bitwarden',
       item: 'GoodVibes Slack',
       field: 'password',
       sessionEnv: 'BW_SESSION',
     });
-    expect(normalizeSecretRef('vaultwarden://GoodVibes%20Slack/password?server=https%3A%2F%2Fvault.example.test')).toMatchObject({
+    expect(normalizeSecretRef('goodvibes://secrets/vaultwarden?item=GoodVibes%20Slack&field=password&server=https%3A%2F%2Fvault.example.test')).toMatchObject({
       source: 'vaultwarden',
       item: 'GoodVibes Slack',
       server: 'https://vault.example.test',
     });
-    expect(normalizeSecretRef('bws://secret-id/value?accessTokenEnv=GV_BWS_TOKEN')).toMatchObject({
+    expect(normalizeSecretRef('goodvibes://secrets/bws/secret-id?field=value&accessTokenEnv=GV_BWS_TOKEN')).toMatchObject({
       source: 'bws',
       id: 'secret-id',
       field: 'value',
@@ -183,11 +184,19 @@ describe('secret refs', () => {
   test('SecretsManager resolves stored SecretRef values with local indirection', async () => {
     const manager = new SecretsManager({ projectRoot: tmpDir, globalHome: join(tmpDir, 'home') });
     await manager.set('GV_INNER_SECRET', 'stored-secret', { scope: 'project', medium: 'secure' });
-    await manager.set('GV_OUTER_SECRET', jsonRef({ source: 'goodvibes', id: 'GV_INNER_SECRET' }), { scope: 'project', medium: 'secure' });
+    await manager.set('GV_OUTER_SECRET', goodVibesRef('goodvibes', 'GV_INNER_SECRET'), { scope: 'project', medium: 'secure' });
 
     expect(await manager.get('GV_OUTER_SECRET')).toBe('stored-secret');
     const records = await manager.listDetailed();
     expect(records.find((record) => record.key === 'GV_OUTER_SECRET')?.refSource).toBe('goodvibes');
+  });
+
+  test('SecretsManager keeps env provider-style values raw unless they are GoodVibes secret refs', async () => {
+    const manager = new SecretsManager({ projectRoot: tmpDir, globalHome: join(tmpDir, 'home') });
+    const externalProviderValue = `op:${'//'}Private/GoodVibes/API%20Key`;
+    process.env.GV_EXTERNAL_REF_TEST = externalProviderValue;
+
+    expect(await manager.get('GV_EXTERNAL_REF_TEST')).toBe(externalProviderValue);
   });
 
   test('ServiceRegistry resolves tokenRef without requiring a local tokenKey value', async () => {

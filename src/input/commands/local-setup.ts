@@ -1,10 +1,9 @@
-import { dirname, join, resolve } from 'path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import type { CommandRegistry, CommandContext } from '../command-registry.ts';
+import { dirname, join } from 'path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import type { CommandRegistry } from '../command-registry.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
 import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
-import { isRunningInWsl } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
 import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
 import type { SetupTransferBundle } from './local-setup-transfer.ts';
 import {
@@ -15,20 +14,29 @@ import {
   parseSetupLink,
 } from './local-setup-transfer.ts';
 import { buildSetupReviewSnapshot, exportSetupSupportBundle, renderSetupSandboxReview } from './local-setup-review.ts';
-import { requirePanelManager, requireShellPaths } from './runtime-services.ts';
+import { openOnboardingWizard, requirePanelManager, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+
+type SetupSnapshot = Awaited<ReturnType<typeof buildSetupReviewSnapshot>>;
 
 export function registerLocalSetupCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'setup',
     aliases: ['startup'],
-    description: 'Review startup readiness, ecosystem posture, sandbox bring-up, and service configuration',
+    description: 'Launch the onboarding wizard and review startup readiness, service posture, and sandbox bring-up',
     usage: '[review|doctor|services|hooks|remote|sandbox|onboarding|support-bundle <dir>|export <path>|transfer <export|inspect|import> <path>|link <surface> [target]|open-link <uri>]',
     async handler(args, ctx) {
-      const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'review';
-      const snapshot = await buildSetupReviewSnapshot(ctx);
+      let shellPaths: ReturnType<typeof requireShellPaths> | null = null;
+      let snapshotPromise: Promise<SetupSnapshot> | null = null;
+      const getShellPaths = () => (shellPaths ??= requireShellPaths(ctx));
+      const getSnapshot = async (): Promise<SetupSnapshot> => {
+        snapshotPromise ??= buildSetupReviewSnapshot(ctx);
+        return snapshotPromise;
+      };
+
       if (sub === 'review') {
+        const snapshot = await getSnapshot();
         ctx.print([
           'Startup Readiness Review',
           `  session: ${snapshot.sessionId}`,
@@ -58,6 +66,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'doctor') {
+        const snapshot = await getSnapshot();
         ctx.print([
           'Startup Doctor',
           ...snapshot.issues.map((issue) => `  [${issue.severity.toUpperCase()}] ${issue.area}: ${issue.message}`),
@@ -75,6 +84,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'services') {
+        const snapshot = await getSnapshot();
         ctx.print([
           'Startup Services',
           `  configured: ${snapshot.serviceCount}`,
@@ -91,6 +101,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'hooks') {
+        const snapshot = await getSnapshot();
         const contracts = listHookPointContracts();
         ctx.print([
           'Startup Hooks',
@@ -102,6 +113,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'remote') {
+        const snapshot = await getSnapshot();
         const runners = ctx.ops.remoteRuntime?.listContracts() ?? [];
         ctx.print([
           'Startup Remote',
@@ -112,40 +124,19 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'sandbox') {
+        const snapshot = await getSnapshot();
         ctx.print(renderSetupSandboxReview(ctx, snapshot));
         return;
       }
 
       if (sub === 'onboarding') {
-        ctx.print([
-          'Onboarding Checklist',
-          `  providers: ${snapshot.providerCount > 0 ? '[ready]' : '[needs setup]'}`,
-          `  services: ${(snapshot.serviceCount > 0 || snapshot.oauthProviderCount > 0 || snapshot.builtinSubscriptionProviderCount > 0) ? '[ready]' : '[optional]'}`,
-          `  subscriptions: ${snapshot.activeSubscriptionCount > 0 ? '[ready]' : (snapshot.oauthProviderCount + snapshot.builtinSubscriptionProviderCount) > 0 ? '[available]' : '[optional]'}`,
-          `  hooks: ${(snapshot.managedHookCount + snapshot.managedHookChainCount) > 0 ? '[ready]' : '[optional]'}`,
-          `  remote: ${snapshot.remoteRunnerCount > 0 ? '[ready]' : '[optional]'}`,
-          `  sandbox: ${`${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'local' ? '[local default]' : (snapshot.sandboxSecureModeReady ? '[qemu ready]' : '[host blocked]')}`,
-          `  plugins: ${snapshot.pluginCount > 0 ? '[ready]' : '[optional]'}`,
-          `  skills: ${snapshot.skillCount > 0 ? '[ready]' : '[optional]'}`,
-          '',
-          'Recommended next commands:',
-          '  /health review',
-          '  /provider',
-          '  /services doctor',
-          '  /subscription review',
-          '  /hooks scaffold <name> <match> <type>',
-          '  /setup sandbox',
-          '  /sandbox recommend',
-          '  /sandbox qemu bootstrap .goodvibes/tui/sandbox 20',
-          ...(process.platform === 'win32' && !isRunningInWsl() ? ['  Run GoodVibes inside WSL before enabling QEMU sandboxing'] : []),
-          '  /remote setup',
-          '  /plugin browse',
-          '  /skills browse',
-        ].join('\n'));
+        openOnboardingWizard(ctx, { mode: 'edit', reset: true });
+        ctx.print('Opening onboarding wizard.');
         return;
       }
 
       if (sub === 'support-bundle') {
+        const snapshot = await getSnapshot();
         const dirArg = args[1];
         if (!dirArg) {
           ctx.print('Usage: /setup support-bundle <dir>');
@@ -167,12 +158,13 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
       }
 
       if (sub === 'export') {
+        const snapshot = await getSnapshot();
         const pathArg = args[1];
         if (!pathArg) {
           ctx.print('Usage: /setup export <path>');
           return;
         }
-        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
+        const targetPath = getShellPaths().resolveWorkspacePath(pathArg);
         mkdirSync(dirname(targetPath), { recursive: true });
         writeFileSync(targetPath, JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
         ctx.print(`Exported startup review to ${targetPath}`);
@@ -186,8 +178,9 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           ctx.print('Usage: /setup transfer <export|inspect|import> <path>');
           return;
         }
-        const targetPath = shellPaths.resolveWorkspacePath(pathArg);
+        const targetPath = getShellPaths().resolveWorkspacePath(pathArg);
         if (mode === 'export') {
+          const snapshot = await getSnapshot();
           const bundle = buildSetupTransferBundle(ctx, snapshot);
           ctx.print(`Exported setup transfer bundle to ${exportSetupTransferBundle(ctx, pathArg, bundle)}`);
           return;
@@ -210,17 +203,17 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
               }
             }
             if (bundle.services) {
-              const servicesPath = shellPaths.resolveProjectPath('tui', 'services.json');
+              const servicesPath = getShellPaths().resolveProjectPath('tui', 'services.json');
               mkdirSync(dirname(servicesPath), { recursive: true });
               writeFileSync(servicesPath, JSON.stringify(bundle.services, null, 2) + '\n', 'utf-8');
             }
             if (bundle.ecosystem?.plugins) {
-              const pluginsPath = shellPaths.resolveProjectPath('tui', 'ecosystem', 'plugins.json');
+              const pluginsPath = getShellPaths().resolveProjectPath('tui', 'ecosystem', 'plugins.json');
               mkdirSync(dirname(pluginsPath), { recursive: true });
               writeFileSync(pluginsPath, JSON.stringify(bundle.ecosystem.plugins, null, 2) + '\n', 'utf-8');
             }
             if (bundle.ecosystem?.skills) {
-              const skillsPath = shellPaths.resolveProjectPath('tui', 'ecosystem', 'skills.json');
+              const skillsPath = getShellPaths().resolveProjectPath('tui', 'ecosystem', 'skills.json');
               mkdirSync(dirname(skillsPath), { recursive: true });
               writeFileSync(skillsPath, JSON.stringify(bundle.ecosystem.skills, null, 2) + '\n', 'utf-8');
             }

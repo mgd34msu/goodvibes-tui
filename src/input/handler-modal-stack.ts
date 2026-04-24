@@ -17,6 +17,8 @@ export function modalOpened(state: ModalStackState, name: string): void {
   if (getActiveModalName(state) === null && state.modalStack.length > 0) {
     state.modalStack.length = 0;
   }
+  if (state.modalStack[state.modalStack.length - 1] === name) return;
+  if (state.modalStack.includes(name)) return;
   if (state.modalStack.length === 0) {
     state.modalReturnFocus = state.indicatorFocused ? 'indicator' : state.panelFocused ? 'panel' : 'prompt';
   }
@@ -46,6 +48,8 @@ export type EscapeState = ModalStackState & {
   selectionModal: ModalStackState['selectionModal'];
   autocompleteReset: () => void;
   autocompleteUpdate?: (query: string) => void;
+  clearOnboardingModelPickerCancelState?: () => void;
+  restoreOnboardingModelPickerCancelState?: () => void;
 };
 
 export function handleEscape(state: EscapeState): {
@@ -59,6 +63,7 @@ export function handleEscape(state: EscapeState): {
   selectionCallback: ((result: SelectionResult | null) => void) | null;
   panelFocused: boolean;
   indicatorFocused: boolean;
+  modalReturnFocus: NonNullable<ModalStackState['modalReturnFocus']>;
 } {
   let prompt = state.prompt;
   let cursorPos = state.cursorPos;
@@ -70,6 +75,7 @@ export function handleEscape(state: EscapeState): {
   let selectionCallback = state.selectionCallback;
   let panelFocused = state.panelFocused;
   let indicatorFocused = state.indicatorFocused;
+  let modalReturnFocus: NonNullable<ModalStackState['modalReturnFocus']> = state.modalReturnFocus ?? 'prompt';
 
   const restoreFocus = (): void => {
     if (state.modalStack.length > 0 || getActiveModalName({
@@ -78,8 +84,9 @@ export function handleEscape(state: EscapeState): {
       shortcutsOverlayActive,
       commandMode,
     }) !== null) return;
-    panelFocused = state.modalReturnFocus === 'panel';
-    indicatorFocused = state.modalReturnFocus === 'indicator';
+    panelFocused = modalReturnFocus === 'panel';
+    indicatorFocused = modalReturnFocus === 'indicator';
+    modalReturnFocus = 'prompt';
     state.modalReturnFocus = 'prompt';
   };
 
@@ -97,6 +104,7 @@ export function handleEscape(state: EscapeState): {
       selectionCallback,
       panelFocused,
       indicatorFocused,
+      modalReturnFocus,
     };
   }
 
@@ -118,7 +126,10 @@ export function handleEscape(state: EscapeState): {
       closeProfilePicker: () => state.profilePickerModal.close(),
       closeContextInspector: () => state.contextInspectorModal.close(),
       closeProcess: () => state.processModal.close(),
-      closeModelPicker: () => state.modelPicker.close(),
+      closeModelPicker: () => {
+        state.modelPicker.close();
+        state.restoreOnboardingModelPickerCancelState?.();
+      },
       closeFilePicker: () => state.filePicker.close(),
       closeBlockActions: () => state.blockActionsMenu.close(),
       closeSelection: () => {
@@ -126,6 +137,10 @@ export function handleEscape(state: EscapeState): {
         selectionCallback = null;
         state.selectionModal.close();
         cb?.(null);
+      },
+      closeOnboarding: () => {
+        state.onboardingWizard?.close();
+        state.clearOnboardingModelPickerCancelState?.();
       },
       closeCommandMode: () => {
         commandMode = false;
@@ -146,6 +161,7 @@ export function handleEscape(state: EscapeState): {
       openBookmark: () => state.bookmarkModal.open(),
       openProcess: () => state.processModal.open(),
       openContextInspector: () => state.contextInspectorModal.open(),
+      openOnboarding: () => state.onboardingWizard?.reopen(),
       openCommandMode: () => {
         commandMode = true;
         prompt = '/';
@@ -176,6 +192,7 @@ export function handleEscape(state: EscapeState): {
       selectionCallback,
       panelFocused,
       indicatorFocused,
+      modalReturnFocus,
     };
   }
 
@@ -200,6 +217,7 @@ export function handleEscape(state: EscapeState): {
       selectionCallback,
       panelFocused,
       indicatorFocused,
+      modalReturnFocus,
     };
   }
 
@@ -218,6 +236,7 @@ export function handleEscape(state: EscapeState): {
       selectionCallback,
       panelFocused,
       indicatorFocused,
+      modalReturnFocus,
     };
   }
 
@@ -233,5 +252,6 @@ export function handleEscape(state: EscapeState): {
     selectionCallback,
     panelFocused,
     indicatorFocused,
+    modalReturnFocus,
   };
 }

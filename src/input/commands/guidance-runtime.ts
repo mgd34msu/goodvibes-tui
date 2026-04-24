@@ -2,24 +2,29 @@ import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core/
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines, getGuidanceMode } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
 import { dismissGuidance, evaluateContextualGuidance, formatGuidanceItems, resetGuidance } from '@pellux/goodvibes-sdk/platform/runtime/guidance';
 import type { CommandRegistry } from '../command-registry.ts';
-import { openCommandPanel, requireProviderApi, requireReadModels, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
+import { requireProviderApi, requireReadModels, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
 
 export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'welcome',
     aliases: ['guide'],
-    description: 'Open the guided start surface for setup, security, marketplace, remote, and operator workflows',
+    description: 'Open the product entry surface for the onboarding wizard, security, marketplace, remote, and operator workflows',
     usage: '[open|print]',
     handler(args, ctx) {
       const sub = args[0] ?? 'open';
       if (sub === 'open' || sub === 'panel') {
-        openCommandPanel(ctx, 'welcome');
+        if (ctx.openOnboardingWizard) {
+          ctx.openOnboardingWizard({ mode: 'edit' });
+          return;
+        }
+        ctx.print('Use /onboarding to open the setup wizard.');
         return;
       }
       if (sub === 'print') {
         ctx.print([
           'Welcome To GoodVibes',
-          '  /setup onboarding   - first-run checklist and health flows',
+          '  /onboarding         - open the onboarding wizard with current settings preloaded',
+          '  /setup onboarding   - open the same onboarding wizard from setup workflows',
           '  /health review      - unified startup, service, and sandbox posture',
           '  /sandbox review     - inspect VM isolation posture',
           '  /marketplace open   - browse curated plugins, skills, hook packs, and policy packs',

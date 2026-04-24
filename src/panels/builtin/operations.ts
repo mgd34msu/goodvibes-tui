@@ -1,7 +1,6 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { CockpitPanel } from '../cockpit-panel.ts';
 import { ApprovalPanel } from '../approval-panel.ts';
-import { WelcomePanel } from '../welcome-panel.ts';
 import { PluginsPanel } from '../plugins-panel.ts';
 import { SkillsPanel } from '../skills-panel.ts';
 import { ServicesPanel } from '../services-panel.ts';
@@ -70,15 +69,6 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     category: 'monitoring',
     description: 'Action-specific approval workspace for why-prompted, why-denied, and what-if review',
     factory: () => new ApprovalPanel(deps.policyRuntimeState),
-  });
-
-  manager.registerType({
-    id: 'welcome',
-    name: 'Welcome',
-    icon: 'W',
-    category: 'monitoring',
-    description: 'Guided start surface for setup, security, marketplace, remote, and operator workflows',
-    factory: () => new WelcomePanel(),
   });
 
   manager.registerType({

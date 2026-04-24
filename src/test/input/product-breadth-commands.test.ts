@@ -9,6 +9,7 @@ import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/i
 import { createOperatorClientServices } from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
 import { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
 import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
 import type { MemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state/memory-store';
@@ -26,6 +27,7 @@ import { createRuntimeKnowledgeApi } from '@pellux/goodvibes-sdk/platform/runtim
 import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
 import { createRuntimeMcpApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-mcp-api';
 import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
+import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import {
   resetTestRuntimeServices,
 } from '../helpers/runtime-services.ts';
@@ -35,6 +37,28 @@ let productRemoteSupervisor: RemoteSupervisor;
 let localUserAuthManager: UserAuthManager;
 let runtimeServices: RuntimeServices;
 const TEST_TMP_ROOT = join(import.meta.dir, '../../../.tmp-tests');
+
+function createProductFeatureFlags() {
+  const featureFlags = createFeatureFlagManager();
+  featureFlags.loadFromConfig({
+    flags: {
+      'automation-domain': 'enabled',
+      'control-plane-gateway': 'enabled',
+      'delivery-engine': 'enabled',
+      'hitl-ux-modes': 'enabled',
+      'permission-divergence-dashboard': 'enabled',
+      'policy-as-code': 'enabled',
+      'route-binding': 'enabled',
+      'service-management': 'enabled',
+      'slack-surface': 'enabled',
+      'unified-runtime-task': 'enabled',
+      'watcher-framework': 'enabled',
+      'web-surface': 'enabled',
+      'webhook-surface': 'enabled',
+    },
+  });
+  return featureFlags;
+}
 
 describe('product breadth commands', () => {
   const originalCwd = process.cwd();
@@ -58,6 +82,7 @@ describe('product breadth commands', () => {
     runtimeServices = createRuntimeServices({
       runtimeBus: new RuntimeEventBus(),
       runtimeStore: createRuntimeStore(),
+      featureFlags: createProductFeatureFlags(),
       workingDir: root,
       homeDirectory: root,
       configManager: new ConfigManager({ surfaceRoot: 'tui',
@@ -373,6 +398,49 @@ describe('product breadth commands', () => {
     };
   }
 
+  function wireOnboardingShell(context: CommandContext): {
+    active: boolean;
+    mode: 'new' | 'edit' | 'reopen' | undefined;
+    modalStack: string[];
+  } {
+    const state = {
+      active: false,
+      mode: undefined as 'new' | 'edit' | 'reopen' | undefined,
+      modalStack: [] as string[],
+    };
+    const input = {
+      openOnboardingWizard: (modeOrOptions?: 'new' | 'edit' | 'reopen' | { mode?: 'new' | 'edit' | 'reopen' }) => {
+        state.active = true;
+        state.mode = typeof modeOrOptions === 'string'
+          ? modeOrOptions
+          : modeOrOptions?.mode ?? 'new';
+        state.modalStack = ['onboarding'];
+      },
+    } as never;
+
+    wireShellUiOpeners({
+      commandContext: context,
+      input,
+      panelManager: runtimeServices.panelManager,
+      conversation: {
+        setSplashSuppressed: () => {},
+        rebuildHistory: () => {},
+      } as never,
+      configManager: runtimeServices.configManager,
+      providerRegistry: runtimeServices.providerRegistry,
+      runtime: context.session.runtime as never,
+      featureFlags: runtimeServices.featureFlags,
+      mcpRegistry: runtimeServices.mcpRegistry,
+      subscriptionManager: runtimeServices.subscriptionManager,
+      serviceRegistry: runtimeServices.serviceRegistry,
+      getConfiguredProviderIds: () => [],
+      getPinned: async () => [],
+      render: () => {},
+    });
+
+    return state;
+  }
+
   test('services command can inspect and test configured services', async () => {
     mkdirSync(join(root, '.goodvibes', 'tui'), { recursive: true });
     writeFileSync(join(root, '.goodvibes', 'tui', 'services.json'), JSON.stringify({
@@ -562,6 +630,7 @@ describe('product breadth commands', () => {
       getSelectableModels: () => [{ id: 'model-1', provider: 'openai', displayName: 'Model 1', registryKey: 'openai:model-1' }],
       setCurrentModel: () => {},
     } as never;
+    const onboarding = wireOnboardingShell(ctx);
 
     await skills!.handler(['list'], ctx);
     expect(out.join('\n')).toContain('deploy-check');
@@ -584,11 +653,10 @@ describe('product breadth commands', () => {
 
     out.length = 0;
     await setup!.handler(['onboarding'], ctx);
-    expect(out.join('\n')).toContain('Onboarding Checklist');
-    expect(out.join('\n')).toContain('/hooks scaffold');
-    expect(out.join('\n')).toContain('sandbox:');
-    expect(out.join('\n')).toContain('/setup sandbox');
-    expect(out.join('\n')).toContain('/sandbox qemu bootstrap .goodvibes/tui/sandbox 20');
+    expect(onboarding.active).toBe(true);
+    expect(onboarding.mode).toBe('edit');
+    expect(onboarding.modalStack).toEqual(['onboarding']);
+    expect(out.join('\n')).toContain('Opening onboarding wizard.');
 
     out.length = 0;
     await setup!.handler(['sandbox'], ctx);
@@ -1794,6 +1862,7 @@ describe('product breadth commands', () => {
     const daemon = new DaemonServer({
       port: 39451,
       host: '127.0.0.1',
+      runtimeServices,
       userAuth: new UserAuthManager({
         bootstrapFilePath: join(root, '.goodvibes', 'tui', 'auth-users.json'),
         bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
@@ -2037,6 +2106,28 @@ describe('product breadth commands', () => {
     await deeplink!.handler(['bundle', 'export', deeplinkBundle], ctx);
     expect(out.join('\n')).toContain('Deep link bundle exported');
     expect(existsSync(deeplinkBundle)).toBe(true);
+  });
+
+  test('secrets command accepts only GoodVibes secret URI refs', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const secrets = registry.get('secrets');
+    expect(secrets).toBeDefined();
+
+    const out: string[] = [];
+    const ctx = makeContext(out);
+    process.env.GV_TEST_SECRET_REF = 'redacted-value';
+
+    try {
+      await secrets!.handler(['test', 'goodvibes://secrets/env/GV_TEST_SECRET_REF'], ctx);
+      expect(out.join('\n')).toContain('resolved <redacted>');
+
+      out.length = 0;
+      await secrets!.handler(['test', 'goodvibes://secrets/'], ctx);
+      expect(out.join('\n')).toContain('Invalid secret reference');
+    } finally {
+      delete process.env.GV_TEST_SECRET_REF;
+    }
   });
 
   test('teamwork command exposes packaged modes, recipes, and task creation', async () => {

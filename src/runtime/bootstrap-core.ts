@@ -432,6 +432,7 @@ export async function initializeBootstrapCore(
     createPermissionConfigReader(configManager),
     policyRuntimeState,
     services.hookDispatcher,
+    featureFlags,
   );
   await hookWorkbench.loadAndApplyManagedHooks();
 

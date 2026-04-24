@@ -1,4 +1,12 @@
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config/oauth-local-listener';
+import { clearModalStackForHandler, cleanupMarkerRegistryForHandler, executeBlockActionForHandler, expandPromptForHandler, findMarkerAtPosForHandler, getImageAttachmentsForHandler, handleBlockCopyForHandler, handleBlockRerunForHandler, handleBlockSaveForHandler, handleBlockToggleForHandler, handleBookmarkForHandler, handleCopyForHandler, handleCtrlCForHandler, handleDiffApplyForHandler, handleEscapeForHandler, hydrateOnboardingWizardFromRuntimeForHandler, modalOpenedForHandler, openOnboardingWizardForHandler, registerPasteForHandler } from './handler-interactions.ts';
+import { clearOnboardingModelPickerCancelStateForHandler, clearOnboardingPendingModelPickerTargetForHandler, completeOpenAiSubscriptionFromListenerForHandler, getOnboardingConfigValueForHandler, getOnboardingRuntimePostureForHandler, handleModelPickerCommitForHandler, handleOnboardingActionForHandler, handleOpenAiSubscriptionFinishForHandler, handleOpenAiSubscriptionStartForHandler, openModelPickerWithTargetForHandler, refreshOnboardingHydrationForHandler, restartOnboardingExternalServicesIfNeededForHandler, restoreOnboardingModelPickerCancelStateForHandler, syncRuntimeFromOnboardingRequestForHandler, verifyOnboardingRuntimePostureForHandler, type OnboardingRuntimePosture } from './handler-onboarding.ts';
+import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
+import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils/open-external';
+import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
 import { SelectionManager } from './selection.ts';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
@@ -19,6 +27,19 @@ import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
+import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
+import {
+  applyOnboardingRequest,
+  collectOnboardingSnapshot,
+  getOnboardingCompletionMarkerPath,
+  verifyOnboardingRequest,
+} from '../runtime/onboarding/index.ts';
+import type {
+  OnboardingApplyOperation,
+  OnboardingApplyRequest,
+  OnboardingShellPaths,
+  OnboardingVerificationItem,
+} from '../runtime/onboarding/index.ts';
 import {
   IMAGE_EXTENSIONS,
   cleanupMarkerRegistry,
@@ -59,9 +80,14 @@ import {
 import { clearModalStack, handleEscape, modalOpened } from './handler-modal-stack.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
 import {
+  captureOnboardingWizardSnapshot,
   handleHistorySearchToken,
   handleOverlayToken,
+  openOnboardingWizardState,
+  restoreOnboardingWizardSnapshot,
   handleSearchModeToken,
+  type OnboardingWizardSnapshot,
+  type OpenOnboardingWizardOptions,
 } from './handler-ui-state.ts';
 import {
   handleBookmarkModalToken,
@@ -86,8 +112,10 @@ import { handlePanelIntegrationAction as runPanelIntegrationAction } from './pan
 import type { Panel } from '../panels/types.ts';
 import type { UiRuntimeServices } from '../runtime/ui-services.ts';
 export { handlePanelIntegrationAction } from './panel-integration-actions.ts';
+import type { ModelPickerTarget } from './model-picker.ts';
 
 type SelectionModalCallback = (result: SelectionResult | null) => void;
+
 
 /**
  * InputHandler - Owns prompt text, paste registry, and keyboard/mouse handling.
@@ -109,14 +137,14 @@ export class InputHandler {
   /** True when keyboard focus is on the active panel (arrow/enter go to panel, not prompt). */
   public panelFocused = false;
 
-  private tokenizer = new InputTokenizer();
-  private pasteRegistry = new Map<string, string>();
-  private nextPasteId = 1;
-  private lastCtrlCTime = 0;
+  public tokenizer = new InputTokenizer();
+  public pasteRegistry = new Map<string, string>();
+  public nextPasteId = 1;
+  public lastCtrlCTime = 0;
   /** Long-lived feed context — reused across every feed() call to avoid per-keystroke allocation. */
-  private feedContext!: import('./handler-feed.ts').InputFeedContext;
-  private commandRegistry: CommandRegistry | null = null;
-  private commandContext: CommandContext | undefined = undefined;
+  public feedContext!: import('./handler-feed.ts').InputFeedContext;
+  public commandRegistry: CommandRegistry | null = null;
+  public commandContext: CommandContext | undefined = undefined;
   public autocomplete: AutocompleteEngine | null = null;
   public modelPicker: ModelPickerModal;
   public selectionModal = new SelectionModal();
@@ -128,6 +156,11 @@ export class InputHandler {
   public bookmarkModal: BookmarkModal;
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
+  public onboardingWizard = new OnboardingWizardController();
+  public onboardingModelPickerCancelSnapshot: OnboardingWizardSnapshot | null = null;
+  public onboardingHydrationSerial = 0;
+  public onboardingApplyPending = false;
+  public onboardingOpenAiListenerSerial = 0;
 
   /**
    * Modal navigation stack. Each element is the name of an open modal.
@@ -142,47 +175,48 @@ export class InputHandler {
   public helpScrollOffset = 0;
   public shortcutsOverlayActive = false;
   public shortcutsScrollOffset = 0;
-  private inputHistory: InputHistory | null = null;
+  public inputHistory: InputHistory | null = null;
   public filePicker: FilePickerModal;
   public historySearch: HistorySearch = new HistorySearch(() => this.inputHistory?.getEntries() ?? []);
-  private conversationManager: ConversationManager | null = null;
-  private selectionCallback: SelectionModalCallback | null = null;
-  private syncFeedSelectionCallback: ((callback: SelectionModalCallback | null) => void) | null = null;
+  public conversationManager: ConversationManager | null = null;
+  public selectionCallback: SelectionModalCallback | null = null;
+  public syncFeedSelectionCallback: ((callback: SelectionModalCallback | null) => void) | null = null;
   /** Time of last [COPIED] block feedback, for brief display. */
   public lastBlockCopyTime = 0;
-  private mouseDownRow = -1;
-  private mouseDownCol = -1;
+  public mouseDownRow = -1;
+  public mouseDownCol = -1;
 
   /** Pasted images: maps marker IDs to base64 image data. */
-  private imageRegistry = new Map<string, { data: string; mediaType: string }>();
-  private nextImageId = 1;
+  public imageRegistry = new Map<string, { data: string; mediaType: string }>();
+  public nextImageId = 1;
 
   // ── Undo / Redo ────────────────────────────────────────────────────────────
-  private undoStack: Array<{ prompt: string; cursorPos: number }> = [];
-  private redoStack: Array<{ prompt: string; cursorPos: number }> = [];
-  private static readonly MAX_UNDO = 50;
+  public undoStack: Array<{ prompt: string; cursorPos: number }> = [];
+  public redoStack: Array<{ prompt: string; cursorPos: number }> = [];
+  public static readonly MAX_UNDO = 50;
 
   // ── Path completion (Tab on path-like token) ───────────────────────────────
   /** Current list of path completions cycling on repeated Tab presses. */
-  private pathCompletions: string[] = [];
+  public pathCompletions: string[] = [];
   /** Index into pathCompletions for Tab cycling. */
-  private pathCompletionIndex = -1;
+  public pathCompletionIndex = -1;
   /** The raw prefix that triggered path completion (e.g. 'src/in'). */
-  private pathCompletionPrefix = '';
+  public pathCompletionPrefix = '';
   /** Start offset in prompt where the path token begins. */
-  private pathCompletionStart = 0;
+  public pathCompletionStart = 0;
 
   constructor(
-    private requestRender: () => void,
-    private selection: SelectionManager,
-    private getScrollTop: () => number,
-    private getViewportHeight: () => number,
-    private getHistory: () => InfiniteBuffer,
-    private scroll: (delta: number) => void,
-    private exitApp: () => void,
-    private readonly uiServices: Pick<UiRuntimeServices,
+    public requestRender: () => void,
+    public selection: SelectionManager,
+    public getScrollTop: () => number,
+    public getViewportHeight: () => number,
+    public getHistory: () => InfiniteBuffer,
+    public scroll: (delta: number) => void,
+    public exitApp: () => void,
+    public readonly uiServices: Pick<UiRuntimeServices,
       'agents'
       | 'environment'
+      | 'platform'
       | 'providers'
       | 'sessions'
       | 'shell'
@@ -220,7 +254,7 @@ export class InputHandler {
    * initFeedContext — Build the long-lived InputFeedContext once via factory.
    * See feed-context-factory.ts for full field documentation.
    */
-  private initFeedContext(): void {
+  public initFeedContext(): void {
     this.feedContext = buildInitialFeedContext(
       {
         prompt: this.prompt, cursorPos: this.cursorPos, commandMode: this.commandMode,
@@ -246,6 +280,7 @@ export class InputHandler {
         autocomplete: this.autocomplete,
         filePicker: this.filePicker,
         modelPicker: this.modelPicker,
+        onboardingWizard: this.onboardingWizard,
         processModal: this.processModal,
         liveTailModal: this.liveTailModal,
         agentDetailModal: this.agentDetailModal,
@@ -288,12 +323,16 @@ export class InputHandler {
         findMarkerAtPos: (pos: number) => this.findMarkerAtPos(pos),
         cleanupMarkerRegistry: (text: string) => this.cleanupMarkerRegistry(text),
         expandPrompt: (text: string) => this.expandPrompt(text),
+        openModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') =>
+          this.openModelPickerWithTarget(target, source),
+        onModelPickerCommit: () => this.handleModelPickerCommit(),
+        onOnboardingAction: (action: OnboardingWizardAction) => { void this.handleOnboardingAction(action); },
       },
     );
   }
 
   /** Sync mutable handler fields back into feedContext after in-feed mutations. */
-  private syncFeedContextMutableFields(): void {
+  public syncFeedContextMutableFields(): void {
     const h = this;
     syncFeedContextMutableFields({ prompt: h.prompt, cursorPos: h.cursorPos, commandMode: h.commandMode,
       panelFocused: h.panelFocused, indicatorFocused: h.indicatorFocused, helpOverlayActive: h.helpOverlayActive,
@@ -337,211 +376,46 @@ export class InputHandler {
     this.requestRender();
   }
 
-  public registerPaste(content: string): string {
-    const result = registerPaste({
-      pasteRegistry: this.pasteRegistry,
-      nextPasteId: this.nextPasteId,
-      imageRegistry: this.imageRegistry,
-      nextImageId: this.nextImageId,
-    }, content, this.uiServices.environment.shellPaths.workingDirectory);
-    this.nextPasteId = result.nextPasteId;
-    this.nextImageId = result.nextImageId;
-    return result.marker;
-  }
 
-  /**
-   * expandPrompt - Replaces paste markers with actual content.
-   * If image markers are present, returns ContentPart[] for multimodal delivery.
-   * Otherwise returns a plain string.
-   */
-  private expandPrompt(text: string) {
-    return expandPrompt(this.pasteRegistry, this.imageRegistry, text, this.uiServices.environment.shellPaths.workingDirectory);
-  }
+  public openOnboardingWizard(
+    modeOrOptions: OnboardingWizardMode | OpenOnboardingWizardOptions = 'new',
+  ): void { openOnboardingWizardForHandler(this, modeOrOptions); }
 
-  /**
-   * getImageAttachments - Returns a copy of the current image registry.
-   * Callers can use this to attach images when building LLM messages.
-   */
-  public getImageAttachments(): Map<string, { data: string; mediaType: string }> {
-    return new Map(this.imageRegistry);
-  }
+  public async hydrateOnboardingWizardFromRuntime(hydrationSerial: number): Promise<void> { await hydrateOnboardingWizardFromRuntimeForHandler(this, hydrationSerial); }
+  public registerPaste(content: string): string { return registerPasteForHandler(this, content); }
+  public expandPrompt(text: string) { return expandPromptForHandler(this, text); }
+  public getImageAttachments(): Map<string, { data: string; mediaType: string }> { return getImageAttachmentsForHandler(this); }
+  public cleanupMarkerRegistry(markerText: string): void { cleanupMarkerRegistryForHandler(this, markerText); }
+  public findMarkerAtPos(pos: number): { start: number; end: number } | null { return findMarkerAtPosForHandler(this, pos); }
+  public handleCopy(): void { handleCopyForHandler(this); }
+  public handleBlockCopy(): void { handleBlockCopyForHandler(this); }
+  public handleBookmark(): void { handleBookmarkForHandler(this); }
+  public handleBlockSave(): void { handleBlockSaveForHandler(this); }
+  public executeBlockAction(actionId: string): void { executeBlockActionForHandler(this, actionId); }
+  public handleBlockRerun(): void { handleBlockRerunForHandler(this); }
+  public handleBlockToggle(): void { handleBlockToggleForHandler(this); }
+  public handleDiffApply(): boolean { return handleDiffApplyForHandler(this); }
+  public handleCtrlC(): void { handleCtrlCForHandler(this); }
+  public modalOpened(name: string): void { modalOpenedForHandler(this, name); }
+  public clearModalStack(): void { clearModalStackForHandler(this); }
+  public handleEscape(): void { handleEscapeForHandler(this); }
 
-  /**
-   * findMarkerAtPos - Returns the start/end of an atomic marker if pos is inside one.
-   * Used to make backspace/delete/arrow treat markers as single units.
-   */
-  /**
-   * cleanupMarkerRegistry - If the given marker text is an IMAGE marker,
-   * parses its ID and removes it from imageRegistry.
-   */
-  private cleanupMarkerRegistry(markerText: string): void {
-    cleanupMarkerRegistry(this.imageRegistry, markerText);
-  }
+  public clearOnboardingPendingModelPickerTarget(): void { clearOnboardingPendingModelPickerTargetForHandler(this); }
+  public clearOnboardingModelPickerCancelState(): void { clearOnboardingModelPickerCancelStateForHandler(this); }
+  public restoreOnboardingModelPickerCancelState(): void { restoreOnboardingModelPickerCancelStateForHandler(this); }
+  public openModelPickerWithTarget(target: ModelPickerTarget, source: 'settings' | 'onboarding' = 'settings'): boolean { return openModelPickerWithTargetForHandler(this, target, source); }
+  public handleModelPickerCommit(): boolean { return handleModelPickerCommitForHandler(this); }
+  public async handleOnboardingAction(action: OnboardingWizardAction): Promise<void> { await handleOnboardingActionForHandler(this, action); }
+  public async refreshOnboardingHydration(options: { readonly preserveValues?: boolean; readonly targetStepId?: string } = {}): Promise<void> { await refreshOnboardingHydrationForHandler(this, options); }
+  public async handleOpenAiSubscriptionStart(): Promise<void> { await handleOpenAiSubscriptionStartForHandler(this); }
+  public async completeOpenAiSubscriptionFromListener(listener: Awaited<ReturnType<typeof createOAuthLocalListener>>, verifier: string, serial: number): Promise<void> { await completeOpenAiSubscriptionFromListenerForHandler(this, listener, verifier, serial); }
+  public async handleOpenAiSubscriptionFinish(): Promise<void> { await handleOpenAiSubscriptionFinishForHandler(this); }
+  public syncRuntimeFromOnboardingRequest(request: ReturnType<OnboardingWizardController['buildApplyRequest']>): void { syncRuntimeFromOnboardingRequestForHandler(this, request); }
+  public getOnboardingConfigValue(request: OnboardingApplyRequest, key: string): unknown { return getOnboardingConfigValueForHandler(this, request, key); }
+  public getOnboardingRuntimePosture(request: OnboardingApplyRequest): OnboardingRuntimePosture { return getOnboardingRuntimePostureForHandler(this, request); }
+  public async restartOnboardingExternalServicesIfNeeded(request: OnboardingApplyRequest): Promise<OnboardingVerificationItem[]> { return await restartOnboardingExternalServicesIfNeededForHandler(this, request); }
+  public verifyOnboardingRuntimePosture(request: OnboardingApplyRequest): OnboardingVerificationItem[] { return verifyOnboardingRuntimePostureForHandler(this, request); }
 
-  private findMarkerAtPos(pos: number): { start: number; end: number } | null {
-    return findMarkerAtPos(this.prompt, pos);
-  }
-
-  private handleCopy(): void {
-    handleCopy(this.selection, this.getHistory, this.requestRender, () => {
-      this.lastCopyTime = Date.now();
-    });
-  }
-
-  /**
-   * handleBlockCopy - Ctrl+Y: Copy the content of the nearest code/tool block.
-   */
-  private handleBlockCopy(): void {
-    handleBlockCopy(this.conversationManager, this.getScrollTop, this.requestRender, () => {
-      this.lastBlockCopyTime = Date.now();
-    });
-  }
-
-  /**
-   * handleBookmark - Ctrl+B: Toggle bookmark on the nearest block.
-   */
-  private handleBookmark(): void {
-    handleBookmark(this.conversationManager, this.getScrollTop, this.requestRender, this.uiServices.shell.bookmarkManager);
-  }
-
-  /**
-   * handleBlockSave - Ctrl+S: Save nearest block content to a file.
-   */
-  private handleBlockSave(): void {
-    handleBlockSave(this.conversationManager, this.getScrollTop, this.requestRender, this.uiServices.shell.bookmarkManager);
-  }
-
-  /**
-   * executeBlockAction - Execute a block action ID on the nearest block.
-   * Called when the user selects an action from the BlockActionsMenu.
-   */
-  private executeBlockAction(actionId: string): void {
-    switch (actionId) {
-      case 'copy':     this.handleBlockCopy(); break;
-      case 'bookmark': this.handleBookmark(); break;
-      case 'toggle':   this.handleBlockToggle(); break;
-      case 'apply':    this.handleDiffApply(); break;
-      case 'rerun':    this.handleBlockRerun(); break;
-    }
-  }
-
-  /**
-   * handleBlockRerun - Re-run the tool call for the nearest tool block.
-   * Emits a tool-rerun event for the orchestrator to handle.
-   */
-  private handleBlockRerun(): void {
-    handleBlockRerun(this.conversationManager, this.getScrollTop, this.requestRender);
-  }
-
-  /**
-   * handleBlockToggle - Tab (non-command mode): Toggle collapse of nearest block.
-   */
-  private handleBlockToggle(): void {
-    handleBlockToggle(this.conversationManager, this.getScrollTop, this.requestRender);
-  }
-
-  /**
-   * handleDiffApply - Ctrl+A when a diff block is nearest: request approval and apply the diff.
-   * Returns true if a diff was found and applied (so caller can skip default Ctrl+A).
-   */
-  private handleDiffApply(): boolean {
-    return handleDiffApply(
-      this.conversationManager,
-      this.getScrollTop,
-      this.commandContext,
-      this.requestRender,
-      () => `diff-apply-${Date.now()}`,
-      'write',
-    );
-  }
-
-  /**
-   * Handle Ctrl+C:
-   * - If prompt has text: clear it
-   * - If prompt is empty and LLM is thinking: cancel generation
-   * - If prompt is empty and idle: show exit notice (double = exit)
-   */
-  private handleCtrlC(): void {
-    handleCtrlC(
-      this.prompt,
-      () => this.saveUndoState(),
-      (value) => { this.prompt = value; },
-      (value) => { this.cursorPos = value; },
-      this.commandContext?.cancelGeneration,
-      this.exitApp,
-      this.requestRender,
-      this.lastCtrlCTime,
-      (value) => { this.lastCtrlCTime = value; },
-      (value) => { this.showExitNotice = value; },
-    );
-  }
-
-  /**
-   * Handle Escape:
-   * - If prompt has text: clear it
-   * - If prompt is empty: cancel generation (double-tap not needed)
-   */
-  /**
-   * Record that a modal has been opened and push it onto the navigation stack.
-   * Call this EVERY time a modal opens (except inside openModal()).
-   *
-   * @param name - The modal identifier (e.g. 'settings', 'help', 'process').
-   */
-  public modalOpened(name: string): void {
-    modalOpened(this, name);
-  }
-
-  /**
-   * Clear the modal navigation stack on non-modal user input (e.g. submit).
-   */
-  public clearModalStack(): void {
-    clearModalStack(this.modalStack);
-  }
-
-  private handleEscape(): void {
-    const result = handleEscape({
-      helpOverlayActive: this.helpOverlayActive,
-      shortcutsOverlayActive: this.shortcutsOverlayActive,
-      bookmarkModal: this.bookmarkModal,
-      agentDetailModal: this.agentDetailModal,
-      liveTailModal: this.liveTailModal,
-      settingsModal: this.settingsModal,
-      sessionPickerModal: this.sessionPickerModal,
-      profilePickerModal: this.profilePickerModal,
-      contextInspectorModal: this.contextInspectorModal,
-      processModal: this.processModal,
-      modelPicker: this.modelPicker,
-      filePicker: this.filePicker,
-      blockActionsMenu: this.blockActionsMenu,
-      selectionModal: this.selectionModal,
-      commandMode: this.commandMode,
-      modalStack: this.modalStack,
-      modalReturnFocus: this.modalReturnFocus,
-      panelFocused: this.panelFocused,
-      indicatorFocused: this.indicatorFocused,
-      prompt: this.prompt,
-      cursorPos: this.cursorPos,
-      requestRender: this.requestRender,
-      saveUndoState: () => this.saveUndoState(),
-      cancelGeneration: this.commandContext?.cancelGeneration,
-      selectionCallback: this.selectionCallback,
-      autocompleteReset: () => this.autocomplete?.reset(),
-      autocompleteUpdate: (query: string) => this.autocomplete?.update(query),
-      helpScrollOffset: this.helpScrollOffset,
-      shortcutsScrollOffset: this.shortcutsScrollOffset,
-    });
-    this.prompt = result.prompt;
-    this.cursorPos = result.cursorPos;
-    this.commandMode = result.commandMode;
-    this.helpOverlayActive = result.helpOverlayActive;
-    this.helpScrollOffset = result.helpScrollOffset;
-    this.shortcutsOverlayActive = result.shortcutsOverlayActive;
-    this.shortcutsScrollOffset = result.shortcutsScrollOffset;
-    this.selectionCallback = result.selectionCallback;
-    this.panelFocused = result.panelFocused;
-    this.indicatorFocused = result.indicatorFocused;
-    this.modalReturnFocus = 'prompt';
-  }
 
   /**
    * feed - Process raw stdin data through the tokenizer.
@@ -619,7 +493,7 @@ export class InputHandler {
    * handlePaste - Shared paste logic for Ctrl+V and middle-click.
    * Tries image clipboard first, falls back to text paste.
    */
-  private handlePaste(): void {
+  public handlePaste(): void {
     const result = handleClipboardPaste({
       prompt: this.prompt,
       cursorPos: this.cursorPos,
@@ -638,7 +512,7 @@ export class InputHandler {
   }
 
   /** Content width for wrapping — set by main.ts via setContentWidth(). */
-  private contentWidth = 76;
+  public contentWidth = 76;
 
   /** Set the content width used for wrapping calculations. Call from main.ts. */
   public setContentWidth(w: number): void {
@@ -650,7 +524,7 @@ export class InputHandler {
    * Uses the segment table to navigate visual lines, not raw \n lines.
    * Returns true if the cursor moved, false if at boundary.
    */
-  private moveCursorVertical(direction: -1 | 1): boolean {
+  public moveCursorVertical(direction: -1 | 1): boolean {
     const result = moveCursorVertical(
       this.prompt,
       this.cursorPos,
@@ -707,14 +581,14 @@ export class InputHandler {
    * saveUndoState - Snapshot current prompt + cursor onto the undo stack.
    * Clears the redo stack because a new edit invalidates future states.
    */
-  private saveUndoState(): void {
+  public saveUndoState(): void {
     saveUndoState(this.undoStack, this.redoStack, this.prompt, this.cursorPos, InputHandler.MAX_UNDO);
   }
 
   /**
    * handleUndo - Ctrl+Z: pop from undo stack, push current to redo stack.
    */
-  private handleUndo(): void {
+  public handleUndo(): void {
     const state = undoPromptState(this.undoStack, this.redoStack, this.prompt, this.cursorPos);
     if (!state) return;
     this.prompt = state.prompt;
@@ -725,7 +599,7 @@ export class InputHandler {
   /**
    * handleRedo - Ctrl+Shift+Z: pop from redo stack, push current to undo stack.
    */
-  private handleRedo(): void {
+  public handleRedo(): void {
     const state = redoPromptState(this.undoStack, this.redoStack, this.prompt, this.cursorPos);
     if (!state) return;
     this.prompt = state.prompt;
@@ -748,11 +622,11 @@ export class InputHandler {
    * Repeated Tab cycles through matches.
    * Returns true if path completion was performed.
    */
-  private findPathToken(): { start: number; prefix: string } | null {
+  public findPathToken(): { start: number; prefix: string } | null {
     return findPathToken(this.prompt, this.cursorPos);
   }
 
-  private handlePathCompletion(): boolean {
+  public handlePathCompletion(): boolean {
     const result = handlePathCompletion({
       prompt: this.prompt,
       cursorPos: this.cursorPos,
@@ -781,7 +655,7 @@ export class InputHandler {
    * Word-wrap a single line to fit within maxW columns.
    * Breaks at spaces; words wider than maxW are force-broken.
    */
-  private cyclePanelTab(direction: 'next' | 'prev'): void {
+  public cyclePanelTab(direction: 'next' | 'prev'): void {
     const pm = this.uiServices.shell.panelManager;
     if (pm.isVisible()) {
       if (direction === 'next') pm.nextWorkspaceTab();
@@ -790,11 +664,11 @@ export class InputHandler {
     }
   }
 
-  private handlePanelIntegrationAction(activePanel: Panel | null, key: string): void {
+  public handlePanelIntegrationAction(activePanel: Panel | null, key: string): void {
     runPanelIntegrationAction(this.uiServices.shell.panelManager, activePanel, key, this.commandContext);
   }
 
-  private wordWrapLine(line: string, maxW: number): string[] {
+  public wordWrapLine(line: string, maxW: number): string[] {
     return wordWrapLine(line, maxW);
   }
 }

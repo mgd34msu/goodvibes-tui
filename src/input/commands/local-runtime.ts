@@ -11,6 +11,16 @@ import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, r
 import { openCommandPanel, requireBookmarkManager, requireProviderApi, requireSecretsManager } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
+function isGoodVibesSecretRefInput(value: string): boolean {
+  const normalized = value.trim();
+  return normalized.startsWith('goodvibes://secrets/') && isSecretRefInput(normalized);
+}
+
+function isMalformedGoodVibesSecretRefInput(value: string): boolean {
+  const normalized = value.trim();
+  return normalized.startsWith('goodvibes://') && !isGoodVibesSecretRefInput(normalized);
+}
+
 function toggleBlocks(typeFilter: string, collapsed: boolean, ctx: CommandContext): void {
   const VALID_TYPES = ['all', 'thinking', 'tool', 'code'] as const;
   if (!VALID_TYPES.includes(typeFilter as typeof VALID_TYPES[number])) {
@@ -157,11 +167,11 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
           ...BUILTIN_SECRET_PROVIDER_SOURCES.map((source) => `  ${source}`),
           '',
           'Examples:',
-          '  /secrets link OPENAI_API_KEY secret://env/OPENAI_API_KEY',
-          '  /secrets link SLACK_BOT_TOKEN bw://GoodVibes%20Slack/password?sessionEnv=BW_SESSION',
-          '  /secrets link SLACK_BOT_TOKEN vaultwarden://GoodVibes%20Slack/password?server=https%3A%2F%2Fvault.example.test',
-          '  /secrets link STRIPE_TOKEN bws://00000000-0000-0000-0000-000000000000/value?accessTokenEnv=BWS_ACCESS_TOKEN',
-          '  /secrets link OPENAI_API_KEY op://Private/GoodVibes%20OpenAI/API%20Key',
+          '  /secrets link OPENAI_API_KEY goodvibes://secrets/env/OPENAI_API_KEY',
+          '  /secrets link SLACK_BOT_TOKEN goodvibes://secrets/bitwarden?item=GoodVibes%20Slack&field=password&sessionEnv=BW_SESSION',
+          '  /secrets link SLACK_BOT_TOKEN goodvibes://secrets/vaultwarden?item=GoodVibes%20Slack&field=password&server=https%3A%2F%2Fvault.example.test',
+          '  /secrets link STRIPE_TOKEN goodvibes://secrets/bws/00000000-0000-0000-0000-000000000000?field=value&accessTokenEnv=BWS_ACCESS_TOKEN',
+          '  /secrets link OPENAI_API_KEY goodvibes://secrets/1password?vault=Private&item=GoodVibes%20OpenAI&field=API%20Key',
         ].join('\n'));
         return;
       }
@@ -171,7 +181,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('[secrets] Usage: /secrets test <secret-ref>');
           return;
         }
-        if (!isSecretRefInput(refText)) {
+        if (!isGoodVibesSecretRefInput(refText)) {
           ctx.print('[secrets] Invalid secret reference. Use /secrets providers for examples.');
           return;
         }
@@ -192,7 +202,11 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         const value = rawValueParts.join(' ');
-        if (sub === 'link' && !isSecretRefInput(value)) {
+        if (sub === 'link' && !isGoodVibesSecretRefInput(value)) {
+          ctx.print('[secrets] Invalid secret reference. Use /secrets providers for examples.');
+          return;
+        }
+        if (sub === 'set' && isMalformedGoodVibesSecretRefInput(value)) {
           ctx.print('[secrets] Invalid secret reference. Use /secrets providers for examples.');
           return;
         }
