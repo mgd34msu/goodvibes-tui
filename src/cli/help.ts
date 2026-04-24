@@ -35,6 +35,7 @@ export function renderGoodVibesHelp(binary = 'goodvibes'): string {
     '  run|exec [prompt]          Run non-interactively with text/json/stream-json output',
     '  serve|daemon               Start the daemon/API host',
     '  web                        Show browser surface bind URL and enablement',
+    '  service                    Inspect/manage daemon service lifecycle',
     '  status                     Print config, provider, service, and onboarding posture',
     '  doctor                     Print status plus setup warnings',
     '  onboarding [status]        Open onboarding in the TUI, or print onboarding status',
@@ -94,6 +95,7 @@ export function renderGoodVibesHelp(binary = 'goodvibes'): string {
     `  ${binary} surfaces`,
     `  ${binary} surfaces check`,
     `  ${binary} surfaces enable web`,
+    `  ${binary} service check`,
     `  ${binary} listener test`,
     `  ${binary} control-plane status`,
     `  ${binary} subscription providers`,
@@ -200,6 +202,11 @@ const COMMAND_HELP: Record<string, CommandHelp> = {
     summary: 'Show the configured browser surface URL, bind address, and enablement state.',
     examples: ['web', 'web --open', 'web --hostname 0.0.0.0 --port 3423'],
   },
+  service: {
+    usage: ['service status', 'service check', 'service install|start|stop|restart|uninstall'],
+    summary: 'Inspect and manage the daemon service lifecycle, autostart, restart policy, PID, logs, and endpoint readiness.',
+    examples: ['service status', 'service check --json', 'service install'],
+  },
   completion: {
     usage: ['completion <bash|zsh|fish>'],
     summary: 'Generate shell completion scripts.',
@@ -235,6 +242,7 @@ const HELP_ALIASES: Record<string, string> = {
   qr: 'pair',
   daemon: 'serve',
   server: 'serve',
+  services: 'service',
   bridge: 'remote',
 };
 

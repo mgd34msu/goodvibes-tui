@@ -25,7 +25,10 @@ import { classifyProviderSetup } from './provider-classification.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { applyRuntimeEndpointFlagOverrides } from './config-overrides.ts';
 import type { RuntimeEndpointId } from './endpoints.ts';
-import { buildListenerTestResult, formatListenerTestResult, handleBundle, handleSecrets, handleSessions, handleSurfacesCommand, handleTasks, renderControlPlaneStatus, renderPairing, renderRemote, renderSubscriptions, renderWeb } from './management-commands.ts';
+import { handleServiceCommand } from './service-command.ts';
+import { handleBundleCommand } from './bundle-command.ts';
+import { buildListenerTestResult, formatListenerTestResult, handleSurfacesCommand } from './surface-command.ts';
+import { buildControlPlaneStatusResult, formatControlPlaneStatus, handleSecrets, handleSessions, handleTasks, renderPairing, renderRemote, renderSubscriptions, renderWeb } from './management-commands.ts';
 
 export interface CliCommandRuntime {
   readonly cli: GoodVibesCliParseResult;
@@ -40,23 +43,6 @@ interface CliCommandResult {
 }
 
 type Formatter = (value: unknown, text: string) => string;
-
-export const SURFACE_CONFIGS = [
-  ['slack', 'Slack', ['surfaces.slack.signingSecret', 'surfaces.slack.botToken']],
-  ['discord', 'Discord', ['surfaces.discord.publicKey', 'surfaces.discord.botToken', 'surfaces.discord.applicationId']],
-  ['telegram', 'Telegram', ['surfaces.telegram.botToken']],
-  ['webhook', 'Webhook', ['surfaces.webhook.secret']],
-  ['ntfy', 'ntfy', ['surfaces.ntfy.baseUrl', 'surfaces.ntfy.topic']],
-  ['googleChat', 'Google Chat', ['surfaces.googleChat.webhookUrl']],
-  ['signal', 'Signal', ['surfaces.signal.bridgeUrl', 'surfaces.signal.account']],
-  ['whatsapp', 'WhatsApp', ['surfaces.whatsapp.accessToken', 'surfaces.whatsapp.phoneNumberId']],
-  ['imessage', 'iMessage', ['surfaces.imessage.bridgeUrl', 'surfaces.imessage.account']],
-  ['msteams', 'Microsoft Teams', ['surfaces.msteams.appId', 'surfaces.msteams.appPassword']],
-  ['bluebubbles', 'BlueBubbles', ['surfaces.bluebubbles.serverUrl', 'surfaces.bluebubbles.password']],
-  ['mattermost', 'Mattermost', ['surfaces.mattermost.baseUrl', 'surfaces.mattermost.botToken']],
-  ['matrix', 'Matrix', ['surfaces.matrix.homeserverUrl', 'surfaces.matrix.accessToken', 'surfaces.matrix.userId']],
-] as const;
-
 
 export function yesNo(value: unknown): string {
   return value === true ? 'yes' : 'no';
@@ -653,6 +639,11 @@ export async function handleGoodVibesCliCommand(runtime: CliCommandRuntime): Pro
       case 'web':
         console.log(renderWeb(runtime));
         return { handled: true, exitCode: 0 };
+      case 'service': {
+        const result = await handleServiceCommand(runtime);
+        console.log(result.output);
+        return { handled: true, exitCode: result.exitCode };
+      }
       case 'providers': {
         const output = await renderProviders(runtime);
         console.log(output);
@@ -699,16 +690,18 @@ export async function handleGoodVibesCliCommand(runtime: CliCommandRuntime): Pro
         console.log(formatListenerTestResult(runtime, result));
         return { handled: true, exitCode: result.issues.length > 0 ? 1 : 0 };
       }
-      case 'control-plane':
-        console.log(await renderControlPlaneStatus(runtime));
-        return { handled: true, exitCode: 0 };
+      case 'control-plane': {
+        const result = await buildControlPlaneStatusResult(runtime);
+        console.log(formatControlPlaneStatus(runtime, result));
+        return { handled: true, exitCode: result.issues.length > 0 ? 1 : 0 };
+      }
       case 'pair':
         console.log(await renderPairing(runtime));
         return { handled: true, exitCode: 0 };
       case 'bundle': {
-        const output = await handleBundle(runtime);
-        console.log(output);
-        return { handled: true, exitCode: exitCodeForText(output) };
+        const result = await handleBundleCommand(runtime);
+        console.log(result.output);
+        return { handled: true, exitCode: result.exitCode };
       }
       case 'remote':
         console.log(await renderRemote(runtime, 'remote'));

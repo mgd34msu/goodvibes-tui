@@ -5,4 +5,7 @@ export * from './status.ts';
 export * from './completion.ts';
 export * from './config-overrides.ts';
 export * from './endpoints.ts';
+export * from './surface-command.ts';
+export * from './service-command.ts';
+export * from './bundle-command.ts';
 export * from './management.ts';

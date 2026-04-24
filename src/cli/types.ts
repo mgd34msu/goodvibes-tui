@@ -3,6 +3,7 @@ export type GoodVibesCliCommand =
   | 'run'
   | 'serve'
   | 'web'
+  | 'service'
   | 'status'
   | 'doctor'
   | 'onboarding'
@@ -26,6 +27,11 @@ export type GoodVibesCliCommand =
   | 'unknown';
 
 export type GoodVibesCliOutputFormat = 'text' | 'json' | 'stream-json';
+
+export interface CliCommandOutput {
+  readonly output: string;
+  readonly exitCode: number;
+}
 
 export interface GoodVibesCliFlags {
   readonly provider: string | undefined;

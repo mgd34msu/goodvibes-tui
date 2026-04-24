@@ -101,4 +101,56 @@ describe('CLI status and doctor output', () => {
     expect(findings.map((finding) => finding.id)).toContain('network-surface-without-local-users');
     expect(findings.map((finding) => finding.id)).toContain('network-surface-with-bootstrap-credential');
   });
+
+  test('status can render a stable JSON contract with service lifecycle details', () => {
+    const text = renderCliStatus({
+      ...makeOptions(),
+      outputFormat: 'json',
+      service: {
+        config: {
+          enabled: true,
+          autostart: true,
+          restartOnFailure: true,
+          daemonEnabled: true,
+        },
+        managed: {
+          platform: 'manual',
+          path: '/project/.goodvibes/tui/service/manual-service.txt',
+          installed: true,
+          autostart: true,
+          running: true,
+          pid: 123,
+          logPath: '/project/.goodvibes/tui/service/manual.log',
+          commandPreview: 'bun run src/daemon/cli.ts',
+          suggestedCommands: ['bun run src/daemon/cli.ts'],
+          lastAction: 'status',
+          pidPath: '/project/.goodvibes/tui/service/manual.pid',
+          lastError: null,
+        },
+        endpoints: [],
+        log: {
+          path: '/project/.goodvibes/tui/service/manual.log',
+          exists: true,
+          size: 128,
+          modifiedAt: 1,
+        },
+        issues: [],
+      },
+    });
+
+    const parsed = JSON.parse(text) as {
+      title: string;
+      provider: { provider: string };
+      service: { lifecycle: { managed: { running: boolean; pid: number } } };
+      surfaces: { controlPlane: { port: number } };
+      findings: unknown[];
+    };
+
+    expect(parsed.title).toBe('GoodVibes status');
+    expect(parsed.provider.provider).toBe('openai');
+    expect(parsed.service.lifecycle.managed.running).toBe(true);
+    expect(parsed.service.lifecycle.managed.pid).toBe(123);
+    expect(parsed.surfaces.controlPlane.port).toBe(3421);
+    expect(parsed.findings).toBeArray();
+  });
 });
