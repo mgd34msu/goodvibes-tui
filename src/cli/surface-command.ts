@@ -1,4 +1,11 @@
 import type { ConfigKey } from '../config/index.ts';
+import {
+  GOODVIBES_NTFY_AGENT_TOPIC,
+  GOODVIBES_NTFY_CHAT_TOPIC,
+  GOODVIBES_NTFY_REMOTE_TOPIC,
+  resolveGoodVibesNtfyTopics,
+} from '@pellux/goodvibes-sdk/platform/integrations/ntfy';
+import { enableFeatureFlags, getMissingSurfaceFeatureFlags, getServerSurfaceFeatureFlags } from '../runtime/surface-feature-flags.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './management.ts';
@@ -18,7 +25,7 @@ export const SURFACE_CONFIGS = [
   ['discord', 'Discord', ['surfaces.discord.publicKey', 'surfaces.discord.botToken', 'surfaces.discord.applicationId']],
   ['telegram', 'Telegram', ['surfaces.telegram.botToken']],
   ['webhook', 'Webhook', ['surfaces.webhook.secret']],
-  ['ntfy', 'ntfy', ['surfaces.ntfy.baseUrl', 'surfaces.ntfy.topic']],
+  ['ntfy', 'ntfy', ['surfaces.ntfy.baseUrl']],
   ['googleChat', 'Google Chat', ['surfaces.googleChat.webhookUrl']],
   ['signal', 'Signal', ['surfaces.signal.bridgeUrl', 'surfaces.signal.account']],
   ['whatsapp', 'WhatsApp', ['surfaces.whatsapp.accessToken', 'surfaces.whatsapp.phoneNumberId']],
@@ -39,6 +46,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
     if (target === 'web') {
       runtime.configManager.setDynamic('web.enabled', enabled);
       if (enabled) {
+        enableFeatureFlags(runtime.configManager, getServerSurfaceFeatureFlags({ serverBacked: true, web: true }));
         runtime.configManager.setDynamic('danger.daemon', true);
         runtime.configManager.setDynamic('controlPlane.enabled', true);
         const webError = applyTargetEndpointFlagsOrDefault(runtime, 'web');
@@ -71,6 +79,7 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
     else if (SURFACE_CONFIGS.some(([id]) => id === target)) {
       runtime.configManager.setDynamic(`surfaces.${target}.enabled` as ConfigKey, enabled);
       if (enabled) {
+        enableFeatureFlags(runtime.configManager, getServerSurfaceFeatureFlags({ serverBacked: true, externalSurfaces: [target] }));
         runtime.configManager.setDynamic('danger.httpListener', true);
         enableEndpointLanDefault(runtime.configManager, 'httpListener');
       }
@@ -88,34 +97,45 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
   const web = resolveRuntimeEndpointBinding(config, 'web');
   const httpListener = resolveRuntimeEndpointBinding(config, 'httpListener');
   const includeProbe = sub === 'check';
+  const targetExternalSurface = target && SURFACE_CONFIGS.some(([id]) => id === target);
+  const shouldProbeControlPlane = includeProbe && !target;
+  const shouldProbeWeb = includeProbe && !target;
+  const shouldProbeListener = includeProbe && (!target || targetExternalSurface);
   const [controlPlaneReachable, webReachable, listenerReachable] = includeProbe
     ? await Promise.all([
-      probeTcp(controlPlane.host, controlPlane.port),
-      probeTcp(web.host, web.port),
-      probeTcp(httpListener.host, httpListener.port),
+      shouldProbeControlPlane ? probeTcp(controlPlane.host, controlPlane.port) : Promise.resolve(undefined),
+      shouldProbeWeb ? probeTcp(web.host, web.port) : Promise.resolve(undefined),
+      shouldProbeListener ? probeTcp(httpListener.host, httpListener.port) : Promise.resolve(undefined),
     ])
     : [undefined, undefined, undefined];
   const externalSurfaces = SURFACE_CONFIGS.map(([id, label, requiredKeys]) => {
     const enabled = config.get(`surfaces.${id}.enabled` as ConfigKey);
     const missing = requiredKeys.filter((key) => !isPresentConfigValue(config.get(key as ConfigKey)));
+    const missingFeatureFlags = enabled === true ? getMissingSurfaceFeatureFlags(config, id) : [];
     return {
       id,
       label,
       enabled,
-      ready: !enabled || missing.length === 0,
+      ready: !enabled || (missing.length === 0 && missingFeatureFlags.length === 0),
       missing,
+      missingFeatureFlags,
     };
   });
   const filteredSurfaces = target ? externalSurfaces.filter((surface) => surface.id === target) : externalSurfaces;
   if (target && filteredSurfaces.length === 0) return { output: `Unknown surface: ${target}`, exitCode: 1 };
+  const ntfyTopics = resolveGoodVibesNtfyTopics({
+    chatTopic: String(config.get('surfaces.ntfy.chatTopic' as ConfigKey) || GOODVIBES_NTFY_CHAT_TOPIC),
+    agentTopic: String(config.get('surfaces.ntfy.agentTopic' as ConfigKey) || GOODVIBES_NTFY_AGENT_TOPIC),
+    remoteTopic: String(config.get('surfaces.ntfy.remoteTopic' as ConfigKey) || GOODVIBES_NTFY_REMOTE_TOPIC),
+  });
   const readinessIssues: string[] = [];
-  if (includeProbe && config.get('controlPlane.enabled') === true && !controlPlaneReachable) {
+  if (shouldProbeControlPlane && config.get('controlPlane.enabled') === true && !controlPlaneReachable) {
     readinessIssues.push(`Control plane is enabled but not reachable on ${controlPlane.host}:${controlPlane.port}.`);
   }
-  if (includeProbe && config.get('web.enabled') === true && !webReachable) {
+  if (shouldProbeWeb && config.get('web.enabled') === true && !webReachable) {
     readinessIssues.push(`Web surface is enabled but not reachable on ${web.host}:${web.port}.`);
   }
-  if (includeProbe && config.get('danger.httpListener') === true && !listenerReachable) {
+  if (shouldProbeListener && config.get('danger.httpListener') === true && !listenerReachable) {
     readinessIssues.push(`HTTP listener is enabled but not reachable on ${httpListener.host}:${httpListener.port}.`);
   }
   for (const surface of filteredSurfaces) {
@@ -125,6 +145,9 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
     }
     if (surface.missing.length > 0) {
       readinessIssues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
+    }
+    if (surface.missingFeatureFlags.length > 0) {
+      readinessIssues.push(`${surface.label} is enabled but feature gates are disabled: ${surface.missingFeatureFlags.join(', ')}.`);
     }
   }
   const value = {
@@ -162,7 +185,15 @@ export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise
     `  http-listener: ${yesNo(value.httpListener.enabled)} (${value.httpListener.hostMode} ${value.httpListener.host}:${value.httpListener.port})${includeProbe ? ` reachable=${yesNo(value.httpListener.reachable)}` : ''}`,
     '',
     'External surfaces:',
-    ...value.surfaces.map((surface) => `  ${surface.label.padEnd(16)} enabled=${yesNo(surface.enabled)} ready=${yesNo(surface.ready)}${surface.enabled && surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}`),
+    ...value.surfaces.map((surface) => `  ${surface.label.padEnd(16)} enabled=${yesNo(surface.enabled)} ready=${yesNo(surface.ready)}${surface.enabled && surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}${surface.enabled && surface.missingFeatureFlags.length > 0 ? ` featureGates=${surface.missingFeatureFlags.join(',')}` : ''}`),
+    ...(filteredSurfaces.some((surface) => surface.id === 'ntfy') ? [
+      '',
+      'ntfy inbound topics:',
+      `  chat: ${ntfyTopics.chatTopic}`,
+      `  agent: ${ntfyTopics.agentTopic}`,
+      `  daemon-only remote: ${ntfyTopics.remoteTopic}`,
+      `  default delivery topic: ${String(config.get('surfaces.ntfy.topic') || '(none)')}`,
+    ] : []),
     ...(includeProbe ? [
       readinessIssues.length === 0 ? 'Readiness: ready' : 'Readiness: needs attention',
       ...readinessIssues.map((issue) => `  - ${issue}`),
@@ -191,6 +222,7 @@ export interface ListenerTestResult {
     readonly enabled: unknown;
     readonly ready: boolean;
     readonly missing: readonly string[];
+    readonly missingFeatureFlags: readonly string[];
   }[];
   readonly issues: readonly string[];
 }
@@ -209,12 +241,14 @@ export async function buildListenerTestResult(runtime: CliCommandRuntime): Promi
   const surfaces = SURFACE_CONFIGS.map(([id, label, requiredKeys]) => {
     const surfaceEnabled = runtime.configManager.get(`surfaces.${id}.enabled` as ConfigKey);
     const missing = requiredKeys.filter((key) => !isPresentConfigValue(runtime.configManager.get(key as ConfigKey)));
+    const missingFeatureFlags = surfaceEnabled === true ? getMissingSurfaceFeatureFlags(runtime.configManager, id) : [];
     return {
       id,
       label,
       enabled: surfaceEnabled,
-      ready: surfaceEnabled !== true || missing.length === 0,
+      ready: surfaceEnabled !== true || (missing.length === 0 && missingFeatureFlags.length === 0),
       missing,
+      missingFeatureFlags,
     };
   }).filter((surface) => surface.enabled === true);
   const issues: string[] = [];
@@ -226,6 +260,7 @@ export async function buildListenerTestResult(runtime: CliCommandRuntime): Promi
   if (isNetworkFacing(enabled, binding) && auth.bootstrapCredentialPresent) issues.push('Network-facing listener still has a bootstrap credential file.');
   for (const surface of surfaces) {
     if (surface.missing.length > 0) issues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
+    if (surface.missingFeatureFlags.length > 0) issues.push(`${surface.label} is enabled but feature gates are disabled: ${surface.missingFeatureFlags.join(', ')}.`);
   }
   return { enabled, ...binding, posture, reachable, service, auth, surfaces, issues };
 }
@@ -241,7 +276,7 @@ export function formatListenerTestResult(runtime: CliCommandRuntime, value: List
     `  local auth users: ${value.auth.userStorePresent ? 'present' : 'missing'}`,
     `  bootstrap credential: ${value.auth.bootstrapCredentialPresent ? 'present' : 'missing'}`,
     value.surfaces.length === 0 ? '  enabled webhook surfaces: none' : '  enabled webhook surfaces:',
-    ...value.surfaces.map((surface) => `    ${surface.label}: ready=${yesNo(surface.ready)}${surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}`),
+    ...value.surfaces.map((surface) => `    ${surface.label}: ready=${yesNo(surface.ready)}${surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}${surface.missingFeatureFlags.length > 0 ? ` featureGates=${surface.missingFeatureFlags.join(',')}` : ''}`),
     value.issues.length === 0 ? '  readiness: ready' : '  readiness: needs attention',
     ...value.issues.map((issue) => `    - ${issue}`),
   ].join('\n'));

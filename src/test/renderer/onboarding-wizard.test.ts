@@ -28,6 +28,18 @@ describe('renderOnboardingWizard', () => {
     expect(text).toContain('Esc');
   });
 
+  test('uses visible frame chrome and readable rail labels on wide terminals', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+
+    const text = linesToText(renderOnboardingWizard(wizard, 188, 42)).join('\n');
+
+    expect(text).toContain('┌─Onboarding Wizard');
+    expect(text).toContain('1. Capabilities');
+    expect(text).not.toContain('Capabilit…');
+    expect(text).toContain('Choose what GoodVibes should be able to do.');
+  });
+
   test('shows scroll affordances for the field body when the current step exceeds the visible window', () => {
     const wizard = new OnboardingWizardController();
     wizard.open();

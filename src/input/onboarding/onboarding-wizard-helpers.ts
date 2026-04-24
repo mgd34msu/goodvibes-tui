@@ -209,9 +209,9 @@ export function getRuntimeDerivedState(hydration: OnboardingWizardRuntimeHydrati
 }
 
 export function getOnboardingWizardBodyRows(viewportHeight: number): number {
-  return Math.max(5, viewportHeight - 5);
+  return Math.max(6, viewportHeight - 5);
 }
 
 export function getOnboardingWizardVisibleFieldCount(viewportHeight: number): number {
-  return Math.max(1, getOnboardingWizardBodyRows(viewportHeight) - 5);
+  return Math.max(1, getOnboardingWizardBodyRows(viewportHeight) - 6);
 }

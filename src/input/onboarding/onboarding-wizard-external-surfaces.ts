@@ -1,4 +1,10 @@
-import type { ConfigKey } from '../../config/index.ts';
+import {
+  GOODVIBES_NTFY_AGENT_TOPIC,
+  GOODVIBES_NTFY_CHAT_TOPIC,
+  GOODVIBES_NTFY_REMOTE_TOPIC,
+  resolveGoodVibesNtfyTopics,
+} from '@pellux/goodvibes-sdk/platform/integrations/ntfy';
+import { DEFAULT_CONFIG, type ConfigKey } from '../../config/index.ts';
 import type { OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { TELEGRAM_MODE_OPTIONS, WHATSAPP_PROVIDER_OPTIONS } from './onboarding-wizard-constants.ts';
 import type { OnboardingWizardRadioOption } from './onboarding-wizard-types.ts';
@@ -24,8 +30,63 @@ export interface ExternalSurfaceSpec {
   readonly enabledConfigKey: ConfigKey;
   readonly label: string;
   readonly hint: string;
+  /**
+   * Existing SDK config key. In onboarding this maps to the per-surface
+   * auto-start choice, not to whether setup fields are shown.
+   */
   readonly defaultEnabled: (snapshot: OnboardingSnapshotState | null) => boolean;
   readonly fields: readonly ExternalSurfaceSetupFieldSpec[];
+}
+
+function normalizeConfigValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function getDefaultConfigValue(key: ConfigKey): unknown {
+  return key.split('.').reduce<unknown>((cursor, part) => (
+    typeof cursor === 'object' && cursor !== null && part in cursor
+      ? (cursor as Record<string, unknown>)[part]
+      : undefined
+  ), DEFAULT_CONFIG);
+}
+
+export function getExternalSurfaceAutoStartFieldId(surface: ExternalSurfaceSpec): string {
+  return `${surface.enabledFieldId}.auto-start`;
+}
+
+export function getExternalSurfaceAutoStartDefaultValue(
+  surface: ExternalSurfaceSpec,
+  snapshot: OnboardingSnapshotState | null,
+): 'yes' | 'no' {
+  return surface.defaultEnabled(snapshot) ? 'yes' : 'no';
+}
+
+export function isExternalSurfaceSelectedByDefault(
+  surface: ExternalSurfaceSpec,
+  snapshot: OnboardingSnapshotState | null,
+): boolean {
+  if (surface.defaultEnabled(snapshot)) return true;
+  if (!snapshot) return false;
+
+  return surface.fields.some((field) => {
+    const current = normalizeConfigValue(field.defaultValue(snapshot));
+    const defaultValue = normalizeConfigValue(getDefaultConfigValue(field.configKey));
+    return current.length > 0 && current !== defaultValue;
+  });
+}
+
+export function getNtfyProtocolTopicLines(snapshot: OnboardingSnapshotState | null): readonly string[] {
+  const topics = resolveGoodVibesNtfyTopics({
+    chatTopic: snapshot?.config.surfaces.ntfy.chatTopic,
+    agentTopic: snapshot?.config.surfaces.ntfy.agentTopic,
+    remoteTopic: snapshot?.config.surfaces.ntfy.remoteTopic,
+  });
+  return [
+    `Chat topic: ${topics.chatTopic}`,
+    `Agent topic: ${topics.agentTopic}`,
+    `Daemon-only remote topic: ${topics.remoteTopic}`,
+  ];
 }
 
 export const EXTERNAL_SURFACE_SPECS: readonly ExternalSurfaceSpec[] = [
@@ -200,7 +261,7 @@ export const EXTERNAL_SURFACE_SPECS: readonly ExternalSurfaceSpec[] = [
     enabledFieldId: 'external-services.ntfy',
     enabledConfigKey: 'surfaces.ntfy.enabled',
     label: 'ntfy surface',
-    hint: 'Enable ntfy notifications for lightweight device alerts.',
+    hint: 'Configure ntfy chat, agent, remote-session, and notification delivery topics.',
     defaultEnabled: (snapshot) => snapshot?.config.surfaces.ntfy.enabled ?? false,
     fields: [
       {
@@ -213,11 +274,38 @@ export const EXTERNAL_SURFACE_SPECS: readonly ExternalSurfaceSpec[] = [
         defaultValue: (snapshot) => snapshot?.config.surfaces.ntfy.baseUrl ?? 'https://ntfy.sh',
       },
       {
+        id: 'external-services.ntfy.chat-topic',
+        configKey: 'surfaces.ntfy.chatTopic',
+        kind: 'text',
+        label: 'ntfy chat topic',
+        hint: 'Messages sent here attach to the active terminal TUI session and reply back to ntfy.',
+        placeholder: GOODVIBES_NTFY_CHAT_TOPIC,
+        defaultValue: (snapshot) => snapshot?.config.surfaces.ntfy.chatTopic ?? GOODVIBES_NTFY_CHAT_TOPIC,
+      },
+      {
+        id: 'external-services.ntfy.agent-topic',
+        configKey: 'surfaces.ntfy.agentTopic',
+        kind: 'text',
+        label: 'ntfy agent topic',
+        hint: 'Messages sent here start agent work attached to the active TUI session.',
+        placeholder: GOODVIBES_NTFY_AGENT_TOPIC,
+        defaultValue: (snapshot) => snapshot?.config.surfaces.ntfy.agentTopic ?? GOODVIBES_NTFY_AGENT_TOPIC,
+      },
+      {
+        id: 'external-services.ntfy.remote-topic',
+        configKey: 'surfaces.ntfy.remoteTopic',
+        kind: 'text',
+        label: 'ntfy daemon-only remote topic',
+        hint: 'Messages sent here start an ntfy remote session in the daemon and do not appear in the TUI.',
+        placeholder: GOODVIBES_NTFY_REMOTE_TOPIC,
+        defaultValue: (snapshot) => snapshot?.config.surfaces.ntfy.remoteTopic ?? GOODVIBES_NTFY_REMOTE_TOPIC,
+      },
+      {
         id: 'external-services.ntfy.topic',
         configKey: 'surfaces.ntfy.topic',
         kind: 'text',
-        label: 'ntfy topic',
-        hint: 'Default ntfy topic for notifications.',
+        label: 'ntfy default delivery topic',
+        hint: 'Optional outbound notification topic. It does not control chat, agent, or daemon-only remote routing.',
         placeholder: 'goodvibes',
         defaultValue: (snapshot) => snapshot?.config.surfaces.ntfy.topic ?? '',
       },
@@ -227,7 +315,7 @@ export const EXTERNAL_SURFACE_SPECS: readonly ExternalSurfaceSpec[] = [
         kind: 'masked',
         label: 'ntfy token',
         hint: 'Optional token for authenticated ntfy servers.',
-        placeholder: 'token',
+        placeholder: 'empty for anonymous ntfy',
         defaultValue: (snapshot) => snapshot?.config.surfaces.ntfy.token ?? '',
       },
       {

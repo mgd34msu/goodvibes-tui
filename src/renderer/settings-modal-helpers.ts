@@ -75,6 +75,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   permissions: 'Permissions',
   mcp: 'MCP',
   sandbox: 'Sandbox',
+  surfaces: 'Surfaces',
   danger: 'Danger',
   tools: 'Tools',
   flags: 'Flags',
@@ -129,6 +130,14 @@ export const SETTING_LABELS: Partial<Record<string, string>> = {
   'web.port': 'Web Port',
   'web.publicBaseUrl': 'Web Public Base URL',
   'web.staticAssetsDir': 'Web Static Assets Dir',
+  'surfaces.ntfy.enabled': 'ntfy Enabled',
+  'surfaces.ntfy.baseUrl': 'ntfy Base URL',
+  'surfaces.ntfy.topic': 'ntfy Default Delivery Topic',
+  'surfaces.ntfy.chatTopic': 'ntfy Chat Topic',
+  'surfaces.ntfy.agentTopic': 'ntfy Agent Topic',
+  'surfaces.ntfy.remoteTopic': 'ntfy Daemon-Only Remote Topic',
+  'surfaces.ntfy.token': 'ntfy Token',
+  'surfaces.ntfy.defaultPriority': 'ntfy Default Priority',
 };
 
 export function getSettingLabel(entry: SettingEntry): string {

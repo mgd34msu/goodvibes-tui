@@ -1,8 +1,14 @@
 import { NETWORK_MODE_OPTIONS, REASONING_OPTIONS, HITL_MODE_OPTIONS, GUIDANCE_MODE_OPTIONS, PERMISSION_MODE_OPTIONS, SECRET_POLICY_OPTIONS } from './onboarding-wizard-constants.ts';
-import { EXTERNAL_SURFACE_SPECS, type ExternalSurfaceSpec } from './onboarding-wizard-external-surfaces.ts';
+import {
+  EXTERNAL_SURFACE_SPECS,
+  getExternalSurfaceAutoStartDefaultValue,
+  getExternalSurfaceAutoStartFieldId,
+  isExternalSurfaceSelectedByDefault,
+  type ExternalSurfaceSpec,
+} from './onboarding-wizard-external-surfaces.ts';
 import { countSelected, modelSelectionLabel, normalizeText } from './onboarding-wizard-helpers.ts';
 import type { OnboardingWizardController } from './onboarding-wizard.ts';
-import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardRadioFieldDefinition, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
+import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
 
 export function buildOnboardingWizardSteps(controller: OnboardingWizardController): readonly OnboardingWizardStepDefinition[] {
   if (controller.hydrationPending || controller.hydrationError !== null) return [buildLoadingStep(controller)];
@@ -86,7 +92,7 @@ export function buildCapabilitiesStep(controller: OnboardingWizardController): O
         id: 'capabilities.select-all',
         action: 'select-all-capabilities',
         label: 'Select all server-backed capabilities',
-        hint: 'Enable browser access, other-device LAN access, webhooks/events, and external integrations. Local TUI Only is turned off.',
+        hint: 'Enable browser access, LAN reachability, webhooks/events, and external app surfaces. Local TUI Only is turned off.',
         defaultValue: 'Action',
       },
       {
@@ -103,7 +109,7 @@ export function buildCapabilitiesStep(controller: OnboardingWizardController): O
       id: 'capabilities',
       title: 'Choose GoodVibes capabilities',
       shortLabel: 'Capabilities',
-      description: 'Select one or more capabilities. Local TUI Only means no browser, daemon, listener, or network setup; any other choice turns on service mode and autostart.',
+      description: 'Choose what GoodVibes should be able to do. Local TUI Only avoids servers; any other choice enables service mode and autostart.',
       summaryTitle: 'Selected capabilities',
       summaryLines: [
         `${selectedCount}/${capabilities.length} option(s) selected`,
@@ -266,8 +272,11 @@ export function buildDefaultModelStep(controller: OnboardingWizardController): O
   }
 
 export function buildExternalServicesStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
-    const enabledCount = EXTERNAL_SURFACE_SPECS
-      .filter((surface) => controller.getBooleanFieldValue(surface.enabledFieldId, surface.defaultEnabled(controller.runtimeSnapshot)))
+    const selectedCount = EXTERNAL_SURFACE_SPECS
+      .filter((surface) => controller.getBooleanFieldValue(
+        surface.enabledFieldId,
+        isExternalSurfaceSelectedByDefault(surface, controller.runtimeSnapshot),
+      ))
       .length;
     const fields: OnboardingWizardFieldDefinition[] = [];
 
@@ -276,8 +285,8 @@ export function buildExternalServicesStep(controller: OnboardingWizardController
         kind: 'checklist',
         id: surface.enabledFieldId,
         label: surface.label,
-        hint: surface.hint,
-        defaultValue: surface.defaultEnabled(controller.runtimeSnapshot),
+        hint: `${surface.hint} Selecting this opens a dedicated setup screen; auto-start is chosen on that screen.`,
+        defaultValue: isExternalSurfaceSelectedByDefault(surface, controller.runtimeSnapshot),
       });
     }
 
@@ -287,7 +296,7 @@ export function buildExternalServicesStep(controller: OnboardingWizardController
         id: 'external-services.select-all',
         action: 'select-all-external-surfaces',
         label: 'Select all external surfaces',
-        hint: 'Enable every supported external surface so each one gets a setup screen.',
+        hint: 'Show setup screens for every supported external surface. Auto-start stays controlled per surface.',
         defaultValue: 'Action',
       },
       {
@@ -295,7 +304,7 @@ export function buildExternalServicesStep(controller: OnboardingWizardController
         id: 'external-services.clear',
         action: 'clear-external-surfaces',
         label: 'Clear all external surfaces',
-        hint: 'Disable all external surfaces. The HTTP listener can still be enabled separately by webhook/event capabilities.',
+        hint: 'Hide all external surface setup screens. The HTTP listener can still be enabled separately by webhook/event capabilities.',
         defaultValue: 'Action',
       },
       {
@@ -312,12 +321,12 @@ export function buildExternalServicesStep(controller: OnboardingWizardController
       id: 'external-services',
       title: 'Choose external surfaces',
       shortLabel: 'Services',
-      description: 'Select the apps and integration surfaces GoodVibes should prepare. Setup fields are not shown here; each selected surface opens as its own screen.',
+      description: 'Select the apps and integration surfaces GoodVibes should prepare. Each selected surface gets its own setup screen and its own auto-start choice.',
       summaryTitle: 'External surfaces',
       summaryLines: [
-        `${enabledCount} external surface(s) selected`,
+        `${selectedCount} external surface(s) selected for setup`,
         `Secret policy: ${controller.getStringFieldValue('external-services.secret-policy', controller.runtimeSnapshot?.runtimeDefaults.secretStoragePolicy ?? 'preferred_secure')}`,
-        enabledCount > 0 ? 'Selected surfaces appear as separate setup screens.' : 'No external surfaces selected.',
+        selectedCount > 0 ? 'Selected surfaces appear as separate setup screens.' : 'No external surfaces selected.',
       ],
       fields,
     };
@@ -325,28 +334,47 @@ export function buildExternalServicesStep(controller: OnboardingWizardController
 
 function getSelectedExternalSurfaceSpecs(controller: OnboardingWizardController): readonly ExternalSurfaceSpec[] {
     return EXTERNAL_SURFACE_SPECS.filter((surface) => (
-      controller.getBooleanFieldValue(surface.enabledFieldId, surface.defaultEnabled(controller.runtimeSnapshot))
+      controller.getBooleanFieldValue(
+        surface.enabledFieldId,
+        isExternalSurfaceSelectedByDefault(surface, controller.runtimeSnapshot),
+      )
     ));
   }
+
+const SURFACE_AUTO_START_OPTIONS: readonly OnboardingWizardRadioOption[] = [
+  {
+    id: 'yes',
+    label: 'Yes',
+    hint: 'Start this surface automatically when the GoodVibes service starts.',
+  },
+  {
+    id: 'no',
+    label: 'No',
+    hint: 'Save these settings but leave the surface idle until it is enabled from Settings > Surfaces.',
+  },
+];
 
 function buildExternalSurfaceStep(
   controller: OnboardingWizardController,
   surface: ExternalSurfaceSpec,
 ): OnboardingWizardStepDefinition {
-    let requiredCount = 0;
-    let requiredCompleteCount = 0;
+    let setupCount = 0;
+    let setupCompleteCount = 0;
+    const autoStartFieldId = getExternalSurfaceAutoStartFieldId(surface);
+    const autoStartDefault = getExternalSurfaceAutoStartDefaultValue(surface, controller.runtimeSnapshot);
+    const autoStartValue = controller.getStringFieldValue(autoStartFieldId, autoStartDefault);
     const setupFields = surface.fields.map((setupField): OnboardingWizardFieldDefinition => {
-      const required = controller.isRequiredExternalSetupField(setupField.id);
-      if (required) {
-        requiredCount += 1;
+      const suggested = controller.isRequiredExternalSetupField(setupField.id);
+      if (suggested) {
+        setupCount += 1;
         if (normalizeText(setupField.defaultValue(controller.runtimeSnapshot)).length > 0
           || normalizeText(controller.getStringFieldValue(setupField.id, '')).length > 0) {
-          requiredCompleteCount += 1;
+          setupCompleteCount += 1;
         }
       }
 
-      const hint = required
-        ? `${setupField.hint} Required because ${surface.label} is selected.`
+      const hint = suggested
+        ? `${setupField.hint} Recommended because ${surface.label} is selected, but it will not block saving.`
         : setupField.hint;
 
       if (setupField.kind === 'radio') {
@@ -367,26 +395,46 @@ function buildExternalSurfaceStep(
         hint,
         placeholder: setupField.placeholder,
         defaultValue: setupField.defaultValue(controller.runtimeSnapshot),
-        required,
       };
     });
+    const ntfyTopicSummary = surface.id === 'ntfy'
+      ? [
+          `Chat topic: ${controller.getStringFieldValue('external-services.ntfy.chat-topic', 'goodvibes-chat')}`,
+          `Agent topic: ${controller.getStringFieldValue('external-services.ntfy.agent-topic', 'goodvibes-agent')}`,
+          `Daemon-only remote topic: ${controller.getStringFieldValue('external-services.ntfy.remote-topic', 'goodvibes-ntfy')}`,
+        ]
+      : [];
     const title = `${surface.label.replace(/ surface$/i, '')} setup`;
-    const requiredSummary = requiredCount === 0
-      ? 'Required setup: none'
-      : `Required setup: ${requiredCompleteCount}/${requiredCount}`;
+    const setupSummary = setupCount === 0
+      ? 'Suggested setup: none'
+      : `Suggested setup entered: ${setupCompleteCount}/${setupCount}`;
 
     return {
       id: `external-surface:${surface.id}` as OnboardingWizardExternalSurfaceStepId,
       title,
       shortLabel: surface.label.replace(/ surface$/i, ''),
-      description: `Configure ${surface.label}. This screen only appears because that surface is selected on the previous screen.`,
+      description: `Configure ${surface.label}. Settings are saved either way; auto-start controls whether this surface starts with the background service.`,
       summaryTitle: `${surface.label} setup`,
       summaryLines: [
-        requiredSummary,
+        `Auto-start: ${autoStartValue === 'yes' ? 'yes' : 'no'}`,
+        ...ntfyTopicSummary,
+        setupSummary,
         `Secret policy: ${controller.getStringFieldValue('external-services.secret-policy', controller.runtimeSnapshot?.runtimeDefaults.secretStoragePolicy ?? 'preferred_secure')}`,
-        'Leave optional fields blank to keep defaults or existing values.',
+        autoStartValue === 'yes'
+          ? 'The surface will be enabled after apply.'
+          : 'Start it later from Settings > Surfaces by turning Enabled on.',
       ],
-      fields: setupFields,
+      fields: [
+        {
+          kind: 'radio',
+          id: autoStartFieldId,
+          label: 'Auto-start this surface',
+          hint: `Yes turns on ${surface.enabledConfigKey}. No saves setup values but keeps the surface off until Settings > Surfaces enables it.`,
+          options: SURFACE_AUTO_START_OPTIONS,
+          defaultValue: autoStartDefault,
+        },
+        ...setupFields,
+      ],
     };
   }
 
@@ -574,32 +622,34 @@ export function buildAccountsStep(controller: OnboardingWizardController): Onboa
       && !needsAuthBootstrap
       && controller.hasLocalAuthUser();
     const fields: OnboardingWizardFieldDefinition[] = [];
+    const defaultAdminUsername = controller.getDefaultAdminUsername();
 
-    if (needsAuthBootstrap) {
-      const defaultAdminUsername = controller.getDefaultAdminUsername();
-      fields.push(
-        {
-          kind: 'text',
-          id: 'accounts.admin-username',
-          label: 'Local auth admin username',
-          hint: 'Required before any background service, browser surface, or listener is exposed.',
-          placeholder: defaultAdminUsername,
-          defaultValue: defaultAdminUsername,
-          required: true,
-        },
-        {
-          kind: 'masked',
-          id: 'accounts.admin-password',
-          label: 'Local auth admin password',
-          hint: controller.hasBootstrapCredentialPresent()
-            ? 'Creates a new local admin, removes the bootstrap credential file, and retires the bootstrap admin before LAN/server settings are applied.'
-            : 'Creates the first local admin user and an initial session before LAN/server settings are applied.',
-          placeholder: 'password required',
-          defaultValue: '',
-          required: true,
-        },
-      );
-    }
+    fields.push(
+      {
+        kind: 'text',
+        id: 'accounts.admin-username',
+        label: 'Local auth admin username',
+        hint: needsAuthBootstrap
+          ? 'Required before any background service, browser surface, or listener is exposed.'
+          : 'Optional. Enter an existing admin username to rotate its password, or a new username to create another admin.',
+        placeholder: defaultAdminUsername,
+        defaultValue: defaultAdminUsername,
+        required: needsAuthBootstrap,
+      },
+      {
+        kind: 'masked',
+        id: 'accounts.admin-password',
+        label: 'Local auth admin password',
+        hint: needsAuthBootstrap
+          ? controller.hasBootstrapCredentialPresent()
+            ? 'Creates or updates the named local admin, removes the bootstrap credential file, and retires the bootstrap admin when it is a different user.'
+            : 'Creates the first local admin user and an initial session before LAN/server settings are applied.'
+          : 'Optional. Leave blank to keep existing local auth unchanged; enter a password to create or rotate the named admin user.',
+        placeholder: needsAuthBootstrap ? 'password required' : 'leave blank to keep unchanged',
+        defaultValue: '',
+        required: needsAuthBootstrap,
+      },
+    );
 
     fields.push(
       {
@@ -668,6 +718,29 @@ export function buildAccountsStep(controller: OnboardingWizardController): Onboa
   }
 
 export function buildReviewStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+    const feedback = controller.applyFeedback;
+    const feedbackFields: OnboardingWizardFieldDefinition[] = feedback
+      ? [
+          {
+            kind: 'status',
+            id: 'review.feedback',
+            label: feedback.title,
+            hint: feedback.summary,
+            defaultValue: feedback.severity === 'error' ? 'Needs attention' : feedback.severity === 'warning' ? 'Warning' : 'Info',
+          },
+          ...feedback.messages.slice(0, 8).map((message, index): OnboardingWizardFieldDefinition => ({
+            kind: 'status',
+            id: `review.feedback.${index}`,
+            label: message,
+            hint: message,
+            defaultValue: feedback.severity === 'error' ? 'Error' : feedback.severity === 'warning' ? 'Warning' : 'Info',
+          })),
+        ]
+      : [];
+    const unsavedLabel = controller.dirtyStepCount === 1
+      ? '1 screen has unapplied changes'
+      : `${controller.dirtyStepCount} screens have unapplied changes`;
+
     return {
       id: 'review',
       title: 'Review and apply',
@@ -675,12 +748,13 @@ export function buildReviewStep(controller: OnboardingWizardController): Onboard
       description: 'Review the selected settings and apply them directly from the wizard.',
       summaryTitle: 'Review posture',
       summaryLines: [
-        `${controller.dirtyStepCount} dirty step(s)`,
-        `${controller.buildApplyRequest().operations.length} operation(s) ready to apply`,
-        `Pending picker: ${controller.pendingModelPickerTarget ?? 'none'}`,
-        controller.isEditingTextField() ? `Editing: ${controller.editingFieldId}` : 'Ready for apply/verify',
+        unsavedLabel,
+        `${controller.buildApplyRequest().operations.length} settings change(s) ready to apply`,
+        feedback ? `Last apply: ${feedback.title}` : 'No apply errors reported',
+        controller.isEditingTextField() ? `Editing: ${controller.editingFieldId}` : 'Ready to apply',
       ],
       fields: [
+        ...feedbackFields,
         {
           kind: 'status',
           id: 'review.global-marker',

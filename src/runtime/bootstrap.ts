@@ -370,6 +370,20 @@ export async function bootstrapRuntime(
     };
   };
 
+  const waitForConfigDrivenRestarts = async (handle: ExternalServicesHandle): Promise<void> => {
+    const waitForRestart = async (service: unknown): Promise<void> => {
+      const maybeRestarting = service as { waitForRestart?: unknown } | null;
+      if (typeof maybeRestarting?.waitForRestart === 'function') {
+        await maybeRestarting.waitForRestart();
+      }
+    };
+
+    await Promise.all([
+      waitForRestart(handle.daemonServer),
+      waitForRestart(handle.httpListener),
+    ]);
+  };
+
   let externalServices: ExternalServicesHandle = {
     daemonServer: null,
     httpListener: null,
@@ -401,6 +415,7 @@ export async function bootstrapRuntime(
           // A failed previous startup should not prevent a restart attempt.
         }
       }
+      await waitForConfigDrivenRestarts(externalServices);
       await externalServices.stop();
       const previousBindings = externalServiceBindings;
       externalServiceBindings = readExternalServiceBindings();

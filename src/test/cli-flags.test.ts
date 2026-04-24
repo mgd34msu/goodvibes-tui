@@ -32,6 +32,10 @@ async function captureGoodVibesCliCommand(args: readonly string[], configManager
   }
 }
 
+function featureFlagState(configManager: ConfigManager, flagId: string): unknown {
+  return (configManager.getCategory('featureFlags') as Record<string, unknown>)[flagId];
+}
+
 describe('parseCliFlags', () => {
   // ---------------------------------------------------------------------------
   // --daemon-home
@@ -314,6 +318,9 @@ describe('parseCliFlags', () => {
     expect(configManager.get('service.enabled')).toBe(true);
     expect(configManager.get('service.autostart')).toBe(true);
     expect(configManager.get('service.restartOnFailure')).toBe(true);
+    expect(featureFlagState(configManager, 'control-plane-gateway')).toBe('enabled');
+    expect(featureFlagState(configManager, 'service-management')).toBe('enabled');
+    expect(featureFlagState(configManager, 'web-surface')).toBe('enabled');
   });
 
   test('surface enable respects explicit local host overrides', async () => {
@@ -375,6 +382,12 @@ describe('parseCliFlags', () => {
     expect(configManager.get('service.enabled')).toBe(true);
     expect(configManager.get('service.autostart')).toBe(true);
     expect(configManager.get('service.restartOnFailure')).toBe(true);
+    expect(featureFlagState(configManager, 'control-plane-gateway')).toBe('enabled');
+    expect(featureFlagState(configManager, 'service-management')).toBe('enabled');
+    expect(featureFlagState(configManager, 'route-binding')).toBe('enabled');
+    expect(featureFlagState(configManager, 'delivery-engine')).toBe('enabled');
+    expect(featureFlagState(configManager, 'omnichannel-surface-adapters')).toBe('enabled');
+    expect(featureFlagState(configManager, 'slack-surface')).toBe('enabled');
   });
 
   test('listener test reports readiness issues for network webhook posture', async () => {
@@ -427,6 +440,31 @@ describe('parseCliFlags', () => {
     expect(json.result).toEqual({ handled: true, exitCode: 1 });
     const parsed = JSON.parse(json.output) as { readinessIssues: string[] };
     expect(parsed.readinessIssues.some((issue) => issue.includes('Slack is enabled but missing'))).toBe(true);
+  });
+
+  test('surfaces check reports disabled feature gates for configured surfaces', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-surfaces-feature-gates-'));
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(root, '.goodvibes', 'tui'),
+      workingDir: root,
+    });
+    configManager.setDynamic('danger.httpListener', true);
+    configManager.setDynamic('surfaces.ntfy.enabled', true);
+    configManager.setDynamic('surfaces.ntfy.baseUrl', 'https://ntfy.example.test');
+    configManager.setDynamic('surfaces.ntfy.topic', 'goodvibes');
+    configManager.setDynamic('surfaces.ntfy.chatTopic', 'custom-chat');
+    configManager.setDynamic('surfaces.ntfy.agentTopic', 'custom-agent');
+    configManager.setDynamic('surfaces.ntfy.remoteTopic', 'custom-remote');
+
+    const text = await captureGoodVibesCliCommand(['surfaces', 'check', 'ntfy'], configManager, root);
+    expect(text.result).toEqual({ handled: true, exitCode: 1 });
+    expect(text.output).toContain('ntfy is enabled but feature gates are disabled:');
+    expect(text.output).toContain('ntfy-surface');
+    expect(text.output).toContain('chat: custom-chat');
+    expect(text.output).toContain('agent: custom-agent');
+    expect(text.output).toContain('daemon-only remote: custom-remote');
+    expect(text.output).not.toContain('Web surface is enabled');
   });
 
   test('bundle inspect resolves relative paths from the GoodVibes working directory', async () => {

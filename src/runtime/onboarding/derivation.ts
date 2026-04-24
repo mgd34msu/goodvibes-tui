@@ -240,22 +240,22 @@ function hasExternalIntegrations(snapshot: OnboardingSnapshotState): boolean {
 
 function describeLocalTuiOnly(snapshot: OnboardingSnapshotState): string {
   if (!hasAnyServerEnabled(snapshot)) {
-    return 'Keep GoodVibes in this terminal and disable browser access, background services, network listeners, and external surfaces.';
+    return 'Use GoodVibes only in this terminal. No browser access, background service, HTTP listener, external app surface, or network setup.';
   }
 
-  return 'Switching to this disables browser access, background services, network listeners, and external surfaces.';
+  return 'Turn off browser access, background services, HTTP listeners, external app surfaces, and network setup.';
 }
 
 function describeBrowserAccess(snapshot: OnboardingSnapshotState): string {
   return snapshot.bindSettings.web.enabled
-    ? 'Keep the background service and web UI enabled, reachable according to the network step.'
-    : 'Enable the background service and web UI, reachable on the local network by default unless customized.';
+    ? 'Keep the background service and web UI enabled. Network reachability is controlled on the next screen.'
+    : 'Run the background service and web UI. GoodVibes will use the local network by default; you can restrict or customize it next.';
 }
 
 function describeRemoteDeviceAccess(snapshot: OnboardingSnapshotState): string {
   return hasRemoteDeviceAccess(snapshot)
-    ? 'Keep enabled GoodVibes services reachable from other devices on your LAN. Local auth is required.'
-    : 'Expose enabled GoodVibes services on your LAN so other devices can reach them. Local auth is required.';
+    ? 'Keep enabled GoodVibes services reachable from other devices on your LAN. Local authentication is required.'
+    : 'Make enabled GoodVibes services reachable from other devices on your LAN. Local authentication is required.';
 }
 
 function describeWebhookIngress(snapshot: OnboardingSnapshotState): string {
@@ -272,7 +272,7 @@ function describeExternalIntegrations(snapshot: OnboardingSnapshotState): string
   ]).size;
 
   if (integrationCount === 0) {
-    return 'Show Slack, Discord, Telegram, Teams, Matrix, and other app surfaces so they can be enabled and configured here.';
+    return 'Enable setup screens for Slack, Discord, Telegram, Teams, Matrix, and other app surfaces you choose.';
   }
 
   return `Review and configure ${integrationCount} detected external app, service, or surface integration signal(s).`;

@@ -519,6 +519,8 @@ export class SettingsModal {
         cat = 'tools';
       } else if (rawCat === 'controlPlane' || rawCat === 'httpListener' || rawCat === 'web') {
         cat = 'network';
+      } else if (rawCat === 'surfaces') {
+        cat = 'surfaces';
       } else {
         cat = rawCat as SettingsCategory;
       }
@@ -746,6 +748,8 @@ export class SettingsModal {
         if (isRestartKey && previousValue !== value) {
           this.lastSaveTriggeredRestart = 'web';
         }
+      } else if (rawCat === 'surfaces') {
+        cat = 'surfaces';
       } else {
         cat = rawCat as SettingsCategory;
       }

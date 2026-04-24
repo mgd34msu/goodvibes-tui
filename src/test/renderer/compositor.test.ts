@@ -89,6 +89,22 @@ describe('Compositor — no panel', () => {
     expect(cellAt(compositor, 0, 0)?.char).toBe('A');
     expect(cellAt(compositor, 0, 1)?.char).toBe('B');
   });
+
+  test('viewport starts at row 0 when no header is supplied', () => {
+    const { compositor } = makeCompositor();
+    const viewport = Array.from({ length: HEIGHT }, () => makeLine(WIDTH, '.'));
+    stampChar(viewport[0], 0, 'T');
+    stampChar(viewport[HEIGHT - 1], 0, 'B');
+
+    compositor.composite(makeBaseRequest({
+      header: [],
+      viewport,
+      footer: [],
+    }));
+
+    expect(cellAt(compositor, 0, 0)?.char).toBe('T');
+    expect(cellAt(compositor, 0, HEIGHT - 1)?.char).toBe('B');
+  });
 });
 
 describe('Compositor — with panel', () => {

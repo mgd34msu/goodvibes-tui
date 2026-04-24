@@ -43,7 +43,7 @@ function verifyConfigOperation(
   deps: OnboardingVerificationDependencies,
   operation: Extract<OnboardingApplyOperation, { kind: 'set-config' }>,
 ): OnboardingVerificationItem {
-  const actual = deps.config.get(operation.key);
+  const actual = deps.config.get(operation.key as never);
   const ok = isDeepEqual(actual, operation.value);
 
   return {

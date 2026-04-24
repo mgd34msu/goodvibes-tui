@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import type { FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
@@ -155,8 +157,13 @@ async function main(): Promise<void> {
   }
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
+  const featureFlags = createFeatureFlagManager();
+  featureFlags.loadFromConfig({
+    flags: (config.getCategory('featureFlags') as Record<string, FlagState>) ?? {},
+  });
   const runtimeServices = createRuntimeServices({
     configManager: config,
+    featureFlags,
     runtimeBus,
     runtimeStore,
     getConversationTitle: () => 'goodvibes daemon',

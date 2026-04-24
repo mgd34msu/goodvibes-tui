@@ -64,6 +64,7 @@ export function renderSettingsModal(
   const isUiTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'ui';
   const isToolsTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'tools';
   const isNetworkTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'network';
+  const isSurfacesTab = SETTINGS_CATEGORIES[modal.categoryIndex] === 'surfaces';
   let persistentHelpers: import('./modal-factory.ts').ModalHelperRow[] | undefined;
   sections.push({
     type: 'text',
@@ -79,6 +80,8 @@ export function renderSettingsModal(
             ? 'Feature flags control staged or experimental behavior. Some changes may require restart.'
             : isToolsTab
               ? 'Configure tool LLM routing and helper model. Provider and model fields are optional — empty means use the active provider.'
+              : isSurfacesTab
+                ? 'Configure external app surfaces. Toggle each Enabled setting to auto-start that surface when the service starts.'
               : isNetworkTab
                 ? 'Configure control-plane and HTTP-listener binding. hostMode local/network use preset hosts; custom enables the host field. Changes trigger auto-restart.'
                 : 'Browse and adjust operator-facing runtime settings by category.',

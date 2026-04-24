@@ -2,7 +2,7 @@ import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config/
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
 import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils/open-external';
 import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
-import { OnboardingWizardController, type OnboardingWizardAction } from './onboarding/onboarding-wizard.ts';
+import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
 import { applyOnboardingRequest, collectOnboardingSnapshot, verifyOnboardingRequest } from '../runtime/onboarding/index.ts';
 import type { OnboardingApplyRequest, OnboardingVerificationItem } from '../runtime/onboarding/index.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
@@ -18,6 +18,15 @@ export interface OnboardingRuntimePosture {
   readonly serverBacked: boolean;
   readonly remoteExposure: boolean;
 }
+
+interface OnboardingExternalServiceState {
+  readonly daemonRunning?: boolean;
+  readonly daemonPortInUse?: boolean;
+  readonly httpListenerRunning?: boolean;
+  readonly httpListenerPortInUse?: boolean;
+}
+
+type OnboardingRuntimeEndpoint = 'daemon' | 'httpListener';
 
 function extractAuthorizationCode(input: string): string | null {
   const trimmed = input.trim();
@@ -40,6 +49,101 @@ function isLoopbackHostValue(value: string | null | undefined): boolean {
     || normalized === '0:0:0:0:0:0:0:1'
     || /^127(?:\.\d{1,3}){3}$/.test(normalized);
 }
+
+function onboardingVerificationStatusRank(item: OnboardingVerificationItem): number {
+  if (item.status === 'fail') return 3;
+  if (item.status === 'warn') return 2;
+  return 1;
+}
+
+function dedupeOnboardingVerificationItems(
+  items: readonly OnboardingVerificationItem[],
+): OnboardingVerificationItem[] {
+  const order: string[] = [];
+  const byId = new Map<string, OnboardingVerificationItem>();
+  for (const item of items) {
+    const existing = byId.get(item.id);
+    if (!existing) {
+      order.push(item.id);
+      byId.set(item.id, item);
+      continue;
+    }
+    if (onboardingVerificationStatusRank(item) > onboardingVerificationStatusRank(existing)) {
+      byId.set(item.id, item);
+    }
+  }
+  return order.map((id) => byId.get(id)).filter((item): item is OnboardingVerificationItem => Boolean(item));
+}
+
+function formatOnboardingApplyCompletionMessage(items: readonly OnboardingVerificationItem[]): string {
+  const warnings = items.filter((item) => item.status === 'warn');
+  if (warnings.length === 0) return `Onboarding applied and verified ${items.length} item(s).`;
+  const passed = items.filter((item) => item.status === 'pass').length;
+  return [
+    `Onboarding settings applied. ${passed} verification item(s) passed; ${warnings.length} warning(s) need attention.`,
+    ...warnings.map((warning) => `  warning ${warning.id}: ${warning.message}`),
+  ].join('\n');
+}
+
+function getRuntimeEndpointBinding(
+  handler: InputHandler,
+  request: OnboardingApplyRequest,
+  endpoint: OnboardingRuntimeEndpoint,
+): { readonly label: string; readonly host: string; readonly port: number } {
+  const hostKey = endpoint === 'daemon' ? 'controlPlane.host' : 'httpListener.host';
+  const portKey = endpoint === 'daemon' ? 'controlPlane.port' : 'httpListener.port';
+  const fallbackHost = '127.0.0.1';
+  const fallbackPort = endpoint === 'daemon' ? 3421 : 3422;
+  const rawHost = handler.getOnboardingConfigValue(request, hostKey);
+  const rawPort = handler.getOnboardingConfigValue(request, portKey);
+  const parsedPort = typeof rawPort === 'number' ? rawPort : Number(rawPort);
+  return {
+    label: endpoint === 'daemon' ? 'GoodVibes daemon' : 'HTTP listener',
+    host: String(rawHost ?? fallbackHost),
+    port: Number.isFinite(parsedPort) ? parsedPort : fallbackPort,
+  };
+}
+
+function runtimePortDiagnostic(
+  binding: { readonly label: string; readonly host: string; readonly port: number },
+  portInUse: boolean | undefined,
+): string {
+  if (portInUse) {
+    return `The configured port ${binding.host}:${binding.port} is occupied after restart; another GoodVibes process, an overlapping restart, or another service may still own it.`;
+  }
+  return `No process is listening on ${binding.host}:${binding.port} after restart.`;
+}
+
+function formatRuntimeActiveFailureMessage(
+  handler: InputHandler,
+  request: OnboardingApplyRequest,
+  endpoint: OnboardingRuntimeEndpoint,
+  state: OnboardingExternalServiceState | undefined,
+): string {
+  const binding = getRuntimeEndpointBinding(handler, request, endpoint);
+  const portInUse = endpoint === 'daemon' ? state?.daemonPortInUse : state?.httpListenerPortInUse;
+  const impact = endpoint === 'daemon'
+    ? 'browser, LAN, and service-backed GoodVibes surfaces may be unavailable until the daemon is running there.'
+    : 'incoming webhooks and event surfaces will not receive traffic until the listener is running there.';
+  return `${binding.label} is enabled for ${binding.host}:${binding.port}, but onboarding could not confirm it is running in this TUI instance after restart. ${runtimePortDiagnostic(binding, portInUse)} Settings were saved; ${impact}`;
+}
+
+function formatRuntimeStoppedFailureMessage(
+  handler: InputHandler,
+  request: OnboardingApplyRequest,
+  endpoint: OnboardingRuntimeEndpoint,
+): string {
+  const binding = getRuntimeEndpointBinding(handler, request, endpoint);
+  const disabledSurface = endpoint === 'daemon' ? 'server-backed surfaces' : 'incoming event surfaces';
+  return `${binding.label} was disabled for ${disabledSurface}, but ${binding.host}:${binding.port} is still occupied. Settings were saved; another GoodVibes process or external service may still be running on that port.`;
+}
+
+function showOnboardingApplyFeedbackForHandler(handler: InputHandler, feedback: OnboardingWizardApplyFeedback): void {
+    handler.onboardingWizard.setApplyFeedback(feedback);
+    const reviewIndex = handler.onboardingWizard.steps.findIndex((step) => step.id === 'review');
+    if (reviewIndex >= 0) handler.onboardingWizard.setStep(reviewIndex);
+    handler.requestRender();
+  }
 
 export function clearOnboardingPendingModelPickerTargetForHandler(handler: InputHandler): void {
     handler.onboardingWizard.clearPendingModelPickerTarget();
@@ -115,15 +219,17 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
     if (handler.onboardingApplyPending) return;
     const blockers = handler.onboardingWizard.getBlockingFieldLabels();
     if (blockers.length > 0) {
-      handler.commandContext?.print?.([
-        'Onboarding needs these fields before applying.',
-        ...blockers.map((label) => `  ${label}`),
-      ].join('\n'));
-      handler.requestRender();
+      showOnboardingApplyFeedbackForHandler(handler, {
+        severity: 'error',
+        title: 'Cannot apply yet',
+        summary: 'Fix these required or invalid fields, then apply again.',
+        messages: blockers,
+      });
       return;
     }
 
     const request = handler.onboardingWizard.buildApplyRequest();
+    handler.onboardingWizard.clearApplyFeedback();
     const deps = {
       config: handler.uiServices.platform.configManager,
       secrets: handler.uiServices.platform.secretsManager,
@@ -133,43 +239,48 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
     };
     let appliedErrors: string[] = [];
     let verificationItems: readonly OnboardingVerificationItem[] = [];
+    let runtimeWarnings: readonly OnboardingVerificationItem[] = [];
     handler.onboardingApplyPending = true;
     try {
       const applied = await applyOnboardingRequest(deps, request);
-      const verification = await verifyOnboardingRequest(deps, request);
-      verificationItems = verification.items;
-      appliedErrors = [
-        ...applied.errors.map((error) => `apply ${error.kind}: ${error.message}`),
-        ...verification.items
-          .filter((item) => item.status !== 'pass')
-          .map((item) => `verify ${item.id}: ${item.message}`),
-      ];
-
-      if (appliedErrors.length === 0) {
-        const activationVerification = await handler.restartOnboardingExternalServicesIfNeeded(request);
-        const runtimeVerification = [...activationVerification, ...handler.verifyOnboardingRuntimePosture(request)];
-        verificationItems = [...verification.items, ...runtimeVerification];
-        appliedErrors = runtimeVerification
+      if (applied.errors.length > 0) {
+        appliedErrors = applied.errors.map((error) => `apply ${error.kind}: ${error.message}`);
+      } else {
+        const verification = await verifyOnboardingRequest(deps, request);
+        verificationItems = verification.items;
+        appliedErrors = verification.items
           .filter((item) => item.status === 'fail')
           .map((item) => `verify ${item.id}: ${item.message}`);
       }
+
+      if (appliedErrors.length === 0) {
+        const activationVerification = await handler.restartOnboardingExternalServicesIfNeeded(request);
+        runtimeWarnings = dedupeOnboardingVerificationItems([...activationVerification, ...handler.verifyOnboardingRuntimePosture(request)]
+          .map((item): OnboardingVerificationItem => item.status === 'fail'
+            ? { ...item, status: 'warn' }
+            : item));
+        verificationItems = dedupeOnboardingVerificationItems([...verificationItems, ...runtimeWarnings]);
+      }
     } catch (error) {
-      handler.commandContext?.print?.([
-        'Onboarding apply did not complete.',
-        `  ${error instanceof Error ? error.message : String(error)}`,
-      ].join('\n'));
-      handler.requestRender();
+      showOnboardingApplyFeedbackForHandler(handler, {
+        severity: 'error',
+        title: 'Apply failed',
+        summary: 'The wizard could not persist these settings. No service restart was attempted.',
+        messages: [error instanceof Error ? error.message : String(error)],
+      });
       return;
     } finally {
       handler.onboardingApplyPending = false;
+      handler.requestRender();
     }
 
     if (appliedErrors.length > 0) {
-      handler.commandContext?.print?.([
-        'Onboarding apply did not complete.',
-        ...appliedErrors.map((error) => `  ${error}`),
-      ].join('\n'));
-      handler.requestRender();
+      showOnboardingApplyFeedbackForHandler(handler, {
+        severity: 'error',
+        title: 'Apply did not complete',
+        summary: 'The settings were not fully applied. Review the messages below and try again.',
+        messages: appliedErrors,
+      });
       return;
     }
 
@@ -185,11 +296,7 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
       handler.indicatorFocused = returnFocus === 'indicator';
       handler.modalReturnFocus = 'prompt';
     }
-    const warnings = verificationItems.filter((item) => item.status === 'warn');
-    handler.commandContext?.print?.([
-      `Onboarding applied and verified ${verificationItems.length} item(s).`,
-      ...warnings.map((warning) => `  warning ${warning.id}: ${warning.message}`),
-    ].join('\n'));
+    handler.commandContext?.print?.(formatOnboardingApplyCompletionMessage(verificationItems));
     handler.requestRender();
   }
 
@@ -472,7 +579,7 @@ export async function restartOnboardingExternalServicesIfNeededForHandler(handle
         failures.push({
           id: 'runtime:daemon-active',
           status: 'fail',
-          message: 'The GoodVibes daemon did not start after applying onboarding settings.',
+          message: formatRuntimeActiveFailureMessage(handler, request, 'daemon', state),
           target: 'service',
         });
       }
@@ -480,7 +587,7 @@ export async function restartOnboardingExternalServicesIfNeededForHandler(handle
         failures.push({
           id: 'runtime:daemon-stopped',
           status: 'fail',
-          message: 'The GoodVibes daemon port is still occupied after onboarding disabled server-backed surfaces.',
+          message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon'),
           target: 'service',
         });
       }
@@ -488,7 +595,7 @@ export async function restartOnboardingExternalServicesIfNeededForHandler(handle
         failures.push({
           id: 'runtime:http-listener-active',
           status: 'fail',
-          message: 'The HTTP listener did not start after applying onboarding settings.',
+          message: formatRuntimeActiveFailureMessage(handler, request, 'httpListener', state),
           target: 'service',
         });
       }
@@ -496,7 +603,7 @@ export async function restartOnboardingExternalServicesIfNeededForHandler(handle
         failures.push({
           id: 'runtime:http-listener-stopped',
           status: 'fail',
-          message: 'The HTTP listener port is still occupied after onboarding disabled incoming event surfaces.',
+          message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener'),
           target: 'service',
         });
       }
@@ -537,7 +644,7 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
         stoppedItems.push({
           id: 'runtime:daemon-stopped',
           status: 'fail',
-          message: 'The GoodVibes daemon port is still occupied after onboarding disabled server-backed surfaces.',
+          message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon'),
           target: 'service',
         });
       }
@@ -545,7 +652,7 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
         stoppedItems.push({
           id: 'runtime:http-listener-stopped',
           status: 'fail',
-          message: 'The HTTP listener port is still occupied after onboarding disabled incoming event surfaces.',
+          message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener'),
           target: 'service',
         });
       }
@@ -597,7 +704,7 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
         status: externalState?.daemonRunning ? 'pass' : 'fail',
         message: externalState?.daemonRunning
           ? 'The GoodVibes daemon is running with the applied onboarding settings.'
-          : 'The GoodVibes daemon is not running after onboarding apply.',
+          : formatRuntimeActiveFailureMessage(handler, request, 'daemon', externalState),
         target: 'service',
       });
     }
@@ -605,7 +712,7 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
       items.push({
         id: 'runtime:daemon-stopped',
         status: 'fail',
-        message: 'The GoodVibes daemon port is still occupied after onboarding disabled server-backed surfaces.',
+        message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon'),
         target: 'service',
       });
     }
@@ -615,7 +722,7 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
         status: externalState?.httpListenerRunning ? 'pass' : 'fail',
         message: externalState?.httpListenerRunning
           ? 'The HTTP listener is running with the applied onboarding settings.'
-          : 'The HTTP listener is not running after onboarding apply.',
+          : formatRuntimeActiveFailureMessage(handler, request, 'httpListener', externalState),
         target: 'service',
       });
     }
@@ -623,7 +730,7 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
       items.push({
         id: 'runtime:http-listener-stopped',
         status: 'fail',
-        message: 'The HTTP listener port is still occupied after onboarding disabled incoming event surfaces.',
+        message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener'),
         target: 'service',
       });
     }
