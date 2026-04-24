@@ -14,6 +14,23 @@ import {
   renderGoodVibesHelp,
 } from '../cli-flags.ts';
 
+async function captureGoodVibesCliCommand(args: readonly string[], configManager: ConfigManager, root: string) {
+  const logs: string[] = [];
+  const originalLog = console.log;
+  try {
+    console.log = (value?: unknown) => { logs.push(String(value)); };
+    const result = await handleGoodVibesCliCommand({
+      cli: parseGoodVibesCli(args),
+      configManager,
+      workingDirectory: root,
+      homeDirectory: root,
+    });
+    return { result, output: logs.join('\n') };
+  } finally {
+    console.log = originalLog;
+  }
+}
+
 describe('parseCliFlags', () => {
   // ---------------------------------------------------------------------------
   // --daemon-home
@@ -379,6 +396,62 @@ describe('parseCliFlags', () => {
     }
 
     expect(logs.join('\n')).toContain(`path: ${bundlePath}`);
+  });
+
+  test('providers and models commands surface setup posture through CLI output', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-provider-posture-'));
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(root, '.goodvibes', 'tui'),
+      workingDir: root,
+    });
+
+    const providersText = await captureGoodVibesCliCommand(['providers', 'inspect', 'openai-subscriber'], configManager, root);
+    expect(providersText.result).toEqual({ handled: true, exitCode: 0 });
+    expect(providersText.output).toContain('setup: Subscription');
+
+    const providersJson = await captureGoodVibesCliCommand(['providers', 'inspect', 'openai-subscriber', '--json'], configManager, root);
+    expect(providersJson.result).toEqual({ handled: true, exitCode: 0 });
+    expect((JSON.parse(providersJson.output) as { setup: { setupClass: string } }).setup.setupClass).toBe('subscription');
+
+    const modelsText = await captureGoodVibesCliCommand(['models', 'current'], configManager, root);
+    expect(modelsText.result).toEqual({ handled: true, exitCode: 0 });
+    expect(modelsText.output).toContain('setup:');
+    expect(modelsText.output).toContain('provider configured:');
+
+    const modelsJson = await captureGoodVibesCliCommand(['models', 'current', '--json'], configManager, root);
+    expect(modelsJson.result).toEqual({ handled: true, exitCode: 0 });
+    expect((JSON.parse(modelsJson.output) as { setup: { setupClass: string } }).setup.setupClass).toBeString();
+  });
+
+  test('secrets test redacts resolved secret values in text and json output', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-secret-redaction-'));
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(root, '.goodvibes', 'tui'),
+      workingDir: root,
+    });
+    const secretValue = 'gv-sensitive-value-that-must-not-print';
+    const previousSecretValue = process.env.GV_CLI_SECRET_REDACTION;
+    process.env.GV_CLI_SECRET_REDACTION = secretValue;
+
+    try {
+      const text = await captureGoodVibesCliCommand(['secrets', 'test', 'goodvibes://secrets/env/GV_CLI_SECRET_REDACTION'], configManager, root);
+      expect(text.result).toEqual({ handled: true, exitCode: 0 });
+      expect(text.output).toContain('resolved <redacted>');
+      expect(text.output).not.toContain(secretValue);
+
+      const json = await captureGoodVibesCliCommand(['secrets', 'test', 'goodvibes://secrets/env/GV_CLI_SECRET_REDACTION', '--json'], configManager, root);
+      expect(json.result).toEqual({ handled: true, exitCode: 0 });
+      expect(json.output).not.toContain(secretValue);
+      expect(JSON.parse(json.output)).toEqual({
+        ref: 'env:GV_CLI_SECRET_REDACTION',
+        resolved: true,
+      });
+    } finally {
+      if (previousSecretValue === undefined) delete process.env.GV_CLI_SECRET_REDACTION;
+      else process.env.GV_CLI_SECRET_REDACTION = previousSecretValue;
+    }
   });
 
   test('rejects invalid runtime config overrides', () => {

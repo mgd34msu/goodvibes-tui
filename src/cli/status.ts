@@ -20,12 +20,187 @@ export interface CliAuthStatus {
   readonly operatorTokenPresent: boolean;
 }
 
+export interface CliDoctorFinding {
+  readonly id: string;
+  readonly area: 'auth' | 'network' | 'onboarding' | 'security' | 'service' | 'secrets';
+  readonly severity: 'warning' | 'risk';
+  readonly summary: string;
+  readonly cause: string;
+  readonly impact: string;
+  readonly action: string;
+}
+
 function yesNo(value: unknown): string {
   return value === true ? 'yes' : 'no';
 }
 
+function permissionModeLabel(mode: unknown): string {
+  if (mode === 'prompt') return 'Ask before powerful actions';
+  if (mode === 'allow-all') return 'Allow everything';
+  if (mode === 'custom') return 'Custom rules';
+  return String(mode ?? 'unknown');
+}
+
+function secretPolicyLabel(policy: unknown): string {
+  if (policy === 'preferred_secure') return 'Use secure storage when available';
+  if (policy === 'require_secure') return 'Require secure storage';
+  if (policy === 'plaintext_allowed') return 'Allow plaintext storage';
+  return String(policy ?? 'unknown');
+}
+
 function bindLine(label: string, enabled: unknown, binding: { readonly hostMode: string; readonly host: string; readonly port: number }): string {
   return `  ${label}: ${yesNo(enabled)} (${binding.hostMode} ${binding.host}:${binding.port})`;
+}
+
+function isLoopbackHost(host: string): boolean {
+  return host === 'localhost'
+    || host === '::1'
+    || host.startsWith('127.')
+    || host === '0:0:0:0:0:0:0:1';
+}
+
+function isNetworkFacing(
+  enabled: unknown,
+  binding: { readonly hostMode: string; readonly host: string },
+): boolean {
+  if (enabled !== true) return false;
+  if (binding.hostMode === 'local') return false;
+  return binding.host === '0.0.0.0' || binding.host === '::' || !isLoopbackHost(binding.host);
+}
+
+export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliDoctorFinding[] {
+  const config = options.configManager;
+  const serviceEnabled = config.get('service.enabled') === true;
+  const serviceAutostart = config.get('service.autostart') === true;
+  const restartOnFailure = config.get('service.restartOnFailure') === true;
+  const daemonEnabled = config.get('danger.daemon') === true;
+  const listenerEnabled = config.get('danger.httpListener') === true;
+  const webEnabled = config.get('web.enabled') === true;
+  const controlPlaneEnabled = config.get('controlPlane.enabled') === true;
+  const controlPlaneBinding = resolveRuntimeEndpointBinding(config, 'controlPlane');
+  const httpListenerBinding = resolveRuntimeEndpointBinding(config, 'httpListener');
+  const webBinding = resolveRuntimeEndpointBinding(config, 'web');
+  const permissionMode = config.get('permissions.mode');
+  const secretPolicy = config.get('storage.secretPolicy');
+  const marker = options.onboardingMarkers?.effective;
+  const serverBackedEnabled = daemonEnabled || controlPlaneEnabled || listenerEnabled || webEnabled;
+  const networkFacingSurfaces = [
+    ['control plane', controlPlaneEnabled, controlPlaneBinding],
+    ['HTTP listener', listenerEnabled, httpListenerBinding],
+    ['web surface', webEnabled, webBinding],
+  ].filter(([, enabled, binding]) => isNetworkFacing(enabled, binding as typeof controlPlaneBinding));
+
+  const findings: CliDoctorFinding[] = [];
+
+  if (serverBackedEnabled && !serviceEnabled) {
+    findings.push({
+      id: 'service-disabled-for-server-surfaces',
+      area: 'service',
+      severity: 'warning',
+      summary: 'Server-backed surfaces are enabled but service mode is off.',
+      cause: 'One or more daemon, control-plane, listener, or web settings are enabled while service.enabled is false.',
+      impact: 'The configured surfaces may not start automatically or survive restarts.',
+      action: 'Enable service mode or disable the server-backed surfaces you do not want.',
+    });
+  }
+
+  if (serviceEnabled && !serviceAutostart) {
+    findings.push({
+      id: 'service-autostart-disabled',
+      area: 'service',
+      severity: 'warning',
+      summary: 'Service mode is enabled but autostart is off.',
+      cause: 'service.enabled is true and service.autostart is false.',
+      impact: 'GoodVibes may not start after login or reboot even though service mode is selected.',
+      action: 'Enable service.autostart if the daemon/listener/web surfaces should stay available.',
+    });
+  }
+
+  if (serviceEnabled && !restartOnFailure) {
+    findings.push({
+      id: 'service-restart-disabled',
+      area: 'service',
+      severity: 'warning',
+      summary: 'Service restart-on-failure is off.',
+      cause: 'service.enabled is true and service.restartOnFailure is false.',
+      impact: 'A crashed daemon or listener may stay down until manually restarted.',
+      action: 'Enable service.restartOnFailure for durable daemon/listener operation.',
+    });
+  }
+
+  if (!marker?.payload) {
+    findings.push({
+      id: 'onboarding-incomplete',
+      area: 'onboarding',
+      severity: 'warning',
+      summary: 'Onboarding has not been completed for this user/project.',
+      cause: 'No effective onboarding completion marker was found.',
+      impact: 'Important service, network, provider, auth, or permission choices may still be implicit defaults.',
+      action: 'Run /onboarding in the TUI or goodvibes onboarding status to review setup state.',
+    });
+  }
+
+  if (networkFacingSurfaces.length > 0 && options.auth?.userStorePresent !== true) {
+    findings.push({
+      id: 'network-surface-without-local-users',
+      area: 'auth',
+      severity: 'risk',
+      summary: 'Network-facing surfaces are enabled before local users are configured.',
+      cause: `${networkFacingSurfaces.map(([name]) => name).join(', ')} are LAN/custom-bound, but no local auth user store was found.`,
+      impact: 'Remote access paths may be unusable or unsafe until local admin auth is configured.',
+      action: 'Create/verify a local admin user before exposing GoodVibes on the network.',
+    });
+  }
+
+  if (networkFacingSurfaces.length > 0 && options.auth?.bootstrapCredentialPresent === true) {
+    findings.push({
+      id: 'network-surface-with-bootstrap-credential',
+      area: 'auth',
+      severity: 'risk',
+      summary: 'A bootstrap credential is still present while network-facing surfaces are enabled.',
+      cause: `${networkFacingSurfaces.map(([name]) => name).join(', ')} are LAN/custom-bound and auth-bootstrap.txt exists.`,
+      impact: 'Bootstrap credentials should be treated as temporary setup material, not long-lived network access credentials.',
+      action: 'Replace bootstrap auth with a named admin user and retire the bootstrap credential.',
+    });
+  }
+
+  if (permissionMode === 'allow-all') {
+    findings.push({
+      id: 'allow-all-permissions',
+      area: 'security',
+      severity: 'risk',
+      summary: 'Allow everything permission mode is active.',
+      cause: 'permissions.mode is allow-all.',
+      impact: 'Powerful write, edit, network, and execution tools can run without a Human-in-the-Loop (HITL) approval prompt.',
+      action: 'Use Ask before powerful actions or Custom rules unless this is an intentionally trusted environment.',
+    });
+  }
+
+  if (secretPolicy === 'plaintext_allowed') {
+    findings.push({
+      id: 'plaintext-secrets-allowed',
+      area: 'secrets',
+      severity: 'risk',
+      summary: 'Plaintext secret storage is allowed.',
+      cause: 'storage.secretPolicy is plaintext_allowed.',
+      impact: 'Provider keys and surface tokens may be stored without secure backend protection.',
+      action: 'Use Require secure storage or Use secure storage when available for normal operation.',
+    });
+  }
+
+  if (listenerEnabled && isNetworkFacing(listenerEnabled, httpListenerBinding)) {
+    findings.push({
+      id: 'network-http-listener-enabled',
+      area: 'network',
+      severity: 'warning',
+      summary: 'The HTTP listener is reachable beyond loopback.',
+      cause: `HTTP listener is enabled on ${httpListenerBinding.host}:${httpListenerBinding.port} with ${httpListenerBinding.hostMode} binding.`,
+      impact: 'External tools and devices may be able to reach incoming event endpoints.',
+      action: 'Keep listener secrets/signature checks configured for every enabled webhook surface.',
+    });
+  }
+
+  return findings;
 }
 
 export function renderCliStatus(options: CliStatusOptions): string {
@@ -41,14 +216,7 @@ export function renderCliStatus(options: CliStatusOptions): string {
   const httpListenerBinding = resolveRuntimeEndpointBinding(config, 'httpListener');
   const webBinding = resolveRuntimeEndpointBinding(config, 'web');
   const marker = options.onboardingMarkers?.effective;
-  const warnings: string[] = [];
-
-  if ((daemonEnabled || controlPlaneEnabled || listenerEnabled || webEnabled) && !serviceEnabled) {
-    warnings.push('server-backed surfaces are enabled but service.enabled is off');
-  }
-  if (serviceEnabled && !serviceAutostart) warnings.push('service.enabled is on but service.autostart is off');
-  if (serviceEnabled && !restartOnFailure) warnings.push('service.enabled is on but service.restartOnFailure is off');
-  if (!marker?.payload) warnings.push('onboarding has not been completed for this user/project');
+  const findings = buildCliDoctorFindings(options);
 
   const lines = [
     options.doctor ? 'GoodVibes doctor' : 'GoodVibes status',
@@ -61,8 +229,8 @@ export function renderCliStatus(options: CliStatusOptions): string {
     `  reasoning: ${String(config.get('provider.reasoningEffort'))}`,
     '',
     'Auth:',
-    `  permissions: ${String(config.get('permissions.mode'))}`,
-    `  secretPolicy: ${String(config.get('storage.secretPolicy'))}`,
+    `  permissions: ${permissionModeLabel(config.get('permissions.mode'))} (${String(config.get('permissions.mode'))})`,
+    `  secretPolicy: ${secretPolicyLabel(config.get('storage.secretPolicy'))} (${String(config.get('storage.secretPolicy'))})`,
     options.auth
       ? `  localUsers: ${options.auth.userStorePresent ? 'present' : 'missing'} (${options.auth.userStorePath})`
       : '  localUsers: unknown',
@@ -91,8 +259,18 @@ export function renderCliStatus(options: CliStatusOptions): string {
 
   if (options.doctor) {
     lines.push('', 'Warnings:');
-    if (warnings.length === 0) lines.push('  none');
-    else lines.push(...warnings.map((warning) => `  - ${warning}`));
+    if (findings.length === 0) {
+      lines.push('  none');
+    } else {
+      for (const finding of findings) {
+        lines.push(
+          `  - [${finding.severity}:${finding.area}:${finding.id}] ${finding.summary}`,
+          `    cause: ${finding.cause}`,
+          `    impact: ${finding.impact}`,
+          `    action: ${finding.action}`,
+        );
+      }
+    }
   }
 
   return lines.join('\n');

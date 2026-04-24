@@ -943,6 +943,31 @@ describe('error cases', () => {
 // ---------------------------------------------------------------------------
 
 describe('upgrade mode', () => {
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+    const fetchMock = (async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === 'https://registry.npmjs.org/typescript/latest') {
+        return new Response(JSON.stringify({ version: '5.9.3' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ error: 'not found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    fetchMock.preconnect = originalFetch.preconnect;
+    globalThis.fetch = fetchMock;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   test('reads packages from package.json when no packages specified', async () => {
     // package.json already has { name: 'analyze-test', version: '1.0.0' } — no deps
     const result = await analyze({
@@ -959,8 +984,6 @@ describe('upgrade mode', () => {
   });
 
   test('accepts explicit packages array', async () => {
-    // Use a real package that won't fail registry fetch in most environments.
-    // We mock by writing a package.json with known versions.
     await writeTempFile(
       dir,
       'package.json',
