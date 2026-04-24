@@ -131,23 +131,6 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     acknowledge('subscriptions', 'accounts.subscriptions');
     acknowledge('auth', 'accounts.auth');
 
-    if (controller.getBooleanFieldValue('review.project-marker', true)) {
-      operations.push({
-        kind: 'set-completion-marker',
-        scope: 'project',
-        completed: true,
-        payload: { source: 'wizard', mode: controller.mode },
-      });
-    }
-    if (controller.getBooleanFieldValue('review.user-marker', controller.defaultReviewUserMarker())) {
-      operations.push({
-        kind: 'set-completion-marker',
-        scope: 'user',
-        completed: true,
-        payload: { source: 'wizard', mode: controller.mode },
-      });
-    }
-
     return {
       mode: controller.mode,
       source: 'wizard',

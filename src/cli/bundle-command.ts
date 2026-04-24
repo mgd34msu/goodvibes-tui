@@ -5,6 +5,7 @@ import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/s
 import { listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
+import { getOnboardingCheckMarkerPath } from '../runtime/onboarding/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
 import { SecretsManager } from '../config/secrets.ts';
 import type { ConfigKey } from '../config/index.ts';
@@ -178,8 +179,8 @@ export async function handleBundleCommand(runtime: CliCommandRuntime): Promise<C
       },
       secrets: await secrets.inspect(),
       onboarding: {
-        projectMarker: existsSync(shellPaths.resolveProjectPath('tui', 'onboarding.json')),
-        userMarker: existsSync(shellPaths.resolveUserPath('tui', 'onboarding.json')),
+        userMarker: existsSync(getOnboardingCheckMarkerPath(shellPaths, 'user')),
+        projectMarker: existsSync(getOnboardingCheckMarkerPath(shellPaths, 'project')),
       },
     };
     const targetPath = shellPaths.resolveWorkspacePath(outputPath);

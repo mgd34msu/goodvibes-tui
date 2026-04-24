@@ -1,5 +1,5 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { OnboardingCompletionMarkersState } from '../runtime/onboarding/index.ts';
+import type { OnboardingCheckMarkersState } from '../runtime/onboarding/index.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { isNetworkFacing } from './network-posture.ts';
 import type { GoodVibesCliOutputFormat } from './types.ts';
@@ -9,7 +9,7 @@ export interface CliStatusOptions {
   readonly configManager: Pick<ConfigManager, 'get'>;
   readonly workingDirectory: string;
   readonly homeDirectory: string;
-  readonly onboardingMarkers?: OnboardingCompletionMarkersState;
+  readonly onboardingMarkers?: OnboardingCheckMarkersState;
   readonly auth?: CliAuthStatus;
   readonly service?: CliServicePosture;
   readonly doctor?: boolean;
@@ -63,7 +63,7 @@ export interface CliStatusSnapshot {
     readonly web: ReturnType<typeof resolveRuntimeEndpointBinding> & { readonly enabled: unknown };
   };
   readonly onboarding: {
-    readonly completed: boolean;
+    readonly checked: boolean;
     readonly scope: string;
     readonly updatedAt: number | null;
   };
@@ -167,13 +167,13 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
     }
   }
 
-  if (!marker?.payload) {
+  if (!marker?.exists) {
     findings.push({
       id: 'onboarding-incomplete',
       area: 'onboarding',
       severity: 'warning',
-      summary: 'Onboarding has not been completed for this user/project.',
-      cause: 'No effective onboarding completion marker was found.',
+      summary: 'Onboarding has not been shown for this user.',
+      cause: 'No global user onboarding check marker was found.',
       impact: 'Important service, network, provider, auth, or permission choices may still be implicit defaults.',
       action: 'Run /onboarding in the TUI or goodvibes onboarding status to review setup state.',
     });
@@ -277,7 +277,7 @@ export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnap
       web: { enabled: config.get('web.enabled'), ...webBinding },
     },
     onboarding: {
-      completed: Boolean(marker?.payload),
+      checked: Boolean(marker?.exists),
       scope: marker?.scope ?? 'none',
       updatedAt: marker?.payload?.updatedAt ?? null,
     },
@@ -344,7 +344,7 @@ export function renderCliStatus(options: CliStatusOptions): string {
     bindLine('web', webEnabled, webBinding),
     '',
     'Onboarding:',
-    `  completed: ${marker?.payload ? 'yes' : 'no'}`,
+    `  checked: ${marker?.exists ? 'yes' : 'no'}`,
     `  scope: ${marker?.scope ?? 'none'}`,
     `  updatedAt: ${marker?.payload ? new Date(marker.payload.updatedAt).toISOString() : 'n/a'}`,
   ];
@@ -372,7 +372,7 @@ export function renderOnboardingCliStatus(options: CliStatusOptions): string {
   const marker = options.onboardingMarkers?.effective;
   return [
     'GoodVibes onboarding status',
-    `  completed: ${marker?.payload ? 'yes' : 'no'}`,
+    `  checked: ${marker?.exists ? 'yes' : 'no'}`,
     `  scope: ${marker?.scope ?? 'none'}`,
     `  source: ${marker?.payload?.source ?? 'n/a'}`,
     `  mode: ${marker?.payload?.mode ?? 'n/a'}`,

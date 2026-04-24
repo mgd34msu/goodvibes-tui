@@ -1,15 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type {
-  OnboardingCompletionMarkerPayload,
-  OnboardingCompletionMarkerScope,
-  OnboardingCompletionMarkerState,
-  OnboardingCompletionMarkersState,
-  WriteOnboardingCompletionMarkerOptions,
+  OnboardingCheckMarkerPayload,
+  OnboardingCheckMarkerState,
+  OnboardingCheckMarkersState,
+  OnboardingStateScope,
+  WriteOnboardingCheckMarkerOptions,
 } from './types.ts';
 
-const ONBOARDING_COMPLETION_MARKER_FILE = 'onboarding-complete.json';
+const ONBOARDING_CHECK_MARKER_FILE = 'onboarding-checked.json';
 
 type OnboardingShellPaths = Pick<
   ShellPathService,
@@ -18,26 +18,26 @@ type OnboardingShellPaths = Pick<
 
 function resolveMarkerPath(
   shellPaths: OnboardingShellPaths,
-  scope: OnboardingCompletionMarkerScope,
+  scope: OnboardingStateScope,
 ): string {
   return scope === 'project'
-    ? shellPaths.resolveProjectPath('tui', ONBOARDING_COMPLETION_MARKER_FILE)
-    : shellPaths.resolveUserPath('tui', ONBOARDING_COMPLETION_MARKER_FILE);
+    ? shellPaths.resolveProjectPath('tui', ONBOARDING_CHECK_MARKER_FILE)
+    : shellPaths.resolveUserPath('tui', ONBOARDING_CHECK_MARKER_FILE);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isOnboardingMode(value: unknown): value is OnboardingCompletionMarkerPayload['mode'] {
+function isOnboardingMode(value: unknown): value is OnboardingCheckMarkerPayload['mode'] {
   return value === 'new' || value === 'edit' || value === 'reopen';
 }
 
-function isCompletionMarkerPayload(value: unknown): value is OnboardingCompletionMarkerPayload {
+function isCheckMarkerPayload(value: unknown): value is OnboardingCheckMarkerPayload {
   return isObject(value)
     && value.version === 1
-    && typeof value.completedAt === 'number'
-    && Number.isFinite(value.completedAt)
+    && typeof value.checkedAt === 'number'
+    && Number.isFinite(value.checkedAt)
     && typeof value.updatedAt === 'number'
     && Number.isFinite(value.updatedAt)
     && typeof value.source === 'string'
@@ -46,9 +46,9 @@ function isCompletionMarkerPayload(value: unknown): value is OnboardingCompletio
 }
 
 function buildMissingMarkerState(
-  scope: OnboardingCompletionMarkerScope,
+  scope: OnboardingStateScope,
   path: string,
-): OnboardingCompletionMarkerState {
+): OnboardingCheckMarkerState {
   return {
     scope,
     path,
@@ -58,10 +58,10 @@ function buildMissingMarkerState(
 }
 
 function buildParseErrorState(
-  scope: OnboardingCompletionMarkerScope,
+  scope: OnboardingStateScope,
   path: string,
   parseError: string,
-): OnboardingCompletionMarkerState {
+): OnboardingCheckMarkerState {
   return {
     scope,
     path,
@@ -72,34 +72,31 @@ function buildParseErrorState(
 }
 
 function pickEffectiveMarker(
-  project: OnboardingCompletionMarkerState,
-  user: OnboardingCompletionMarkerState,
-): OnboardingCompletionMarkerState | null {
-  if (project.payload) return project;
+  user: OnboardingCheckMarkerState,
+): OnboardingCheckMarkerState | null {
   if (user.payload) return user;
-  if (project.exists) return project;
   if (user.exists) return user;
   return null;
 }
 
-export function getOnboardingCompletionMarkerPath(
+export function getOnboardingCheckMarkerPath(
   shellPaths: OnboardingShellPaths,
-  scope: OnboardingCompletionMarkerScope = 'user',
+  scope: OnboardingStateScope = 'user',
 ): string {
   return resolveMarkerPath(shellPaths, scope);
 }
 
-export function readOnboardingCompletionMarker(
+export function readOnboardingCheckMarker(
   shellPaths: OnboardingShellPaths,
-  scope: OnboardingCompletionMarkerScope = 'user',
-): OnboardingCompletionMarkerState {
+  scope: OnboardingStateScope = 'user',
+): OnboardingCheckMarkerState {
   const path = resolveMarkerPath(shellPaths, scope);
   if (!existsSync(path)) return buildMissingMarkerState(scope, path);
 
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
-    if (!isCompletionMarkerPayload(parsed)) {
-      return buildParseErrorState(scope, path, 'Invalid onboarding completion marker payload.');
+    if (!isCheckMarkerPayload(parsed)) {
+      return buildParseErrorState(scope, path, 'Invalid onboarding check marker payload.');
     }
 
     return {
@@ -114,48 +111,37 @@ export function readOnboardingCompletionMarker(
   }
 }
 
-export function readOnboardingCompletionMarkers(
+export function readOnboardingCheckMarkers(
   shellPaths: OnboardingShellPaths,
-): OnboardingCompletionMarkersState {
-  const user = readOnboardingCompletionMarker(shellPaths, 'user');
-  const project = readOnboardingCompletionMarker(shellPaths, 'project');
+): OnboardingCheckMarkersState {
+  const user = readOnboardingCheckMarker(shellPaths, 'user');
+  const project = readOnboardingCheckMarker(shellPaths, 'project');
 
   return {
     user,
     project,
-    effective: pickEffectiveMarker(project, user),
+    effective: pickEffectiveMarker(user),
   };
 }
 
-export function writeOnboardingCompletionMarker(
+export function writeOnboardingCheckMarker(
   shellPaths: OnboardingShellPaths,
-  options: WriteOnboardingCompletionMarkerOptions = {},
-): OnboardingCompletionMarkerState {
+  options: WriteOnboardingCheckMarkerOptions = {},
+): OnboardingCheckMarkerState {
   const scope = options.scope ?? 'user';
   const path = resolveMarkerPath(shellPaths, scope);
-  const completedAt = options.completedAt ?? Date.now();
-  const payload: OnboardingCompletionMarkerPayload = {
+  const checkedAt = options.checkedAt ?? Date.now();
+  const payload: OnboardingCheckMarkerPayload = {
     version: 1,
-    completedAt,
-    updatedAt: options.updatedAt ?? completedAt,
+    checkedAt,
+    updatedAt: options.updatedAt ?? checkedAt,
     source: options.source ?? 'wizard',
     ...(options.mode ? { mode: options.mode } : {}),
-    ...(options.workspaceRoot ?? shellPaths.workingDirectory
-      ? { workspaceRoot: options.workspaceRoot ?? shellPaths.workingDirectory }
-      : {}),
+    ...(options.workspaceRoot ? { workspaceRoot: options.workspaceRoot } : {}),
   };
 
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
 
-  return readOnboardingCompletionMarker(shellPaths, scope);
-}
-
-export function clearOnboardingCompletionMarker(
-  shellPaths: OnboardingShellPaths,
-  scope: OnboardingCompletionMarkerScope = 'user',
-): OnboardingCompletionMarkerState {
-  const path = resolveMarkerPath(shellPaths, scope);
-  if (existsSync(path)) unlinkSync(path);
-  return buildMissingMarkerState(scope, path);
+  return readOnboardingCheckMarker(shellPaths, scope);
 }

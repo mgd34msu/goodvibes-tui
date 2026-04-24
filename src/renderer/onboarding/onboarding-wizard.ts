@@ -26,7 +26,6 @@ type RenderedFieldRow =
       readonly kind: 'field';
       readonly field: OnboardingWizardFieldDefinition;
       readonly absoluteIndex: number;
-      readonly line: 0 | 1;
     };
 
 function clamp(value: number, min: number, max: number): number {
@@ -95,7 +94,11 @@ function fieldBadgeTone(
     return wizard.getFieldValue(field) ? UI_TONES.state.good : UI_TONES.fg.muted;
   }
   if (field.kind === 'radio') return UI_TONES.state.active;
-  if (field.kind === 'masked') return UI_TONES.state.warn;
+  if (field.kind === 'text' || field.kind === 'masked') {
+    const missingRequired = wizard.getFieldValueLabel(field) === 'Missing';
+    if (missingRequired) return UI_TONES.state.warn;
+    if (field.kind === 'masked') return UI_TONES.state.warn;
+  }
   return UI_TONES.fg.secondary;
 }
 
@@ -116,8 +119,7 @@ function buildFieldRows(
 
   fieldWindow.fields.forEach((field, index) => {
     const absoluteIndex = fieldWindow.start + index;
-    rows.push({ kind: 'field', field, absoluteIndex, line: 0 });
-    rows.push({ kind: 'field', field, absoluteIndex, line: 1 });
+    rows.push({ kind: 'field', field, absoluteIndex });
   });
 
   if (fieldWindow.end < fieldWindow.total) {
@@ -155,6 +157,48 @@ function fieldHint(
   return field.hint;
 }
 
+function fieldRowPrefix(
+  wizard: OnboardingWizardController,
+  field: OnboardingWizardFieldDefinition,
+  selected: boolean,
+): string {
+  if (selected) return `${OVERLAY_GLYPHS.selected} `;
+  if (wizard.isFieldDirty(field.id)) return '◇ ';
+  if (field.kind === 'checklist') return (wizard.getFieldValue(field) as boolean) ? '✓ ' : '□ ';
+  if (field.kind === 'acknowledgement') return (wizard.getFieldValue(field) as boolean) ? '✓ ' : '□ ';
+  if (field.kind === 'action') return '▶ ';
+  if (field.kind === 'radio') return '◉ ';
+  return '  ';
+}
+
+function selectedFieldText(wizard: OnboardingWizardController): {
+  readonly title: string;
+  readonly hint: string;
+} {
+  if (wizard.isEditingTextField() && wizard.editingFieldId !== null) {
+    const editingField = wizard.getFieldById(wizard.editingFieldId);
+    if (editingField) {
+      return {
+        title: `Editing: ${editingField.label}`,
+        hint: fieldHint(wizard, editingField, true),
+      };
+    }
+  }
+
+  const field = wizard.getSelectedField();
+  if (!field) {
+    return {
+      title: 'Selected: none',
+      hint: 'No selectable row is active on this screen.',
+    };
+  }
+
+  return {
+    title: `Selected: ${field.label} [${wizard.getFieldValueLabel(field)}]`,
+    hint: fieldHint(wizard, field, true),
+  };
+}
+
 function renderFieldRow(
   line: Line,
   wizard: OnboardingWizardController,
@@ -178,38 +222,36 @@ function renderFieldRow(
   const fieldBg = selected ? DEFAULT_OVERLAY_PALETTE.selectedBg : UI_TONES.bg.base;
   fillRange(line, startX, width, fieldBg);
 
-  if (fieldRow.line === 0) {
-    const badge = truncateDisplay(`[${wizard.getFieldValueLabel(field)}]`, Math.max(8, Math.floor(width * 0.38)));
-    const badgeWidth = getDisplayWidth(badge);
-    const prefix = selected ? `${OVERLAY_GLYPHS.selected} ` : wizard.isFieldDirty(field.id) ? '◇ ' : '  ';
-    const labelWidth = Math.max(0, width - badgeWidth - 4);
+  const badge = truncateDisplay(`[${wizard.getFieldValueLabel(field)}]`, Math.max(8, Math.floor(width * 0.34)));
+  const badgeWidth = getDisplayWidth(badge);
+  const labelWidth = Math.max(0, width - badgeWidth - 4);
+  const prefix = fieldRowPrefix(wizard, field, selected);
 
-    putOverlayText(line, startX + 1, labelWidth, truncateDisplay(`${prefix}${field.label}`, labelWidth), {
-      fg: UI_TONES.fg.primary,
-      bg: fieldBg,
-      bold: selected,
-    });
-    putOverlayText(line, startX + width - badgeWidth - 1, badgeWidth, badge, {
-      fg: fieldBadgeTone(wizard, field),
-      bg: fieldBg,
-      bold: selected,
-    });
-    return;
-  }
-
-  putOverlayText(line, startX + 3, Math.max(0, width - 4), truncateDisplay(fieldHint(wizard, field, selected), Math.max(0, width - 4)), {
-    fg: selected ? UI_TONES.fg.secondary : UI_TONES.fg.muted,
+  putOverlayText(line, startX + 1, labelWidth, truncateDisplay(`${prefix}${field.label}`, labelWidth), {
+    fg: UI_TONES.fg.primary,
     bg: fieldBg,
-    dim: !selected,
+    bold: selected,
+  });
+  putOverlayText(line, startX + width - badgeWidth - 1, badgeWidth, badge, {
+    fg: fieldBadgeTone(wizard, field),
+    bg: fieldBg,
+    bold: selected,
   });
 }
 
 function footerText(wizard: OnboardingWizardController): string {
   if (wizard.isEditingTextField()) {
-    return '[Enter] Save  [Esc] Cancel  [Backspace] Delete  [Type] Edit value';
+    return '[Enter] Save value  [Esc] Cancel edit  [Backspace] Delete  [Type] Edit value';
   }
 
-  return '[Tab/Shift+Tab] Step  [↑↓/j/k] Move  [Enter/Space] Toggle/Open  [1-9] Jump  [Esc] Close';
+  return '[Enter] Toggle/open selected  [Tab] Next screen  [Shift+Tab] Previous  [↑↓] Move  [Esc] Close';
+}
+
+function controlsText(wizard: OnboardingWizardController): string {
+  if (wizard.isEditingTextField()) {
+    return 'Controls: Enter saves this value, Esc cancels editing, Backspace deletes, typing edits the value.';
+  }
+  return 'Controls: Enter or Space changes the selected row; Tab/Shift+Tab changes screens; arrows move; typing edits selected inputs.';
 }
 
 function renderWideLayout(
@@ -252,12 +294,13 @@ function renderWideLayout(
   const descriptionLines = wrapText(currentStep.description, Math.max(18, centerWidth - 2)).slice(0, 2);
   const summaryLines = [
     currentStep.summaryTitle,
-    ...currentStep.summaryLines,
+    ...currentStep.summaryLines.slice(0, 2),
     `Fields ${wizard.getCompletedFieldCount(wizard.stepIndex)}/${wizard.getStepFieldCount(wizard.stepIndex)} complete`,
     `Dirty steps ${wizard.dirtyStepCount}`,
-    `Pending picker ${wizard.pendingModelPickerTarget ?? 'none'}`,
   ];
-  const fieldRows = buildFieldRows(wizard, visibleFields, Math.max(0, bodyRows - 3));
+  const fieldStartRow = 5;
+  const selectedText = selectedFieldText(wizard);
+  const fieldRows = buildFieldRows(wizard, visibleFields, Math.max(0, bodyRows - fieldStartRow));
 
   const topLine = createOverlayFilledBorderLine(
     width,
@@ -296,7 +339,7 @@ function renderWideLayout(
     bg: headerBg,
     bold: true,
   });
-  putOverlayText(headerLine, rightStart + 1, rightWidth - 2, 'Summary Rail', {
+  putOverlayText(headerLine, rightStart + 1, rightWidth - 2, 'Summary', {
     fg: UI_TONES.fg.secondary,
     bg: summaryBg,
     bold: true,
@@ -333,28 +376,40 @@ function renderWideLayout(
         bg: bodyBg,
       });
     } else if (row === 2) {
-      const status = fitDisplay(
-        `Fields ${wizard.getCompletedFieldCount(wizard.stepIndex)}/${wizard.getStepFieldCount(wizard.stepIndex)} complete • ${modeLabel(wizard.mode)}`,
-        centerWidth - 2,
-      );
-      putOverlayText(line, centerStart + 1, centerWidth - 2, descriptionLines[1] ?? status, {
+      fillRange(line, centerStart, centerWidth, railBg);
+      putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(controlsText(wizard), centerWidth - 2), {
+        fg: UI_TONES.state.info,
+        bg: railBg,
+      });
+    } else if (row === 3) {
+      fillRange(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
+      putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(`Focus: ${selectedText.title.replace(/^Selected: /, '')}`, centerWidth - 2), {
+        fg: UI_TONES.fg.primary,
+        bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
+        bold: true,
+      });
+    } else if (row === 4) {
+      fillRange(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
+      putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(selectedText.hint, centerWidth - 2), {
         fg: UI_TONES.fg.secondary,
-        bg: bodyBg,
+        bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
       });
     } else {
-      renderFieldRow(line, wizard, fieldRows[row - 3] ?? { kind: 'empty' }, centerStart, centerWidth);
+      renderFieldRow(line, wizard, fieldRows[row - fieldStartRow] ?? { kind: 'empty' }, centerStart, centerWidth);
     }
 
     const step = wizard.steps[row] ?? null;
     if (step) {
       const stepState = stepGlyph(wizard, step, row);
       const completion = `${wizard.getCompletedFieldCount(row)}/${wizard.getStepFieldCount(row)}`;
-      putOverlayText(line, leftStart + 1, leftWidth - 2, truncateDisplay(`${stepState.glyph} ${row + 1}. ${step.shortLabel}`, leftWidth - 2), {
+      const completionWidth = getDisplayWidth(completion);
+      const stepLabelWidth = Math.max(0, leftWidth - completionWidth - 4);
+      putOverlayText(line, leftStart + 1, stepLabelWidth, truncateDisplay(`${stepState.glyph} ${row + 1}. ${step.shortLabel}`, stepLabelWidth), {
         fg: stepState.fg,
         bg: railBg,
         bold: row === wizard.stepIndex,
       });
-      putOverlayText(line, Math.max(leftStart + 1, leftStart + leftWidth - getDisplayWidth(completion) - 2), leftWidth - 2, completion, {
+      putOverlayText(line, Math.max(leftStart + 1, leftStart + leftWidth - completionWidth - 2), completionWidth, completion, {
         fg: wizard.isStepDirty(row) ? UI_TONES.state.warn : UI_TONES.fg.muted,
         bg: railBg,
       });
@@ -418,7 +473,9 @@ function renderCollapsedLayout(
   const innerStart = layout.margin + 1;
   const innerWidth = layout.innerWidth;
   const descriptionLines = wrapText(currentStep.description, Math.max(14, innerWidth - 2)).slice(0, 2);
-  const fieldRows = buildFieldRows(wizard, visibleFields, Math.max(0, bodyRows - 3));
+  const fieldStartRow = 5;
+  const selectedText = selectedFieldText(wizard);
+  const fieldRows = buildFieldRows(wizard, visibleFields, Math.max(0, bodyRows - fieldStartRow));
 
   const topLine = createOverlayFilledBorderLine(
     width,
@@ -476,16 +533,26 @@ function renderCollapsedLayout(
         bg: bodyBg,
       });
     } else if (row === 2) {
-      const compactMeta = fitDisplay(
-        `${currentStep.summaryTitle} • ${wizard.getCompletedFieldCount(wizard.stepIndex)}/${wizard.getStepFieldCount(wizard.stepIndex)} complete`,
-        innerWidth - 2,
-      );
-      putOverlayText(line, innerStart + 1, innerWidth - 2, descriptionLines[1] ?? compactMeta, {
+      fillRange(line, innerStart, innerWidth, UI_TONES.bg.section);
+      putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(controlsText(wizard), innerWidth - 2), {
+        fg: UI_TONES.state.info,
+        bg: UI_TONES.bg.section,
+      });
+    } else if (row === 3) {
+      fillRange(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
+      putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(`Focus: ${selectedText.title.replace(/^Selected: /, '')}`, innerWidth - 2), {
+        fg: UI_TONES.fg.primary,
+        bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
+        bold: true,
+      });
+    } else if (row === 4) {
+      fillRange(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
+      putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(selectedText.hint, innerWidth - 2), {
         fg: UI_TONES.fg.secondary,
-        bg: bodyBg,
+        bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
       });
     } else {
-      renderFieldRow(line, wizard, fieldRows[row - 3] ?? { kind: 'empty' }, innerStart, innerWidth);
+      renderFieldRow(line, wizard, fieldRows[row - fieldStartRow] ?? { kind: 'empty' }, innerStart, innerWidth);
     }
 
     lines.push(line);

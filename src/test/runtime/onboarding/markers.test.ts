@@ -4,10 +4,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import {
-  clearOnboardingCompletionMarker,
-  getOnboardingCompletionMarkerPath,
-  readOnboardingCompletionMarkers,
-  writeOnboardingCompletionMarker,
+  getOnboardingCheckMarkerPath,
+  readOnboardingCheckMarkers,
+  writeOnboardingCheckMarker,
 } from '../../../runtime/onboarding/index.ts';
 
 function createShellPaths() {
@@ -18,55 +17,68 @@ function createShellPaths() {
   });
 }
 
-describe('onboarding completion marker helpers', () => {
-  test('writes and reads user and project markers with project precedence', () => {
+describe('onboarding check marker helpers', () => {
+  test('writes and reads user and project markers with user-only effective check state', () => {
     const shellPaths = createShellPaths();
 
-    writeOnboardingCompletionMarker(shellPaths, {
+    writeOnboardingCheckMarker(shellPaths, {
       scope: 'user',
-      completedAt: 100,
+      checkedAt: 100,
       updatedAt: 110,
       source: 'wizard',
       mode: 'new',
     });
-    writeOnboardingCompletionMarker(shellPaths, {
+    writeOnboardingCheckMarker(shellPaths, {
       scope: 'project',
-      completedAt: 200,
+      checkedAt: 200,
       updatedAt: 210,
       source: 'command',
       mode: 'edit',
     });
 
-    const markers = readOnboardingCompletionMarkers(shellPaths);
+    const markers = readOnboardingCheckMarkers(shellPaths);
 
-    expect(markers.user.payload?.completedAt).toBe(100);
-    expect(markers.user.payload?.workspaceRoot).toBe(shellPaths.workingDirectory);
-    expect(markers.project.payload?.completedAt).toBe(200);
-    expect(markers.effective?.scope).toBe('project');
-    expect(markers.effective?.payload?.mode).toBe('edit');
+    expect(markers.user.payload?.checkedAt).toBe(100);
+    expect(markers.user.payload?.workspaceRoot).toBeUndefined();
+    expect(markers.project.payload?.checkedAt).toBe(200);
+    expect(markers.effective?.scope).toBe('user');
+    expect(markers.effective?.payload?.mode).toBe('new');
   });
 
   test('falls back to a valid user marker when the project marker is invalid', () => {
     const shellPaths = createShellPaths();
 
-    writeOnboardingCompletionMarker(shellPaths, {
+    writeOnboardingCheckMarker(shellPaths, {
       scope: 'user',
-      completedAt: 300,
+      checkedAt: 300,
       source: 'wizard',
     });
 
-    const projectPath = getOnboardingCompletionMarkerPath(shellPaths, 'project');
+    const projectPath = getOnboardingCheckMarkerPath(shellPaths, 'project');
     mkdirSync(dirname(projectPath), { recursive: true });
     writeFileSync(projectPath, '{invalid-json', 'utf-8');
 
-    const markers = readOnboardingCompletionMarkers(shellPaths);
+    const markers = readOnboardingCheckMarkers(shellPaths);
 
     expect(markers.project.exists).toBe(true);
     expect(markers.project.payload).toBeNull();
     expect(markers.project.parseError).toBeTruthy();
     expect(markers.effective?.scope).toBe('user');
+  });
 
-    clearOnboardingCompletionMarker(shellPaths, 'user');
-    expect(readOnboardingCompletionMarkers(shellPaths).user.exists).toBe(false);
+  test('does not treat a project marker as global onboarding check state', () => {
+    const shellPaths = createShellPaths();
+
+    writeOnboardingCheckMarker(shellPaths, {
+      scope: 'project',
+      checkedAt: 400,
+      source: 'command',
+    });
+
+    const markers = readOnboardingCheckMarkers(shellPaths);
+
+    expect(markers.project.payload?.checkedAt).toBe(400);
+    expect(markers.user.payload).toBeNull();
+    expect(markers.effective).toBeNull();
   });
 });

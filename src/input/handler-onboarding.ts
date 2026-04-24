@@ -1,20 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config/oauth-local-listener';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
 import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils/open-external';
 import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
 import { OnboardingWizardController, type OnboardingWizardAction } from './onboarding/onboarding-wizard.ts';
-import { applyOnboardingRequest, collectOnboardingSnapshot, getOnboardingCompletionMarkerPath, verifyOnboardingRequest } from '../runtime/onboarding/index.ts';
-import type { OnboardingApplyOperation, OnboardingApplyRequest, OnboardingShellPaths, OnboardingVerificationItem } from '../runtime/onboarding/index.ts';
+import { applyOnboardingRequest, collectOnboardingSnapshot, verifyOnboardingRequest } from '../runtime/onboarding/index.ts';
+import type { OnboardingApplyRequest, OnboardingVerificationItem } from '../runtime/onboarding/index.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import { captureOnboardingWizardSnapshot, restoreOnboardingWizardSnapshot } from './handler-ui-state.ts';
 import type { InputHandler } from './handler.ts';
-
-interface CompletionMarkerSnapshot {
-  readonly path: string;
-  readonly previous: string | null;
-}
 
 export interface OnboardingRuntimePosture {
   readonly serviceEnabled: boolean;
@@ -35,44 +28,6 @@ function extractAuthorizationCode(input: string): string | null {
     return url.searchParams.get('code');
   } catch {
     return trimmed;
-  }
-}
-
-function splitCompletionMarkerOperations(request: OnboardingApplyRequest): {
-  readonly settingsRequest: OnboardingApplyRequest;
-  readonly markerRequest: OnboardingApplyRequest;
-} {
-  const markerOperations = request.operations.filter((operation) => operation.kind === 'set-completion-marker');
-  const settingsOperations = request.operations.filter((operation) => operation.kind !== 'set-completion-marker');
-  return {
-    settingsRequest: { ...request, operations: settingsOperations },
-    markerRequest: { ...request, operations: markerOperations },
-  };
-}
-
-function snapshotCompletionMarkers(
-  shellPaths: OnboardingShellPaths,
-  operations: readonly OnboardingApplyOperation[],
-): readonly CompletionMarkerSnapshot[] {
-  return operations
-    .filter((operation) => operation.kind === 'set-completion-marker')
-    .map((operation) => {
-      const path = getOnboardingCompletionMarkerPath(shellPaths, operation.scope);
-      return {
-        path,
-        previous: existsSync(path) ? readFileSync(path, 'utf-8') : null,
-      };
-    });
-}
-
-function restoreCompletionMarkers(snapshots: readonly CompletionMarkerSnapshot[]): void {
-  for (const snapshot of snapshots) {
-    if (snapshot.previous === null) {
-      rmSync(snapshot.path, { force: true });
-      continue;
-    }
-    mkdirSync(dirname(snapshot.path), { recursive: true });
-    writeFileSync(snapshot.path, snapshot.previous, 'utf-8');
   }
 }
 
@@ -161,7 +116,7 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
     const blockers = handler.onboardingWizard.getBlockingFieldLabels();
     if (blockers.length > 0) {
       handler.commandContext?.print?.([
-        'Onboarding needs required confirmations before applying.',
+        'Onboarding needs these fields before applying.',
         ...blockers.map((label) => `  ${label}`),
       ].join('\n'));
       handler.requestRender();
@@ -169,7 +124,6 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
     }
 
     const request = handler.onboardingWizard.buildApplyRequest();
-    const { settingsRequest, markerRequest } = splitCompletionMarkerOperations(request);
     const deps = {
       config: handler.uiServices.platform.configManager,
       secrets: handler.uiServices.platform.secretsManager,
@@ -181,12 +135,12 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
     let verificationItems: readonly OnboardingVerificationItem[] = [];
     handler.onboardingApplyPending = true;
     try {
-      const settingsApplied = await applyOnboardingRequest(deps, settingsRequest);
-      const settingsVerification = await verifyOnboardingRequest(deps, settingsRequest);
-      verificationItems = settingsVerification.items;
+      const applied = await applyOnboardingRequest(deps, request);
+      const verification = await verifyOnboardingRequest(deps, request);
+      verificationItems = verification.items;
       appliedErrors = [
-        ...settingsApplied.errors.map((error) => `apply ${error.kind}: ${error.message}`),
-        ...settingsVerification.items
+        ...applied.errors.map((error) => `apply ${error.kind}: ${error.message}`),
+        ...verification.items
           .filter((item) => item.status !== 'pass')
           .map((item) => `verify ${item.id}: ${item.message}`),
       ];
@@ -194,28 +148,10 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
       if (appliedErrors.length === 0) {
         const activationVerification = await handler.restartOnboardingExternalServicesIfNeeded(request);
         const runtimeVerification = [...activationVerification, ...handler.verifyOnboardingRuntimePosture(request)];
-        verificationItems = [...settingsVerification.items, ...runtimeVerification];
+        verificationItems = [...verification.items, ...runtimeVerification];
         appliedErrors = runtimeVerification
           .filter((item) => item.status === 'fail')
           .map((item) => `verify ${item.id}: ${item.message}`);
-      }
-
-      if (appliedErrors.length === 0 && markerRequest.operations.length > 0) {
-        const markerSnapshots = snapshotCompletionMarkers(deps.shellPaths, markerRequest.operations);
-        const markerApplied = await applyOnboardingRequest(deps, markerRequest);
-        const finalVerification = await verifyOnboardingRequest(deps, request);
-        const runtimeVerification = handler.verifyOnboardingRuntimePosture(request);
-        verificationItems = [...finalVerification.items, ...runtimeVerification];
-        appliedErrors = [
-          ...markerApplied.errors.map((error) => `apply ${error.kind}: ${error.message}`),
-          ...finalVerification.items
-            .filter((item) => item.status !== 'pass')
-            .map((item) => `verify ${item.id}: ${item.message}`),
-          ...runtimeVerification
-            .filter((item) => item.status === 'fail')
-            .map((item) => `verify ${item.id}: ${item.message}`),
-        ];
-        if (appliedErrors.length > 0) restoreCompletionMarkers(markerSnapshots);
       }
     } catch (error) {
       handler.commandContext?.print?.([
@@ -625,7 +561,7 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
     }
 
     const auth = handler.uiServices.platform.localUserAuthManager.inspect();
-    const hasAdmin = auth.users.some((user) => user.roles.includes('admin'));
+    const hasLocalAuth = auth.users.length > 0;
     const items: OnboardingVerificationItem[] = [];
 
     items.push({
@@ -638,19 +574,19 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
     });
     items.push({
       id: 'runtime:auth-posture',
-      status: hasAdmin && !auth.bootstrapCredentialPresent ? 'pass' : 'fail',
-      message: hasAdmin && !auth.bootstrapCredentialPresent
-        ? 'Local admin auth is configured and bootstrap credentials are not present.'
-        : 'Network-capable surfaces require local admin auth with no bootstrap credential file.',
+      status: hasLocalAuth && !auth.bootstrapCredentialPresent ? 'pass' : 'fail',
+      message: hasLocalAuth && !auth.bootstrapCredentialPresent
+        ? 'Local auth is configured and bootstrap credentials are not present.'
+        : 'Network-capable surfaces require local auth with no bootstrap credential file.',
       target: 'auth',
     });
     if (posture.remoteExposure) {
       items.push({
         id: 'runtime:remote-auth-gate',
-        status: hasAdmin ? 'pass' : 'fail',
-        message: hasAdmin
-          ? 'Remote-capable bind settings have local admin auth available.'
-          : 'Remote-capable bind settings cannot be applied without local admin auth.',
+        status: hasLocalAuth ? 'pass' : 'fail',
+        message: hasLocalAuth
+          ? 'Remote-capable bind settings have local auth available.'
+          : 'Remote-capable bind settings cannot be applied without local auth.',
         target: 'auth',
       });
     }

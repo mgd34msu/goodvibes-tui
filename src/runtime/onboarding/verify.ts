@@ -1,5 +1,4 @@
 import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
-import { readOnboardingCompletionMarker } from './markers.ts';
 import { readOnboardingRuntimeState } from './state.ts';
 import type {
   OnboardingApplyOperation,
@@ -11,11 +10,6 @@ import type {
 
 function getNow(deps: Pick<OnboardingVerificationDependencies, 'clock'>): number {
   return deps.clock?.() ?? Date.now();
-}
-
-function normalizeCompletionSource(source: string): 'wizard' | 'command' | 'import' | 'unknown' {
-  if (source === 'wizard' || source === 'command' || source === 'import') return source;
-  return 'unknown';
 }
 
 function isDeepEqual(left: unknown, right: unknown): boolean {
@@ -89,60 +83,6 @@ function verifyAcknowledgementOperation(
   };
 }
 
-function verifyCompletionMarkerOperation(
-  deps: OnboardingVerificationDependencies,
-  request: OnboardingApplyRequest,
-  operation: Extract<OnboardingApplyOperation, { kind: 'set-completion-marker' }>,
-): OnboardingVerificationItem {
-  const marker = readOnboardingCompletionMarker(deps.shellPaths, operation.scope);
-  if (marker.parseError) {
-    return {
-      id: `marker:${operation.scope}`,
-      status: 'fail',
-      message: `Onboarding completion marker could not be parsed: ${marker.parseError}`,
-      target: operation.scope,
-    };
-  }
-
-  if (!operation.completed) {
-    return {
-      id: `marker:${operation.scope}`,
-      status: marker.exists ? 'fail' : 'pass',
-      message: marker.exists
-        ? `${operation.scope} onboarding completion marker still exists.`
-        : `${operation.scope} onboarding completion marker is cleared.`,
-      target: operation.scope,
-    };
-  }
-
-  if (!marker.payload) {
-    return {
-      id: `marker:${operation.scope}`,
-      status: 'fail',
-      message: `${operation.scope} onboarding completion marker is missing.`,
-      target: operation.scope,
-    };
-  }
-
-  const expectedSource = operation.payload?.source ?? normalizeCompletionSource(request.source);
-  const expectedMode = operation.payload?.mode ?? request.mode;
-  const expectedWorkspaceRoot = operation.payload?.workspaceRoot ?? deps.shellPaths.workingDirectory;
-  const payloadMatches = marker.payload.source === expectedSource
-    && (expectedMode === undefined || marker.payload.mode === expectedMode)
-    && (expectedWorkspaceRoot === undefined || marker.payload.workspaceRoot === expectedWorkspaceRoot)
-    && (operation.payload?.completedAt === undefined || marker.payload.completedAt === operation.payload.completedAt)
-    && (operation.payload?.updatedAt === undefined || marker.payload.updatedAt === operation.payload.updatedAt);
-
-  return {
-    id: `marker:${operation.scope}`,
-    status: payloadMatches ? 'pass' : 'fail',
-    message: payloadMatches
-      ? `${operation.scope} onboarding completion marker matches the requested state.`
-      : `${operation.scope} onboarding completion marker does not match the requested state.`,
-    target: operation.scope,
-  };
-}
-
 async function verifySecretOperation(
   deps: OnboardingVerificationDependencies,
   operation: Extract<OnboardingApplyOperation, { kind: 'set-secret' }>,
@@ -209,21 +149,19 @@ function verifyAuthOperation(
 
 async function verifyOperation(
   deps: OnboardingVerificationDependencies,
-  request: OnboardingApplyRequest,
   operation: OnboardingApplyOperation,
 ): Promise<OnboardingVerificationItem> {
   if (operation.kind === 'set-config') return verifyConfigOperation(deps, operation);
   if (operation.kind === 'set-secret') return verifySecretOperation(deps, operation);
   if (operation.kind === 'ensure-auth-user') return verifyAuthOperation(deps, operation);
-  if (operation.kind === 'acknowledge') return verifyAcknowledgementOperation(deps, operation);
-  return verifyCompletionMarkerOperation(deps, request, operation);
+  return verifyAcknowledgementOperation(deps, operation);
 }
 
 export async function verifyOnboardingRequest(
   deps: OnboardingVerificationDependencies,
   request: OnboardingApplyRequest,
 ): Promise<OnboardingVerificationResult> {
-  const items = await Promise.all(request.operations.map((operation) => verifyOperation(deps, request, operation)));
+  const items = await Promise.all(request.operations.map((operation) => verifyOperation(deps, operation)));
 
   return {
     verifiedAt: getNow(deps),

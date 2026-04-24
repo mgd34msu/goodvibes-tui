@@ -10,7 +10,7 @@ import {
   applyOnboardingRequest,
   collectOnboardingSnapshot,
   deriveReopenEditAcknowledgementState,
-  readOnboardingCompletionMarker,
+  readOnboardingCheckMarker,
   verifyOnboardingRequest,
 } from '../../../runtime/onboarding/index.ts';
 
@@ -36,7 +36,7 @@ describe('onboarding apply and verify helpers', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  test('applies project onboarding settings, acknowledgements, and completion markers with verification', async () => {
+  test('applies project onboarding settings and acknowledgements with verification', async () => {
     const request = {
       mode: 'edit' as const,
       source: 'wizard',
@@ -51,14 +51,6 @@ describe('onboarding apply and verify helpers', () => {
           kind: 'acknowledge' as const,
           target: 'providers' as const,
           acknowledged: true,
-        },
-        {
-          kind: 'set-completion-marker' as const,
-          scope: 'project' as const,
-          completed: true,
-          payload: {
-            source: 'wizard' as const,
-          },
         },
       ],
     };
@@ -88,10 +80,6 @@ describe('onboarding apply and verify helpers', () => {
     });
     expect(existsSync(globalSettingsPath)).toBe(false);
 
-    const projectMarker = readOnboardingCompletionMarker(shellPaths, 'project');
-    expect(projectMarker.payload?.mode).toBe('edit');
-    expect(projectMarker.payload?.source).toBe('wizard');
-
     const verification = await verifyOnboardingRequest(
       {
         clock: () => 200,
@@ -103,7 +91,7 @@ describe('onboarding apply and verify helpers', () => {
     );
 
     expect(verification.ok).toBe(true);
-    expect(verification.items.map((item) => item.status)).toEqual(['pass', 'pass', 'pass']);
+    expect(verification.items.map((item) => item.status)).toEqual(['pass', 'pass']);
   });
 
   test('prevalidates all config operations before mutating settings', async () => {
@@ -139,7 +127,7 @@ describe('onboarding apply and verify helpers', () => {
     expect(configManager.get('display.stream')).toBe(true);
   });
 
-  test('does not write completion markers when settings verification fails', async () => {
+  test('does not touch check markers when settings verification fails', async () => {
     const request = {
       mode: 'new' as const,
       source: 'wizard',
@@ -148,11 +136,6 @@ describe('onboarding apply and verify helpers', () => {
           kind: 'set-config' as const,
           key: 'display.stream' as const,
           value: false,
-        },
-        {
-          kind: 'set-completion-marker' as const,
-          scope: 'project' as const,
-          completed: true,
         },
       ],
     };
@@ -174,7 +157,7 @@ describe('onboarding apply and verify helpers', () => {
       request,
     );
 
-    const marker = readOnboardingCompletionMarker(shellPaths, 'project');
+    const marker = readOnboardingCheckMarker(shellPaths, 'project');
     expect(applied.ok).toBe(false);
     expect(applied.applied).toEqual([]);
     expect(applied.errors.map((error) => error.message).join('\n')).toContain('verify config:display.stream');

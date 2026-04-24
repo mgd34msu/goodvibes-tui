@@ -3,12 +3,6 @@ import { dirname } from 'node:path';
 import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
 import { CONFIG_SCHEMA, DEFAULT_CONFIG } from '../../config/index.ts';
 import {
-  clearOnboardingCompletionMarker,
-  getOnboardingCompletionMarkerPath,
-  readOnboardingCompletionMarker,
-  writeOnboardingCompletionMarker,
-} from './markers.ts';
-import {
   getOnboardingRuntimeStatePath,
   readOnboardingRuntimeState,
   writeOnboardingAcknowledgementState,
@@ -25,11 +19,6 @@ import type {
 
 function getNow(deps: Pick<OnboardingApplyDependencies, 'clock'>): number {
   return deps.clock?.() ?? Date.now();
-}
-
-function normalizeCompletionSource(source: string): 'wizard' | 'command' | 'import' | 'unknown' {
-  if (source === 'wizard' || source === 'command' || source === 'import') return source;
-  return 'unknown';
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -234,17 +223,6 @@ function validateAcknowledgementOperation(
   }
 }
 
-function validateCompletionMarkerOperation(
-  deps: OnboardingApplyDependencies,
-  operation: Extract<OnboardingApplyOperation, { kind: 'set-completion-marker' }>,
-): void {
-  const marker = readOnboardingCompletionMarker(deps.shellPaths, operation.scope);
-  if (marker.parseError && !operation.completed) return;
-  if (marker.parseError) {
-    throw new Error(`Existing ${operation.scope} onboarding marker could not be parsed: ${marker.parseError}`);
-  }
-}
-
 function applyConfigOperation(
   deps: OnboardingApplyDependencies,
   operation: Extract<OnboardingApplyOperation, { kind: 'set-config' }>,
@@ -433,9 +411,8 @@ async function buildRollbackAction(
     );
   }
 
-  return snapshotFileRollback(
-    getOnboardingCompletionMarkerPath(deps.shellPaths, operation.scope),
-  );
+  const neverOperation: never = operation;
+  throw new Error(`Unsupported onboarding operation: ${JSON.stringify(neverOperation)}`);
 }
 
 function applyAcknowledgementOperation(
@@ -458,35 +435,6 @@ function applyAcknowledgementOperation(
   };
 }
 
-function applyCompletionMarkerOperation(
-  deps: OnboardingApplyDependencies,
-  request: OnboardingApplyRequest,
-  operation: Extract<OnboardingApplyOperation, { kind: 'set-completion-marker' }>,
-): OnboardingAppliedOperation {
-  if (!operation.completed) {
-    clearOnboardingCompletionMarker(deps.shellPaths, operation.scope);
-    return {
-      kind: operation.kind,
-      summary: `Cleared ${operation.scope} onboarding completion marker.`,
-    };
-  }
-
-  const updatedAt = getNow(deps);
-  writeOnboardingCompletionMarker(deps.shellPaths, {
-    scope: operation.scope,
-    completedAt: operation.payload?.completedAt,
-    updatedAt: operation.payload?.updatedAt ?? updatedAt,
-    source: operation.payload?.source ?? normalizeCompletionSource(request.source),
-    mode: operation.payload?.mode ?? request.mode,
-    workspaceRoot: operation.payload?.workspaceRoot,
-  });
-
-  return {
-    kind: operation.kind,
-    summary: `Wrote ${operation.scope} onboarding completion marker.`,
-  };
-}
-
 function orderApplyOperations(
   operations: readonly OnboardingApplyOperation[],
 ): readonly OnboardingApplyOperation[] {
@@ -499,7 +447,7 @@ function orderApplyOperations(
     operation.kind === 'set-config' && operation.key !== 'storage.secretPolicy'
   ));
   const finalOperations = operations.filter((operation) => (
-    operation.kind === 'acknowledge' || operation.kind === 'set-completion-marker'
+    operation.kind === 'acknowledge'
   ));
 
   return [
@@ -543,7 +491,8 @@ function prevalidateApplyRequest(
         continue;
       }
 
-      validateCompletionMarkerOperation(deps, operation);
+      const neverOperation: never = operation;
+      throw new Error(`Unsupported onboarding operation: ${JSON.stringify(neverOperation)}`);
     } catch (error) {
       errors.push({
         kind: operation.kind,
@@ -560,20 +509,7 @@ function getVerificationFailureKind(itemId: string): OnboardingApplyOperation['k
   if (itemId.startsWith('secret:')) return 'set-secret';
   if (itemId.startsWith('auth:')) return 'ensure-auth-user';
   if (itemId.startsWith('acknowledge:')) return 'acknowledge';
-  if (itemId.startsWith('marker:')) return 'set-completion-marker';
   return 'set-config';
-}
-
-function splitCompletionMarkerOperations(
-  operations: readonly OnboardingApplyOperation[],
-): {
-  readonly preMarkerOperations: readonly OnboardingApplyOperation[];
-  readonly markerOperations: readonly OnboardingApplyOperation[];
-} {
-  return {
-    preMarkerOperations: operations.filter((operation) => operation.kind !== 'set-completion-marker'),
-    markerOperations: operations.filter((operation) => operation.kind === 'set-completion-marker'),
-  };
 }
 
 export async function applyOnboardingRequest(
@@ -593,7 +529,6 @@ export async function applyOnboardingRequest(
   }
 
   const orderedOperations = orderApplyOperations(request.operations);
-  const { preMarkerOperations, markerOperations } = splitCompletionMarkerOperations(orderedOperations);
   const rollbacks: RollbackAction[] = [];
 
   const applyOperations = async (operations: readonly OnboardingApplyOperation[]): Promise<boolean> => {
@@ -625,8 +560,8 @@ export async function applyOnboardingRequest(
           continue;
         }
 
-        applied.push(applyCompletionMarkerOperation(deps, request, operation));
-        rollbacks.push(rollback);
+        const neverOperation: never = operation;
+        throw new Error(`Unsupported onboarding operation: ${JSON.stringify(neverOperation)}`);
       } catch (error) {
         const rollbackErrors = await runRollbacks([...rollbacks, rollback]);
         applied.length = 0;
@@ -660,19 +595,11 @@ export async function applyOnboardingRequest(
     return false;
   };
 
-  if (!await applyOperations(preMarkerOperations)) {
+  if (!await applyOperations(orderedOperations)) {
     return { ok: false, applied, skipped, errors };
   }
 
-  if (!await verifyOrRollback(preMarkerOperations)) {
-    return { ok: false, applied, skipped, errors };
-  }
-
-  if (!await applyOperations(markerOperations)) {
-    return { ok: false, applied, skipped, errors };
-  }
-
-  if (!await verifyOrRollback(request.operations)) {
+  if (!await verifyOrRollback(orderedOperations)) {
     return { ok: false, applied, skipped, errors };
   }
 

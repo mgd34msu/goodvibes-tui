@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '../config/index.ts';
-import { readOnboardingCompletionMarkers } from '../runtime/onboarding/index.ts';
+import { readOnboardingCheckMarkers } from '../runtime/onboarding/index.ts';
 import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { configureActivityLogger } from '@pellux/goodvibes-sdk/platform/utils/logger';
@@ -125,7 +125,7 @@ export async function prepareShellCliRuntime(
     const userStorePath = shellPaths.resolveUserPath('tui', 'auth-users.json');
     const bootstrapCredentialPath = shellPaths.resolveUserPath('tui', 'auth-bootstrap.txt');
     const operatorTokenPath = join(bootstrapHomeDirectory, '.goodvibes', 'daemon', 'operator-tokens.json');
-    const onboardingMarkers = readOnboardingCompletionMarkers(shellPaths);
+    const onboardingMarkers = readOnboardingCheckMarkers(shellPaths);
     const service = await buildCliServicePosture({
       configManager,
       workingDirectory: bootstrapWorkingDir,

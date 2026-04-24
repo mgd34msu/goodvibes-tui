@@ -16,12 +16,15 @@ import type { ConfigKey } from '../../config/index.ts';
 
 export type OnboardingWizardMode = OnboardingMode;
 
+export type OnboardingWizardExternalSurfaceStepId = `external-surface:${string}`;
+
 export type OnboardingWizardStepId =
   | 'loading'
   | 'capabilities'
   | 'network'
   | 'access'
   | 'external-services'
+  | OnboardingWizardExternalSurfaceStepId
   | 'provider-access'
   | 'default-model'
   | 'experience'
@@ -41,6 +44,8 @@ export type OnboardingWizardAction =
   | 'apply'
   | 'select-all-capabilities'
   | 'clear-capabilities'
+  | 'select-all-external-surfaces'
+  | 'clear-external-surfaces'
   | 'start-openai-subscription'
   | 'finish-openai-subscription';
 

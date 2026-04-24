@@ -31,7 +31,7 @@ import { OnboardingWizardController, type OnboardingWizardAction, type Onboardin
 import {
   applyOnboardingRequest,
   collectOnboardingSnapshot,
-  getOnboardingCompletionMarkerPath,
+  getOnboardingCheckMarkerPath,
   verifyOnboardingRequest,
 } from '../runtime/onboarding/index.ts';
 import type {
