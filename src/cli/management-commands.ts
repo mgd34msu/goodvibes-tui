@@ -307,11 +307,15 @@ export async function handleTasks(runtime: CliCommandRuntime): Promise<string> {
 }
 
 export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string> {
+  return (await handleSurfacesCommand(runtime)).output;
+}
+
+export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise<{ readonly output: string; readonly exitCode: number }> {
   const config = runtime.configManager;
   const [sub = 'list', ...rest] = runtime.cli.commandArgs;
   const target = rest[0];
   if (sub === 'enable' || sub === 'disable') {
-    if (!target) return `Usage: goodvibes surfaces ${sub} <web|listener|control-plane|surfaceId>`;
+    if (!target) return { output: `Usage: goodvibes surfaces ${sub} <web|listener|control-plane|surfaceId>`, exitCode: 2 };
     const enabled = sub === 'enable';
     if (target === 'web') {
       runtime.configManager.setDynamic('web.enabled', enabled);
@@ -319,7 +323,7 @@ export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string
         runtime.configManager.setDynamic('danger.daemon', true);
         runtime.configManager.setDynamic('controlPlane.enabled', true);
         const webError = applyTargetEndpointFlagsOrDefault(runtime, 'web');
-        if (webError) return webError;
+        if (webError) return { output: webError, exitCode: 2 };
         const webBinding = resolveRuntimeEndpointBinding(runtime.configManager, 'web');
         if (runtime.cli.flags.hostname !== undefined && webBinding.hostMode === 'local') {
           runtime.configManager.setDynamic('controlPlane.hostMode', 'local');
@@ -334,7 +338,7 @@ export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string
       runtime.configManager.setDynamic('danger.httpListener', enabled);
       if (enabled) {
         const listenerError = applyTargetEndpointFlagsOrDefault(runtime, 'httpListener');
-        if (listenerError) return listenerError;
+        if (listenerError) return { output: listenerError, exitCode: 2 };
       }
     }
     else if (target === 'control-plane' || target === 'controlPlane') {
@@ -342,7 +346,7 @@ export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string
       runtime.configManager.setDynamic('danger.daemon', enabled);
       if (enabled) {
         const controlPlaneError = applyTargetEndpointFlagsOrDefault(runtime, 'controlPlane');
-        if (controlPlaneError) return controlPlaneError;
+        if (controlPlaneError) return { output: controlPlaneError, exitCode: 2 };
       }
     }
     else if (SURFACE_CONFIGS.some(([id]) => id === target)) {
@@ -352,14 +356,14 @@ export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string
         enableEndpointLanDefault(runtime.configManager, 'httpListener');
       }
     }
-    else return `Unknown surface: ${target}`;
+    else return { output: `Unknown surface: ${target}`, exitCode: 1 };
     if (enabled) {
       enableServicePosture(runtime.configManager);
     }
-    return `Surface ${enabled ? 'enabled' : 'disabled'}: ${target}`;
+    return { output: `Surface ${enabled ? 'enabled' : 'disabled'}: ${target}`, exitCode: 0 };
   }
   if (sub !== 'list' && sub !== 'status' && sub !== 'check' && sub !== 'show') {
-    return 'Usage: goodvibes surfaces [list|check|show <surfaceId>|enable <surfaceId>|disable <surfaceId>]';
+    return { output: 'Usage: goodvibes surfaces [list|check|show <surfaceId>|enable <surfaceId>|disable <surfaceId>]', exitCode: 2 };
   }
   const controlPlane = resolveRuntimeEndpointBinding(config, 'controlPlane');
   const web = resolveRuntimeEndpointBinding(config, 'web');
@@ -384,7 +388,26 @@ export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string
     };
   });
   const filteredSurfaces = target ? externalSurfaces.filter((surface) => surface.id === target) : externalSurfaces;
-  if (target && filteredSurfaces.length === 0) return `Unknown surface: ${target}`;
+  if (target && filteredSurfaces.length === 0) return { output: `Unknown surface: ${target}`, exitCode: 1 };
+  const readinessIssues: string[] = [];
+  if (includeProbe && config.get('controlPlane.enabled') === true && !controlPlaneReachable) {
+    readinessIssues.push(`Control plane is enabled but not reachable on ${controlPlane.host}:${controlPlane.port}.`);
+  }
+  if (includeProbe && config.get('web.enabled') === true && !webReachable) {
+    readinessIssues.push(`Web surface is enabled but not reachable on ${web.host}:${web.port}.`);
+  }
+  if (includeProbe && config.get('danger.httpListener') === true && !listenerReachable) {
+    readinessIssues.push(`HTTP listener is enabled but not reachable on ${httpListener.host}:${httpListener.port}.`);
+  }
+  for (const surface of filteredSurfaces) {
+    if (surface.enabled !== true) continue;
+    if (config.get('danger.httpListener') !== true) {
+      readinessIssues.push(`${surface.label} is enabled but the HTTP listener is disabled.`);
+    }
+    if (surface.missing.length > 0) {
+      readinessIssues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
+    }
+  }
   const value = {
     controlPlane: {
       enabled: config.get('controlPlane.enabled'),
@@ -411,8 +434,9 @@ export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string
       reachable: listenerReachable,
     },
     surfaces: filteredSurfaces,
+    readinessIssues,
   };
-  return formatJsonOrText(runtime.cli)(value, [
+  const output = formatJsonOrText(runtime.cli)(value, [
     'GoodVibes surfaces',
     `  control-plane: ${yesNo(value.controlPlane.enabled)} (${value.controlPlane.hostMode} ${value.controlPlane.host}:${value.controlPlane.port})${includeProbe ? ` reachable=${yesNo(value.controlPlane.reachable)}` : ''}`,
     `  web: ${yesNo(value.web.enabled)} (${value.web.hostMode} ${value.web.host}:${value.web.port})${includeProbe ? ` reachable=${yesNo(value.web.reachable)}` : ''}`,
@@ -420,10 +444,39 @@ export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string
     '',
     'External surfaces:',
     ...value.surfaces.map((surface) => `  ${surface.label.padEnd(16)} enabled=${yesNo(surface.enabled)} ready=${yesNo(surface.ready)}${surface.enabled && surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}`),
+    ...(includeProbe ? [
+      readinessIssues.length === 0 ? 'Readiness: ready' : 'Readiness: needs attention',
+      ...readinessIssues.map((issue) => `  - ${issue}`),
+    ] : []),
   ].join('\n'));
+  return { output, exitCode: includeProbe && readinessIssues.length > 0 ? 1 : 0 };
 }
 
-export async function renderListenerTest(runtime: CliCommandRuntime): Promise<string> {
+export interface ListenerTestResult {
+  readonly enabled: unknown;
+  readonly hostMode: string;
+  readonly configuredHost: string;
+  readonly host: string;
+  readonly port: number;
+  readonly posture: ReturnType<typeof classifyBindPosture>;
+  readonly reachable: boolean;
+  readonly service: {
+    readonly enabled: unknown;
+    readonly autostart: unknown;
+    readonly restartOnFailure: unknown;
+  };
+  readonly auth: ReturnType<typeof readAuthPaths>;
+  readonly surfaces: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly enabled: unknown;
+    readonly ready: boolean;
+    readonly missing: readonly string[];
+  }[];
+  readonly issues: readonly string[];
+}
+
+export async function buildListenerTestResult(runtime: CliCommandRuntime): Promise<ListenerTestResult> {
   const enabled = runtime.configManager.get('danger.httpListener');
   const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'httpListener');
   const posture = classifyBindPosture(binding);
@@ -455,21 +508,28 @@ export async function renderListenerTest(runtime: CliCommandRuntime): Promise<st
   for (const surface of surfaces) {
     if (surface.missing.length > 0) issues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
   }
-  const value = { enabled, ...binding, posture, reachable, service, auth, surfaces, issues };
+  return { enabled, ...binding, posture, reachable, service, auth, surfaces, issues };
+}
+
+export function formatListenerTestResult(runtime: CliCommandRuntime, value: ListenerTestResult): string {
   return formatJsonOrText(runtime.cli)(value, [
     'GoodVibes listener test',
-    `  enabled: ${yesNo(enabled)}`,
-    `  endpoint: ${binding.hostMode} ${binding.host}:${binding.port}`,
-    `  bind posture: ${posture.label}`,
-    `  reachable: ${yesNo(reachable)}`,
-    `  service: enabled=${yesNo(service.enabled)} autostart=${yesNo(service.autostart)} restartOnFailure=${yesNo(service.restartOnFailure)}`,
-    `  local auth users: ${auth.userStorePresent ? 'present' : 'missing'}`,
-    `  bootstrap credential: ${auth.bootstrapCredentialPresent ? 'present' : 'missing'}`,
-    surfaces.length === 0 ? '  enabled webhook surfaces: none' : '  enabled webhook surfaces:',
-    ...surfaces.map((surface) => `    ${surface.label}: ready=${yesNo(surface.ready)}${surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}`),
-    issues.length === 0 ? '  readiness: ready' : '  readiness: needs attention',
-    ...issues.map((issue) => `    - ${issue}`),
+    `  enabled: ${yesNo(value.enabled)}`,
+    `  endpoint: ${value.hostMode} ${value.host}:${value.port}`,
+    `  bind posture: ${value.posture.label}`,
+    `  reachable: ${yesNo(value.reachable)}`,
+    `  service: enabled=${yesNo(value.service.enabled)} autostart=${yesNo(value.service.autostart)} restartOnFailure=${yesNo(value.service.restartOnFailure)}`,
+    `  local auth users: ${value.auth.userStorePresent ? 'present' : 'missing'}`,
+    `  bootstrap credential: ${value.auth.bootstrapCredentialPresent ? 'present' : 'missing'}`,
+    value.surfaces.length === 0 ? '  enabled webhook surfaces: none' : '  enabled webhook surfaces:',
+    ...value.surfaces.map((surface) => `    ${surface.label}: ready=${yesNo(surface.ready)}${surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}`),
+    value.issues.length === 0 ? '  readiness: ready' : '  readiness: needs attention',
+    ...value.issues.map((issue) => `    - ${issue}`),
   ].join('\n'));
+}
+
+export async function renderListenerTest(runtime: CliCommandRuntime): Promise<string> {
+  return formatListenerTestResult(runtime, await buildListenerTestResult(runtime));
 }
 
 export async function renderControlPlaneStatus(runtime: CliCommandRuntime): Promise<string> {
