@@ -11,6 +11,7 @@ import { inspectProviderAuth } from '@pellux/goodvibes-sdk/platform/runtime/auth
 import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing/index';
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
+import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './management.ts';
 import { applyTargetEndpointFlagsOrDefault, enableEndpointLanDefault, enableServicePosture, extractAuthorizationCode, formatJsonOrText, getNestedValue, hasCommandFlag, isPresentConfigValue, openBrowser, probeTcp, readAuthPaths, runNonInteractiveAgent, SURFACE_CONFIGS, urlHostForBindHost, withRuntimeServices, yesNo } from './management.ts';
 
@@ -425,13 +426,49 @@ export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string
 export async function renderListenerTest(runtime: CliCommandRuntime): Promise<string> {
   const enabled = runtime.configManager.get('danger.httpListener');
   const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'httpListener');
-  const reachable = await probeTcp(binding.host, binding.port);
-  const value = { enabled, ...binding, reachable };
+  const posture = classifyBindPosture(binding);
+  const reachable = enabled === true ? await probeTcp(binding.host, binding.port) : false;
+  const auth = readAuthPaths(runtime);
+  const service = {
+    enabled: runtime.configManager.get('service.enabled'),
+    autostart: runtime.configManager.get('service.autostart'),
+    restartOnFailure: runtime.configManager.get('service.restartOnFailure'),
+  };
+  const surfaces = SURFACE_CONFIGS.map(([id, label, requiredKeys]) => {
+    const surfaceEnabled = runtime.configManager.get(`surfaces.${id}.enabled` as ConfigKey);
+    const missing = requiredKeys.filter((key) => !isPresentConfigValue(runtime.configManager.get(key as ConfigKey)));
+    return {
+      id,
+      label,
+      enabled: surfaceEnabled,
+      ready: surfaceEnabled !== true || missing.length === 0,
+      missing,
+    };
+  }).filter((surface) => surface.enabled === true);
+  const issues: string[] = [];
+  if (enabled !== true) issues.push('HTTP listener is disabled.');
+  if (enabled === true && service.enabled !== true) issues.push('HTTP listener is enabled but service mode is off.');
+  if (enabled === true && service.autostart !== true) issues.push('HTTP listener is enabled but service autostart is off.');
+  if (enabled === true && service.restartOnFailure !== true) issues.push('HTTP listener is enabled but service restart-on-failure is off.');
+  if (isNetworkFacing(enabled, binding) && !auth.userStorePresent) issues.push('Network-facing listener has no local auth user store.');
+  if (isNetworkFacing(enabled, binding) && auth.bootstrapCredentialPresent) issues.push('Network-facing listener still has a bootstrap credential file.');
+  for (const surface of surfaces) {
+    if (surface.missing.length > 0) issues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
+  }
+  const value = { enabled, ...binding, posture, reachable, service, auth, surfaces, issues };
   return formatJsonOrText(runtime.cli)(value, [
     'GoodVibes listener test',
     `  enabled: ${yesNo(enabled)}`,
     `  endpoint: ${binding.hostMode} ${binding.host}:${binding.port}`,
+    `  bind posture: ${posture.label}`,
     `  reachable: ${yesNo(reachable)}`,
+    `  service: enabled=${yesNo(service.enabled)} autostart=${yesNo(service.autostart)} restartOnFailure=${yesNo(service.restartOnFailure)}`,
+    `  local auth users: ${auth.userStorePresent ? 'present' : 'missing'}`,
+    `  bootstrap credential: ${auth.bootstrapCredentialPresent ? 'present' : 'missing'}`,
+    surfaces.length === 0 ? '  enabled webhook surfaces: none' : '  enabled webhook surfaces:',
+    ...surfaces.map((surface) => `    ${surface.label}: ready=${yesNo(surface.ready)}${surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}`),
+    issues.length === 0 ? '  readiness: ready' : '  readiness: needs attention',
+    ...issues.map((issue) => `    - ${issue}`),
   ].join('\n'));
 }
 

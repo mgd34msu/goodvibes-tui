@@ -14,6 +14,7 @@ import {
   parseGoodVibesCli,
   renderCliStatus,
   renderCompletion,
+  renderGoodVibesCommandHelp,
   renderGoodVibesHelp,
   renderGoodVibesVersion,
   renderOnboardingCliStatus,
@@ -58,7 +59,10 @@ export async function prepareShellCliRuntime(
   }
 
   if (cli.flags.help || cli.command === 'help') {
-    console.log(renderGoodVibesHelp(binary));
+    const helpTopic = cli.command === 'help'
+      ? cli.commandArgs[0]
+      : cli.rawCommand ?? undefined;
+    console.log(helpTopic ? renderGoodVibesCommandHelp(helpTopic, binary) : renderGoodVibesHelp(binary));
     process.exit(0);
   }
 

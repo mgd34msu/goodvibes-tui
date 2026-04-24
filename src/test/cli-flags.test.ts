@@ -11,6 +11,7 @@ import {
   handleGoodVibesCliCommand,
   parseCliFlags,
   parseGoodVibesCli,
+  renderGoodVibesCommandHelp,
   renderGoodVibesHelp,
 } from '../cli-flags.ts';
 
@@ -124,6 +125,17 @@ describe('parseCliFlags', () => {
     expect(helpOutput).toContain('--output <format>');
     expect(helpOutput).toContain('status');
     expect(helpOutput).toContain('onboarding');
+  });
+
+  test('command-specific help describes the selected command surface', () => {
+    const parsed = parseGoodVibesCli(['providers', '--help']);
+    const helpOutput = renderGoodVibesCommandHelp(parsed.rawCommand ?? parsed.command, 'goodvibes');
+
+    expect(parsed.command).toBe('providers');
+    expect(parsed.flags.help).toBe(true);
+    expect(helpOutput).toContain('GoodVibes providers');
+    expect(helpOutput).toContain('providers inspect <provider>');
+    expect(helpOutput).not.toContain('Usage: goodvibes [OPTIONS] [PROMPT]');
   });
 
   // ---------------------------------------------------------------------------
@@ -363,6 +375,36 @@ describe('parseCliFlags', () => {
     expect(configManager.get('service.enabled')).toBe(true);
     expect(configManager.get('service.autostart')).toBe(true);
     expect(configManager.get('service.restartOnFailure')).toBe(true);
+  });
+
+  test('listener test reports readiness issues for network webhook posture', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-listener-readiness-'));
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(root, '.goodvibes', 'tui'),
+      workingDir: root,
+    });
+    configManager.setDynamic('danger.httpListener', true);
+    configManager.setDynamic('httpListener.hostMode', 'network');
+    configManager.setDynamic('httpListener.host', '0.0.0.0');
+    configManager.setDynamic('service.enabled', false);
+    configManager.setDynamic('service.autostart', false);
+    configManager.setDynamic('service.restartOnFailure', false);
+    configManager.setDynamic('surfaces.slack.enabled', true);
+
+    const text = await captureGoodVibesCliCommand(['listener', 'test'], configManager, root);
+    expect(text.result).toEqual({ handled: true, exitCode: 0 });
+    expect(text.output).toContain('bind posture: Local Network');
+    expect(text.output).toContain('readiness: needs attention');
+    expect(text.output).toContain('HTTP listener is enabled but service mode is off.');
+    expect(text.output).toContain('Network-facing listener has no local auth user store.');
+    expect(text.output).toContain('Slack is enabled but missing surfaces.slack.signingSecret, surfaces.slack.botToken.');
+
+    const json = await captureGoodVibesCliCommand(['listener', 'test', '--json'], configManager, root);
+    const parsed = JSON.parse(json.output) as { issues: string[]; posture: { kind: string }; surfaces: Array<{ id: string; ready: boolean }> };
+    expect(parsed.posture.kind).toBe('local-network');
+    expect(parsed.issues).toContain('HTTP listener is enabled but service mode is off.');
+    expect(parsed.surfaces.find((surface) => surface.id === 'slack')?.ready).toBe(false);
   });
 
   test('bundle inspect resolves relative paths from the GoodVibes working directory', async () => {
