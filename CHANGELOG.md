@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.28] — 2026-04-24
+
+### Changes
+- 89221c1 fix: mark onboarding checked when opened
+
 ## [0.19.27] — 2026-04-24
 
 ### Changes
