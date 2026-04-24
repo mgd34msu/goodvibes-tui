@@ -13,8 +13,8 @@ import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/provi
 import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { getProviderRuntimeSnapshot, getProviderUsageSnapshot } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
 
-function jsonRef(value: unknown): string {
-  return `secretref:${JSON.stringify(value)}`;
+function goodVibesRef(source: string, id: string): string {
+  return `goodvibes://secrets/${source}/${encodeURIComponent(id)}`;
 }
 
 describe('provider runtime snapshots', () => {
@@ -60,7 +60,7 @@ describe('provider runtime snapshots', () => {
   });
 
   test('surfaces provider-owned secret-ref and subscription OAuth routes', async () => {
-    await secrets.set('OPENAI_API_KEY', jsonRef({ source: 'goodvibes', id: 'OPENAI_REAL_KEY' }), {
+    await secrets.set('OPENAI_API_KEY', goodVibesRef('goodvibes', 'OPENAI_REAL_KEY'), {
       scope: 'project',
       medium: 'secure',
     });

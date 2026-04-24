@@ -17,6 +17,14 @@ const SAMPLE_COMMANDS: SlashCommand[] = [
   { name: 'quit', aliases: ['q'], description: 'Exit application', handler: () => {} },
 ];
 
+function renderAllText(commands?: SlashCommand[]): string {
+  const frames: string[] = [];
+  for (let offset = 0; offset <= 30; offset += 6) {
+    frames.push(linesToText(renderHelpOverlay(W, KEYBINDINGS, commands, offset, TALL_VIEWPORT)).join('\n'));
+  }
+  return frames.join('\n');
+}
+
 describe('renderHelpOverlay', () => {
   test('returns an array of Lines', () => {
     const lines = renderHelpOverlay(W, KEYBINDINGS, undefined, 0, TALL_VIEWPORT);
@@ -67,6 +75,14 @@ describe('renderHelpOverlay', () => {
     const lines = renderHelpOverlay(W, KEYBINDINGS, cmds, 14, TALL_VIEWPORT);
     const texts = linesToText(lines).join('\n');
     expect(texts).toContain('Quick Start');
+  });
+
+  test('shows the onboarding wizard quick-start row when onboarding is registered', () => {
+    const text = renderAllText([{ name: 'onboarding', description: 'Setup surfaces', handler: () => {} }]);
+    expect(text).toContain('/onboarding');
+    expect(text).toContain('Open the onboarding wizard with current settings');
+    expect(text).toContain('preloaded');
+    expect(text).not.toContain('first-run checklist');
   });
 
   test('includes Ctrl+F shortcut in navigation', () => {

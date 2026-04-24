@@ -7,12 +7,24 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
 import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { createRealtimeTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/realtime';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 
 const TEST_TOKEN = 'realtime-transport-token-abc123';
+
+function createTransportFeatureFlags() {
+  const featureFlags = createFeatureFlagManager();
+  featureFlags.loadFromConfig({
+    flags: {
+      'control-plane-gateway': 'enabled',
+      'unified-runtime-task': 'enabled',
+    },
+  });
+  return featureFlags;
+}
 
 async function waitFor<T>(fn: () => T | undefined | null, timeoutMs = 3_000, intervalMs = 10): Promise<T> {
   const startedAt = Date.now();
@@ -77,6 +89,7 @@ describe('RealtimeTransport', () => {
       }),
       workingDir,
       homeDirectory: homeDir,
+      featureFlags: createTransportFeatureFlags(),
       getConversationTitle: () => 'realtime-transport-test',
     });
     daemon = new DaemonServer({

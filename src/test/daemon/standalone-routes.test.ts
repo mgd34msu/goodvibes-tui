@@ -252,7 +252,7 @@ describe('F4 — panel registry on standalone daemon', () => {
   });
 
   test('POST /api/panels/open for unknown panel returns 404', async () => {
-    // 'welcome' is a TUI-only panel — not registered on standalone
+    // Removed onboarding-era panel IDs should remain unavailable on standalone.
     const res = await fetch(`http://127.0.0.1:${port}/api/panels/open`, {
       method: 'POST',
       headers: bearerHeaders(),

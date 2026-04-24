@@ -1,13 +1,11 @@
 #!/usr/bin/env bun
 import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from './types/grid.ts';
 import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
-import { ConfigManager } from './config/index.ts';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
 import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
 import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
@@ -32,7 +30,7 @@ import {
 } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
-import { configureActivityLogger, logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
@@ -50,9 +48,9 @@ import { handleBlockingShellInput, type PendingPermissionState } from './shell/b
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
-import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-import { parseCliFlags } from './cli-flags.ts';
+import { prepareShellCliRuntime } from './cli/entrypoint.ts';
+import { applyInitialTuiCliState } from './cli/tui-startup.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -66,41 +64,13 @@ const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
 const PASTE_ENABLE     = '\x1b[?2004h';
 const PASTE_DISABLE    = '\x1b[?2004l';
 
-type ShellEntrypointOwnership = {
-  readonly workingDirectory: string;
-  readonly homeDirectory: string;
-};
-
-function resolveShellEntrypointOwnership(): ShellEntrypointOwnership {
-  return {
-    workingDirectory: process.cwd(),
-    homeDirectory: homedir(),
-  };
-}
-
 async function main() {
   const stdout = process.stdout;
   const stdin = process.stdin;
-  const {
-    workingDirectory: bootstrapWorkingDir,
-    homeDirectory: bootstrapHomeDirectory,
-  } = resolveShellEntrypointOwnership();
-  configureActivityLogger(join(bootstrapWorkingDir, '.goodvibes', 'logs'));
-  const configManager = new ConfigManager({
-    workingDir: bootstrapWorkingDir,
-    homeDir: bootstrapHomeDirectory,
-    surfaceRoot: 'tui',
-  });
-  new GlobalNetworkTransportInstaller().install(configManager);
-
-  // Apply CLI flags — override settings.json before the provider registry is constructed
-  const cliFlags = parseCliFlags(process.argv.slice(2), 'goodvibes');
-  if (cliFlags.provider !== undefined) {
-    configManager.set('provider.provider', cliFlags.provider);
-  }
-  if (cliFlags.model !== undefined) {
-    configManager.set('provider.model', cliFlags.model);
-  }
+  const { cli, configManager, bootstrapWorkingDir, bootstrapHomeDirectory } = await prepareShellCliRuntime(process.argv.slice(2), {
+    defaultWorkingDirectory: process.env['GOODVIBES_WORKING_DIR'] ?? process.cwd(),
+    homeDirectory: homedir(),
+  }, 'goodvibes');
 
   // ── Bootstrap runtime subsystems via bootstrapRuntime.
   const ctx: BootstrapContext = await bootstrapRuntime(stdout, {
@@ -288,7 +258,7 @@ async function main() {
     stdout.removeListener('resize', resizeHandler);
     process.removeListener('SIGINT', sigintHandler);
     process.removeListener('unhandledRejection', unhandledRejectionHandler);
-    stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + ALT_SCREEN_EXIT);
+    stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + (cli.flags.noAltScreen ? '' : ALT_SCREEN_EXIT));
     stdin.setRawMode(false);
     process.exit(0);
   };
@@ -403,6 +373,20 @@ async function main() {
         benchmarkStore: ctx.services.benchmarkStore,
         favoritesStore: ctx.services.favoritesStore,
         providerRegistry: ctx.services.providerRegistry,
+      },
+      platform: {
+        configManager: ctx.services.configManager,
+        localUserAuthManager: ctx.services.localUserAuthManager,
+        mcpRegistry: ctx.services.mcpRegistry,
+        serviceRegistry: ctx.services.serviceRegistry,
+        surfaceRegistry: ctx.services.surfaceRegistry,
+        subscriptionManager: ctx.services.subscriptionManager,
+        secretsManager: ctx.services.secretsManager,
+        tokenAuditor: ctx.services.tokenAuditor,
+        replayEngine: ctx.services.replayEngine,
+        webhookNotifier: ctx.services.webhookNotifier,
+        policyRuntimeState: ctx.services.policyRuntimeState,
+        externalServices: uiServices.platform.externalServices,
       },
       shell: {
         bookmarkManager: ctx.services.bookmarkManager,
@@ -690,6 +674,15 @@ async function main() {
     render,
   });
 
+  applyInitialTuiCliState({
+    cli,
+    input,
+    commandRegistry,
+    commandContext,
+    shellPaths: ctx.services.shellPaths,
+    render,
+  });
+
   // --- Streaming speed + tool preview wiring ---
   const refreshGit = () => gitStatusProvider.refresh().then((info) => { lastGitInfoRef.value = info; render(); }).catch(() => { /* non-fatal */ });
   // Refresh git status after each turn completes or after tool results arrive
@@ -733,7 +726,7 @@ async function main() {
   stdin.setRawMode(true);
   stdin.resume();
   stdin.setEncoding('utf8');
-  stdout.write(ALT_SCREEN_ENTER + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE);
+  stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE);
 
   stdin.on('data', (data: string) => {
     const blocking = handleBlockingShellInput({

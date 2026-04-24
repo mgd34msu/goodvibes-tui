@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
 import { RuntimeEventBus, createEventEnvelope, type AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { createDirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
 import { createHttpTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http';
 import { createRealtimeTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/realtime';
@@ -34,6 +35,17 @@ interface TransportHarness {
 }
 
 const TEST_TOKEN = 'transport-parity-token-abc123';
+
+function createTransportFeatureFlags() {
+  const featureFlags = createFeatureFlagManager();
+  featureFlags.loadFromConfig({
+    flags: {
+      'control-plane-gateway': 'enabled',
+      'unified-runtime-task': 'enabled',
+    },
+  });
+  return featureFlags;
+}
 
 async function waitFor<T>(fn: () => Promise<T | undefined | null> | T | undefined | null, timeoutMs = 3_000, intervalMs = 10): Promise<T> {
   const startedAt = Date.now();
@@ -92,6 +104,7 @@ function createRuntimeFixture(prefix: string) {
     configManager,
     workingDir,
     homeDirectory: homeDir,
+    featureFlags: createTransportFeatureFlags(),
     getConversationTitle: () => prefix,
   });
   runtimeServices.distributedRuntime.pairRequests.clear();

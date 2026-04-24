@@ -126,7 +126,10 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       input.modalOpened('modelPicker');
       input.modelPicker.openAllModels(models, runtime.model);
       render();
-    })();
+    })().catch((error: unknown) => {
+      commandContext.print?.(`Model picker failed to open: ${error instanceof Error ? error.message : String(error)}`);
+      render();
+    });
   };
 
   commandContext.openProviderPicker = () => {
@@ -139,11 +142,18 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       input.modalOpened('modelPicker');
       input.modelPicker.openProviders(providers, runtime.provider);
       render();
-    })();
+    })().catch((error: unknown) => {
+      commandContext.print?.(`Provider picker failed to open: ${error instanceof Error ? error.message : String(error)}`);
+      render();
+    });
   };
 
   commandContext.openSelection = (title, items, opts, callback) => {
     input.openSelection(title, items, opts, callback);
+  };
+
+  commandContext.openOnboardingWizard = (modeOrOptions) => {
+    input.openOnboardingWizard(modeOrOptions);
   };
 
   commandContext.openContextInspector = () => {

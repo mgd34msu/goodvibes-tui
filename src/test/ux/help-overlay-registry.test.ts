@@ -46,6 +46,13 @@ function renderText(commands: SlashCommand[]): string {
 }
 
 describe('renderHelpOverlay Quick Start sourced from live registry (β3)', () => {
+  test('shows the onboarding wizard row with its updated description', () => {
+    const text = renderText([makeCmd('onboarding')]);
+    expect(text).toContain('/onboarding');
+    expect(text).toContain('Open the onboarding wizard with current settings');
+    expect(text).toContain('preloaded');
+  });
+
   test('shows /cockpit when cockpit is registered', () => {
     const commands: SlashCommand[] = [makeCmd('cockpit'), makeCmd('setup')];
     const text = renderText(commands);

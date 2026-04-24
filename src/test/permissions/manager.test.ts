@@ -8,6 +8,7 @@ import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permi
 import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
 import type { PolicyRule } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
@@ -37,10 +38,16 @@ describe('PermissionManager', () => {
     configManager.set('behavior.autoApprove', false);
     requests = [];
     decisions = [];
+    const featureFlags = createFeatureFlagManager();
+    featureFlags.loadFromConfig({
+      flags: {
+        'permissions-policy-engine': 'enabled',
+      },
+    });
     manager = new PermissionManager(async (request) => {
       requests.push(request);
       return decisions.shift() ?? { approved: true };
-    }, createPermissionConfigReader(configManager), policyRuntimeState);
+    }, createPermissionConfigReader(configManager), policyRuntimeState, null, featureFlags);
   });
 
   afterEach(() => {

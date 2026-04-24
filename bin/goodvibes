@@ -39,7 +39,12 @@ function run(command, args) {
 }
 
 const artifactName = resolveArtifactName(process.platform, process.arch);
+const localBuild = join(packageRoot, 'dist', 'goodvibes');
 const vendoredBinary = artifactName ? join(packageRoot, 'vendor', artifactName) : null;
+
+if (isExecutable(localBuild)) {
+  run(localBuild, process.argv.slice(2));
+}
 
 if (vendoredBinary && isExecutable(vendoredBinary)) {
   run(vendoredBinary, process.argv.slice(2));

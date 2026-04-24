@@ -31,10 +31,12 @@ import type { BookmarkModal } from './bookmark-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';
 import type { SessionPickerModal } from './session-picker-modal.ts';
 import type { ProfilePickerModal } from './profile-picker-modal.ts';
+import type { OnboardingWizardController } from './onboarding/onboarding-wizard.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import type { Panel } from '../panels/types.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
+import type { ModelPickerTarget } from './model-picker.ts';
 
 /**
  * Initial mutable scalar values for InputFeedContext.
@@ -77,7 +79,7 @@ export interface FeedContextMutableInit {
  *     `profilePickerModal` — modal objects constructed once
  *   - `filePicker`, `modelPicker`, `processModal`, `liveTailModal`,
  *     `agentDetailModal`, `contextInspectorModal`, `blockActionsMenu`,
- *     `searchManager`, `historySearch` — service objects constructed once
+ *     `searchManager`, `historySearch`, `onboardingWizard` — service objects constructed once
  *   - `panelManager`, `keybindingsManager` — from uiServices, stable
  *   - `modalStack` — reference to the handler's shared array
  *   - `getHistory`, `getViewportHeight`, `getScrollTop`, `scroll`, `exitApp` — callbacks
@@ -104,6 +106,7 @@ export interface FeedContextStableRefs {
   autocomplete: AutocompleteEngine | null;
   filePicker: FilePickerModal;
   modelPicker: ModelPickerModal;
+  onboardingWizard: OnboardingWizardController;
   processModal: ProcessModal;
   liveTailModal: LiveTailModal;
   agentDetailModal: AgentDetailModal;
@@ -148,6 +151,9 @@ export interface FeedContextClosures {
   findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   cleanupMarkerRegistry: (text: string) => void;
   expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[];
+  openModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
+  onModelPickerCommit: () => boolean;
+  onOnboardingAction: (action: import('./onboarding/onboarding-wizard.ts').OnboardingWizardAction) => void;
 }
 
 /**
@@ -233,4 +239,5 @@ export function syncFeedContextMutableFields(
   ctx.nextImageId = fields.nextImageId;
   ctx.mouseDownRow = fields.mouseDownRow;
   ctx.mouseDownCol = fields.mouseDownCol;
+  ctx.contentWidth = fields.contentWidth;
 }

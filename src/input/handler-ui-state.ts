@@ -2,6 +2,54 @@ import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { SearchManager } from './search.ts';
 import type { HistorySearch } from './input-history.ts';
+import type {
+  OnboardingWizardController,
+  OnboardingWizardMode,
+  OnboardingWizardSnapshot,
+} from './onboarding/onboarding-wizard.ts';
+export type { OnboardingWizardSnapshot } from './onboarding/onboarding-wizard.ts';
+
+export interface OpenOnboardingWizardOptions {
+  readonly mode?: OnboardingWizardMode;
+  readonly reset?: boolean;
+  readonly preload?: OnboardingWizardSnapshot | ((wizard: OnboardingWizardController) => void);
+}
+
+export function captureOnboardingWizardSnapshot(
+  wizard: OnboardingWizardController,
+): OnboardingWizardSnapshot {
+  return wizard.captureSnapshot();
+}
+
+export function restoreOnboardingWizardSnapshot(
+  wizard: OnboardingWizardController,
+  snapshot: OnboardingWizardSnapshot,
+  options?: { active?: boolean },
+): void {
+  wizard.restoreSnapshot(snapshot, options);
+}
+
+export function openOnboardingWizardState(
+  wizard: OnboardingWizardController,
+  options: OpenOnboardingWizardOptions = {},
+): void {
+  const snapshot = typeof options.preload === 'function' ? null : options.preload;
+  const nextMode = options.mode ?? snapshot?.mode ?? wizard.mode;
+  const shouldReset = options.reset ?? !wizard.active;
+
+  if (shouldReset) {
+    wizard.open(nextMode);
+  } else {
+    wizard.reopen();
+    if (options.mode !== undefined) wizard.setMode(options.mode);
+  }
+
+  if (typeof options.preload === 'function') {
+    options.preload(wizard);
+  } else if (snapshot) {
+    restoreOnboardingWizardSnapshot(wizard, snapshot, { active: true });
+  }
+}
 
 export type ActiveModalState = {
   helpOverlayActive: boolean;
@@ -18,6 +66,7 @@ export type ActiveModalState = {
   filePicker: { active: boolean; close: () => void };
   blockActionsMenu: { active: boolean; close: () => void };
   selectionModal: { active: boolean; close: () => void };
+  onboardingWizard?: Pick<OnboardingWizardController, 'active' | 'close' | 'reopen'>;
   commandMode: boolean;
 };
 
@@ -36,6 +85,7 @@ export function getActiveModalName(state: ActiveModalState): string | null {
   if (state.filePicker.active) return 'filePicker';
   if (state.blockActionsMenu.active) return 'blockActions';
   if (state.selectionModal.active) return 'selection';
+  if (state.onboardingWizard?.active) return 'onboarding';
   if (state.commandMode) return 'command';
   return null;
 }
@@ -55,6 +105,7 @@ export type ModalCloseOps = {
   closeFilePicker: () => void;
   closeBlockActions: () => void;
   closeSelection: () => void;
+  closeOnboarding?: () => void;
   closeCommandMode: () => void;
 };
 
@@ -102,6 +153,9 @@ export function closeModalByName(name: string, ops: ModalCloseOps): void {
     case 'selection':
       ops.closeSelection();
       break;
+    case 'onboarding':
+      ops.closeOnboarding?.();
+      break;
     case 'command':
       ops.closeCommandMode();
       break;
@@ -114,6 +168,7 @@ export type ModalOpenOps = {
   openBookmark: () => void;
   openProcess: () => void;
   openContextInspector: () => void;
+  openOnboarding?: () => void;
   openCommandMode: () => void;
 };
 
@@ -133,6 +188,9 @@ export function reopenModalByName(name: string, ops: ModalOpenOps): void {
       break;
     case 'contextInspector':
       ops.openContextInspector();
+      break;
+    case 'onboarding':
+      ops.openOnboarding?.();
       break;
     case 'command':
       ops.openCommandMode();

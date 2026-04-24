@@ -18,6 +18,7 @@ import { renderProfilePickerModal } from './profile-picker-modal.ts';
 import { renderBookmarkModal } from './bookmark-modal.ts';
 import { renderHelpOverlay, renderShortcutsOverlay } from './help-overlay.ts';
 import { renderAutocompleteOverlay } from './autocomplete-overlay.ts';
+import { renderOnboardingWizard } from './onboarding/onboarding-wizard.ts';
 import { overlayViewportBottom, replaceViewportWithOverlay } from './conversation-layout.ts';
 
 export interface ConversationOverlayContext {
@@ -37,6 +38,11 @@ export function applyConversationOverlays(
   const { input, conversation, commandRegistry, keybindingsManager, conversationWidth, viewportHeight, contextWindow } = context;
   let next = viewport;
   const bottomDockInset = 1 + (input.searchManager.active || input.historySearch.active ? 1 : 0);
+
+  if (input.onboardingWizard.active) {
+    const lines = renderOnboardingWizard(input.onboardingWizard, conversationWidth, viewportHeight);
+    next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
+  }
 
   if (input.filePicker.active) {
     const lines = renderFilePickerOverlay(input.filePicker, conversationWidth, viewportHeight);

@@ -25,7 +25,15 @@ import {
   persistProviders,
 } from '@pellux/goodvibes-sdk/platform/discovery/index';
 
-import { parseCliFlags } from '../cli-flags.ts';
+import {
+  parseGoodVibesCli,
+  renderGoodVibesDaemonHelp,
+  renderGoodVibesVersion,
+  applyRuntimeConfigOverrides,
+  applyRuntimeConfigValue,
+  applyRuntimeFeatureFlagOverrides,
+  applyRuntimeEndpointFlagOverrides,
+} from '../cli/index.ts';
 type DaemonCliOwnership = {
   readonly workingDirectory: string;
   readonly homeDirectory: string;
@@ -39,13 +47,17 @@ type DaemonCliTokens = {
 };
 
 function getLocalNetworkIp(): string {
-  const nets = networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] ?? []) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
+  try {
+    const nets = networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] ?? []) {
+        if (net.family === 'IPv4' && !net.internal) {
+          return net.address;
+        }
       }
     }
+  } catch {
+    return 'localhost';
   }
   return 'localhost';
 }
@@ -82,7 +94,22 @@ function readDaemonCliTokens(env: NodeJS.ProcessEnv): DaemonCliTokens {
 async function main(): Promise<void> {
   // Parse CLI flags first so --daemon-home and --working-dir env vars are set
   // before resolveDaemonCliOwnership() reads them.
-  const cliFlags = parseCliFlags(process.argv.slice(2), 'goodvibes-daemon');
+  const cli = parseGoodVibesCli(process.argv.slice(2), 'goodvibes-daemon');
+  if (cli.errors.length > 0) {
+    console.error(cli.errors.join('\n'));
+    console.error('');
+    console.error(renderGoodVibesDaemonHelp('goodvibes-daemon'));
+    process.exit(2);
+  }
+  if (cli.flags.help || cli.command === 'help') {
+    console.log(renderGoodVibesDaemonHelp('goodvibes-daemon'));
+    process.exit(0);
+  }
+  if (cli.flags.version || cli.command === 'version') {
+    console.log(renderGoodVibesVersion('goodvibes-daemon'));
+    process.exit(0);
+  }
+  const cliFlags = cli.flags;
   if (cliFlags.daemonHome !== undefined) {
     process.env['GOODVIBES_DAEMON_HOME'] = cliFlags.daemonHome;
     logger.info('daemon: --daemon-home flag applied', { daemonHome: cliFlags.daemonHome });
@@ -96,14 +123,35 @@ async function main(): Promise<void> {
   const config = new ConfigManager({ workingDir, homeDir: homeDirectory, surfaceRoot: 'tui' });
   new GlobalNetworkTransportInstaller().install(config);
 
-  // Apply remaining CLI flags — override settings.json before the provider registry is constructed
+  const overrideErrors = applyRuntimeConfigOverrides(config, cliFlags.configOverrides);
+  if (overrideErrors.length > 0) {
+    console.error(overrideErrors.join('\n'));
+    process.exit(2);
+  }
+  applyRuntimeFeatureFlagOverrides(config, {
+    enableFeatures: cliFlags.enableFeatures,
+    disableFeatures: cliFlags.disableFeatures,
+  });
+
+  // Apply remaining CLI flags before the provider registry is constructed.
+  // These are runtime-only overrides; they must not rewrite settings.json.
   if (cliFlags.provider !== undefined) {
-    config.set('provider.provider', cliFlags.provider);
+    applyRuntimeConfigValue(config, 'provider.provider', cliFlags.provider);
     logger.info('daemon: --provider flag applied', { provider: cliFlags.provider });
   }
   if (cliFlags.model !== undefined) {
-    config.set('provider.model', cliFlags.model);
+    applyRuntimeConfigValue(config, 'provider.model', cliFlags.model);
     logger.info('daemon: --model flag applied', { model: cliFlags.model });
+  }
+  const endpointOverrideErrors = applyRuntimeEndpointFlagOverrides(config, 'controlPlane', cliFlags);
+  if (endpointOverrideErrors.length > 0) {
+    console.error(endpointOverrideErrors.join('\n'));
+    process.exit(2);
+  }
+  if (cliFlags.port !== undefined) logger.info('daemon: --port flag applied', { port: cliFlags.port });
+  if (cliFlags.hostname !== undefined) {
+    process.env['GOODVIBES_DAEMON_HOST'] = cliFlags.hostname;
+    logger.info('daemon: --hostname flag applied', { hostname: cliFlags.hostname });
   }
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
@@ -209,7 +257,10 @@ async function main(): Promise<void> {
   // Print companion connection info + QR code to stdout.
   // Use the config-driven control plane port, not a hardcoded default.
   const daemonPort = config.get('controlPlane.port');
-  const daemonHost = String(process.env.GOODVIBES_DAEMON_HOST ?? getLocalNetworkIp());
+  const configuredDaemonHost = String(process.env.GOODVIBES_DAEMON_HOST ?? getLocalNetworkIp());
+  const daemonHost = configuredDaemonHost === '0.0.0.0' || configuredDaemonHost === '::'
+    ? getLocalNetworkIp()
+    : configuredDaemonHost;
   const daemonUrl = `http://${daemonHost}:${daemonPort}`;
   const bootstrapPassword = readBootstrapPassword(userAuth.getBootstrapCredentialPath());
   const connectionInfo = buildCompanionConnectionInfo({

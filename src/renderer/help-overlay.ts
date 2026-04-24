@@ -69,7 +69,7 @@ export function renderHelpOverlay(
   // Each entry is [commandName, subcommandOrArgHint, description].
   // Commands not registered in the live registry are omitted at render time.
   const FEATURED_COMMANDS: Array<[name: string, argHint: string, desc: string]> = [
-    ['setup',        'onboarding', 'Guided first-run review and environment posture'],
+    ['onboarding',   '',           'Open the onboarding wizard with current settings preloaded'],
     ['cockpit',      '',           'Unified runtime control room'],
     ['settings',     '',           'Settings and config browser'],
     ['provider',     '',           'Choose provider or model family'],
