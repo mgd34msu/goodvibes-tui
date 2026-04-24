@@ -49,6 +49,7 @@
     "publish:dry-run": "bun run scripts/publish-package.ts --dry-run",
     "publish:dry-run:github": "GOODVIBES_PUBLIC_PACKAGE_NAME=@mgd34msu/goodvibes-tui GOODVIBES_PUBLISH_REGISTRY=https://npm.pkg.github.com bun run scripts/publish-package.ts --dry-run",
     "publish:check": "bun run scripts/publish-check.ts",
+    "package:install-check": "bun run scripts/package-install-check.ts",
     "build:prod": "bun run scripts/build.ts",
     "build:all": "bun run scripts/build.ts --all",
     "perf:check": "bun run scripts/perf-check.ts",

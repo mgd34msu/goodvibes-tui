@@ -2,6 +2,8 @@ import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manage
 import type { OnboardingCompletionMarkersState } from '../runtime/onboarding/index.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { isNetworkFacing } from './network-posture.ts';
+import type { GoodVibesCliOutputFormat } from './types.ts';
+import type { CliServicePosture } from './service-posture.ts';
 
 export interface CliStatusOptions {
   readonly configManager: Pick<ConfigManager, 'get'>;
@@ -9,7 +11,9 @@ export interface CliStatusOptions {
   readonly homeDirectory: string;
   readonly onboardingMarkers?: OnboardingCompletionMarkersState;
   readonly auth?: CliAuthStatus;
+  readonly service?: CliServicePosture;
   readonly doctor?: boolean;
+  readonly outputFormat?: GoodVibesCliOutputFormat;
 }
 
 export interface CliAuthStatus {
@@ -29,6 +33,41 @@ export interface CliDoctorFinding {
   readonly cause: string;
   readonly impact: string;
   readonly action: string;
+}
+
+export interface CliStatusSnapshot {
+  readonly title: 'GoodVibes status' | 'GoodVibes doctor';
+  readonly workingDirectory: string;
+  readonly homeDirectory: string;
+  readonly provider: {
+    readonly provider: string;
+    readonly model: string;
+    readonly reasoning: string;
+  };
+  readonly auth: {
+    readonly permissionMode: unknown;
+    readonly permissionLabel: string;
+    readonly secretPolicy: unknown;
+    readonly secretPolicyLabel: string;
+    readonly localUsers: CliAuthStatus | null;
+  };
+  readonly service: {
+    readonly enabled: unknown;
+    readonly autostart: unknown;
+    readonly restartOnFailure: unknown;
+    readonly lifecycle?: CliServicePosture;
+  };
+  readonly surfaces: {
+    readonly controlPlane: ReturnType<typeof resolveRuntimeEndpointBinding> & { readonly enabled: unknown };
+    readonly httpListener: ReturnType<typeof resolveRuntimeEndpointBinding> & { readonly enabled: unknown };
+    readonly web: ReturnType<typeof resolveRuntimeEndpointBinding> & { readonly enabled: unknown };
+  };
+  readonly onboarding: {
+    readonly completed: boolean;
+    readonly scope: string;
+    readonly updatedAt: number | null;
+  };
+  readonly findings: readonly CliDoctorFinding[];
 }
 
 function yesNo(value: unknown): string {
@@ -113,6 +152,21 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
     });
   }
 
+  if (options.service) {
+    for (const issue of options.service.issues) {
+      if (findings.some((finding) => finding.summary === issue)) continue;
+      findings.push({
+        id: `service-lifecycle-${findings.length}`,
+        area: 'service',
+        severity: 'warning',
+        summary: issue,
+        cause: 'The service lifecycle inspection found a mismatch between configured service/surface state and observed host state.',
+        impact: 'Daemon, control-plane, listener, or web availability may not match the configuration.',
+        action: 'Run goodvibes service check and apply the suggested service install/start/configuration fix.',
+      });
+    }
+  }
+
   if (!marker?.payload) {
     findings.push({
       id: 'onboarding-incomplete',
@@ -188,23 +242,68 @@ export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliD
   return findings;
 }
 
-export function renderCliStatus(options: CliStatusOptions): string {
+export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnapshot {
   const config = options.configManager;
-  const serviceEnabled = config.get('service.enabled');
-  const serviceAutostart = config.get('service.autostart');
-  const restartOnFailure = config.get('service.restartOnFailure');
-  const daemonEnabled = config.get('danger.daemon');
-  const listenerEnabled = config.get('danger.httpListener');
-  const webEnabled = config.get('web.enabled');
-  const controlPlaneEnabled = config.get('controlPlane.enabled');
   const controlPlaneBinding = resolveRuntimeEndpointBinding(config, 'controlPlane');
   const httpListenerBinding = resolveRuntimeEndpointBinding(config, 'httpListener');
   const webBinding = resolveRuntimeEndpointBinding(config, 'web');
   const marker = options.onboardingMarkers?.effective;
   const findings = buildCliDoctorFindings(options);
+  return {
+    title: options.doctor ? 'GoodVibes doctor' : 'GoodVibes status',
+    workingDirectory: options.workingDirectory,
+    homeDirectory: options.homeDirectory,
+    provider: {
+      provider: String(config.get('provider.provider')),
+      model: String(config.get('provider.model')),
+      reasoning: String(config.get('provider.reasoningEffort')),
+    },
+    auth: {
+      permissionMode: config.get('permissions.mode'),
+      permissionLabel: permissionModeLabel(config.get('permissions.mode')),
+      secretPolicy: config.get('storage.secretPolicy'),
+      secretPolicyLabel: secretPolicyLabel(config.get('storage.secretPolicy')),
+      localUsers: options.auth ?? null,
+    },
+    service: {
+      enabled: config.get('service.enabled'),
+      autostart: config.get('service.autostart'),
+      restartOnFailure: config.get('service.restartOnFailure'),
+      ...(options.service ? { lifecycle: options.service } : {}),
+    },
+    surfaces: {
+      controlPlane: { enabled: config.get('controlPlane.enabled'), ...controlPlaneBinding },
+      httpListener: { enabled: config.get('danger.httpListener'), ...httpListenerBinding },
+      web: { enabled: config.get('web.enabled'), ...webBinding },
+    },
+    onboarding: {
+      completed: Boolean(marker?.payload),
+      scope: marker?.scope ?? 'none',
+      updatedAt: marker?.payload?.updatedAt ?? null,
+    },
+    findings,
+  };
+}
+
+export function renderCliStatus(options: CliStatusOptions): string {
+  const config = options.configManager;
+  const snapshot = buildCliStatusSnapshot(options);
+  const serviceEnabled = snapshot.service.enabled;
+  const serviceAutostart = snapshot.service.autostart;
+  const restartOnFailure = snapshot.service.restartOnFailure;
+  const controlPlaneEnabled = snapshot.surfaces.controlPlane.enabled;
+  const listenerEnabled = snapshot.surfaces.httpListener.enabled;
+  const webEnabled = snapshot.surfaces.web.enabled;
+  const controlPlaneBinding = snapshot.surfaces.controlPlane;
+  const httpListenerBinding = snapshot.surfaces.httpListener;
+  const webBinding = snapshot.surfaces.web;
+  const marker = options.onboardingMarkers?.effective;
+  const findings = snapshot.findings;
+
+  if (options.outputFormat === 'json') return JSON.stringify(snapshot, null, 2);
 
   const lines = [
-    options.doctor ? 'GoodVibes doctor' : 'GoodVibes status',
+    snapshot.title,
     `  workingDir: ${options.workingDirectory}`,
     `  homeDir: ${options.homeDirectory}`,
     '',
@@ -230,6 +329,14 @@ export function renderCliStatus(options: CliStatusOptions): string {
     `  enabled: ${yesNo(serviceEnabled)}`,
     `  autostart: ${yesNo(serviceAutostart)}`,
     `  restartOnFailure: ${yesNo(restartOnFailure)}`,
+    ...(options.service ? [
+      `  platform: ${options.service.managed.platform}`,
+      `  installed: ${yesNo(options.service.managed.installed)}`,
+      `  running: ${yesNo(options.service.managed.running)}`,
+      `  pid: ${options.service.managed.pid ?? 'n/a'}`,
+      `  definition: ${options.service.managed.path}`,
+      `  log: ${options.service.log.path ?? 'n/a'} (${options.service.log.exists ? 'present' : 'missing'})`,
+    ] : []),
     '',
     'Surfaces:',
     bindLine('controlPlane', controlPlaneEnabled, controlPlaneBinding),

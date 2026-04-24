@@ -15,6 +15,8 @@ const COMMAND_ALIASES: Readonly<Record<string, GoodVibesCliCommand>> = {
   daemon: 'serve',
   server: 'serve',
   web: 'web',
+  service: 'service',
+  services: 'service',
   status: 'status',
   doctor: 'doctor',
   onboarding: 'onboarding',

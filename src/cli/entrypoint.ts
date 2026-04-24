@@ -10,6 +10,7 @@ import {
   applyRuntimeConfigOverrides,
   applyRuntimeConfigValue,
   applyRuntimeFeatureFlagOverrides,
+  buildCliStatusSnapshot,
   handleGoodVibesCliCommand,
   parseGoodVibesCli,
   renderCliStatus,
@@ -19,6 +20,7 @@ import {
   renderGoodVibesVersion,
   renderOnboardingCliStatus,
 } from './index.ts';
+import { buildCliServicePosture } from './service-posture.ts';
 
 type ShellEntrypointOwnership = {
   readonly workingDirectory: string;
@@ -124,6 +126,11 @@ export async function prepareShellCliRuntime(
     const bootstrapCredentialPath = shellPaths.resolveUserPath('tui', 'auth-bootstrap.txt');
     const operatorTokenPath = join(bootstrapHomeDirectory, '.goodvibes', 'daemon', 'operator-tokens.json');
     const onboardingMarkers = readOnboardingCompletionMarkers(shellPaths);
+    const service = await buildCliServicePosture({
+      configManager,
+      workingDirectory: bootstrapWorkingDir,
+      homeDirectory: bootstrapHomeDirectory,
+    });
     const statusOptions = {
       configManager,
       workingDirectory: bootstrapWorkingDir,
@@ -137,12 +144,15 @@ export async function prepareShellCliRuntime(
         operatorTokenPath,
         operatorTokenPresent: existsSync(operatorTokenPath),
       },
+      service,
       doctor: cli.command === 'doctor',
+      outputFormat: cli.flags.outputFormat,
     };
+    const snapshot = buildCliStatusSnapshot(statusOptions);
     console.log(cli.command === 'onboarding'
       ? renderOnboardingCliStatus(statusOptions)
       : renderCliStatus(statusOptions));
-    process.exit(0);
+    process.exit(cli.command === 'doctor' && snapshot.findings.length > 0 ? 1 : 0);
   }
 
   const cliCommandResult = await handleGoodVibesCliCommand({

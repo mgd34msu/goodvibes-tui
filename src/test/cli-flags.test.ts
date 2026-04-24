@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '../config/index.ts';
@@ -196,7 +196,7 @@ describe('parseCliFlags', () => {
   });
 
   test('parses GoodVibes-specific command names', () => {
-    for (const command of ['surfaces', 'control-plane', 'bundle', 'remote', 'bridge'] as const) {
+    for (const command of ['surfaces', 'control-plane', 'bundle', 'remote', 'bridge', 'service'] as const) {
       expect(parseGoodVibesCli([command]).command).toBe(command);
     }
   });
@@ -460,6 +460,104 @@ describe('parseCliFlags', () => {
     }
 
     expect(logs.join('\n')).toContain(`path: ${bundlePath}`);
+  });
+
+  test('bundle export redacts secret config values and import skips redacted sentinels', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-bundle-redaction-'));
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(root, '.goodvibes', 'tui'),
+      workingDir: root,
+    });
+    configManager.setDynamic('surfaces.slack.signingSecret', 'slack-secret-value');
+    configManager.setDynamic('surfaces.slack.botToken', 'xoxb-secret-value');
+    configManager.setDynamic('surfaces.slack.defaultChannel', 'goodvibes-alerts');
+    const logPath = join(root, '.goodvibes', 'tui', 'service', 'manual.log');
+    mkdirSync(join(root, '.goodvibes', 'tui', 'service'), { recursive: true });
+    writeFileSync(logPath, 'failed with slack-secret-value and xoxb-secret-value\n', 'utf-8');
+    configManager.setDynamic('service.logPath', logPath);
+
+    const exported = await captureGoodVibesCliCommand(['bundle', 'export', 'support-bundle.json'], configManager, root);
+    expect(exported.result).toEqual({ handled: true, exitCode: 0 });
+    const raw = readFileSync(join(root, 'support-bundle.json'), 'utf-8');
+    expect(raw).not.toContain('slack-secret-value');
+    expect(raw).not.toContain('xoxb-secret-value');
+    expect(raw).toContain('<redacted>');
+    const bundle = JSON.parse(raw) as {
+      config: { surfaces: { slack: { signingSecret: string; botToken: string; defaultChannel: string } } };
+      redaction: { redactedConfigPaths: string[] };
+      diagnostics: { service: { issues: string[] } };
+    };
+    expect(bundle.config.surfaces.slack.signingSecret).toBe('<redacted>');
+    expect(bundle.config.surfaces.slack.botToken).toBe('<redacted>');
+    expect(bundle.config.surfaces.slack.defaultChannel).toBe('goodvibes-alerts');
+    expect(bundle.redaction.redactedConfigPaths).toContain('surfaces.slack.signingSecret');
+    expect(bundle.diagnostics.service.issues).toBeArray();
+
+    const importRoot = mkdtempSync(join(tmpdir(), 'goodvibes-cli-bundle-import-'));
+    const importedConfig = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(importRoot, '.goodvibes', 'tui'),
+      workingDir: importRoot,
+    });
+    const imported = await captureGoodVibesCliCommand(['bundle', 'import', join(root, 'support-bundle.json')], importedConfig, importRoot);
+    expect(imported.result).toEqual({ handled: true, exitCode: 0 });
+    expect(imported.output).toContain('redacted values skipped');
+    expect(importedConfig.get('surfaces.slack.signingSecret')).toBe('');
+    expect(importedConfig.get('surfaces.slack.botToken')).toBe('');
+    expect(importedConfig.get('surfaces.slack.defaultChannel')).toBe('goodvibes-alerts');
+  });
+
+  test('service check reports lifecycle posture with failing readiness exit code', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-service-check-'));
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(root, '.goodvibes', 'tui'),
+      workingDir: root,
+    });
+    configManager.setDynamic('service.enabled', true);
+    configManager.setDynamic('service.autostart', true);
+    configManager.setDynamic('service.restartOnFailure', true);
+    configManager.setDynamic('controlPlane.enabled', true);
+
+    const text = await captureGoodVibesCliCommand(['service', 'check'], configManager, root);
+    expect(text.result).toEqual({ handled: true, exitCode: 1 });
+    expect(text.output).toContain('GoodVibes service');
+    expect(text.output).toContain('Readiness: needs attention');
+    expect(text.output).toContain('Service mode is enabled but no platform service definition is installed.');
+
+    const json = await captureGoodVibesCliCommand(['service', 'check', '--json'], configManager, root);
+    expect(json.result).toEqual({ handled: true, exitCode: 1 });
+    const parsed = JSON.parse(json.output) as { managed: { installed: boolean }; endpoints: Array<{ id: string }>; issues: string[] };
+    expect(parsed.managed.installed).toBe(false);
+    expect(parsed.endpoints.some((endpoint) => endpoint.id === 'controlPlane')).toBe(true);
+    expect(parsed.issues).toContain('Service mode is enabled but no platform service definition is installed.');
+  });
+
+  test('control-plane status returns readiness failures for enabled unreachable network posture', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-control-plane-check-'));
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(root, '.goodvibes', 'tui'),
+      workingDir: root,
+    });
+    configManager.setDynamic('controlPlane.enabled', true);
+    configManager.setDynamic('controlPlane.hostMode', 'network');
+    configManager.setDynamic('controlPlane.host', '0.0.0.0');
+    configManager.setDynamic('service.enabled', false);
+
+    const text = await captureGoodVibesCliCommand(['control-plane', 'status'], configManager, root);
+    expect(text.result).toEqual({ handled: true, exitCode: 1 });
+    expect(text.output).toContain('bind posture: Local Network');
+    expect(text.output).toContain('readiness: needs attention');
+    expect(text.output).toContain('Control plane is enabled but service mode is off.');
+    expect(text.output).toContain('Network-facing control plane has no local auth user store.');
+
+    const json = await captureGoodVibesCliCommand(['control-plane', 'status', '--json'], configManager, root);
+    expect(json.result).toEqual({ handled: true, exitCode: 1 });
+    const parsed = JSON.parse(json.output) as { posture: { kind: string }; issues: string[] };
+    expect(parsed.posture.kind).toBe('local-network');
+    expect(parsed.issues).toContain('Control plane is enabled but service mode is off.');
   });
 
   test('providers and models commands surface setup posture through CLI output', async () => {

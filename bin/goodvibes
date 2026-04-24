@@ -39,8 +39,13 @@ function run(command, args) {
 }
 
 const artifactName = resolveArtifactName(process.platform, process.arch);
+const localPlatformBuild = artifactName ? join(packageRoot, 'dist', artifactName) : null;
 const localBuild = join(packageRoot, 'dist', 'goodvibes');
 const vendoredBinary = artifactName ? join(packageRoot, 'vendor', artifactName) : null;
+
+if (localPlatformBuild && isExecutable(localPlatformBuild)) {
+  run(localPlatformBuild, process.argv.slice(2));
+}
 
 if (isExecutable(localBuild)) {
   run(localBuild, process.argv.slice(2));

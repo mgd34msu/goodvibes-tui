@@ -4,6 +4,7 @@ const COMMANDS = [
   'exec',
   'serve',
   'web',
+  'service',
   'onboarding',
   'setup',
   'doctor',

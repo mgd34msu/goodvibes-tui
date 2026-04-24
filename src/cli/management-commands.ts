@@ -1,9 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { ConfigKey, GoodVibesConfig } from '../config/index.ts';
-import { CONFIG_SCHEMA } from '../config/index.ts';
 import { SecretsManager } from '../config/secrets.ts';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
@@ -13,7 +10,7 @@ import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platfo
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './management.ts';
-import { applyTargetEndpointFlagsOrDefault, enableEndpointLanDefault, enableServicePosture, extractAuthorizationCode, formatJsonOrText, getNestedValue, hasCommandFlag, isPresentConfigValue, openBrowser, probeTcp, readAuthPaths, runNonInteractiveAgent, SURFACE_CONFIGS, urlHostForBindHost, withRuntimeServices, yesNo } from './management.ts';
+import { extractAuthorizationCode, formatJsonOrText, hasCommandFlag, openBrowser, probeTcp, readAuthPaths, runNonInteractiveAgent, urlHostForBindHost, withRuntimeServices, yesNo } from './management.ts';
 
 export async function renderSubscriptions(runtime: CliCommandRuntime): Promise<string> {
   return await withRuntimeServices(runtime, async (services) => {
@@ -306,153 +303,7 @@ export async function handleTasks(runtime: CliCommandRuntime): Promise<string> {
   });
 }
 
-export async function handleSurfaces(runtime: CliCommandRuntime): Promise<string> {
-  return (await handleSurfacesCommand(runtime)).output;
-}
-
-export async function handleSurfacesCommand(runtime: CliCommandRuntime): Promise<{ readonly output: string; readonly exitCode: number }> {
-  const config = runtime.configManager;
-  const [sub = 'list', ...rest] = runtime.cli.commandArgs;
-  const target = rest[0];
-  if (sub === 'enable' || sub === 'disable') {
-    if (!target) return { output: `Usage: goodvibes surfaces ${sub} <web|listener|control-plane|surfaceId>`, exitCode: 2 };
-    const enabled = sub === 'enable';
-    if (target === 'web') {
-      runtime.configManager.setDynamic('web.enabled', enabled);
-      if (enabled) {
-        runtime.configManager.setDynamic('danger.daemon', true);
-        runtime.configManager.setDynamic('controlPlane.enabled', true);
-        const webError = applyTargetEndpointFlagsOrDefault(runtime, 'web');
-        if (webError) return { output: webError, exitCode: 2 };
-        const webBinding = resolveRuntimeEndpointBinding(runtime.configManager, 'web');
-        if (runtime.cli.flags.hostname !== undefined && webBinding.hostMode === 'local') {
-          runtime.configManager.setDynamic('controlPlane.hostMode', 'local');
-          runtime.configManager.setDynamic('controlPlane.host', '127.0.0.1');
-          runtime.configManager.setDynamic('controlPlane.allowRemote', false);
-        } else {
-          enableEndpointLanDefault(runtime.configManager, 'controlPlane');
-        }
-      }
-    }
-    else if (target === 'listener' || target === 'http-listener') {
-      runtime.configManager.setDynamic('danger.httpListener', enabled);
-      if (enabled) {
-        const listenerError = applyTargetEndpointFlagsOrDefault(runtime, 'httpListener');
-        if (listenerError) return { output: listenerError, exitCode: 2 };
-      }
-    }
-    else if (target === 'control-plane' || target === 'controlPlane') {
-      runtime.configManager.setDynamic('controlPlane.enabled', enabled);
-      runtime.configManager.setDynamic('danger.daemon', enabled);
-      if (enabled) {
-        const controlPlaneError = applyTargetEndpointFlagsOrDefault(runtime, 'controlPlane');
-        if (controlPlaneError) return { output: controlPlaneError, exitCode: 2 };
-      }
-    }
-    else if (SURFACE_CONFIGS.some(([id]) => id === target)) {
-      runtime.configManager.setDynamic(`surfaces.${target}.enabled` as ConfigKey, enabled);
-      if (enabled) {
-        runtime.configManager.setDynamic('danger.httpListener', true);
-        enableEndpointLanDefault(runtime.configManager, 'httpListener');
-      }
-    }
-    else return { output: `Unknown surface: ${target}`, exitCode: 1 };
-    if (enabled) {
-      enableServicePosture(runtime.configManager);
-    }
-    return { output: `Surface ${enabled ? 'enabled' : 'disabled'}: ${target}`, exitCode: 0 };
-  }
-  if (sub !== 'list' && sub !== 'status' && sub !== 'check' && sub !== 'show') {
-    return { output: 'Usage: goodvibes surfaces [list|check|show <surfaceId>|enable <surfaceId>|disable <surfaceId>]', exitCode: 2 };
-  }
-  const controlPlane = resolveRuntimeEndpointBinding(config, 'controlPlane');
-  const web = resolveRuntimeEndpointBinding(config, 'web');
-  const httpListener = resolveRuntimeEndpointBinding(config, 'httpListener');
-  const includeProbe = sub === 'check';
-  const [controlPlaneReachable, webReachable, listenerReachable] = includeProbe
-    ? await Promise.all([
-      probeTcp(controlPlane.host, controlPlane.port),
-      probeTcp(web.host, web.port),
-      probeTcp(httpListener.host, httpListener.port),
-    ])
-    : [undefined, undefined, undefined];
-  const externalSurfaces = SURFACE_CONFIGS.map(([id, label, requiredKeys]) => {
-    const enabled = config.get(`surfaces.${id}.enabled` as ConfigKey);
-    const missing = requiredKeys.filter((key) => !isPresentConfigValue(config.get(key as ConfigKey)));
-    return {
-      id,
-      label,
-      enabled,
-      ready: !enabled || missing.length === 0,
-      missing,
-    };
-  });
-  const filteredSurfaces = target ? externalSurfaces.filter((surface) => surface.id === target) : externalSurfaces;
-  if (target && filteredSurfaces.length === 0) return { output: `Unknown surface: ${target}`, exitCode: 1 };
-  const readinessIssues: string[] = [];
-  if (includeProbe && config.get('controlPlane.enabled') === true && !controlPlaneReachable) {
-    readinessIssues.push(`Control plane is enabled but not reachable on ${controlPlane.host}:${controlPlane.port}.`);
-  }
-  if (includeProbe && config.get('web.enabled') === true && !webReachable) {
-    readinessIssues.push(`Web surface is enabled but not reachable on ${web.host}:${web.port}.`);
-  }
-  if (includeProbe && config.get('danger.httpListener') === true && !listenerReachable) {
-    readinessIssues.push(`HTTP listener is enabled but not reachable on ${httpListener.host}:${httpListener.port}.`);
-  }
-  for (const surface of filteredSurfaces) {
-    if (surface.enabled !== true) continue;
-    if (config.get('danger.httpListener') !== true) {
-      readinessIssues.push(`${surface.label} is enabled but the HTTP listener is disabled.`);
-    }
-    if (surface.missing.length > 0) {
-      readinessIssues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
-    }
-  }
-  const value = {
-    controlPlane: {
-      enabled: config.get('controlPlane.enabled'),
-      hostMode: controlPlane.hostMode,
-      configuredHost: controlPlane.configuredHost,
-      host: controlPlane.host,
-      port: controlPlane.port,
-      reachable: controlPlaneReachable,
-    },
-    web: {
-      enabled: config.get('web.enabled'),
-      hostMode: web.hostMode,
-      configuredHost: web.configuredHost,
-      host: web.host,
-      port: web.port,
-      reachable: webReachable,
-    },
-    httpListener: {
-      enabled: config.get('danger.httpListener'),
-      hostMode: httpListener.hostMode,
-      configuredHost: httpListener.configuredHost,
-      host: httpListener.host,
-      port: httpListener.port,
-      reachable: listenerReachable,
-    },
-    surfaces: filteredSurfaces,
-    readinessIssues,
-  };
-  const output = formatJsonOrText(runtime.cli)(value, [
-    'GoodVibes surfaces',
-    `  control-plane: ${yesNo(value.controlPlane.enabled)} (${value.controlPlane.hostMode} ${value.controlPlane.host}:${value.controlPlane.port})${includeProbe ? ` reachable=${yesNo(value.controlPlane.reachable)}` : ''}`,
-    `  web: ${yesNo(value.web.enabled)} (${value.web.hostMode} ${value.web.host}:${value.web.port})${includeProbe ? ` reachable=${yesNo(value.web.reachable)}` : ''}`,
-    `  http-listener: ${yesNo(value.httpListener.enabled)} (${value.httpListener.hostMode} ${value.httpListener.host}:${value.httpListener.port})${includeProbe ? ` reachable=${yesNo(value.httpListener.reachable)}` : ''}`,
-    '',
-    'External surfaces:',
-    ...value.surfaces.map((surface) => `  ${surface.label.padEnd(16)} enabled=${yesNo(surface.enabled)} ready=${yesNo(surface.ready)}${surface.enabled && surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}`),
-    ...(includeProbe ? [
-      readinessIssues.length === 0 ? 'Readiness: ready' : 'Readiness: needs attention',
-      ...readinessIssues.map((issue) => `  - ${issue}`),
-    ] : []),
-  ].join('\n'));
-  return { output, exitCode: includeProbe && readinessIssues.length > 0 ? 1 : 0 };
-}
-
-export interface ListenerTestResult {
+export interface ControlPlaneStatusResult {
   readonly enabled: unknown;
   readonly hostMode: string;
   readonly configuredHost: string;
@@ -460,26 +311,18 @@ export interface ListenerTestResult {
   readonly port: number;
   readonly posture: ReturnType<typeof classifyBindPosture>;
   readonly reachable: boolean;
+  readonly auth: ReturnType<typeof readAuthPaths>;
   readonly service: {
     readonly enabled: unknown;
     readonly autostart: unknown;
     readonly restartOnFailure: unknown;
   };
-  readonly auth: ReturnType<typeof readAuthPaths>;
-  readonly surfaces: readonly {
-    readonly id: string;
-    readonly label: string;
-    readonly enabled: unknown;
-    readonly ready: boolean;
-    readonly missing: readonly string[];
-  }[];
   readonly issues: readonly string[];
 }
 
-export async function buildListenerTestResult(runtime: CliCommandRuntime): Promise<ListenerTestResult> {
-  const enabled = runtime.configManager.get('danger.httpListener');
-  const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'httpListener');
-  const posture = classifyBindPosture(binding);
+export async function buildControlPlaneStatusResult(runtime: CliCommandRuntime): Promise<ControlPlaneStatusResult> {
+  const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'controlPlane');
+  const enabled = runtime.configManager.get('controlPlane.enabled');
   const reachable = enabled === true ? await probeTcp(binding.host, binding.port) : false;
   const auth = readAuthPaths(runtime);
   const service = {
@@ -487,70 +330,42 @@ export async function buildListenerTestResult(runtime: CliCommandRuntime): Promi
     autostart: runtime.configManager.get('service.autostart'),
     restartOnFailure: runtime.configManager.get('service.restartOnFailure'),
   };
-  const surfaces = SURFACE_CONFIGS.map(([id, label, requiredKeys]) => {
-    const surfaceEnabled = runtime.configManager.get(`surfaces.${id}.enabled` as ConfigKey);
-    const missing = requiredKeys.filter((key) => !isPresentConfigValue(runtime.configManager.get(key as ConfigKey)));
-    return {
-      id,
-      label,
-      enabled: surfaceEnabled,
-      ready: surfaceEnabled !== true || missing.length === 0,
-      missing,
-    };
-  }).filter((surface) => surface.enabled === true);
   const issues: string[] = [];
-  if (enabled !== true) issues.push('HTTP listener is disabled.');
-  if (enabled === true && service.enabled !== true) issues.push('HTTP listener is enabled but service mode is off.');
-  if (enabled === true && service.autostart !== true) issues.push('HTTP listener is enabled but service autostart is off.');
-  if (enabled === true && service.restartOnFailure !== true) issues.push('HTTP listener is enabled but service restart-on-failure is off.');
-  if (isNetworkFacing(enabled, binding) && !auth.userStorePresent) issues.push('Network-facing listener has no local auth user store.');
-  if (isNetworkFacing(enabled, binding) && auth.bootstrapCredentialPresent) issues.push('Network-facing listener still has a bootstrap credential file.');
-  for (const surface of surfaces) {
-    if (surface.missing.length > 0) issues.push(`${surface.label} is enabled but missing ${surface.missing.join(', ')}.`);
-  }
-  return { enabled, ...binding, posture, reachable, service, auth, surfaces, issues };
+  if (enabled === true && !reachable) issues.push(`Control plane is enabled but not reachable on ${binding.host}:${binding.port}.`);
+  if (enabled === true && service.enabled !== true) issues.push('Control plane is enabled but service mode is off.');
+  if (enabled === true && service.autostart !== true) issues.push('Control plane is enabled but service autostart is off.');
+  if (enabled === true && service.restartOnFailure !== true) issues.push('Control plane is enabled but service restart-on-failure is off.');
+  if (isNetworkFacing(enabled, binding) && !auth.userStorePresent) issues.push('Network-facing control plane has no local auth user store.');
+  if (isNetworkFacing(enabled, binding) && auth.bootstrapCredentialPresent) issues.push('Network-facing control plane still has a bootstrap credential file.');
+  return {
+    enabled,
+    ...binding,
+    posture: classifyBindPosture(binding),
+    reachable,
+    auth,
+    service,
+    issues,
+  };
 }
 
-export function formatListenerTestResult(runtime: CliCommandRuntime, value: ListenerTestResult): string {
+export function formatControlPlaneStatus(runtime: CliCommandRuntime, value: ControlPlaneStatusResult): string {
   return formatJsonOrText(runtime.cli)(value, [
-    'GoodVibes listener test',
+    'GoodVibes control-plane status',
     `  enabled: ${yesNo(value.enabled)}`,
-    `  endpoint: ${value.hostMode} ${value.host}:${value.port}`,
+    `  bind: ${value.hostMode} ${value.host}:${value.port}`,
     `  bind posture: ${value.posture.label}`,
     `  reachable: ${yesNo(value.reachable)}`,
     `  service: enabled=${yesNo(value.service.enabled)} autostart=${yesNo(value.service.autostart)} restartOnFailure=${yesNo(value.service.restartOnFailure)}`,
     `  local auth users: ${value.auth.userStorePresent ? 'present' : 'missing'}`,
     `  bootstrap credential: ${value.auth.bootstrapCredentialPresent ? 'present' : 'missing'}`,
-    value.surfaces.length === 0 ? '  enabled webhook surfaces: none' : '  enabled webhook surfaces:',
-    ...value.surfaces.map((surface) => `    ${surface.label}: ready=${yesNo(surface.ready)}${surface.missing.length > 0 ? ` missing=${surface.missing.join(',')}` : ''}`),
+    `  operator tokens: ${value.auth.operatorTokenPresent ? 'present' : 'missing'}`,
     value.issues.length === 0 ? '  readiness: ready' : '  readiness: needs attention',
     ...value.issues.map((issue) => `    - ${issue}`),
   ].join('\n'));
 }
 
-export async function renderListenerTest(runtime: CliCommandRuntime): Promise<string> {
-  return formatListenerTestResult(runtime, await buildListenerTestResult(runtime));
-}
-
 export async function renderControlPlaneStatus(runtime: CliCommandRuntime): Promise<string> {
-  const binding = resolveRuntimeEndpointBinding(runtime.configManager, 'controlPlane');
-  const reachable = await probeTcp(binding.host, binding.port);
-  const auth = readAuthPaths(runtime);
-  const value = {
-    enabled: runtime.configManager.get('controlPlane.enabled'),
-    ...binding,
-    reachable,
-    auth,
-  };
-  return formatJsonOrText(runtime.cli)(value, [
-    'GoodVibes control-plane status',
-    `  enabled: ${yesNo(value.enabled)}`,
-    `  bind: ${binding.hostMode} ${binding.host}:${binding.port}`,
-    `  reachable: ${yesNo(reachable)}`,
-    `  local auth users: ${auth.userStorePresent ? 'present' : 'missing'}`,
-    `  bootstrap credential: ${auth.bootstrapCredentialPresent ? 'present' : 'missing'}`,
-    `  operator tokens: ${auth.operatorTokenPresent ? 'present' : 'missing'}`,
-  ].join('\n'));
+  return formatControlPlaneStatus(runtime, await buildControlPlaneStatusResult(runtime));
 }
 
 export async function renderPairing(runtime: CliCommandRuntime): Promise<string> {
@@ -566,68 +381,6 @@ export async function renderPairing(runtime: CliCommandRuntime): Promise<string>
   const payload = encodeConnectionPayload(info);
   const qr = renderQrToString(generateQrMatrix(payload));
   return [formatConnectionBlock(info, payload), '', qr].join('\n');
-}
-
-export async function handleBundle(runtime: CliCommandRuntime): Promise<string> {
-  const [sub = 'inspect', ...rest] = runtime.cli.commandArgs;
-  const shellPaths = createShellPathService({
-    workingDirectory: runtime.workingDirectory,
-    homeDirectory: runtime.homeDirectory,
-  });
-  if (sub === 'inspect') {
-    const path = rest[0];
-    if (!path) return 'Usage: goodvibes bundle inspect <path>';
-    const sourcePath = shellPaths.resolveWorkspacePath(path);
-    const parsed = JSON.parse(readFileSync(sourcePath, 'utf-8')) as Record<string, unknown>;
-    return [
-      'GoodVibes bundle',
-      `  type: ${String(parsed['type'] ?? 'unknown')}`,
-      `  version: ${String(parsed['version'] ?? 'unknown')}`,
-      `  path: ${sourcePath}`,
-      `  capturedAt: ${parsed['capturedAt'] ? new Date(Number(parsed['capturedAt'])).toISOString() : 'n/a'}`,
-      `  configKeys: ${parsed['config'] && typeof parsed['config'] === 'object' ? CONFIG_SCHEMA.filter((setting) => getNestedValue(parsed['config'], setting.key) !== undefined).length : 0}`,
-    ].join('\n');
-  }
-  if (sub === 'export') {
-    const outputPath = rest[0] ?? 'goodvibes-bundle.json';
-    const secrets = new SecretsManager({
-      projectRoot: runtime.workingDirectory,
-      globalHome: runtime.homeDirectory,
-      configManager: runtime.configManager,
-    });
-    const bundle = {
-      version: 1,
-      type: 'goodvibes.setup',
-      capturedAt: Date.now(),
-      workingDirectory: runtime.workingDirectory,
-      config: runtime.configManager.getRaw(),
-      secrets: await secrets.inspect(),
-      onboarding: {
-        projectMarker: existsSync(shellPaths.resolveProjectPath('tui', 'onboarding.json')),
-        userMarker: existsSync(shellPaths.resolveUserPath('tui', 'onboarding.json')),
-      },
-    };
-    const targetPath = shellPaths.resolveWorkspacePath(outputPath);
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, JSON.stringify(bundle, null, 2) + '\n', 'utf-8');
-    return `Bundle exported: ${targetPath}`;
-  }
-  if (sub === 'import') {
-    const path = rest[0];
-    if (!path) return 'Usage: goodvibes bundle import <path>';
-    const sourcePath = shellPaths.resolveWorkspacePath(path);
-    const parsed = JSON.parse(readFileSync(sourcePath, 'utf-8')) as { config?: GoodVibesConfig };
-    if (!parsed.config || typeof parsed.config !== 'object') return 'Bundle has no config object to import.';
-    let count = 0;
-    for (const setting of CONFIG_SCHEMA) {
-      const value = getNestedValue(parsed.config, setting.key);
-      if (value === undefined) continue;
-      runtime.configManager.setDynamic(setting.key, value);
-      count++;
-    }
-    return `Bundle imported: ${count} config value${count === 1 ? '' : 's'} applied.`;
-  }
-  return 'Usage: goodvibes bundle export [path]|inspect <path>|import <path>';
 }
 
 export async function renderRemote(runtime: CliCommandRuntime, label: 'remote' | 'bridge'): Promise<string> {
