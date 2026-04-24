@@ -393,7 +393,7 @@ describe('parseCliFlags', () => {
     configManager.setDynamic('surfaces.slack.enabled', true);
 
     const text = await captureGoodVibesCliCommand(['listener', 'test'], configManager, root);
-    expect(text.result).toEqual({ handled: true, exitCode: 0 });
+    expect(text.result).toEqual({ handled: true, exitCode: 1 });
     expect(text.output).toContain('bind posture: Local Network');
     expect(text.output).toContain('readiness: needs attention');
     expect(text.output).toContain('HTTP listener is enabled but service mode is off.');
@@ -401,10 +401,32 @@ describe('parseCliFlags', () => {
     expect(text.output).toContain('Slack is enabled but missing surfaces.slack.signingSecret, surfaces.slack.botToken.');
 
     const json = await captureGoodVibesCliCommand(['listener', 'test', '--json'], configManager, root);
+    expect(json.result).toEqual({ handled: true, exitCode: 1 });
     const parsed = JSON.parse(json.output) as { issues: string[]; posture: { kind: string }; surfaces: Array<{ id: string; ready: boolean }> };
     expect(parsed.posture.kind).toBe('local-network');
     expect(parsed.issues).toContain('HTTP listener is enabled but service mode is off.');
     expect(parsed.surfaces.find((surface) => surface.id === 'slack')?.ready).toBe(false);
+  });
+
+  test('surfaces check returns failure when enabled surfaces are not ready', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-cli-surfaces-check-'));
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir: join(root, '.goodvibes', 'tui'),
+      workingDir: root,
+    });
+    configManager.setDynamic('danger.httpListener', true);
+    configManager.setDynamic('surfaces.slack.enabled', true);
+
+    const text = await captureGoodVibesCliCommand(['surfaces', 'check'], configManager, root);
+    expect(text.result).toEqual({ handled: true, exitCode: 1 });
+    expect(text.output).toContain('Readiness: needs attention');
+    expect(text.output).toContain('Slack is enabled but missing surfaces.slack.signingSecret, surfaces.slack.botToken.');
+
+    const json = await captureGoodVibesCliCommand(['surfaces', 'check', '--json'], configManager, root);
+    expect(json.result).toEqual({ handled: true, exitCode: 1 });
+    const parsed = JSON.parse(json.output) as { readinessIssues: string[] };
+    expect(parsed.readinessIssues.some((issue) => issue.includes('Slack is enabled but missing'))).toBe(true);
   });
 
   test('bundle inspect resolves relative paths from the GoodVibes working directory', async () => {
