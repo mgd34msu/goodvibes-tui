@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.29] — 2026-04-24
+
+### Changes
+- 617b8860 feat: improve onboarding and surface setup
+- 5e39b0f8 docs: add onboarding wizard WIP notice to README top
+
 ## [0.19.28] — 2026-04-24
 
 ### Changes
