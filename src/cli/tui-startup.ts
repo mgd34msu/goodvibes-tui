@@ -1,6 +1,6 @@
 import type { CommandContext, CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
-import { readOnboardingCompletionMarkers } from '../runtime/onboarding/index.ts';
+import { readOnboardingCheckMarker } from '../runtime/onboarding/index.ts';
 import type { GoodVibesCliParseResult } from './types.ts';
 
 export function applyInitialTuiCliState(options: {
@@ -8,11 +8,11 @@ export function applyInitialTuiCliState(options: {
   readonly input: InputHandler;
   readonly commandRegistry: CommandRegistry;
   readonly commandContext: CommandContext;
-  readonly shellPaths: Parameters<typeof readOnboardingCompletionMarkers>[0];
+  readonly shellPaths: Parameters<typeof readOnboardingCheckMarker>[0];
   readonly render: () => void;
 }): void {
   const { cli, input, commandRegistry, commandContext, shellPaths, render } = options;
-  const onboardingMarkers = readOnboardingCompletionMarkers(shellPaths);
+  const globalOnboardingMarker = readOnboardingCheckMarker(shellPaths, 'user');
   if (cli.command === 'onboarding') {
     input.openOnboardingWizard({ mode: 'edit', reset: true });
   } else if (cli.command === 'sessions' && cli.commandArgs[0] === 'resume') {
@@ -20,7 +20,7 @@ export function applyInitialTuiCliState(options: {
     if (target) {
       void commandRegistry.execute('session', ['resume', target], commandContext).then(() => render());
     }
-  } else if (!onboardingMarkers.effective?.payload) {
+  } else if (!globalOnboardingMarker.exists) {
     input.openOnboardingWizard({ mode: 'new', reset: true });
   }
 

@@ -30,10 +30,6 @@ export function getSharedIpHostDefault(
     return hosts[0] ?? '0.0.0.0';
   }
 
-export function defaultReviewUserMarker(controller: OnboardingWizardController): boolean {
-    return controller.mode === 'new';
-  }
-
 export function toggleCapability(controller: OnboardingWizardController, capabilityId: OnboardingStep1CapabilityId): void {
     if (capabilityId === 'local-tui-only') {
       for (const capability of controller.getCurrentCapabilities()) {
@@ -66,6 +62,18 @@ export function selectAllServerCapabilities(controller: OnboardingWizardControll
 export function selectLocalTuiOnly(controller: OnboardingWizardController): void {
     for (const capability of controller.getCurrentCapabilities()) {
       controller.toggleState.set(`capabilities.${capability.id}`, capability.id === 'local-tui-only');
+    }
+  }
+
+export function selectAllExternalSurfaces(controller: OnboardingWizardController): void {
+    for (const surface of EXTERNAL_SURFACE_SPECS) {
+      controller.toggleState.set(surface.enabledFieldId, true);
+    }
+  }
+
+export function clearExternalSurfaces(controller: OnboardingWizardController): void {
+    for (const surface of EXTERNAL_SURFACE_SPECS) {
+      controller.toggleState.set(surface.enabledFieldId, false);
     }
   }
 
@@ -172,12 +180,17 @@ export function shouldExposeControlPlaneNetwork(controller: OnboardingWizardCont
 
 export function requiresAuthBootstrap(controller: OnboardingWizardController): boolean {
     return controller.hasServerCapabilitiesSelected()
-      && (!controller.hasAdminAuthUser() || controller.hasBootstrapCredentialPresent());
+      && (!controller.hasLocalAuthUser() || controller.hasBootstrapCredentialPresent());
   }
 
 export function hasAdminAuthUser(controller: OnboardingWizardController): boolean {
     return (controller.runtimeSnapshot?.auth.snapshot.users ?? [])
       .some((user) => user.roles.includes('admin'));
+  }
+
+export function hasLocalAuthUser(controller: OnboardingWizardController): boolean {
+    return (controller.runtimeSnapshot?.auth.snapshot.userCount ?? 0) > 0
+      || (controller.runtimeSnapshot?.auth.snapshot.users ?? []).length > 0;
   }
 
 export function hasBootstrapCredentialPresent(controller: OnboardingWizardController): boolean {

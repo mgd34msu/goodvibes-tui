@@ -258,7 +258,8 @@ async function main() {
     stdout.removeListener('resize', resizeHandler);
     process.removeListener('SIGINT', sigintHandler);
     process.removeListener('unhandledRejection', unhandledRejectionHandler);
-    stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + (cli.flags.noAltScreen ? '' : ALT_SCREEN_EXIT));
+    const exitScreen = cli.flags.noAltScreen ? CLEAR_SCREEN : CLEAR_SCREEN + ALT_SCREEN_EXIT;
+    stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + exitScreen);
     stdin.setRawMode(false);
     process.exit(0);
   };

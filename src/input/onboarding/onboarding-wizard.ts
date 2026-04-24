@@ -4,11 +4,39 @@ import { STEP_ORDER } from './onboarding-wizard-constants.ts';
 import { buildOnboardingApplyRequest } from './onboarding-wizard-apply.ts';
 import { buildOnboardingWizardSteps } from './onboarding-wizard-steps.ts';
 import { buildDefaultDerivedState, clamp, cloneSelection, getRuntimeDerivedState, maskValue, modelSelectionLabel, normalizeText } from './onboarding-wizard-helpers.ts';
-import { defaultReviewUserMarker as defaultReviewUserMarkerForController, getBooleanFieldValue as getBooleanFieldValueForController, getDefaultAdminUsername as getDefaultAdminUsernameForController, getNumberFieldValue as getNumberFieldValueForController, getPortFieldValue as getPortFieldValueForController, getSelectedSecretMedium as getSelectedSecretMediumForController, getSharedIpDefault as getSharedIpDefaultForController, getSharedIpHostDefault as getSharedIpHostDefaultForController, getStringFieldValue as getStringFieldValueForController, hasAdminAuthUser as hasAdminAuthUserForController, hasBootstrapCredentialPresent as hasBootstrapCredentialPresentForController, hasSelectedInboundExternalSurface as hasSelectedInboundExternalSurfaceForController, hasServerCapabilitiesSelected as hasServerCapabilitiesSelectedForController, isCapabilitySelected as isCapabilitySelectedForController, isRequiredExternalSetupField as isRequiredExternalSetupFieldForController, parseIntegerFieldValue as parseIntegerFieldValueForController, requiresAuthBootstrap as requiresAuthBootstrapForController, selectAllServerCapabilities as selectAllServerCapabilitiesForController, selectLocalTuiOnly as selectLocalTuiOnlyForController, setCapabilityValue as setCapabilityValueForController, shouldEnableBrowserSurface as shouldEnableBrowserSurfaceForController, shouldEnableHttpListener as shouldEnableHttpListenerForController, shouldExposeControlPlaneNetwork as shouldExposeControlPlaneNetworkForController, shouldExposeHttpListenerNetworkFields as shouldExposeHttpListenerNetworkFieldsForController, toggleCapability as toggleCapabilityForController } from './onboarding-wizard-rules.ts';
+import {
+  clearExternalSurfaces as clearExternalSurfacesForController,
+  getBooleanFieldValue as getBooleanFieldValueForController,
+  getDefaultAdminUsername as getDefaultAdminUsernameForController,
+  getNumberFieldValue as getNumberFieldValueForController,
+  getPortFieldValue as getPortFieldValueForController,
+  getSelectedSecretMedium as getSelectedSecretMediumForController,
+  getSharedIpDefault as getSharedIpDefaultForController,
+  getSharedIpHostDefault as getSharedIpHostDefaultForController,
+  getStringFieldValue as getStringFieldValueForController,
+  hasAdminAuthUser as hasAdminAuthUserForController,
+  hasBootstrapCredentialPresent as hasBootstrapCredentialPresentForController,
+  hasLocalAuthUser as hasLocalAuthUserForController,
+  hasSelectedInboundExternalSurface as hasSelectedInboundExternalSurfaceForController,
+  hasServerCapabilitiesSelected as hasServerCapabilitiesSelectedForController,
+  isCapabilitySelected as isCapabilitySelectedForController,
+  isRequiredExternalSetupField as isRequiredExternalSetupFieldForController,
+  parseIntegerFieldValue as parseIntegerFieldValueForController,
+  requiresAuthBootstrap as requiresAuthBootstrapForController,
+  selectAllExternalSurfaces as selectAllExternalSurfacesForController,
+  selectAllServerCapabilities as selectAllServerCapabilitiesForController,
+  selectLocalTuiOnly as selectLocalTuiOnlyForController,
+  setCapabilityValue as setCapabilityValueForController,
+  shouldEnableBrowserSurface as shouldEnableBrowserSurfaceForController,
+  shouldEnableHttpListener as shouldEnableHttpListenerForController,
+  shouldExposeControlPlaneNetwork as shouldExposeControlPlaneNetworkForController,
+  shouldExposeHttpListenerNetworkFields as shouldExposeHttpListenerNetworkFieldsForController,
+  toggleCapability as toggleCapabilityForController,
+} from './onboarding-wizard-rules.ts';
 import { ensureSelectionVisible as ensureSelectionVisibleForController, getBlockingFieldLabels as getBlockingFieldLabelsForController, getCapabilitySelectionState as getCapabilitySelectionStateForController, getCompletedFieldCount as getCompletedFieldCountForController, getCompletedToggleCount as getCompletedToggleCountForController, getCurrentCapabilities as getCurrentCapabilitiesForController, getFieldById as getFieldByIdForController, getFieldValidationError as getFieldValidationErrorForController, getStepFieldCount as getStepFieldCountForController, getToggleFieldCount as getToggleFieldCountForController, hasExistingAccessState as hasExistingAccessStateForController, isFieldDirty as isFieldDirtyForController, isFieldDirtyByDefinition as isFieldDirtyByDefinitionForController, isFieldSatisfied as isFieldSatisfiedForController, isStepDirty as isStepDirtyForController, recalculateDirtyState as recalculateDirtyStateForController, reconcileStateWithCurrentDefinitions as reconcileStateWithCurrentDefinitionsForController, reconcileStepCursor as reconcileStepCursorForController, resetValuesFromCurrentDefinitions as resetValuesFromCurrentDefinitionsForController } from './onboarding-wizard-state.ts';
 import type { MutableModelSelectionMap, OnboardingWizardAction, OnboardingWizardFieldDefinition, OnboardingWizardFieldWindow, OnboardingWizardMode, OnboardingWizardModelSelection, OnboardingWizardRuntimeHydration, OnboardingWizardSnapshot, OnboardingWizardStepDefinition, OnboardingWizardStepId } from './onboarding-wizard-types.ts';
 
-export type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardAction, OnboardingWizardActionFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardFieldDefinition, OnboardingWizardFieldKind, OnboardingWizardFieldWindow, OnboardingWizardMaskedFieldDefinition, OnboardingWizardMode, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardModelSelection, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardRuntimeHydration, OnboardingWizardSnapshot, OnboardingWizardStatusFieldDefinition, OnboardingWizardStepDefinition, OnboardingWizardStepId, OnboardingWizardTextFieldDefinition } from './onboarding-wizard-types.ts';
+export type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardAction, OnboardingWizardActionFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardFieldKind, OnboardingWizardFieldWindow, OnboardingWizardMaskedFieldDefinition, OnboardingWizardMode, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardModelSelection, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardRuntimeHydration, OnboardingWizardSnapshot, OnboardingWizardStatusFieldDefinition, OnboardingWizardStepDefinition, OnboardingWizardStepId, OnboardingWizardTextFieldDefinition } from './onboarding-wizard-types.ts';
 export { getOnboardingWizardBodyRows, getOnboardingWizardVisibleFieldCount } from './onboarding-wizard-helpers.ts';
 
 export class OnboardingWizardController {
@@ -40,7 +68,9 @@ export class OnboardingWizardController {
   public runtimeDerived: OnboardingStepDerivationState = buildDefaultDerivedState();
 
   public get steps(): readonly OnboardingWizardStepDefinition[] {
-    return buildOnboardingWizardSteps(this);
+    const steps = buildOnboardingWizardSteps(this);
+    this.ensureNavigationStateLength(steps.length);
+    return steps;
   }
 
   public get currentStep(): OnboardingWizardStepDefinition {
@@ -57,6 +87,11 @@ export class OnboardingWizardController {
 
   constructor() {
     this.resetValuesFromCurrentDefinitions();
+  }
+
+  private ensureNavigationStateLength(stepCount: number): void {
+    while (this.scrollOffsets.length < stepCount) this.scrollOffsets.push(0);
+    while (this.selectedFieldIndices.length < stepCount) this.selectedFieldIndices.push(0);
   }
 
   public open(mode: OnboardingWizardMode = 'new'): void {
@@ -159,7 +194,9 @@ export class OnboardingWizardController {
     this.dirtyStepIds.clear();
     for (const stepId of snapshot.dirtyStepIds) this.dirtyStepIds.add(stepId);
 
-    for (let index = 0; index < this.scrollOffsets.length; index += 1) {
+    const navigationLength = Math.max(this.steps.length, snapshot.scrollOffsets.length, this.scrollOffsets.length);
+    this.ensureNavigationStateLength(navigationLength);
+    for (let index = 0; index < navigationLength; index += 1) {
       this.scrollOffsets[index] = snapshot.scrollOffsets[index] ?? 0;
       this.selectedFieldIndices[index] = snapshot.selectedFieldIndices[index] ?? 0;
     }
@@ -372,6 +409,22 @@ export class OnboardingWizardController {
         return;
       }
 
+      if (field.action === 'select-all-external-surfaces') {
+        this.selectAllExternalSurfaces();
+        this.pendingAction = null;
+        this.pendingModelPickerTarget = null;
+        this.recalculateDirtyState();
+        return;
+      }
+
+      if (field.action === 'clear-external-surfaces') {
+        this.clearExternalSurfaces();
+        this.pendingAction = null;
+        this.pendingModelPickerTarget = null;
+        this.recalculateDirtyState();
+        return;
+      }
+
       this.pendingAction = field.action;
       this.pendingModelPickerTarget = null;
       return;
@@ -389,6 +442,14 @@ export class OnboardingWizardController {
     this.pendingAction = null;
     this.editingFieldId = fieldId;
     this.editBuffer = this.textState.get(field.id) ?? field.defaultValue;
+  }
+
+  public beginSelectedTextInput(initialText: string): boolean {
+    const field = this.getSelectedField();
+    if (!field || (field.kind !== 'text' && field.kind !== 'masked')) return false;
+    this.beginEdit(field.id);
+    this.editBuffer = initialText;
+    return true;
   }
 
   public commitEdit(): void {
@@ -498,11 +559,13 @@ export class OnboardingWizardController {
 
     if (field.kind === 'text') {
       const value = normalizeText(this.getFieldValue(field) as string);
+      if (value.length === 0 && (field.required === true || this.isRequiredExternalSetupField(field.id))) return 'Missing';
       return value.length > 0 ? value : field.placeholder;
     }
 
     if (field.kind === 'masked') {
       const value = normalizeText(this.getFieldValue(field) as string);
+      if (value.length === 0 && (field.required === true || this.isRequiredExternalSetupField(field.id))) return 'Missing';
       return value.length > 0 ? maskValue(value) : field.placeholder;
     }
 
@@ -548,10 +611,11 @@ export class OnboardingWizardController {
     return getSharedIpHostDefaultForController(this, enabled);
   }
 
-  public defaultReviewUserMarker(): boolean { return defaultReviewUserMarkerForController(this); }
   public toggleCapability(capabilityId: OnboardingStep1CapabilityId): void { toggleCapabilityForController(this, capabilityId); }
   public selectAllServerCapabilities(): void { selectAllServerCapabilitiesForController(this); }
   public selectLocalTuiOnly(): void { selectLocalTuiOnlyForController(this); }
+  public selectAllExternalSurfaces(): void { selectAllExternalSurfacesForController(this); }
+  public clearExternalSurfaces(): void { clearExternalSurfacesForController(this); }
   public setCapabilityValue(capabilityId: OnboardingStep1CapabilityId, selected: boolean): void { setCapabilityValueForController(this, capabilityId, selected); }
   public isCapabilitySelected(capabilityId: OnboardingStep1CapabilityId): boolean { return isCapabilitySelectedForController(this, capabilityId); }
   public hasServerCapabilitiesSelected(): boolean { return hasServerCapabilitiesSelectedForController(this); }
@@ -564,6 +628,7 @@ export class OnboardingWizardController {
   public shouldExposeControlPlaneNetwork(): boolean { return shouldExposeControlPlaneNetworkForController(this); }
   public requiresAuthBootstrap(): boolean { return requiresAuthBootstrapForController(this); }
   public hasAdminAuthUser(): boolean { return hasAdminAuthUserForController(this); }
+  public hasLocalAuthUser(): boolean { return hasLocalAuthUserForController(this); }
   public hasBootstrapCredentialPresent(): boolean { return hasBootstrapCredentialPresentForController(this); }
   public getDefaultAdminUsername(): string { return getDefaultAdminUsernameForController(this); }
   public getBooleanFieldValue(fieldId: string, fallback: boolean): boolean { return getBooleanFieldValueForController(this, fieldId, fallback); }

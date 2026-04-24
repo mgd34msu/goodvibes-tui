@@ -313,14 +313,20 @@ export function isFieldDirtyByDefinition(controller: OnboardingWizardController,
   }
 
 export function isFieldSatisfied(controller: OnboardingWizardController, field: OnboardingWizardFieldDefinition): boolean {
-    if (field.kind === 'checklist' || field.kind === 'acknowledgement') {
-      if (field.kind === 'acknowledgement' && !field.required) return true;
+    if (field.kind === 'checklist') {
+      return true;
+    }
+
+    if (field.kind === 'acknowledgement') {
+      if (!field.required) return true;
       return Boolean(controller.getFieldValue(field));
     }
 
     if (field.kind === 'radio') return true;
 
     if (field.kind === 'text' || field.kind === 'masked') {
+      const required = field.required === true || controller.isRequiredExternalSetupField(field.id);
+      if (!required) return true;
       return normalizeText(controller.getFieldValue(field) as string).length > 0;
     }
 

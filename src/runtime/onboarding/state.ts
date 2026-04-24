@@ -3,15 +3,15 @@ import { dirname } from 'node:path';
 import type {
   OnboardingAcknowledgementRuntimeState,
   OnboardingAcknowledgementTarget,
-  OnboardingCompletionMarkerScope,
   OnboardingMode,
   OnboardingShellPaths,
+  OnboardingStateScope,
 } from './types.ts';
 
 const ONBOARDING_RUNTIME_STATE_FILE = 'onboarding-state.json';
 
 export interface OnboardingRuntimeStateRecord {
-  readonly scope: OnboardingCompletionMarkerScope;
+  readonly scope: OnboardingStateScope;
   readonly path: string;
   readonly exists: boolean;
   readonly payload: OnboardingAcknowledgementRuntimeState | null;
@@ -19,7 +19,7 @@ export interface OnboardingRuntimeStateRecord {
 }
 
 interface WriteOnboardingAcknowledgementStateOptions {
-  readonly scope?: OnboardingCompletionMarkerScope;
+  readonly scope?: OnboardingStateScope;
   readonly target: OnboardingAcknowledgementTarget;
   readonly acknowledged: boolean;
   readonly updatedAt?: number;
@@ -30,7 +30,7 @@ interface WriteOnboardingAcknowledgementStateOptions {
 
 function resolveStatePath(
   shellPaths: OnboardingShellPaths,
-  scope: OnboardingCompletionMarkerScope,
+  scope: OnboardingStateScope,
 ): string {
   return scope === 'project'
     ? shellPaths.resolveProjectPath('tui', ONBOARDING_RUNTIME_STATE_FILE)
@@ -63,14 +63,14 @@ function isRuntimeStatePayload(value: unknown): value is OnboardingAcknowledgeme
 
 export function getOnboardingRuntimeStatePath(
   shellPaths: OnboardingShellPaths,
-  scope: OnboardingCompletionMarkerScope = 'project',
+  scope: OnboardingStateScope = 'project',
 ): string {
   return resolveStatePath(shellPaths, scope);
 }
 
 export function readOnboardingRuntimeState(
   shellPaths: OnboardingShellPaths,
-  scope: OnboardingCompletionMarkerScope = 'project',
+  scope: OnboardingStateScope = 'project',
 ): OnboardingRuntimeStateRecord {
   const path = resolveStatePath(shellPaths, scope);
   if (!existsSync(path)) {

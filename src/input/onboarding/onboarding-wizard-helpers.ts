@@ -213,6 +213,5 @@ export function getOnboardingWizardBodyRows(viewportHeight: number): number {
 }
 
 export function getOnboardingWizardVisibleFieldCount(viewportHeight: number): number {
-  return Math.max(1, Math.floor((getOnboardingWizardBodyRows(viewportHeight) - 5) / 2));
+  return Math.max(1, getOnboardingWizardBodyRows(viewportHeight) - 5);
 }
-

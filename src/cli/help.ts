@@ -124,7 +124,7 @@ const COMMAND_HELP: Record<string, CommandHelp> = {
   },
   onboarding: {
     usage: ['onboarding', 'setup', 'onboarding status'],
-    summary: 'Open the setup wizard on the next TUI startup, or inspect onboarding marker status from the CLI.',
+    summary: 'Open the setup wizard, or inspect whether onboarding has already been shown for this user.',
     examples: ['onboarding', 'onboarding status'],
   },
   status: {

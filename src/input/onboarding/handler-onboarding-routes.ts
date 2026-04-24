@@ -28,6 +28,20 @@ function activateSelection(state: OnboardingRouteState): void {
   if (action !== null) state.onAction?.(action);
 }
 
+function isEnterKey(token: InputToken): boolean {
+  return token.type === 'key' && (token.logicalName === 'enter' || token.logicalName === 'return');
+}
+
+function getKeyTextInput(token: Extract<InputToken, { type: 'key' }>): string | null {
+  if (token.ctrl || token.meta) return null;
+  if (token.logicalName === 'space') return ' ';
+  if (token.logicalName.length !== 1) return null;
+  if (token.shift && token.logicalName >= 'a' && token.logicalName <= 'z') {
+    return token.logicalName.toUpperCase();
+  }
+  return token.logicalName;
+}
+
 export function handleOnboardingWizardToken(state: OnboardingRouteState, token: InputToken): boolean {
   if (!state.onboardingWizard.active) return false;
 
@@ -48,12 +62,13 @@ export function handleOnboardingWizardToken(state: OnboardingRouteState, token: 
     }
 
     if (editing) {
-      if (token.logicalName === 'enter') {
+      if (isEnterKey(token)) {
         state.onboardingWizard.commitEdit();
       } else if (token.logicalName === 'backspace') {
         state.onboardingWizard.editBackspace();
-      } else if (token.logicalName === 'space') {
-        state.onboardingWizard.editChar(' ');
+      } else {
+        const textInput = getKeyTextInput(token);
+        if (textInput !== null) state.onboardingWizard.editChar(textInput);
       }
     } else if (token.logicalName === 'left') {
       state.onboardingWizard.prevStep();
@@ -74,22 +89,23 @@ export function handleOnboardingWizardToken(state: OnboardingRouteState, token: 
       state.onboardingWizard.selectFirst(visibleFields);
     } else if (token.logicalName === 'end') {
       state.onboardingWizard.selectLast(visibleFields);
-    } else if (token.logicalName === 'enter' || token.logicalName === 'space') {
-      activateSelection(state);
-    } else if (token.logicalName === 'backspace') {
-      state.onboardingWizard.editBackspace();
+    } else {
+      const textInput = getKeyTextInput(token);
+      if (textInput !== null && state.onboardingWizard.beginSelectedTextInput(textInput)) {
+        state.requestRender();
+        return true;
+      }
+      if (isEnterKey(token) || token.logicalName === 'space') {
+        activateSelection(state);
+      } else if (token.logicalName === 'backspace') {
+        state.onboardingWizard.editBackspace();
+      }
     }
   } else if (token.type === 'text') {
     if (editing) {
       state.onboardingWizard.editChar(token.value);
-    } else if (token.value === 'h') {
-      state.onboardingWizard.prevStep();
-    } else if (token.value === 'l') {
-      state.onboardingWizard.nextStep();
-    } else if (token.value === 'k') {
-      state.onboardingWizard.moveSelection(-1, visibleFields);
-    } else if (token.value === 'j') {
-      state.onboardingWizard.moveSelection(1, visibleFields);
+    } else if (state.onboardingWizard.beginSelectedTextInput(token.value)) {
+      // Direct typing into selected inputs behaves like a real form field.
     } else if (token.value === ' ') {
       activateSelection(state);
     } else if (/^[1-9]$/.test(token.value)) {

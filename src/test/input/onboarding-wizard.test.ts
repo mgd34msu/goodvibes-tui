@@ -3,12 +3,14 @@ import { InfiniteBuffer } from '../../core/history.ts';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { InputHandler } from '../../input/handler.ts';
 import { OnboardingWizardController } from '../../input/onboarding/onboarding-wizard.ts';
+import { handleOnboardingWizardToken } from '../../input/onboarding/handler-onboarding-routes.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { DEFAULT_CONFIG } from '../../config/index.ts';
-import { readOnboardingCompletionMarker, type OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
+import { readOnboardingCheckMarker, type OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 import type { UiRuntimeServices } from '../../runtime/ui-services.ts';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 
 afterEach(() => {
   resetTestRuntimeServices();
@@ -208,16 +210,6 @@ describe('OnboardingWizardController', () => {
     });
   });
 
-  test('defaults first-launch completion to user and project markers', () => {
-    const wizard = new OnboardingWizardController();
-    wizard.open('new');
-
-    const markerOps = wizard.buildApplyRequest().operations.filter((operation) => operation.kind === 'set-completion-marker');
-
-    expect(markerOps).toContainEqual(expect.objectContaining({ kind: 'set-completion-marker', scope: 'project', completed: true }));
-    expect(markerOps).toContainEqual(expect.objectContaining({ kind: 'set-completion-marker', scope: 'user', completed: true }));
-  });
-
   test('blocks invalid custom network ports instead of silently falling back', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
@@ -331,7 +323,7 @@ describe('OnboardingWizardController', () => {
     expect(networkStep?.fields.map((field) => field.id)).not.toContain('network.shared-ip-address');
   });
 
-  test('external services exposes schema-backed surface setup fields', () => {
+  test('external services exposes selected surfaces as separate setup screens', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
     wizard.setFieldValue('capabilities.external-integrations', true);
@@ -345,17 +337,28 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('external-services.matrix', true);
 
     const serviceStep = wizard.steps.find((step) => step.id === 'external-services');
-    const fieldIds = serviceStep?.fields.map((field) => field.id) ?? [];
+    const selectorFieldIds = serviceStep?.fields.map((field) => field.id) ?? [];
 
-    expect(fieldIds).toContain('external-services.ntfy');
-    expect(fieldIds).toContain('external-services.google-chat.webhook-url');
-    expect(fieldIds).toContain('external-services.signal.token');
-    expect(fieldIds).toContain('external-services.whatsapp.access-token');
-    expect(fieldIds).toContain('external-services.imessage.token');
-    expect(fieldIds).toContain('external-services.msteams.app-password');
-    expect(fieldIds).toContain('external-services.bluebubbles.password');
-    expect(fieldIds).toContain('external-services.mattermost.bot-token');
-    expect(fieldIds).toContain('external-services.matrix.access-token');
+    expect(selectorFieldIds).toContain('external-services.ntfy');
+    expect(selectorFieldIds).not.toContain('external-services.google-chat.webhook-url');
+    expect(wizard.steps.map((step) => step.id)).toContain('external-surface:googleChat');
+    expect(wizard.steps.map((step) => step.id)).toContain('external-surface:matrix');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:googleChat')?.fields.map((field) => field.id))
+      .toContain('external-services.google-chat.webhook-url');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:signal')?.fields.map((field) => field.id))
+      .toContain('external-services.signal.token');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:whatsapp')?.fields.map((field) => field.id))
+      .toContain('external-services.whatsapp.access-token');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:imessage')?.fields.map((field) => field.id))
+      .toContain('external-services.imessage.token');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:msteams')?.fields.map((field) => field.id))
+      .toContain('external-services.msteams.app-password');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:bluebubbles')?.fields.map((field) => field.id))
+      .toContain('external-services.bluebubbles.password');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:mattermost')?.fields.map((field) => field.id))
+      .toContain('external-services.mattermost.bot-token');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:matrix')?.fields.map((field) => field.id))
+      .toContain('external-services.matrix.access-token');
   });
 
   test('enabling an inbound external surface turns on the HTTP listener', () => {
@@ -431,7 +434,19 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('capabilities.external-integrations', true);
     wizard.setFieldValue('external-services.matrix', true);
 
-    expect(wizard.getBlockingFieldLabels()).toContain('Services: Matrix access token is required.');
+    expect(wizard.getBlockingFieldLabels()).toContain('Matrix: Matrix access token is required.');
+  });
+
+  test('does not require setup values for unselected external surfaces', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.external-integrations', true);
+
+    expect(wizard.getBlockingFieldLabels()).not.toContain('ntfy: ntfy topic is required.');
+    wizard.setFieldValue('external-services.ntfy', true);
+    expect(wizard.getBlockingFieldLabels()).toContain('ntfy: ntfy topic is required.');
+    wizard.setFieldValue('external-services.ntfy', false);
+    expect(wizard.getBlockingFieldLabels()).not.toContain('ntfy: ntfy topic is required.');
   });
 
   test('blocks malformed GoodVibes secret refs in masked fields', () => {
@@ -441,7 +456,7 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('external-services.slack', true);
     wizard.setFieldValue('external-services.slack.bot-token', 'goodvibes://secrets/');
 
-    expect(wizard.getBlockingFieldLabels()).toContain('Services: Slack bot token must be a secret value or a goodvibes://secrets/... reference.');
+    expect(wizard.getBlockingFieldLabels()).toContain('Slack: Slack bot token must be a secret value or a goodvibes://secrets/... reference.');
   });
 
   test('uses mode-aware required fields for Telegram and WhatsApp', () => {
@@ -456,12 +471,12 @@ describe('OnboardingWizardController', () => {
     wizard.setFieldValue('external-services.whatsapp.access-token', 'bridge-token');
 
     const blockers = wizard.getBlockingFieldLabels();
-    expect(blockers).not.toContain('Services: Telegram webhook secret is required.');
-    expect(blockers).not.toContain('Services: WhatsApp verify token is required.');
-    expect(blockers).not.toContain('Services: WhatsApp phone number ID is required.');
+    expect(blockers).not.toContain('Telegram: Telegram webhook secret is required.');
+    expect(blockers).not.toContain('WhatsApp: WhatsApp verify token is required.');
+    expect(blockers).not.toContain('WhatsApp: WhatsApp phone number ID is required.');
   });
 
-  test('requires an admin auth user before server-backed settings can apply', () => {
+  test('keeps existing local auth users instead of requiring a replacement password', () => {
     const snapshot = makeOnboardingSnapshot({
       auth: {
         snapshot: {
@@ -481,7 +496,73 @@ describe('OnboardingWizardController', () => {
     wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
     wizard.setFieldValue('capabilities.browser-access', true);
 
-    expect(wizard.steps.find((step) => step.id === 'access')?.fields.map((field) => field.id)).toContain('accounts.admin-password');
+    expect(wizard.steps.find((step) => step.id === 'access')?.fields.map((field) => field.id)).not.toContain('accounts.admin-password');
+    expect(wizard.getBlockingFieldLabels()).not.toContain('Access: Local auth admin password is required.');
+  });
+
+  test('treats return key tokens as Enter in the onboarding route', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.moveSelection(1, 10);
+
+    handleOnboardingWizardToken({
+      onboardingWizard: wizard,
+      getViewportHeight: () => 20,
+      requestRender: () => {},
+      handleEscape: () => {},
+    }, { type: 'key', logicalName: 'return' } as InputToken);
+
+    expect(wizard.getBooleanFieldValue('capabilities.browser-access', false)).toBe(true);
+    expect(wizard.getBooleanFieldValue('capabilities.local-tui-only', true)).toBe(false);
+  });
+
+  test('typing j and k into selected onboarding inputs edits text instead of moving selection', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.browser-access', true);
+    wizard.setFieldValue('network.mode', 'custom');
+    wizard.setStep(1);
+    wizard.moveSelection(3, 10);
+
+    const routeState = {
+      onboardingWizard: wizard,
+      getViewportHeight: () => 20,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleOnboardingWizardToken(routeState, { type: 'text', value: 'j' });
+    handleOnboardingWizardToken(routeState, { type: 'text', value: 'k' });
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'return' } as InputToken);
+
+    expect(wizard.getSelectedField()?.id).toBe('network.service-port');
+    expect(wizard.getSelectedFieldIndex()).toBe(3);
+    expect(wizard.getTextFieldValue('network.service-port')).toBe('jk');
+  });
+
+  test('printable key tokens edit selected onboarding inputs before shortcut handling', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.browser-access', true);
+    wizard.setFieldValue('network.mode', 'custom');
+    wizard.setStep(1);
+    wizard.moveSelection(3, 10);
+
+    const routeState = {
+      onboardingWizard: wizard,
+      getViewportHeight: () => 20,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'j', ctrl: false, shift: false, meta: false } as InputToken);
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'k', ctrl: false, shift: false, meta: false } as InputToken);
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: '1', ctrl: false, shift: false, meta: false } as InputToken);
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'return' } as InputToken);
+
+    expect(wizard.getSelectedField()?.id).toBe('network.service-port');
+    expect(wizard.getSelectedFieldIndex()).toBe(3);
+    expect(wizard.getTextFieldValue('network.service-port')).toBe('jk1');
   });
 
   test('requires bootstrap auth replacement before server-backed settings can apply', () => {
@@ -594,15 +675,28 @@ describe('InputHandler onboarding integration', () => {
     expect(input.onboardingWizard.currentStep.id).toBe('loading');
   });
 
-  test('routes text navigation into the onboarding shell instead of the prompt', () => {
+  test('routes arrow navigation into the onboarding shell instead of the prompt', () => {
     const input = makeInput();
     input.openOnboardingWizard({ mode: 'new', preload: () => {} });
 
-    input.feed('j');
+    input.feed('\x1b[B');
 
     expect(input.prompt).toBe('');
     expect(input.onboardingWizard.getSelectedFieldIndex()).toBe(1);
     expect(input.onboardingWizard.active).toBe(true);
+  });
+
+  test('marks onboarding checked as soon as the wizard opens', () => {
+    const uiServices = createDefaultUiRuntimeServices();
+    const input = makeInput(uiServices);
+
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.feed('\x1b');
+
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(marker.exists).toBe(true);
+    expect(marker.payload?.mode).toBe('new');
+    expect(input.onboardingWizard.active).toBe(false);
   });
 
   test('opens nested model picker from onboarding and unwinds back to the shell on escape', () => {
@@ -637,7 +731,7 @@ describe('InputHandler onboarding integration', () => {
     expect(input.modalStack).toEqual([]);
   });
 
-  test('does not write completion markers when post-apply verification fails', async () => {
+  test('keeps the global onboarding check marker when post-apply verification fails', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
     const input = makeInput(uiServices);
@@ -668,12 +762,12 @@ describe('InputHandler onboarding integration', () => {
 
     await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
 
-    const marker = readOnboardingCompletionMarker(uiServices.environment.shellPaths, 'project');
-    expect(marker.exists).toBe(false);
-    expect(prints.join('\n')).toContain('Network-capable surfaces require local admin auth with no bootstrap credential file.');
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(marker.exists).toBe(true);
+    expect(prints.join('\n')).toContain('Network-capable surfaces require local auth with no bootstrap credential file.');
   });
 
-  test('restarts and verifies background services before writing completion markers', async () => {
+  test('restarts and verifies background services after the wizard has been checked', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
     ensureLocalAdminAuth(uiServices);
@@ -719,13 +813,13 @@ describe('InputHandler onboarding integration', () => {
 
     await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
 
-    const marker = readOnboardingCompletionMarker(uiServices.environment.shellPaths, 'project');
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
     expect(restarted).toBe(true);
     expect(marker.exists).toBe(true);
     expect(prints.join('\n')).toContain('Onboarding applied and verified');
   });
 
-  test('does not write completion markers when background service activation fails', async () => {
+  test('keeps the global onboarding check marker when background service activation fails', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
     ensureLocalAdminAuth(uiServices);
@@ -767,8 +861,8 @@ describe('InputHandler onboarding integration', () => {
 
     await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
 
-    const marker = readOnboardingCompletionMarker(uiServices.environment.shellPaths, 'project');
-    expect(marker.exists).toBe(false);
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(marker.exists).toBe(true);
     expect(prints.join('\n')).toContain('The GoodVibes daemon did not start after applying onboarding settings.');
   });
 
@@ -824,13 +918,13 @@ describe('InputHandler onboarding integration', () => {
 
     await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
 
-    const marker = readOnboardingCompletionMarker(uiServices.environment.shellPaths, 'project');
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
     expect(restarted).toBe(true);
     expect(marker.exists).toBe(true);
     expect(prints.join('\n')).toContain('Onboarding applied and verified');
   });
 
-  test('does not write completion markers for Local TUI Only when background service controller is unavailable', async () => {
+  test('keeps the global onboarding check marker when Local TUI Only cannot inspect services', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
     const input = makeInput(uiServices);
@@ -865,12 +959,12 @@ describe('InputHandler onboarding integration', () => {
 
     await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
 
-    const marker = readOnboardingCompletionMarker(uiServices.environment.shellPaths, 'project');
-    expect(marker.exists).toBe(false);
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(marker.exists).toBe(true);
     expect(prints.join('\n')).toContain('Background service controller is unavailable');
   });
 
-  test('does not write completion markers when Local TUI Only cannot stop a running service', async () => {
+  test('keeps the global onboarding check marker when Local TUI Only cannot stop a running service', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
     installExternalServices(uiServices, {
@@ -914,12 +1008,12 @@ describe('InputHandler onboarding integration', () => {
 
     await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
 
-    const marker = readOnboardingCompletionMarker(uiServices.environment.shellPaths, 'project');
-    expect(marker.exists).toBe(false);
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(marker.exists).toBe(true);
     expect(prints.join('\n')).toContain('The HTTP listener port is still occupied after onboarding disabled incoming event surfaces.');
   });
 
-  test('does not write completion markers when Local TUI Only leaves an external listener port occupied', async () => {
+  test('keeps the global onboarding check marker when Local TUI Only leaves an external listener port occupied', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
     installExternalServices(uiServices, {
@@ -967,8 +1061,8 @@ describe('InputHandler onboarding integration', () => {
 
     await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
 
-    const marker = readOnboardingCompletionMarker(uiServices.environment.shellPaths, 'project');
-    expect(marker.exists).toBe(false);
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(marker.exists).toBe(true);
     expect(prints.join('\n')).toContain('The HTTP listener port is still occupied after onboarding disabled incoming event surfaces.');
   });
 });

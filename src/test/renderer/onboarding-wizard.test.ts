@@ -22,8 +22,9 @@ describe('renderOnboardingWizard', () => {
 
     const text = linesToText(lines).join('\n');
     expect(text).toContain('Onboarding Wizard');
-    expect(text).toContain('Summary Rail');
+    expect(text).toContain('Summary');
     expect(text).toContain('Steps');
+    expect(text).toContain('Controls:');
     expect(text).toContain('Esc');
   });
 
@@ -43,7 +44,7 @@ describe('renderOnboardingWizard', () => {
     wizard.open('edit');
     wizard.setFieldValue('capabilities.external-integrations', true);
     wizard.setFieldValue('external-services.slack', true);
-    wizard.setStep(3);
+    wizard.setStep(wizard.steps.findIndex((step) => step.id === 'external-surface:slack'));
     wizard.moveSelection(1, getOnboardingWizardVisibleFieldCount(18));
     wizard.beginEdit('external-services.slack.bot-token');
     wizard.editBuffer = 'sk-secret-value';

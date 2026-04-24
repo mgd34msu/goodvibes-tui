@@ -26,9 +26,9 @@ export type OnboardingAcknowledgementReason =
 
 export type OnboardingVerificationStatus = 'pass' | 'warn' | 'fail';
 
-export type OnboardingCompletionMarkerScope = 'user' | 'project';
+export type OnboardingStateScope = 'user' | 'project';
 
-export type OnboardingCompletionMarkerSource = 'wizard' | 'command' | 'import' | 'unknown';
+export type OnboardingCheckMarkerSource = 'wizard' | 'command' | 'import' | 'unknown';
 
 export interface OnboardingConfigSnapshot {
   readonly display: GoodVibesConfig['display'];
@@ -147,7 +147,7 @@ export interface OnboardingRuntimeDefaultsSnapshot {
 }
 
 export interface OnboardingAcknowledgementSnapshot {
-  readonly scope: OnboardingCompletionMarkerScope;
+  readonly scope: OnboardingStateScope;
   readonly exists: boolean;
   readonly updatedAt: number | null;
   readonly source: string | null;
@@ -258,12 +258,6 @@ export type OnboardingApplyOperation =
       readonly kind: 'acknowledge';
       readonly target: OnboardingAcknowledgementTarget;
       readonly acknowledged: boolean;
-    }
-  | {
-      readonly kind: 'set-completion-marker';
-      readonly scope: OnboardingCompletionMarkerScope;
-      readonly completed: boolean;
-      readonly payload?: Partial<OnboardingCompletionMarkerPayload>;
     };
 
 export interface OnboardingApplyRequest {
@@ -316,34 +310,34 @@ export interface OnboardingAcknowledgementRuntimeState {
   readonly acknowledgements: Partial<Record<OnboardingAcknowledgementTarget, boolean>>;
 }
 
-export interface OnboardingCompletionMarkerPayload {
+export interface OnboardingCheckMarkerPayload {
   readonly version: 1;
-  readonly completedAt: number;
+  readonly checkedAt: number;
   readonly updatedAt: number;
-  readonly source: OnboardingCompletionMarkerSource;
+  readonly source: OnboardingCheckMarkerSource;
   readonly mode?: OnboardingMode;
   readonly workspaceRoot?: string;
 }
 
-export interface OnboardingCompletionMarkerState {
-  readonly scope: OnboardingCompletionMarkerScope;
+export interface OnboardingCheckMarkerState {
+  readonly scope: OnboardingStateScope;
   readonly path: string;
   readonly exists: boolean;
-  readonly payload: OnboardingCompletionMarkerPayload | null;
+  readonly payload: OnboardingCheckMarkerPayload | null;
   readonly parseError?: string;
 }
 
-export interface OnboardingCompletionMarkersState {
-  readonly user: OnboardingCompletionMarkerState;
-  readonly project: OnboardingCompletionMarkerState;
-  readonly effective: OnboardingCompletionMarkerState | null;
+export interface OnboardingCheckMarkersState {
+  readonly user: OnboardingCheckMarkerState;
+  readonly project: OnboardingCheckMarkerState;
+  readonly effective: OnboardingCheckMarkerState | null;
 }
 
-export interface WriteOnboardingCompletionMarkerOptions {
-  readonly scope?: OnboardingCompletionMarkerScope;
-  readonly completedAt?: number;
+export interface WriteOnboardingCheckMarkerOptions {
+  readonly scope?: OnboardingStateScope;
+  readonly checkedAt?: number;
   readonly updatedAt?: number;
-  readonly source?: OnboardingCompletionMarkerSource;
+  readonly source?: OnboardingCheckMarkerSource;
   readonly mode?: OnboardingMode;
   readonly workspaceRoot?: string;
 }
@@ -371,7 +365,7 @@ export interface OnboardingSnapshotDependencies {
   readonly surfaces?: OnboardingSurfaceReadHelper;
   readonly providerAccounts?: OnboardingProviderAccountReadHelper;
   readonly shellPaths?: OnboardingShellPaths;
-  readonly acknowledgementScope?: OnboardingCompletionMarkerScope;
+  readonly acknowledgementScope?: OnboardingStateScope;
 }
 
 export interface OnboardingApplyDependencies {
@@ -389,7 +383,7 @@ export interface OnboardingApplyDependencies {
     | 'revokeSession'
   >;
   readonly shellPaths: OnboardingShellPaths;
-  readonly acknowledgementScope?: OnboardingCompletionMarkerScope;
+  readonly acknowledgementScope?: OnboardingStateScope;
 }
 
 export interface OnboardingVerificationDependencies {
@@ -398,5 +392,5 @@ export interface OnboardingVerificationDependencies {
   readonly secrets?: Pick<SecretsManager, 'get'>;
   readonly auth?: Pick<UserAuthManager, 'inspect'>;
   readonly shellPaths: OnboardingShellPaths;
-  readonly acknowledgementScope?: OnboardingCompletionMarkerScope;
+  readonly acknowledgementScope?: OnboardingStateScope;
 }
