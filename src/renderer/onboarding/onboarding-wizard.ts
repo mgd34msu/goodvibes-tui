@@ -60,6 +60,12 @@ function modeLabel(mode: OnboardingWizardController['mode']): string {
   return 'New setup';
 }
 
+function changedScreensLabel(wizard: OnboardingWizardController): string {
+  if (wizard.dirtyStepCount === 0) return 'no changes';
+  if (wizard.dirtyStepCount === 1) return '1 changed screen';
+  return `${wizard.dirtyStepCount} changed screens`;
+}
+
 function stepGlyph(
   wizard: OnboardingWizardController,
   step: OnboardingWizardStepDefinition,
@@ -241,17 +247,17 @@ function renderFieldRow(
 
 function footerText(wizard: OnboardingWizardController): string {
   if (wizard.isEditingTextField()) {
-    return '[Enter] Save value  [Esc] Cancel edit  [Backspace] Delete  [Type] Edit value';
+    return '[Enter] Save value  [Esc] Cancel edit  [Backspace] Delete char  [Del/Ctrl+U] Clear value';
   }
 
-  return '[Enter] Toggle/open selected  [Tab] Next screen  [Shift+Tab] Previous  [↑↓] Move  [Esc] Close';
+  return '[Enter] Toggle/open  [Esc] Close  [Tab/Shift+Tab] Screen  [↑↓] Move  [Del/Ctrl+U] Clear input';
 }
 
 function controlsText(wizard: OnboardingWizardController): string {
   if (wizard.isEditingTextField()) {
-    return 'Controls: Enter saves this value, Esc cancels editing, Backspace deletes, typing edits the value.';
+    return 'Controls: Enter saves this value, Esc cancels editing, Backspace deletes one character, Delete or Ctrl+U clears the field.';
   }
-  return 'Controls: Enter or Space changes the selected row; Tab/Shift+Tab changes screens; arrows move; typing edits selected inputs.';
+  return 'Controls: Enter or Space changes the selected row; Delete or Ctrl+U clears selected text inputs; Tab/Shift+Tab changes screens; arrows move.';
 }
 
 function renderWideLayout(
@@ -271,18 +277,18 @@ function renderWideLayout(
   const summaryBg = UI_TONES.bg.summary;
   const innerLeft = layout.margin + 1;
   const availableInner = layout.innerWidth - 2;
-  const leftWidthBase = layout.innerWidth >= 108 ? 22 : 18;
-  const rightWidthBase = layout.innerWidth >= 108 ? 30 : 24;
-  const minCenterWidth = 34;
-  let leftWidth = Math.min(leftWidthBase, Math.max(16, availableInner - minCenterWidth - 12));
-  let rightWidth = Math.min(rightWidthBase, Math.max(20, availableInner - minCenterWidth - leftWidth));
+  const leftWidthBase = layout.innerWidth >= 150 ? 32 : layout.innerWidth >= 108 ? 28 : 24;
+  const rightWidthBase = layout.innerWidth >= 150 ? 34 : layout.innerWidth >= 108 ? 32 : 24;
+  const minCenterWidth = layout.innerWidth >= 120 ? 48 : 40;
+  let leftWidth = Math.min(leftWidthBase, Math.max(20, availableInner - minCenterWidth - 12));
+  let rightWidth = Math.min(rightWidthBase, Math.max(22, availableInner - minCenterWidth - leftWidth));
   let centerWidth = layout.innerWidth - leftWidth - rightWidth - 2;
 
   if (centerWidth < minCenterWidth) {
     const deficit = minCenterWidth - centerWidth;
-    const leftCut = Math.min(Math.max(0, leftWidth - 16), Math.ceil(deficit / 2));
+    const leftCut = Math.min(Math.max(0, leftWidth - 20), Math.ceil(deficit / 2));
     leftWidth -= leftCut;
-    rightWidth -= Math.min(Math.max(0, rightWidth - 20), deficit - leftCut);
+    rightWidth -= Math.min(Math.max(0, rightWidth - 22), deficit - leftCut);
     centerWidth = layout.innerWidth - leftWidth - rightWidth - 2;
   }
 
@@ -296,9 +302,9 @@ function renderWideLayout(
     currentStep.summaryTitle,
     ...currentStep.summaryLines.slice(0, 2),
     `Fields ${wizard.getCompletedFieldCount(wizard.stepIndex)}/${wizard.getStepFieldCount(wizard.stepIndex)} complete`,
-    `Dirty steps ${wizard.dirtyStepCount}`,
+    changedScreensLabel(wizard),
   ];
-  const fieldStartRow = 5;
+  const fieldStartRow = 6;
   const selectedText = selectedFieldText(wizard);
   const fieldRows = buildFieldRows(wizard, visibleFields, Math.max(0, bodyRows - fieldStartRow));
 
@@ -316,7 +322,7 @@ function renderWideLayout(
     bg: headerBg,
     bold: true,
   });
-  const meta = `${modeLabel(wizard.mode)}  ${wizard.stepIndex + 1}/${wizard.steps.length}  dirty ${wizard.dirtyStepCount}`;
+  const meta = `${modeLabel(wizard.mode)}  ${wizard.stepIndex + 1}/${wizard.steps.length}  ${changedScreensLabel(wizard)}`;
   putOverlayText(topLine, Math.max(layout.margin + 2, layout.margin + layout.width - getDisplayWidth(meta) - 3), layout.width - 4, meta, {
     fg: UI_TONES.fg.secondary,
     bg: headerBg,
@@ -376,19 +382,24 @@ function renderWideLayout(
         bg: bodyBg,
       });
     } else if (row === 2) {
+      putOverlayText(line, centerStart + 1, centerWidth - 2, descriptionLines[1] ?? '', {
+        fg: UI_TONES.fg.secondary,
+        bg: bodyBg,
+      });
+    } else if (row === 3) {
       fillRange(line, centerStart, centerWidth, railBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(controlsText(wizard), centerWidth - 2), {
         fg: UI_TONES.state.info,
         bg: railBg,
       });
-    } else if (row === 3) {
+    } else if (row === 4) {
       fillRange(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(`Focus: ${selectedText.title.replace(/^Selected: /, '')}`, centerWidth - 2), {
         fg: UI_TONES.fg.primary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
         bold: true,
       });
-    } else if (row === 4) {
+    } else if (row === 5) {
       fillRange(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(selectedText.hint, centerWidth - 2), {
         fg: UI_TONES.fg.secondary,
@@ -473,7 +484,7 @@ function renderCollapsedLayout(
   const innerStart = layout.margin + 1;
   const innerWidth = layout.innerWidth;
   const descriptionLines = wrapText(currentStep.description, Math.max(14, innerWidth - 2)).slice(0, 2);
-  const fieldStartRow = 5;
+  const fieldStartRow = 6;
   const selectedText = selectedFieldText(wizard);
   const fieldRows = buildFieldRows(wizard, visibleFields, Math.max(0, bodyRows - fieldStartRow));
 
@@ -491,7 +502,7 @@ function renderCollapsedLayout(
     bg: headerBg,
     bold: true,
   });
-  const meta = `${wizard.stepIndex + 1}/${wizard.steps.length} • dirty ${wizard.dirtyStepCount}`;
+  const meta = `${wizard.stepIndex + 1}/${wizard.steps.length} • ${changedScreensLabel(wizard)}`;
   putOverlayText(topLine, Math.max(layout.margin + 2, layout.margin + layout.width - getDisplayWidth(meta) - 3), layout.width - 4, meta, {
     fg: UI_TONES.fg.secondary,
     bg: headerBg,
@@ -533,19 +544,24 @@ function renderCollapsedLayout(
         bg: bodyBg,
       });
     } else if (row === 2) {
+      putOverlayText(line, innerStart + 1, innerWidth - 2, descriptionLines[1] ?? '', {
+        fg: UI_TONES.fg.secondary,
+        bg: bodyBg,
+      });
+    } else if (row === 3) {
       fillRange(line, innerStart, innerWidth, UI_TONES.bg.section);
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(controlsText(wizard), innerWidth - 2), {
         fg: UI_TONES.state.info,
         bg: UI_TONES.bg.section,
       });
-    } else if (row === 3) {
+    } else if (row === 4) {
       fillRange(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(`Focus: ${selectedText.title.replace(/^Selected: /, '')}`, innerWidth - 2), {
         fg: UI_TONES.fg.primary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
         bold: true,
       });
-    } else if (row === 4) {
+    } else if (row === 5) {
       fillRange(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(selectedText.hint, innerWidth - 2), {
         fg: UI_TONES.fg.secondary,
@@ -592,7 +608,8 @@ export function renderOnboardingWizard(
   width: number,
   viewportHeight: number,
 ): Line[] {
-  const layout = createOverlayBoxLayout(width, 0, width);
+  const margin = width >= 64 ? 1 : 0;
+  const layout = createOverlayBoxLayout(width, margin, Math.max(20, width - margin * 2));
   const collapsed = layout.innerWidth < 86;
   return collapsed
     ? renderCollapsedLayout(wizard, width, viewportHeight, layout)

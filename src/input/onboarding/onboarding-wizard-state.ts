@@ -72,19 +72,24 @@ export function getFieldValidationError(
     if (field.kind !== 'text' && field.kind !== 'masked') return null;
 
     const value = normalizeText(controller.getFieldValue(field) as string);
-    const required = field.required === true || controller.isRequiredExternalSetupField(field.id);
+    const required = field.required === true;
     if (required && value.length === 0) {
       return `${step.shortLabel}: ${field.label} is required.`;
     }
 
     if (field.id === 'accounts.admin-username') {
+      const password = normalizeText(controller.getStringFieldValue('accounts.admin-password', ''));
+      if (!required && password.length > 0 && value.length === 0) {
+        return `${step.shortLabel}: ${field.label} is required when setting a local auth password.`;
+      }
       const existing = controller.runtimeSnapshot?.auth.snapshot.users.find((user) => user.username === value);
-      if (controller.hasBootstrapCredentialPresent() && existing) {
-        return `${step.shortLabel}: ${field.label} must be a new username so the wizard can replace bootstrap credentials.`;
+      if ((required || password.length > 0) && existing && !existing.roles.includes('admin')) {
+        return `${step.shortLabel}: ${field.label} must be an existing admin user or a new username.`;
       }
-      if (existing && !existing.roles.includes('admin')) {
-        return `${step.shortLabel}: ${field.label} must be a new username or an existing admin user.`;
-      }
+    }
+
+    if (field.id === 'accounts.admin-password' && value.length > 0 && value.length < 8) {
+      return `${step.shortLabel}: ${field.label} must be at least 8 characters.`;
     }
 
     if (field.kind === 'masked' && isMalformedGoodVibesSecretReferenceValue(value)) {
@@ -325,7 +330,7 @@ export function isFieldSatisfied(controller: OnboardingWizardController, field: 
     if (field.kind === 'radio') return true;
 
     if (field.kind === 'text' || field.kind === 'masked') {
-      const required = field.required === true || controller.isRequiredExternalSetupField(field.id);
+      const required = field.required === true;
       if (!required) return true;
       return normalizeText(controller.getFieldValue(field) as string).length > 0;
     }

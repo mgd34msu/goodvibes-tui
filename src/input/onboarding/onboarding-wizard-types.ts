@@ -49,6 +49,15 @@ export type OnboardingWizardAction =
   | 'start-openai-subscription'
   | 'finish-openai-subscription';
 
+export type OnboardingWizardApplyFeedbackSeverity = 'info' | 'warning' | 'error';
+
+export interface OnboardingWizardApplyFeedback {
+  readonly severity: OnboardingWizardApplyFeedbackSeverity;
+  readonly title: string;
+  readonly summary: string;
+  readonly messages: readonly string[];
+}
+
 export interface OnboardingWizardRadioOption {
   readonly id: string;
   readonly label: string;
@@ -164,6 +173,7 @@ export interface OnboardingWizardSnapshot {
   readonly editBuffer: string;
   readonly hydrationPending: boolean;
   readonly hydrationError: string | null;
+  readonly applyFeedback: OnboardingWizardApplyFeedback | null;
   readonly hydration: OnboardingWizardRuntimeHydration;
 }
 

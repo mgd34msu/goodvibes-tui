@@ -17,19 +17,19 @@ export const DEFAULT_CAPABILITIES: readonly OnboardingStep1CapabilityItem[] = [
     id: 'local-tui-only',
     label: 'Local TUI Only (No Servers)',
     selected: true,
-    detail: 'Keep GoodVibes in this terminal and disable browser access, background services, network listeners, and external surfaces.',
+    detail: 'Use GoodVibes only in this terminal. No browser access, background service, HTTP listener, external app surface, or network setup.',
   },
   {
     id: 'browser-access',
     label: 'Open GoodVibes in a Browser',
     selected: false,
-    detail: 'Enable the background service and web UI, reachable on the local network by default unless customized.',
+    detail: 'Run the background service and web UI. GoodVibes will use the local network by default; you can restrict or customize it next.',
   },
   {
     id: 'network-access',
     label: 'Let other devices use GoodVibes',
     selected: false,
-    detail: 'Expose enabled GoodVibes services on your LAN so other devices can reach them. Local auth is required.',
+    detail: 'Make enabled GoodVibes services reachable from other devices on your LAN. Local authentication is required.',
   },
   {
     id: 'webhook-events',
@@ -41,7 +41,7 @@ export const DEFAULT_CAPABILITIES: readonly OnboardingStep1CapabilityItem[] = [
     id: 'external-integrations',
     label: 'Connect GoodVibes to external apps and services',
     selected: false,
-    detail: 'Show Slack, Discord, Telegram, Teams, Matrix, and other app surfaces so they can be enabled and configured here.',
+    detail: 'Enable setup screens for Slack, Discord, Telegram, Teams, Matrix, and other app surfaces you choose.',
   },
 ];
 
@@ -115,7 +115,6 @@ export const REQUIRED_EXTERNAL_SETUP_FIELD_IDS = new Set<string>([
   'external-services.discord.public-key',
   'external-services.telegram.bot-token',
   'external-services.telegram.webhook-secret',
-  'external-services.ntfy.topic',
   'external-services.webhook.default-target',
   'external-services.google-chat.webhook-url',
   'external-services.google-chat.verification-token',

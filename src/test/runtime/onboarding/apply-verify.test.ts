@@ -324,6 +324,51 @@ describe('onboarding apply and verify helpers', () => {
     expect(snapshot.sessionCount).toBe(1);
   });
 
+  test('replaces SDK bootstrap credentials while reusing an existing admin username', async () => {
+    const auth = new UserAuthManager({
+      bootstrapFilePath: join(root, 'home', 'auth-bootstrap.json'),
+      bootstrapCredentialPath: join(root, 'home', 'auth-bootstrap-password.txt'),
+    });
+    const originalBootstrap = readFileSync(join(root, 'home', 'auth-bootstrap-password.txt'), 'utf-8');
+    const originalPassword = originalBootstrap.split('\n')
+      .find((line) => line.startsWith('password='))
+      ?.slice('password='.length) ?? '';
+    expect(auth.inspect().users.map((user) => user.username)).toEqual(['admin']);
+    expect(auth.inspect().bootstrapCredentialPresent).toBe(true);
+
+    const applied = await applyOnboardingRequest(
+      {
+        clock: () => 100,
+        config: configManager,
+        shellPaths,
+        acknowledgementScope: 'project',
+        auth,
+      },
+      {
+        mode: 'new',
+        source: 'wizard',
+        operations: [
+          {
+            kind: 'ensure-auth-user',
+            username: 'admin',
+            password: 'wizard-pass',
+            roles: ['admin'],
+            createSession: true,
+            retireBootstrapCredential: true,
+          },
+        ],
+      },
+    );
+
+    const snapshot = auth.inspect();
+    expect(applied.ok).toBe(true);
+    expect(snapshot.bootstrapCredentialPresent).toBe(false);
+    expect(snapshot.users.map((user) => user.username)).toEqual(['admin']);
+    expect(snapshot.sessionCount).toBe(1);
+    expect(auth.authenticate('admin', 'wizard-pass')).not.toBeNull();
+    expect(auth.authenticate('admin', originalPassword)).toBeNull();
+  });
+
   test('rolls back bootstrap auth replacement when a later apply operation fails', async () => {
     const auth = new UserAuthManager({
       bootstrapFilePath: join(root, 'home', 'auth-bootstrap.json'),

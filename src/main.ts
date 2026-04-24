@@ -177,6 +177,7 @@ async function main() {
   };
 
   const getViewportHeight = (): number => {
+    if (input.onboardingWizard.active) return stdout.rows || 24;
     const promptLines: number = input.getVisiblePromptLineCount(getPromptContentWidth());
     const currentModel = providerRegistry.getCurrentModel();
     return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, currentModel.contextWindow);
@@ -551,19 +552,23 @@ async function main() {
       composerPendingRisk: composerState.pendingRisk,
     }).lines;
 
+    const onboardingOwnsScreen = input.onboardingWizard.active;
+    const shellHeaderLines = onboardingOwnsScreen ? [] : headerLines;
+    const shellFooterLines = onboardingOwnsScreen ? [] : footerLines;
+    const panelWidth = !onboardingOwnsScreen && panelManager.isVisible() && panelManager.getAllOpen().length > 0
+      ? panelManager.getRightWidth(width)
+      : 0;
     const shellLayout = createShellLayout({
       width,
       height,
-      headerHeight: headerLines.length,
-      footerHeight: footerLines.length,
-      panelWidth: panelManager.isVisible() && panelManager.getAllOpen().length > 0
-        ? panelManager.getRightWidth(width)
-        : 0,
+      headerHeight: shellHeaderLines.length,
+      footerHeight: shellFooterLines.length,
+      panelWidth,
     });
     const vHeight = shellLayout.body.height;
     const conversationWidth = shellLayout.conversation.width;
     activeConversationWidth = conversationWidth;
-    const hasPanelWorkspace = panelManager.isVisible() && panelManager.getAllOpen().length > 0;
+    const hasPanelWorkspace = !onboardingOwnsScreen && panelManager.isVisible() && panelManager.getAllOpen().length > 0;
     conversation.setSplashSuppressed(hasPanelWorkspace);
 
     // Flush pending renders after updating the width provider and splash posture
@@ -627,27 +632,29 @@ async function main() {
     });
 
     // Panel composite data
-    const panelComposite = buildPanelCompositeData(
-      panelManager,
-      input,
-      shellLayout.panel?.width ?? 0,
-      shellLayout.panel?.height ?? vHeight,
-    );
+    const panelComposite = onboardingOwnsScreen
+      ? { panelData: undefined, panelWidth: 0 }
+      : buildPanelCompositeData(
+        panelManager,
+        input,
+        shellLayout.panel?.width ?? 0,
+        shellLayout.panel?.height ?? vHeight,
+      );
 
     compositor.composite({
       width, height,
-      header: headerLines,
+      header: shellHeaderLines,
       viewport,
-      footer: footerLines,
-      selection: {
+      footer: shellFooterLines,
+      selection: onboardingOwnsScreen ? undefined : {
         isCellSelected: (col, row) => selection.isCellSelected(col, row),
         scrollTop,
         lineCount: conversation.history.getLineCount(),
       },
-      search: input.searchManager.active ? {
+      search: !onboardingOwnsScreen && input.searchManager.active ? {
         manager: input.searchManager,
         scrollTop,
-        viewportStartY: 2,
+        viewportStartY: shellHeaderLines.length,
       } : undefined,
       panel: panelComposite.panelData,
       panelWidth: panelComposite.panelWidth,
@@ -672,15 +679,6 @@ async function main() {
     serviceRegistry: ctx.services.serviceRegistry,
     getConfiguredProviderIds: ctx._getConfiguredProviderIds,
     getPinned: ctx._getPinned,
-    render,
-  });
-
-  applyInitialTuiCliState({
-    cli,
-    input,
-    commandRegistry,
-    commandContext,
-    shellPaths: ctx.services.shellPaths,
     render,
   });
 
@@ -728,6 +726,15 @@ async function main() {
   stdin.resume();
   stdin.setEncoding('utf8');
   stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE);
+
+  applyInitialTuiCliState({
+    cli,
+    input,
+    commandRegistry,
+    commandContext,
+    shellPaths: ctx.services.shellPaths,
+    render,
+  });
 
   stdin.on('data', (data: string) => {
     const blocking = handleBlockingShellInput({

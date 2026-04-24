@@ -1,6 +1,11 @@
 import type { OnboardingStep1CapabilityId } from '../../runtime/onboarding/index.ts';
 import { INBOUND_EXTERNAL_SURFACE_IDS, REQUIRED_EXTERNAL_SETUP_FIELD_IDS } from './onboarding-wizard-constants.ts';
-import { EXTERNAL_SURFACE_SPECS } from './onboarding-wizard-external-surfaces.ts';
+import {
+  EXTERNAL_SURFACE_SPECS,
+  getExternalSurfaceAutoStartDefaultValue,
+  getExternalSurfaceAutoStartFieldId,
+  isExternalSurfaceSelectedByDefault,
+} from './onboarding-wizard-external-surfaces.ts';
 import { getExternalSurfaceSpecByFieldId, normalizeText, uniqueNonEmpty } from './onboarding-wizard-helpers.ts';
 import type { OnboardingWizardController } from './onboarding-wizard.ts';
 
@@ -124,7 +129,14 @@ export function hasSelectedInboundExternalSurface(controller: OnboardingWizardCo
     if (!controller.isCapabilitySelected('external-integrations')) return false;
     return EXTERNAL_SURFACE_SPECS.some((surface) => (
       INBOUND_EXTERNAL_SURFACE_IDS.has(surface.id)
-      && controller.getBooleanFieldValue(surface.enabledFieldId, surface.defaultEnabled(controller.runtimeSnapshot))
+      && controller.getBooleanFieldValue(
+        surface.enabledFieldId,
+        isExternalSurfaceSelectedByDefault(surface, controller.runtimeSnapshot),
+      )
+      && controller.getStringFieldValue(
+        getExternalSurfaceAutoStartFieldId(surface),
+        getExternalSurfaceAutoStartDefaultValue(surface, controller.runtimeSnapshot),
+      ) === 'yes'
     ));
   }
 
@@ -133,7 +145,10 @@ export function isRequiredExternalSetupField(controller: OnboardingWizardControl
     const surface = getExternalSurfaceSpecByFieldId(fieldId);
     if (!surface) return false;
     if (!controller.isCapabilitySelected('external-integrations')
-      || !controller.getBooleanFieldValue(surface.enabledFieldId, surface.defaultEnabled(controller.runtimeSnapshot))) {
+      || !controller.getBooleanFieldValue(
+        surface.enabledFieldId,
+        isExternalSurfaceSelectedByDefault(surface, controller.runtimeSnapshot),
+      )) {
       return false;
     }
     if (fieldId === 'external-services.telegram.webhook-secret') {
@@ -199,6 +214,10 @@ export function hasBootstrapCredentialPresent(controller: OnboardingWizardContro
 
 export function getDefaultAdminUsername(controller: OnboardingWizardController): string {
     const users = controller.runtimeSnapshot?.auth.snapshot.users ?? [];
+    if (controller.hasBootstrapCredentialPresent()) {
+      const existingAdmin = users.find((user) => user.roles.includes('admin'));
+      if (existingAdmin) return existingAdmin.username;
+    }
     const candidates = controller.hasBootstrapCredentialPresent()
       ? ['goodvibes-admin', 'admin']
       : ['admin', 'goodvibes-admin'];

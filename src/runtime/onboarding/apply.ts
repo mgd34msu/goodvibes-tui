@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from '
 import { dirname } from 'node:path';
 import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
 import { CONFIG_SCHEMA, DEFAULT_CONFIG } from '../../config/index.ts';
+import type { FeatureFlagConfigKey } from '../surface-feature-flags.ts';
 import {
   getOnboardingRuntimeStatePath,
   readOnboardingRuntimeState,
@@ -133,10 +134,38 @@ function isMalformedGoodVibesSecretReferenceValue(value: string): boolean {
   return normalized.startsWith('goodvibes://') && !isGoodVibesSecretReferenceValue(normalized);
 }
 
+function isFeatureFlagConfigKey(key: string): key is FeatureFlagConfigKey {
+  return key === 'featureFlags' || key.startsWith('featureFlags.');
+}
+
+function validateFeatureFlagConfigValue(operation: Extract<OnboardingApplyOperation, { kind: 'set-config' }>): boolean {
+  if (!isFeatureFlagConfigKey(operation.key)) return false;
+
+  if (operation.key === 'featureFlags') {
+    if (!isPlainObject(operation.value)) throw new Error('featureFlags expects an object value.');
+    for (const [flagId, state] of Object.entries(operation.value)) {
+      if (flagId.trim().length === 0) throw new Error('featureFlags cannot contain an empty feature id.');
+      if (state !== 'enabled' && state !== 'disabled') {
+        throw new Error(`featureFlags.${flagId} expects enabled or disabled.`);
+      }
+    }
+    return true;
+  }
+
+  const flagId = operation.key.slice('featureFlags.'.length);
+  if (flagId.trim().length === 0) throw new Error('featureFlags requires a feature id.');
+  if (operation.value !== 'enabled' && operation.value !== 'disabled') {
+    throw new Error(`Config key ${operation.key} expects enabled or disabled.`);
+  }
+  return true;
+}
+
 function validateConfigValue(operation: Extract<OnboardingApplyOperation, { kind: 'set-config' }>): void {
   if (typeof operation.value === 'string' && isMalformedGoodVibesSecretReferenceValue(operation.value)) {
     throw new Error(`Config key ${operation.key} only accepts goodvibes://secrets/... secret references.`);
   }
+
+  if (validateFeatureFlagConfigValue(operation)) return;
 
   const schema = CONFIG_SCHEMA.find((entry) => entry.key === operation.key);
   if (!schema) {
@@ -204,9 +233,6 @@ function validateAuthOperation(
   if (existing && !requiredRoles.every((role) => existing.roles.includes(role))) {
     throw new Error(`Existing local auth user ${username} is missing required role(s): ${requiredRoles.join(', ')}.`);
   }
-  if (existing && operation.retireBootstrapCredential) {
-    throw new Error('Replacing a bootstrap credential requires a new local admin username.');
-  }
 }
 
 function validateAcknowledgementOperation(
@@ -242,7 +268,7 @@ function applyConfigOperation(
     };
   }
 
-  deps.config.setDynamic(operation.key, operation.value);
+  deps.config.setDynamic(operation.key as never, operation.value);
   return {
     kind: operation.kind,
     summary: `Updated ${operation.key} in global onboarding settings.`,
@@ -278,7 +304,9 @@ function applyAuthOperation(
     ? parseBootstrapCredential(readFileSync(before.bootstrapCredentialPath, 'utf-8'))
     : null;
 
-  if (!existing) {
+  if (existing) {
+    auth.rotatePassword(username, operation.password);
+  } else {
     auth.addUser(username, operation.password, operation.roles ?? ['admin']);
   }
 
@@ -296,7 +324,7 @@ function applyAuthOperation(
   return {
     kind: operation.kind,
     summary: existing
-      ? `Verified local auth user ${username}.`
+      ? `Updated local auth user ${username}.`
       : `Created local auth user ${username}.`,
   };
 }
@@ -391,9 +419,9 @@ async function buildRollbackAction(
       );
     }
 
-    const previous = deps.config.get(operation.key);
+    const previous = deps.config.get(operation.key as never);
     return () => {
-      deps.config.setDynamic(operation.key, previous);
+      deps.config.setDynamic(operation.key as never, previous);
     };
   }
 

@@ -64,6 +64,8 @@ export function handleOnboardingWizardToken(state: OnboardingRouteState, token: 
     if (editing) {
       if (isEnterKey(token)) {
         state.onboardingWizard.commitEdit();
+      } else if ((token.ctrl && token.logicalName === 'u') || token.logicalName === 'delete') {
+        state.onboardingWizard.clearEditingValue();
       } else if (token.logicalName === 'backspace') {
         state.onboardingWizard.editBackspace();
       } else {
@@ -97,6 +99,8 @@ export function handleOnboardingWizardToken(state: OnboardingRouteState, token: 
       }
       if (isEnterKey(token) || token.logicalName === 'space') {
         activateSelection(state);
+      } else if ((token.ctrl && token.logicalName === 'u') || token.logicalName === 'delete') {
+        state.onboardingWizard.clearSelectedTextField();
       } else if (token.logicalName === 'backspace') {
         state.onboardingWizard.editBackspace();
       }

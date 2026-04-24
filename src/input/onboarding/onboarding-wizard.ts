@@ -34,9 +34,9 @@ import {
   toggleCapability as toggleCapabilityForController,
 } from './onboarding-wizard-rules.ts';
 import { ensureSelectionVisible as ensureSelectionVisibleForController, getBlockingFieldLabels as getBlockingFieldLabelsForController, getCapabilitySelectionState as getCapabilitySelectionStateForController, getCompletedFieldCount as getCompletedFieldCountForController, getCompletedToggleCount as getCompletedToggleCountForController, getCurrentCapabilities as getCurrentCapabilitiesForController, getFieldById as getFieldByIdForController, getFieldValidationError as getFieldValidationErrorForController, getStepFieldCount as getStepFieldCountForController, getToggleFieldCount as getToggleFieldCountForController, hasExistingAccessState as hasExistingAccessStateForController, isFieldDirty as isFieldDirtyForController, isFieldDirtyByDefinition as isFieldDirtyByDefinitionForController, isFieldSatisfied as isFieldSatisfiedForController, isStepDirty as isStepDirtyForController, recalculateDirtyState as recalculateDirtyStateForController, reconcileStateWithCurrentDefinitions as reconcileStateWithCurrentDefinitionsForController, reconcileStepCursor as reconcileStepCursorForController, resetValuesFromCurrentDefinitions as resetValuesFromCurrentDefinitionsForController } from './onboarding-wizard-state.ts';
-import type { MutableModelSelectionMap, OnboardingWizardAction, OnboardingWizardFieldDefinition, OnboardingWizardFieldWindow, OnboardingWizardMode, OnboardingWizardModelSelection, OnboardingWizardRuntimeHydration, OnboardingWizardSnapshot, OnboardingWizardStepDefinition, OnboardingWizardStepId } from './onboarding-wizard-types.ts';
+import type { MutableModelSelectionMap, OnboardingWizardAction, OnboardingWizardApplyFeedback, OnboardingWizardFieldDefinition, OnboardingWizardFieldWindow, OnboardingWizardMode, OnboardingWizardModelSelection, OnboardingWizardRuntimeHydration, OnboardingWizardSnapshot, OnboardingWizardStepDefinition, OnboardingWizardStepId } from './onboarding-wizard-types.ts';
 
-export type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardAction, OnboardingWizardActionFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardFieldKind, OnboardingWizardFieldWindow, OnboardingWizardMaskedFieldDefinition, OnboardingWizardMode, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardModelSelection, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardRuntimeHydration, OnboardingWizardSnapshot, OnboardingWizardStatusFieldDefinition, OnboardingWizardStepDefinition, OnboardingWizardStepId, OnboardingWizardTextFieldDefinition } from './onboarding-wizard-types.ts';
+export type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardAction, OnboardingWizardActionFieldDefinition, OnboardingWizardApplyFeedback, OnboardingWizardApplyFeedbackSeverity, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardFieldKind, OnboardingWizardFieldWindow, OnboardingWizardMaskedFieldDefinition, OnboardingWizardMode, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardModelSelection, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardRuntimeHydration, OnboardingWizardSnapshot, OnboardingWizardStatusFieldDefinition, OnboardingWizardStepDefinition, OnboardingWizardStepId, OnboardingWizardTextFieldDefinition } from './onboarding-wizard-types.ts';
 export { getOnboardingWizardBodyRows, getOnboardingWizardVisibleFieldCount } from './onboarding-wizard-helpers.ts';
 
 export class OnboardingWizardController {
@@ -58,6 +58,7 @@ export class OnboardingWizardController {
   public editingFieldId: string | null = null;
   public editBuffer = '';
   public hydrationError: string | null = null;
+  public applyFeedback: OnboardingWizardApplyFeedback | null = null;
 
   public readonly baselineToggleState = new Map<string, boolean>();
   public readonly baselineRadioState = new Map<string, string>();
@@ -102,6 +103,7 @@ export class OnboardingWizardController {
     this.stepIndex = 0;
     this.pendingModelPickerTarget = null;
     this.pendingAction = null;
+    this.applyFeedback = null;
     this.editingFieldId = null;
     this.editBuffer = '';
     this.scrollOffsets.fill(0);
@@ -115,6 +117,7 @@ export class OnboardingWizardController {
     this.hydrationError = null;
     this.pendingModelPickerTarget = null;
     this.pendingAction = null;
+    this.applyFeedback = null;
     this.cancelEdit();
   }
 
@@ -178,6 +181,7 @@ export class OnboardingWizardController {
       editBuffer: this.editBuffer,
       hydrationPending: this.hydrationPending,
       hydrationError: this.hydrationError,
+      applyFeedback: this.applyFeedback,
       hydration: this.captureHydratedState(),
     };
   }
@@ -191,6 +195,7 @@ export class OnboardingWizardController {
     this.stepIndex = clamp(snapshot.stepIndex, 0, Math.max(0, this.steps.length - 1));
     this.pendingModelPickerTarget = snapshot.pendingModelPickerTarget;
     this.pendingAction = snapshot.pendingAction;
+    this.applyFeedback = snapshot.applyFeedback;
     this.dirtyStepIds.clear();
     for (const stepId of snapshot.dirtyStepIds) this.dirtyStepIds.add(stepId);
 
@@ -223,6 +228,7 @@ export class OnboardingWizardController {
   public beginRuntimeHydration(): void {
     this.hydrationPending = true;
     this.hydrationError = null;
+    this.applyFeedback = null;
     this.stepIndex = 0;
     this.pendingModelPickerTarget = null;
     this.pendingAction = null;
@@ -232,6 +238,7 @@ export class OnboardingWizardController {
   public finishRuntimeHydration(): void {
     this.hydrationPending = false;
     this.hydrationError = null;
+    this.applyFeedback = null;
     this.stepIndex = clamp(this.stepIndex, 0, Math.max(0, this.steps.length - 1));
     this.reconcileStepCursor(this.stepIndex);
   }
@@ -239,6 +246,12 @@ export class OnboardingWizardController {
   public failRuntimeHydration(message: string): void {
     this.hydrationPending = false;
     this.hydrationError = message;
+    this.applyFeedback = {
+      severity: 'error',
+      title: 'Current settings could not load',
+      summary: message,
+      messages: [message],
+    };
     this.stepIndex = 0;
     this.pendingModelPickerTarget = null;
     this.pendingAction = null;
@@ -344,6 +357,14 @@ export class OnboardingWizardController {
     this.pendingAction = null;
   }
 
+  public setApplyFeedback(feedback: OnboardingWizardApplyFeedback): void {
+    this.applyFeedback = feedback;
+  }
+
+  public clearApplyFeedback(): void {
+    this.applyFeedback = null;
+  }
+
   public consumePendingAction(): OnboardingWizardAction | null {
     const action = this.pendingAction;
     this.pendingAction = null;
@@ -360,6 +381,7 @@ export class OnboardingWizardController {
       this.toggleCapability(field.capabilityId);
       this.pendingModelPickerTarget = null;
       this.pendingAction = null;
+      this.applyFeedback = null;
       this.recalculateDirtyState();
       return;
     }
@@ -369,6 +391,7 @@ export class OnboardingWizardController {
       this.toggleState.set(field.id, !current);
       this.pendingModelPickerTarget = null;
       this.pendingAction = null;
+      this.applyFeedback = null;
       this.recalculateDirtyState();
       return;
     }
@@ -382,6 +405,7 @@ export class OnboardingWizardController {
       this.radioState.set(field.id, next.id);
       this.pendingModelPickerTarget = null;
       this.pendingAction = null;
+      this.applyFeedback = null;
       this.recalculateDirtyState();
       return;
     }
@@ -397,6 +421,7 @@ export class OnboardingWizardController {
         this.selectAllServerCapabilities();
         this.pendingAction = null;
         this.pendingModelPickerTarget = null;
+        this.applyFeedback = null;
         this.recalculateDirtyState();
         return;
       }
@@ -405,6 +430,7 @@ export class OnboardingWizardController {
         this.selectLocalTuiOnly();
         this.pendingAction = null;
         this.pendingModelPickerTarget = null;
+        this.applyFeedback = null;
         this.recalculateDirtyState();
         return;
       }
@@ -413,6 +439,7 @@ export class OnboardingWizardController {
         this.selectAllExternalSurfaces();
         this.pendingAction = null;
         this.pendingModelPickerTarget = null;
+        this.applyFeedback = null;
         this.recalculateDirtyState();
         return;
       }
@@ -421,6 +448,7 @@ export class OnboardingWizardController {
         this.clearExternalSurfaces();
         this.pendingAction = null;
         this.pendingModelPickerTarget = null;
+        this.applyFeedback = null;
         this.recalculateDirtyState();
         return;
       }
@@ -433,6 +461,7 @@ export class OnboardingWizardController {
     this.pendingModelPickerTarget = field.target;
     this.pendingAction = null;
     this.touchedActionFields.add(field.id);
+    this.applyFeedback = null;
   }
 
   public beginEdit(fieldId: string): void {
@@ -458,6 +487,7 @@ export class OnboardingWizardController {
     const field = this.getFieldById(fieldId);
     if (field && (field.kind === 'text' || field.kind === 'masked')) {
       this.textState.set(fieldId, this.editBuffer);
+      this.applyFeedback = null;
       this.recalculateDirtyState();
     }
     this.editingFieldId = null;
@@ -479,6 +509,21 @@ export class OnboardingWizardController {
     this.editBuffer = this.editBuffer.slice(0, -1);
   }
 
+  public clearEditingValue(): void {
+    if (this.editingFieldId === null) return;
+    this.editBuffer = '';
+  }
+
+  public clearSelectedTextField(): boolean {
+    const field = this.getSelectedField();
+    if (!field || (field.kind !== 'text' && field.kind !== 'masked')) return false;
+    this.textState.set(field.id, '');
+    if (this.editingFieldId === field.id) this.editBuffer = '';
+    this.applyFeedback = null;
+    this.recalculateDirtyState();
+    return true;
+  }
+
   public setFieldValue(fieldId: string, value: boolean | string): void {
     const field = this.getFieldById(fieldId);
     if (!field) return;
@@ -487,6 +532,7 @@ export class OnboardingWizardController {
       if (typeof value === 'boolean') {
         if (field.kind === 'checklist' && field.capabilityId) this.setCapabilityValue(field.capabilityId, value);
         else this.toggleState.set(fieldId, value);
+        this.applyFeedback = null;
         this.recalculateDirtyState();
       }
       return;
@@ -495,6 +541,7 @@ export class OnboardingWizardController {
     if (field.kind === 'radio') {
       if (typeof value === 'string' && field.options.some((option) => option.id === value)) {
         this.radioState.set(fieldId, value);
+        this.applyFeedback = null;
         this.recalculateDirtyState();
       }
       return;
@@ -504,6 +551,7 @@ export class OnboardingWizardController {
       if (typeof value === 'string') {
         this.textState.set(fieldId, value);
         if (this.editingFieldId === fieldId) this.editBuffer = value;
+        this.applyFeedback = null;
         this.recalculateDirtyState();
       }
     }
@@ -559,13 +607,15 @@ export class OnboardingWizardController {
 
     if (field.kind === 'text') {
       const value = normalizeText(this.getFieldValue(field) as string);
-      if (value.length === 0 && (field.required === true || this.isRequiredExternalSetupField(field.id))) return 'Missing';
+      if (value.length === 0 && field.required === true) return 'Missing';
+      if (value.length === 0 && this.isRequiredExternalSetupField(field.id)) return 'Not set';
       return value.length > 0 ? value : field.placeholder;
     }
 
     if (field.kind === 'masked') {
       const value = normalizeText(this.getFieldValue(field) as string);
-      if (value.length === 0 && (field.required === true || this.isRequiredExternalSetupField(field.id))) return 'Missing';
+      if (value.length === 0 && field.required === true) return 'Missing';
+      if (value.length === 0 && this.isRequiredExternalSetupField(field.id)) return 'Not set';
       return value.length > 0 ? maskValue(value) : field.placeholder;
     }
 
@@ -584,6 +634,7 @@ export class OnboardingWizardController {
       enabled: selection.enabled ?? true,
     });
     this.pendingModelPickerTarget = null;
+    this.applyFeedback = null;
     this.recalculateDirtyState();
   }
 
@@ -601,6 +652,7 @@ export class OnboardingWizardController {
     this.baselineModelSelectionState.clear();
     for (const [key, value] of this.modelSelectionState) this.baselineModelSelectionState.set(key, cloneSelection(value));
     this.dirtyStepIds.clear();
+    this.applyFeedback = null;
   }
 
   public getSharedIpDefault(enabled: { readonly controlPlane: boolean; readonly httpListener: boolean; readonly web: boolean }): boolean {

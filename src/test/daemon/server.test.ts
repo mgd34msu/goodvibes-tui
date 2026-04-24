@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
 import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
+import { GOODVIBES_NTFY_AGENT_TOPIC } from '@pellux/goodvibes-sdk/platform/integrations/ntfy';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
@@ -91,6 +92,8 @@ describe('DaemonServer', () => {
       'control-plane-gateway',
       'delivery-engine',
       'hitl-ux-modes',
+      'ntfy-surface',
+      'omnichannel-surface-adapters',
       'permission-divergence-dashboard',
       'policy-as-code',
       'route-binding',
@@ -2485,14 +2488,14 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const ntfy = await fetch('http://127.0.0.1:39421/webhook/ntfy?topic=ops-alerts', {
+    const ntfy = await fetch(`http://127.0.0.1:39421/webhook/ntfy?topic=${GOODVIBES_NTFY_AGENT_TOPIC}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Goodvibes-Ntfy-Token': 'ntfy-test-token',
       },
       body: JSON.stringify({
-        topic: 'ops-alerts',
+        topic: GOODVIBES_NTFY_AGENT_TOPIC,
         message: 'summarize the latest deployment status',
         title: 'Ops alerts',
       }),
@@ -2507,7 +2510,7 @@ describe('DaemonServer', () => {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     const listBody = await list.json() as { bindings: Array<{ id: string; surfaceKind: string; externalId: string }> };
-    expect(listBody.bindings.some((binding) => binding.id === ntfyBody.bindingId && binding.surfaceKind === 'ntfy' && binding.externalId === 'ops-alerts')).toBe(true);
+    expect(listBody.bindings.some((binding) => binding.id === ntfyBody.bindingId && binding.surfaceKind === 'ntfy' && binding.externalId === GOODVIBES_NTFY_AGENT_TOPIC)).toBe(true);
   });
 
   test('ntfy webhook rejects invalid ingress tokens', async () => {

@@ -1,5 +1,6 @@
 import type { ConfigManager, ConfigKey, GoodVibesConfig } from '../../config/index.ts';
 import type { SecretsManager, SecretRecord, SecretStorageReview } from '../../config/secrets.ts';
+import type { FeatureFlagConfigKey } from '../surface-feature-flags.ts';
 import type { LocalAuthSnapshot, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import type {
@@ -45,6 +46,7 @@ export interface OnboardingConfigSnapshot {
   readonly network: GoodVibesConfig['network'];
   readonly surfaces: GoodVibesConfig['surfaces'];
   readonly service: GoodVibesConfig['service'];
+  readonly featureFlags: GoodVibesConfig['featureFlags'];
 }
 
 export interface OnboardingProviderRoutingSnapshot {
@@ -235,7 +237,7 @@ export interface OnboardingStepDerivationState {
 export type OnboardingApplyOperation =
   | {
       readonly kind: 'set-config';
-      readonly key: ConfigKey;
+      readonly key: ConfigKey | FeatureFlagConfigKey;
       readonly value: unknown;
       readonly scope?: 'global' | 'project';
     }
@@ -381,6 +383,7 @@ export interface OnboardingApplyDependencies {
     | 'getUser'
     | 'inspect'
     | 'revokeSession'
+    | 'rotatePassword'
   >;
   readonly shellPaths: OnboardingShellPaths;
   readonly acknowledgementScope?: OnboardingStateScope;

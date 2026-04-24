@@ -3,6 +3,8 @@ import { InfiniteBuffer } from '../../core/history.ts';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { InputHandler } from '../../input/handler.ts';
 import { OnboardingWizardController } from '../../input/onboarding/onboarding-wizard.ts';
+import { EXTERNAL_SURFACE_SPECS, getExternalSurfaceAutoStartFieldId } from '../../input/onboarding/onboarding-wizard-external-surfaces.ts';
+import { buildGoodVibesSecretKey, buildGoodVibesSecretRef } from '../../input/onboarding/onboarding-wizard-helpers.ts';
 import { handleOnboardingWizardToken } from '../../input/onboarding/handler-onboarding-routes.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { DEFAULT_CONFIG } from '../../config/index.ts';
@@ -69,6 +71,7 @@ function makeOnboardingSnapshot(
     network: structuredClone(DEFAULT_CONFIG.network),
     surfaces: structuredClone(DEFAULT_CONFIG.surfaces),
     service: structuredClone(DEFAULT_CONFIG.service),
+    featureFlags: structuredClone(DEFAULT_CONFIG.featureFlags),
   };
 
   return {
@@ -366,6 +369,7 @@ describe('OnboardingWizardController', () => {
     wizard.open('new');
     wizard.setFieldValue('capabilities.external-integrations', true);
     wizard.setFieldValue('external-services.slack', true);
+    wizard.setFieldValue('external-services.slack.auto-start', 'yes');
 
     const request = wizard.buildApplyRequest();
 
@@ -396,6 +400,7 @@ describe('OnboardingWizardController', () => {
       wizard.open('new');
       wizard.setFieldValue('capabilities.external-integrations', true);
       wizard.setFieldValue(surfaceFieldId, true);
+      wizard.setFieldValue(`${surfaceFieldId}.auto-start`, 'yes');
 
       expect(wizard.buildApplyRequest().operations).toContainEqual({
         kind: 'set-config',
@@ -428,25 +433,219 @@ describe('OnboardingWizardController', () => {
     });
   });
 
-  test('blocks enabled external surfaces until required setup values are entered', () => {
+  test('maps editable wizard settings to apply operations', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.browser-access', true);
+    wizard.setFieldValue('capabilities.network-access', true);
+    wizard.setFieldValue('capabilities.webhook-events', true);
+    wizard.setFieldValue('capabilities.external-integrations', true);
+    wizard.setFieldValue('network.mode', 'custom');
+    wizard.setFieldValue('network.shared-ip', false);
+    wizard.setFieldValue('network.service-ip', '10.0.0.10');
+    wizard.setFieldValue('network.service-port', '4551');
+    wizard.setFieldValue('network.browser-ip', '10.0.0.11');
+    wizard.setFieldValue('network.browser-port', '4552');
+    wizard.setFieldValue('network.webhook-ip', '10.0.0.12');
+    wizard.setFieldValue('network.webhook-port', '4553');
+    wizard.setFieldValue('accounts.admin-username', 'admin');
+    wizard.setFieldValue('accounts.admin-password', 'admin-pass');
+    wizard.setFieldValue('accounts.subscriptions', true);
+    wizard.setFieldValue('accounts.auth', true);
+    wizard.setFieldValue('providers.openai-api-key', 'sk-test-openai');
+    wizard.setFieldValue('providers.reviewed', true);
+    wizard.applyModelSelection('main', { providerId: 'openai', modelId: 'gpt-5-test', enabled: true });
+    wizard.setFieldValue('default-model.reasoning', 'high');
+    wizard.setFieldValue('external-services.secret-policy', 'plaintext_allowed');
+    wizard.setFieldValue('experience.hitl', 'operator');
+    wizard.setFieldValue('experience.guidance', 'guided');
+    wizard.setFieldValue('experience.permissions', 'allow-all');
+
+    const setupValues = new Map<string, string>();
+    for (const surface of EXTERNAL_SURFACE_SPECS) {
+      wizard.setFieldValue(surface.enabledFieldId, true);
+      wizard.setFieldValue(getExternalSurfaceAutoStartFieldId(surface), 'yes');
+    }
+    for (const surface of EXTERNAL_SURFACE_SPECS) {
+      for (const setupField of surface.fields) {
+        const value = setupField.kind === 'radio'
+          ? setupField.options?.at(-1)?.id ?? setupField.defaultValue(null)
+          : setupField.valueType === 'number'
+            ? String(setupField.defaultNumber ?? setupField.min ?? 1)
+            : `value-${surface.id}-${setupField.id.split('.').at(-1)}`;
+        wizard.setFieldValue(setupField.id, value);
+        setupValues.set(setupField.id, value);
+      }
+    }
+
+    const request = wizard.buildApplyRequest();
+    const configValues = new Map<string, unknown>();
+    const secretValues = new Map<string, string>();
+    for (const operation of request.operations) {
+      if (operation.kind === 'set-config') configValues.set(operation.key, operation.value);
+      if (operation.kind === 'set-secret') secretValues.set(operation.key, operation.value);
+    }
+
+    expect(request.operations).toContainEqual({
+      kind: 'ensure-auth-user',
+      username: 'admin',
+      password: 'admin-pass',
+      roles: ['admin'],
+      createSession: true,
+      retireBootstrapCredential: false,
+    });
+    expect(secretValues.get('OPENAI_API_KEY')).toBe('sk-test-openai');
+    expect(configValues.get('service.enabled')).toBe(true);
+    expect(configValues.get('service.autostart')).toBe(true);
+    expect(configValues.get('service.restartOnFailure')).toBe(true);
+    expect(configValues.get('danger.daemon')).toBe(true);
+    expect(configValues.get('controlPlane.enabled')).toBe(true);
+    expect(configValues.get('danger.httpListener')).toBe(true);
+    expect(configValues.get('web.enabled')).toBe(true);
+    expect(configValues.get('controlPlane.hostMode')).toBe('custom');
+    expect(configValues.get('controlPlane.host')).toBe('10.0.0.10');
+    expect(configValues.get('controlPlane.port')).toBe(4551);
+    expect(configValues.get('controlPlane.allowRemote')).toBe(true);
+    expect(configValues.get('web.hostMode')).toBe('custom');
+    expect(configValues.get('web.host')).toBe('10.0.0.11');
+    expect(configValues.get('web.port')).toBe(4552);
+    expect(configValues.get('httpListener.hostMode')).toBe('custom');
+    expect(configValues.get('httpListener.host')).toBe('10.0.0.12');
+    expect(configValues.get('httpListener.port')).toBe(4553);
+    expect(configValues.get('featureFlags.control-plane-gateway')).toBe('enabled');
+    expect(configValues.get('featureFlags.service-management')).toBe('enabled');
+    expect(configValues.get('featureFlags.web-surface')).toBe('enabled');
+    expect(configValues.get('featureFlags.route-binding')).toBe('enabled');
+    expect(configValues.get('featureFlags.delivery-engine')).toBe('enabled');
+    expect(configValues.get('featureFlags.omnichannel-surface-adapters')).toBe('enabled');
+    expect(configValues.get('provider.provider')).toBe('openai');
+    expect(configValues.get('provider.model')).toBe('gpt-5-test');
+    expect(configValues.get('provider.reasoningEffort')).toBe('high');
+    expect(configValues.get('storage.secretPolicy')).toBe('plaintext_allowed');
+    expect(configValues.get('behavior.hitlMode')).toBe('operator');
+    expect(configValues.get('behavior.guidanceMode')).toBe('guided');
+    expect(configValues.get('permissions.mode')).toBe('allow-all');
+    expect(request.operations).toContainEqual({ kind: 'acknowledge', target: 'providers', acknowledged: true });
+    expect(request.operations).toContainEqual({ kind: 'acknowledge', target: 'subscriptions', acknowledged: true });
+    expect(request.operations).toContainEqual({ kind: 'acknowledge', target: 'auth', acknowledged: true });
+
+    for (const surface of EXTERNAL_SURFACE_SPECS) {
+      expect(configValues.get(surface.enabledConfigKey)).toBe(true);
+      for (const setupField of surface.fields) {
+        const value = setupValues.get(setupField.id);
+        expect(value).toBeDefined();
+        if (setupField.valueType === 'number') {
+          expect(configValues.get(setupField.configKey)).toBe(Number(value));
+          continue;
+        }
+
+        if (setupField.kind === 'masked') {
+          const secretKey = buildGoodVibesSecretKey(setupField.configKey);
+          expect(secretValues.get(secretKey)).toBe(value);
+          expect(configValues.get(setupField.configKey)).toBe(buildGoodVibesSecretRef(secretKey));
+          continue;
+        }
+
+        expect(configValues.get(setupField.configKey)).toBe(value);
+      }
+    }
+    expect(configValues.get('featureFlags.slack-surface')).toBe('enabled');
+    expect(configValues.get('featureFlags.discord-surface')).toBe('enabled');
+    expect(configValues.get('featureFlags.ntfy-surface')).toBe('enabled');
+    expect(configValues.get('featureFlags.webhook-surface')).toBe('enabled');
+  });
+
+  test('does not block selected external surfaces when setup values are blank', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
     wizard.setFieldValue('capabilities.external-integrations', true);
     wizard.setFieldValue('external-services.matrix', true);
 
-    expect(wizard.getBlockingFieldLabels()).toContain('Matrix: Matrix access token is required.');
+    expect(wizard.getBlockingFieldLabels()).not.toContain('Matrix: Matrix access token is required.');
+    const matrixStep = wizard.steps.find((step) => step.id === 'external-surface:matrix');
+    const tokenField = matrixStep?.fields.find((field) => field.id === 'external-services.matrix.access-token');
+    expect(tokenField ? wizard.getFieldValueLabel(tokenField) : null).toBe('Not set');
   });
 
-  test('does not require setup values for unselected external surfaces', () => {
+  test('does not block saving when selected external surfaces have blank setup values', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
     wizard.setFieldValue('capabilities.external-integrations', true);
 
-    expect(wizard.getBlockingFieldLabels()).not.toContain('ntfy: ntfy topic is required.');
+    expect(wizard.getBlockingFieldLabels()).not.toContain('ntfy: ntfy default delivery topic is required.');
     wizard.setFieldValue('external-services.ntfy', true);
-    expect(wizard.getBlockingFieldLabels()).toContain('ntfy: ntfy topic is required.');
+    expect(wizard.getBlockingFieldLabels()).not.toContain('ntfy: ntfy default delivery topic is required.');
     wizard.setFieldValue('external-services.ntfy', false);
-    expect(wizard.getBlockingFieldLabels()).not.toContain('ntfy: ntfy topic is required.');
+    expect(wizard.getBlockingFieldLabels()).not.toContain('ntfy: ntfy default delivery topic is required.');
+  });
+
+  test('clears selected onboarding text fields with Delete', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.external-integrations', true);
+    wizard.setFieldValue('external-services.ntfy', true);
+    wizard.setFieldValue('external-services.ntfy.token', 'old-token');
+
+    const ntfyStepIndex = wizard.steps.findIndex((step) => step.id === 'external-surface:ntfy');
+    wizard.setStep(ntfyStepIndex);
+    wizard.moveSelection(6, 10);
+
+    const routeState = {
+      onboardingWizard: wizard,
+      getViewportHeight: () => 20,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'delete', ctrl: false, shift: false, meta: false } as InputToken);
+
+    expect(wizard.getSelectedField()?.id).toBe('external-services.ntfy.token');
+    expect(wizard.getTextFieldValue('external-services.ntfy.token')).toBe('');
+  });
+
+  test('clears edited onboarding text fields with Ctrl+U and persists empty masked values', () => {
+    const snapshot = makeOnboardingSnapshot({
+      config: {
+        ...makeOnboardingSnapshot().config,
+        surfaces: {
+          ...makeOnboardingSnapshot().config.surfaces,
+          ntfy: {
+            ...makeOnboardingSnapshot().config.surfaces.ntfy,
+            enabled: true,
+            baseUrl: 'https://ntfy.buzznet.dev',
+            topic: 'your-topic',
+            token: 'old-token',
+          },
+        },
+      },
+    });
+    const wizard = new OnboardingWizardController();
+    wizard.open('edit');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+    wizard.setFieldValue('capabilities.external-integrations', true);
+    wizard.setFieldValue('external-services.ntfy', true);
+
+    const ntfyStepIndex = wizard.steps.findIndex((step) => step.id === 'external-surface:ntfy');
+    wizard.setStep(ntfyStepIndex);
+    wizard.moveSelection(6, 10);
+
+    const routeState = {
+      onboardingWizard: wizard,
+      getViewportHeight: () => 20,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'return' } as InputToken);
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'u', ctrl: true, shift: false, meta: false } as InputToken);
+    handleOnboardingWizardToken(routeState, { type: 'key', logicalName: 'return' } as InputToken);
+
+    expect(wizard.getTextFieldValue('external-services.ntfy.token')).toBe('');
+    expect(wizard.buildApplyRequest().operations).toContainEqual({
+      kind: 'set-config',
+      key: 'surfaces.ntfy.token',
+      value: '',
+    });
   });
 
   test('blocks malformed GoodVibes secret refs in masked fields', () => {
@@ -476,7 +675,7 @@ describe('OnboardingWizardController', () => {
     expect(blockers).not.toContain('WhatsApp: WhatsApp phone number ID is required.');
   });
 
-  test('keeps existing local auth users instead of requiring a replacement password', () => {
+  test('shows optional local admin credential fields without requiring a replacement password', () => {
     const snapshot = makeOnboardingSnapshot({
       auth: {
         snapshot: {
@@ -496,8 +695,21 @@ describe('OnboardingWizardController', () => {
     wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
     wizard.setFieldValue('capabilities.browser-access', true);
 
-    expect(wizard.steps.find((step) => step.id === 'access')?.fields.map((field) => field.id)).not.toContain('accounts.admin-password');
+    expect(wizard.steps.find((step) => step.id === 'access')?.fields.map((field) => field.id)).toContain('accounts.admin-username');
+    expect(wizard.steps.find((step) => step.id === 'access')?.fields.map((field) => field.id)).toContain('accounts.admin-password');
     expect(wizard.getBlockingFieldLabels()).not.toContain('Access: Local auth admin password is required.');
+    expect(wizard.buildApplyRequest().operations).not.toContainEqual(expect.objectContaining({ kind: 'ensure-auth-user' }));
+
+    wizard.setFieldValue('accounts.admin-password', 'wizard-pass');
+
+    expect(wizard.buildApplyRequest().operations).toContainEqual({
+      kind: 'ensure-auth-user',
+      username: 'admin',
+      password: 'wizard-pass',
+      roles: ['admin'],
+      createSession: true,
+      retireBootstrapCredential: false,
+    });
   });
 
   test('treats return key tokens as Enter in the onboarding route', () => {
@@ -565,7 +777,7 @@ describe('OnboardingWizardController', () => {
     expect(wizard.getTextFieldValue('network.service-port')).toBe('jk1');
   });
 
-  test('requires bootstrap auth replacement before server-backed settings can apply', () => {
+  test('allows bootstrap auth replacement to reuse an existing admin username', () => {
     const snapshot = makeOnboardingSnapshot({
       auth: {
         snapshot: {
@@ -587,13 +799,14 @@ describe('OnboardingWizardController', () => {
 
     const accessFields = wizard.steps.find((step) => step.id === 'access')?.fields;
     expect(accessFields?.map((field) => field.id)).toContain('accounts.admin-password');
-    expect(wizard.getTextFieldValue('accounts.admin-username')).toBe('goodvibes-admin');
+    expect(wizard.getTextFieldValue('accounts.admin-username')).toBe('admin');
     expect(wizard.getBlockingFieldLabels()).toContain('Access: Local auth admin password is required.');
     wizard.setFieldValue('accounts.admin-password', 'wizard-pass');
+    expect(wizard.getBlockingFieldLabels()).not.toContain('Access: Local auth admin username must be a new username so the wizard can replace bootstrap credentials.');
     const request = wizard.buildApplyRequest();
     expect(request.operations).toContainEqual({
       kind: 'ensure-auth-user',
-      username: 'goodvibes-admin',
+      username: 'admin',
       password: 'wizard-pass',
       roles: ['admin'],
       createSession: true,
@@ -731,6 +944,41 @@ describe('InputHandler onboarding integration', () => {
     expect(input.modalStack).toEqual([]);
   });
 
+  test('shows apply blockers inside the wizard instead of printing behind the overlay', async () => {
+    const input = makeInput();
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({
+        auth: {
+          snapshot: {
+            userStorePath: '/tmp/auth-users.json',
+            bootstrapCredentialPath: '/tmp/auth-bootstrap.txt',
+            persisted: true,
+            bootstrapCredentialPresent: true,
+            userCount: 1,
+            sessionCount: 0,
+            users: [{ username: 'admin', roles: ['admin'] }],
+            sessions: [],
+          },
+        },
+      }),
+    }, { resetValues: true });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
+
+    expect(input.onboardingWizard.active).toBe(true);
+    expect(input.onboardingWizard.currentStep.id).toBe('review');
+    expect(input.onboardingWizard.applyFeedback?.title).toBe('Cannot apply yet');
+    expect(input.onboardingWizard.applyFeedback?.messages).toContain('Access: Local auth admin password is required.');
+    expect(prints).toEqual([]);
+  });
+
   test('keeps the global onboarding check marker when post-apply verification fails', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
@@ -863,7 +1111,64 @@ describe('InputHandler onboarding integration', () => {
 
     const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
     expect(marker.exists).toBe(true);
-    expect(prints.join('\n')).toContain('The GoodVibes daemon did not start after applying onboarding settings.');
+    expect(prints.join('\n')).toContain('Onboarding settings applied.');
+    expect(prints.join('\n')).not.toContain('Onboarding applied and verified');
+    expect(prints.join('\n')).toContain('GoodVibes daemon is enabled for');
+    expect(prints.join('\n')).toContain('No process is listening');
+  });
+
+  test('deduplicates runtime activation warnings in completion output', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    ensureLocalAdminAuth(uiServices);
+    installExternalServices(uiServices, {
+      inspect: () => ({
+        daemonRunning: true,
+        httpListenerRunning: false,
+        httpListenerPortInUse: true,
+      }),
+      restart: async () => ({
+        daemonRunning: true,
+        httpListenerRunning: false,
+        httpListenerPortInUse: true,
+      }),
+    });
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({
+        auth: {
+          snapshot: {
+            userStorePath: '/tmp/auth-users.json',
+            bootstrapCredentialPath: '/tmp/auth-bootstrap.txt',
+            persisted: true,
+            bootstrapCredentialPresent: false,
+            userCount: 1,
+            sessionCount: 0,
+            users: [{ username: 'admin', roles: ['admin'] }],
+            sessions: [],
+          },
+        },
+      }),
+    }, { resetValues: true });
+    input.onboardingWizard.setFieldValue('capabilities.webhook-events', true);
+    input.onboardingWizard.setFieldValue('accounts.auth', true);
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
+
+    const output = prints.join('\n');
+    expect(output).toContain('Onboarding settings applied.');
+    expect(output).not.toContain('Onboarding applied and verified');
+    expect(output).toContain('HTTP listener is enabled for');
+    expect(output).toContain('The configured port');
+    expect(output).toContain('is occupied after restart');
+    expect((output.match(/runtime:http-listener-active/g) ?? []).length).toBe(1);
+    expect(output).not.toContain('not running after onboarding apply');
   });
 
   test('stops running background services before completing Local TUI Only', async () => {
@@ -1010,7 +1315,8 @@ describe('InputHandler onboarding integration', () => {
 
     const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
     expect(marker.exists).toBe(true);
-    expect(prints.join('\n')).toContain('The HTTP listener port is still occupied after onboarding disabled incoming event surfaces.');
+    expect(prints.join('\n')).toContain('HTTP listener was disabled for incoming event surfaces');
+    expect(prints.join('\n')).toContain('is still occupied');
   });
 
   test('keeps the global onboarding check marker when Local TUI Only leaves an external listener port occupied', async () => {
@@ -1063,6 +1369,7 @@ describe('InputHandler onboarding integration', () => {
 
     const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
     expect(marker.exists).toBe(true);
-    expect(prints.join('\n')).toContain('The HTTP listener port is still occupied after onboarding disabled incoming event surfaces.');
+    expect(prints.join('\n')).toContain('HTTP listener was disabled for incoming event surfaces');
+    expect(prints.join('\n')).toContain('is still occupied');
   });
 });

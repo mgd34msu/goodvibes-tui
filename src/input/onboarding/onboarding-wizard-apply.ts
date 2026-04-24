@@ -1,5 +1,11 @@
 import type { OnboardingAcknowledgementTarget, OnboardingApplyOperation, OnboardingApplyRequest } from '../../runtime/onboarding/index.ts';
-import { EXTERNAL_SURFACE_SPECS } from './onboarding-wizard-external-surfaces.ts';
+import { getServerSurfaceFeatureFlags } from '../../runtime/surface-feature-flags.ts';
+import {
+  EXTERNAL_SURFACE_SPECS,
+  getExternalSurfaceAutoStartDefaultValue,
+  getExternalSurfaceAutoStartFieldId,
+  isExternalSurfaceSelectedByDefault,
+} from './onboarding-wizard-external-surfaces.ts';
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef, isLoopbackAddress, isSecretReferenceValue } from './onboarding-wizard-helpers.ts';
 import type { OnboardingWizardController } from './onboarding-wizard.ts';
 
@@ -8,6 +14,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     const hasServers = controller.hasServerCapabilitiesSelected();
     const browserAccess = controller.shouldEnableBrowserSurface();
     const httpListener = controller.shouldEnableHttpListener();
+    const httpListenerNetworkFields = controller.shouldExposeHttpListenerNetworkFields();
     const controlPlaneRemote = controller.shouldExposeControlPlaneNetwork();
     const networkMode = controller.getStringFieldValue('network.mode', controller.runtimeDerived.step1_5NetworkMode);
     const customNetwork = hasServers && networkMode === 'custom';
@@ -17,6 +24,9 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
       value: unknown,
     ): void => {
       operations.push({ kind: 'set-config', key, value });
+    };
+    const enableFeatureFlags = (flagIds: readonly string[]): void => {
+      for (const flagId of flagIds) setConfig(`featureFlags.${flagId}`, 'enabled');
     };
     const acknowledge = (target: OnboardingAcknowledgementTarget, fieldId: string): void => {
       operations.push({
@@ -50,11 +60,13 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
       setConfig(key, buildGoodVibesSecretRef(secretKey));
     };
 
-    if (controller.requiresAuthBootstrap()) {
+    const requestedAdminPassword = controller.getStringFieldValue('accounts.admin-password', '');
+    const shouldEnsureAuthUser = controller.requiresAuthBootstrap() || requestedAdminPassword.length > 0;
+    if (shouldEnsureAuthUser) {
       operations.push({
         kind: 'ensure-auth-user',
         username: controller.getStringFieldValue('accounts.admin-username', controller.getDefaultAdminUsername()),
-        password: controller.getStringFieldValue('accounts.admin-password', ''),
+        password: requestedAdminPassword,
         roles: ['admin'],
         createSession: true,
         retireBootstrapCredential: controller.hasBootstrapCredentialPresent(),
@@ -73,7 +85,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
       addNetworkOperations(controller, operations, customNetwork, {
         controlPlane: hasServers,
         controlPlaneRemote,
-        httpListener,
+        httpListener: httpListenerNetworkFields,
         web: browserAccess,
       });
     } else {
@@ -100,11 +112,21 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
     setSecret('OPENAI_API_KEY', controller.getStringFieldValue('providers.openai-api-key', ''));
 
     const externalIntegrations = controller.isCapabilitySelected('external-integrations');
+    const enabledExternalSurfaceIds: string[] = [];
     for (const surface of EXTERNAL_SURFACE_SPECS) {
-      const enabled = externalIntegrations
-        && controller.getBooleanFieldValue(surface.enabledFieldId, surface.defaultEnabled(controller.runtimeSnapshot));
-      setConfig(surface.enabledConfigKey, enabled);
-      if (!enabled) continue;
+      const selected = externalIntegrations
+        && controller.getBooleanFieldValue(
+          surface.enabledFieldId,
+          isExternalSurfaceSelectedByDefault(surface, controller.runtimeSnapshot),
+        );
+      const autoStart = selected
+        && controller.getStringFieldValue(
+          getExternalSurfaceAutoStartFieldId(surface),
+          getExternalSurfaceAutoStartDefaultValue(surface, controller.runtimeSnapshot),
+        ) === 'yes';
+      setConfig(surface.enabledConfigKey, autoStart);
+      if (!selected) continue;
+      enabledExternalSurfaceIds.push(surface.id);
 
       for (const setupField of surface.fields) {
         const fallback = setupField.defaultValue(controller.runtimeSnapshot);
@@ -126,6 +148,11 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
         else setConfig(setupField.configKey, value);
       }
     }
+    enableFeatureFlags(getServerSurfaceFeatureFlags({
+      serverBacked: hasServers,
+      web: browserAccess,
+      externalSurfaces: enabledExternalSurfaceIds,
+    }));
 
     acknowledge('providers', 'providers.reviewed');
     acknowledge('subscriptions', 'accounts.subscriptions');

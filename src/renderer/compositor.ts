@@ -86,11 +86,11 @@ export class Compositor {
     const leftWidth = hasPanel ? Math.max(1, width - panelWidth - 1) : width;
     const sepX = hasPanel ? leftWidth : -1;
 
-    // 1. Draw Header (Rows 0-1) — always full width
+    // 1. Draw Header — always full width
     header.forEach((line, i) => newBuffer.blitLine(i, line));
 
-    // 2. Draw Viewport (Starting at Row 2)
-    const viewportStartY = 2;
+    // 2. Draw Viewport directly after the supplied header.
+    const viewportStartY = header.length;
     const vHeight = Math.max(0, height - header.length - footer.length);
 
     // Calculate the offset for bottom-anchored short history
