@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.26] — 2026-04-24
+
+### Changes
+- f1e0ac3 feat: harden CLI operations and support bundles
+- 0c94095 feat: enforce readiness command exit codes
+- 566bc34 feat: improve CLI help and listener readiness
+- d620637 feat: harden CLI diagnostics and provider posture
+
 ## [0.19.25] — 2026-04-24
 
 ### Changes
