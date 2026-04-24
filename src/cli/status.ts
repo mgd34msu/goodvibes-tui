@@ -1,6 +1,7 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { OnboardingCompletionMarkersState } from '../runtime/onboarding/index.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
+import { isNetworkFacing } from './network-posture.ts';
 
 export interface CliStatusOptions {
   readonly configManager: Pick<ConfigManager, 'get'>;
@@ -50,22 +51,6 @@ function secretPolicyLabel(policy: unknown): string {
 
 function bindLine(label: string, enabled: unknown, binding: { readonly hostMode: string; readonly host: string; readonly port: number }): string {
   return `  ${label}: ${yesNo(enabled)} (${binding.hostMode} ${binding.host}:${binding.port})`;
-}
-
-function isLoopbackHost(host: string): boolean {
-  return host === 'localhost'
-    || host === '::1'
-    || host.startsWith('127.')
-    || host === '0:0:0:0:0:0:0:1';
-}
-
-function isNetworkFacing(
-  enabled: unknown,
-  binding: { readonly hostMode: string; readonly host: string },
-): boolean {
-  if (enabled !== true) return false;
-  if (binding.hostMode === 'local') return false;
-  return binding.host === '0.0.0.0' || binding.host === '::' || !isLoopbackHost(binding.host);
 }
 
 export function buildCliDoctorFindings(options: CliStatusOptions): readonly CliDoctorFinding[] {

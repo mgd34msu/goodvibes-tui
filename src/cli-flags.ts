@@ -8,6 +8,7 @@ export {
   applyRuntimeFeatureFlagOverrides,
   handleGoodVibesCliCommand,
   parseGoodVibesCli,
+  renderGoodVibesCommandHelp,
   renderGoodVibesHelp,
   renderGoodVibesVersion,
 } from './cli/index.ts';
