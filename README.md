@@ -1,5 +1,3 @@
-> **ATTENTION:** Currently updating the Onboarding Wizard - Expect problems with starting the TUI until this work is complete!
-
 # goodvibes-tui
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
