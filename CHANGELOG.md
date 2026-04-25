@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.31] — 2026-04-25
+
+### Changes
+- 2508d632 chore: wire sdk service secret updates
+
 ## [0.19.30] — 2026-04-25
 
 ### Changes
