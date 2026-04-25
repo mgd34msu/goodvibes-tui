@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.30] — 2026-04-25
+
+### Changes
+- 4aeed7a9 chore: wire sdk ntfy origin correlation
+- 62b9efd4 docs: remove onboarding wizard WIP notice from README
+
 ## [0.19.29] — 2026-04-24
 
 ### Changes
