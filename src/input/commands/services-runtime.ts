@@ -41,6 +41,7 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
           `  webhookUrl: ${inspection.hasWebhookUrl ? 'present' : 'missing'}`,
           `  signingSecret: ${inspection.hasSigningSecret ? 'present' : 'missing'}`,
           `  publicKey: ${inspection.hasPublicKey ? 'present' : 'missing'}`,
+          `  appToken: ${inspection.hasAppToken ? 'present' : 'missing'}`,
         ].join('\n'));
         return;
       }

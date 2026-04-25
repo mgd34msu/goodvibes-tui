@@ -75,6 +75,7 @@ export interface OnboardingServiceState {
   readonly hasWebhookUrl: boolean;
   readonly hasSigningSecret: boolean;
   readonly hasPublicKey: boolean;
+  readonly hasAppToken: boolean;
 }
 
 export interface OnboardingServicesSnapshot {

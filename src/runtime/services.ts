@@ -417,6 +417,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const projectIndex = new ProjectIndex(workingDirectory);
   const channelDeliveryRouter = new ChannelDeliveryRouter({
     configManager,
+    secretsManager,
     serviceRegistry,
     artifactStore,
   });

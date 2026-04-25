@@ -195,6 +195,8 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
         ...buildStatusPill(inspect.hasWebhookUrl ? 'good' : 'info', inspect.hasWebhookUrl ? 'present' : 'missing'),
         ['  Signing secret: ', C.label],
         ...buildStatusPill(inspect.hasSigningSecret ? 'good' : 'info', inspect.hasSigningSecret ? 'present' : 'missing'),
+        ['  App token: ', C.label],
+        ...buildStatusPill(inspect.hasAppToken ? 'good' : 'info', inspect.hasAppToken ? 'present' : 'missing'),
       ]));
       if (selected.lastTest) {
         detailLines.push(buildPanelLine(width, [

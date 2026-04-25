@@ -26,16 +26,19 @@ function createDefaultRouter(root?: string, overrides: {
   readonly configManager?: ConfigManager;
   readonly artifactStore?: ArtifactStore;
   readonly controlPlaneGateway?: ControlPlaneGateway | null;
+  readonly secretsManager?: SecretsManager;
 } = {}): ChannelDeliveryRouter {
   const configRoot = root ?? mkdtempSync(join(tmpdir(), 'gv-delivery-router-'));
   const configManager = overrides.configManager ?? new ConfigManager({ surfaceRoot: 'tui',  configDir: configRoot });
+  const secretsManager = overrides.secretsManager ?? new SecretsManager({ projectRoot: configRoot, globalHome: configRoot });
   const serviceRegistry = new ServiceRegistry(join(configRoot, 'services.json'), {
-    secretsManager: new SecretsManager({ projectRoot: configRoot, globalHome: configRoot }),
+    secretsManager,
     subscriptionManager: new SubscriptionManager(join(configRoot, 'subscriptions.json')),
   });
   const artifactStore = overrides.artifactStore ?? new ArtifactStore({ rootDir: join(configRoot, 'artifacts') });
   return new ChannelDeliveryRouter({
     configManager,
+    secretsManager,
     serviceRegistry,
     artifactStore,
     ...(overrides.controlPlaneGateway ? { controlPlaneGateway: overrides.controlPlaneGateway } : {}),
@@ -203,6 +206,43 @@ describe('ChannelDeliveryRouter', () => {
       globalThis.fetch = originalFetch;
       if (originalTelegramToken === undefined) delete process.env.TELEGRAM_BOT_TOKEN;
       else process.env.TELEGRAM_BOT_TOKEN = originalTelegramToken;
+    }
+  });
+
+  test('resolves Slack bot token through GoodVibes config secret refs', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'gv-delivery-router-slack-'));
+    const config = new ConfigManager({ surfaceRoot: 'tui', configDir: root });
+    const secretsManager = new SecretsManager({ projectRoot: root, globalHome: root, configManager: config });
+    const originalFetch = globalThis.fetch;
+    let authorizationHeader = '';
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe('https://slack.com/api/chat.postMessage');
+      authorizationHeader = String((init?.headers as Record<string, string> | undefined)?.Authorization ?? '');
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      config.set('surfaces.slack.botToken', 'goodvibes://secrets/goodvibes/SLACK_BOT_TOKEN');
+      await secretsManager.set('SLACK_BOT_TOKEN', 'xoxb-from-goodvibes');
+      const router = createDefaultRouter(root, { configManager: config, secretsManager });
+
+      await router.deliver({
+        target: { kind: 'surface', surfaceKind: 'slack', address: 'C123' },
+        body: 'slack hello',
+        title: 'Slack delivery',
+        jobId: 'job-slack',
+        runId: 'run-slack',
+        includeLinks: false,
+      });
+
+      expect(authorizationHeader).toBe('Bearer xoxb-from-goodvibes');
+    } finally {
+      globalThis.fetch = originalFetch;
+      rmSync(root, { recursive: true, force: true });
     }
   });
 

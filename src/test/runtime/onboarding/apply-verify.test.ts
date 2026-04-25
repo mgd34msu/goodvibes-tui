@@ -591,6 +591,7 @@ describe('onboarding apply and verify helpers', () => {
           hasWebhookUrl: false,
           hasSigningSecret: false,
           hasPublicKey: false,
+          hasAppToken: false,
         }),
       },
     });
