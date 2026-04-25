@@ -211,7 +211,7 @@ function hasRemoteDeviceAccess(snapshot: OnboardingSnapshotState): boolean {
 function hasWebhookOrEventIngress(snapshot: OnboardingSnapshotState): boolean {
   return snapshot.bindSettings.httpListenerEnabled
     || hasInboundEventSurface(snapshot)
-    || snapshot.services.services.some((service) => service.hasWebhookUrl || service.hasSigningSecret || service.hasPublicKey);
+    || snapshot.services.services.some((service) => service.hasWebhookUrl || service.hasSigningSecret || service.hasPublicKey || service.hasAppToken);
 }
 
 function getProviderIdentityIds(snapshot: OnboardingSnapshotState): Set<string> {

@@ -122,6 +122,7 @@ async function buildServicesSnapshot(
           hasWebhookUrl: inspection?.hasWebhookUrl ?? false,
           hasSigningSecret: inspection?.hasSigningSecret ?? false,
           hasPublicKey: inspection?.hasPublicKey ?? false,
+          hasAppToken: inspection?.hasAppToken ?? false,
         } satisfies OnboardingServiceState,
         issue: null,
       };
@@ -139,6 +140,7 @@ async function buildServicesSnapshot(
           hasWebhookUrl: false,
           hasSigningSecret: false,
           hasPublicKey: false,
+          hasAppToken: false,
         } satisfies OnboardingServiceState,
         issue: {
           area: 'services',

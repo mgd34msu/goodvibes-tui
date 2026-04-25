@@ -104,6 +104,7 @@ describe('collectOnboardingSnapshot', () => {
           hasWebhookUrl: false,
           hasSigningSecret: false,
           hasPublicKey: false,
+          hasAppToken: false,
         }),
       },
       surfaces: {
@@ -278,6 +279,7 @@ describe('collectOnboardingSnapshot', () => {
           hasWebhookUrl: false,
           hasSigningSecret: false,
           hasPublicKey: false,
+          hasAppToken: false,
         },
       ],
     });

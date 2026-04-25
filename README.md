@@ -836,7 +836,7 @@ Key commands:
 - `/profilesync`
 - `/setup transfer export|inspect|import`
 
-Service entries can use existing `tokenKey` fields, a SecretRef in the key field, or explicit `tokenRef` / `passwordRef` / `webhookUrlRef` / `signingSecretRef` / `publicKeyRef` fields:
+Service entries can use existing `tokenKey` fields, a SecretRef in the key field, or explicit `tokenRef` / `passwordRef` / `webhookUrlRef` / `signingSecretRef` / `publicKeyRef` / `appTokenRef` fields:
 
 ```json
 {
@@ -844,9 +844,16 @@ Service entries can use existing `tokenKey` fields, a SecretRef in the key field
     "name": "slack",
     "authType": "bearer",
     "tokenKey": "SLACK_BOT_TOKEN",
+    "appTokenKey": "SLACK_APP_TOKEN",
     "tokenRef": {
       "source": "vaultwarden",
       "item": "GoodVibes Slack",
+      "field": "password",
+      "server": "https://vault.example.test"
+    },
+    "appTokenRef": {
+      "source": "vaultwarden",
+      "item": "GoodVibes Slack App",
       "field": "password",
       "server": "https://vault.example.test"
     }
