@@ -11,6 +11,7 @@ import { Compositor } from '../renderer/compositor.ts';
 import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
 import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
+import type { OrchestratorUserInputOptions } from '../core/orchestrator.ts';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
 import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
 import type { BootstrapOptions } from './context.ts';
@@ -55,10 +56,30 @@ export interface BootstrapCoreState {
    * When non-null, COMPANION_MESSAGE_RECEIVED fires a real LLM turn via
    * orchestrator.handleUserInput() instead of only appending the user message.
    */
-  readonly orchestratorHandleUserInputRef: { value: ((text: string) => void) | null };
+  readonly orchestratorHandleUserInputRef: { value: ((text: string, options?: OrchestratorUserInputOptions) => void) | null };
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
+}
+
+export type CompanionMessagePayload = Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>;
+
+export function companionMessageToOrchestratorInputOptions(
+  payload: CompanionMessagePayload,
+): OrchestratorUserInputOptions {
+  const metadata = payload.metadata;
+  const surface = typeof metadata?.surface === 'string' ? metadata.surface : undefined;
+  const topic = typeof metadata?.topic === 'string' ? metadata.topic : undefined;
+
+  return {
+    origin: {
+      source: payload.source,
+      messageId: payload.messageId,
+      ...(surface ? { surface } : {}),
+      ...(topic ? { topic } : {}),
+      ...(metadata ? { metadata } : {}),
+    },
+  };
 }
 
 export async function initializeBootstrapCore(
@@ -362,13 +383,17 @@ export async function initializeBootstrapCore(
   // The fallback (ref not yet set) adds the message to the conversation view only —
   // this path is unreachable in practice because the event bus is not connected to
   // any live HTTP traffic until after the orchestrator is wired in bootstrap.ts.
-  const orchestratorHandleUserInputRef: { value: ((text: string) => void) | null } = { value: null };
+  const orchestratorHandleUserInputRef: {
+    value: ((text: string, options?: OrchestratorUserInputOptions) => void) | null;
+  } = { value: null };
   runtimeUnsubs.push(runtimeBus.on<Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>>(
     'COMPANION_MESSAGE_RECEIVED',
     ({ payload }) => {
       if (orchestratorHandleUserInputRef.value) {
         // Delegate to the orchestrator: adds user message + fires a real LLM turn.
-        orchestratorHandleUserInputRef.value(payload.body);
+        // Preserve surface origin metadata so the SDK can correlate replies back
+        // to the originating external channel, including ntfy chat topics.
+        orchestratorHandleUserInputRef.value(payload.body, companionMessageToOrchestratorInputOptions(payload));
       } else {
         // Fallback: render the user message immediately (orchestrator not yet ready).
         conversation.addUserMessage(payload.body);
