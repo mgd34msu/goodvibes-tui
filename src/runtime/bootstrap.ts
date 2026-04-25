@@ -11,7 +11,7 @@
  */
 import { join } from 'node:path';
 import net from 'node:net';
-import { Orchestrator } from '../core/orchestrator.ts';
+import { Orchestrator, type OrchestratorUserInputOptions } from '../core/orchestrator.ts';
 import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
 import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers/tier-prompts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
@@ -195,8 +195,10 @@ export async function bootstrapRuntime(
       return supplement ? runtime.systemPrompt + '\n\n' + supplement : runtime.systemPrompt;
     },
     hookDispatcher,
+    flagManager: services.featureFlags,
     requestRender: () => orchestratorRefs.requestRender(),
     runtimeBus,
+    sessionId: runtime.sessionId,
     services: {
       agentManager: services.agentManager,
       wrfcController: services.wrfcController,
@@ -204,8 +206,8 @@ export async function bootstrapRuntime(
   });
   conversationFollowUpRef.value = (item) => orchestrator.enqueueConversationFollowUp(item);
   // Wire orchestratorHandleUserInputRef so COMPANION_MESSAGE_RECEIVED fires a real LLM turn.
-  orchestratorHandleUserInputRef.value = (text: string) => {
-    orchestrator.handleUserInput(text).catch((err: unknown) => {
+  orchestratorHandleUserInputRef.value = (text: string, options?: OrchestratorUserInputOptions) => {
+    orchestrator.handleUserInput(text, undefined, options).catch((err: unknown) => {
       logger.debug('companion handleUserInput safety catch', { error: String(err) });
     });
   };
