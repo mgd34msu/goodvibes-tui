@@ -117,6 +117,40 @@ export const POPULAR_PROVIDERS: ReadonlySet<string> = new Set([
   'synthetic',
 ]);
 
+interface FilteredModelsCache {
+  readonly modelsRef: ModelDefinition[];
+  readonly configuredProvidersKey: string;
+  readonly pinnedIdsKey: string;
+  readonly recentIdsKey: string;
+  readonly query: string;
+  readonly categoryFilter: CategoryFilter;
+  readonly capabilityFilter: CapabilityFilter;
+  readonly availableOnly: boolean;
+  readonly benchmarkSort: BenchmarkSort;
+  readonly groupBy: GroupByMode;
+  readonly result: ModelDefinition[];
+}
+
+interface FilteredProvidersCache {
+  readonly providersRef: string[];
+  readonly query: string;
+  readonly result: string[];
+}
+
+interface ModelItemsCache {
+  readonly filteredModelsRef: ModelDefinition[];
+  readonly pinnedIdsKey: string;
+  readonly groupBy: GroupByMode;
+  readonly result: PickerItem[];
+}
+
+interface ProviderItemsCache {
+  readonly filteredProvidersRef: string[];
+  readonly configuredProvidersKey: string;
+  readonly configuredViaKey: string;
+  readonly result: PickerItem[];
+}
+
 /**
  * ModelPickerModal - Multi-step interactive picker for model, provider, and effort.
  * Supports three modes: 'model', 'provider', 'effort'.
@@ -180,12 +214,18 @@ export class ModelPickerModal {
   /** Current group-by mode. */
   public groupBy: GroupByMode = 'provider';
 
+  private filteredModelsCache: FilteredModelsCache | null = null;
+  private filteredProvidersCache: FilteredProvidersCache | null = null;
+  private modelItemsCache: ModelItemsCache | null = null;
+  private providerItemsCache: ProviderItemsCache | null = null;
+
   // ── Category filter cycling ───────────────────────────────────────────────
   private static readonly CATEGORY_CYCLE: CategoryFilter[] = ['all', 'free', 'paid', 'subscription'];
   /** Cycle to next pricing tier filter. */
   cycleCategory(): void {
     const idx = ModelPickerModal.CATEGORY_CYCLE.indexOf(this.categoryFilter);
     this.categoryFilter = ModelPickerModal.CATEGORY_CYCLE[(idx + 1) % ModelPickerModal.CATEGORY_CYCLE.length];
+    this.clearFilteredCaches();
     this._clampSelection();
   }
 
@@ -195,6 +235,7 @@ export class ModelPickerModal {
   cycleGroupBy(): void {
     const idx = ModelPickerModal.GROUP_BY_CYCLE.indexOf(this.groupBy);
     this.groupBy = ModelPickerModal.GROUP_BY_CYCLE[(idx + 1) % ModelPickerModal.GROUP_BY_CYCLE.length];
+    this.clearFilteredCaches();
     this._clampSelection();
   }
 
@@ -204,6 +245,7 @@ export class ModelPickerModal {
   cycleBenchmarkSort(): void {
     const idx = ModelPickerModal.BENCHMARK_SORT_CYCLE.indexOf(this.benchmarkSort);
     this.benchmarkSort = ModelPickerModal.BENCHMARK_SORT_CYCLE[(idx + 1) % ModelPickerModal.BENCHMARK_SORT_CYCLE.length];
+    this.clearFilteredCaches();
     this._clampSelection();
   }
 
@@ -315,6 +357,7 @@ export class ModelPickerModal {
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
+    this.clearCaches();
   }
 
   // ── Search helpers ─────────────────────────────────────────────────────────
@@ -322,6 +365,7 @@ export class ModelPickerModal {
   /** Append a character to the search query and clamp selectedIndex. */
   appendChar(ch: string): void {
     this.query += ch;
+    this.clearFilteredCaches();
     this._clampSelection();
   }
 
@@ -329,6 +373,7 @@ export class ModelPickerModal {
   deleteChar(): void {
     if (this.query.length > 0) {
       this.query = this.query.slice(0, -1);
+      this.clearFilteredCaches();
       this._clampSelection();
     }
   }
@@ -336,6 +381,7 @@ export class ModelPickerModal {
   /** Clear the search query and clamp selectedIndex. */
   clearQuery(): void {
     this.query = '';
+    this.clearFilteredCaches();
     this._clampSelection();
   }
 
@@ -354,18 +400,21 @@ export class ModelPickerModal {
   /** Set category filter and clamp selectedIndex. */
   setCategoryFilter(filter: CategoryFilter): void {
     this.categoryFilter = filter;
+    this.clearFilteredCaches();
     this._clampSelection();
   }
 
   /** Set capability filter and clamp selectedIndex. */
   setCapabilityFilter(filter: CapabilityFilter): void {
     this.capabilityFilter = filter;
+    this.clearFilteredCaches();
     this._clampSelection();
   }
 
   /** Toggle the available-only filter. */
   toggleAvailableOnly(): void {
     this.availableOnly = !this.availableOnly;
+    this.clearFilteredCaches();
     this._clampSelection();
   }
 
@@ -396,15 +445,50 @@ export class ModelPickerModal {
 
   /** Return providers matching the current query (case-insensitive substring), in grouped order. */
   getFilteredProviders(): string[] {
+    const cached = this.filteredProvidersCache;
+    if (
+      cached !== null
+      && cached.providersRef === this.providers
+      && cached.query === this.query
+    ) {
+      return cached.result;
+    }
+
     const { popular, all } = this.getGroupedProviders();
     const ordered = [...popular, ...all];
-    if (this.query.trim().length === 0) return ordered;
-    const q = this.query.toLowerCase();
-    return ordered.filter(p => p.toLowerCase().includes(q));
+    const result = this.query.trim().length === 0
+      ? ordered
+      : ordered.filter(p => p.toLowerCase().includes(this.query.toLowerCase()));
+    this.filteredProvidersCache = {
+      providersRef: this.providers,
+      query: this.query,
+      result,
+    };
+    return result;
   }
 
   /** Return models matching all current filters, sorted per benchmarkSort. */
   getFilteredModels(): ModelDefinition[] {
+    const configuredProvidersKey = setKey(this.configuredProviders);
+    const pinnedIdsKey = setKey(this.pinnedIds);
+    const recentIdsKey = orderedListKey(this.recentIds);
+    const cached = this.filteredModelsCache;
+    if (
+      cached !== null
+      && cached.modelsRef === this.models
+      && cached.configuredProvidersKey === configuredProvidersKey
+      && cached.pinnedIdsKey === pinnedIdsKey
+      && cached.recentIdsKey === recentIdsKey
+      && cached.query === this.query
+      && cached.categoryFilter === this.categoryFilter
+      && cached.capabilityFilter === this.capabilityFilter
+      && cached.availableOnly === this.availableOnly
+      && cached.benchmarkSort === this.benchmarkSort
+      && cached.groupBy === this.groupBy
+    ) {
+      return cached.result;
+    }
+
     let result = this.models;
 
     // Available-only filter
@@ -520,6 +604,20 @@ export class ModelPickerModal {
       result = [...recent, ...rest];
     }
 
+    this.filteredModelsCache = {
+      modelsRef: this.models,
+      configuredProvidersKey,
+      pinnedIdsKey,
+      recentIdsKey,
+      query: this.query,
+      categoryFilter: this.categoryFilter,
+      capabilityFilter: this.capabilityFilter,
+      availableOnly: this.availableOnly,
+      benchmarkSort: this.benchmarkSort,
+      groupBy: this.groupBy,
+      result,
+    };
+    this.modelItemsCache = null;
     return result;
   }
 
@@ -529,6 +627,7 @@ export class ModelPickerModal {
    */
   async loadRecentModels(n = 10): Promise<void> {
     this.recentIds = await this.favoritesStore.getRecentModels(n);
+    this.clearFilteredCaches();
   }
 
   /**
@@ -574,6 +673,16 @@ export class ModelPickerModal {
   getItems(): PickerItem[] {
     if (this.mode === 'model') {
       const filtered = this.getFilteredModels();
+      const pinnedIdsKey = setKey(this.pinnedIds);
+      const cached = this.modelItemsCache;
+      if (
+        cached !== null
+        && cached.filteredModelsRef === filtered
+        && cached.pinnedIdsKey === pinnedIdsKey
+        && cached.groupBy === this.groupBy
+      ) {
+        return cached.result;
+      }
 
       // Separate pinned and unpinned
       const pinned = filtered.filter(m => this.pinnedIds.has(m.id));
@@ -600,33 +709,45 @@ export class ModelPickerModal {
         items.push(this._modelToItem(m, false));
       }
 
+      this.modelItemsCache = {
+        filteredModelsRef: filtered,
+        pinnedIdsKey,
+        groupBy: this.groupBy,
+        result: items,
+      };
       return items;
     }
     if (this.mode === 'provider') {
-      const q = this.query.trim().toLowerCase();
-      const { popular, all } = this.getGroupedProviders();
-
-      const filterGroup = (group: string[]) =>
-        q.length === 0 ? group : group.filter(p => p.toLowerCase().includes(q));
-
-      const filteredPopular = filterGroup(popular);
-      const filteredAll = filterGroup(all);
+      const filteredProviders = this.getFilteredProviders();
+      const configuredProvidersKey = setKey(this.configuredProviders);
+      const configuredViaKey = mapKey(this.configuredViaMap);
+      const cached = this.providerItemsCache;
+      if (
+        cached !== null
+        && cached.filteredProvidersRef === filteredProviders
+        && cached.configuredProvidersKey === configuredProvidersKey
+        && cached.configuredViaKey === configuredViaKey
+      ) {
+        return cached.result;
+      }
 
       const providerItems: PickerItem[] = [];
-
-      if (filteredPopular.length > 0) {
-        providerItems.push({ id: '__header__popular', label: 'Popular', isGroupHeader: true });
-        for (const p of filteredPopular) {
-          providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p), configuredVia: this.configuredViaMap.get(p) });
+      let currentGroup: 'Popular' | 'All Providers' | null = null;
+      for (const p of filteredProviders) {
+        const group: 'Popular' | 'All Providers' = POPULAR_PROVIDERS.has(p.toLowerCase()) ? 'Popular' : 'All Providers';
+        if (group !== currentGroup) {
+          providerItems.push({ id: `__header__${group}`, label: group, isGroupHeader: true });
+          currentGroup = group;
         }
-      }
-      if (filteredAll.length > 0) {
-        providerItems.push({ id: '__header__all', label: 'All Providers', isGroupHeader: true });
-        for (const p of filteredAll) {
-          providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p), configuredVia: this.configuredViaMap.get(p) });
-        }
+        providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p), configuredVia: this.configuredViaMap.get(p) });
       }
 
+      this.providerItemsCache = {
+        filteredProvidersRef: filteredProviders,
+        configuredProvidersKey,
+        configuredViaKey,
+        result: providerItems,
+      };
       return providerItems;
     }
     // effort mode
@@ -743,4 +864,32 @@ export class ModelPickerModal {
   getBenchmarkEntry(model: ModelDefinition) {
     return this.benchmarkStore.getBenchmarks(model.id) ?? this.benchmarkStore.getBenchmarks(model.displayName);
   }
+
+  private clearFilteredCaches(): void {
+    this.filteredModelsCache = null;
+    this.filteredProvidersCache = null;
+    this.modelItemsCache = null;
+    this.providerItemsCache = null;
+  }
+
+  private clearCaches(): void {
+    this.clearFilteredCaches();
+  }
+}
+
+function setKey(values: ReadonlySet<string>): string {
+  if (values.size === 0) return '';
+  return [...values].sort().join('\u001f');
+}
+
+function orderedListKey(values: readonly string[]): string {
+  return values.length === 0 ? '' : values.join('\u001f');
+}
+
+function mapKey(values: ReadonlyMap<string, string | undefined>): string {
+  if (values.size === 0) return '';
+  return [...values.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}\u001e${value ?? ''}`)
+    .join('\u001f');
 }

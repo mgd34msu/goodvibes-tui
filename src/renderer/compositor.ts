@@ -1,6 +1,6 @@
 import { TerminalBuffer } from './buffer.ts';
 import { DiffEngine } from './diff.ts';
-import { type Line, createStyledCell } from '../types/grid.ts';
+import { type Line, createEmptyCell, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
 
@@ -78,7 +78,7 @@ export class Compositor {
     if (!this.backBuffer) {
       this.backBuffer = new TerminalBuffer(width, height);
     } else {
-      this.backBuffer.reset(width, height);
+      this.backBuffer.reset(width, height, this.frontBuffer);
     }
     const newBuffer = this.backBuffer;
 
@@ -154,19 +154,31 @@ export class Compositor {
         }
 
         const panelStartX = sepX + 1;
+        const clearPanelRemainder = (fromX = 0) => {
+          for (let x = Math.max(0, fromX); x < panelWidth; x++) {
+            newBuffer.setCell(panelStartX + x, screenY, createEmptyCell());
+          }
+        };
+        const drawPanelLine = (panelLine: Line | undefined) => {
+          if (panelLine === undefined) {
+            clearPanelRemainder();
+            return;
+          }
+          const limit = Math.min(panelLine.length, panelWidth);
+          for (let x = 0; x < limit; x++) {
+            const cell = panelLine[x];
+            if (cell !== undefined) {
+              newBuffer.setCell(panelStartX + x, screenY, cell);
+            }
+          }
+          clearPanelRemainder(limit);
+        };
 
         if (!hasBottomPane) {
           // --- Single pane mode ---
           // viewport row 0 → workspace bar, viewport rows 1+ → panel content
           const panelLine = i === 0 ? p.workspaceBar : p.topContent[i - 1];
-          if (panelLine !== undefined) {
-            for (let x = 0; x < panelWidth; x++) {
-              const cell = panelLine[x];
-              if (cell !== undefined) {
-                newBuffer.setCell(panelStartX + x, screenY, cell);
-              }
-            }
-          }
+          drawPanelLine(panelLine);
         } else {
           // --- Two pane mode ---
           // Row layout (by viewport row i):
@@ -203,13 +215,8 @@ export class Compositor {
             panelLine = p.bottomContent?.[i - (hSepRow + 2)];
           }
 
-          if (panelLine !== undefined) {
-            for (let x = 0; x < panelWidth; x++) {
-              const cell = panelLine[x];
-              if (cell !== undefined) {
-                newBuffer.setCell(panelStartX + x, screenY, cell);
-              }
-            }
+          if (i !== hSepRow) {
+            drawPanelLine(panelLine);
           }
         }
       }
@@ -269,6 +276,7 @@ export class Compositor {
     // Swap: back (just written) becomes the new front reference; old front becomes the next back
     const swap = this.frontBuffer;
     this.frontBuffer = this.backBuffer;
+    this.frontBuffer.clearDirty();
     this.backBuffer = swap;
   }
 }
