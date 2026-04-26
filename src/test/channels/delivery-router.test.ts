@@ -55,6 +55,7 @@ describe('ChannelDeliveryRouter', () => {
       'channel-delivery:discord',
       'channel-delivery:ntfy',
       'channel-delivery:web-control-plane',
+      'channel-delivery:homeassistant',
       'channel-delivery:telegram',
       'channel-delivery:google-chat',
       'channel-delivery:signal',

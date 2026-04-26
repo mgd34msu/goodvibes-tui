@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.19.34-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.19.35-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -60,7 +60,7 @@ Deployment shapes:
 - local TUI only
 - TUI with in-process daemon/API host
 - source-run headless daemon/API host
-- omnichannel runtime with Slack, Discord, Telegram, webhook, Teams, Matrix, and other surfaces
+- omnichannel runtime with Slack, Discord, Telegram, Home Assistant, webhook, Teams, Matrix, and other surfaces
 - remote peer/node-host runtime for distributed execution
 
 Typical workflows:
@@ -661,6 +661,7 @@ Current surfaces:
 - `discord`
 - `ntfy`
 - `webhook`
+- `homeassistant`
 - `telegram`
 - `google-chat`
 - `signal`
@@ -733,7 +734,7 @@ Key commands:
 - `/auth local review`
 - `/auth local add-user <username> <password> [roles]`
 - `/auth local rotate-password <username> <password>`
-- `/auth local revoke-session <token>`
+- `/auth local revoke-session <token-or-fingerprint>`
 - `/auth local clear-bootstrap-file`
 
 ### Integration helpers

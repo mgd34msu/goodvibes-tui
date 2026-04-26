@@ -139,6 +139,14 @@ export const SETTING_LABELS: Partial<Record<string, string>> = {
   'surfaces.ntfy.remoteTopic': 'ntfy Daemon-Only Remote Topic',
   'surfaces.ntfy.token': 'ntfy Token',
   'surfaces.ntfy.defaultPriority': 'ntfy Default Priority',
+  'surfaces.homeassistant.enabled': 'Home Assistant Enabled',
+  'surfaces.homeassistant.instanceUrl': 'Home Assistant URL',
+  'surfaces.homeassistant.accessToken': 'Home Assistant Access Token',
+  'surfaces.homeassistant.webhookSecret': 'Home Assistant Webhook Secret',
+  'surfaces.homeassistant.defaultConversationId': 'Home Assistant Conversation ID',
+  'surfaces.homeassistant.deviceId': 'Home Assistant Device ID',
+  'surfaces.homeassistant.deviceName': 'Home Assistant Device Name',
+  'surfaces.homeassistant.eventType': 'Home Assistant Event Type',
 };
 
 export function getSettingLabel(entry: SettingEntry): string {

@@ -234,6 +234,10 @@ function addCloudflareOperations(
     setConfig('cloudflare.deadLetterQueueName', controller.getStringFieldValue('cloudflare.dead-letter-queue-name', config?.deadLetterQueueName ?? 'goodvibes-batch-dlq'));
     setConfig('cloudflare.tunnelName', controller.getStringFieldValue('cloudflare.tunnel-name', config?.tunnelName ?? 'goodvibes-daemon'));
     setConfig('cloudflare.tunnelId', controller.getStringFieldValue('cloudflare.tunnel-id', config?.tunnelId ?? ''));
+    setConfig('cloudflare.tunnelTokenRef', controller.getStringFieldValue('cloudflare.tunnel-token-ref', config?.tunnelTokenRef ?? ''));
+    setConfig('cloudflare.accessAppId', controller.getStringFieldValue('cloudflare.access-app-id', config?.accessAppId ?? ''));
+    setConfig('cloudflare.accessServiceTokenId', controller.getStringFieldValue('cloudflare.access-service-token-id', config?.accessServiceTokenId ?? ''));
+    setConfig('cloudflare.accessServiceTokenRef', controller.getStringFieldValue('cloudflare.access-service-token-ref', config?.accessServiceTokenRef ?? ''));
     setConfig('cloudflare.kvNamespaceName', controller.getStringFieldValue('cloudflare.kv-namespace-name', config?.kvNamespaceName ?? 'goodvibes-runtime'));
     setConfig('cloudflare.kvNamespaceId', controller.getStringFieldValue('cloudflare.kv-namespace-id', config?.kvNamespaceId ?? ''));
     setConfig('cloudflare.durableObjectNamespaceName', controller.getStringFieldValue('cloudflare.do-namespace-name', config?.durableObjectNamespaceName ?? 'GoodVibesCoordinator'));

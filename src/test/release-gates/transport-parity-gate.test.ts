@@ -10,6 +10,7 @@ import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime
 import { createDirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
 import { createHttpTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http';
 import { createRealtimeTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/realtime';
+import { createAuthenticatedWebSocket } from '../helpers/authenticated-websocket.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
@@ -190,7 +191,11 @@ async function createRemoteHarness(kind: 'http' | 'realtime'): Promise<Transport
   const baseUrl = `http://127.0.0.1:${port}`;
   const transport = kind === 'http'
     ? createHttpTransport({ baseUrl, authToken: TEST_TOKEN })
-    : createRealtimeTransport({ baseUrl, authToken: TEST_TOKEN });
+    : createRealtimeTransport({
+      baseUrl,
+      authToken: TEST_TOKEN,
+      webSocketImpl: createAuthenticatedWebSocket(TEST_TOKEN),
+    });
 
   return {
     kind,
@@ -293,12 +298,20 @@ describe('transport parity gate', () => {
       });
       try {
         await harness.waitForEventReady();
-        harness.emitAgentSpawning(`agent-${harness.kind}`, `transport parity ${harness.kind}`);
-        const event = await waitFor(() => seen[0]);
+        const agentId = `agent-${harness.kind}`;
+        const task = `transport parity ${harness.kind}`;
+        const event = await waitFor(() => {
+          if (!seen[0]) {
+            harness.emitAgentSpawning(agentId, task);
+          }
+          return seen[0];
+        }, 5_000, 25).catch((error: unknown) => {
+          throw new Error(`${harness.kind} agent spawning event was not observed`, { cause: error });
+        });
         expect(event).toEqual({
           type: 'AGENT_SPAWNING',
-          agentId: `agent-${harness.kind}`,
-          task: `transport parity ${harness.kind}`,
+          agentId,
+          task,
         });
       } finally {
         unsubscribe();

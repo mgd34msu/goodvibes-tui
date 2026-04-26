@@ -15,7 +15,7 @@ Select `Use Cloudflare for batch or remote daemon work` on the first onboarding 
 - Cloudflare enabled/disabled
 - Batch mode: `off`, `explicit`, or `eligible-by-default`
 - Components: Workers, Queues, Tunnel, Access, DNS, KV, Durable Objects, Secrets Store, and R2
-- Account, zone/domain, worker, queue, tunnel, KV, DO, R2, and Secrets Store names
+- Account, zone/domain, worker, queue, tunnel, Access, KV, DO, R2, and Secrets Store names/refs
 - Token setup path
 - Whether final onboarding apply should provision resources immediately
 
@@ -44,12 +44,14 @@ Use `/cloudflare` for runtime inspection and daemon actions:
 /cloudflare create-token --account <account-id> --bootstrap-env <ENV_NAME>
 /cloudflare discover --token-env CLOUDFLARE_API_TOKEN
 /cloudflare validate --token-env CLOUDFLARE_API_TOKEN
-/cloudflare provision --account <account-id> --batch-mode explicit
+/cloudflare provision --account <account-id> --batch-mode explicit --tunnel-token-ref goodvibes://secrets/goodvibes/CLOUDFLARE_TUNNEL_TOKEN
 /cloudflare verify
 /cloudflare disable
 ```
 
 `/cloudflare setup` opens onboarding in edit mode. All other subcommands call SDK-owned daemon routes under local daemon admin/auth.
+
+`/cloudflare provision` accepts the same major SDK daemon fields the onboarding screen exposes, including `--tunnel-name`, `--tunnel-id`, `--tunnel-service-url`, `--tunnel-token-ref`, `--access-app-id`, `--access-service-token-id`, `--access-service-token-ref`, `--kv-namespace-name`, `--kv-namespace-id`, `--do-namespace-name`, `--do-namespace-id`, `--r2-bucket-name`, `--secrets-store-name`, `--secrets-store-id`, `--operator-token-ref`, and `--worker-client-token-ref`.
 
 ## Daemon Routes
 
@@ -86,6 +88,8 @@ Raw Cloudflare tokens are transient form or command input only. Persistent refer
 ```text
 goodvibes://secrets/goodvibes/CLOUDFLARE_API_TOKEN
 goodvibes://secrets/env/CLOUDFLARE_API_TOKEN
+goodvibes://secrets/goodvibes/CLOUDFLARE_TUNNEL_TOKEN
+goodvibes://secrets/goodvibes/CLOUDFLARE_ACCESS_SERVICE_TOKEN
 ```
 
 The SDK may also store generated Worker client, Tunnel, Access service, and daemon/operator token material as GoodVibes secret references when provisioning needs them.

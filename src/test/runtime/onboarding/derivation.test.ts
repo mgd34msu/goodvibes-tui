@@ -530,7 +530,7 @@ describe('onboarding derivation helpers', () => {
         id: 'external-integrations',
         label: 'Connect GoodVibes to external apps and services',
         selected: false,
-        detail: 'Enable setup screens for Slack, Discord, Telegram, Teams, Matrix, and other app surfaces you choose.',
+        detail: 'Enable setup screens for Slack, Discord, Telegram, Home Assistant, Teams, Matrix, and other app surfaces you choose.',
       },
       {
         id: 'cloudflare-batch',

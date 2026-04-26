@@ -353,25 +353,26 @@ function buildAuthRollbackAction(
 ): RollbackAction {
   validateAuthOperation(deps, operation);
   const auth = deps.auth!;
+  const mutable = auth as unknown as MutableAuthManager;
   const username = operation.username.trim();
   const before = auth.inspect();
   const existingUser = before.users.find((user) => user.username === username);
-  const existingSessionTokens = new Set(before.sessions
+  const existingSessionFingerprints = new Set(before.sessions
     .filter((session) => session.username === username)
-    .map((session) => session.token));
+    .map((session) => session.tokenFingerprint));
   const userStoreSnapshot = existsSync(before.userStorePath) ? readFileSync(before.userStorePath, 'utf-8') : null;
   const bootstrapCredentialSnapshot = existsSync(before.bootstrapCredentialPath)
     ? readFileSync(before.bootstrapCredentialPath, 'utf-8')
     : null;
   const bootstrapCredential = parseBootstrapCredential(bootstrapCredentialSnapshot);
-  const beforeSessions = before.sessions.map((session) => ({ ...session }));
+  const beforeSessions = mutable.sessions instanceof Map
+    ? [...mutable.sessions.entries()].map(([token, session]) => [token, { ...session }] as const)
+    : [];
 
   return () => {
-    const mutable = auth as unknown as MutableAuthManager;
-
     for (const session of auth.inspect().sessions) {
-      if (session.username === username && !existingSessionTokens.has(session.token)) {
-        auth.revokeSession(session.token);
+      if (session.username === username && !existingSessionFingerprints.has(session.tokenFingerprint)) {
+        auth.revokeSession(session.tokenFingerprint);
       }
     }
 
@@ -402,7 +403,7 @@ function buildAuthRollbackAction(
 
     if (mutable.sessions instanceof Map) {
       mutable.sessions.clear();
-      for (const session of beforeSessions) mutable.sessions.set(session.token, session);
+      for (const [token, session] of beforeSessions) mutable.sessions.set(token, session);
     }
   };
 }
