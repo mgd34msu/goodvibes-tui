@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.19.33-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.19.34-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -989,6 +989,7 @@ These systems are first-class runtime families.
 - `web-search`: provider-backed search with verbosity control, evidence shaping, optional source fetching, and normalized results across DuckDuckGo, SearXNG, Brave, Exa, Firecrawl, Tavily, and Perplexity
 - `artifacts`: durable file/object storage for markdown, text, JSON, CSV, spreadsheets, PDFs, images, audio, video, and generated outputs, with metadata, content access, and delivery reuse
 - `voice`: provider-backed TTS/STT/realtime negotiation with OpenAI, ElevenLabs, Deepgram, Google, Microsoft, and Vydra; the TUI also supports live `/tts` spoken output through streaming TTS providers and local `mpv`/`ffplay` playback
+- `cloudflare`: optional Workers/Queues batch execution and remote control-plane provisioning through SDK daemon routes; local immediate daemon behavior remains the default until Cloudflare and a batch mode are enabled
 - `multimodal`: unified image/audio/video/document analysis with packet building and optional knowledge write-back
 
 These surfaces are exposed through the daemon/API as well as the TUI panels and commands, giving future web and companion clients the same backend runtime.
@@ -1270,6 +1271,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/voice [action]` | — | Review optional voice posture and export/inspect voice bundles |
 | `/tts <prompt>` | — | Submit a normal prompt and play the assistant response through live TTS |
 | `/config-tts [action]` | `/tts-config` | Open TTS configuration for provider, voice, and optional `/tts` response-model override |
+| `/cloudflare [action]` | `/cf` | Configure optional Cloudflare Workers/Queues batch and remote control-plane provisioning |
 | `/diff [target]` | `/d` | Show unified diff: session, head, working, staged, or a git ref |
 | `/mcp [tools]` | — | List connected MCP servers and their tools |
 | `/help [command]` | `/h`, `/?` | Show available commands and keyboard shortcuts |

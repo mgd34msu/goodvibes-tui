@@ -3,6 +3,7 @@ import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibe
 import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils/open-external';
 import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
+import { handleCloudflareOnboardingActionForHandler, maybeProvisionCloudflareOnFinalApplyForHandler } from './handler-onboarding-cloudflare.ts';
 import { applyOnboardingRequest, collectOnboardingSnapshot, verifyOnboardingRequest } from '../runtime/onboarding/index.ts';
 import type { OnboardingApplyRequest, OnboardingVerificationItem } from '../runtime/onboarding/index.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
@@ -245,6 +246,18 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
       continueOnboardingSection(handler);
       return;
     }
+    if (action.startsWith('cloudflare-')) {
+      await handleCloudflareOnboardingActionForHandler(handler, action as Extract<OnboardingWizardAction,
+        | 'cloudflare-token-requirements'
+        | 'cloudflare-create-operational-token'
+        | 'cloudflare-discover'
+        | 'cloudflare-validate'
+        | 'cloudflare-provision'
+        | 'cloudflare-verify'
+        | 'cloudflare-disable'
+      >);
+      return;
+    }
     if (action !== 'apply') return;
     if (handler.onboardingApplyPending) return;
     const blockers = handler.onboardingWizard.getBlockingFieldLabels();
@@ -290,6 +303,8 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
             ? { ...item, status: 'warn' }
             : item));
         verificationItems = dedupeOnboardingVerificationItems([...verificationItems, ...runtimeWarnings]);
+        const cloudflareItems = await maybeProvisionCloudflareOnFinalApplyForHandler(handler);
+        verificationItems = dedupeOnboardingVerificationItems([...verificationItems, ...cloudflareItems]);
       }
     } catch (error) {
       showOnboardingApplyFeedbackForHandler(handler, {

@@ -76,6 +76,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   mcp: 'MCP',
   sandbox: 'Sandbox',
   surfaces: 'Surfaces',
+  cloudflare: 'Cloudflare',
   danger: 'Danger',
   tools: 'Tools',
   flags: 'Flags',

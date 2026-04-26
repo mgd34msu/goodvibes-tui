@@ -2,7 +2,7 @@ import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config/schema
 import type { ProviderAuthFreshness, ProviderAuthRoute } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
 import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
 
-export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'storage' | 'permissions' | 'mcp' | 'sandbox' | 'surfaces' | 'danger' | 'tools' | 'flags' | 'network';
+export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'storage' | 'permissions' | 'mcp' | 'sandbox' | 'surfaces' | 'cloudflare' | 'danger' | 'tools' | 'flags' | 'network';
 
 export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'display',
@@ -15,6 +15,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'mcp',
   'sandbox',
   'surfaces',
+  'cloudflare',
   'danger',
   'tools',
   'flags',

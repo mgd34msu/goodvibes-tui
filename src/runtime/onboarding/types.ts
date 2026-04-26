@@ -47,6 +47,8 @@ export interface OnboardingConfigSnapshot {
   readonly surfaces: GoodVibesConfig['surfaces'];
   readonly service: GoodVibesConfig['service'];
   readonly featureFlags: GoodVibesConfig['featureFlags'];
+  readonly batch: GoodVibesConfig['batch'];
+  readonly cloudflare: GoodVibesConfig['cloudflare'];
 }
 
 export interface OnboardingProviderRoutingSnapshot {
@@ -196,7 +198,8 @@ export type OnboardingStep1CapabilityId =
   | 'browser-access'
   | 'network-access'
   | 'webhook-events'
-  | 'external-integrations';
+  | 'external-integrations'
+  | 'cloudflare-batch';
 
 export interface OnboardingStep1CapabilityItem {
   readonly id: OnboardingStep1CapabilityId;
@@ -214,6 +217,7 @@ export interface OnboardingStep1CapabilityFlags {
   readonly httpListener: boolean;
   readonly web: boolean;
   readonly surfaces: boolean;
+  readonly cloudflare: boolean;
 }
 
 export interface OnboardingAcknowledgementState {

@@ -35,6 +35,8 @@ function buildBaseSnapshot(): OnboardingSnapshotState {
       surfaces: structuredClone(DEFAULT_CONFIG.surfaces),
       service: structuredClone(DEFAULT_CONFIG.service),
       featureFlags: structuredClone(DEFAULT_CONFIG.featureFlags),
+      batch: structuredClone(DEFAULT_CONFIG.batch),
+      cloudflare: structuredClone(DEFAULT_CONFIG.cloudflare),
     },
     providerRouting: {
       primaryProviderId: DEFAULT_CONFIG.provider.provider,
@@ -248,6 +250,12 @@ describe('onboarding derivation helpers', () => {
         selected: true,
         detail: 'Review and configure 1 detected external app, service, or surface integration signal(s).',
       },
+      {
+        id: 'cloudflare-batch',
+        label: 'Use Cloudflare for batch or remote daemon work',
+        selected: false,
+        detail: 'Optionally configure Cloudflare Workers and Queues for explicit or eligible background batch jobs. Immediate local daemon behavior stays the default unless enabled.',
+      },
     ]);
 
     expect(deriveStep1CapabilityFlags(snapshot)).toEqual({
@@ -259,6 +267,7 @@ describe('onboarding derivation helpers', () => {
       httpListener: true,
       web: true,
       surfaces: true,
+      cloudflare: false,
     });
   });
 
@@ -522,6 +531,12 @@ describe('onboarding derivation helpers', () => {
         label: 'Connect GoodVibes to external apps and services',
         selected: false,
         detail: 'Enable setup screens for Slack, Discord, Telegram, Teams, Matrix, and other app surfaces you choose.',
+      },
+      {
+        id: 'cloudflare-batch',
+        label: 'Use Cloudflare for batch or remote daemon work',
+        selected: false,
+        detail: 'Optionally configure Cloudflare Workers and Queues for explicit or eligible background batch jobs. Immediate local daemon behavior stays the default unless enabled.',
       },
     ]);
   });

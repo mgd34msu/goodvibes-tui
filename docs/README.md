@@ -16,6 +16,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Voice and live TTS](voice-and-live-tts.md)
   Live `/tts` playback, TTS provider/voice configuration, local player requirements, and streaming voice API behavior.
 
+- [Cloudflare batch and control plane](cloudflare-batch.md)
+  Optional Workers/Queues batch setup, bootstrap-token flow, daemon routes, onboarding fields, and `/cloudflare` commands.
+
 - [Knowledge, artifacts, and multimodal](knowledge-artifacts-and-multimodal.md)
   Session memory, durable memory, structured knowledge, connectors, extractors, embeddings, artifacts, and multimodal analysis.
 
@@ -31,7 +34,7 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Panel authoring](panel-authoring.md)
   Class hierarchy, canonical example, palette convention, rendering utilities, input handling, performance instrumentation, and contract test registration for contributors building new TUI panels.
 
-- [Release notes](releases/0.18.10.md)
+- [Release notes](releases/0.19.34.md)
   Version-specific release notes for shipped TUI releases.
 
 - [Foundation artifacts](foundation-artifacts/README.md)

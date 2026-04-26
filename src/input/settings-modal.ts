@@ -539,6 +539,8 @@ export class SettingsModal {
         cat = 'network';
       } else if (rawCat === 'surfaces') {
         cat = 'surfaces';
+      } else if (rawCat === 'cloudflare' || rawCat === 'batch') {
+        cat = 'cloudflare';
       } else {
         cat = rawCat as SettingsCategory;
       }
@@ -768,6 +770,8 @@ export class SettingsModal {
         }
       } else if (rawCat === 'surfaces') {
         cat = 'surfaces';
+      } else if (rawCat === 'cloudflare' || rawCat === 'batch') {
+        cat = 'cloudflare';
       } else {
         cat = rawCat as SettingsCategory;
       }
