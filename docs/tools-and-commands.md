@@ -100,14 +100,14 @@ The `/wrfc` command opens the chain-status view directly. Constraint counts are 
 
 `/tts stop` cancels active playback and pending TTS requests without deleting the text response.
 
-`/config-tts` manages the TTS defaults used by spoken-output clients:
+`/config-tts` opens the interactive TTS configuration modal in the TUI. It manages the defaults used by spoken-output clients:
 
 - `tts.provider`
 - `tts.voice`
 - `tts.llmProvider`
 - `tts.llmModel`
 
-Use `/config-tts providers` to list providers with streaming TTS support and `/config-tts voices [provider]` to inspect available voices. Live local playback requires `mpv` or `ffplay` on `PATH`.
+Use `/config-tts providers` to choose a provider with streaming TTS support, `/config-tts voices [provider]` to choose a voice, and `/config-tts llm` to choose an optional `/tts` response model override. Without that override, `/tts` uses the current chat provider/model. Live local playback requires `mpv` or `ffplay` on `PATH`.
 
 ## Workflow-oriented commands
 

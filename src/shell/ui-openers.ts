@@ -111,6 +111,14 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     return new Set(results.filter((v): v is string => v !== null));
   }
 
+  const getCurrentModelForPickerTarget = (): string => {
+    const target = input.modelPicker.target;
+    if (target === 'helper') return String(configManager.get('helper.globalModel') || runtime.model);
+    if (target === 'tool') return String(configManager.get('tools.llmModel') || runtime.model);
+    if (target === 'tts') return String(configManager.get('tts.llmModel') || runtime.model);
+    return runtime.model;
+  };
+
   commandContext.openModelPicker = () => {
     void (async () => {
       const models = providerRegistry.getSelectableModels();
@@ -124,13 +132,15 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       });
       void input.modelPicker.loadRecentModels().catch(() => {}); // best-effort: prefetch for UI, failure is non-visible
       input.modalOpened('modelPicker');
-      input.modelPicker.openAllModels(models, runtime.model);
+      input.modelPicker.openAllModels(models, getCurrentModelForPickerTarget());
       render();
     })().catch((error: unknown) => {
       commandContext.print?.(`Model picker failed to open: ${error instanceof Error ? error.message : String(error)}`);
       render();
     });
   };
+
+  commandContext.openModelPickerWithTarget = (target) => input.openModelPickerWithTarget(target);
 
   commandContext.openProviderPicker = () => {
     void (async () => {

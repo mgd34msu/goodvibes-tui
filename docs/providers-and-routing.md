@@ -120,7 +120,7 @@ Current voice providers include:
 - `microsoft`
 - `vydra`
 
-The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults with `/config-tts provider <id>` and `/config-tts voice <voice-id>`. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
+The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults through the `/config-tts` modal or direct setters such as `/config-tts provider <id>` and `/config-tts voice <voice-id>`. `/tts` uses the active chat model by default, with an optional separate response-model override via `/config-tts llm`. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
 
 ## Media and multimodal providers
 

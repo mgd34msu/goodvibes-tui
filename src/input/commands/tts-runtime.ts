@@ -1,5 +1,6 @@
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
+import type { SelectionItem } from '../selection-modal.ts';
 
 const TTS_CONFIG_KEYS = new Set(['provider', 'voice', 'llm-provider', 'llm-model']);
 
@@ -33,19 +34,34 @@ export function registerTtsRuntimeCommands(registry: CommandRegistry): void {
     name: 'config-tts',
     aliases: ['tts-config'],
     description: 'Configure live TTS provider, voice, and optional spoken-turn LLM overrides',
-    usage: '[show|providers|voices [provider]|provider <id|clear>|voice <id|clear>|llm-provider <id|clear>|llm-model <id|clear>]',
+    usage: '[show|providers|voices [provider]|provider <id|clear>|voice <id|clear>|llm|llm clear|llm-provider <id|clear>|llm-model <id|clear>]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'show').toLowerCase();
       if (sub === 'show') {
+        if (args.length === 0 && openTtsConfigModal(ctx)) return;
         ctx.print(formatTtsConfig(ctx));
         return;
       }
       if (sub === 'providers') {
-        await printTtsProviders(ctx);
+        if (openTtsProviderPicker(ctx)) return;
+        printTtsProviders(ctx);
         return;
       }
       if (sub === 'voices') {
+        if (await openTtsVoicePicker(ctx, args[1])) return;
         await printTtsVoices(ctx, args[1]);
+        return;
+      }
+      if (sub === 'llm' || sub === 'model') {
+        const action = (args[1] ?? '').toLowerCase();
+        if (action === 'clear' || action === 'default') {
+          setTtsConfigValue(ctx, 'tts.llmProvider', '');
+          setTtsConfigValue(ctx, 'tts.llmModel', '');
+          ctx.print('TTS LLM override cleared. /tts will use the current chat model.');
+          return;
+        }
+        if (ctx.openModelPickerWithTarget?.('tts')) return;
+        ctx.print('TTS LLM picker is not available in this runtime. Use /config-tts llm-provider <id> and /config-tts llm-model <model>.');
         return;
       }
       if (TTS_CONFIG_KEYS.has(sub)) {
@@ -56,11 +72,17 @@ export function registerTtsRuntimeCommands(registry: CommandRegistry): void {
         }
         const key = ttsConfigKeyForSubcommand(sub);
         const nextValue = value.toLowerCase() === 'clear' ? '' : value;
-        ctx.platform.configManager.setDynamic(key, nextValue);
+        const previousProvider = key === 'tts.provider'
+          ? String(ctx.platform.configManager.get('tts.provider') ?? '').trim()
+          : '';
+        setTtsConfigValue(ctx, key, nextValue);
+        if (key === 'tts.provider' && previousProvider && previousProvider !== nextValue) {
+          setTtsConfigValue(ctx, 'tts.voice', '');
+        }
         ctx.print(`${key} ${nextValue ? `set to ${nextValue}` : 'cleared'}.`);
         return;
       }
-      ctx.print('Usage: /config-tts [show|providers|voices [provider]|provider <id|clear>|voice <id|clear>|llm-provider <id|clear>|llm-model <id|clear>]');
+      ctx.print('Usage: /config-tts [show|providers|voices [provider]|provider <id|clear>|voice <id|clear>|llm|llm clear|llm-provider <id|clear>|llm-model <id|clear>]');
     },
   });
 }
@@ -86,17 +108,139 @@ function formatTtsConfig(ctx: CommandContext): string {
     `  spoken-turn llm provider override: ${llmProvider || '(current chat provider)'}`,
     `  spoken-turn llm model override: ${llmModel || '(current chat model)'}`,
     '  playback: live streaming through local mpv or ffplay',
-    '  commands: /tts <prompt>, /tts stop, /config-tts providers, /config-tts voices [provider]',
+    '  commands: /tts <prompt>, /tts stop, /config-tts, /config-tts providers, /config-tts voices [provider], /config-tts llm',
   ].join('\n');
 }
 
-async function printTtsProviders(ctx: CommandContext): Promise<void> {
+function openTtsConfigModal(ctx: CommandContext): boolean {
+  if (!ctx.openSelection) return false;
+  const cm = ctx.platform.configManager;
+  const provider = String(cm.get('tts.provider') ?? '').trim() || '(default)';
+  const voice = String(cm.get('tts.voice') ?? '').trim() || '(provider default)';
+  const llmProvider = String(cm.get('tts.llmProvider') ?? '').trim();
+  const llmModel = String(cm.get('tts.llmModel') ?? '').trim();
+  const llm = llmProvider || llmModel ? `${llmProvider || 'provider'} / ${llmModel || 'model'}` : '(current chat model)';
+  const items: SelectionItem[] = [
+    {
+      id: 'provider',
+      label: 'TTS provider',
+      detail: provider,
+      category: 'speech output',
+      primaryAction: 'select',
+      actions: '[Enter] choose',
+    },
+    {
+      id: 'voice',
+      label: 'TTS voice',
+      detail: voice,
+      category: 'speech output',
+      primaryAction: 'select',
+      actions: '[Enter] choose',
+    },
+    {
+      id: 'llm',
+      label: 'TTS response model override',
+      detail: llm,
+      category: 'response generation',
+      primaryAction: 'select',
+      actions: '[Enter] choose model',
+    },
+    {
+      id: 'clear-voice',
+      label: 'Use provider default voice',
+      detail: 'clears tts.voice',
+      category: 'clear values',
+      primaryAction: 'select',
+    },
+    {
+      id: 'clear-llm',
+      label: 'Use current chat model for /tts',
+      detail: 'clears tts.llmProvider and tts.llmModel',
+      category: 'clear values',
+      primaryAction: 'select',
+    },
+  ];
+
+  ctx.openSelection('TTS Configuration', items, { allowSearch: true }, (result) => {
+    if (!result) return;
+    if (result.item.id === 'provider') {
+      openTtsProviderPicker(ctx);
+      return;
+    }
+    if (result.item.id === 'voice') {
+      void openTtsVoicePicker(ctx);
+      return;
+    }
+    if (result.item.id === 'llm') {
+      if (!ctx.openModelPickerWithTarget?.('tts')) {
+        ctx.print('TTS LLM picker is not available in this runtime.');
+      }
+      return;
+    }
+    if (result.item.id === 'clear-voice') {
+      setTtsConfigValue(ctx, 'tts.voice', '');
+      ctx.print('TTS voice cleared. The provider default voice will be used.');
+      return;
+    }
+    if (result.item.id === 'clear-llm') {
+      setTtsConfigValue(ctx, 'tts.llmProvider', '');
+      setTtsConfigValue(ctx, 'tts.llmModel', '');
+      ctx.print('TTS LLM override cleared. /tts will use the current chat model.');
+    }
+  });
+  return true;
+}
+
+function getStreamingTtsProviders(ctx: CommandContext): Array<{ id: string; label: string; capabilities: readonly string[] }> {
+  const registry = ctx.platform.voiceProviderRegistry;
+  if (!registry) {
+    return [];
+  }
+  return registry.list().filter((provider) => provider.capabilities.includes('tts-stream'));
+}
+
+function openTtsProviderPicker(ctx: CommandContext): boolean {
+  if (!ctx.openSelection) return false;
+  const registry = ctx.platform.voiceProviderRegistry;
+  if (!registry) {
+    ctx.print('Voice provider registry is not available in this runtime.');
+    return true;
+  }
+  const providers = getStreamingTtsProviders(ctx);
+  if (providers.length === 0) {
+    ctx.print('No streaming TTS providers are registered.');
+    return true;
+  }
+  const current = String(ctx.platform.configManager.get('tts.provider') ?? '').trim();
+  const items: SelectionItem[] = providers.map((provider) => ({
+    id: provider.id,
+    label: provider.label,
+    detail: provider.id === current ? `${provider.id}  (current)` : provider.id,
+    category: 'streaming TTS providers',
+    primaryAction: 'select',
+    actions: '[Enter] set provider',
+  }));
+  ctx.openSelection('Choose TTS Provider', items, { preSelectId: current, allowSearch: true }, (result) => {
+    if (!result) return;
+    const previous = String(ctx.platform.configManager.get('tts.provider') ?? '').trim();
+    setTtsConfigValue(ctx, 'tts.provider', result.item.id);
+    if (previous && previous !== result.item.id) {
+      setTtsConfigValue(ctx, 'tts.voice', '');
+      ctx.print(`TTS provider set to ${result.item.id}. TTS voice was cleared because voices are provider-specific.`);
+    } else {
+      ctx.print(`TTS provider set to ${result.item.id}.`);
+    }
+  });
+  return true;
+}
+
+function printTtsProviders(ctx: CommandContext): void {
   const registry = ctx.platform.voiceProviderRegistry;
   if (!registry) {
     ctx.print('Voice provider registry is not available in this runtime.');
     return;
   }
-  const providers = registry.list().filter((provider) => provider.capabilities.includes('tts-stream'));
+  const providers = getStreamingTtsProviders(ctx);
   if (providers.length === 0) {
     ctx.print('No streaming TTS providers are registered.');
     return;
@@ -104,7 +248,54 @@ async function printTtsProviders(ctx: CommandContext): Promise<void> {
   ctx.print([
     'Streaming TTS Providers',
     ...providers.map((provider) => `  ${provider.id}: ${provider.label}`),
+    '',
+    'Set provider: /config-tts provider <provider-id>',
   ].join('\n'));
+}
+
+async function openTtsVoicePicker(ctx: CommandContext, providerArg?: string): Promise<boolean> {
+  if (!ctx.openSelection) return false;
+  const service = ctx.platform.voiceService;
+  if (!service) {
+    ctx.print('Voice service is not available in this runtime.');
+    return true;
+  }
+  const providerId = (providerArg ?? String(ctx.platform.configManager.get('tts.provider') ?? '')).trim() || undefined;
+  try {
+    const voices = await service.listVoices(providerId);
+    if (voices.length === 0) {
+      ctx.print(providerId ? `No voices returned for ${providerId}.` : 'No TTS voices returned.');
+      return true;
+    }
+    const current = String(ctx.platform.configManager.get('tts.voice') ?? '').trim();
+    const items: SelectionItem[] = [
+      {
+        id: '__default__',
+        label: 'Use provider default voice',
+        detail: current ? 'clears tts.voice' : '(current)',
+        category: 'voice',
+        primaryAction: 'select',
+      },
+      ...voices.map((voice) => ({
+        id: voice.id,
+        label: voice.label || voice.id,
+        detail: voice.id === current ? `${voice.id}  (current)` : voice.id,
+        category: providerId ?? 'voices',
+        primaryAction: 'select' as const,
+        actions: '[Enter] set voice',
+      })),
+    ];
+    ctx.openSelection(`Choose TTS Voice${providerId ? ` (${providerId})` : ''}`, items, { preSelectId: current || '__default__', allowSearch: true }, (result) => {
+      if (!result) return;
+      const nextVoice = result.item.id === '__default__' ? '' : result.item.id;
+      setTtsConfigValue(ctx, 'tts.voice', nextVoice);
+      ctx.print(nextVoice ? `TTS voice set to ${nextVoice}.` : 'TTS voice cleared. The provider default voice will be used.');
+    });
+    return true;
+  } catch (error) {
+    ctx.print(`Unable to list TTS voices: ${error instanceof Error ? error.message : String(error)}`);
+    return true;
+  }
 }
 
 async function printTtsVoices(ctx: CommandContext, providerArg?: string): Promise<void> {
@@ -124,10 +315,17 @@ async function printTtsVoices(ctx: CommandContext, providerArg?: string): Promis
       `TTS Voices${providerId ? ` (${providerId})` : ''}`,
       ...voices.slice(0, 60).map((voice) => `  ${voice.id}: ${voice.label}`),
       ...(voices.length > 60 ? [`  ... ${voices.length - 60} more`] : []),
+      '',
+      'Set voice: /config-tts voice <voice-id>',
+      'Use provider default voice: /config-tts voice clear',
     ].join('\n'));
   } catch (error) {
     ctx.print(`Unable to list TTS voices: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+function setTtsConfigValue(ctx: CommandContext, key: ConfigKey, value: string): void {
+  ctx.platform.configManager.setDynamic(key, value);
 }
 
 function formatValue(value: unknown): string {

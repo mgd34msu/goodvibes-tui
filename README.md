@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.19.32-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.19.33-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -1269,7 +1269,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/notify [action]` | `/ntf` | Manage webhook notifications (ntfy.sh): add, remove, list, clear, test |
 | `/voice [action]` | — | Review optional voice posture and export/inspect voice bundles |
 | `/tts <prompt>` | — | Submit a normal prompt and play the assistant response through live TTS |
-| `/config-tts [action]` | `/tts-config` | Configure TTS provider, voice, and optional spoken-turn LLM overrides |
+| `/config-tts [action]` | `/tts-config` | Open TTS configuration for provider, voice, and optional `/tts` response-model override |
 | `/diff [target]` | `/d` | Show unified diff: session, head, working, staged, or a git ref |
 | `/mcp [tools]` | — | List connected MCP servers and their tools |
 | `/help [command]` | `/h`, `/?` | Show available commands and keyboard shortcuts |

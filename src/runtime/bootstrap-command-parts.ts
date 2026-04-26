@@ -203,6 +203,10 @@ export function createBootstrapCommandActions(
           configManager.set('tools.llmModel', key);
           configManager.setDynamic('tools.llmEnabled' as never, true);
           conversation.log(`Tool LLM set to: ${def.displayName} (${def.provider})`, { fg: '135' });
+        } else if (resolvedTarget === 'tts') {
+          configManager.set('tts.llmProvider', def.provider);
+          configManager.set('tts.llmModel', key);
+          conversation.log(`TTS LLM set to: ${def.displayName} (${def.provider})`, { fg: '135' });
         } else {
           // Default: main provider/model
           if (contextCap != null && contextCap > 0) {

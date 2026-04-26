@@ -12,8 +12,9 @@ export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap';
  * 'main'   → provider.provider + provider.model (default)
  * 'helper' → helper.globalProvider + helper.globalModel (+ helper.enabled: true)
  * 'tool'   → tools.llmProvider + tools.llmModel (+ tools.llmEnabled: true)
+ * 'tts'    → tts.llmProvider + tts.llmModel
  */
-export type ModelPickerTarget = 'main' | 'helper' | 'tool';
+export type ModelPickerTarget = 'main' | 'helper' | 'tool' | 'tts';
 
 /**
  * Pricing tier filter.

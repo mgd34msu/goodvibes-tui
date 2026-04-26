@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.33] — 2026-04-26
+
+### Changed
+- `/config-tts` now opens an interactive TTS configuration modal instead of only printing provider and voice lists.
+- `/config-tts providers` and `/config-tts voices [provider]` open selectable provider/voice pickers in the TUI and persist the selected SDK config keys.
+- `/config-tts llm` opens the model picker for a separate `/tts` response-model override; `/tts` still defaults to the current chat provider/model when no override is configured.
+
+### Fixed
+- `/tts` now honors configured `tts.llmProvider`/`tts.llmModel` for that spoken turn without changing the main chat model or global provider settings.
+- Changing the TTS provider clears the provider-specific voice selection so a stale voice id is not reused against a different provider.
+
 ## [0.19.32] — 2026-04-25
 
 ### Added
