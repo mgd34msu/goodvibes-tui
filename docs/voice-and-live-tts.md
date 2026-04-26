@@ -15,24 +15,28 @@ The `/tts` command does not replace text output. The normal assistant response s
 /config-tts
 /config-tts providers
 /config-tts voices [provider]
+/config-tts llm
+/config-tts llm clear
 /config-tts provider <provider-id|clear>
 /config-tts voice <voice-id|clear>
 /config-tts llm-provider <provider-id|clear>
 /config-tts llm-model <model-id|clear>
 ```
 
-`/tts <prompt>` submits the prompt through the normal conversation path using the active chat provider/model. Assistant deltas are chunked at sentence or phrase boundaries and sent to streaming TTS in order. Audio failures are reported as non-blocking TUI status messages and do not cancel the text turn.
+`/tts <prompt>` submits the prompt through the normal conversation path. It uses the active chat provider/model by default, unless a separate TTS response model override is configured. Assistant deltas are chunked at sentence or phrase boundaries and sent to streaming TTS in order. Audio failures are reported as non-blocking TUI status messages and do not cancel the text turn.
 
 `/tts stop` cancels pending TTS requests, kills active playback, and clears the queued audio chunks.
 
-`/config-tts` writes the SDK TTS config keys:
+`/config-tts` opens the TTS configuration modal in the TUI. From there users can choose the streaming TTS provider, choose a voice from that provider, open the model picker for the TTS response model override, or clear voice/model overrides.
+
+The modal and direct commands write the SDK TTS config keys:
 
 - `tts.provider`
 - `tts.voice`
 - `tts.llmProvider`
 - `tts.llmModel`
 
-The current TUI live `/tts` path uses the active chat provider/model for text generation. `tts.llmProvider` and `tts.llmModel` are stored as optional spoken-turn override settings for SDK-compatible clients and future TUI model-routing support.
+By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config-tts llm`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model.
 
 ## Playback Requirements
 
@@ -54,6 +58,8 @@ Useful discovery commands:
 /config-tts voices elevenlabs
 ```
 
+In the TUI these open selection modals that set the chosen provider or voice. In non-interactive command contexts they print the available IDs and the direct setter command.
+
 For ElevenLabs, configure provider credentials in the environment before starting GoodVibes:
 
 ```bash
@@ -67,6 +73,7 @@ Then set the TTS defaults if desired:
 ```text
 /config-tts provider elevenlabs
 /config-tts voice <voice-id>
+/config-tts llm
 ```
 
 Leaving `tts.voice` empty lets the provider choose its default voice.

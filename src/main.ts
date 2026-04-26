@@ -52,6 +52,10 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-displ
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState } from './cli/tui-startup.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
+import {
+  attachSpokenTurnModelRouting,
+  createSpokenTurnInputOptions,
+} from './audio/spoken-turn-model-routing.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -251,6 +255,12 @@ async function main() {
   });
   stopSpokenOutputForExit = () => spokenTurns.stop();
   unsubs.push(...spokenTurns.unsubs);
+  unsubs.push(attachSpokenTurnModelRouting({
+    orchestrator,
+    providerRegistry,
+    configManager,
+    notify: (message) => { systemMessageRouter.high(message); render(); },
+  }));
 
   const submitInput = (text: string, content?: ContentPart[], options: { readonly spokenOutput?: boolean } = {}) => {
     input.clearModalStack();
@@ -289,7 +299,8 @@ async function main() {
       if (options.spokenOutput && processedText) {
         spokenTurns.submitNextTurn(processedText);
       }
-      orchestrator.handleUserInput(processedText, content).catch((err: unknown) => {
+      const inputOptions = options.spokenOutput ? createSpokenTurnInputOptions() : undefined;
+      orchestrator.handleUserInput(processedText, content, inputOptions).catch((err: unknown) => {
         logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: summarizeError(err) });
       });
     } else {
