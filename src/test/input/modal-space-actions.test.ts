@@ -162,6 +162,73 @@ describe('modal space actions', () => {
     expect(state.modalStack).toEqual(['selection']);
   });
 
+  test('selection modal preserves callbacks across chained selection modals', () => {
+    let selected = { id: 'llm-provider', label: 'TTS LLM provider' };
+    let closeCount = 0;
+    let modelCallbackCalled = 0;
+    let currentCallback: ((result: { item: { id: string; label: string }; action: SelectionAction } | null) => void) | null = null;
+    const modelCallback = (result: { item: { id: string; label: string }; action: SelectionAction } | null) => {
+      if (result?.item.id === 'anthropic:claude-sonnet') modelCallbackCalled++;
+    };
+    const providerCallback = (result: { item: { id: string; label: string }; action: SelectionAction } | null) => {
+      if (result?.item.id !== 'anthropic') return;
+      selected = { id: 'anthropic:claude-sonnet', label: 'Claude Sonnet' };
+      state.selectionModal.active = true;
+      state.modalStack.push('selection');
+      currentCallback = modelCallback;
+    };
+    const firstCallback = () => {
+      selected = { id: 'anthropic', label: 'anthropic' };
+      state.selectionModal.active = true;
+      state.modalStack.push('selection');
+      currentCallback = providerCallback;
+    };
+    currentCallback = firstCallback;
+    const state = {
+      selectionModal: {
+        active: true,
+        query: '',
+        searchFocused: false,
+        allowSearch: true,
+        customActions: new Map<string, SelectionAction>(),
+        selectedIndex: 0,
+        getSelected: () => selected,
+        setQuery: () => {},
+        focusSearch: () => {},
+        blurSearch: () => {},
+        moveUp: () => {},
+        moveDown: () => {},
+        close: () => {
+          closeCount++;
+          state.selectionModal.active = false;
+        },
+      },
+      selectionCallback: currentCallback,
+      getSelectionCallback: () => currentCallback,
+      setSelectionCallback: (callback: typeof currentCallback) => { currentCallback = callback; },
+      modalStack: ['selection'],
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleSelectionModalToken(state, { type: 'key', name: '\r', logicalName: 'enter', ctrl: false, shift: false, meta: false });
+    expect(state.selectionModal.active).toBe(true);
+    expect(state.selectionCallback).toBe(providerCallback);
+    expect(currentCallback).toBe(providerCallback);
+    expect(state.modalStack).toEqual(['selection']);
+
+    handleSelectionModalToken(state, { type: 'key', name: '\r', logicalName: 'enter', ctrl: false, shift: false, meta: false });
+    expect(state.selectionModal.active).toBe(true);
+    expect(state.selectionCallback).toBe(modelCallback);
+    expect(currentCallback).toBe(modelCallback);
+    expect(state.modalStack).toEqual(['selection']);
+
+    handleSelectionModalToken(state, { type: 'key', name: '\r', logicalName: 'enter', ctrl: false, shift: false, meta: false });
+    expect(modelCallbackCalled).toBe(1);
+    expect(closeCount).toBe(3);
+    expect(currentCallback).toBeNull();
+  });
+
   test('selection modal uses left/right to adjust toggleable values', () => {
     const results: Array<{ action: SelectionAction; step?: number }> = [];
     const state = {
@@ -285,6 +352,42 @@ describe('modal space actions', () => {
     }, { type: 'key', name: '', logicalName: 'right', ctrl: false, shift: true, meta: false });
     expect(handled).toBe(true);
     expect(calls).toEqual([{ direction: 'right', step: 10 }]);
+  });
+
+  test('settings modal opens provider-model picker requests before model-only picker requests', () => {
+    const providerTargets: string[] = [];
+    const modelTargets: string[] = [];
+    const settingsModal = {
+      active: true,
+      editingMode: false,
+      currentCategory: 'voice',
+      commitEdit: () => {},
+      toggleSelectedFlag: () => {},
+      activateSelected: () => {
+        settingsModal.pendingProviderModelPickerTarget = 'tts';
+      },
+      pendingModelPickerTarget: null as import('../../input/model-picker.ts').ModelPickerTarget | null,
+      pendingProviderModelPickerTarget: null as import('../../input/model-picker.ts').ModelPickerTarget | null,
+      adjustSelected: () => {},
+      moveUp: () => {},
+      moveDown: () => {},
+      nextCategory: () => {},
+      editBackspace: () => {},
+      editChar: () => {},
+    };
+
+    const handled = handleSettingsModalToken({
+      settingsModal,
+      openProviderModelPickerWithTarget: (target) => { providerTargets.push(target); },
+      openModelPickerWithTarget: (target) => { modelTargets.push(target); },
+      requestRender: () => {},
+      handleEscape: () => {},
+    }, { type: 'key', name: '', logicalName: 'enter', ctrl: false, shift: false, meta: false });
+
+    expect(handled).toBe(true);
+    expect(providerTargets).toEqual(['tts']);
+    expect(modelTargets).toEqual([]);
+    expect(settingsModal.pendingProviderModelPickerTarget).toBeNull();
   });
 
   test('settings modal applies left/right adjustments to booleans and numbers', () => {

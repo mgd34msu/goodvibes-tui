@@ -13,11 +13,13 @@ function makeContext(options: {
   out?: string[];
   openedSelections?: OpenedSelection[];
   modelTargets?: string[];
+  providerModelTargets?: string[];
   initialConfig?: Record<string, unknown>;
 } = {}): { ctx: CommandContext; values: Record<string, unknown> } {
   const out = options.out ?? [];
   const openedSelections = options.openedSelections ?? [];
   const modelTargets = options.modelTargets ?? [];
+  const providerModelTargets = options.providerModelTargets ?? [];
   const values: Record<string, unknown> = {
     'tts.provider': 'elevenlabs',
     'tts.voice': '',
@@ -74,6 +76,10 @@ function makeContext(options: {
     },
     openModelPickerWithTarget: (target) => {
       modelTargets.push(target);
+      return true;
+    },
+    openProviderModelPickerWithTarget: (target) => {
+      providerModelTargets.push(target);
       return true;
     },
   };
@@ -134,7 +140,8 @@ describe('TTS runtime commands', () => {
     registerTtsRuntimeCommands(registry);
     const openedSelections: OpenedSelection[] = [];
     const modelTargets: string[] = [];
-    const { ctx } = makeContext({ openedSelections, modelTargets });
+    const providerModelTargets: string[] = [];
+    const { ctx } = makeContext({ openedSelections, modelTargets, providerModelTargets });
 
     await registry.execute('config-tts', [], ctx);
 
@@ -152,8 +159,8 @@ describe('TTS runtime commands', () => {
     const providerItem = openedSelections[0].items.find((item) => item.id === 'llm-provider');
     expect(providerItem).toBeDefined();
     openedSelections[0].callback({ item: providerItem!, action: 'select' });
-    expect(openedSelections[1].title).toBe('Choose TTS LLM Provider');
     expect(modelTargets).toEqual([]);
+    expect(providerModelTargets).toEqual(['tts']);
   });
 
   test('/config-tts provider picker sets provider and clears stale voice', async () => {
@@ -199,26 +206,26 @@ describe('TTS runtime commands', () => {
     expect(out).toContain('TTS voice set to voice-1.');
   });
 
-  test('/config-tts llm chooses provider then provider-scoped model and clear resets overrides', async () => {
+  test('/config-tts llm opens the shared provider-model picker and clear resets overrides', async () => {
     const registry = new CommandRegistry();
     registerTtsRuntimeCommands(registry);
     const out: string[] = [];
-    const openedSelections: OpenedSelection[] = [];
+    const providerModelTargets: string[] = [];
     const { ctx, values } = makeContext({
       out,
-      openedSelections,
+      providerModelTargets,
       initialConfig: { 'tts.llmProvider': 'openai', 'tts.llmModel': 'openai:gpt-5.4' },
     });
 
     await registry.execute('config-tts', ['llm'], ctx);
-    expect(openedSelections[0].title).toBe('Choose TTS LLM Provider');
-    const anthropic = openedSelections[0].items.find((item) => item.id === 'anthropic');
-    expect(anthropic).toBeDefined();
-    openedSelections[0].callback({ item: anthropic!, action: 'select' });
-    expect(openedSelections[1].title).toBe('Choose TTS LLM Model (anthropic)');
-    const sonnet = openedSelections[1].items.find((item) => item.id === 'anthropic:claude-sonnet');
-    expect(sonnet).toBeDefined();
-    openedSelections[1].callback({ item: sonnet!, action: 'select' });
+    expect(providerModelTargets).toEqual(['tts']);
+
+    await registry.execute('config-tts', ['llm-provider'], ctx);
+    await registry.execute('config-tts', ['llm-model'], ctx);
+    expect(providerModelTargets).toEqual(['tts', 'tts', 'tts']);
+
+    await registry.execute('config-tts', ['llm-provider', 'anthropic'], ctx);
+    await registry.execute('config-tts', ['llm-model', 'anthropic:claude-sonnet'], ctx);
     await registry.execute('config-tts', ['llm', 'clear'], ctx);
 
     expect(values['tts.llmProvider']).toBe('');

@@ -61,15 +61,14 @@ export function registerTtsRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('TTS LLM override cleared. /tts will use the current chat model.');
           return;
         }
-        if (openTtsLlmProviderPicker(ctx)) return;
+        if (openTtsLlmPicker(ctx)) return;
         ctx.print('TTS LLM picker is not available in this runtime. Use /config-tts llm-provider <id> and /config-tts llm-model <model>.');
         return;
       }
       if (TTS_CONFIG_KEYS.has(sub)) {
         const value = args.slice(1).join(' ').trim();
         if (!value) {
-          if (sub === 'llm-provider' && openTtsLlmProviderPicker(ctx)) return;
-          if (sub === 'llm-model' && openTtsLlmModelPicker(ctx)) return;
+          if ((sub === 'llm-provider' || sub === 'llm-model') && openTtsLlmPicker(ctx)) return;
           ctx.print(`Usage: /config-tts ${sub} <value|clear>`);
           return;
         }
@@ -155,7 +154,7 @@ function openTtsConfigModal(ctx: CommandContext): boolean {
       detail: llmProviderLabel,
       category: 'response generation',
       primaryAction: 'select',
-      actions: '[Enter] choose provider',
+      actions: '[Enter] choose provider and model',
     },
     {
       id: 'llm-model',
@@ -163,7 +162,7 @@ function openTtsConfigModal(ctx: CommandContext): boolean {
       detail: llmModelLabel,
       category: 'response generation',
       primaryAction: 'select',
-      actions: '[Enter] choose model',
+      actions: '[Enter] choose provider and model',
     },
     {
       id: 'clear-voice',
@@ -192,11 +191,11 @@ function openTtsConfigModal(ctx: CommandContext): boolean {
       return;
     }
     if (result.item.id === 'llm-provider') {
-      openTtsLlmProviderPicker(ctx);
+      openTtsLlmPicker(ctx);
       return;
     }
     if (result.item.id === 'llm-model') {
-      openTtsLlmModelPicker(ctx);
+      openTtsLlmPicker(ctx);
       return;
     }
     if (result.item.id === 'clear-voice') {
@@ -213,95 +212,9 @@ function openTtsConfigModal(ctx: CommandContext): boolean {
   return true;
 }
 
-function openTtsLlmProviderPicker(ctx: CommandContext): boolean {
-  if (!ctx.openSelection) return false;
-  const models = getSelectableLlmModels(ctx);
-  if (models.length === 0) {
-    ctx.print('No selectable LLM models are registered.');
-    return true;
-  }
-  const currentProvider = String(ctx.platform.configManager.get('tts.llmProvider') ?? '').trim() || ctx.session.runtime.provider;
-  const providers = [...new Set(models.map((model) => model.provider))].sort((a, b) => a.localeCompare(b));
-  const counts = new Map<string, number>();
-  for (const model of models) counts.set(model.provider, (counts.get(model.provider) ?? 0) + 1);
-  const items: SelectionItem[] = providers.map((provider) => ({
-    id: provider,
-    label: provider,
-    detail: provider === currentProvider
-      ? `${counts.get(provider) ?? 0} model(s)  (current)`
-      : `${counts.get(provider) ?? 0} model(s)`,
-    category: 'LLM providers',
-    primaryAction: 'select',
-    actions: '[Enter] choose provider',
-  }));
-  ctx.openSelection('Choose TTS LLM Provider', items, { preSelectId: currentProvider, allowSearch: true }, (result) => {
-    if (!result) return;
-    const previousProvider = String(ctx.platform.configManager.get('tts.llmProvider') ?? '').trim();
-    setTtsConfigValue(ctx, 'tts.llmProvider', result.item.id);
-    if (previousProvider && previousProvider !== result.item.id) {
-      setTtsConfigValue(ctx, 'tts.llmModel', '');
-    }
-    openTtsLlmModelPicker(ctx, result.item.id);
-  });
-  return true;
-}
-
-function openTtsLlmModelPicker(ctx: CommandContext, providerArg?: string): boolean {
-  if (!ctx.openSelection) return false;
-  const models = getSelectableLlmModels(ctx);
-  if (models.length === 0) {
-    ctx.print('No selectable LLM models are registered.');
-    return true;
-  }
-  const configuredProvider = String(ctx.platform.configManager.get('tts.llmProvider') ?? '').trim();
-  const providerId = (providerArg ?? (configuredProvider || ctx.session.runtime.provider)).trim();
-  if (!providerId) return openTtsLlmProviderPicker(ctx);
-  const providerModels = models
-    .filter((model) => model.provider === providerId)
-    .sort((left, right) => modelSortLabel(left).localeCompare(modelSortLabel(right)));
-  if (providerModels.length === 0) {
-    ctx.print(`No selectable LLM models are registered for provider '${providerId}'.`);
-    return true;
-  }
-  const currentModel = String(ctx.platform.configManager.get('tts.llmModel') ?? '').trim() || ctx.session.runtime.model;
-  const items: SelectionItem[] = [
-    {
-      id: '__current_chat__',
-      label: 'Use current chat model',
-      detail: 'clears tts.llmProvider and tts.llmModel',
-      category: providerId,
-      primaryAction: 'select',
-    },
-    ...providerModels.map((model) => {
-      const key = getModelRegistryKey(model);
-      return {
-        id: key,
-        label: model.displayName,
-        detail: key,
-        category: providerId,
-        primaryAction: 'select' as const,
-        actions: '[Enter] set model',
-      };
-    }),
-  ];
-  ctx.openSelection(`Choose TTS LLM Model (${providerId})`, items, { preSelectId: currentModel, allowSearch: true }, (result) => {
-    if (!result) return;
-    if (result.item.id === '__current_chat__') {
-      setTtsConfigValue(ctx, 'tts.llmProvider', '');
-      setTtsConfigValue(ctx, 'tts.llmModel', '');
-      ctx.print('TTS LLM override cleared. /tts will use the current chat model.');
-      return;
-    }
-    const selected = providerModels.find((model) => getModelRegistryKey(model) === result.item.id || model.id === result.item.id);
-    if (!selected) {
-      ctx.print(`TTS LLM model '${result.item.id}' is no longer available.`);
-      return;
-    }
-    setTtsConfigValue(ctx, 'tts.llmProvider', selected.provider);
-    setTtsConfigValue(ctx, 'tts.llmModel', getModelRegistryKey(selected));
-    ctx.print(`TTS LLM set to ${selected.displayName} (${selected.provider}).`);
-  });
-  return true;
+function openTtsLlmPicker(ctx: CommandContext): boolean {
+  if (ctx.openProviderModelPickerWithTarget?.('tts')) return true;
+  return ctx.openModelPickerWithTarget?.('tts') ?? false;
 }
 
 function getStreamingTtsProviders(ctx: CommandContext): Array<{ id: string; label: string; capabilities: readonly string[] }> {
@@ -421,10 +334,6 @@ function findSelectableLlmModel(ctx: CommandContext, ref: string, preferredProvi
 
 function getModelRegistryKey(model: ModelDefinition): string {
   return model.registryKey ?? `${model.provider}:${model.id}`;
-}
-
-function modelSortLabel(model: ModelDefinition): string {
-  return `${model.displayName} ${getModelRegistryKey(model)}`.toLowerCase();
 }
 
 async function openTtsVoicePicker(ctx: CommandContext, providerArg?: string): Promise<boolean> {

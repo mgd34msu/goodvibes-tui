@@ -153,6 +153,7 @@ export interface InputFeedContext {
   readonly cleanupMarkerRegistry: (text: string) => void;
   readonly expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[];
   readonly openModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
+  readonly openProviderModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
   readonly onModelPickerCommit: () => boolean;
   readonly onOnboardingAction: (action: OnboardingWizardAction) => void;
   readonly exitApp: () => void;
@@ -176,6 +177,10 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       searchShortcutMatch: token.type === 'key' && keybindings.matches('search', token),
       selectionModal: context.selectionModal,
       selectionCallback: context.selectionCallback,
+      getSelectionCallback: () => context.selectionCallback,
+      setSelectionCallback: (callback) => {
+        context.selectionCallback = callback;
+      },
       bookmarkModal: context.bookmarkModal,
       settingsModal: context.settingsModal,
       sessionPickerModal: context.sessionPickerModal,
@@ -213,6 +218,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       scroll: context.scroll,
       getScrollTop: context.getScrollTop,
       openModelPickerWithTarget: context.openModelPickerWithTarget,
+      openProviderModelPickerWithTarget: context.openProviderModelPickerWithTarget,
       onModelPickerCommit: context.onModelPickerCommit,
       onOnboardingAction: context.onOnboardingAction,
     }, token);

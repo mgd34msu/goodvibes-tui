@@ -41,13 +41,21 @@ export {
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
 
+type ModelPickerLaunch =
+  | { readonly flow: 'providerModel'; readonly target: ModelPickerTarget }
+  | { readonly flow: 'model'; readonly target: ModelPickerTarget };
+
 /**
- * Map a config key to the model picker target it should open, or null if the
- * setting should use the normal inline text-edit flow.
+ * Map config keys to the shared provider/model picker flows. Provider rows open
+ * provider first; model rows open directly to models for the same target.
  */
-function _modelPickerTargetForKey(key: string): ModelPickerTarget | null {
-  if (key === 'helper.globalProvider' || key === 'helper.globalModel') return 'helper';
-  if (key === 'tools.llmProvider' || key === 'tools.llmModel') return 'tool';
+function _modelPickerLaunchForKey(key: string): ModelPickerLaunch | null {
+  if (key === 'helper.globalProvider') return { flow: 'providerModel', target: 'helper' };
+  if (key === 'helper.globalModel') return { flow: 'model', target: 'helper' };
+  if (key === 'tools.llmProvider') return { flow: 'providerModel', target: 'tool' };
+  if (key === 'tools.llmModel') return { flow: 'model', target: 'tool' };
+  if (key === 'tts.llmProvider') return { flow: 'providerModel', target: 'tts' };
+  if (key === 'tts.llmModel') return { flow: 'model', target: 'tts' };
   return null;
 }
 
@@ -94,6 +102,8 @@ export class SettingsModal {
    * Consumed and cleared by the route handler after each Enter/Space action.
    */
   public pendingModelPickerTarget: ModelPickerTarget | null = null;
+  /** Set when the highlighted setting should open provider selection before model selection. */
+  public pendingProviderModelPickerTarget: ModelPickerTarget | null = null;
   /** Provider awaiting explicit logout confirmation, if any. */
   public subscriptionLogoutConfirmationTarget: string | null = null;
 
@@ -146,6 +156,8 @@ export class SettingsModal {
     this.selectedIndex = 0;
     this.editingMode = false;
     this.editBuffer = '';
+    this.pendingModelPickerTarget = null;
+    this.pendingProviderModelPickerTarget = null;
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
@@ -156,6 +168,8 @@ export class SettingsModal {
     this.active = false;
     this.editingMode = false;
     this.editBuffer = '';
+    this.pendingModelPickerTarget = null;
+    this.pendingProviderModelPickerTarget = null;
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
@@ -290,9 +304,13 @@ export class SettingsModal {
     const { setting } = entry;
 
     // Delegate provider/model picker settings to the model picker UI
-    const pickerTarget = _modelPickerTargetForKey(setting.key);
-    if (pickerTarget !== null) {
-      this.pendingModelPickerTarget = pickerTarget;
+    const pickerLaunch = _modelPickerLaunchForKey(setting.key);
+    if (pickerLaunch !== null) {
+      if (pickerLaunch.flow === 'providerModel') {
+        this.pendingProviderModelPickerTarget = pickerLaunch.target;
+      } else {
+        this.pendingModelPickerTarget = pickerLaunch.target;
+      }
       return;
     }
 

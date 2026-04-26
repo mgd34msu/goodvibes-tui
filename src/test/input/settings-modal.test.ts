@@ -184,6 +184,34 @@ describe('SettingsModal', () => {
     expect(modal.editBuffer).toBeTruthy(); // pre-populated with current value
   });
 
+  test('activateSelected delegates TTS LLM settings to the targeted provider-model picker flow', () => {
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    modal.categoryIndex = SETTINGS_CATEGORIES.indexOf('display');
+    modal.groups.set('display', [
+      {
+        setting: { key: 'tts.llmProvider', type: 'string', label: 'TTS LLM provider', description: '' } as never,
+        currentValue: '',
+        isDefault: true,
+      },
+      {
+        setting: { key: 'tts.llmModel', type: 'string', label: 'TTS LLM model', description: '' } as never,
+        currentValue: '',
+        isDefault: true,
+      },
+    ]);
+
+    modal.selectedIndex = 0;
+    modal.activateSelected();
+    expect(modal.pendingProviderModelPickerTarget).toBe('tts');
+    expect(modal.pendingModelPickerTarget).toBeNull();
+
+    modal.pendingProviderModelPickerTarget = null;
+    modal.selectedIndex = 1;
+    modal.activateSelected();
+    expect(modal.pendingModelPickerTarget).toBe('tts');
+    expect(modal.pendingProviderModelPickerTarget).toBeNull();
+  });
+
   test('editChar appends to editBuffer', () => {
     modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
     const items = modal.currentItems;
