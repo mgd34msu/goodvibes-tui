@@ -27,7 +27,7 @@ The `/tts` command does not replace text output. The normal assistant response s
 
 `/tts stop` cancels pending TTS requests, kills active playback, and clears the queued audio chunks.
 
-`/config-tts` opens the TTS configuration modal in the TUI. From there users can choose the streaming TTS provider, choose a voice from that provider, open the model picker for the TTS response model override, or clear voice/model overrides.
+`/config-tts` opens the TTS configuration modal in the TUI. From there users can choose the streaming TTS provider, choose a voice from that provider, open the shared provider-to-model picker for the TTS response model override, or clear voice/model overrides.
 
 The modal and direct commands write the SDK TTS config keys:
 
@@ -36,7 +36,7 @@ The modal and direct commands write the SDK TTS config keys:
 - `tts.llmProvider`
 - `tts.llmModel`
 
-By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config-tts llm`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model.
+By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config-tts llm`, `/config-tts llm-provider`, or `/config-tts llm-model`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model. The interactive path starts with provider selection and then shows models for that provider, using the same picker flow as the main model/provider commands.
 
 ## Playback Requirements
 

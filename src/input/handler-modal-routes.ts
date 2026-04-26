@@ -19,6 +19,8 @@ type SelectionRouteState = {
     close: () => void;
   };
   selectionCallback: ((result: SelectionResult | null) => void) | null;
+  getSelectionCallback?: () => ((result: SelectionResult | null) => void) | null;
+  setSelectionCallback?: (callback: ((result: SelectionResult | null) => void) | null) => void;
   modalStack: string[];
   requestRender: () => void;
   handleEscape: () => void;
@@ -53,11 +55,13 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
     }
     const cb = state.selectionCallback;
     state.selectionCallback = null;
+    state.setSelectionCallback?.(null);
     state.selectionModal.close();
     if (state.modalStack.length > 0 && state.modalStack[state.modalStack.length - 1] === 'selection') {
       state.modalStack.pop();
     }
     cb?.({ item: selected, action, step });
+    state.selectionCallback = state.getSelectionCallback?.() ?? state.selectionCallback;
   };
 
   const getAdjustmentStep = (
@@ -216,12 +220,29 @@ type SettingsRouteState = {
     editBackspace: () => void;
     editChar: (char: string) => void;
     pendingModelPickerTarget: import('./model-picker.ts').ModelPickerTarget | null;
+    pendingProviderModelPickerTarget?: import('./model-picker.ts').ModelPickerTarget | null;
   };
   /** Called when the settings modal requests the model picker for a non-main target. */
   openModelPickerWithTarget?: (target: import('./model-picker.ts').ModelPickerTarget) => void;
+  /** Called when the settings modal requests provider selection before model selection. */
+  openProviderModelPickerWithTarget?: (target: import('./model-picker.ts').ModelPickerTarget) => void;
   requestRender: () => void;
   handleEscape: () => void;
 };
+
+function consumeSettingsPickerRequest(state: SettingsRouteState): void {
+  const providerModelTarget = state.settingsModal.pendingProviderModelPickerTarget ?? null;
+  if (providerModelTarget !== null) {
+    state.settingsModal.pendingProviderModelPickerTarget = null;
+    state.openProviderModelPickerWithTarget?.(providerModelTarget);
+    return;
+  }
+  const pickerTarget = state.settingsModal.pendingModelPickerTarget;
+  if (pickerTarget !== null) {
+    state.settingsModal.pendingModelPickerTarget = null;
+    state.openModelPickerWithTarget?.(pickerTarget);
+  }
+}
 
 export function handleSettingsModalToken(state: SettingsRouteState, token: InputToken): boolean {
   if (!state.settingsModal.active) return false;
@@ -236,11 +257,7 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
       else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
       else {
         state.settingsModal.activateSelected();
-        const pickerTarget = state.settingsModal.pendingModelPickerTarget;
-        if (pickerTarget !== null) {
-          state.settingsModal.pendingModelPickerTarget = null;
-          state.openModelPickerWithTarget?.(pickerTarget);
-        }
+        consumeSettingsPickerRequest(state);
       }
     } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.settingsModal.editingMode) {
       state.settingsModal.adjustSelected(token.logicalName, token.shift ? 10 : 1);
@@ -253,11 +270,7 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
       if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
       else {
         state.settingsModal.activateSelected();
-        const pickerTarget = state.settingsModal.pendingModelPickerTarget;
-        if (pickerTarget !== null) {
-          state.settingsModal.pendingModelPickerTarget = null;
-          state.openModelPickerWithTarget?.(pickerTarget);
-        }
+        consumeSettingsPickerRequest(state);
       }
     } else if (state.settingsModal.editingMode) {
       state.settingsModal.editChar(token.value);

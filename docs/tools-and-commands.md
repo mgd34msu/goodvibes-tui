@@ -107,7 +107,7 @@ The `/wrfc` command opens the chain-status view directly. Constraint counts are 
 - `tts.llmProvider`
 - `tts.llmModel`
 
-Use `/config-tts providers` to choose a provider with streaming TTS support, `/config-tts voices [provider]` to choose a voice, and `/config-tts llm` to choose an optional `/tts` response model override. Without that override, `/tts` uses the current chat provider/model. Live local playback requires `mpv` or `ffplay` on `PATH`.
+Use `/config-tts providers` to choose a provider with streaming TTS support, `/config-tts voices [provider]` to choose a voice, and `/config-tts llm` to choose an optional `/tts` response model override through the shared provider-to-model picker flow. Without that override, `/tts` uses the current chat provider/model. Live local playback requires `mpv` or `ffplay` on `PATH`.
 
 ## Workflow-oriented commands
 

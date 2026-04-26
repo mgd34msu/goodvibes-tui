@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config/oauth-local-listener';
 import { clearModalStackForHandler, cleanupMarkerRegistryForHandler, executeBlockActionForHandler, expandPromptForHandler, findMarkerAtPosForHandler, getImageAttachmentsForHandler, handleBlockCopyForHandler, handleBlockRerunForHandler, handleBlockSaveForHandler, handleBlockToggleForHandler, handleBookmarkForHandler, handleCopyForHandler, handleCtrlCForHandler, handleDiffApplyForHandler, handleEscapeForHandler, hydrateOnboardingWizardFromRuntimeForHandler, modalOpenedForHandler, openOnboardingWizardForHandler, registerPasteForHandler } from './handler-interactions.ts';
-import { clearOnboardingModelPickerCancelStateForHandler, clearOnboardingPendingModelPickerTargetForHandler, completeOpenAiSubscriptionFromListenerForHandler, getOnboardingConfigValueForHandler, getOnboardingRuntimePostureForHandler, handleModelPickerCommitForHandler, handleOnboardingActionForHandler, handleOpenAiSubscriptionFinishForHandler, handleOpenAiSubscriptionStartForHandler, openModelPickerWithTargetForHandler, refreshOnboardingHydrationForHandler, restartOnboardingExternalServicesIfNeededForHandler, restoreOnboardingModelPickerCancelStateForHandler, syncRuntimeFromOnboardingRequestForHandler, verifyOnboardingRuntimePostureForHandler, type OnboardingRuntimePosture } from './handler-onboarding.ts';
+import { clearOnboardingModelPickerCancelStateForHandler, clearOnboardingPendingModelPickerTargetForHandler, completeOpenAiSubscriptionFromListenerForHandler, getOnboardingConfigValueForHandler, getOnboardingRuntimePostureForHandler, handleModelPickerCommitForHandler, handleOnboardingActionForHandler, handleOpenAiSubscriptionFinishForHandler, handleOpenAiSubscriptionStartForHandler, openModelPickerWithTargetForHandler, openProviderModelPickerWithTargetForHandler, refreshOnboardingHydrationForHandler, restartOnboardingExternalServicesIfNeededForHandler, restoreOnboardingModelPickerCancelStateForHandler, syncRuntimeFromOnboardingRequestForHandler, verifyOnboardingRuntimePostureForHandler, type OnboardingRuntimePosture } from './handler-onboarding.ts';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
 import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils/open-external';
 import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
@@ -325,6 +325,8 @@ export class InputHandler {
         expandPrompt: (text: string) => this.expandPrompt(text),
         openModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') =>
           this.openModelPickerWithTarget(target, source),
+        openProviderModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') =>
+          this.openProviderModelPickerWithTarget(target, source),
         onModelPickerCommit: () => this.handleModelPickerCommit(),
         onOnboardingAction: (action: OnboardingWizardAction) => { void this.handleOnboardingAction(action); },
       },
@@ -404,6 +406,7 @@ export class InputHandler {
   public clearOnboardingModelPickerCancelState(): void { clearOnboardingModelPickerCancelStateForHandler(this); }
   public restoreOnboardingModelPickerCancelState(): void { restoreOnboardingModelPickerCancelStateForHandler(this); }
   public openModelPickerWithTarget(target: ModelPickerTarget, source: 'settings' | 'onboarding' = 'settings'): boolean { return openModelPickerWithTargetForHandler(this, target, source); }
+  public openProviderModelPickerWithTarget(target: ModelPickerTarget, source: 'settings' | 'onboarding' = 'settings'): boolean { return openProviderModelPickerWithTargetForHandler(this, target, source); }
   public handleModelPickerCommit(): boolean { return handleModelPickerCommitForHandler(this); }
   public async handleOnboardingAction(action: OnboardingWizardAction): Promise<void> { await handleOnboardingActionForHandler(this, action); }
   public async refreshOnboardingHydration(options: { readonly preserveValues?: boolean; readonly targetStepId?: string } = {}): Promise<void> { await refreshOnboardingHydrationForHandler(this, options); }

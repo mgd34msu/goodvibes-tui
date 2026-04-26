@@ -55,7 +55,7 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         const selected = state.modelPicker.getSelected();
         if (selected) {
           const currentEffort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
-          if (selected.reasoningEffort && selected.reasoningEffort.length > 0) {
+          if (state.modelPicker.target === 'main' && selected.reasoningEffort && selected.reasoningEffort.length > 0) {
             state.modelPicker.showEffortPicker(selected, currentEffort);
           } else {
             const target = state.modelPicker.target;

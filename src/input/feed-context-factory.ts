@@ -152,6 +152,7 @@ export interface FeedContextClosures {
   cleanupMarkerRegistry: (text: string) => void;
   expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[];
   openModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
+  openProviderModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
   onModelPickerCommit: () => boolean;
   onOnboardingAction: (action: import('./onboarding/onboarding-wizard.ts').OnboardingWizardAction) => void;
 }

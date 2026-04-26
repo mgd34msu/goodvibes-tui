@@ -80,6 +80,7 @@ export interface CommandShellUiOpeners {
   openOnboardingWizard?: (modeOrOptions?: OnboardingWizardMode | OpenOnboardingWizardOptions) => void;
   openModelPicker?: () => void;
   openModelPickerWithTarget?: (target: import('./model-picker.ts').ModelPickerTarget) => boolean;
+  openProviderModelPickerWithTarget?: (target: import('./model-picker.ts').ModelPickerTarget) => boolean;
   openProviderPicker?: () => void;
   openContextInspector?: () => void;
   openBookmarkModal?: () => void;

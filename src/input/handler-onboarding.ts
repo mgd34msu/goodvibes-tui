@@ -186,6 +186,24 @@ export function openModelPickerWithTargetForHandler(
     return true;
   }
 
+export function openProviderModelPickerWithTargetForHandler(
+  handler: InputHandler,
+    target: ModelPickerTarget,
+    source: 'settings' | 'onboarding' = 'settings',
+  ): boolean {
+    const openProviderPicker = handler.commandContext?.openProviderPicker;
+    if (!openProviderPicker) return false;
+    if (source === 'onboarding' && handler.onboardingWizard.active) {
+      handler.onboardingModelPickerCancelSnapshot = captureOnboardingWizardSnapshot(handler.onboardingWizard);
+    } else {
+      handler.clearOnboardingModelPickerCancelState();
+    }
+    handler.clearOnboardingPendingModelPickerTarget();
+    handler.modelPicker.target = target;
+    openProviderPicker();
+    return true;
+  }
+
 export function handleModelPickerCommitForHandler(handler: InputHandler): boolean {
     if (handler.onboardingModelPickerCancelSnapshot && handler.onboardingWizard.active) {
       const selected = handler.modelPicker.mode === 'effort'

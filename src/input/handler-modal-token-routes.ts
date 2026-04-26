@@ -39,6 +39,8 @@ export type ModalTokenRouteState = {
   searchShortcutMatch: boolean;
   selectionModal: SelectionModal;
   selectionCallback: ((result: SelectionResult | null) => void) | null;
+  getSelectionCallback?: () => ((result: SelectionResult | null) => void) | null;
+  setSelectionCallback?: (callback: ((result: SelectionResult | null) => void) | null) => void;
   bookmarkModal: BookmarkModal;
   settingsModal: SettingsModal;
   sessionPickerModal: SessionPickerModal;
@@ -80,6 +82,10 @@ export type ModalTokenRouteState = {
     target: import('./model-picker.ts').ModelPickerTarget,
     source?: 'settings' | 'onboarding',
   ) => boolean;
+  openProviderModelPickerWithTarget?: (
+    target: import('./model-picker.ts').ModelPickerTarget,
+    source?: 'settings' | 'onboarding',
+  ) => boolean;
   clearOnboardingModelPickerCancelState?: () => void;
   restoreOnboardingModelPickerCancelState?: () => void;
   onModelPickerCommit?: () => boolean;
@@ -110,6 +116,8 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
   const selectionState = {
     selectionModal: state.selectionModal,
     selectionCallback: state.selectionCallback,
+    getSelectionCallback: state.getSelectionCallback,
+    setSelectionCallback: state.setSelectionCallback,
     modalStack: state.modalStack,
     requestRender: state.requestRender,
     handleEscape: state.handleEscape,
@@ -130,6 +138,7 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
   if (handleSettingsModalToken({
     settingsModal: state.settingsModal,
     openModelPickerWithTarget: state.openModelPickerWithTarget,
+    openProviderModelPickerWithTarget: state.openProviderModelPickerWithTarget,
     requestRender: state.requestRender,
     handleEscape: state.handleEscape,
   }, token)) {
