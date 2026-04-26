@@ -17,6 +17,7 @@ import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/ind
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { createAuthenticatedWebSocket } from '../helpers/authenticated-websocket.ts';
 import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
@@ -1320,7 +1321,8 @@ describe('DaemonServer', () => {
     daemon.enable({ daemon: true }, TEST_TOKEN);
     await daemon.start();
 
-    const socket = new WebSocket('ws://127.0.0.1:39421/api/control-plane/ws?clientKind=web&domains=control-plane,automation');
+    const AuthenticatedWebSocket = createAuthenticatedWebSocket(TEST_TOKEN);
+    const socket = new AuthenticatedWebSocket('ws://127.0.0.1:39421/api/control-plane/ws?clientKind=web&domains=control-plane,automation');
     const ready = await waitForSocketFrame(socket, (frame) => frame.type === 'event' && frame.event === 'ready');
     expect(ready.type).toBe('event');
 
@@ -1532,7 +1534,8 @@ describe('DaemonServer', () => {
     expect(writeInvokeBody.error).toContain('Missing required scope');
     expect(writeInvokeBody.missingScopes).toContain('write:automation');
 
-    const socket = new WebSocket('ws://127.0.0.1:39421/api/control-plane/ws?clientKind=web&domains=control-plane');
+    const AuthenticatedWebSocket = createAuthenticatedWebSocket(operatorToken);
+    const socket = new AuthenticatedWebSocket('ws://127.0.0.1:39421/api/control-plane/ws?clientKind=web&domains=control-plane');
     const ready = await waitForSocketFrame(socket, (frame) => frame.type === 'event' && frame.event === 'ready');
     expect(ready.type).toBe('event');
 

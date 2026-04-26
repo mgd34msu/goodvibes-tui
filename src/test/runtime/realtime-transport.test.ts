@@ -9,6 +9,7 @@ import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/i
 import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import { createRealtimeTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/realtime';
+import { createAuthenticatedWebSocket } from '../helpers/authenticated-websocket.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
@@ -112,6 +113,7 @@ describe('RealtimeTransport', () => {
     const transport = createRealtimeTransport({
       baseUrl: `http://127.0.0.1:${port}`,
       authToken: TEST_TOKEN,
+      webSocketImpl: createAuthenticatedWebSocket(TEST_TOKEN),
     });
 
     const session = await transport.operator.sessions.ensureSession({

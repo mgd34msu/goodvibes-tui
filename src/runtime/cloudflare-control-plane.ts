@@ -123,7 +123,24 @@ export interface CloudflareProvisionResult {
   readonly account?: { readonly id: string; readonly name: string };
   readonly worker?: { readonly name: string; readonly baseUrl?: string; readonly subdomain?: string; readonly hostname?: string; readonly cron?: string };
   readonly queues?: { readonly queueName: string; readonly queueId: string; readonly deadLetterQueueName: string; readonly deadLetterQueueId: string; readonly consumerId?: string };
+  readonly tunnel?: { readonly id: string; readonly name: string; readonly hostname?: string; readonly tokenRef?: string };
+  readonly access?: { readonly appId?: string; readonly serviceTokenId?: string; readonly serviceTokenRef?: string };
+  readonly dns?: {
+    readonly zoneId: string;
+    readonly zoneName?: string;
+    readonly records: ReadonlyArray<{ readonly id?: string; readonly name?: string; readonly type?: string; readonly content?: string }>;
+  };
+  readonly kv?: { readonly namespaceName: string; readonly namespaceId: string };
+  readonly durableObjects?: { readonly namespaceName: string; readonly namespaceId?: string };
+  readonly r2?: { readonly bucketName: string; readonly storageClass: 'Standard' };
+  readonly secretsStore?: { readonly storeName: string; readonly storeId: string };
   readonly verification?: CloudflareVerifyResult;
+  readonly generatedSecrets?: {
+    readonly workerClientToken?: string;
+    readonly tunnelToken?: string;
+    readonly accessServiceTokenClientId?: string;
+    readonly accessServiceTokenClientSecret?: string;
+  };
 }
 
 export interface CloudflareVerifyResult {
@@ -187,6 +204,10 @@ export interface CloudflareProvisionRequest extends CloudflareDiscoverRequest {
   readonly tunnelName?: string;
   readonly tunnelId?: string;
   readonly tunnelServiceUrl?: string;
+  readonly tunnelTokenRef?: string;
+  readonly accessAppId?: string;
+  readonly accessServiceTokenId?: string;
+  readonly accessServiceTokenRef?: string;
   readonly kvNamespaceName?: string;
   readonly kvNamespaceId?: string;
   readonly durableObjectNamespaceName?: string;

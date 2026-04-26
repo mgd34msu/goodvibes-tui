@@ -281,7 +281,7 @@ function describeExternalIntegrations(snapshot: OnboardingSnapshotState): string
   ]).size;
 
   if (integrationCount === 0) {
-    return 'Enable setup screens for Slack, Discord, Telegram, Teams, Matrix, and other app surfaces you choose.';
+    return 'Enable setup screens for Slack, Discord, Telegram, Home Assistant, Teams, Matrix, and other app surfaces you choose.';
   }
 
   return `Review and configure ${integrationCount} detected external app, service, or surface integration signal(s).`;

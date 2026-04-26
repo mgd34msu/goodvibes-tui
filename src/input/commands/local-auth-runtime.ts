@@ -65,10 +65,10 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
   if (sub === 'revoke-session') {
     const token = args[1];
     if (!token) {
-      ctx.print('Usage: /auth local revoke-session <token>');
+      ctx.print('Usage: /auth local revoke-session <token-or-fingerprint>');
       return;
     }
-    ctx.print(auth.revokeSession(token) ? `Revoked session ${token.slice(0, 12)}…` : `Unknown session token: ${token}`);
+    ctx.print(auth.revokeSession(token) ? `Revoked session ${token.slice(0, 12)}…` : `Unknown session token or fingerprint: ${token}`);
     return;
   }
 
@@ -88,7 +88,7 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
     `  users: ${snapshot.userCount}`,
     `  sessions: ${snapshot.sessionCount}`,
     ...snapshot.users.map((user) => `  user: ${user.username}  roles=${formatRoles(user.roles)}`),
-    ...snapshot.sessions.map((session) => `  session: ${session.username}  expires=${new Date(session.expiresAt).toISOString()}  token=${session.token.slice(0, 12)}…`),
+    ...snapshot.sessions.map((session) => `  session: ${session.username}  expires=${new Date(session.expiresAt).toISOString()}  fingerprint=${session.tokenFingerprint}`),
   ].join('\n'));
 }
 
@@ -97,7 +97,7 @@ export function registerLocalAuthRuntimeCommands(registry: CommandRegistry): voi
     name: 'local-auth',
     aliases: ['auth-local'],
     description: 'Inspect and manage local daemon/listener auth users, sessions, and bootstrap credentials',
-    usage: '[review|panel|add-user <username> <password> [roles]|delete-user <username>|rotate-password <username> <password>|revoke-session <token>|clear-bootstrap-file]',
+    usage: '[review|panel|add-user <username> <password> [roles]|delete-user <username>|rotate-password <username> <password>|revoke-session <token-or-fingerprint>|clear-bootstrap-file]',
     handler(args, ctx) {
       handleLocalAuthCommand(args, ctx);
     },

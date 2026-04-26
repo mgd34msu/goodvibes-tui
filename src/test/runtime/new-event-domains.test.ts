@@ -114,6 +114,7 @@ describe('new runtime event domains', () => {
       'discord',
       'ntfy',
       'webhook',
+      'homeassistant',
       'telegram',
       'google-chat',
       'signal',

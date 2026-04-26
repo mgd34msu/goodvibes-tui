@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.35] — 2026-04-26
+
+### Added
+- Home Assistant is now exposed as an external onboarding/settings surface with auto-start control, instance URL, access token, webhook secret, route conversation, daemon device, and event type fields.
+- Cloudflare onboarding and `/cloudflare provision` now pass Tunnel token refs, Tunnel service URLs, Access app/service-token refs, and advanced KV/DO/R2/Secrets Store provisioning fields through to the SDK daemon routes.
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.11` for Cloudflare token-creation fixes, Home Assistant companion surface contracts, and redacted auth-session fingerprints.
+- Local auth session listings now show SDK session fingerprints instead of assuming raw tokens are available; revoke-session accepts either a raw token or SDK fingerprint.
+- Regenerated foundation operator contract artifacts from the SDK 0.25.11 contract.
+
 ## [0.19.34] — 2026-04-26
 
 ### Added

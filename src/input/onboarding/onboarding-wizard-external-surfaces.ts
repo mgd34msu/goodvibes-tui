@@ -7,6 +7,7 @@ import {
 import { DEFAULT_CONFIG, type ConfigKey } from '../../config/index.ts';
 import type { OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { TELEGRAM_MODE_OPTIONS, WHATSAPP_PROVIDER_OPTIONS } from './onboarding-wizard-constants.ts';
+import { HOME_ASSISTANT_SURFACE_SPEC, WEBHOOK_SURFACE_SPEC } from './onboarding-wizard-external-surface-extra-specs.ts';
 import type { OnboardingWizardRadioOption } from './onboarding-wizard-types.ts';
 
 export interface ExternalSurfaceSetupFieldSpec {
@@ -333,47 +334,8 @@ export const EXTERNAL_SURFACE_SPECS: readonly ExternalSurfaceSpec[] = [
       },
     ],
   },
-  {
-    id: 'webhook',
-    enabledFieldId: 'external-services.webhook',
-    enabledConfigKey: 'surfaces.webhook.enabled',
-    label: 'Outbound webhook surface',
-    hint: 'Enable outbound webhook delivery targets.',
-    defaultEnabled: (snapshot) => snapshot?.config.surfaces.webhook.enabled ?? false,
-    fields: [
-      {
-        id: 'external-services.webhook.default-target',
-        configKey: 'surfaces.webhook.defaultTarget',
-        kind: 'text',
-        label: 'Default webhook target',
-        hint: 'Fallback URL used for outbound webhook deliveries.',
-        placeholder: 'https://example.com/goodvibes',
-        defaultValue: (snapshot) => snapshot?.config.surfaces.webhook.defaultTarget ?? '',
-      },
-      {
-        id: 'external-services.webhook.secret',
-        configKey: 'surfaces.webhook.secret',
-        kind: 'masked',
-        label: 'Webhook signing secret',
-        hint: 'Secret used to sign outbound webhook payloads.',
-        placeholder: 'secret',
-        defaultValue: (snapshot) => snapshot?.config.surfaces.webhook.secret ?? '',
-      },
-      {
-        id: 'external-services.webhook.timeout-ms',
-        configKey: 'surfaces.webhook.timeoutMs',
-        kind: 'text',
-        valueType: 'number',
-        label: 'Webhook timeout ms',
-        hint: 'Request timeout for outbound webhook deliveries.',
-        placeholder: '10000',
-        defaultNumber: 10000,
-        min: 1000,
-        max: 60000,
-        defaultValue: (snapshot) => String(snapshot?.config.surfaces.webhook.timeoutMs ?? 10000),
-      },
-    ],
-  },
+  WEBHOOK_SURFACE_SPEC,
+  HOME_ASSISTANT_SURFACE_SPEC,
   {
     id: 'googleChat',
     enabledFieldId: 'external-services.google-chat',

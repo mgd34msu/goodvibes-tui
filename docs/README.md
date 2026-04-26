@@ -19,6 +19,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Cloudflare batch and control plane](cloudflare-batch.md)
   Optional Workers/Queues batch setup, bootstrap-token flow, daemon routes, onboarding fields, and `/cloudflare` commands.
 
+- [Home Assistant surface](homeassistant-surface.md)
+  Home Assistant companion setup, daemon callbacks, webhook security, and onboarding/settings fields.
+
 - [Knowledge, artifacts, and multimodal](knowledge-artifacts-and-multimodal.md)
   Session memory, durable memory, structured knowledge, connectors, extractors, embeddings, artifacts, and multimodal analysis.
 
@@ -34,7 +37,7 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Panel authoring](panel-authoring.md)
   Class hierarchy, canonical example, palette convention, rendering utilities, input handling, performance instrumentation, and contract test registration for contributors building new TUI panels.
 
-- [Release notes](releases/0.19.34.md)
+- [Release notes](releases/0.19.35.md)
   Version-specific release notes for shipped TUI releases.
 
 - [Foundation artifacts](foundation-artifacts/README.md)

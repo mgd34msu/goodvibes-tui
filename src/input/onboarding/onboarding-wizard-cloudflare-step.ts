@@ -238,6 +238,51 @@ export function buildCloudflareStep(controller: OnboardingWizardController): Onb
           placeholder: 'optional tunnel id',
           defaultValue: config?.tunnelId ?? '',
         },
+        {
+          kind: 'text',
+          id: 'cloudflare.tunnel-service-url',
+          label: 'Tunnel service URL',
+          hint: 'Optional origin service URL for Tunnel ingress. Leave blank to use the daemon base URL.',
+          placeholder: 'http://127.0.0.1:3421',
+          defaultValue: '',
+        },
+        {
+          kind: 'text',
+          id: 'cloudflare.tunnel-token-ref',
+          label: 'Tunnel token secret ref',
+          hint: 'Optional existing goodvibes:// secret ref for a Cloudflare Tunnel token.',
+          placeholder: 'goodvibes://secrets/goodvibes/CLOUDFLARE_TUNNEL_TOKEN',
+          defaultValue: config?.tunnelTokenRef ?? '',
+        },
+      );
+    }
+
+    if (components.zeroTrustAccess) {
+      fields.push(
+        {
+          kind: 'text',
+          id: 'cloudflare.access-app-id',
+          label: 'Access app id',
+          hint: 'Optional existing Cloudflare Access application id. Leave blank to let provisioning create or discover one.',
+          placeholder: 'optional Access app id',
+          defaultValue: config?.accessAppId ?? '',
+        },
+        {
+          kind: 'text',
+          id: 'cloudflare.access-service-token-id',
+          label: 'Access service token id',
+          hint: 'Optional existing Access service token id.',
+          placeholder: 'optional service token id',
+          defaultValue: config?.accessServiceTokenId ?? '',
+        },
+        {
+          kind: 'text',
+          id: 'cloudflare.access-service-token-ref',
+          label: 'Access service token secret ref',
+          hint: 'Optional existing goodvibes:// secret ref for Access service token material.',
+          placeholder: 'goodvibes://secrets/goodvibes/CLOUDFLARE_ACCESS_SERVICE_TOKEN',
+          defaultValue: config?.accessServiceTokenRef ?? '',
+        },
       );
     }
 
