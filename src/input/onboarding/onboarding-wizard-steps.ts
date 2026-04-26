@@ -1,4 +1,6 @@
 import { NETWORK_MODE_OPTIONS, REASONING_OPTIONS, HITL_MODE_OPTIONS, GUIDANCE_MODE_OPTIONS, PERMISSION_MODE_OPTIONS, SECRET_POLICY_OPTIONS } from './onboarding-wizard-constants.ts';
+import { shouldShowCloudflareStep } from './onboarding-wizard-cloudflare.ts';
+import { buildCloudflareStep } from './onboarding-wizard-cloudflare-step.ts';
 import {
   EXTERNAL_SURFACE_SPECS,
   getExternalSurfaceAutoStartDefaultValue,
@@ -19,27 +21,25 @@ export function buildOnboardingWizardSteps(controller: OnboardingWizardControlle
   const steps: OnboardingWizardStepDefinition[] = [
     buildCapabilitiesStep(controller),
   ];
-
   if (hasServers) {
     steps.push(buildNetworkStep(controller));
   }
-
   if (hasServers || controller.hasExistingAccessState()) {
     steps.push(buildAccessStep(controller));
   }
-
   if (wantsExternalServices) {
     steps.push(buildExternalServicesStep(controller));
     for (const surface of getSelectedExternalSurfaceSpecs(controller)) {
       steps.push(buildExternalSurfaceStep(controller, surface));
     }
   }
-
+  if (shouldShowCloudflareStep(controller)) {
+    steps.push(buildCloudflareStep(controller));
+  }
   steps.push(buildProviderAccessStep(controller));
   steps.push(buildDefaultModelStep(controller));
   steps.push(buildExperienceStep(controller));
   steps.push(buildReviewStep(controller));
-
   return steps.map(addApplyAndContinueAction);
 }
 
@@ -49,7 +49,7 @@ function buildApplyAndContinueAction(step: OnboardingWizardStepDefinition): Onbo
       id: `${step.id}.apply-and-continue`,
       action: 'apply-and-continue',
       label: 'Apply & Continue To Next Section',
-      hint: 'Persist the current wizard settings, verify them, and move to the next onboarding section.',
+      hint: 'Save the current wizard selections in this onboarding session and move to the next section. Settings are persisted on the final Review apply.',
       defaultValue: 'Apply & next',
       spacerBeforeRows: 2,
     };

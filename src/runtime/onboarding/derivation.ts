@@ -238,6 +238,15 @@ function hasExternalIntegrations(snapshot: OnboardingSnapshotState): boolean {
     || countConfiguredSurfaceKinds(snapshot) > 0;
 }
 
+function hasCloudflareBatch(snapshot: OnboardingSnapshotState): boolean {
+  return snapshot.config.cloudflare.enabled
+    || snapshot.config.batch.queueBackend === 'cloudflare'
+    || snapshot.config.batch.mode !== 'off'
+    || snapshot.config.cloudflare.accountId.trim().length > 0
+    || snapshot.config.cloudflare.apiTokenRef.trim().length > 0
+    || snapshot.config.cloudflare.workerBaseUrl.trim().length > 0;
+}
+
 function describeLocalTuiOnly(snapshot: OnboardingSnapshotState): string {
   if (!hasAnyServerEnabled(snapshot)) {
     return 'Use GoodVibes only in this terminal. No browser access, background service, HTTP listener, external app surface, or network setup.';
@@ -276,6 +285,14 @@ function describeExternalIntegrations(snapshot: OnboardingSnapshotState): string
   }
 
   return `Review and configure ${integrationCount} detected external app, service, or surface integration signal(s).`;
+}
+
+function describeCloudflareBatch(snapshot: OnboardingSnapshotState): string {
+  if (hasCloudflareBatch(snapshot)) {
+    return 'Review Cloudflare Workers/Queues batch processing, token storage, and optional remote daemon provisioning settings.';
+  }
+
+  return 'Optionally configure Cloudflare Workers and Queues for explicit or eligible background batch jobs. Immediate local daemon behavior stays the default unless enabled.';
 }
 
 function getAcknowledgementAccepted(
@@ -346,6 +363,12 @@ export function deriveStep1Capabilities(
       selected: hasExternalIntegrations(snapshot),
       detail: describeExternalIntegrations(snapshot),
     },
+    {
+      id: 'cloudflare-batch',
+      label: 'Use Cloudflare for batch or remote daemon work',
+      selected: hasCloudflareBatch(snapshot),
+      detail: describeCloudflareBatch(snapshot),
+    },
   ];
 }
 
@@ -360,6 +383,7 @@ export function deriveStep1CapabilityFlags(
   readonly httpListener: boolean;
   readonly web: boolean;
   readonly surfaces: boolean;
+  readonly cloudflare: boolean;
 } {
   return {
     providers: hasConfiguredProviderState(snapshot) || hasCustomizedProviderRouting(snapshot),
@@ -372,6 +396,7 @@ export function deriveStep1CapabilityFlags(
     httpListener: snapshot.bindSettings.httpListenerEnabled,
     web: snapshot.bindSettings.web.enabled,
     surfaces: countConfiguredSurfaceKinds(snapshot) > 0,
+    cloudflare: hasCloudflareBatch(snapshot),
   };
 }
 

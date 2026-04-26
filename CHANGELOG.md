@@ -4,6 +4,18 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.34] — 2026-04-26
+
+### Added
+- Cloudflare onboarding support for optional Workers/Queues batch and remote daemon/control-plane provisioning.
+- `/cloudflare` (`/cf`) runtime command for status, token requirements, bootstrap-token creation, discovery, validation, provisioning, verification, disable, and setup entry.
+- Cloudflare settings category in `/settings`, including SDK `cloudflare.*` and `batch.*` keys.
+- Documentation for Cloudflare token setup, daemon routes, onboarding fields, batch modes, and secret references.
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.10` for SDK-owned Cloudflare daemon routes, token creation, discovery, validation, provisioning, and config persistence.
+- Onboarding Cloudflare provisioning failures are reported as warnings so local daemon usage is not blocked when optional Cloudflare setup needs follow-up.
+
 ## [0.19.33] — 2026-04-26
 
 ### Changed

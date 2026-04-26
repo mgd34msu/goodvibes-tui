@@ -62,6 +62,7 @@ Representative slash-command families include:
 - `/voice`
 - `/tts`
 - `/config-tts`
+- `/cloudflare`
 - `/mcp`
 - `/incident`
 - `/replay`
@@ -108,6 +109,23 @@ The `/wrfc` command opens the chain-status view directly. Constraint counts are 
 - `tts.llmModel`
 
 Use `/config-tts providers` to choose a provider with streaming TTS support, `/config-tts voices [provider]` to choose a voice, and `/config-tts llm` to choose an optional `/tts` response model override through the shared provider-to-model picker flow. Without that override, `/tts` uses the current chat provider/model. Live local playback requires `mpv` or `ffplay` on `PATH`.
+
+## Cloudflare batch commands
+
+Cloudflare integration is optional and keeps local immediate daemon behavior by default. Select `Use Cloudflare for batch or remote daemon work` in onboarding to configure it visually, or use `/cloudflare` for runtime actions.
+
+High-signal commands:
+
+- `/cloudflare status`
+- `/cloudflare requirements`
+- `/cloudflare create-token --account <account-id> --bootstrap-env <ENV_NAME>`
+- `/cloudflare discover`
+- `/cloudflare validate`
+- `/cloudflare provision --batch-mode explicit`
+- `/cloudflare verify`
+- `/cloudflare disable`
+
+The TUI calls SDK daemon routes only. It does not call Cloudflare APIs directly. See [Cloudflare batch and control plane](cloudflare-batch.md) for token setup, supported components, and provisioning behavior.
 
 ## Workflow-oriented commands
 

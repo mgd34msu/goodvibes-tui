@@ -6,6 +6,7 @@ export const STEP_ORDER: readonly OnboardingWizardStepId[] = [
   'network',
   'access',
   'external-services',
+  'cloudflare',
   'provider-access',
   'default-model',
   'experience',
@@ -42,6 +43,12 @@ export const DEFAULT_CAPABILITIES: readonly OnboardingStep1CapabilityItem[] = [
     label: 'Connect GoodVibes to external apps and services',
     selected: false,
     detail: 'Enable setup screens for Slack, Discord, Telegram, Teams, Matrix, and other app surfaces you choose.',
+  },
+  {
+    id: 'cloudflare-batch',
+    label: 'Use Cloudflare for batch or remote daemon work',
+    selected: false,
+    detail: 'Optionally configure Cloudflare Workers and Queues for explicit or eligible background batch jobs. Immediate local daemon behavior stays the default unless enabled.',
   },
 ];
 

@@ -25,6 +25,7 @@ export type OnboardingWizardStepId =
   | 'access'
   | 'external-services'
   | OnboardingWizardExternalSurfaceStepId
+  | 'cloudflare'
   | 'provider-access'
   | 'default-model'
   | 'experience'
@@ -47,6 +48,13 @@ export type OnboardingWizardAction =
   | 'clear-capabilities'
   | 'select-all-external-surfaces'
   | 'clear-external-surfaces'
+  | 'cloudflare-token-requirements'
+  | 'cloudflare-create-operational-token'
+  | 'cloudflare-discover'
+  | 'cloudflare-validate'
+  | 'cloudflare-provision'
+  | 'cloudflare-verify'
+  | 'cloudflare-disable'
   | 'start-openai-subscription'
   | 'finish-openai-subscription';
 

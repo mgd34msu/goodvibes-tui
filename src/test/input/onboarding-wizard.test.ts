@@ -72,6 +72,8 @@ function makeOnboardingSnapshot(
     surfaces: structuredClone(DEFAULT_CONFIG.surfaces),
     service: structuredClone(DEFAULT_CONFIG.service),
     featureFlags: structuredClone(DEFAULT_CONFIG.featureFlags),
+    batch: structuredClone(DEFAULT_CONFIG.batch),
+    cloudflare: structuredClone(DEFAULT_CONFIG.cloudflare),
   };
 
   return {
@@ -171,8 +173,8 @@ describe('OnboardingWizardController', () => {
     expect(wizard.dirty).toBe(true);
     expect(wizard.isStepDirty(0)).toBe(true);
     wizard.selectLast(2);
-    expect(wizard.getSelectedFieldIndex()).toBe(7);
-    expect(wizard.scrollOffsets[0]).toBe(6);
+    expect(wizard.getSelectedFieldIndex()).toBe(8);
+    expect(wizard.scrollOffsets[0]).toBe(7);
 
     wizard.setStep(2);
     wizard.moveSelection(1, 2);
@@ -180,8 +182,8 @@ describe('OnboardingWizardController', () => {
     expect(wizard.scrollOffsets[2]).toBe(0);
 
     wizard.setStep(0);
-    expect(wizard.getSelectedFieldIndex()).toBe(7);
-    expect(wizard.scrollOffsets[0]).toBe(6);
+    expect(wizard.getSelectedFieldIndex()).toBe(8);
+    expect(wizard.scrollOffsets[0]).toBe(7);
   });
 
   test('adds a separated apply-and-continue action to every non-final editable step', () => {
@@ -231,6 +233,85 @@ describe('OnboardingWizardController', () => {
       key: 'web.hostMode',
       value: 'network',
     });
+  });
+
+  test('maps Cloudflare onboarding fields to config and batch operations', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+    wizard.setFieldValue('cloudflare.batch-mode', 'explicit');
+    wizard.setFieldValue('cloudflare.setup-source', 'operational-env');
+    wizard.setFieldValue('cloudflare.operational-env-name', 'MY_CF_TOKEN');
+    wizard.setFieldValue('cloudflare.account-id', 'account-123');
+    wizard.setFieldValue('cloudflare.queue-name', 'gv-queue');
+    wizard.setFieldValue('cloudflare.dead-letter-queue-name', 'gv-dlq');
+
+    const cloudflareStep = wizard.steps.find((step) => step.id === 'cloudflare');
+    expect(cloudflareStep?.fields.map((field) => field.id)).toContain('cloudflare.component.workers');
+    expect(cloudflareStep?.fields.map((field) => field.id)).toContain('cloudflare.requirements');
+
+    const configValues = new Map<string, unknown>();
+    for (const operation of wizard.buildApplyRequest().operations) {
+      if (operation.kind === 'set-config') configValues.set(operation.key, operation.value);
+    }
+
+    expect(configValues.get('service.enabled')).toBe(true);
+    expect(configValues.get('service.autostart')).toBe(true);
+    expect(configValues.get('cloudflare.enabled')).toBe(true);
+    expect(configValues.get('cloudflare.accountId')).toBe('account-123');
+    expect(configValues.get('cloudflare.apiTokenRef')).toBe('goodvibes://secrets/env/MY_CF_TOKEN');
+    expect(configValues.get('cloudflare.queueName')).toBe('gv-queue');
+    expect(configValues.get('cloudflare.deadLetterQueueName')).toBe('gv-dlq');
+    expect(configValues.get('batch.mode')).toBe('explicit');
+    expect(configValues.get('batch.queueBackend')).toBe('cloudflare');
+  });
+
+  test('stores a pasted Cloudflare operational token as a GoodVibes secret ref', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+    wizard.setFieldValue('cloudflare.setup-source', 'operational-token');
+    wizard.setFieldValue('cloudflare.operational-token', 'cf-secret');
+
+    const configValues = new Map<string, unknown>();
+    const secretValues = new Map<string, string>();
+    for (const operation of wizard.buildApplyRequest().operations) {
+      if (operation.kind === 'set-config') configValues.set(operation.key, operation.value);
+      if (operation.kind === 'set-secret') secretValues.set(operation.key, operation.value);
+    }
+
+    expect(secretValues.get('CLOUDFLARE_API_TOKEN')).toBe('cf-secret');
+    expect(configValues.get('cloudflare.apiTokenRef')).toBe('goodvibes://secrets/goodvibes/CLOUDFLARE_API_TOKEN');
+  });
+
+  test('preserves an existing stored Cloudflare token ref when reopening onboarding', () => {
+    const base = makeOnboardingSnapshot();
+    const snapshot = makeOnboardingSnapshot({
+      config: {
+        ...base.config,
+        cloudflare: {
+          ...base.config.cloudflare,
+          enabled: true,
+          apiTokenRef: 'goodvibes://secrets/goodvibes/CLOUDFLARE_API_TOKEN',
+        },
+      },
+    });
+    const wizard = new OnboardingWizardController();
+    wizard.open('edit');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+
+    const cloudflareStep = wizard.steps.find((step) => step.id === 'cloudflare');
+    const setupField = cloudflareStep?.fields.find((field) => field.id === 'cloudflare.setup-source');
+    expect(setupField?.kind).toBe('radio');
+    expect(setupField?.kind === 'radio' ? setupField.defaultValue : undefined).toBe('save-only');
+    expect(cloudflareStep?.fields.map((field) => field.id)).not.toContain('cloudflare.operational-env-name');
+
+    const configValues = new Map<string, unknown>();
+    for (const operation of wizard.buildApplyRequest().operations) {
+      if (operation.kind === 'set-config') configValues.set(operation.key, operation.value);
+    }
+
+    expect(configValues.get('cloudflare.apiTokenRef')).toBe('goodvibes://secrets/goodvibes/CLOUDFLARE_API_TOKEN');
   });
 
   test('blocks invalid custom network ports instead of silently falling back', () => {
