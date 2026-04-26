@@ -144,6 +144,7 @@ export const SETTING_LABELS: Partial<Record<string, string>> = {
   'surfaces.homeassistant.accessToken': 'Home Assistant Access Token',
   'surfaces.homeassistant.webhookSecret': 'Home Assistant Webhook Secret',
   'surfaces.homeassistant.defaultConversationId': 'Home Assistant Conversation ID',
+  'surfaces.homeassistant.remoteSessionTtlMs': 'Home Assistant Remote Session TTL',
   'surfaces.homeassistant.deviceId': 'Home Assistant Device ID',
   'surfaces.homeassistant.deviceName': 'Home Assistant Device Name',
   'surfaces.homeassistant.eventType': 'Home Assistant Event Type',

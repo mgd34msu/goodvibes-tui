@@ -41,11 +41,12 @@ Relevant settings:
 - `surfaces.homeassistant.accessToken`
 - `surfaces.homeassistant.webhookSecret`
 - `surfaces.homeassistant.defaultConversationId`
+- `surfaces.homeassistant.remoteSessionTtlMs`
 - `surfaces.homeassistant.deviceId`
 - `surfaces.homeassistant.deviceName`
 - `surfaces.homeassistant.eventType`
 
-The inbound daemon callback path is `/webhook/homeassistant`. Use a `goodvibes://` secret reference or an environment-backed secret for tokens when possible.
+The inbound daemon callback path is `/webhook/homeassistant`. Authenticated Home Assistant Assist clients can also use `GET /api/homeassistant/health`, `POST /api/homeassistant/conversation`, `POST /api/homeassistant/conversation/stream`, and `POST /api/homeassistant/conversation/cancel`. These routes are SDK-owned, direct non-WRFC work paths with daemon-owned remote sessions. Use a `goodvibes://` secret reference or an environment-backed secret for tokens when possible.
 
 ## Shared reply pipeline
 

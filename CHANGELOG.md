@@ -4,6 +4,16 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.36] — 2026-04-26
+
+### Added
+- Home Assistant onboarding and Settings > Surfaces now expose `surfaces.homeassistant.remoteSessionTtlMs` for daemon-owned remote conversation idle expiry.
+- Documentation now covers the authenticated Home Assistant Assist conversation routes: `GET /api/homeassistant/health`, `POST /api/homeassistant/conversation`, `POST /api/homeassistant/conversation/stream`, and `POST /api/homeassistant/conversation/cancel`.
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.13` for direct non-WRFC Home Assistant ingress, daemon-owned remote sessions, Assist reply correlation metadata, and event-bus reply delivery fixes.
+- Regenerated foundation operator contract artifacts from the SDK 0.25.13 contract.
+
 ## [0.19.35] — 2026-04-26
 
 ### Added
