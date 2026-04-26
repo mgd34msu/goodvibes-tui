@@ -158,6 +158,21 @@ describe('Compositor — with panel', () => {
     const panelStartX = leftWidth + 1;
     expect(cellAt(compositor, panelStartX, 2)?.char).toBe('W');
   });
+
+  test('panel rows clear stale content when current panel has no line for that row', () => {
+    const { compositor } = makeCompositor();
+    const leftWidth = WIDTH - PANEL_WIDTH - 1;
+    const panelStartX = leftWidth + 1;
+
+    compositor.composite(makeBaseRequest({ panel: makePanelData(), panelWidth: PANEL_WIDTH }));
+    expect(cellAt(compositor, panelStartX, 3)?.char).toBe('P');
+
+    const sparsePanel = makePanelData();
+    sparsePanel.topContent = [];
+    compositor.composite(makeBaseRequest({ panel: sparsePanel, panelWidth: PANEL_WIDTH }));
+
+    expect(cellAt(compositor, panelStartX, 3)?.char).toBe(' ');
+  });
 });
 
 describe('Compositor — dual-pane (top + bottom)', () => {

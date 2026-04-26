@@ -30,7 +30,14 @@ function makeContext(options: {
       conversationManager: {} as never,
       runtime: { model: 'gpt-5.4', provider: 'openai', debugMode: false, systemPrompt: '', reasoningEffort: 'medium', sessionId: 'sess' },
     },
-    provider: { providerRegistry: {} as never },
+    provider: {
+      providerRegistry: {
+        getSelectableModels: () => [
+          { id: 'gpt-5.4', registryKey: 'openai:gpt-5.4', displayName: 'GPT 5.4', provider: 'openai', contextWindow: 1000000 },
+          { id: 'claude-sonnet', registryKey: 'anthropic:claude-sonnet', displayName: 'Claude Sonnet', provider: 'anthropic', contextWindow: 200000 },
+        ],
+      } as never,
+    },
     workspace: {},
     platform: {
       config: {} as never,
@@ -136,15 +143,17 @@ describe('TTS runtime commands', () => {
     expect(openedSelections[0].items.map((item) => item.id)).toEqual([
       'provider',
       'voice',
-      'llm',
+      'llm-provider',
+      'llm-model',
       'clear-voice',
       'clear-llm',
     ]);
 
-    const llmItem = openedSelections[0].items.find((item) => item.id === 'llm');
-    expect(llmItem).toBeDefined();
-    openedSelections[0].callback({ item: llmItem!, action: 'select' });
-    expect(modelTargets).toEqual(['tts']);
+    const providerItem = openedSelections[0].items.find((item) => item.id === 'llm-provider');
+    expect(providerItem).toBeDefined();
+    openedSelections[0].callback({ item: providerItem!, action: 'select' });
+    expect(openedSelections[1].title).toBe('Choose TTS LLM Provider');
+    expect(modelTargets).toEqual([]);
   });
 
   test('/config-tts provider picker sets provider and clears stale voice', async () => {
@@ -190,23 +199,31 @@ describe('TTS runtime commands', () => {
     expect(out).toContain('TTS voice set to voice-1.');
   });
 
-  test('/config-tts llm opens the model picker target and clear resets overrides', async () => {
+  test('/config-tts llm chooses provider then provider-scoped model and clear resets overrides', async () => {
     const registry = new CommandRegistry();
     registerTtsRuntimeCommands(registry);
     const out: string[] = [];
-    const modelTargets: string[] = [];
+    const openedSelections: OpenedSelection[] = [];
     const { ctx, values } = makeContext({
       out,
-      modelTargets,
+      openedSelections,
       initialConfig: { 'tts.llmProvider': 'openai', 'tts.llmModel': 'openai:gpt-5.4' },
     });
 
     await registry.execute('config-tts', ['llm'], ctx);
+    expect(openedSelections[0].title).toBe('Choose TTS LLM Provider');
+    const anthropic = openedSelections[0].items.find((item) => item.id === 'anthropic');
+    expect(anthropic).toBeDefined();
+    openedSelections[0].callback({ item: anthropic!, action: 'select' });
+    expect(openedSelections[1].title).toBe('Choose TTS LLM Model (anthropic)');
+    const sonnet = openedSelections[1].items.find((item) => item.id === 'anthropic:claude-sonnet');
+    expect(sonnet).toBeDefined();
+    openedSelections[1].callback({ item: sonnet!, action: 'select' });
     await registry.execute('config-tts', ['llm', 'clear'], ctx);
 
-    expect(modelTargets).toEqual(['tts']);
     expect(values['tts.llmProvider']).toBe('');
     expect(values['tts.llmModel']).toBe('');
+    expect(out).toContain('TTS LLM set to Claude Sonnet (anthropic).');
     expect(out).toContain('TTS LLM override cleared. /tts will use the current chat model.');
   });
 });

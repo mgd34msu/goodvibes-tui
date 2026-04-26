@@ -39,7 +39,13 @@ export class TerminalBuffer {
 
   public blitLine(row: number, line: Line): void {
     if (row >= 0 && row < this.height) {
-      this.cells[row] = [...line];
+      const current = this.cells[row]!;
+      const next = createEmptyLine(this.width);
+      for (let x = 0; x < Math.min(line.length, this.width); x++) {
+        next[x] = { ...line[x]! };
+      }
+      if (linesEqual(current, next, this.width)) return;
+      this.cells[row] = next;
       this.dirtyRows[row] = true;
     }
   }
@@ -56,12 +62,17 @@ export class TerminalBuffer {
    * If dimensions changed, reallocates cells array.
    * Always clears the dirty bitmap.
    */
-  public reset(width: number, height: number): void {
+  public reset(width: number, height: number, source?: TerminalBuffer | null): void {
     if (width !== this.width || height !== this.height) {
       this.width = width;
       this.height = height;
       this.cells = Array.from({ length: height }, () => createEmptyLine(width));
       this.dirtyRows = new Array(height).fill(false);
+    } else if (source && source.width === width && source.height === height) {
+      for (let y = 0; y < this.height; y++) {
+        this.cells[y] = source.cells[y]!.map(cell => ({ ...cell }));
+        this.dirtyRows[y] = false;
+      }
     } else {
       for (let y = 0; y < this.height; y++) {
         const row = this.cells[y]!;
@@ -72,4 +83,31 @@ export class TerminalBuffer {
       }
     }
   }
+
+  public clearDirty(): void {
+    this.dirtyRows.fill(false);
+  }
+}
+
+function linesEqual(left: Line, right: Line, width: number): boolean {
+  for (let x = 0; x < width; x++) {
+    const a = left[x];
+    const b = right[x];
+    if (!a && !b) continue;
+    if (!a || !b) return false;
+    if (
+      a.char !== b.char
+      || a.fg !== b.fg
+      || a.bg !== b.bg
+      || a.bold !== b.bold
+      || a.dim !== b.dim
+      || a.underline !== b.underline
+      || a.italic !== b.italic
+      || a.strikethrough !== b.strikethrough
+      || (a.link ?? '') !== (b.link ?? '')
+    ) {
+      return false;
+    }
+  }
+  return true;
 }

@@ -34,6 +34,10 @@ const MODE_TITLES: Record<string, string> = {
  */
 export const MODEL_PICKER_CHROME_LINES = 7;
 
+const renderCache = new WeakMap<ModelPickerModal, { key: string; lines: Line[] }>();
+const objectIds = new WeakMap<object, number>();
+let nextObjectId = 1;
+
 function putRowText(line: Line, startX: number, maxWidth: number, text: string, fg: string, bg = '', bold = false, dim = false): void {
   putOverlayText(line, startX, maxWidth, text, { fg, bg, bold, dim });
 }
@@ -51,6 +55,10 @@ export function renderModelPickerOverlay(
   maxVisible = 20,
   viewportHeight?: number,
 ): Line[] {
+  const cacheKey = getRenderCacheKey(picker, width, maxVisible, viewportHeight);
+  const cached = renderCache.get(picker);
+  if (cached?.key === cacheKey) return cached.lines;
+
   const lines: Line[] = [];
   const metrics = getOverlaySurfaceMetrics(width, viewportHeight ?? 24, {
     chromeRows: MODEL_PICKER_CHROME_LINES,
@@ -399,5 +407,67 @@ export function renderModelPickerOverlay(
   putRowText(footerLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(hints, contentW), contentW), mutedFg, '', false, true);
   lines.push(footerLine);
 
+  renderCache.set(picker, { key: cacheKey, lines });
   return lines;
+}
+
+function getRenderCacheKey(
+  picker: ModelPickerModal,
+  width: number,
+  maxVisible: number,
+  viewportHeight: number | undefined,
+): string {
+  const base = [
+    width,
+    maxVisible,
+    viewportHeight ?? '',
+    picker.mode,
+    picker.target,
+    picker.query,
+    picker.searchFocused ? 1 : 0,
+    picker.selectedIndex,
+    picker.scrollOffset,
+    picker.categoryFilter,
+    picker.capabilityFilter,
+    picker.availableOnly ? 1 : 0,
+    picker.benchmarkSort,
+    picker.groupBy,
+    keyForSet(picker.pinnedIds),
+    keyForSet(picker.configuredProviders),
+  ];
+
+  if (picker.mode === 'model') {
+    const filtered = picker.getFilteredModels();
+    const selected = filtered[picker.selectedIndex];
+    base.push(objectId(picker.models), objectId(filtered), filtered.length, selected?.registryKey ?? selected?.id ?? '');
+  } else if (picker.mode === 'provider') {
+    const filteredProviders = picker.getFilteredProviders();
+    base.push(objectId(picker.providers), objectId(filteredProviders), filteredProviders.length, keyForMap(picker.configuredViaMap));
+  } else if (picker.mode === 'effort') {
+    base.push(objectId(picker.effortLevels), picker.effortLevels.join('\u001f'), picker.pendingModel?.registryKey ?? picker.pendingModel?.id ?? '');
+  } else if (picker.mode === 'contextCap') {
+    base.push(picker.contextCapQuery, picker.contextCapPendingModel?.registryKey ?? picker.contextCapPendingModel?.id ?? '');
+  }
+
+  return base.join('\u001e');
+}
+
+function objectId(value: object): number {
+  const existing = objectIds.get(value);
+  if (existing !== undefined) return existing;
+  const next = nextObjectId++;
+  objectIds.set(value, next);
+  return next;
+}
+
+function keyForSet(values: ReadonlySet<string>): string {
+  return values.size === 0 ? '' : [...values].sort().join('\u001f');
+}
+
+function keyForMap(values: ReadonlyMap<string, string | undefined>): string {
+  if (values.size === 0) return '';
+  return [...values.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}\u001d${value ?? ''}`)
+    .join('\u001f');
 }

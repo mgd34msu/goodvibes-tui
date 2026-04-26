@@ -41,9 +41,14 @@ describe('TerminalBuffer dirty bitmap (β2 unit)', () => {
     expect(buf.dirtyRows[9]).toBe(false);
   });
 
-  test('blitLine marks row dirty', () => {
+  test('blitLine skips identical rows and marks changed rows dirty', () => {
     const buf = new TerminalBuffer(W, H);
     buf.blitLine(7, new Array(W).fill({ char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }));
+    expect(buf.dirtyRows[7]).toBe(false);
+    buf.blitLine(7, [
+      { char: 'X', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false },
+      ...new Array(W - 1).fill({ char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }),
+    ]);
     expect(buf.dirtyRows[7]).toBe(true);
     expect(buf.dirtyRows[6]).toBe(false);
   });
