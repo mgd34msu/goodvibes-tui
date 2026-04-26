@@ -183,6 +183,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     requestPermission: (request) => permissionPromptRef.requestPermission(request),
     toolRegistry,
     mcpRegistry: services.mcpRegistry,
+    voiceProviderRegistry: services.voiceProviders,
+    voiceService: services.voiceService,
     forensicsRegistry,
     policyRuntimeState,
     readModels: uiServices.readModels,

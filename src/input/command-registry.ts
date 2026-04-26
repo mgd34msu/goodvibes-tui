@@ -19,6 +19,7 @@ import type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
 import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
 import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
+import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
 import type {
   CommandWorkspaceShellServices,
 } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-workspace';
@@ -58,6 +59,8 @@ export interface CommandUiActions {
   print: (text: string) => void;
   exit: () => void;
   submitInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[]) => void;
+  submitSpokenInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[]) => void;
+  stopSpokenOutput?: () => void;
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
   cancelGeneration?: () => void;
   completeModelSelection?: (selection: {
@@ -146,6 +149,8 @@ export interface CommandWorkspaceServices
 export interface CommandPlatformConfigServices {
   readonly config: DeepReadonly<GoodVibesConfig>;
   readonly configManager: ConfigManager;
+  readonly voiceProviderRegistry?: VoiceProviderRegistry;
+  readonly voiceService?: VoiceService;
 }
 
 export interface CommandPlatformServices

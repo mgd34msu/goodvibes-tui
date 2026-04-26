@@ -21,6 +21,7 @@ import { inspectProviderAuth } from '@pellux/goodvibes-sdk/platform/runtime/auth
 import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing/index';
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
 import type { GoodVibesCliParseResult } from './types.ts';
+import { formatProviderAuthRoute, summarizeProviderAuthRoutes } from './provider-auth-routes.ts';
 import { classifyProviderSetup } from './provider-classification.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { applyRuntimeEndpointFlagOverrides } from './config-overrides.ts';
@@ -378,11 +379,23 @@ async function renderProviders(runtime: CliCommandRuntime): Promise<string> {
     const snapshots = await listProviderRuntimeSnapshots(services.providerRegistry);
     const current = services.providerRegistry.getCurrentModel();
     if (sub === 'current') {
-      const value = { provider: current.provider, model: current.registryKey };
+      const snapshot = snapshots.find((candidate) => candidate.providerId === current.provider);
+      const authRoutes = snapshot?.runtime.auth?.routes ?? [];
+      const value = {
+        provider: current.provider,
+        model: current.registryKey,
+        configured: snapshot?.runtime.auth?.configured ?? true,
+        configuredVia: snapshot?.runtime.auth?.mode ?? 'unknown',
+        authRoutes,
+        authRouteSummary: summarizeProviderAuthRoutes(authRoutes),
+      };
       return formatJsonOrText(runtime.cli)(value, [
         'GoodVibes current provider',
         `  provider: ${current.provider}`,
         `  model: ${current.registryKey}`,
+        `  configured: ${yesNo(value.configured)}`,
+        `  via: ${value.configuredVia}`,
+        `  auth routes: ${value.authRouteSummary}`,
       ].join('\n'));
     }
     if (sub === 'use' || sub === 'set') {
@@ -417,13 +430,21 @@ async function renderProviders(runtime: CliCommandRuntime): Promise<string> {
         configured: snapshot.runtime.auth?.configured ?? true,
         modelCount: snapshot.modelCount,
       });
-      return formatJsonOrText(runtime.cli)({ ...snapshot, setup }, [
+      const authRoutes = snapshot.runtime.auth?.routes ?? [];
+      return formatJsonOrText(runtime.cli)({
+        ...snapshot,
+        setup,
+        authRoutes,
+        authRouteSummary: summarizeProviderAuthRoutes(authRoutes),
+      }, [
         `Provider ${snapshot.providerId}`,
         `  active: ${yesNo(snapshot.active)}`,
         `  setup: ${setup.setupLabel}`,
         `  configured: ${yesNo(snapshot.runtime.auth?.configured ?? true)}`,
         `  via: ${snapshot.runtime.auth?.mode ?? 'unknown'}`,
         `  models: ${snapshot.modelCount}`,
+        `  auth routes: ${summarizeProviderAuthRoutes(authRoutes)}`,
+        ...authRoutes.map((route) => `    ${formatProviderAuthRoute(route)}`),
         `  detail: ${snapshot.runtime.auth?.detail ?? snapshot.runtime.notes?.join('; ') ?? ''}`,
       ].join('\n'));
     }
@@ -442,11 +463,13 @@ async function renderProviders(runtime: CliCommandRuntime): Promise<string> {
       models: snapshot.modelCount,
       current: current.provider === snapshot.providerId,
       detail: snapshot.runtime.auth?.detail ?? snapshot.runtime.notes?.join('; ') ?? '',
+      authRoutes: snapshot.runtime.auth?.routes ?? [],
+      authRouteSummary: summarizeProviderAuthRoutes(snapshot.runtime.auth?.routes),
     }));
     return formatJsonOrText(runtime.cli)(value, [
       'GoodVibes providers',
       ...value.map((provider) =>
-        `  ${provider.current ? '*' : ' '} ${provider.provider.padEnd(18)} setup=${provider.setupClass} configured=${yesNo(provider.configured)} via=${provider.configuredVia ?? 'n/a'} models=${provider.models} ${provider.detail ?? ''}`.trimEnd(),
+        `  ${provider.current ? '*' : ' '} ${provider.provider.padEnd(18)} setup=${provider.setupClass} configured=${yesNo(provider.configured)} via=${provider.configuredVia ?? 'n/a'} models=${provider.models} routes=${provider.authRouteSummary} ${provider.detail ?? ''}`.trimEnd(),
       ),
     ].join('\n'));
   });

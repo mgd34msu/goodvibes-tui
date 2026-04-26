@@ -114,11 +114,13 @@ The search runtime exposes normalized results, evidence shaping, verbosity contr
 Current voice providers include:
 
 - `openai` for `tts`, `stt`, and `realtime`
-- `elevenlabs` for `tts`, `stt`, and `realtime`
+- `elevenlabs` for `tts`, `tts-stream`, `stt`, and `realtime`
 - `deepgram` for `stt`
 - `google` for `stt`
 - `microsoft`
 - `vydra`
+
+The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults with `/config-tts provider <id>` and `/config-tts voice <voice-id>`. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
 
 ## Media and multimodal providers
 

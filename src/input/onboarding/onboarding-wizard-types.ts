@@ -42,6 +42,7 @@ export type OnboardingWizardFieldKind =
 
 export type OnboardingWizardAction =
   | 'apply'
+  | 'apply-and-continue'
   | 'select-all-capabilities'
   | 'clear-capabilities'
   | 'select-all-external-surfaces'
@@ -75,6 +76,7 @@ interface OnboardingWizardFieldBase {
   readonly kind: OnboardingWizardFieldKind;
   readonly label: string;
   readonly hint: string;
+  readonly spacerBeforeRows?: number;
 }
 
 export interface OnboardingWizardChecklistFieldDefinition extends OnboardingWizardFieldBase {

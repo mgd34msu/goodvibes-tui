@@ -8,7 +8,7 @@ import {
 } from './onboarding-wizard-external-surfaces.ts';
 import { countSelected, modelSelectionLabel, normalizeText } from './onboarding-wizard-helpers.ts';
 import type { OnboardingWizardController } from './onboarding-wizard.ts';
-import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
+import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardActionFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
 
 export function buildOnboardingWizardSteps(controller: OnboardingWizardController): readonly OnboardingWizardStepDefinition[] {
   if (controller.hydrationPending || controller.hydrationError !== null) return [buildLoadingStep(controller)];
@@ -40,8 +40,31 @@ export function buildOnboardingWizardSteps(controller: OnboardingWizardControlle
   steps.push(buildExperienceStep(controller));
   steps.push(buildReviewStep(controller));
 
-  return steps;
+  return steps.map(addApplyAndContinueAction);
 }
+
+function buildApplyAndContinueAction(step: OnboardingWizardStepDefinition): OnboardingWizardActionFieldDefinition {
+    return {
+      kind: 'action',
+      id: `${step.id}.apply-and-continue`,
+      action: 'apply-and-continue',
+      label: 'Apply & Continue To Next Section',
+      hint: 'Persist the current wizard settings, verify them, and move to the next onboarding section.',
+      defaultValue: 'Apply & next',
+      spacerBeforeRows: 2,
+    };
+  }
+
+function addApplyAndContinueAction(step: OnboardingWizardStepDefinition): OnboardingWizardStepDefinition {
+    if (step.id === 'loading' || step.id === 'review') return step;
+    return {
+      ...step,
+      fields: [
+        ...step.fields,
+        buildApplyAndContinueAction(step),
+      ],
+    };
+  }
 
 export function buildLoadingStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
     const failed = controller.hydrationError !== null;

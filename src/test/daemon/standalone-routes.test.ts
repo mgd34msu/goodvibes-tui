@@ -141,6 +141,48 @@ describe('F1 — companion-chat routes on standalone DaemonServer', () => {
     expect(getRes.status).toBe(200);
   });
 
+  test('PATCH /api/companion/chat/sessions/:id updates companion session metadata', async () => {
+    const createRes = await fetch(`http://127.0.0.1:${port}/api/companion/chat/sessions`, {
+      method: 'POST',
+      headers: bearerHeaders(),
+      body: JSON.stringify({ title: 'before patch' }),
+    });
+    expect(createRes.status).toBe(201);
+    const { sessionId } = await createRes.json() as { sessionId: string };
+
+    const patchRes = await fetch(`http://127.0.0.1:${port}/api/companion/chat/sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: bearerHeaders(),
+      body: JSON.stringify({
+        title: 'after patch',
+        provider: 'openai',
+        model: 'openai:gpt-test',
+        systemPrompt: 'patched prompt',
+      }),
+    });
+    expect(patchRes.status).toBe(200);
+    const patchBody = await patchRes.json() as {
+      session: {
+        title: string;
+        provider: string | null;
+        model: string | null;
+        systemPrompt: string | null;
+      };
+    };
+    expect(patchBody.session.title).toBe('after patch');
+    expect(patchBody.session.provider).toBe('openai');
+    expect(patchBody.session.model).toBe('openai:gpt-test');
+    expect(patchBody.session.systemPrompt).toBe('patched prompt');
+
+    const getRes = await fetch(`http://127.0.0.1:${port}/api/companion/chat/sessions/${sessionId}`, {
+      headers: bearerHeaders(),
+    });
+    expect(getRes.status).toBe(200);
+    const getBody = await getRes.json() as { session: { title: string; systemPrompt: string | null } };
+    expect(getBody.session.title).toBe('after patch');
+    expect(getBody.session.systemPrompt).toBe('patched prompt');
+  });
+
   test('GET /api/providers/current returns 200 with model field', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/providers/current`, {
       headers: bearerHeaders(),

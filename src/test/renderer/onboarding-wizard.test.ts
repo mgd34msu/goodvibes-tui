@@ -48,7 +48,23 @@ describe('renderOnboardingWizard', () => {
     const text = linesToText(renderOnboardingWizard(wizard, 100, 14)).join('\n');
 
     expect(text).toContain('more above');
-    expect(text).toContain('Use Local TUI Only');
+    expect(text).toContain('Apply & Continue');
+  });
+
+  test('separates the apply-and-continue action from normal fields', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+
+    const textLines = linesToText(renderOnboardingWizard(wizard, 188, 42));
+    const applyLine = textLines.findIndex((line) => line.includes('Apply & Continue To Next Section'));
+    let previousActionLine = -1;
+    for (let index = 0; index < applyLine; index += 1) {
+      if (textLines[index]?.includes('Use Local TUI Only (No Servers)')) previousActionLine = index;
+    }
+
+    expect(applyLine).toBeGreaterThan(0);
+    expect(previousActionLine).toBeGreaterThan(0);
+    expect(applyLine - previousActionLine).toBe(3);
   });
 
   test('does not render raw masked edit buffers', () => {

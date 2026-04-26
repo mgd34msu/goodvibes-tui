@@ -13,6 +13,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Providers and routing](providers-and-routing.md)
   Native providers, compatible/gateway providers, local discovery, synthetic failover, search providers, voice providers, and media providers.
 
+- [Voice and live TTS](voice-and-live-tts.md)
+  Live `/tts` playback, TTS provider/voice configuration, local player requirements, and streaming voice API behavior.
+
 - [Knowledge, artifacts, and multimodal](knowledge-artifacts-and-multimodal.md)
   Session memory, durable memory, structured knowledge, connectors, extractors, embeddings, artifacts, and multimodal analysis.
 

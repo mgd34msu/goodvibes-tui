@@ -171,8 +171,8 @@ describe('OnboardingWizardController', () => {
     expect(wizard.dirty).toBe(true);
     expect(wizard.isStepDirty(0)).toBe(true);
     wizard.selectLast(2);
-    expect(wizard.getSelectedFieldIndex()).toBe(6);
-    expect(wizard.scrollOffsets[0]).toBe(5);
+    expect(wizard.getSelectedFieldIndex()).toBe(7);
+    expect(wizard.scrollOffsets[0]).toBe(6);
 
     wizard.setStep(2);
     wizard.moveSelection(1, 2);
@@ -180,8 +180,28 @@ describe('OnboardingWizardController', () => {
     expect(wizard.scrollOffsets[2]).toBe(0);
 
     wizard.setStep(0);
-    expect(wizard.getSelectedFieldIndex()).toBe(6);
-    expect(wizard.scrollOffsets[0]).toBe(5);
+    expect(wizard.getSelectedFieldIndex()).toBe(7);
+    expect(wizard.scrollOffsets[0]).toBe(6);
+  });
+
+  test('adds a separated apply-and-continue action to every non-final editable step', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.external-integrations', true);
+    wizard.setFieldValue('external-services.ntfy', true);
+
+    for (const step of wizard.steps) {
+      const applyAndContinue = step.fields.find((field) => field.kind === 'action' && field.action === 'apply-and-continue');
+      if (step.id === 'review') {
+        expect(applyAndContinue).toBeUndefined();
+        continue;
+      }
+
+      expect(applyAndContinue).toBeDefined();
+      expect(applyAndContinue?.label).toBe('Apply & Continue To Next Section');
+      expect(applyAndContinue?.spacerBeforeRows).toBe(2);
+      expect(step.fields.at(-1)).toBe(applyAndContinue);
+    }
   });
 
   test('derives service/autostart and LAN defaults from non-TUI capabilities', () => {
@@ -976,6 +996,82 @@ describe('InputHandler onboarding integration', () => {
     expect(input.onboardingWizard.currentStep.id).toBe('review');
     expect(input.onboardingWizard.applyFeedback?.title).toBe('Cannot apply yet');
     expect(input.onboardingWizard.applyFeedback?.messages).toContain('Access: Local auth admin password is required.');
+    expect(prints).toEqual([]);
+  });
+
+  test('apply-and-continue advances without persisting runtime settings', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({
+        auth: {
+          snapshot: {
+            userStorePath: '/tmp/auth-users.json',
+            bootstrapCredentialPath: '/tmp/auth-bootstrap.txt',
+            persisted: true,
+            bootstrapCredentialPresent: false,
+            userCount: 1,
+            sessionCount: 0,
+            users: [{ username: 'admin', roles: ['admin'] }],
+            sessions: [],
+          },
+        },
+      }),
+    }, { resetValues: true });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+    input.onboardingWizard.setFieldValue('accounts.auth', true);
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply-and-continue'): Promise<void> }).handleOnboardingAction('apply-and-continue');
+
+    expect(input.onboardingWizard.active).toBe(true);
+    expect(input.onboardingWizard.currentStep.id).toBe('network');
+    expect(input.onboardingWizard.applyFeedback).toBeNull();
+    expect(uiServices.platform.configManager.get('service.enabled')).toBe(false);
+    expect(uiServices.platform.configManager.get('web.enabled')).toBe(false);
+    expect(prints).toEqual([]);
+  });
+
+  test('apply-and-continue advances to the next section instead of review when later required fields are incomplete', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({
+        auth: {
+          snapshot: {
+            userStorePath: '/tmp/auth-users.json',
+            bootstrapCredentialPath: '/tmp/auth-bootstrap.txt',
+            persisted: true,
+            bootstrapCredentialPresent: true,
+            userCount: 1,
+            sessionCount: 0,
+            users: [{ username: 'admin', roles: ['admin'] }],
+            sessions: [],
+          },
+        },
+      }),
+    }, { resetValues: true });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply-and-continue'): Promise<void> }).handleOnboardingAction('apply-and-continue');
+
+    expect(input.onboardingWizard.active).toBe(true);
+    expect(input.onboardingWizard.currentStep.id).toBe('network');
+    expect(input.onboardingWizard.applyFeedback).toBeNull();
+    expect(uiServices.platform.configManager.get('service.enabled')).toBe(false);
     expect(prints).toEqual([]);
   });
 

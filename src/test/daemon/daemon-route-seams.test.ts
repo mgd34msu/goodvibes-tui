@@ -243,6 +243,13 @@ describe('daemon route seams', () => {
         getStatus: async () => ({ providers: [{ id: 'voice-1' }] }),
         listVoices: async () => [],
         synthesize: async () => ({}),
+        synthesizeStream: async () => ({
+          providerId: 'voice-1',
+          mimeType: 'audio/mpeg',
+          format: 'mp3',
+          chunks: (async function* () {})(),
+          metadata: {},
+        }),
         transcribe: async () => ({}),
         openRealtimeSession: async () => ({}),
       },

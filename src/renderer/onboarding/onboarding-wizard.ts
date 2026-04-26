@@ -113,26 +113,50 @@ function buildFieldRows(
   visibleFields: number,
   capacity: number,
 ): readonly RenderedFieldRow[] {
-  const fieldWindow = wizard.getFieldWindow(visibleFields);
+  wizard.ensureSelectionVisible(visibleFields);
+  const fields = wizard.currentStep.fields;
   const rows: RenderedFieldRow[] = [];
+  if (fields.length === 0 || capacity <= 0) return rows;
 
-  if (fieldWindow.start > 0) {
-    rows.push({
-      kind: 'moreAbove',
-      text: `${OVERLAY_GLYPHS.moreAbove} ${fieldWindow.start} more above`,
-    });
-  }
-
-  fieldWindow.fields.forEach((field, index) => {
-    const absoluteIndex = fieldWindow.start + index;
-    rows.push({ kind: 'field', field, absoluteIndex });
+  const allRows: RenderedFieldRow[] = [];
+  fields.forEach((field, absoluteIndex) => {
+    const spacerRows = Math.max(0, field.spacerBeforeRows ?? 0);
+    for (let index = 0; index < spacerRows; index += 1) {
+      allRows.push({ kind: 'empty' });
+    }
+    allRows.push({ kind: 'field', field, absoluteIndex });
   });
 
-  if (fieldWindow.end < fieldWindow.total) {
-    rows.push({
+  const selectedFieldIndex = wizard.getSelectedFieldIndex();
+  const selectedRowIndex = Math.max(0, allRows.findIndex((row) => row.kind === 'field' && row.absoluteIndex === selectedFieldIndex));
+  const scrollFieldIndex = wizard.scrollOffsets[wizard.stepIndex] ?? 0;
+  const scrollRowIndex = allRows.findIndex((row) => row.kind === 'field' && row.absoluteIndex === scrollFieldIndex);
+  const maxStart = Math.max(0, allRows.length - capacity);
+  let start = clamp(scrollRowIndex >= 0 ? scrollRowIndex : 0, 0, maxStart);
+
+  if (selectedRowIndex < start) start = selectedRowIndex;
+  if (selectedRowIndex >= start + capacity) start = selectedRowIndex - capacity + 1;
+  start = clamp(start, 0, maxStart);
+
+  if (start > 0 && selectedRowIndex === start) start = Math.max(0, start - 1);
+  if (start + capacity < allRows.length && selectedRowIndex === start + capacity - 1) {
+    start = Math.min(maxStart, start + 1);
+  }
+
+  rows.push(...allRows.slice(start, start + capacity));
+  if (start > 0 && rows.length > 0) {
+    rows[0] = {
+      kind: 'moreAbove',
+      text: `${OVERLAY_GLYPHS.moreAbove} ${start} more above`,
+    };
+  }
+
+  const hiddenBelow = Math.max(0, allRows.length - (start + capacity));
+  if (hiddenBelow > 0 && rows.length > 0) {
+    rows[rows.length - 1] = {
       kind: 'moreBelow',
-      text: `${OVERLAY_GLYPHS.moreBelow} ${fieldWindow.total - fieldWindow.end} more below`,
-    });
+      text: `${OVERLAY_GLYPHS.moreBelow} ${hiddenBelow} more below`,
+    };
   }
 
   while (rows.length < capacity) rows.push({ kind: 'empty' });

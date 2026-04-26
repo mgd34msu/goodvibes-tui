@@ -4,6 +4,25 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.32] — 2026-04-25
+
+### Added
+- Live `/tts <prompt>` command for normal chat turns with additional streaming spoken output. Text still renders normally; only turns submitted through `/tts` are spoken.
+- `/tts stop` cancellation for active playback, queued audio chunks, and pending streaming TTS requests.
+- `/config-tts` and `/tts-config` commands for TTS provider, voice, and optional spoken-turn LLM override settings.
+- Local streaming audio playback through `mpv` or `ffplay`, with non-blocking status errors when no player is available.
+- Documentation for live TTS usage, playback requirements, TTS config keys, and the new `POST /api/voice/tts/stream` daemon route.
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.8` and regenerated foundation operator contract artifacts.
+- Exposed provider auth route posture in CLI provider management output.
+- Updated onboarding wizard navigation with an `Apply & Continue To Next Section` action that saves wizard screen state without applying runtime settings before the final review/apply step.
+- Kept prompt borders visually inactive when keyboard focus moves to the process indicator.
+
+### Fixed
+- Updated daemon/media route seam tests for the SDK streaming voice service contract.
+- Added focused regression coverage for text chunking, player discovery, spoken-turn event correlation, and TTS command behavior.
+
 ## [0.19.31] — 2026-04-25
 
 ### Changes
