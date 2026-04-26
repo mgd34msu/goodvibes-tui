@@ -40,6 +40,7 @@ import type { BootstrapCommandShellServices } from '@pellux/goodvibes-sdk/platfo
 import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
 import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
+import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 export type BootstrapCommandSessionSection = CommandContext['session'];
@@ -74,6 +75,8 @@ export interface BootstrapCommandSectionOptions {
   readonly requestPermission: PermissionRequestHandler;
   readonly toolRegistry: ToolRegistry;
   readonly mcpRegistry: McpRegistry;
+  readonly voiceProviderRegistry?: VoiceProviderRegistry;
+  readonly voiceService?: VoiceService;
   readonly forensicsRegistry: ForensicsRegistry;
   readonly policyRuntimeState: PolicyRuntimeState;
   readonly readModels: UiReadModels;
@@ -321,13 +324,15 @@ export function createBootstrapCommandWorkspaceSection(
 export function createBootstrapCommandPlatformSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'configManager'
+    'configManager' | 'voiceProviderRegistry' | 'voiceService'
   >,
   shellServices: BootstrapCommandShellServices,
 ): BootstrapCommandPlatformSection {
   return {
     config: getConfigSnapshot(options.configManager),
     configManager: options.configManager,
+    voiceProviderRegistry: options.voiceProviderRegistry,
+    voiceService: options.voiceService,
     ...shellServices.platform,
   };
 }

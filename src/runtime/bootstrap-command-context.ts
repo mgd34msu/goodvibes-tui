@@ -37,6 +37,7 @@ import { createBootstrapCommandShellServices, type PlanRuntimeService, type Remo
 import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
 import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
 import type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
+import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
 import {
   createBootstrapCommandActions,
   createBootstrapCommandClientsSection,
@@ -58,6 +59,8 @@ export type CreateBootstrapCommandContextOptions = {
   requestPermission: PermissionRequestHandler;
   toolRegistry: ToolRegistry;
   mcpRegistry: McpRegistry;
+  voiceProviderRegistry?: VoiceProviderRegistry;
+  voiceService?: VoiceService;
   forensicsRegistry: ForensicsRegistry;
   policyRuntimeState: PolicyRuntimeState;
   readModels: UiReadModels;
@@ -122,6 +125,8 @@ export function createBootstrapCommandContext(
     requestPermission,
     toolRegistry,
     mcpRegistry,
+    voiceProviderRegistry,
+    voiceService,
     forensicsRegistry,
     policyRuntimeState,
     readModels,
@@ -223,7 +228,7 @@ export function createBootstrapCommandContext(
     profileManager,
     bookmarkManager,
   }, shellServices);
-  const platform = createBootstrapCommandPlatformSection({ configManager }, shellServices);
+  const platform = createBootstrapCommandPlatformSection({ configManager, voiceProviderRegistry, voiceService }, shellServices);
   const extensions = createBootstrapCommandExtensionsSection({
     toolRegistry,
     mcpRegistry,

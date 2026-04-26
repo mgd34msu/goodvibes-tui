@@ -60,6 +60,8 @@ Representative slash-command families include:
 - `/workflow`
 - `/schedule`
 - `/voice`
+- `/tts`
+- `/config-tts`
 - `/mcp`
 - `/incident`
 - `/replay`
@@ -91,6 +93,21 @@ The WRFC panel surfaces constraint state at every level of a running chain:
 - When constraints are loaded, the system-message router emits a `WORKFLOW_CONSTRAINTS_ENUMERATED` operator-visible message. This is routed through the standard `ui.wrfcMessages` setting (`panel`, `conversation`, or `both`).
 
 The `/wrfc` command opens the chain-status view directly. Constraint counts are also visible in the orchestration panel and in `/wrfc` output without opening the full panel.
+
+## Live TTS commands
+
+`/tts <prompt>` submits a normal chat turn and adds live spoken output for that one turn. Text still renders normally in the transcript. Assistant deltas are chunked at sentence or phrase boundaries and streamed through the configured TTS provider.
+
+`/tts stop` cancels active playback and pending TTS requests without deleting the text response.
+
+`/config-tts` manages the TTS defaults used by spoken-output clients:
+
+- `tts.provider`
+- `tts.voice`
+- `tts.llmProvider`
+- `tts.llmModel`
+
+Use `/config-tts providers` to list providers with streaming TTS support and `/config-tts voices [provider]` to inspect available voices. Live local playback requires `mpv` or `ffplay` on `PATH`.
 
 ## Workflow-oriented commands
 

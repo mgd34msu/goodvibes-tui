@@ -51,6 +51,7 @@ import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnC
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState } from './cli/tui-startup.ts';
+import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -72,7 +73,6 @@ async function main() {
     homeDirectory: homedir(),
   }, 'goodvibes');
 
-  // ── Bootstrap runtime subsystems via bootstrapRuntime.
   const ctx: BootstrapContext = await bootstrapRuntime(stdout, {
     configManager,
     workingDir: bootstrapWorkingDir,
@@ -118,7 +118,6 @@ async function main() {
   ctx.services.wrfcController.setPlanManager(ctx.services.planManager);
   let activeConversationWidth = stdout.columns || 80;
   conversation.setWidthProvider(() => activeConversationWidth);
-  // ── HITL UX mode — read from config and apply at startup ─────────────────
   {
     const hitlMode = configManager.get('behavior.hitlMode') as HITLMode | undefined;
     if (hitlMode && (hitlMode === 'quiet' || hitlMode === 'balanced' || hitlMode === 'operator')) {
@@ -126,7 +125,6 @@ async function main() {
     }
   }
 
-  // Use the panel manager owned by the runtime service graph.
   const panelManager = ctx.services.panelManager;
   const buildSessionContinuityHints = () => {
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
@@ -145,7 +143,6 @@ async function main() {
     };
   };
 
-  // Permission state — set while a permission prompt is blocking the orchestrator
   let pendingPermission: PendingPermissionState | null = null;
   approvalBroker.subscribe((approval) => {
     if (!pendingPermission) return;
@@ -155,20 +152,13 @@ async function main() {
     render();
   });
 
-  // --- Streaming speed tracking (B2) ---
   let streamStartTime = 0;
   let streamDeltaCount = 0;
   let streamTokenSpeed = 0;
 
   let scrollTop = 0;
-  /** When true, view auto-scrolls to bottom on every render.
-   *  False when user manually scrolls up. Reset on user input. */
   let scrollLocked = true;
 
-  // lastGitInfo is a mutable ref provided by bootstrap (updated asynchronously)
-  // Use lastGitInfoRef.value inside render to get the current value.
-
-  /** Content width inside the prompt box (box width minus padding). */
   const getPromptContentWidth = () => {
     const w = stdout.columns || 80;
     const boxMargin = 2;
@@ -195,23 +185,12 @@ async function main() {
     scrollTop = Math.max(0, conversation.history.getLineCount() - vHeight);
   };
 
-  // main.ts-owned unsub functions for shell-owned typed runtime subscriptions
-  // Bootstrap-owned unsubs are in ctx.bootstrapUnsubs and cleared by ctx.shutdown().
   const unsubs: Array<() => void> = [];
-
-  // Crash recovery interval handle — cleared on exit
   let recoveryInterval: ReturnType<typeof setInterval> | null = null;
-
-  // Recovery flow state
+  let stopSpokenOutputForExit: (() => void) | null = null;
   let recoveryPending = false;
 
-  /**
-   * Full application teardown.
-   * Clears main.ts-owned listeners, calls ctx.shutdown() for logical teardown,
-   * then tears down the terminal and exits the process.
-   */
   const sigintHandler = (): void => input.feed('\x03');
-  // Track unhandled rejections to detect cascading failures
   let _unhandledRejectionCount = 0;
   let _unhandledRejectionWindowStart = Date.now();
   const unhandledRejectionHandler = (reason: unknown): void => {
@@ -244,17 +223,14 @@ async function main() {
   };
 
   const exitApp = (): void => {
-    // Clear main.ts-owned event subscriptions
+    stopSpokenOutputForExit?.();
     unsubs.forEach(fn => fn());
-    // Clear bootstrap-owned unsubs + interval via ctx.shutdown()
     const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
     ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints()) }).catch((err) => {
       logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: summarizeError(err) });
     });
-    // Clear recovery interval
     if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
     deleteRecoveryFile({ homeDirectory });
-    // Terminal teardown — main.ts exclusively owns these
     stdin.removeAllListeners('data');
     stdout.removeListener('resize', resizeHandler);
     process.removeListener('SIGINT', sigintHandler);
@@ -265,10 +241,18 @@ async function main() {
     process.exit(0);
   };
 
-  // main.ts owns terminal teardown, so it binds the shell exit bridge here.
   commandContext.exit = exitApp;
 
-  const submitInput = (text: string, content?: ContentPart[]) => {
+  const spokenTurns = wireSpokenTurnRuntime({
+    voiceService: ctx.services.voiceService,
+    configManager,
+    events: uiServices.events,
+    notify: (message) => { systemMessageRouter.high(message); render(); },
+  });
+  stopSpokenOutputForExit = () => spokenTurns.stop();
+  unsubs.push(...spokenTurns.unsubs);
+
+  const submitInput = (text: string, content?: ContentPart[], options: { readonly spokenOutput?: boolean } = {}) => {
     input.clearModalStack();
     scrollLocked = true; // Re-lock on any user input
     const AT_MODEL_RE = /@model:([^\s]+)/g;
@@ -302,6 +286,9 @@ async function main() {
       }
     }
     if (processedText || content) {
+      if (options.spokenOutput && processedText) {
+        spokenTurns.submitNextTurn(processedText);
+      }
       orchestrator.handleUserInput(processedText, content).catch((err: unknown) => {
         logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: summarizeError(err) });
       });
@@ -311,6 +298,7 @@ async function main() {
   };
 
   const cancelGeneration = () => {
+    spokenTurns.stop('Spoken output stopped.');
     if (orchestrator.isThinking) {
       orchestrator.abort();
     }
@@ -338,6 +326,8 @@ async function main() {
   };
 
   commandContext.submitInput = submitInput;
+  commandContext.submitSpokenInput = (text, content) => submitInput(text, content, { spokenOutput: true });
+  commandContext.stopSpokenOutput = () => spokenTurns.stop();
   commandContext.executeCommand = (name, args) => commandRegistry.execute(name, args, commandContext);
   commandContext.cancelGeneration = cancelGeneration;
   commandContext.jumpToBookmark = jumpToBookmark;

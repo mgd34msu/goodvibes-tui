@@ -154,7 +154,7 @@ export class UIFactory {
     const promptLines = prompt.split('\n');
     const TEXT_COLOR = promptFocused ? '252' : '246';
     const BG_COLOR = promptFocused ? '#2a2a2a' : '#1f2430';
-    const BORDER_COLOR = promptFocused ? BG_COLOR : '#334155';
+    const BORDER_COLOR = BG_COLOR;
     const boxMargin = 2; const boxWidth = width - (boxMargin * 2); const boxStartX = boxMargin;
     const createBaseLine = () => {
       const l = createEmptyLine(width);

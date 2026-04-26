@@ -153,4 +153,30 @@ describe('shell surface', () => {
     expect(unfocused.lines[1]![4]!.bg).toBe('#1f2430');
     expect(lineToString(unfocused.lines[1])).not.toContain('█');
   });
+
+  test('prompt box borders match the inactive prompt fill when the indicator is focused', () => {
+    const result = buildShellFooter({
+      width: 80,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 1,
+      runningProcessCount: 0,
+      indicatorFocused: true,
+    });
+    const topBorderCells = result.lines[0]!.filter((cell) => cell.char === '▄');
+    const bottomBorderCells = result.lines[2]!.filter((cell) => cell.char === '▀');
+
+    expect(topBorderCells.length).toBeGreaterThan(0);
+    expect(bottomBorderCells.length).toBeGreaterThan(0);
+    expect(topBorderCells.every((cell) => cell.fg === '#1f2430')).toBe(true);
+    expect(bottomBorderCells.every((cell) => cell.fg === '#1f2430')).toBe(true);
+  });
 });

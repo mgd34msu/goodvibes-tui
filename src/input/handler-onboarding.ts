@@ -145,6 +145,13 @@ function showOnboardingApplyFeedbackForHandler(handler: InputHandler, feedback: 
     handler.requestRender();
   }
 
+function continueOnboardingSection(handler: InputHandler): void {
+    handler.onboardingWizard.commitEdit();
+    handler.onboardingWizard.clearApplyFeedback();
+    handler.onboardingWizard.nextStep();
+    handler.requestRender();
+  }
+
 export function clearOnboardingPendingModelPickerTargetForHandler(handler: InputHandler): void {
     handler.onboardingWizard.clearPendingModelPickerTarget();
   }
@@ -213,6 +220,11 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
     }
     if (action === 'finish-openai-subscription') {
       await handler.handleOpenAiSubscriptionFinish();
+      return;
+    }
+    if (action === 'apply-and-continue') {
+      if (handler.onboardingApplyPending) return;
+      continueOnboardingSection(handler);
       return;
     }
     if (action !== 'apply') return;

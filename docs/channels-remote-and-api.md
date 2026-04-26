@@ -76,12 +76,14 @@ The control-plane method catalog is the canonical external-client contract. Exte
 The daemon also exposes dedicated product-domain APIs for:
 
 - knowledge status, ingest, search, packets, jobs, schedules, projections, GraphQL, and reports
-- voice status, providers, voices, TTS, STT, and realtime sessions
+- voice status, providers, voices, TTS, streaming TTS, STT, and realtime sessions
 - web-search providers and queries
 - artifacts and artifact content
 - multimodal status, providers, analyze, packet, and writeback
 
 These surfaces are what make future web clients and companion apps straightforward to build without duplicating runtime logic.
+
+Streaming TTS is exposed at `POST /api/voice/tts/stream` and returns raw binary audio. The existing `POST /api/voice/tts` JSON synthesis route is unchanged.
 
 ## Remote runtime
 
