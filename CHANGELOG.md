@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.39] — 2026-04-27
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.16` for SDK-owned Cloudflare operational-token creation fixes.
+- Cloudflare setup now benefits from SDK permission matching for Cloudflare `Write`/`Edit` naming variants and corrected resource scopes for R2, DNS, and Zero Trust Access token creation.
+
 ## [0.19.38] — 2026-04-26
 
 ### Changed
