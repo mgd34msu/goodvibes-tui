@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.41] — 2026-04-27
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.18` for SDK-owned Cloudflare provisioning idempotency and recovery fixes.
+- Cloudflare setup now benefits from repeated-run reuse of existing Queues, queue consumers, KV namespaces, R2 buckets, Secrets Stores, Zero Trust Tunnels, Access resources, DNS CNAMEs, and workers.dev script routes.
+
 ## [0.19.40] — 2026-04-27
 
 ### Changed
