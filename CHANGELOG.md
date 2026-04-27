@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.42] — 2026-04-27
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.19` for SDK-owned Cloudflare Workers provisioning fixes around existing workers.dev subdomains, Worker cron settings, and workers.dev route disable flows.
+- Regenerated foundation operator contract artifacts from the SDK 0.25.19 contract.
+
+### Fixed
+- Home Assistant setup is now detected as an external onboarding surface even when configured values exist but `surfaces.homeassistant.enabled` is off.
+- Home Assistant token and webhook secret edits from `/settings` and `/config` now store raw values through GoodVibes secrets and persist `goodvibes://secrets/goodvibes/...` refs in config.
+- `/config surfaces...` now exposes the surfaces category so Home Assistant settings can be inspected and changed outside the wizard.
+
 ## [0.19.41] — 2026-04-27
 
 ### Changed

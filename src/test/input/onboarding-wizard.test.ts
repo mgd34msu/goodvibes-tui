@@ -431,6 +431,7 @@ describe('OnboardingWizardController', () => {
     const wizard = new OnboardingWizardController();
     wizard.open('new');
     wizard.setFieldValue('capabilities.external-integrations', true);
+    wizard.setFieldValue('external-services.homeassistant', true);
     wizard.setFieldValue('external-services.google-chat', true);
     wizard.setFieldValue('external-services.signal', true);
     wizard.setFieldValue('external-services.whatsapp', true);
@@ -444,9 +445,13 @@ describe('OnboardingWizardController', () => {
     const selectorFieldIds = serviceStep?.fields.map((field) => field.id) ?? [];
 
     expect(selectorFieldIds).toContain('external-services.ntfy');
+    expect(selectorFieldIds).toContain('external-services.homeassistant');
     expect(selectorFieldIds).not.toContain('external-services.google-chat.webhook-url');
+    expect(wizard.steps.map((step) => step.id)).toContain('external-surface:homeassistant');
     expect(wizard.steps.map((step) => step.id)).toContain('external-surface:googleChat');
     expect(wizard.steps.map((step) => step.id)).toContain('external-surface:matrix');
+    expect(wizard.steps.find((step) => step.id === 'external-surface:homeassistant')?.fields.map((field) => field.id))
+      .toContain('external-services.homeassistant.access-token');
     expect(wizard.steps.find((step) => step.id === 'external-surface:googleChat')?.fields.map((field) => field.id))
       .toContain('external-services.google-chat.webhook-url');
     expect(wizard.steps.find((step) => step.id === 'external-surface:signal')?.fields.map((field) => field.id))
@@ -463,6 +468,35 @@ describe('OnboardingWizardController', () => {
       .toContain('external-services.mattermost.bot-token');
     expect(wizard.steps.find((step) => step.id === 'external-surface:matrix')?.fields.map((field) => field.id))
       .toContain('external-services.matrix.access-token');
+  });
+
+  test('detects configured Home Assistant values even when the surface is not enabled', () => {
+    const base = makeOnboardingSnapshot();
+    const snapshot = makeOnboardingSnapshot({
+      config: {
+        ...base.config,
+        surfaces: {
+          ...base.config.surfaces,
+          homeassistant: {
+            ...base.config.surfaces.homeassistant,
+            enabled: false,
+            instanceUrl: 'http://homeassistant.local:8123',
+            accessToken: 'goodvibes://secrets/goodvibes/GOODVIBES_SURFACES_HOMEASSISTANT_ACCESS_TOKEN',
+          },
+        },
+      },
+    });
+    const wizard = new OnboardingWizardController();
+    wizard.open('edit');
+    wizard.hydrateRuntimeState({ snapshot }, { resetValues: true });
+
+    expect(wizard.getCapabilitySelectionState().find((item) => item.id === 'external-integrations')?.selected).toBe(true);
+    expect(wizard.steps.map((step) => step.id)).toContain('external-services');
+    expect(wizard.steps.map((step) => step.id)).toContain('external-surface:homeassistant');
+    expect(wizard.getStringFieldValue('external-services.homeassistant.auto-start', 'yes')).toBe('no');
+    expect(wizard.getStringFieldValue('external-services.homeassistant.access-token', '')).toBe(
+      'goodvibes://secrets/goodvibes/GOODVIBES_SURFACES_HOMEASSISTANT_ACCESS_TOKEN',
+    );
   });
 
   test('enabling an inbound external surface turns on the HTTP listener', () => {

@@ -6,11 +6,20 @@
 
 import type { SettingEntry, McpEntry, SubscriptionEntry } from '../input/settings-modal.ts';
 import { SETTINGS_CATEGORIES } from '../input/settings-modal.ts';
+import { isSecretConfigKey, isSecretReferenceValue } from '../config/secret-config.ts';
+
+function maskSecretValue(value: string): string {
+  if (value.length === 0) return '(empty)';
+  if (isSecretReferenceValue(value)) return value;
+  if (value.length <= 4) return '••••';
+  return `${'•'.repeat(Math.min(12, Math.max(4, value.length - 4)))}${value.slice(-4)}`;
+}
 
 export function formatValue(entry: SettingEntry): string {
   const val = entry.currentValue;
   if (val === null || val === undefined) return '(unset)';
   if (typeof val === 'boolean') return val ? 'true' : 'false';
+  if (typeof val === 'string' && isSecretConfigKey(entry.setting.key)) return maskSecretValue(val);
   if (typeof val === 'string' && val === '') return '(empty)';
   return String(val);
 }

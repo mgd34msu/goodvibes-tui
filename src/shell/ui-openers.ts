@@ -22,7 +22,7 @@ type WireShellUiOpenersOptions = {
   featureFlags: FeatureFlagManager;
   mcpRegistry: McpRegistry;
   subscriptionManager: SubscriptionManager;
-  secretsManager?: Pick<SecretsManager, 'get'>;
+  secretsManager?: Pick<SecretsManager, 'delete' | 'get' | 'set'>;
   serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
   getConfiguredProviderIds: () => string[];
   getPinned: () => Promise<string[]>;
@@ -208,7 +208,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openSettingsModal = () => {
     input.modalOpened('settings');
-    input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry);
+    input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager);
     render();
   };
 
