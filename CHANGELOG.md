@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.43] — 2026-04-27
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.20` for SDK-owned Cloudflare Durable Object migration idempotency and retry fixes.
+- Regenerated foundation operator contract artifacts from the SDK 0.25.20 contract.
+
+### Fixed
+- Cloudflare Worker provisioning now benefits from SDK recovery when an existing `GoodVibesCoordinator` Durable Object SQLite migration has already been applied.
+
 ## [0.19.42] — 2026-04-27
 
 ### Changed
