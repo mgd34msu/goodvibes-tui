@@ -4,6 +4,16 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.44] — 2026-04-27
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.21` for SDK-owned Cloudflare hostname normalization and zone ownership checks.
+- Regenerated foundation operator contract artifacts from the SDK 0.25.21 contract.
+
+### Fixed
+- Cloudflare provisioning now benefits from SDK normalization of stale placeholder hostnames like `daemon.example.com` and `goodvibes.example.com` into hostnames within the selected zone.
+- Cloudflare DNS and Zero Trust Access setup now benefits from SDK-side zone ownership checks before hostname requests are sent to Cloudflare.
+
 ## [0.19.43] — 2026-04-27
 
 ### Changed
