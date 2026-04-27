@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.38] — 2026-04-26
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.15` for SDK-owned Cloudflare bootstrap-token permission-group resolution fixes.
+- Cloudflare bootstrap setup now benefits from filtered permission-group lookups for account and zone permissions such as Workers Scripts Write, Queues Write, Zone Read, DNS Write, and Workers KV Storage Write.
+
 ## [0.19.37] — 2026-04-26
 
 ### Changed
