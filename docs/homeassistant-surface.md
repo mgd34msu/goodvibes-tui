@@ -17,6 +17,17 @@ Select `Connect GoodVibes to external apps and services`, then select `Home Assi
 
 If auto-start is set to `No`, the setup values are saved but the surface stays idle until `surfaces.homeassistant.enabled` is turned on from Settings > Surfaces.
 
+## Settings
+
+Home Assistant values are also editable after onboarding:
+
+- `/settings` > `Surfaces` exposes every `surfaces.homeassistant.*` key.
+- `/config surfaces.homeassistant.instanceUrl <url>` updates the instance URL.
+- `/config surfaces.homeassistant.accessToken <token-or-goodvibes-ref>` stores raw token input in the GoodVibes user secret store and writes a `goodvibes://secrets/goodvibes/...` reference to config.
+- `/config surfaces.homeassistant.webhookSecret <secret-or-goodvibes-ref>` uses the same secret-backed persistence path.
+
+Clearing or resetting a Home Assistant secret-backed config key removes the derived GoodVibes user secret when possible. Existing `goodvibes://secrets/env/...`, `goodvibes://secrets/file/...`, and `goodvibes://secrets/goodvibes/...` references are preserved as references rather than copied.
+
 ## Daemon Contract
 
 The inbound callback path is:

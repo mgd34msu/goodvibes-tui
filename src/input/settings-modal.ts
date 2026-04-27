@@ -10,7 +10,7 @@
  * Saves changes via configManager.set(key, value) or featureFlagManager methods.
  */
 
-import { CONFIG_SCHEMA, type ConfigSetting, type ConfigKey, type PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config/schema';
+import { CONFIG_SCHEMA, type ConfigKey, type PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config/schema';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
@@ -18,6 +18,16 @@ import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform
 import type { ProviderAuthFreshness, ProviderAuthRoute } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
 import { getResolvedSettingLookup } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
+import { isSecretConfigKey } from '../config/secret-config.ts';
+import {
+  getNumericAdjustmentMeta,
+  modelPickerLaunchForKey,
+  roundToPrecision,
+} from './settings-modal-behavior.ts';
+import {
+  setSecretBackedSettingValue,
+  type SettingsSecretsManager,
+} from './settings-modal-secrets.ts';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
@@ -40,41 +50,6 @@ export {
   type SettingsCategory,
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
-
-type ModelPickerLaunch =
-  | { readonly flow: 'providerModel'; readonly target: ModelPickerTarget }
-  | { readonly flow: 'model'; readonly target: ModelPickerTarget };
-
-/**
- * Map config keys to the shared provider/model picker flows. Provider rows open
- * provider first; model rows open directly to models for the same target.
- */
-function _modelPickerLaunchForKey(key: string): ModelPickerLaunch | null {
-  if (key === 'helper.globalProvider') return { flow: 'providerModel', target: 'helper' };
-  if (key === 'helper.globalModel') return { flow: 'model', target: 'helper' };
-  if (key === 'tools.llmProvider') return { flow: 'providerModel', target: 'tool' };
-  if (key === 'tools.llmModel') return { flow: 'model', target: 'tool' };
-  if (key === 'tts.llmProvider') return { flow: 'providerModel', target: 'tts' };
-  if (key === 'tts.llmModel') return { flow: 'model', target: 'tts' };
-  return null;
-}
-
-function roundToPrecision(value: number, precision: number): number {
-  const factor = 10 ** precision;
-  return Math.round(value * factor) / factor;
-}
-
-function getNumericAdjustmentMeta(setting: ConfigSetting): {
-  step: number;
-  min?: number;
-  max?: number;
-  precision: number;
-} {
-  if (setting.key === 'wrfc.scoreThreshold') {
-    return { step: 0.1, min: 0, max: 10, precision: 1 };
-  }
-  return { step: 1, precision: 0 };
-}
 
 // ---------------------------------------------------------------------------
 // SettingsModal
@@ -125,6 +100,7 @@ export class SettingsModal {
   public lastSaveTriggeredRestart: 'control-plane' | 'http-listener' | 'web' | null = null;
 
   private configManager: ConfigManager | null = null;
+  private secretsManager: SettingsSecretsManager | null = null;
   private featureFlagManager: FeatureFlagManager | null = null;
   private mcpRegistry: McpRegistry | null = null;
   private subscriptionManager: SubscriptionManager | null = null;
@@ -142,8 +118,10 @@ export class SettingsModal {
     subscriptionManager: SubscriptionManager,
     serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>,
     mcpRegistry?: McpRegistry,
+    secretsManager?: SettingsSecretsManager,
   ): void {
     this.configManager = configManager;
+    this.secretsManager = secretsManager ?? null;
     this.featureFlagManager = featureFlagManager;
     this.subscriptionManager = subscriptionManager;
     this.serviceRegistry = serviceRegistry;
@@ -174,6 +152,7 @@ export class SettingsModal {
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
     this.serviceRegistry = null;
+    this.secretsManager = null;
   }
 
   /** Cycle to the next category (Tab). */
@@ -304,7 +283,7 @@ export class SettingsModal {
     const { setting } = entry;
 
     // Delegate provider/model picker settings to the model picker UI
-    const pickerLaunch = _modelPickerLaunchForKey(setting.key);
+    const pickerLaunch = modelPickerLaunchForKey(setting.key);
     if (pickerLaunch !== null) {
       if (pickerLaunch.flow === 'providerModel') {
         this.pendingProviderModelPickerTarget = pickerLaunch.target;
@@ -495,7 +474,17 @@ export class SettingsModal {
       return false;
     }
 
-    this._setValue(setting.key, parsed);
+    if (setting.type === 'string' && isSecretConfigKey(setting.key)) {
+      setSecretBackedSettingValue({
+        key: setting.key,
+        value: String(parsed ?? ''),
+        configManager: this.configManager,
+        secretsManager: this.secretsManager,
+        setConfigValue: (key, value) => this._setValue(key, value),
+      });
+    } else {
+      this._setValue(setting.key, parsed);
+    }
     this.editingMode = false;
     this.editBuffer = '';
     return true;
@@ -787,4 +776,5 @@ export class SettingsModal {
       logger.error('SettingsModal: failed to set config value', { key, error: summarizeError(e) });
     }
   }
+
 }

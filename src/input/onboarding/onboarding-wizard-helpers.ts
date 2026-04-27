@@ -3,6 +3,13 @@ import { deriveOnboardingStepState, type OnboardingStep1CapabilityItem, type Onb
 import { DEFAULT_CAPABILITIES } from './onboarding-wizard-constants.ts';
 import { EXTERNAL_SURFACE_SPECS, type ExternalSurfaceSetupFieldSpec, type ExternalSurfaceSpec } from './onboarding-wizard-external-surfaces.ts';
 import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardModelSelection, OnboardingWizardRuntimeHydration } from './onboarding-wizard-types.ts';
+export {
+  buildGoodVibesSecretKey,
+  buildGoodVibesSecretRef,
+  isMalformedGoodVibesSecretReferenceValue,
+  isSecretReferenceValue,
+  normalizeSecretKeyPart,
+} from '../../config/secret-config.ts';
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -14,63 +21,6 @@ export function countSelected(items: readonly OnboardingStep1CapabilityItem[]): 
 
 export function normalizeText(value: string | null | undefined): string {
   return (value ?? '').trim();
-}
-
-export function normalizeSecretKeyPart(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toUpperCase();
-}
-
-export function buildGoodVibesSecretKey(configKey: string): string {
-  return `GOODVIBES_${configKey.split('.').map(normalizeSecretKeyPart).filter(Boolean).join('_')}`;
-}
-
-export function buildGoodVibesSecretRef(secretKey: string): string {
-  return `goodvibes://secrets/goodvibes/${encodeURIComponent(secretKey)}`;
-}
-
-export function isSecretReferenceValue(value: string): boolean {
-  const normalized = value.trim();
-  if (normalized.length === 0) return false;
-  let url: URL;
-  try {
-    url = new URL(normalized);
-  } catch {
-    return false;
-  }
-  if (url.protocol !== 'goodvibes:' || url.hostname !== 'secrets') return false;
-  const segments = url.pathname.split('/').filter(Boolean).map((segment) => decodeURIComponent(segment));
-  const source = (segments[0] ?? '').toLowerCase();
-  const rest = segments.slice(1);
-  const params = url.searchParams;
-  if (source === 'env' || source === 'goodvibes') {
-    return Boolean(rest[0] ?? params.get('id') ?? params.get('key') ?? params.get('name'));
-  }
-  if (source === 'file') {
-    return Boolean(rest.length > 0 || params.get('path'));
-  }
-  if (source === 'exec') {
-    return Boolean(rest[0] ?? params.get('command') ?? params.get('cmd'));
-  }
-  if (source === '1password' || source === 'onepassword' || source === 'op') {
-    return Boolean(params.get('ref') ?? params.get('uri'))
-      || Boolean((params.get('vault') ?? rest[0]) && (params.get('item') ?? rest[1]) && (params.get('field') ?? rest[2]));
-  }
-  if (source === 'bitwarden' || source === 'vaultwarden') {
-    return Boolean(rest[0] ?? params.get('item') ?? params.get('id') ?? params.get('name'));
-  }
-  if (source === 'bitwarden-secrets-manager' || source === 'bws') {
-    return Boolean(rest[0] ?? params.get('id') ?? params.get('secretId') ?? params.get('secret'));
-  }
-  return false;
-}
-
-export function isMalformedGoodVibesSecretReferenceValue(value: string): boolean {
-  const normalized = value.trim();
-  return normalized.startsWith('goodvibes://') && !isSecretReferenceValue(normalized);
 }
 
 export function isValidHostValue(value: string): boolean {

@@ -54,6 +54,7 @@ const INBOUND_EVENT_SURFACE_KINDS = new Set<string>([
   'discord',
   'google-chat',
   'googleChat',
+  'homeassistant',
   'imessage',
   'mattermost',
   'matrix',
@@ -148,11 +149,24 @@ function hasConfiguredProviderState(snapshot: OnboardingSnapshotState): boolean 
   return getConfiguredProviderSignalIds(snapshot).length > 0;
 }
 
-function countConfiguredSurfaceKinds(snapshot: OnboardingSnapshotState): number {
-  return new Set<string>([
+function getConfiguredSurfaceKinds(snapshot: OnboardingSnapshotState): string[] {
+  const kinds = new Set<string>([
     ...snapshot.surfaces.configuredEnabledKinds,
     ...snapshot.surfaces.records.filter((surface) => surface.enabled).map((surface) => surface.kind),
-  ]).size;
+  ]);
+
+  for (const [kind, value] of Object.entries(snapshot.config.surfaces)) {
+    if (!value || typeof value !== 'object') continue;
+    const defaults = DEFAULT_CONFIG.surfaces[kind as keyof typeof DEFAULT_CONFIG.surfaces];
+    if (!defaults || typeof defaults !== 'object') continue;
+    if (!isDeepEqual(value, defaults)) kinds.add(kind);
+  }
+
+  return [...kinds].sort((left, right) => left.localeCompare(right));
+}
+
+function countConfiguredSurfaceKinds(snapshot: OnboardingSnapshotState): number {
+  return getConfiguredSurfaceKinds(snapshot).length;
 }
 
 function hasInboundEventSurface(snapshot: OnboardingSnapshotState): boolean {
@@ -276,8 +290,7 @@ function describeWebhookIngress(snapshot: OnboardingSnapshotState): string {
 function describeExternalIntegrations(snapshot: OnboardingSnapshotState): string {
   const integrationCount = new Set<string>([
     ...getExternalIntegrationServiceIds(snapshot),
-    ...snapshot.surfaces.configuredEnabledKinds,
-    ...snapshot.surfaces.records.filter((surface) => surface.enabled).map((surface) => surface.kind),
+    ...getConfiguredSurfaceKinds(snapshot),
   ]).size;
 
   if (integrationCount === 0) {

@@ -1,9 +1,10 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
+import { buildGoodVibesSecretKey, isSecretConfigKey, isSecretReferenceValue, persistSecretBackedConfigValue } from '../../config/secret-config.ts';
 import { configSnapshotToProfileData, profileDataToConfigSnapshot } from '@pellux/goodvibes-sdk/platform/profiles/shape';
 import { dirname, join, resolve } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { requireProfileManager, requireProviderApi, requireShellPaths } from './runtime-services.ts';
+import { requireProfileManager, requireProviderApi, requireSecretsManager, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
 
 interface ConfigBundle {
@@ -78,6 +79,22 @@ function buildConfigSnapshot(
   return snapshot;
 }
 
+function formatConfigSchemaEntry(
+  manager: { get: (key: ConfigKey) => unknown },
+  schema: { readonly key: ConfigKey; readonly description: string },
+): string {
+  let value: unknown = '(unavailable)';
+  try {
+    value = manager.get(schema.key);
+  } catch {
+    // keep unavailable marker
+  }
+  const displayValue = typeof value === 'string' && isSecretConfigKey(schema.key) && !isSecretReferenceValue(value)
+    ? value.length === 0 ? '(empty)' : '[secret]'
+    : String(value);
+  return `  ${schema.key.padEnd(46)} ${displayValue} — ${schema.description}`;
+}
+
 function coerceValue(
   raw: string,
   type: 'boolean' | 'number' | 'string' | 'enum',
@@ -113,8 +130,7 @@ export function registerConfigCommand(registry: CommandRegistry): void {
     argsHint: '<key> [value]',
     async handler(args, ctx) {
       const cm = ctx.platform.configManager;
-      const all = cm.getAll();
-      const categories = ['display', 'provider', 'behavior', 'permissions', 'danger', 'tools'] as const;
+      const categories = ['display', 'ui', 'provider', 'behavior', 'storage', 'permissions', 'surfaces', 'cloudflare', 'batch', 'tts', 'danger', 'tools'] as const;
 
       if (args[0] === 'profile') {
         const sub = args[1];
@@ -310,6 +326,10 @@ export function registerConfigCommand(registry: CommandRegistry): void {
         }
         try {
           cm.setDynamic(resetKey as ConfigKey, schema.default);
+          if (isSecretConfigKey(resetKey)) {
+            const secretsManager = requireSecretsManager(ctx);
+            await secretsManager.delete(buildGoodVibesSecretKey(resetKey), { scope: 'user' });
+          }
           if (resetKey === 'provider.model') ctx.session.runtime.model = schema.default as string;
           if (resetKey === 'provider.provider') ctx.session.runtime.provider = schema.default as string;
           if (resetKey === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = schema.default as string;
@@ -403,12 +423,8 @@ export function registerConfigCommand(registry: CommandRegistry): void {
         const lines: string[] = ['Config settings:'];
         for (const cat of categories) {
           lines.push(`  [${cat}]`);
-          const catObj = all[cat] as Record<string, unknown>;
-          for (const [field, val] of Object.entries(catObj)) {
-            const key = `${cat}.${field}`;
-            const schema = CONFIG_SCHEMA.find((entry) => entry.key === key);
-            const desc = schema ? ` — ${schema.description}` : '';
-            lines.push(`    ${key.padEnd(36)} ${String(val)}${desc}`);
+          for (const schema of CONFIG_SCHEMA.filter((entry) => entry.key.startsWith(`${cat}.`))) {
+            lines.push(`  ${formatConfigSchemaEntry(cm, schema)}`);
           }
         }
         ctx.print(lines.join('\n'));
@@ -418,13 +434,9 @@ export function registerConfigCommand(registry: CommandRegistry): void {
       const firstArg = args[0];
       if (categories.includes(firstArg as typeof categories[number]) && args.length === 1) {
         const cat = firstArg as typeof categories[number];
-        const catObj = all[cat] as Record<string, unknown>;
         const lines: string[] = [`[${cat}]`];
-        for (const [field, val] of Object.entries(catObj)) {
-          const key = `${cat}.${field}`;
-          const schema = CONFIG_SCHEMA.find((entry) => entry.key === key);
-          const desc = schema ? ` — ${schema.description}` : '';
-          lines.push(`  ${key.padEnd(36)} ${String(val)}${desc}`);
+        for (const schema of CONFIG_SCHEMA.filter((entry) => entry.key.startsWith(`${cat}.`))) {
+          lines.push(formatConfigSchemaEntry(cm, schema));
         }
         ctx.print(lines.join('\n'));
         return;
@@ -471,8 +483,13 @@ export function registerConfigCommand(registry: CommandRegistry): void {
         }
 
         try {
-          cm.setDynamic(key, coerced);
-          ctx.print(`Set ${key} = ${String(coerced)}`);
+          if (schema.type === 'string' && isSecretConfigKey(key)) {
+            const configValue = await persistSecretBackedConfigValue(cm, requireSecretsManager(ctx), key, String(coerced), { scope: 'user' });
+            ctx.print(`Set ${key} = ${configValue}`);
+          } else {
+            cm.setDynamic(key, coerced);
+            ctx.print(`Set ${key} = ${String(coerced)}`);
+          }
           if (key === 'provider.model') ctx.session.runtime.model = coerced as string;
           if (key === 'provider.provider') ctx.session.runtime.provider = coerced as string;
           if (key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = coerced as string;

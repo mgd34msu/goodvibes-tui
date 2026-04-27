@@ -8,6 +8,7 @@ import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
+import { buildGoodVibesSecretKey, buildGoodVibesSecretRef } from '../../config/secret-config.ts';
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
@@ -261,6 +262,39 @@ describe('SettingsModal', () => {
     const editResult = modal.commitEdit();
     expect(editResult).toBe(true);
     expect(modal.editingMode).toBe(false);
+  });
+
+  test('surfaces category exposes editable Home Assistant settings', () => {
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'surfaces') modal.nextCategory();
+
+    const keys = modal.currentItems.map((entry) => entry.setting.key);
+    expect(keys).toContain('surfaces.homeassistant.enabled');
+    expect(keys).toContain('surfaces.homeassistant.instanceUrl');
+    expect(keys).toContain('surfaces.homeassistant.accessToken');
+    expect(keys).toContain('surfaces.homeassistant.webhookSecret');
+
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'surfaces.homeassistant.instanceUrl');
+    modal.activateSelected();
+    expect(modal.editingMode).toBe(true);
+    modal.editBuffer = 'http://homeassistant.local:8123';
+    expect(modal.commitEdit()).toBe(true);
+    expect(cm.get('surfaces.homeassistant.instanceUrl')).toBe('http://homeassistant.local:8123');
+  });
+
+  test('settings modal stores edited Home Assistant secrets through goodvibes secret refs', async () => {
+    const secrets = new SecretsManager({ projectRoot: tmpDir, globalHome: tmpDir, configManager: cm });
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry, secrets);
+    while (modal.currentCategory !== 'surfaces') modal.nextCategory();
+
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'surfaces.homeassistant.accessToken');
+    modal.activateSelected();
+    modal.editBuffer = 'ha-long-lived-token';
+    expect(modal.commitEdit()).toBe(true);
+
+    const secretKey = buildGoodVibesSecretKey('surfaces.homeassistant.accessToken');
+    expect(cm.get('surfaces.homeassistant.accessToken')).toBe(buildGoodVibesSecretRef(secretKey));
+    expect(await secrets.get(secretKey)).toBe('ha-long-lived-token');
   });
 
   test('close() deactivates modal and clears editing state', () => {
