@@ -34,11 +34,26 @@ POST /api/homeassistant/conversation/stream
 POST /api/homeassistant/conversation/cancel
 ```
 
-`POST /api/homeassistant/conversation` is the submit-and-wait Assist path for companion clients. `POST /api/homeassistant/conversation/stream` streams the response. `POST /api/homeassistant/conversation/cancel` cancels an active Home Assistant remote conversation. Remote sessions are daemon-owned and close after `surfaces.homeassistant.remoteSessionTtlMs` of inactivity.
+`POST /api/homeassistant/conversation` is the submit-and-wait Assist path for companion clients. `POST /api/homeassistant/conversation/stream` streams the response. `POST /api/homeassistant/conversation/cancel` cancels an active Home Assistant remote conversation. Remote sessions are daemon-owned, isolated from TUI/shared sessions, and close after `surfaces.homeassistant.remoteSessionTtlMs` of inactivity.
+
+Home Assistant conversation responses use the SDK-owned remote-chat contract:
+
+```text
+mode: "remote-chat"
+assistant.text
+assistant.speechText
+sessionId
+messageId
+replyToMessageId
+conversationId
+routeId
+```
+
+Home Assistant clients should not expect `agentId` for Assist chat. Use `sessionId`, `messageId`, `replyToMessageId`, `conversationId`, and `routeId` for correlation.
 
 The SDK advertises Home Assistant account, setup, capabilities, tools, actions, directory, target-resolution metadata, and direct conversation routes through the channel daemon routes. The TUI should not call Home Assistant APIs directly.
 
-Home Assistant ingress is handled as direct non-WRFC work by the SDK daemon. The TUI configures the surface and credentials, but Home Assistant messages should not spawn engineer/reviewer/fixer chains.
+Home Assistant ingress is handled as isolated remote-chat work by the SDK daemon. The TUI configures the surface and credentials, but Home Assistant messages should not spawn engineer/reviewer/fixer chains and should not attach to the active TUI/shared session.
 
 ## Secrets
 

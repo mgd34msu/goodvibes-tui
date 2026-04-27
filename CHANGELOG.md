@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.37] — 2026-04-26
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.25.14` for SDK-owned Home Assistant isolated remote-chat sessions, route-binding cleanup, and Assist chat response contract fixes.
+- Home Assistant docs now state that Assist chat responses use `mode: "remote-chat"`, expose `assistant.text` / `assistant.speechText`, and do not include `agentId`.
+- Regenerated foundation operator contract artifacts from the SDK 0.25.14 contract.
+
 ## [0.19.36] — 2026-04-26
 
 ### Added
