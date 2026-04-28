@@ -133,6 +133,15 @@ Artifacts can be:
 - delivered through channels
 - reused by knowledge and multimodal pipelines
 
+Large file uploads should use daemon upload bodies rather than JSON inline data:
+
+- `POST /api/artifacts` accepts multipart/form-data with field name `file`.
+- `POST /api/artifacts` accepts raw binary bodies with `Content-Type` set and the filename supplied with `filename` query params or `X-GoodVibes-Filename`.
+- `POST /api/knowledge/ingest/artifact` accepts existing artifact references, daemon-local paths, remote URIs, multipart files, and raw binary uploads.
+- Keep JSON `dataBase64` only for small inline control payloads. PDFs, photos, archives, and large documents should use multipart or raw upload bodies.
+
+The host-side artifact storage cap is configured with `storage.artifacts.maxBytes`. The default is 512 MiB.
+
 ## Multimodal
 
 The unified multimodal runtime handles:

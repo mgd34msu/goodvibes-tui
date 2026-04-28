@@ -536,6 +536,22 @@ describe('DaemonServer', () => {
     const ingestArtifactJson = await ingestArtifact.json() as { source: { id: string } };
     expect(ingestArtifactJson.source.id).toBeTruthy();
 
+    const multipartArtifact = new FormData();
+    multipartArtifact.append('file', new Blob(['room,device\nKitchen,Light\n'], { type: 'text/csv' }), 'home-inventory.csv');
+    multipartArtifact.append('connectorId', 'artifact');
+    multipartArtifact.append('sessionId', 'session-artifact-upload');
+    multipartArtifact.append('title', 'Uploaded home inventory');
+    multipartArtifact.append('tags', 'upload,knowledge');
+    const ingestMultipartArtifact = await fetch('http://127.0.0.1:39421/api/knowledge/ingest/artifact', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+      body: multipartArtifact,
+    });
+    expect(ingestMultipartArtifact.status).toBe(201);
+    const ingestMultipartArtifactJson = await ingestMultipartArtifact.json() as { source: { id: string; title?: string } };
+    expect(ingestMultipartArtifactJson.source.id).toBeTruthy();
+    expect(ingestMultipartArtifactJson.source.title).toBe('Uploaded home inventory');
+
     const extractions = await fetch('http://127.0.0.1:39421/api/knowledge/extractions?limit=10', {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
@@ -2500,6 +2516,55 @@ describe('DaemonServer', () => {
     expect(content.status).toBe(200);
     expect(content.headers.get('content-type')).toContain('text/markdown');
     expect(await content.text()).toBe('# shipped\n');
+
+    const rawCreate = await fetch('http://127.0.0.1:39421/api/artifacts?filename=raw-notes.txt', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'text/plain',
+        'X-GoodVibes-Filename': 'raw-notes.txt',
+      },
+      body: new Blob(['raw upload\n'], { type: 'text/plain' }),
+    });
+    expect(rawCreate.status).toBe(201);
+    const rawCreateBody = await rawCreate.json() as { artifact: { id: string; filename?: string } };
+    expect(rawCreateBody.artifact.filename).toBe('raw-notes.txt');
+
+    const rawContent = await fetch(`http://127.0.0.1:39421/api/artifacts/${rawCreateBody.artifact.id}/content?download=0`, {
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+    });
+    expect(rawContent.status).toBe(200);
+    expect(rawContent.headers.get('content-type')).toContain('text/plain');
+    expect(await rawContent.text()).toBe('raw upload\n');
+  });
+
+  test('home graph artifact ingest accepts multipart uploads without JSON encoding', async () => {
+    daemon.enable({ daemon: true }, TEST_TOKEN);
+    await daemon.start();
+
+    const form = new FormData();
+    form.append('file', new Blob(['# Dishwasher\n\nReplace the filter monthly.\n'], { type: 'text/markdown' }), 'dishwasher.md');
+    form.append('installationId', 'ha-test');
+    form.append('title', 'Dishwasher manual');
+    form.append('tags', 'manual,appliance');
+
+    const response = await fetch('http://127.0.0.1:39421/api/homeassistant/home-graph/ingest/artifact', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TEST_TOKEN}` },
+      body: form,
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json() as {
+      ok: boolean;
+      spaceId: string;
+      artifactId: string;
+      source: { id: string; title?: string; artifactId?: string };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.spaceId).toBe('homeassistant:ha-test');
+    expect(body.artifactId).toBeTruthy();
+    expect(body.source.artifactId).toBe(body.artifactId);
+    expect(body.source.title).toBe('Dishwasher manual');
   });
 
   test('ntfy webhook creates route bindings and can spawn agents', async () => {
