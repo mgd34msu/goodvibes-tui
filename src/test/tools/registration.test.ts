@@ -56,10 +56,10 @@ function registerTools(registry: ToolRegistry): void {
 }
 
 describe('registerAllTools', () => {
-  test('registers exactly 23 tools', () => {
+  test('registers exactly 25 tools', () => {
     const registry = new ToolRegistry();
     registerTools(registry);
-    expect(registry.list()).toHaveLength(23);
+    expect(registry.list()).toHaveLength(25);
   });
 
   test('registers a tool named "read"', () => {
@@ -147,6 +147,13 @@ describe('registerAllTools', () => {
       expect(registry.has(name)).toBe(true);
     }
     expect(registry.has('powershell')).toBe(false);
+  });
+
+  test('registers SDK-owned GoodVibes context and settings tools', () => {
+    const registry = new ToolRegistry();
+    registerTools(registry);
+    expect(registry.has('goodvibes_context')).toBe(true);
+    expect(registry.has('goodvibes_settings')).toBe(true);
   });
 
   test('each tool has a definition with name and description', () => {

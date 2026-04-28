@@ -1593,9 +1593,28 @@ describe('DaemonServer', () => {
       }),
     });
     expect(send.status).toBe(202);
-    const sendBody = await send.json() as { session: { id: string }; agentId: string };
-    expect(sendBody.session.id).toBe(created.session.id);
-    expect(typeof sendBody.agentId).toBe('string');
+    const sendBody = await send.json() as { messageId: string; routedTo: string; sessionId: string };
+    expect(sendBody.sessionId).toBe(created.session.id);
+    expect(sendBody.routedTo).toBe('conversation');
+    expect(typeof sendBody.messageId).toBe('string');
+
+    const task = await fetch(`http://127.0.0.1:39421/api/sessions/${created.session.id}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TEST_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        kind: 'task',
+        body: 'Continue this as agent work',
+        surfaceKind: 'web',
+        surfaceId: 'surface:web',
+      }),
+    });
+    expect(task.status).toBe(202);
+    const taskBody = await task.json() as { session: { id: string }; agentId: string };
+    expect(taskBody.session.id).toBe(created.session.id);
+    expect(typeof taskBody.agentId).toBe('string');
 
     const inspect = await fetch(`http://127.0.0.1:39421/api/sessions/${created.session.id}`, {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },

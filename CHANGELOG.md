@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.48] — 2026-04-28
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.26.1` for SDK-owned `goodvibes_context` and `goodvibes_settings` tools, shared harness-awareness prompt support, and Home Assistant automation tool alias support.
+- Adopted SDK 0.26.1 shared-session routing semantics where omitted message `kind` defaults to normal chat and `kind: "task"` is reserved for agent/WRFC continuations.
+
+### Fixed
+- Picked up SDK fixes that prevent ordinary shared-session messages from accidentally binding to agent task handling.
+
+---
+
 ## [0.19.47] — 2026-04-28
 
 ### Fixed
