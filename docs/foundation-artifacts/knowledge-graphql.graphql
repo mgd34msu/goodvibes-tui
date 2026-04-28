@@ -351,13 +351,13 @@ type Query {
   status: KnowledgeStatus!
   connectors: [KnowledgeConnector!]!
   connectorDoctor(id: String!): KnowledgeConnectorDoctorReport
-  sources(limit: Int, offset: Int): [KnowledgeSource!]!
-  nodes(limit: Int, offset: Int): [KnowledgeNode!]!
-  issues(limit: Int, offset: Int): [KnowledgeIssue!]!
+  sources(limit: Int, offset: Int, knowledgeSpaceId: String): [KnowledgeSource!]!
+  nodes(limit: Int, offset: Int, knowledgeSpaceId: String): [KnowledgeNode!]!
+  issues(limit: Int, offset: Int, knowledgeSpaceId: String): [KnowledgeIssue!]!
   itemView(kind: String!, id: String!): KnowledgeItemView
-  extractions(limit: Int, sourceId: String): [KnowledgeExtraction!]!
+  extractions(limit: Int, sourceId: String, knowledgeSpaceId: String): [KnowledgeExtraction!]!
   neighbors(kind: String!, id: String!, relation: String, limit: Int): [KnowledgeEdge!]!
-  search(query: String!, limit: Int): [KnowledgeSearchResult!]!
+  search(query: String!, limit: Int, knowledgeSpaceId: String): [KnowledgeSearchResult!]!
   packet(task: String!, writeScope: [String!], limit: Int, detail: KnowledgePacketDetail, budgetLimit: Int): KnowledgePacket!
   projectionTargets(limit: Int): [KnowledgeProjectionTarget!]!
   projection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeProjectionBundle!

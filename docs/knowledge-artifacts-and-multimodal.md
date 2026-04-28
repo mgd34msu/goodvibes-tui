@@ -39,6 +39,7 @@ The knowledge runtime supports:
 
 - URL ingest
 - bookmark import
+- browser-local history/bookmark ingest, only after explicit user consent
 - URL-list import
 - artifact ingest
 - connector-based ingest
@@ -58,6 +59,7 @@ Connectors provide the front door for ingest ideas such as:
 
 - single URLs
 - bookmark exports
+- browser-local history and bookmark profiles
 - URL lists
 - artifacts
 - future source-specific connectors
@@ -65,6 +67,7 @@ Connectors provide the front door for ingest ideas such as:
 Built-in extractors cover:
 
 - HTML
+- Readability-backed article extraction for suitable HTML pages
 - text
 - markdown
 - JSON

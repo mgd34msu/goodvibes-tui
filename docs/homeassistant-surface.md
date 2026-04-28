@@ -66,6 +66,45 @@ The SDK advertises Home Assistant account, setup, capabilities, tools, actions, 
 
 Home Assistant ingress is handled as isolated remote-chat work by the SDK daemon. The TUI configures the surface and credentials, but Home Assistant messages should not spawn engineer/reviewer/fixer chains and should not attach to the active TUI/shared session.
 
+## Home Graph
+
+SDK 0.26.0 adds daemon-owned Home Assistant Home Graph state. Home Assistant clients should send snapshots, URLs, notes, artifacts, links, and review actions to the daemon rather than duplicating graph storage, source inventory, wiki/export/import behavior, or fact review queues.
+
+The default knowledge space is isolated per Home Assistant installation:
+
+```text
+homeassistant:<installationId>
+```
+
+Read routes:
+
+```text
+GET  /api/homeassistant/home-graph/status
+GET  /api/homeassistant/home-graph/issues
+GET  /api/homeassistant/home-graph/sources
+GET  /api/homeassistant/home-graph/browse
+POST /api/homeassistant/home-graph/export
+POST /api/homeassistant/home-graph/ask
+```
+
+Admin routes:
+
+```text
+POST /api/homeassistant/home-graph/sync
+POST /api/homeassistant/home-graph/ingest/url
+POST /api/homeassistant/home-graph/ingest/note
+POST /api/homeassistant/home-graph/ingest/artifact
+POST /api/homeassistant/home-graph/link
+POST /api/homeassistant/home-graph/unlink
+POST /api/homeassistant/home-graph/device-passport
+POST /api/homeassistant/home-graph/room-page
+POST /api/homeassistant/home-graph/packet
+POST /api/homeassistant/home-graph/facts/review
+POST /api/homeassistant/home-graph/import
+```
+
+Read routes accept `installationId` or `knowledgeSpaceId`. List and browse routes also accept `limit`; issue listing also accepts `status`, `severity`, and `code`.
+
 ## Secrets
 
 Prefer GoodVibes secret references or environment-backed secrets for Home Assistant credentials:

@@ -441,7 +441,7 @@ describe('DaemonServer', () => {
   test('knowledge routes ingest and query structured knowledge', async () => {
     const sourceUrl = 'https://example.com/knowledge-route-page';
     const sourceUrlList = `${sourceUrl}?connector=1`;
-    const sourceHtml = '<html><head><title>Knowledge Route Page</title></head><body><h1>Knowledge</h1><p>Daemon route coverage.</p></body></html>';
+    const sourceHtml = '<html><head><title>Knowledge Route Page</title></head><body><h1>Knowledge Route Page</h1><p>Daemon route coverage.</p></body></html>';
     const originalFetch = globalThis.fetch;
     const mockFetch = async (input: URL | RequestInfo, init?: RequestInit | BunFetchRequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;

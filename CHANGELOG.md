@@ -4,6 +4,16 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.45] — 2026-04-28
+
+### Added
+- Documented SDK-owned Home Assistant Home Graph daemon routes for snapshot sync, graph browse, source-backed answers, issue review, device passports, room pages, packets, import/export, and source inventory.
+- Documented SDK-owned browser-local knowledge ingestion as an opt-in local-data import path exposed through `knowledge.ingest.browserHistory`.
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.26.0` for Home Assistant Home Graph support, browser-local knowledge ingestion, Readability-backed HTML extraction, and refreshed SDK docs/operator contracts.
+- Regenerated foundation operator contract artifacts from the SDK 0.26.0 contract.
+
 ## [0.19.44] — 2026-04-27
 
 ### Changed

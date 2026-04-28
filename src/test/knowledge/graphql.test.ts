@@ -18,7 +18,7 @@ beforeAll(() => {
       const url = new URL(req.url);
       if (url.pathname === '/graphql-page') {
         return new Response(
-          '<html><head><title>GraphQL Source</title></head><body><h1>GraphQL</h1><p>Knowledge GraphQL route coverage.</p></body></html>',
+          '<html><head><title>GraphQL Source</title></head><body><h1>GraphQL Source</h1><p>Knowledge GraphQL route coverage.</p></body></html>',
           { headers: { 'content-type': 'text/html; charset=utf-8' } },
         );
       }
