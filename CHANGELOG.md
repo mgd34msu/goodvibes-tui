@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.47] — 2026-04-28
+
+### Fixed
+- Moved Bun compile compatibility patching into `prebuild` so manual local compile flows patch SDK 0.26.0 transitive `css-tree` JSON loaders before `bun build --compile`.
+- Patched the remaining `mdn-data` JSON imports used by `css-tree/lib/data.js`, fixing compiled TUI startup from directories outside the source checkout.
+
+---
+
 ## [0.19.46] — 2026-04-28
 
 ### Fixed
