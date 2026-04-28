@@ -8,6 +8,7 @@ import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/con
 import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane/approval-broker';
 import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
 import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import type { HostServiceStatus } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
 import type { SecretsManager } from '../config/secrets.ts';
 
 export interface UiEnvironmentServices {
@@ -61,12 +62,16 @@ export interface UiPlatformServices {
       readonly daemonPortInUse?: boolean;
       readonly httpListenerRunning: boolean;
       readonly httpListenerPortInUse?: boolean;
+      readonly daemonStatus?: HostServiceStatus;
+      readonly httpListenerStatus?: HostServiceStatus;
     };
     restart(): Promise<{
       readonly daemonRunning: boolean;
       readonly daemonPortInUse?: boolean;
       readonly httpListenerRunning: boolean;
       readonly httpListenerPortInUse?: boolean;
+      readonly daemonStatus?: HostServiceStatus;
+      readonly httpListenerStatus?: HostServiceStatus;
     }>;
   };
 }

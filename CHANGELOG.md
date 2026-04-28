@@ -4,6 +4,18 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.50] — 2026-04-28
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.26.5`.
+- TUI external-service inspection now uses SDK `daemonStatus` and `httpListenerStatus` startup modes to distinguish embedded services, verified external daemons, blocked ports, disabled services, and unavailable services.
+
+### Fixed
+- Treats a verified external GoodVibes daemon on the configured host/port as active instead of reporting daemon activation failure during onboarding.
+- Reports SDK-provided blocked/unavailable startup reasons in onboarding runtime verification warnings.
+
+---
+
 ## [0.19.49] — 2026-04-28
 
 ### Changed
