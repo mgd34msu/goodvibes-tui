@@ -184,6 +184,7 @@ describe('daemon route seams', () => {
         ingestArtifact: async () => ({}),
         importBookmarksFromFile: async () => ({}),
         importUrlsFromFile: async () => ({}),
+        syncBrowserHistory: async () => ({}),
         ingestConnectorInput: async () => ({}),
         search: () => [],
         buildPacket: async () => ({}),

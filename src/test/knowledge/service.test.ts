@@ -19,7 +19,7 @@ beforeAll(() => {
       const url = new URL(req.url);
       if (url.pathname === '/docs/typescript') {
         return new Response(
-          '<html><head><title>TypeScript Docs</title></head><body><h1>TypeScript</h1><p>Official language documentation.</p><a href="https://example.com/more">More</a></body></html>',
+          '<html><head><title>TypeScript Docs</title></head><body><h1>TypeScript Docs</h1><p>Official language documentation.</p><a href="https://example.com/more">More</a></body></html>',
           { headers: { 'content-type': 'text/html; charset=utf-8' } },
         );
       }

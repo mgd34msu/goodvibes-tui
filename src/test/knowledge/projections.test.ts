@@ -16,7 +16,7 @@ beforeAll(() => {
     port: 0,
     fetch() {
       return new Response(
-        '<html><head><title>Projection Source</title></head><body><h1>Projection</h1><p>Structured knowledge projection test page.</p></body></html>',
+        '<html><head><title>Projection Source</title></head><body><h1>Projection Source</h1><p>Structured knowledge projection test page.</p></body></html>',
         { headers: { 'content-type': 'text/html; charset=utf-8' } },
       );
     },

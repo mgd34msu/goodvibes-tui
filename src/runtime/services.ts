@@ -9,7 +9,7 @@ import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels/d
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers/index';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import { HomeGraphService, KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media/index';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/index';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
@@ -108,6 +108,7 @@ export interface RuntimeServices {
   readonly gatewayMethods: GatewayMethodCatalog;
   readonly artifactStore: ArtifactStore;
   readonly knowledgeService: KnowledgeService;
+  readonly homeGraphService: HomeGraphService;
   readonly memoryStore: MemoryStore;
   readonly memoryRegistry: MemoryRegistry;
   readonly serviceRegistry: ServiceRegistry;
@@ -356,6 +357,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     runtimeBus: options.runtimeBus,
   });
   knowledgeService.attachRuntimeBus(options.runtimeBus);
+  const homeGraphService = new HomeGraphService(knowledgeStore, artifactStore);
   const voiceProviders = new VoiceProviderRegistry();
   ensureBuiltinVoiceProviders(voiceProviders);
   const voiceService = new VoiceService(voiceProviders);
@@ -494,6 +496,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     gatewayMethods,
     artifactStore,
     knowledgeService,
+    homeGraphService,
     memoryStore,
     memoryRegistry,
     serviceRegistry,
