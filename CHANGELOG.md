@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.46] — 2026-04-28
+
+### Fixed
+- Patched the release binary build for SDK 0.26.0 dependencies that load `css-tree` JSON metadata through `createRequire`, allowing Bun-compiled daemon binaries to start successfully.
+
+---
+
 ## [0.19.45] — 2026-04-28
 
 ### Added
