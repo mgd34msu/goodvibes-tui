@@ -9,6 +9,15 @@ import type { OnboardingApplyRequest, OnboardingVerificationItem } from '../runt
 import type { ModelPickerTarget } from './model-picker.ts';
 import { captureOnboardingWizardSnapshot, restoreOnboardingWizardSnapshot } from './handler-ui-state.ts';
 import type { InputHandler } from './handler.ts';
+import {
+  formatRuntimeActiveSuccessMessage,
+  getRuntimeEndpointStatus,
+  isRuntimeEndpointActive,
+  isRuntimeEndpointOccupyingConfiguredPort,
+  runtimePortDiagnostic,
+  type OnboardingExternalServiceState,
+  type OnboardingRuntimeEndpoint,
+} from './onboarding/onboarding-runtime-status.ts';
 
 export interface OnboardingRuntimePosture {
   readonly serviceEnabled: boolean;
@@ -19,15 +28,6 @@ export interface OnboardingRuntimePosture {
   readonly serverBacked: boolean;
   readonly remoteExposure: boolean;
 }
-
-interface OnboardingExternalServiceState {
-  readonly daemonRunning?: boolean;
-  readonly daemonPortInUse?: boolean;
-  readonly httpListenerRunning?: boolean;
-  readonly httpListenerPortInUse?: boolean;
-}
-
-type OnboardingRuntimeEndpoint = 'daemon' | 'httpListener';
 
 function extractAuthorizationCode(input: string): string | null {
   const trimmed = input.trim();
@@ -105,16 +105,6 @@ function getRuntimeEndpointBinding(
   };
 }
 
-function runtimePortDiagnostic(
-  binding: { readonly label: string; readonly host: string; readonly port: number },
-  portInUse: boolean | undefined,
-): string {
-  if (portInUse) {
-    return `The configured port ${binding.host}:${binding.port} is occupied after restart; another GoodVibes process, an overlapping restart, or another service may still own it.`;
-  }
-  return `No process is listening on ${binding.host}:${binding.port} after restart.`;
-}
-
 function formatRuntimeActiveFailureMessage(
   handler: InputHandler,
   request: OnboardingApplyRequest,
@@ -123,20 +113,24 @@ function formatRuntimeActiveFailureMessage(
 ): string {
   const binding = getRuntimeEndpointBinding(handler, request, endpoint);
   const portInUse = endpoint === 'daemon' ? state?.daemonPortInUse : state?.httpListenerPortInUse;
+  const status = getRuntimeEndpointStatus(state, endpoint);
   const impact = endpoint === 'daemon'
     ? 'browser, LAN, and service-backed GoodVibes surfaces may be unavailable until the daemon is running there.'
     : 'incoming webhooks and event surfaces will not receive traffic until the listener is running there.';
-  return `${binding.label} is enabled for ${binding.host}:${binding.port}, but onboarding could not confirm it is running in this TUI instance after restart. ${runtimePortDiagnostic(binding, portInUse)} Settings were saved; ${impact}`;
+  return `${binding.label} is enabled for ${binding.host}:${binding.port}, but onboarding could not confirm an embedded or verified external service after restart. ${runtimePortDiagnostic(binding, portInUse, status)} Settings were saved; ${impact}`;
 }
 
 function formatRuntimeStoppedFailureMessage(
   handler: InputHandler,
   request: OnboardingApplyRequest,
   endpoint: OnboardingRuntimeEndpoint,
+  state?: OnboardingExternalServiceState,
 ): string {
   const binding = getRuntimeEndpointBinding(handler, request, endpoint);
+  const status = getRuntimeEndpointStatus(state, endpoint);
   const disabledSurface = endpoint === 'daemon' ? 'server-backed surfaces' : 'incoming event surfaces';
-  return `${binding.label} was disabled for ${disabledSurface}, but ${binding.host}:${binding.port} is still occupied. Settings were saved; another GoodVibes process or external service may still be running on that port.`;
+  const statusDetail = status ? ` ${runtimePortDiagnostic(binding, undefined, status)}` : '';
+  return `${binding.label} was disabled for ${disabledSurface}, but ${binding.host}:${binding.port} is still occupied. Settings were saved; another GoodVibes process or external service may still be running on that port.${statusDetail}`;
 }
 
 function showOnboardingApplyFeedbackForHandler(handler: InputHandler, feedback: OnboardingWizardApplyFeedback): void {
@@ -611,16 +605,14 @@ export async function restartOnboardingExternalServicesIfNeededForHandler(handle
     }
 
     const currentState = externalServices.inspect();
-    const hasLiveExternalServices = currentState.daemonRunning === true
-      || currentState.daemonPortInUse === true
-      || currentState.httpListenerRunning === true
-      || currentState.httpListenerPortInUse === true;
+    const hasLiveExternalServices = isRuntimeEndpointOccupyingConfiguredPort(currentState, 'daemon')
+      || isRuntimeEndpointOccupyingConfiguredPort(currentState, 'httpListener');
     if (!posture.serverBacked && !hasLiveExternalServices) return [];
 
     try {
       const state = await externalServices.restart();
       const failures: OnboardingVerificationItem[] = [];
-      if (posture.expectedDaemon && !state.daemonRunning) {
+      if (posture.expectedDaemon && !isRuntimeEndpointActive(state, 'daemon')) {
         failures.push({
           id: 'runtime:daemon-active',
           status: 'fail',
@@ -628,15 +620,15 @@ export async function restartOnboardingExternalServicesIfNeededForHandler(handle
           target: 'service',
         });
       }
-      if (!posture.expectedDaemon && (state.daemonRunning || state.daemonPortInUse)) {
+      if (!posture.expectedDaemon && isRuntimeEndpointOccupyingConfiguredPort(state, 'daemon')) {
         failures.push({
           id: 'runtime:daemon-stopped',
           status: 'fail',
-          message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon'),
+          message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon', state),
           target: 'service',
         });
       }
-      if (posture.expectedHttpListener && !state.httpListenerRunning) {
+      if (posture.expectedHttpListener && !isRuntimeEndpointActive(state, 'httpListener')) {
         failures.push({
           id: 'runtime:http-listener-active',
           status: 'fail',
@@ -644,11 +636,11 @@ export async function restartOnboardingExternalServicesIfNeededForHandler(handle
           target: 'service',
         });
       }
-      if (!posture.expectedHttpListener && (state.httpListenerRunning || state.httpListenerPortInUse)) {
+      if (!posture.expectedHttpListener && isRuntimeEndpointOccupyingConfiguredPort(state, 'httpListener')) {
         failures.push({
           id: 'runtime:http-listener-stopped',
           status: 'fail',
-          message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener'),
+          message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener', state),
           target: 'service',
         });
       }
@@ -685,19 +677,19 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
       }
 
       const stoppedItems: OnboardingVerificationItem[] = [];
-      if (externalState?.daemonRunning || externalState?.daemonPortInUse) {
+      if (isRuntimeEndpointOccupyingConfiguredPort(externalState, 'daemon')) {
         stoppedItems.push({
           id: 'runtime:daemon-stopped',
           status: 'fail',
-          message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon'),
+          message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon', externalState),
           target: 'service',
         });
       }
-      if (externalState?.httpListenerRunning || externalState?.httpListenerPortInUse) {
+      if (isRuntimeEndpointOccupyingConfiguredPort(externalState, 'httpListener')) {
         stoppedItems.push({
           id: 'runtime:http-listener-stopped',
           status: 'fail',
-          message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener'),
+          message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener', externalState),
           target: 'service',
         });
       }
@@ -744,38 +736,40 @@ export function verifyOnboardingRuntimePostureForHandler(handler: InputHandler, 
     }
 
     if (posture.expectedDaemon) {
+      const daemonActive = isRuntimeEndpointActive(externalState, 'daemon');
       items.push({
         id: 'runtime:daemon-active',
-        status: externalState?.daemonRunning ? 'pass' : 'fail',
-        message: externalState?.daemonRunning
-          ? 'The GoodVibes daemon is running with the applied onboarding settings.'
+        status: daemonActive ? 'pass' : 'fail',
+        message: daemonActive
+          ? formatRuntimeActiveSuccessMessage('daemon', externalState)
           : formatRuntimeActiveFailureMessage(handler, request, 'daemon', externalState),
         target: 'service',
       });
     }
-    if (!posture.expectedDaemon && (externalState?.daemonRunning || externalState?.daemonPortInUse)) {
+    if (!posture.expectedDaemon && isRuntimeEndpointOccupyingConfiguredPort(externalState, 'daemon')) {
       items.push({
         id: 'runtime:daemon-stopped',
         status: 'fail',
-        message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon'),
+        message: formatRuntimeStoppedFailureMessage(handler, request, 'daemon', externalState),
         target: 'service',
       });
     }
     if (posture.expectedHttpListener) {
+      const httpListenerActive = isRuntimeEndpointActive(externalState, 'httpListener');
       items.push({
         id: 'runtime:http-listener-active',
-        status: externalState?.httpListenerRunning ? 'pass' : 'fail',
-        message: externalState?.httpListenerRunning
-          ? 'The HTTP listener is running with the applied onboarding settings.'
+        status: httpListenerActive ? 'pass' : 'fail',
+        message: httpListenerActive
+          ? formatRuntimeActiveSuccessMessage('httpListener', externalState)
           : formatRuntimeActiveFailureMessage(handler, request, 'httpListener', externalState),
         target: 'service',
       });
     }
-    if (!posture.expectedHttpListener && (externalState?.httpListenerRunning || externalState?.httpListenerPortInUse)) {
+    if (!posture.expectedHttpListener && isRuntimeEndpointOccupyingConfiguredPort(externalState, 'httpListener')) {
       items.push({
         id: 'runtime:http-listener-stopped',
         status: 'fail',
-        message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener'),
+        message: formatRuntimeStoppedFailureMessage(handler, request, 'httpListener', externalState),
         target: 'service',
       });
     }

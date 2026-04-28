@@ -13,6 +13,7 @@ import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 import type { UiRuntimeServices } from '../../runtime/ui-services.ts';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import type { HostServiceStatus } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
 
 afterEach(() => {
   resetTestRuntimeServices();
@@ -1278,6 +1279,74 @@ describe('InputHandler onboarding integration', () => {
     expect(prints.join('\n')).toContain('Onboarding applied and verified');
   });
 
+  test('accepts a verified external daemon as active after onboarding restart', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    ensureLocalAdminAuth(uiServices);
+    const daemonStatus: HostServiceStatus = {
+      mode: 'external',
+      host: '127.0.0.1',
+      port: 3421,
+      baseUrl: 'http://127.0.0.1:3421',
+      authenticated: true,
+      status: 'running',
+      version: '0.26.5',
+      reason: 'Existing GoodVibes daemon verified on configured host/port',
+    };
+    const listenerStatus: HostServiceStatus = {
+      mode: 'disabled',
+      host: '127.0.0.1',
+      port: 3422,
+      baseUrl: 'http://127.0.0.1:3422',
+      reason: 'danger.httpListener is disabled',
+    };
+    installExternalServices(uiServices, {
+      inspect: () => ({
+        daemonRunning: false,
+        httpListenerRunning: false,
+        daemonStatus,
+        httpListenerStatus: listenerStatus,
+      }),
+      restart: async () => ({
+        daemonRunning: false,
+        httpListenerRunning: false,
+        daemonStatus,
+        httpListenerStatus: listenerStatus,
+      }),
+    });
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({
+        auth: {
+          snapshot: {
+            userStorePath: '/tmp/auth-users.json',
+            bootstrapCredentialPath: '/tmp/auth-bootstrap.txt',
+            persisted: true,
+            bootstrapCredentialPresent: false,
+            userCount: 1,
+            sessionCount: 0,
+            users: [{ username: 'admin', roles: ['admin'] }],
+            sessions: [],
+          },
+        },
+      }),
+    }, { resetValues: true });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+    input.onboardingWizard.setFieldValue('accounts.auth', true);
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
+
+    const output = prints.join('\n');
+    expect(output).toContain('Onboarding applied and verified');
+    expect(output).not.toContain('runtime:daemon-active');
+  });
+
   test('keeps the global onboarding check marker when background service activation fails', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
@@ -1326,6 +1395,65 @@ describe('InputHandler onboarding integration', () => {
     expect(prints.join('\n')).not.toContain('Onboarding applied and verified');
     expect(prints.join('\n')).toContain('GoodVibes daemon is enabled for');
     expect(prints.join('\n')).toContain('No process is listening');
+  });
+
+  test('reports blocked daemon status reason when an unverified process owns the configured port', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    ensureLocalAdminAuth(uiServices);
+    const daemonStatus: HostServiceStatus = {
+      mode: 'blocked',
+      host: '127.0.0.1',
+      port: 3421,
+      baseUrl: 'http://127.0.0.1:3421',
+      authenticated: false,
+      reason: 'GoodVibes daemon identity probe was rejected by the configured token',
+    };
+    installExternalServices(uiServices, {
+      inspect: () => ({
+        daemonRunning: false,
+        httpListenerRunning: false,
+        daemonStatus,
+      }),
+      restart: async () => ({
+        daemonRunning: false,
+        httpListenerRunning: false,
+        daemonStatus,
+      }),
+    });
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({
+        auth: {
+          snapshot: {
+            userStorePath: '/tmp/auth-users.json',
+            bootstrapCredentialPath: '/tmp/auth-bootstrap.txt',
+            persisted: true,
+            bootstrapCredentialPresent: false,
+            userCount: 1,
+            sessionCount: 0,
+            users: [{ username: 'admin', roles: ['admin'] }],
+            sessions: [],
+          },
+        },
+      }),
+    }, { resetValues: true });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+    input.onboardingWizard.setFieldValue('accounts.auth', true);
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
+
+    const output = prints.join('\n');
+    expect(output).toContain('Onboarding settings applied.');
+    expect(output).toContain('could not confirm an embedded or verified external service');
+    expect(output).toContain('identity probe was rejected by the configured token');
+    expect(output).toContain('runtime:daemon-active');
   });
 
   test('deduplicates runtime activation warnings in completion output', async () => {
