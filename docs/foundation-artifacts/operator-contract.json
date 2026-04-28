@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "0.26.0"
+    "version": "0.26.1"
   },
   "auth": {
     "modes": [
@@ -51325,7 +51325,7 @@
       {
         "id": "sessions.messages.create",
         "title": "Post Shared Session Message",
-        "description": "Append a user message to a shared session and queue assistant work.",
+        "description": "Append a user message to a shared session. Omitted `kind` defaults to `message` conversation routing; send `kind: \"task\"` to request agent/WRFC task continuation.",
         "category": "sessions",
         "source": "builtin",
         "access": "authenticated",
@@ -51350,6 +51350,9 @@
               "type": "string"
             },
             "surfaceId": {
+              "type": "string"
+            },
+            "kind": {
               "type": "string"
             },
             "routing": {
@@ -51465,98 +51468,213 @@
           "additionalProperties": true
         },
         "outputSchema": {
-          "type": "object",
-          "properties": {
-            "session": {
-              "anyOf": [
-                {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "type": "string"
+                },
+                "routedTo": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "messageId",
+                "routedTo",
+                "sessionId"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "session": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "closed"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "number"
+                        },
+                        "updatedAt": {
+                          "type": "number"
+                        },
+                        "lastMessageAt": {
+                          "type": "number"
+                        },
+                        "closedAt": {
+                          "type": "number"
+                        },
+                        "messageCount": {
+                          "type": "number"
+                        },
+                        "pendingInputCount": {
+                          "type": "number"
+                        },
+                        "routeIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "surfaceKinds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "participants": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "surfaceKind": {
+                                "type": "string"
+                              },
+                              "surfaceId": {
+                                "type": "string"
+                              },
+                              "externalId": {
+                                "type": "string"
+                              },
+                              "userId": {
+                                "type": "string"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              },
+                              "routeId": {
+                                "type": "string"
+                              },
+                              "lastSeenAt": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "surfaceKind",
+                              "surfaceId",
+                              "lastSeenAt"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "activeAgentId": {
+                          "type": "string"
+                        },
+                        "lastAgentId": {
+                          "type": "string"
+                        },
+                        "lastError": {
+                          "type": "string"
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "$ref": "$.operator.methods[204].outputSchema.anyOf[1].properties.session.anyOf[0].properties.metadata.additionalProperties"
+                                }
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "$.operator.methods[204].outputSchema.anyOf[1].properties.session.anyOf[0].properties.metadata.additionalProperties"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "status",
+                        "createdAt",
+                        "updatedAt",
+                        "messageCount",
+                        "pendingInputCount",
+                        "routeIds",
+                        "surfaceKinds",
+                        "participants",
+                        "metadata"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "message": {
                   "type": "object",
                   "properties": {
                     "id": {
                       "type": "string"
                     },
-                    "title": {
+                    "sessionId": {
                       "type": "string"
                     },
-                    "status": {
+                    "role": {
                       "type": "string",
                       "enum": [
-                        "active",
-                        "closed"
+                        "user",
+                        "assistant",
+                        "system"
                       ]
+                    },
+                    "body": {
+                      "type": "string"
                     },
                     "createdAt": {
                       "type": "number"
                     },
-                    "updatedAt": {
-                      "type": "number"
-                    },
-                    "lastMessageAt": {
-                      "type": "number"
-                    },
-                    "closedAt": {
-                      "type": "number"
-                    },
-                    "messageCount": {
-                      "type": "number"
-                    },
-                    "pendingInputCount": {
-                      "type": "number"
-                    },
-                    "routeIds": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "surfaceKinds": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "participants": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "surfaceKind": {
-                            "type": "string"
-                          },
-                          "surfaceId": {
-                            "type": "string"
-                          },
-                          "externalId": {
-                            "type": "string"
-                          },
-                          "userId": {
-                            "type": "string"
-                          },
-                          "displayName": {
-                            "type": "string"
-                          },
-                          "routeId": {
-                            "type": "string"
-                          },
-                          "lastSeenAt": {
-                            "type": "number"
-                          }
-                        },
-                        "required": [
-                          "surfaceKind",
-                          "surfaceId",
-                          "lastSeenAt"
-                        ],
-                        "additionalProperties": false
-                      }
-                    },
-                    "activeAgentId": {
+                    "surfaceKind": {
                       "type": "string"
                     },
-                    "lastAgentId": {
+                    "surfaceId": {
                       "type": "string"
                     },
-                    "lastError": {
+                    "routeId": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "displayName": {
                       "type": "string"
                     },
                     "metadata": {
@@ -51578,13 +51696,13 @@
                           {
                             "type": "object",
                             "additionalProperties": {
-                              "$ref": "$.operator.methods[204].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[204].outputSchema.anyOf[1].properties.message.properties.metadata.additionalProperties"
                             }
                           },
                           {
                             "type": "array",
                             "items": {
-                              "$ref": "$.operator.methods[204].outputSchema.properties.session.anyOf[0].properties.metadata.additionalProperties"
+                              "$ref": "$.operator.methods[204].outputSchema.anyOf[1].properties.message.properties.metadata.additionalProperties"
                             }
                           }
                         ]
@@ -51593,244 +51711,114 @@
                   },
                   "required": [
                     "id",
-                    "title",
-                    "status",
+                    "sessionId",
+                    "role",
+                    "body",
                     "createdAt",
-                    "updatedAt",
-                    "messageCount",
-                    "pendingInputCount",
-                    "routeIds",
-                    "surfaceKinds",
-                    "participants",
                     "metadata"
                   ],
                   "additionalProperties": false
                 },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "message": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "sessionId": {
-                  "type": "string"
-                },
-                "role": {
-                  "type": "string",
-                  "enum": [
-                    "user",
-                    "assistant",
-                    "system"
-                  ]
-                },
-                "body": {
-                  "type": "string"
-                },
-                "createdAt": {
-                  "type": "number"
-                },
-                "surfaceKind": {
-                  "type": "string"
-                },
-                "surfaceId": {
-                  "type": "string"
-                },
-                "routeId": {
-                  "type": "string"
-                },
-                "agentId": {
-                  "type": "string"
-                },
-                "userId": {
-                  "type": "string"
-                },
-                "displayName": {
-                  "type": "string"
-                },
-                "metadata": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "null"
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": {
-                          "$ref": "$.operator.methods[204].outputSchema.properties.message.properties.metadata.additionalProperties"
-                        }
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "$ref": "$.operator.methods[204].outputSchema.properties.message.properties.metadata.additionalProperties"
-                        }
-                      }
-                    ]
-                  }
-                }
-              },
-              "required": [
-                "id",
-                "sessionId",
-                "role",
-                "body",
-                "createdAt",
-                "metadata"
-              ],
-              "additionalProperties": false
-            },
-            "input": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "sessionId": {
-                  "type": "string"
-                },
-                "intent": {
-                  "type": "string",
-                  "enum": [
-                    "submit",
-                    "steer",
-                    "follow-up"
-                  ]
-                },
-                "state": {
-                  "type": "string",
-                  "enum": [
-                    "queued",
-                    "delivered",
-                    "spawned",
-                    "completed",
-                    "cancelled",
-                    "failed",
-                    "rejected"
-                  ]
-                },
-                "correlationId": {
-                  "type": "string"
-                },
-                "causationId": {
-                  "type": "string"
-                },
-                "body": {
-                  "type": "string"
-                },
-                "createdAt": {
-                  "type": "number"
-                },
-                "updatedAt": {
-                  "type": "number"
-                },
-                "routeId": {
-                  "type": "string"
-                },
-                "surfaceKind": {
-                  "type": "string"
-                },
-                "surfaceId": {
-                  "type": "string"
-                },
-                "externalId": {
-                  "type": "string"
-                },
-                "threadId": {
-                  "type": "string"
-                },
-                "userId": {
-                  "type": "string"
-                },
-                "displayName": {
-                  "type": "string"
-                },
-                "activeAgentId": {
-                  "type": "string"
-                },
-                "metadata": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "null"
-                      },
-                      {
-                        "type": "object",
-                        "additionalProperties": {
-                          "$ref": "$.operator.methods[204].outputSchema.properties.input.properties.metadata.additionalProperties"
-                        }
-                      },
-                      {
-                        "type": "array",
-                        "items": {
-                          "$ref": "$.operator.methods[204].outputSchema.properties.input.properties.metadata.additionalProperties"
-                        }
-                      }
-                    ]
-                  }
-                },
-                "routing": {
+                "input": {
                   "type": "object",
                   "properties": {
-                    "providerId": {
+                    "id": {
                       "type": "string"
                     },
-                    "modelId": {
+                    "sessionId": {
                       "type": "string"
                     },
-                    "providerSelection": {
+                    "intent": {
                       "type": "string",
                       "enum": [
-                        "inherit-current",
-                        "concrete",
-                        "synthetic"
+                        "submit",
+                        "steer",
+                        "follow-up"
                       ]
                     },
-                    "unresolvedModelPolicy": {
+                    "state": {
                       "type": "string",
                       "enum": [
-                        "fallback-to-current",
-                        "fail"
+                        "queued",
+                        "delivered",
+                        "spawned",
+                        "completed",
+                        "cancelled",
+                        "failed",
+                        "rejected"
                       ]
                     },
-                    "providerFailurePolicy": {
-                      "type": "string",
-                      "enum": [
-                        "ordered-fallbacks",
-                        "fail"
-                      ]
+                    "correlationId": {
+                      "type": "string"
                     },
-                    "fallbackModels": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
+                    "causationId": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    },
+                    "routeId": {
+                      "type": "string"
+                    },
+                    "surfaceKind": {
+                      "type": "string"
+                    },
+                    "surfaceId": {
+                      "type": "string"
+                    },
+                    "externalId": {
+                      "type": "string"
+                    },
+                    "threadId": {
+                      "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "activeAgentId": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "$ref": "$.operator.methods[204].outputSchema.anyOf[1].properties.input.properties.metadata.additionalProperties"
+                            }
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "$ref": "$.operator.methods[204].outputSchema.anyOf[1].properties.input.properties.metadata.additionalProperties"
+                            }
+                          }
+                        ]
                       }
                     },
-                    "helperModel": {
+                    "routing": {
                       "type": "object",
                       "properties": {
                         "providerId": {
@@ -51838,112 +51826,151 @@
                         },
                         "modelId": {
                           "type": "string"
+                        },
+                        "providerSelection": {
+                          "type": "string",
+                          "enum": [
+                            "inherit-current",
+                            "concrete",
+                            "synthetic"
+                          ]
+                        },
+                        "unresolvedModelPolicy": {
+                          "type": "string",
+                          "enum": [
+                            "fallback-to-current",
+                            "fail"
+                          ]
+                        },
+                        "providerFailurePolicy": {
+                          "type": "string",
+                          "enum": [
+                            "ordered-fallbacks",
+                            "fail"
+                          ]
+                        },
+                        "fallbackModels": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "helperModel": {
+                          "type": "object",
+                          "properties": {
+                            "providerId": {
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "providerId",
+                            "modelId"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "executionIntent": {
+                          "type": "object",
+                          "properties": {
+                            "riskClass": {
+                              "type": "string",
+                              "enum": [
+                                "safe",
+                                "elevated",
+                                "dangerous"
+                              ]
+                            },
+                            "requiresApproval": {
+                              "type": "boolean"
+                            },
+                            "networkPolicy": {
+                              "type": "string",
+                              "enum": [
+                                "inherit",
+                                "allow",
+                                "deny",
+                                "scoped"
+                              ]
+                            },
+                            "filesystemPolicy": {
+                              "type": "string",
+                              "enum": [
+                                "inherit",
+                                "workspace-write",
+                                "read-only",
+                                "isolated"
+                              ]
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "tools": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "reasoningEffort": {
+                          "type": "string",
+                          "enum": [
+                            "instant",
+                            "low",
+                            "medium",
+                            "high"
+                          ]
                         }
                       },
-                      "required": [
-                        "providerId",
-                        "modelId"
-                      ],
                       "additionalProperties": false
                     },
-                    "executionIntent": {
-                      "type": "object",
-                      "properties": {
-                        "riskClass": {
-                          "type": "string",
-                          "enum": [
-                            "safe",
-                            "elevated",
-                            "dangerous"
-                          ]
-                        },
-                        "requiresApproval": {
-                          "type": "boolean"
-                        },
-                        "networkPolicy": {
-                          "type": "string",
-                          "enum": [
-                            "inherit",
-                            "allow",
-                            "deny",
-                            "scoped"
-                          ]
-                        },
-                        "filesystemPolicy": {
-                          "type": "string",
-                          "enum": [
-                            "inherit",
-                            "workspace-write",
-                            "read-only",
-                            "isolated"
-                          ]
-                        }
-                      },
-                      "additionalProperties": false
-                    },
-                    "tools": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "reasoningEffort": {
-                      "type": "string",
-                      "enum": [
-                        "instant",
-                        "low",
-                        "medium",
-                        "high"
-                      ]
+                    "error": {
+                      "type": "string"
                     }
                   },
+                  "required": [
+                    "id",
+                    "sessionId",
+                    "intent",
+                    "state",
+                    "correlationId",
+                    "body",
+                    "createdAt",
+                    "updatedAt",
+                    "metadata"
+                  ],
                   "additionalProperties": false
                 },
-                "error": {
-                  "type": "string"
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "spawn",
+                    "continued-live",
+                    "queued-follow-up",
+                    "rejected"
+                  ]
+                },
+                "agentId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
-                "id",
-                "sessionId",
-                "intent",
-                "state",
-                "correlationId",
-                "body",
-                "createdAt",
-                "updatedAt",
-                "metadata"
+                "session",
+                "message",
+                "input",
+                "mode",
+                "agentId"
               ],
               "additionalProperties": false
-            },
-            "mode": {
-              "type": "string",
-              "enum": [
-                "spawn",
-                "continued-live",
-                "queued-follow-up",
-                "rejected"
-              ]
-            },
-            "agentId": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
             }
-          },
-          "required": [
-            "session",
-            "message",
-            "input",
-            "mode",
-            "agentId"
-          ],
-          "additionalProperties": false
+          ]
         },
         "invokable": true
       },
