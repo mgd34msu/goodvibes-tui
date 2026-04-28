@@ -4,6 +4,19 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.49] — 2026-04-28
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.26.4` for SDK-owned multipart/raw artifact uploads across artifact storage, knowledge ingest, and Home Assistant Home Graph ingest.
+- Exposed the SDK `storage.artifacts.maxBytes` setting through the normal storage configuration surface.
+- Regenerated foundation operator contract artifacts from the SDK 0.26.4 contract.
+
+### Fixed
+- Picked up SDK fixes for large multipart upload cap handling and oversized-upload rejection behavior.
+- Removed the temporary TUI upload-stream normalization shim after SDK 0.26.4 fixed Bun request-reader cleanup failures in raw artifact uploads.
+
+---
+
 ## [0.19.48] — 2026-04-28
 
 ### Changed

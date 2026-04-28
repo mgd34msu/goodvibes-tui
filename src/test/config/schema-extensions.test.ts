@@ -62,6 +62,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
     test('storage category fields have correct types when no project config exists', () => {
       const mgr = createConfigManager(tmpDir);
       expect(typeof mgr.get('storage.secretPolicy')).toBe('string');
+      expect(typeof mgr.get('storage.artifacts.maxBytes')).toBe('number');
     });
 
     test('sandbox category fields have correct types when no project config exists', () => {
@@ -94,6 +95,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
 
     test('DEFAULT_CONFIG.storage has correct default values', () => {
       expect(DEFAULT_CONFIG.storage.secretPolicy).toBe('preferred_secure');
+      expect(DEFAULT_CONFIG.storage.artifacts.maxBytes).toBe(512 * 1024 * 1024);
     });
 
     test('DEFAULT_CONFIG.sandbox has correct default values', () => {

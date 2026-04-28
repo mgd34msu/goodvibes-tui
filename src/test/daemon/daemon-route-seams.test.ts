@@ -145,6 +145,9 @@ describe('daemon route seams', () => {
 
   test('knowledge routes use injected graphql and knowledge services', async () => {
     const handlers = createDaemonKnowledgeRouteHandlers({
+      artifactStore: {
+        create: async () => ({ id: 'artifact-1' }),
+      },
       configManager: {
         get: () => false,
       },

@@ -105,6 +105,13 @@ POST /api/homeassistant/home-graph/import
 
 Read routes accept `installationId` or `knowledgeSpaceId`. List and browse routes also accept `limit`; issue listing also accepts `status`, `severity`, and `code`.
 
+Home Graph artifact ingest accepts the same large-upload bodies as the generic artifact and knowledge routes:
+
+- Use `multipart/form-data` with field name `file` for browser, panel, and integration file pickers.
+- Use a raw binary request body for the most direct large-file path; set `Content-Type` and pass the filename as `filename` or `X-GoodVibes-Filename`.
+- Additional text fields can include `installationId`, `knowledgeSpaceId`, `title`, `tags`, `target`, and `metadata`.
+- Browser-facing Home Assistant bridges must proxy multipart/raw bodies to `/api/homeassistant/home-graph/ingest/artifact` without exposing the daemon token and without converting file bytes into JSON.
+
 ## Secrets
 
 Prefer GoodVibes secret references or environment-backed secrets for Home Assistant credentials:
