@@ -26,6 +26,7 @@ import {
   loadPersistedProviders,
   persistProviders,
 } from '@pellux/goodvibes-sdk/platform/discovery/index';
+import { createSafeHostServeFactory } from './safe-serve.ts';
 
 import {
   parseGoodVibesCli,
@@ -195,11 +196,17 @@ async function main(): Promise<void> {
   });
 
   const userAuth = runtimeServices.localUserAuthManager;
-  const daemon = new DaemonServer({ runtimeBus, userAuth, runtimeServices });
+  const daemon = new DaemonServer({
+    runtimeBus,
+    userAuth,
+    runtimeServices,
+    serveFactory: createSafeHostServeFactory('Standalone daemon'),
+  });
   const listener = new HttpListener({
     hookDispatcher: runtimeServices.hookDispatcher,
     userAuth,
     configManager: config,
+    serveFactory: createSafeHostServeFactory('Standalone HTTP listener'),
   });
   const { daemonToken, httpToken } = readDaemonCliTokens(process.env);
 

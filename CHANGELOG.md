@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.51] — 2026-04-28
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.26.6`.
+- Embedded and standalone daemon hosts now wrap Bun request handlers so unexpected daemon/listener route exceptions return bounded JSON errors and are logged instead of printing raw stack/source output into the TUI terminal.
+
+### Fixed
+- Picked up SDK Home Assistant Home Graph snapshot sync fixes for Home Assistant-native snake_case registry fields, incomplete registry objects, and JSON error responses from Home Graph admin routes.
+
+---
+
 ## [0.19.50] — 2026-04-28
 
 ### Changed

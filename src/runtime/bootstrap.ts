@@ -43,6 +43,11 @@ import { createDeferredStartupCoordinator } from '@pellux/goodvibes-sdk/platform
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
+import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
+import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
+
+type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[3]>;
 
 // ── Bootstrap context type ──────────────────────────────────────────────────
 
@@ -350,6 +355,22 @@ export async function bootstrapRuntime(
     ]);
   };
 
+  const createExternalServiceFactories = (sharedDaemonToken: string): ExternalServiceFactories => ({
+    sharedDaemonToken,
+    createDaemonServer: (bus, userAuth, runtimeServices) => new DaemonServer({
+      runtimeBus: bus,
+      userAuth,
+      runtimeServices,
+      serveFactory: createSafeHostServeFactory('Embedded daemon'),
+    }),
+    createHttpListener: (dispatcher, userAuth, configManager) => new HttpListener({
+      hookDispatcher: dispatcher,
+      userAuth,
+      configManager,
+      serveFactory: createSafeHostServeFactory('Embedded HTTP listener'),
+    }),
+  });
+
   let externalServices: ExternalServicesHandle = {
     daemonServer: null,
     httpListener: null,
@@ -380,7 +401,7 @@ export async function bootstrapRuntime(
         configManager,
         runtimeBus,
         hookDispatcher,
-        { sharedDaemonToken: companionTokenRecord.token },
+        createExternalServiceFactories(companionTokenRecord.token),
         services,
       );
       externalServices = await externalServicesPromise;
@@ -443,7 +464,7 @@ export async function bootstrapRuntime(
         configManager,
         runtimeBus,
         hookDispatcher,
-        { sharedDaemonToken: companionTokenRecord.token },
+        createExternalServiceFactories(companionTokenRecord.token),
         services,
       );
       externalServices = await externalServicesPromise;
