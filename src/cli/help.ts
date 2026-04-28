@@ -1,8 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-const FALLBACK_VERSION = '0.19.24';
+import { VERSION } from '../version.ts';
 
 function readJsonVersion(path: string): string | null {
   try {
@@ -18,7 +17,7 @@ export function getPackageVersion(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   return readJsonVersion(join(here, '..', '..', 'package.json'))
     ?? process.env.npm_package_version
-    ?? FALLBACK_VERSION;
+    ?? VERSION;
 }
 
 export function renderGoodVibesVersion(binary = 'goodvibes'): string {

@@ -1,5 +1,6 @@
 import { withWorkspaceLock } from './workspace-lock.ts';
 import { syncProjectSurfaces } from './project-surfaces.ts';
+import { patchBunCompileCompatibility } from './bun-compile-compat.ts';
 
 /**
  * Prebuild script — syncs versioned surfaces and foundation artifacts before
@@ -7,6 +8,7 @@ import { syncProjectSurfaces } from './project-surfaces.ts';
  */
 try {
   withWorkspaceLock('sync project surfaces', () => {
+    patchBunCompileCompatibility(process.cwd());
     syncProjectSurfaces(process.cwd());
   });
 } catch (error) {

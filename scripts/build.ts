@@ -1,6 +1,7 @@
 import { execSync, spawnSync } from 'child_process';
-import { statSync, mkdirSync, existsSync, copyFileSync, readFileSync, writeFileSync } from 'fs';
+import { statSync, mkdirSync, existsSync, copyFileSync } from 'fs';
 import { join } from 'path';
+import { patchBunCompileCompatibility } from './bun-compile-compat.ts';
 
 /**
  * Production build script — compiles binaries for all targets and reports sizes.
@@ -66,40 +67,6 @@ function getFileSize(filePath: string): number {
     return statSync(filePath).size;
   } catch {
     return -1;
-  }
-}
-
-function patchBunCompileCompatibility(): void {
-  const patches = [
-    {
-      file: join(root, 'node_modules', 'css-tree', 'lib', 'data-patch.js'),
-      from: `import { createRequire } from 'module';\n\nconst require = createRequire(import.meta.url);\nconst patch = require('../data/patch.json');\n\nexport default patch;\n`,
-      to: `import patch from '../data/patch.json';\n\nexport default patch;\n`,
-    },
-    {
-      file: join(root, 'node_modules', 'css-tree', 'lib', 'version.js'),
-      from: `import { createRequire } from 'module';\n\nconst require = createRequire(import.meta.url);\n\nexport const { version } = require('../package.json');\n`,
-      to: `import packageInfo from '../package.json';\n\nexport const { version } = packageInfo;\n`,
-    },
-  ];
-
-  for (const patch of patches) {
-    if (!existsSync(patch.file)) {
-      continue;
-    }
-
-    const source = readFileSync(patch.file, 'utf8');
-    if (source === patch.to) {
-      continue;
-    }
-
-    if (!source.includes(patch.from)) {
-      console.warn(`  [WARN] Skipping Bun compile compatibility patch for unexpected file shape: ${patch.file}`);
-      continue;
-    }
-
-    writeFileSync(patch.file, source.replace(patch.from, patch.to));
-    console.log(`  Patched Bun compile JSON loader: ${patch.file.replace(`${root}/`, '')}`);
   }
 }
 
@@ -203,7 +170,7 @@ function buildTarget(
 }
 
 // --- Run prebuild first ---
-patchBunCompileCompatibility();
+patchBunCompileCompatibility(root);
 
 console.log('Running prebuild...');
 execSync('bun run scripts/prebuild.ts', { cwd: root, stdio: 'inherit' });
