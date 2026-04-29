@@ -3,6 +3,7 @@ import { DiffEngine } from './diff.ts';
 import { type Line, createEmptyCell, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
+import { allowTerminalWrite } from '../runtime/terminal-output-guard.ts';
 
 export interface SelectionInfo {
   isCellSelected: (col: number, absoluteRow: number) => boolean;
@@ -270,7 +271,7 @@ export class Compositor {
     // R3: Diff against front-buffer (last-rendered), then swap front/back — no clone() needed
     const diff = this.diffEngine.diff(this.frontBuffer, newBuffer);
     if (diff) {
-      this.stdout.write(diff);
+      allowTerminalWrite(() => this.stdout.write(diff));
     }
 
     // Swap: back (just written) becomes the new front reference; old front becomes the next back

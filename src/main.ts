@@ -56,6 +56,7 @@ import {
   attachSpokenTurnModelRouting,
   createSpokenTurnInputOptions,
 } from './audio/spoken-turn-model-routing.ts';
+import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -240,7 +241,8 @@ async function main() {
     process.removeListener('SIGINT', sigintHandler);
     process.removeListener('unhandledRejection', unhandledRejectionHandler);
     const exitScreen = cli.flags.noAltScreen ? CLEAR_SCREEN : CLEAR_SCREEN + ALT_SCREEN_EXIT;
-    stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + exitScreen);
+    allowTerminalWrite(() => stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + exitScreen));
+    terminalOutputGuard.dispose();
     stdin.setRawMode(false);
     process.exit(0);
   };
@@ -345,7 +347,7 @@ async function main() {
   commandContext.scrollToLine = scrollToLine;
   commandContext.clearScreen = () => {
     compositor.resetDiff();
-    stdout.write(CLEAR_SCREEN);
+    allowTerminalWrite(() => stdout.write(CLEAR_SCREEN));
     render();
   };
   permissionPromptRef.requestPermission = (request) =>
@@ -661,6 +663,7 @@ async function main() {
       panelWidth: panelComposite.panelWidth,
     });
   };
+  const terminalOutputGuard = installTuiTerminalOutputGuard({ stdout, stderr: process.stderr, notify: (message) => { systemMessageRouter.low(message); render(); } });
 
   setRenderRequest(render);
   orchestratorRefs.requestRender = render;
@@ -726,7 +729,7 @@ async function main() {
   stdin.setRawMode(true);
   stdin.resume();
   stdin.setEncoding('utf8');
-  stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE);
+  allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE));
 
   applyInitialTuiCliState({
     cli,
