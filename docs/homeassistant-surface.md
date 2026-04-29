@@ -114,6 +114,8 @@ Home Graph artifact ingest accepts the same large-upload bodies as the generic a
 
 SDK 0.26.7 adds capped searchable extraction text for manuals and documents and uses bounded lightweight Home Graph search for ask responses. Manuals or documents ingested before SDK 0.26.7 should be reingested or reindexed if deep manual details need to be searchable.
 
+SDK 0.26.8 makes Home Graph review decisions durable across refreshes, preserves resolved state for generated issues, applies stricter Home Assistant quality rules, and discovers Home Assistant integration documentation as pending source candidates.
+
 ## Secrets
 
 Prefer GoodVibes secret references or environment-backed secrets for Home Assistant credentials:

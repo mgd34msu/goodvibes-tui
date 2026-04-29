@@ -122,4 +122,35 @@ describe('knowledgeCommand', () => {
 
     expect(printed.join('\n')).toContain('Curated Project Knowledge');
   });
+
+  test('reviews a knowledge issue', async () => {
+    const artifactStore = new ArtifactStore({
+      configManager: {
+        getControlPlaneConfigDir: () => root,
+      },
+    });
+    const knowledgeStore = new KnowledgeStore({
+      configManager: {
+        getControlPlaneConfigDir: () => root,
+      },
+    });
+    await memoryStore.init();
+    await knowledgeStore.upsertIssue({
+      id: 'issue-1',
+      severity: 'warning',
+      code: 'needs-review',
+      message: 'Generated issue needs operator review.',
+      status: 'open',
+      metadata: {},
+    });
+    const knowledgeService = new KnowledgeService(knowledgeStore, artifactStore, undefined, { memoryRegistry });
+
+    await knowledgeCommand.handler(
+      ['review-issue', 'issue-1', 'resolve', '--reviewer', 'test'],
+      makeKnowledgeCommandContext(root, printed, knowledgeService, memoryRegistry),
+    );
+
+    expect(printed.join('\n')).toContain('Reviewed issue issue-1');
+    expect(knowledgeStore.getIssue('issue-1')?.status).toBe('resolved');
+  });
 });
