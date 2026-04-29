@@ -1,5 +1,9 @@
 import type { CommandContext, SlashCommand } from '../command-registry.ts';
 
+const KNOWLEDGE_REVIEW_ACTIONS = ['accept', 'reject', 'resolve', 'reopen', 'edit', 'forget'] as const;
+
+type KnowledgeReviewAction = typeof KNOWLEDGE_REVIEW_ACTIONS[number];
+
 function requireKnowledgeApi(context: CommandContext) {
   const knowledgeApi = context.clients?.knowledgeApi;
   if (!knowledgeApi) {
@@ -20,6 +24,20 @@ function readStringListFlag(args: string[], name: string): string[] {
   return value.split(',').map((entry) => entry.trim()).filter(Boolean);
 }
 
+function readJsonObjectFlag(args: string[], name: string): Record<string, unknown> | null | undefined {
+  const value = readFlag(args, name);
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 function positionalArgs(args: string[], valuedFlags: readonly string[] = []): string[] {
   return args.filter((token, index) => {
     if (token.startsWith('--')) return false;
@@ -33,7 +51,7 @@ export const knowledgeCommand: SlashCommand = {
   aliases: ['know', 'kb'],
   description: 'Structured knowledge graph: ingest URLs/bookmarks, inspect issues, and build compact prompt packets.',
   usage: '<subcommand> [args]',
-  argsHint: 'status|ingest-url|import-bookmarks|import-urls|list|search|get|queue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate',
+  argsHint: 'status|ingest-url|import-bookmarks|import-urls|list|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const knowledge = requireKnowledgeApi(context);
     if (!knowledge) {
@@ -241,6 +259,40 @@ export const knowledgeCommand: SlashCommand = {
         break;
       }
 
+      case 'review-issue':
+      case 'issue-review': {
+        const [issueId, actionValue] = positionalArgs(rest, ['--reviewer', '--value']);
+        const action = actionValue?.toLowerCase();
+        if (!issueId || !action || !KNOWLEDGE_REVIEW_ACTIONS.includes(action as KnowledgeReviewAction)) {
+          context.print('[knowledge] Usage: /knowledge review-issue <issueId> <accept|reject|resolve|reopen|edit|forget> [--reviewer <name>] [--value <json-object>]');
+          return;
+        }
+        const value = readJsonObjectFlag(rest, '--value');
+        if (value === null) {
+          context.print('[knowledge] --value must be a JSON object.');
+          return;
+        }
+        try {
+          const result = await knowledge.graph.issues.review({
+            issueId,
+            action: action as KnowledgeReviewAction,
+            reviewer: readFlag(rest, '--reviewer') ?? 'tui',
+            ...(value ? { value } : {}),
+          });
+          context.print([
+            `[knowledge] Reviewed issue ${result.issue.id}`,
+            `  action: ${action}`,
+            `  status: ${result.issue.status}`,
+            ...(result.node ? [`  node: ${result.node.id} ${result.node.title}`] : []),
+            ...(result.source ? [`  source: ${result.source.id} ${result.source.title ?? result.source.canonicalUri ?? result.source.sourceUri ?? 'untitled'}`] : []),
+            ...(result.appliedFacts ? [`  applied facts: ${Object.keys(result.appliedFacts).join(', ') || 'none'}`] : []),
+          ].join('\n'));
+        } catch (error) {
+          context.print(`[knowledge] ${error instanceof Error ? error.message : String(error)}`);
+        }
+        break;
+      }
+
       case 'candidates': {
         const [limitArg] = positionalArgs(rest);
         const limit = Math.max(1, Number.parseInt(limitArg ?? '10', 10) || 10);
@@ -354,6 +406,7 @@ export const knowledgeCommand: SlashCommand = {
           '  search <query> [--limit <n>]',
           '  get <id>',
           '  queue [limit]',
+          '  review-issue <issueId> <accept|reject|resolve|reopen|edit|forget> [--reviewer <name>] [--value <json-object>]',
           '  candidates [limit]',
           '  reports [limit]',
           '  schedules',

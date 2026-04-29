@@ -53,6 +53,16 @@ The knowledge runtime supports:
 
 The system is designed as a reviewed, self-improving knowledge substrate for future task context.
 
+## Issue Review
+
+Knowledge issues can be reviewed through the local TUI command and the daemon/operator surfaces:
+
+- `/knowledge review-issue <issueId> <accept|reject|resolve|reopen|edit|forget> [--reviewer <name>] [--value <json-object>]`
+- `POST /api/knowledge/issues/{id}/review`
+- operator method `knowledge.issue.review`
+
+Review actions update the issue state through the SDK. `accept`, `reject`, `resolve`, and `forget` mark the issue resolved; `reopen` and `edit` return it to open. Optional JSON values can supply reviewed source or node facts for SDK-owned application.
+
 ## Connectors and extractors
 
 Connectors provide the front door for ingest ideas such as:
@@ -174,7 +184,7 @@ These can be run directly or saved as schedules through the runtime.
 ## High-signal commands
 
 - `/recall add|search|queue|review|explain|promote|capture`
-- `/knowledge status|ingest-url|import-bookmarks|import-urls|search|get|queue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
+- `/knowledge status|ingest-url|import-bookmarks|import-urls|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
 - `/memory-sync`
 - `/handoff`
 - `/session-memory`

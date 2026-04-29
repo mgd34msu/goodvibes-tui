@@ -4,6 +4,21 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.53] — 2026-04-28
+
+### Added
+- Exposed generic knowledge issue review through `/knowledge review-issue <issueId> <accept|reject|resolve|reopen|edit|forget>`.
+- Documented SDK-owned generic knowledge issue review routes and operator method.
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.26.8`.
+- Documented SDK 0.26.8 Home Graph behavior for durable review decisions, generated issue resolved-state preservation, stricter Home Assistant quality rules, and pending Home Assistant integration documentation source candidates.
+
+### Fixed
+- Picked up SDK Home Graph review persistence and generated issue refresh fixes.
+
+---
+
 ## [0.19.52] — 2026-04-28
 
 ### Changed

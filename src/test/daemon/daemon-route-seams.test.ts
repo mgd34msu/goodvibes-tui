@@ -165,6 +165,7 @@ describe('daemon route seams', () => {
         listSources: () => [],
         listNodes: () => [],
         listIssues: () => [],
+        reviewIssue: async () => ({ ok: true, issue: {} }),
         getItem: () => null,
         listConnectors: () => [],
         getConnector: () => null,
