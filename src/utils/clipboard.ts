@@ -1,5 +1,6 @@
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { allowTerminalWrite } from '../runtime/terminal-output-guard.ts';
 
 /**
  * copyToClipboard - Uses OSC 52 escape sequence to copy text to the terminal clipboard.
@@ -11,7 +12,7 @@ export function copyToClipboard(text: string) {
   try {
     const base64 = Buffer.from(text).toString('base64');
     const sequence = `\x1b]52;c;${base64}\x07`;
-    process.stdout.write(sequence);
+    allowTerminalWrite(() => process.stdout.write(sequence));
     logger.info('Clipboard: OSC 52 sequence written');
   } catch (err: unknown) {
     logger.error('Clipboard: OSC 52 copy failed', { error: summarizeError(err) });
