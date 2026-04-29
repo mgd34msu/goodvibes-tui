@@ -112,6 +112,8 @@ Home Graph artifact ingest accepts the same large-upload bodies as the generic a
 - Additional text fields can include `installationId`, `knowledgeSpaceId`, `title`, `tags`, `target`, and `metadata`.
 - Browser-facing Home Assistant bridges must proxy multipart/raw bodies to `/api/homeassistant/home-graph/ingest/artifact` without exposing the daemon token and without converting file bytes into JSON.
 
+SDK 0.26.7 adds capped searchable extraction text for manuals and documents and uses bounded lightweight Home Graph search for ask responses. Manuals or documents ingested before SDK 0.26.7 should be reingested or reindexed if deep manual details need to be searchable.
+
 ## Secrets
 
 Prefer GoodVibes secret references or environment-backed secrets for Home Assistant credentials:

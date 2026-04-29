@@ -4,6 +4,18 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.52] — 2026-04-28
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.26.7`.
+- Documented that Home Assistant Home Graph manuals and documents ingested before SDK `0.26.7` should be reingested or reindexed when deep manual detail search is needed.
+
+### Fixed
+- Picked up SDK Home Graph ask timeout fixes from bounded lightweight Home Graph search.
+- Picked up capped searchable extraction text for Home Graph manuals and documents so manual/document details are available to search without unbounded payloads.
+
+---
+
 ## [0.19.51] — 2026-04-28
 
 ### Changed
