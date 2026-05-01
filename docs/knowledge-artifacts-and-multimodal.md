@@ -84,6 +84,8 @@ SDK 0.28.1 makes refinement runs budget-aware and non-blocking for user-facing r
 
 SDK 0.28.2 fixes the published dist guardrail path for refinement budgets. Runtime dist uses 12 refinement gaps as the default run size and 24 as the maximum effective limit. It also reopens historical `No semantic gap repairer is configured` tasks once the host has wired the SDK web-backed repairer, so old blocked tasks should no longer look like current host composition failures after a run reaches them.
 
+SDK 0.28.3 coalesces overlapping semantic repair runs so repeated or concurrent refinement triggers should be bounded instead of piling up duplicate repair work. Home Graph repair-source metadata now preserves `linkedObjects` through answer rendering.
+
 Daemon routes:
 
 ```text
