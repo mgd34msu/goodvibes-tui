@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "0.28.4"
+    "version": "0.28.5"
   },
   "auth": {
     "modes": [
@@ -29244,6 +29244,24 @@
                   "toId": {
                     "type": "string"
                   },
+                  "source": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "fromTitle": {
+                    "type": "string"
+                  },
+                  "toTitle": {
+                    "type": "string"
+                  },
+                  "sourceTitle": {
+                    "type": "string"
+                  },
+                  "targetTitle": {
+                    "type": "string"
+                  },
                   "relation": {
                     "type": "string"
                   },
@@ -30582,6 +30600,27 @@
             },
             "knowledgeSpaceId": {
               "type": "string"
+            },
+            "limit": {
+              "type": "number"
+            },
+            "maxRunMs": {
+              "type": "number"
+            },
+            "semanticLimit": {
+              "type": "number"
+            },
+            "semanticMaxRunMs": {
+              "type": "number"
+            },
+            "generatedPageLimit": {
+              "type": "number"
+            },
+            "force": {
+              "type": "boolean"
+            },
+            "refreshPages": {
+              "type": "boolean"
             }
           },
           "additionalProperties": true
@@ -30606,6 +30645,12 @@
             },
             "failed": {
               "type": "number"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "budgetExhausted": {
+              "type": "boolean"
             },
             "sources": {
               "type": "array",
@@ -30778,6 +30823,37 @@
                   },
                   {
                     "$ref": "$.operator.methods[111].outputSchema.properties.linked"
+                  }
+                ]
+              }
+            },
+            "semantic": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "$.operator.methods[111].outputSchema.properties.semantic.additionalProperties"
+                    }
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "$.operator.methods[111].outputSchema.properties.semantic.additionalProperties"
+                    }
                   }
                 ]
               }
@@ -39295,6 +39371,24 @@
                     "type": "string"
                   },
                   "toId": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "fromTitle": {
+                    "type": "string"
+                  },
+                  "toTitle": {
+                    "type": "string"
+                  },
+                  "sourceTitle": {
+                    "type": "string"
+                  },
+                  "targetTitle": {
                     "type": "string"
                   },
                   "relation": {
