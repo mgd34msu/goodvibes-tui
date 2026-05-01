@@ -7,13 +7,15 @@ All notable changes to GoodVibes TUI.
 ## [Unreleased]
 
 ### Changed
-- Updated `@pellux/goodvibes-sdk` to `0.28.12`.
-- Regenerated the operator contract artifacts for SDK 0.28.12, including Home Graph generated-page deferred count/truncation fields.
+- Updated `@pellux/goodvibes-sdk` to `0.28.13`.
+- Regenerated the operator contract artifacts for SDK 0.28.13, including bounded Home Graph Ask timeout fields.
 
 ### Verified
 - Rebuilt and relaunched the daemon with SDK 0.28.10, then retested Home Graph reindex coalescing, status responsiveness, TV feature Ask, base `knowledge.ask` with `knowledgeSpaceId: "homeassistant"`, generated pages, and map edge payloads against the live daemon.
 - Rebuilt and relaunched the daemon with SDK 0.28.11, verified reset `dryRun` is non-destructive against the live Home Graph space, and reran the full local test suite.
 - Rebuilt and relaunched the daemon with SDK 0.28.12, smoke-tested the compiled daemon binary, and coordinated the Home Assistant restart before live Home Graph validation.
+- Rebuilt and relaunched the daemon with SDK 0.28.13, smoke-tested the compiled daemon binary, and verified TTS spoken turns stay active through provider `STREAM_END` until the logical turn completes.
+- Live-tested SDK 0.28.13 Home Graph Ask/reindex/refinement: Ask now returns bounded current evidence with refinement task ids, and the coordinated Home Assistant follow-up showed background refinement can close the LG TV answer gaps; SDK follow-up is still needed for refinement-run budget failures, blocked retry-window tasks, and non-synthesized raw-snippet follow-up output.
 
 ---
 
