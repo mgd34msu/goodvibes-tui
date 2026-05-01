@@ -139,6 +139,8 @@ SDK 0.27.8 tightens the shared semantic feature/spec filters again. It removes t
 
 SDK 0.28.0 adds durable Home Graph refinement tasks and exposes them through `/api/homeassistant/home-graph/refinement/*`. Home Graph map and pages should continue to render SDK-returned facets, filters, generated pages, readiness, refinement task ids, and answer fields directly. Companion clients should not locally infer map filter names or refinement state; build controls from the returned `facets` and task records.
 
+SDK 0.28.1 keeps Home Graph repair asynchronous for interactive flows. Ask should return quickly with the current evidence plus `answer.refinementTaskIds` when repair is queued. Reindex queues repair work instead of blocking on all repair attempts. Broad refinement runs cap effective work per invocation and report truncation or budget exhaustion. Stale `searching` or `evaluating` tasks older than the SDK recovery window are recovered to retriable blocked state on the next run.
+
 The TUI daemon composes the SDK Home Graph service with the SDK web-backed semantic gap repairer. Refinement tasks can therefore search for candidate repair sources, ingest accepted sources into knowledge, and continue the SDK refinement state machine. A task blocked with `No semantic gap repairer is configured` indicates a stale daemon or a host composition bug rather than a Home Assistant client issue.
 
 ## Secrets

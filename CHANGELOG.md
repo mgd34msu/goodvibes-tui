@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.55] — 2026-05-01
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.28.1`.
+- Documented SDK-owned Home Graph and base knowledge refinement budget behavior: Ask returns current evidence quickly with `refinementTaskIds`, reindex queues repair work instead of blocking, broad refinement runs cap effective work per run, and stale active tasks recover to retriable blocked state.
+
+### Fixed
+- Picked up SDK Home Graph refinement fixes for async ask repair, capped broad refinement runs, stale searching/evaluating task recovery, and non-blocking reindex repair queueing.
+
 ## [0.19.54] — 2026-05-01
 
 ### Added
