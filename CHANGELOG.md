@@ -7,11 +7,12 @@ All notable changes to GoodVibes TUI.
 ## [Unreleased]
 
 ### Changed
-- Updated `@pellux/goodvibes-sdk` to `0.28.10`.
-- Regenerated the operator contract artifacts for SDK 0.28.10, including the Home Graph reset route and current Home Graph/knowledge refinement contracts.
+- Updated `@pellux/goodvibes-sdk` to `0.28.11`.
+- Regenerated the operator contract artifacts for SDK 0.28.11, including the Home Graph reset `dryRun` contract.
 
 ### Verified
 - Rebuilt and relaunched the daemon with SDK 0.28.10, then retested Home Graph reindex coalescing, status responsiveness, TV feature Ask, base `knowledge.ask` with `knowledgeSpaceId: "homeassistant"`, generated pages, and map edge payloads against the live daemon.
+- Rebuilt and relaunched the daemon with SDK 0.28.11, verified reset `dryRun` is non-destructive against the live Home Graph space, and reran the full local test suite.
 
 ---
 
