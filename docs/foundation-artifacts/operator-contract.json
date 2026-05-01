@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "0.28.0"
+    "version": "0.28.1"
   },
   "auth": {
     "modes": [
@@ -29438,6 +29438,9 @@
             "limit": {
               "type": "number"
             },
+            "maxRunMs": {
+              "type": "number"
+            },
             "force": {
               "type": "boolean"
             }
@@ -29457,6 +29460,12 @@
               "type": "object",
               "properties": {
                 "scannedGaps": {
+                  "type": "number"
+                },
+                "candidateGaps": {
+                  "type": "number"
+                },
+                "processedGaps": {
                   "type": "number"
                 },
                 "createdGaps": {
@@ -29488,6 +29497,18 @@
                 },
                 "queuedTasks": {
                   "type": "number"
+                },
+                "requestedLimit": {
+                  "type": "number"
+                },
+                "effectiveLimit": {
+                  "type": "number"
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "budgetExhausted": {
+                  "type": "boolean"
                 },
                 "taskIds": {
                   "type": "array",
@@ -37812,6 +37833,12 @@
                           "scannedGaps": {
                             "type": "number"
                           },
+                          "candidateGaps": {
+                            "type": "number"
+                          },
+                          "processedGaps": {
+                            "type": "number"
+                          },
                           "createdGaps": {
                             "type": "number"
                           },
@@ -37841,6 +37868,18 @@
                           },
                           "queuedTasks": {
                             "type": "number"
+                          },
+                          "requestedLimit": {
+                            "type": "number"
+                          },
+                          "effectiveLimit": {
+                            "type": "number"
+                          },
+                          "truncated": {
+                            "type": "boolean"
+                          },
+                          "budgetExhausted": {
+                            "type": "boolean"
                           },
                           "taskIds": {
                             "type": "array",
@@ -38366,6 +38405,12 @@
                         "scannedGaps": {
                           "type": "number"
                         },
+                        "candidateGaps": {
+                          "type": "number"
+                        },
+                        "processedGaps": {
+                          "type": "number"
+                        },
                         "createdGaps": {
                           "type": "number"
                         },
@@ -38395,6 +38440,18 @@
                         },
                         "queuedTasks": {
                           "type": "number"
+                        },
+                        "requestedLimit": {
+                          "type": "number"
+                        },
+                        "effectiveLimit": {
+                          "type": "number"
+                        },
+                        "truncated": {
+                          "type": "boolean"
+                        },
+                        "budgetExhausted": {
+                          "type": "boolean"
                         },
                         "taskIds": {
                           "type": "array",
@@ -40500,6 +40557,9 @@
             "limit": {
               "type": "number"
             },
+            "maxRunMs": {
+              "type": "number"
+            },
             "force": {
               "type": "boolean"
             }
@@ -40510,6 +40570,12 @@
           "type": "object",
           "properties": {
             "scannedGaps": {
+              "type": "number"
+            },
+            "candidateGaps": {
+              "type": "number"
+            },
+            "processedGaps": {
               "type": "number"
             },
             "createdGaps": {
@@ -40541,6 +40607,18 @@
             },
             "queuedTasks": {
               "type": "number"
+            },
+            "requestedLimit": {
+              "type": "number"
+            },
+            "effectiveLimit": {
+              "type": "number"
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "budgetExhausted": {
+              "type": "boolean"
             },
             "taskIds": {
               "type": "array",
