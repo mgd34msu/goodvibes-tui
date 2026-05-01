@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "0.28.10"
+    "version": "0.28.11"
   },
   "auth": {
     "modes": [
@@ -30948,6 +30948,9 @@
             },
             "knowledgeSpaceId": {
               "type": "string"
+            },
+            "dryRun": {
+              "type": "boolean"
             }
           },
           "additionalProperties": true
@@ -30963,6 +30966,9 @@
             },
             "installationId": {
               "type": "string"
+            },
+            "dryRun": {
+              "type": "boolean"
             },
             "deleted": {
               "type": "object",
@@ -31003,6 +31009,7 @@
             "ok",
             "spaceId",
             "installationId",
+            "dryRun",
             "deleted",
             "artifactsDeleted"
           ],
