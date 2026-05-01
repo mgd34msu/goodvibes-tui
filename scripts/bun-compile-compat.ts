@@ -25,6 +25,16 @@ export function patchBunCompileCompatibility(root: string): void {
       from: `import { createRequire } from 'module';\n\nconst require = createRequire(import.meta.url);\n\nexport const { version } = require('../package.json');\n`,
       to: `import packageInfo from '../package.json';\n\nexport const { version } = packageInfo;\n`,
     },
+    {
+      file: join(root, 'node_modules', 'jsdom', 'lib', 'jsdom', 'living', 'xhr', 'XMLHttpRequest-impl.js'),
+      from: `const syncWorkerFile = require.resolve("./xhr-sync-worker.js");\n`,
+      to: `const syncWorkerFile = null;\n`,
+    },
+    {
+      file: join(root, 'node_modules', 'jsdom', 'lib', 'jsdom', 'living', 'xhr', 'XMLHttpRequest-impl.js'),
+      from: `  if (!syncWorker) {\n    syncWorker = new Worker(syncWorkerFile);\n`,
+      to: `  if (!syncWorker) {\n    if (!syncWorkerFile) {\n      throw new Error("Synchronous XMLHttpRequest is not supported in Bun-compiled GoodVibes binaries.");\n    }\n    syncWorker = new Worker(syncWorkerFile);\n`,
+    },
   ];
 
   if (existsSync(jsdomDefaultStyleSheet)) {
@@ -52,6 +62,6 @@ export function patchBunCompileCompatibility(root: string): void {
     }
 
     writeFileSync(patch.file, source.replace(patch.from, patch.to));
-    console.log(`prebuild: patched Bun compile JSON loader → ${patch.file.replace(`${root}/`, '')}`);
+    console.log(`prebuild: patched Bun compile compatibility → ${patch.file.replace(`${root}/`, '')}`);
   }
 }
