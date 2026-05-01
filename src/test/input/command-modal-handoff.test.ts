@@ -13,6 +13,10 @@ import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
 import { registerConfigCommand } from '../../input/commands/config.ts';
+import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { SecretsManager } from '../../config/secrets.ts';
 
 
 function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandContext {
@@ -333,32 +337,38 @@ describe('command modal handoff', () => {
         },
         executeCommand: async (name, args) => registry.execute(name, args, context),
       });
-      context.openSelection = (...args) => input.openSelection(...args);
+      const subscriptions = new SubscriptionManager(join(dir, '.goodvibes', 'tui', 'subscriptions.json'));
+      const services = new ServiceRegistry(join(dir, '.goodvibes', 'tui', 'services.json'), {
+        secretsManager: new SecretsManager({ projectRoot: dir, globalHome: dir, configManager }),
+        subscriptionManager: subscriptions,
+      });
+      context.openSettingsModal = (target?: string) => {
+        input.modalOpened('settings');
+        input.settingsModal.open(configManager, createFeatureFlagManager(), subscriptions, services);
+        input.settingsModal.selectTarget(target);
+      };
       input.setCommandRegistry(registry, context);
 
-      input.feed('/config\r');
+      input.feed('/config danger.daemon\r');
       await Promise.resolve();
 
-      expect(input.selectionModal.active).toBe(true);
+      expect(input.settingsModal.active).toBe(true);
       expect(input.commandMode).toBe(false);
       expect(input.prompt).toBe('');
-      expect(input.modalStack).toEqual(['selection']);
-
-      const dangerIndex = input.selectionModal.filteredItems.findIndex((item) => item.id === 'danger.daemon');
-      expect(dangerIndex).toBeGreaterThanOrEqual(0);
-      input.selectionModal.selectedIndex = dangerIndex;
+      expect(input.modalStack).toEqual(['settings']);
+      expect(input.settingsModal.getSelected()?.setting.key).toBe('danger.daemon');
 
       const before = configManager.get('danger.daemon');
       input.feed(' ');
 
       expect(configManager.get('danger.daemon')).toBe(!before);
-      expect(input.selectionModal.active).toBe(true);
+      expect(input.settingsModal.active).toBe(true);
       expect(input.commandMode).toBe(false);
-      expect(input.modalStack).toEqual(['selection']);
+      expect(input.modalStack).toEqual(['settings']);
 
       input.feed('\x1b');
 
-      expect(input.selectionModal.active).toBe(false);
+      expect(input.settingsModal.active).toBe(false);
       expect(input.commandMode).toBe(false);
       expect(input.prompt).toBe('');
       expect(input.modalStack).toEqual([]);

@@ -93,7 +93,7 @@ export interface CommandShellUiOpeners {
     opts: { preSelectId?: string; allowSearch?: boolean; customActions?: Map<string, SelectionAction> } | undefined,
     callback: (result: SelectionResult | null) => void,
   ) => void;
-  openSettingsModal?: () => void;
+  openSettingsModal?: (target?: string) => void;
   openSessionPicker?: () => void;
   openProfilePicker?: () => void;
   openShortcutsOverlay?: () => void;
@@ -142,6 +142,8 @@ export interface CommandWorkspaceUiServices {
   panelManager?: PanelManager;
   profileManager?: import('@pellux/goodvibes-sdk/platform/profiles/manager').ProfileManager;
   bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks/manager').BookmarkManager;
+  projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge/index').ProjectPlanningService;
+  projectPlanningProjectId?: string;
 }
 
 export interface CommandWorkspaceServices

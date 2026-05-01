@@ -25,6 +25,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Knowledge, artifacts, and multimodal](knowledge-artifacts-and-multimodal.md)
   Session memory, durable memory, structured knowledge, connectors, extractors, embeddings, artifacts, and multimodal analysis.
 
+- [Project planning](project-planning.md)
+  TUI-owned conversational planning loop, passive SDK planning artifacts, project-scoped knowledge spaces, readiness evaluation, and the Planning panel.
+
 - [Channels, remote runtime, and API](channels-remote-and-api.md)
   Omnichannel surfaces, reply routing, remote peers, node-host contracts, and the daemon/control-plane HTTP + streaming surfaces.
 

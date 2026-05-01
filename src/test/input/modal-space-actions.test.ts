@@ -329,18 +329,21 @@ describe('modal space actions', () => {
     }
   });
 
-  test('settings modal adjusts selected values with left/right and shift steps', () => {
-    const calls: Array<{ direction: 'left' | 'right'; step?: number }> = [];
+  test('settings modal uses left/right to switch panes instead of mutating values', () => {
+    const calls: string[] = [];
     const handled = handleSettingsModalToken({
       settingsModal: {
         active: true,
         editingMode: false,
         currentCategory: 'display',
+        focusPane: 'settings',
         commitEdit: () => {},
         toggleSelectedFlag: () => {},
         activateSelected: () => {},
         pendingModelPickerTarget: null,
-        adjustSelected: (direction, step) => { calls.push({ direction, step }); },
+        adjustSelected: () => { calls.push('adjust'); },
+        focusSettings: () => { calls.push('settings'); },
+        focusCategories: () => { calls.push('categories'); },
         moveUp: () => {},
         moveDown: () => {},
         nextCategory: () => {},
@@ -351,7 +354,40 @@ describe('modal space actions', () => {
       handleEscape: () => {},
     }, { type: 'key', name: '', logicalName: 'right', ctrl: false, shift: true, meta: false });
     expect(handled).toBe(true);
-    expect(calls).toEqual([{ direction: 'right', step: 10 }]);
+    expect(calls).toEqual(['settings']);
+  });
+
+  test('settings modal arrow navigation keeps class method binding', () => {
+    const dir = join(tmpdir(), `gv-settings-arrow-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dir, { recursive: true });
+    try {
+      const cm = new ConfigManager({ surfaceRoot: 'tui', workingDir: dir, configDir: join(dir, '.goodvibes', 'tui') });
+      const subscriptionManager = new SubscriptionManager(join(dir, '.goodvibes', 'tui', 'subscriptions.json'));
+      const serviceRegistry = new ServiceRegistry(join(dir, '.goodvibes', 'tui', 'services.json'), {
+        secretsManager: new SecretsManager({ projectRoot: dir, globalHome: dir, configManager: cm }),
+        subscriptionManager,
+      });
+      const modal = new SettingsModal();
+      modal.open(
+        cm,
+        createFeatureFlagManager(),
+        subscriptionManager,
+        serviceRegistry,
+        { listServerSecurity: () => [], setServerTrustMode: () => {} } as never,
+      );
+
+      const before = modal.selectedIndex;
+      const handled = handleSettingsModalToken({
+        settingsModal: modal,
+        requestRender: () => {},
+        handleEscape: () => {},
+      }, { type: 'key', name: '', logicalName: 'down', ctrl: false, shift: false, meta: false });
+
+      expect(handled).toBe(true);
+      expect(modal.selectedIndex).toBe(before + 1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('settings modal opens provider-model picker requests before model-only picker requests', () => {

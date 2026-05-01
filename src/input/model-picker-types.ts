@@ -11,6 +11,18 @@ export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap';
  */
 export type ModelPickerTarget = 'main' | 'helper' | 'tool' | 'tts';
 
+export type ModelPickerFocusPane = 'targets' | 'items';
+
+export interface ModelPickerTargetInfo {
+  readonly target: ModelPickerTarget;
+  readonly label: string;
+  readonly description: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly enabled: boolean;
+  readonly inherited: boolean;
+}
+
 /**
  * Pricing tier filter.
  * 'paid' matches ModelDefinition tiers 'standard' and 'premium' for forward-compat

@@ -5,10 +5,11 @@ import { getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHO
 import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
 import { detectFamily, POPULAR_PROVIDERS, tierToCategoryFilter } from './model-picker-types.ts';
-import type { BenchmarkSort, CapabilityFilter, CategoryFilter, FilteredModelsCache, FilteredProvidersCache, GroupByMode, ModelItemsCache, ModelPickerTarget, PickerItem, PickerMode, ProviderItemsCache } from './model-picker-types.ts';
+import type { BenchmarkSort, CapabilityFilter, CategoryFilter, FilteredModelsCache, FilteredProvidersCache, GroupByMode, ModelItemsCache, ModelPickerFocusPane, ModelPickerTarget, ModelPickerTargetInfo, PickerItem, PickerMode, ProviderItemsCache } from './model-picker-types.ts';
+import { filterProviders, groupProviders } from './model-picker-provider-filter.ts';
 
 export { detectFamily, POPULAR_PROVIDERS, tierToCategoryFilter } from './model-picker-types.ts';
-export type { BenchmarkSort, CapabilityFilter, CategoryFilter, GroupByMode, ModelFamily, ModelPickerTarget, PickerItem, PickerMode } from './model-picker-types.ts';
+export type { BenchmarkSort, CapabilityFilter, CategoryFilter, GroupByMode, ModelFamily, ModelPickerFocusPane, ModelPickerTarget, ModelPickerTargetInfo, PickerItem, PickerMode } from './model-picker-types.ts';
 
 /**
  * ModelPickerModal - Multi-step interactive picker for model, provider, and effort.
@@ -35,6 +36,9 @@ export class ModelPickerModal {
   public mode: PickerMode = 'model';
   /** Which config target this picker session will write to on commit. */
   public target: ModelPickerTarget = 'main';
+  public focusPane: ModelPickerFocusPane = 'items';
+  public targetInfos: ModelPickerTargetInfo[] = [];
+  public targetIndex = 0;
   public searchFocused = false;
   /** Tracks the mode we came from, for back-navigation. */
   public previousMode: PickerMode | null = null;
@@ -77,6 +81,58 @@ export class ModelPickerModal {
   private filteredProvidersCache: FilteredProvidersCache | null = null;
   private modelItemsCache: ModelItemsCache | null = null;
   private providerItemsCache: ProviderItemsCache | null = null;
+
+  setTargetInfos(infos: ModelPickerTargetInfo[]): void {
+    this.targetInfos = infos;
+    const idx = infos.findIndex((entry) => entry.target === this.target);
+    this.targetIndex = idx >= 0 ? idx : 0;
+  }
+
+  getSelectedTargetInfo(): ModelPickerTargetInfo | null {
+    return this.targetInfos[this.targetIndex] ?? null;
+  }
+
+  focusTargets(): void {
+    this.focusPane = 'targets';
+    this.searchFocused = false;
+  }
+
+  focusItems(): void {
+    this.focusPane = 'items';
+  }
+
+  moveTarget(delta: number): void {
+    if (this.targetInfos.length === 0) return;
+    const nextIndex = (this.targetIndex + delta + this.targetInfos.length) % this.targetInfos.length;
+    this.setTarget(this.targetInfos[nextIndex]!.target);
+  }
+
+  setTarget(target: ModelPickerTarget): void {
+    this.target = target;
+    const idx = this.targetInfos.findIndex((entry) => entry.target === target);
+    this.targetIndex = idx >= 0 ? idx : this.targetIndex;
+    this.alignSelectionToTarget();
+  }
+
+  alignSelectionToTarget(): void {
+    const info = this.getSelectedTargetInfo();
+    if (!info) return;
+    if (this.mode === 'provider') {
+      const providers = this.getFilteredProviders();
+      const providerIdx = providers.findIndex((provider) => provider === info.provider);
+      this.selectedIndex = providerIdx >= 0 ? providerIdx : 0;
+      this.scrollOffset = 0;
+      this._scrollToSelection(20);
+      return;
+    }
+    if (this.mode === 'model') {
+      const models = this.getFilteredModels();
+      const modelIdx = models.findIndex((model) => model.registryKey === info.model || model.id === info.model);
+      this.selectedIndex = modelIdx >= 0 ? modelIdx : 0;
+      this.scrollOffset = 0;
+      this._scrollToSelection(20);
+    }
+  }
 
   // ── Category filter cycling ───────────────────────────────────────────────
   private static readonly CATEGORY_CYCLE: CategoryFilter[] = ['all', 'free', 'paid', 'subscription'];
@@ -146,6 +202,7 @@ export class ModelPickerModal {
     this.mode = 'model';
     this.active = true;
     this.pendingModel = null;
+    this.focusPane = 'items';
     this.searchFocused = false;
     this.query = '';
     this.categoryFilter = 'all';
@@ -163,6 +220,7 @@ export class ModelPickerModal {
     this.mode = 'provider';
     this.active = true;
     this.pendingModel = null;
+    this.focusPane = 'items';
     this.searchFocused = false;
     this.query = '';
     this.categoryFilter = 'all';
@@ -206,6 +264,9 @@ export class ModelPickerModal {
     this.active = false;
     this.mode = 'model';
     this.target = 'main';
+    this.focusPane = 'items';
+    this.targetInfos = [];
+    this.targetIndex = 0;
     this.models = [];
     this.providers = [];
     this.pendingModel = null;
@@ -285,22 +346,7 @@ export class ModelPickerModal {
    * renderer and does not affect grouping.
    */
   getGroupedProviders(): { popular: string[]; all: string[] } {
-    const popular: string[] = [];
-    const all: string[] = [];
-
-    for (const p of this.providers) {
-      const pLower = p.toLowerCase();
-      if (POPULAR_PROVIDERS.has(pLower)) {
-        popular.push(p);
-      } else {
-        all.push(p);
-      }
-    }
-
-    popular.sort((a, b) => a.localeCompare(b));
-    all.sort((a, b) => a.localeCompare(b));
-
-    return { popular, all };
+    return groupProviders(this.providers);
   }
 
   /** Return providers matching the current query (case-insensitive substring), in grouped order. */
@@ -314,11 +360,7 @@ export class ModelPickerModal {
       return cached.result;
     }
 
-    const { popular, all } = this.getGroupedProviders();
-    const ordered = [...popular, ...all];
-    const result = this.query.trim().length === 0
-      ? ordered
-      : ordered.filter(p => p.toLowerCase().includes(this.query.toLowerCase()));
+    const result = filterProviders(this.providers, this.query);
     this.filteredProvidersCache = {
       providersRef: this.providers,
       query: this.query,

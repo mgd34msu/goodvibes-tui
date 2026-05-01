@@ -9,7 +9,16 @@ import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels/d
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers/index';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { HomeGraphService, KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import {
+  HomeGraphService,
+  KnowledgeService,
+  KnowledgeSemanticService,
+  KnowledgeStore,
+  ProjectPlanningService,
+  createProviderBackedKnowledgeSemanticLlm,
+  createWebKnowledgeGapRepairer,
+  projectPlanningProjectIdFromPath,
+} from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media/index';
 import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/index';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
@@ -109,6 +118,8 @@ export interface RuntimeServices {
   readonly artifactStore: ArtifactStore;
   readonly knowledgeService: KnowledgeService;
   readonly homeGraphService: HomeGraphService;
+  readonly projectPlanningService: ProjectPlanningService;
+  readonly projectPlanningProjectId: string;
   readonly memoryStore: MemoryStore;
   readonly memoryRegistry: MemoryRegistry;
   readonly serviceRegistry: ServiceRegistry;
@@ -352,12 +363,26 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     },
   });
   const knowledgeStore = new KnowledgeStore({ configManager });
+  const knowledgeSemanticService = new KnowledgeSemanticService(knowledgeStore, {
+    llm: createProviderBackedKnowledgeSemanticLlm(providerRegistry, {
+      timeoutMs: 20_000,
+      maxConcurrent: 1,
+    }),
+    maxLlmSourcesPerReindex: 3,
+  });
   const knowledgeService = new KnowledgeService(knowledgeStore, artifactStore, undefined, {
     memoryRegistry,
     runtimeBus: options.runtimeBus,
+    semanticService: knowledgeSemanticService,
   });
   knowledgeService.attachRuntimeBus(options.runtimeBus);
-  const homeGraphService = new HomeGraphService(knowledgeStore, artifactStore);
+  const homeGraphService = new HomeGraphService(knowledgeStore, artifactStore, {
+    semanticService: knowledgeSemanticService,
+  });
+  const projectPlanningProjectId = projectPlanningProjectIdFromPath(workingDirectory);
+  const projectPlanningService = new ProjectPlanningService(knowledgeStore, {
+    defaultProjectId: projectPlanningProjectId,
+  });
   const voiceProviders = new VoiceProviderRegistry();
   ensureBuiltinVoiceProviders(voiceProviders);
   const voiceService = new VoiceService(voiceProviders);
@@ -369,6 +394,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     serviceRegistry,
     featureFlags,
   });
+  knowledgeSemanticService.setGapRepairer(createWebKnowledgeGapRepairer({
+    searchService: webSearchService,
+    ingestService: knowledgeService,
+  }));
   const mediaProviders = new MediaProviderRegistry();
   ensureBuiltinMediaProviders(mediaProviders, artifactStore, providerRegistry);
   const multimodalService = new MultimodalService(artifactStore, mediaProviders, voiceService, knowledgeService);
@@ -497,6 +526,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     artifactStore,
     knowledgeService,
     homeGraphService,
+    projectPlanningService,
+    projectPlanningProjectId,
     memoryStore,
     memoryRegistry,
     serviceRegistry,

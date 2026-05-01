@@ -20,6 +20,7 @@ import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/us
 import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
 import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
 import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
+import type { ProjectPlanningService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
 import type { ComponentHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
 import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
@@ -89,6 +90,10 @@ export interface BuiltinPanelDeps {
   planManager?: ExecutionPlanManager;
   /** Adaptive planner for ops strategy panels. */
   adaptivePlanner?: AdaptivePlanner;
+  /** Passive SDK-backed project planning artifact service. */
+  projectPlanningService?: ProjectPlanningService;
+  /** Stable workspace project id for project:<projectId> planning spaces. */
+  projectPlanningProjectId?: string;
   /** Shared system-messages panel instance attached from boot so low-priority chatter stays out of conversation. */
   systemMessagesPanel?: import('../system-messages-panel.ts').SystemMessagesPanel;
   /** Explicit UI-facing runtime services for agent/process/WRFC/remote panels and modals. */
@@ -115,6 +120,8 @@ export type ResolvedBuiltinPanelDeps = Omit<
   | 'sessionMemoryStore'
   | 'planManager'
   | 'adaptivePlanner'
+  | 'projectPlanningService'
+  | 'projectPlanningProjectId'
   | 'policyRuntimeState'
   | 'systemMessagesPanel'
 > & {
@@ -126,6 +133,8 @@ export type ResolvedBuiltinPanelDeps = Omit<
   readonly sessionMemoryStore: SessionMemoryStore;
   readonly planManager: ExecutionPlanManager;
   readonly adaptivePlanner: AdaptivePlanner;
+  readonly projectPlanningService: ProjectPlanningService;
+  readonly projectPlanningProjectId: string;
   readonly policyRuntimeState: PolicyRuntimeState;
   readonly systemMessagesPanel: import('../system-messages-panel.ts').SystemMessagesPanel;
 };
@@ -178,6 +187,14 @@ export function resolveBuiltinPanelDeps(deps: BuiltinPanelDeps): ResolvedBuiltin
     adaptivePlanner: requireBuiltinPanelDep(
       uiServices.planning.adaptivePlanner,
       'Adaptive planner must be wired at bootstrap for builtin panels.',
+    ),
+    projectPlanningService: requireBuiltinPanelDep(
+      uiServices.planning.projectPlanningService,
+      'Project planning service must be wired at bootstrap for builtin panels.',
+    ),
+    projectPlanningProjectId: requireBuiltinPanelDep(
+      uiServices.planning.projectPlanningProjectId,
+      'Project planning project id must be wired at bootstrap for builtin panels.',
     ),
     policyRuntimeState: requireBuiltinPanelDep(
       uiServices.platform.policyRuntimeState,

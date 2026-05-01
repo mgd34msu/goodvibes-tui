@@ -1,0 +1,89 @@
+# Project Planning
+
+GoodVibes TUI owns the active project-planning loop. The SDK provides passive storage and readiness evaluation only.
+
+## Boundary
+
+The TUI owns:
+
+- natural-language planning intent detection in the main terminal conversation
+- the relentless planning interview loop
+- one-question-at-a-time clarification
+- the project planning panel
+- execution approval
+- agent handoff metadata and future agent assignment UX
+
+The SDK owns:
+
+- durable project-scoped planning artifacts in knowledge spaces named `project:<projectId>`
+- readiness evaluation and next-question hints
+- project-language records
+- decision records
+- task, dependency, verification, and agent-assignment metadata
+- passive daemon routes and operator methods
+
+Daemon, web, webhook, ntfy, Home Assistant, Slack, Discord, and companion surfaces do not enter planning loops. They can use the SDK routes as storage/evaluation APIs, but conversation control stays in the TUI.
+
+## TUI Behavior
+
+The TUI derives a stable `projectId` from the workspace path and passes it to the SDK `ProjectPlanningService`. Planning artifacts are stored under the matching `project:<projectId>` knowledge space, so unrelated workspaces do not share planning state.
+
+Normal conversation can start planning when the user uses planning language such as implementation plan, execution strategy, dependency graph, verification gates, or agent handoff. The TUI then:
+
+- opens the `Planning` panel
+- persists the current planning state through the SDK
+- records active open questions and user answers
+- calls SDK readiness evaluation for gaps and the suggested next question
+- injects a planning-only system instruction for that turn so the assistant asks one focused question instead of executing
+
+The planning loop can be paused with natural language such as "stop planning" or "pause planning".
+
+## Planning Panel
+
+Open the panel through the panel picker or with `/plan panel`.
+
+The panel shows:
+
+- workspace project id and knowledge space
+- readiness and approval state
+- goal, scope, known context, and current next question
+- blocking/advisory readiness gaps
+- task graph and verification gates
+- agent handoff candidates
+- durable decisions
+- project language and ambiguity resolutions
+
+Panel keys:
+
+- `r` refreshes SDK-backed planning artifacts.
+- `a` marks the current structurally ready plan as approved for execution.
+- Up/Down scrolls panel content.
+
+## `/plan`
+
+`/plan` is retained as a command surface for inspection and seeding, but it is no longer the primary planning UX.
+
+- `/plan` prints current project-planning readiness and opens the panel.
+- `/plan panel` opens the panel.
+- `/plan approve` records explicit execution approval.
+- `/plan <goal>` seeds project planning state.
+- `/plan list` and `/plan show <id>` still inspect older execution-plan records.
+- `/plan mode|explain|override|status|clear` still route to the adaptive runtime controls.
+
+## SDK Routes And Operator Methods
+
+The TUI does not need to call daemon routes for its own local planning loop, but the updated SDK exposes passive routes and methods:
+
+- `GET /api/projects/planning/status`
+- `GET|POST /api/projects/planning/state`
+- `POST /api/projects/planning/evaluate`
+- `GET|POST /api/projects/planning/decisions`
+- `GET|POST /api/projects/planning/language`
+- `projectPlanning.status`
+- `projectPlanning.state.get`
+- `projectPlanning.state.upsert`
+- `projectPlanning.evaluate`
+- `projectPlanning.decisions.list`
+- `projectPlanning.decisions.record`
+- `projectPlanning.language.get`
+- `projectPlanning.language.upsert`

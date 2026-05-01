@@ -43,7 +43,6 @@ import { registerMemoryProductRuntimeCommands } from './commands/memory-product-
 import { registerSkillsRuntimeCommands } from './commands/skills-runtime.ts';
 import { registerServicesRuntimeCommands } from './commands/services-runtime.ts';
 import { registerTasksRuntimeCommands } from './commands/tasks-runtime.ts';
-import { registerPermissionsRuntimeCommands } from './commands/permissions-runtime.ts';
 import { registerLocalProviderRuntimeCommands } from './commands/local-provider-runtime.ts';
 import { registerHealthRuntimeCommands } from './commands/health-runtime.ts';
 import { registerSettingsSyncRuntimeCommands } from './commands/settings-sync-runtime.ts';
@@ -93,7 +92,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerExperienceRuntimeCommands(registry);
   registerServicesRuntimeCommands(registry);
   registerTasksRuntimeCommands(registry);
-  registerPermissionsRuntimeCommands(registry);
   registerLocalProviderRuntimeCommands(registry);
   registerHealthRuntimeCommands(registry);
   registerSettingsSyncRuntimeCommands(registry);

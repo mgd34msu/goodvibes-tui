@@ -57,6 +57,8 @@ import {
   createSpokenTurnInputOptions,
 } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
+import { ProjectPlanningCoordinator } from './planning/project-planning-coordinator.ts';
+import { buildCommandArgsHint } from './input/command-args-hint.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -263,6 +265,17 @@ async function main() {
     configManager,
     notify: (message) => { systemMessageRouter.high(message); render(); },
   }));
+  const projectPlanningCoordinator = new ProjectPlanningCoordinator({
+    service: ctx.services.projectPlanningService,
+    projectId: ctx.services.projectPlanningProjectId,
+    workingDirectory: workingDir,
+    notify: (message) => { systemMessageRouter.high(message); render(); },
+    openPanel: () => {
+      panelManager.open('project-planning');
+      panelManager.show();
+      render();
+    },
+  });
 
   const submitInput = (text: string, content?: ContentPart[], options: { readonly spokenOutput?: boolean } = {}) => {
     input.clearModalStack();
@@ -298,13 +311,36 @@ async function main() {
       }
     }
     if (processedText || content) {
-      if (options.spokenOutput && processedText) {
-        spokenTurns.submitNextTurn(processedText);
-      }
-      const inputOptions = options.spokenOutput ? createSpokenTurnInputOptions() : undefined;
-      orchestrator.handleUserInput(processedText, content, inputOptions).catch((err: unknown) => {
-        logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: summarizeError(err) });
-      });
+      void (async () => {
+        let inputOptions = options.spokenOutput ? createSpokenTurnInputOptions() : undefined;
+        if (!options.spokenOutput && processedText) {
+          try {
+            const planning = await projectPlanningCoordinator.prepareTurn(processedText);
+            if (planning) {
+              conversation.addSystemMessage(planning.systemMessage);
+              inputOptions = {
+                origin: {
+                  source: 'project-planning',
+                  surface: 'tui',
+                  metadata: {
+                    projectId: ctx.services.projectPlanningProjectId,
+                    knowledgeSpaceId: planning.state.knowledgeSpaceId,
+                    readiness: planning.evaluation.readiness,
+                  },
+                },
+              };
+            }
+          } catch (err) {
+            systemMessageRouter.high(`[Planning] ${summarizeError(err)}`);
+          }
+        }
+        if (options.spokenOutput && processedText) {
+          spokenTurns.submitNextTurn(processedText);
+        }
+        orchestrator.handleUserInput(processedText, content, inputOptions).catch((err: unknown) => {
+          logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: summarizeError(err) });
+        });
+      })();
     } else {
       render();
     }
@@ -471,41 +507,7 @@ async function main() {
     const runningProcessCount = processManager.list().filter((p) => !p.status.startsWith('done')).length;
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
-    // Compute args hint for slash commands — shown in dim grey after cursor
-    const commandArgsHint = (() => {
-      const p = input.prompt;
-      if (!p.startsWith('/')) return undefined;
-      // Extract the command name (everything up to first space)
-      const spaceIdx = p.indexOf(' ');
-      if (spaceIdx !== -1) {
-        // User has already typed args — check for subcommand hints
-        const cmdName = p.slice(1, spaceIdx);
-        const cmd = commandRegistry.get(cmdName);
-        if (!cmd) return undefined;
-        // Sub-command awareness: check if there's a matching sub-hint pattern
-        const afterCmd = p.slice(spaceIdx + 1);
-        const subSpaceIdx = afterCmd.indexOf(' ');
-        if (subSpaceIdx !== -1) return undefined; // deeper args, no hint
-        // User typed one subcommand word, check for known subcommand hints
-        const subHints: Record<string, Record<string, string>> = {
-          session: { rename: '<name>', resume: '<id|name>', info: '<id>', export: '<id> [format]', search: '<query>', delete: '<id>' },
-          template: { save: '<name>', use: '<name> [args]', edit: '<name>', delete: '<name>' },
-          secrets: { set: '<KEY> <value>', get: '<KEY>', delete: '<KEY>' },
-          permissions: { tool: '<name> allow|prompt|deny' },
-          config: { reset: '<key>' },
-          danger: {},
-          plugin: { enable: '<name>', disable: '<name>', reload: '' },
-        };
-        const subMap = subHints[cmdName];
-        if (subMap && afterCmd in subMap) return subMap[afterCmd];
-        return undefined;
-      }
-      // No space yet — user is still typing the command name
-      const cmdName = p.slice(1);
-      const cmd = commandRegistry.get(cmdName);
-      if (!cmd) return undefined;
-      return cmd.argsHint ?? cmd.usage;
-    })();
+    const commandArgsHint = buildCommandArgsHint(input.prompt, commandRegistry);
     const composerState = deriveComposerState({
       text: input.prompt,
       commandMode: input.commandMode,

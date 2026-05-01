@@ -61,12 +61,15 @@ Representative slash-command families include:
 - `/schedule`
 - `/voice`
 - `/tts`
-- `/config-tts`
 - `/cloudflare`
 - `/mcp`
 - `/incident`
 - `/replay`
 - `/eval`
+
+`/model` opens the fullscreen provider/model workspace. The left rail chooses the target route (`Main Chat`, `Helper Model`, `Tool LLM`, or `TTS LLM`), and the main table filters large model catalogs by search, price tier, capability, availability, benchmark sort, and grouping. `/provider` opens the same workspace in provider-first mode so users can choose a provider and then a model for the active target.
+
+`/plan` now inspects or seeds the TUI-owned project-planning state. The primary planning UX is natural conversation in the TUI; daemon and companion surfaces only get passive SDK storage/evaluation routes. Use `/plan panel` to open the Planning panel, `/plan approve` to record explicit execution approval, or `/plan <goal>` to seed the current workspace planning artifact.
 
 ## Operator surfaces
 
@@ -80,6 +83,21 @@ Many commands also have matching panels and control rooms. High-signal examples:
 - approvals, policy, security, and diagnostics
 - tasks, orchestration, worktrees, and agents
 - WRFC chain state and constraint satisfaction
+- project planning readiness, decisions, project language, task graph, verification gates, and agent handoff metadata
+
+## Project planning
+
+Project planning is TUI-owned. When a normal chat turn clearly asks for an implementation plan, dependency graph, verification strategy, or agent handoff, the TUI opens the Planning panel, stores state in the SDK `ProjectPlanningService`, evaluates readiness, and asks one focused planning question before execution.
+
+Planning artifacts are stored in a project knowledge space named `project:<projectId>`, where the project id is derived from the workspace path. The SDK supplies passive daemon routes and operator methods, but daemon/non-TUI surfaces do not enter planning loops.
+
+See [Project planning](project-planning.md) for the panel layout, `/plan` behavior, and route/method list.
+
+## Knowledge Ask
+
+`/knowledge ask <query>` asks the SDK knowledge/wiki layer for a source-backed semantic answer. Use `--space <knowledgeSpaceId>` to target a specific space such as a Home Assistant graph, `--limit <n>` to bound evidence, and `--mode concise|standard|detailed` to select answer detail.
+
+The TUI displays the SDK-returned answer text, sources, facts, linked objects, gaps, confidence, and synthesized state directly. It does not turn search results into local snippets.
 
 ## WRFC constraint visibility
 
@@ -101,14 +119,14 @@ The `/wrfc` command opens the chain-status view directly. Constraint counts are 
 
 `/tts stop` cancels active playback and pending TTS requests without deleting the text response.
 
-`/config-tts` opens the interactive TTS configuration modal in the TUI. It manages the defaults used by spoken-output clients:
+`/config tts` opens the TTS category in the fullscreen configuration workspace. It manages the defaults used by spoken-output clients:
 
 - `tts.provider`
 - `tts.voice`
 - `tts.llmProvider`
 - `tts.llmModel`
 
-Use `/config-tts providers` to choose a provider with streaming TTS support, `/config-tts voices [provider]` to choose a voice, and `/config-tts llm` to choose an optional `/tts` response model override through the shared provider-to-model picker flow. Without that override, `/tts` uses the current chat provider/model. Live local playback requires `mpv` or `ffplay` on `PATH`.
+Use the `tts.provider` row to choose a provider with streaming TTS support, the `tts.voice` row to choose a voice, and the `tts.llmProvider` / `tts.llmModel` rows to choose an optional `/tts` response model override through the fullscreen provider/model workspace. Without that override, `/tts` uses the current chat provider/model. Live local playback requires `mpv` or `ffplay` on `PATH`.
 
 ## Cloudflare batch commands
 

@@ -21,10 +21,10 @@ If auto-start is set to `No`, the setup values are saved but the surface stays i
 
 Home Assistant values are also editable after onboarding:
 
-- `/settings` > `Surfaces` exposes every `surfaces.homeassistant.*` key.
-- `/config surfaces.homeassistant.instanceUrl <url>` updates the instance URL.
-- `/config surfaces.homeassistant.accessToken <token-or-goodvibes-ref>` stores raw token input in the GoodVibes user secret store and writes a `goodvibes://secrets/goodvibes/...` reference to config.
-- `/config surfaces.homeassistant.webhookSecret <secret-or-goodvibes-ref>` uses the same secret-backed persistence path.
+- `/settings` or `/config surfaces.homeassistant.instanceUrl` opens the fullscreen configuration workspace with the Home Assistant settings available under `Surfaces`.
+- Edit `surfaces.homeassistant.instanceUrl` inline from the `Surfaces` category to update the instance URL.
+- Edit `surfaces.homeassistant.accessToken` from the same workspace to store raw token input in the GoodVibes user secret store and write a `goodvibes://secrets/goodvibes/...` reference to config.
+- Edit `surfaces.homeassistant.webhookSecret` from the same workspace to use the same secret-backed persistence path.
 
 Clearing or resetting a Home Assistant secret-backed config key removes the derived GoodVibes user secret when possible. Existing `goodvibes://secrets/env/...`, `goodvibes://secrets/file/...`, and `goodvibes://secrets/goodvibes/...` references are preserved as references rather than copied.
 
@@ -83,6 +83,10 @@ GET  /api/homeassistant/home-graph/status
 GET  /api/homeassistant/home-graph/issues
 GET  /api/homeassistant/home-graph/sources
 GET  /api/homeassistant/home-graph/browse
+GET  /api/homeassistant/home-graph/map
+GET  /api/homeassistant/home-graph/pages
+GET  /api/homeassistant/home-graph/refinement/tasks
+GET  /api/homeassistant/home-graph/refinement/tasks/{id}
 POST /api/homeassistant/home-graph/export
 POST /api/homeassistant/home-graph/ask
 ```
@@ -101,9 +105,12 @@ POST /api/homeassistant/home-graph/room-page
 POST /api/homeassistant/home-graph/packet
 POST /api/homeassistant/home-graph/facts/review
 POST /api/homeassistant/home-graph/import
+POST /api/homeassistant/home-graph/reindex
+POST /api/homeassistant/home-graph/refinement/run
+POST /api/homeassistant/home-graph/refinement/tasks/{id}/cancel
 ```
 
-Read routes accept `installationId` or `knowledgeSpaceId`. List and browse routes also accept `limit`; issue listing also accepts `status`, `severity`, and `code`.
+Read routes accept `installationId` or `knowledgeSpaceId`. List and browse routes also accept `limit`; issue listing also accepts `status`, `severity`, and `code`. `GET /api/homeassistant/home-graph/status` includes Home Graph readiness and refinement counts so clients can show whether the graph is ready, needs source work, has active repair tasks, or has review-needed tasks.
 
 Home Graph artifact ingest accepts the same large-upload bodies as the generic artifact and knowledge routes:
 
@@ -115,6 +122,24 @@ Home Graph artifact ingest accepts the same large-upload bodies as the generic a
 SDK 0.26.7 adds capped searchable extraction text for manuals and documents and uses bounded lightweight Home Graph search for ask responses. Manuals or documents ingested before SDK 0.26.7 should be reingested or reindexed if deep manual details need to be searchable.
 
 SDK 0.26.8 makes Home Graph review decisions durable across refreshes, preserves resolved state for generated issues, applies stricter Home Assistant quality rules, and discovers Home Assistant integration documentation as pending source candidates.
+
+SDK 0.27.2 makes knowledge map filtering and facets SDK-owned. TUI or companion map screens should build filter controls from the `facets` returned by `/api/knowledge/map` or `/api/homeassistant/home-graph/map`, then pass selected values back as map filters. Do not hardcode Home Assistant facet names beyond displaying the SDK-provided `facets.homeAssistant` groups. Home Graph map accepts JSON `POST` and trailing slash requests, and Home Graph ask treats binary/raw-PDF-like extraction text as repair-needed rather than usable answer material.
+
+SDK 0.27.3 improves Home Graph PDF repair and generated-page maintenance. Reindex reparses existing PDF sources with the shared extractor, rejects binary PDF garbage, handles compressed streams, auto-links manuals to matching Home Assistant objects by identity/model, regenerates source-backed pages, and exposes generated pages through `GET /api/homeassistant/home-graph/pages`. Run `POST /api/homeassistant/home-graph/reindex` after updating before retesting older uploaded PDF manuals.
+
+SDK 0.27.4 adds the shared semantic knowledge/wiki layer. Home Graph ask can now return `answer.facts`, `answer.gaps`, and `answer.synthesized` alongside `answer.text`, `answer.sources`, and `answer.linkedObjects`. Home Graph reindex runs semantic enrichment and generated pages include semantic facts. Render those returned answer fields directly rather than building local snippets from `results`.
+
+SDK 0.27.5 keeps semantic behavior SDK-owned while bounding provider-backed LLM work. Home Graph ask passes strict candidate filters into semantic answering, deterministic answer fallback filters facts by query intent, and broad reindex only attempts a capped number of provider-backed semantic enrichments before continuing deterministically.
+
+SDK 0.27.6 tightens semantic evidence ranking for Home Graph answers, separates subject terms from generic feature/spec/support terms, prevents generated semantic pages and facts from becoming Home Graph object anchors, allows deterministic records to upgrade to provider-backed LLM enrichment, hides stale deterministic facts, and suppresses manual boilerplate in feature/spec answers.
+
+SDK 0.27.7 further suppresses low-value semantic answer noise. Home Graph answer linked objects exclude semantic extraction artifacts, feature/spec answers filter weak accessory/setup/safety/manual text, generated Home Graph pages apply the same fact-quality filter, and answer synthesis no longer waits behind synchronous semantic enrichment.
+
+SDK 0.27.8 tightens the shared semantic feature/spec filters again. It removes truncated deterministic fragments, filters more remote-control/button-map, accessory/setup, new-feature/spec-change, maintenance, service/repair, and customer-service boilerplate, and applies the low-value filter to answer synthesis fact prompts as well as source text windows.
+
+SDK 0.28.0 adds durable Home Graph refinement tasks and exposes them through `/api/homeassistant/home-graph/refinement/*`. Home Graph map and pages should continue to render SDK-returned facets, filters, generated pages, readiness, refinement task ids, and answer fields directly. Companion clients should not locally infer map filter names or refinement state; build controls from the returned `facets` and task records.
+
+The TUI daemon composes the SDK Home Graph service with the SDK web-backed semantic gap repairer. Refinement tasks can therefore search for candidate repair sources, ingest accepted sources into knowledge, and continue the SDK refinement state machine. A task blocked with `No semantic gap repairer is configured` indicates a stale daemon or a host composition bug rather than a Home Assistant client issue.
 
 ## Secrets
 

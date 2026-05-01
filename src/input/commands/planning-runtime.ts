@@ -1,16 +1,14 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { classifyIntent } from '@pellux/goodvibes-sdk/platform/core/intent-classifier';
-import { requireAdaptivePlanner, requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
+import { requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
 
 export function registerPlanningRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'plan',
-    description: 'Manage execution plans and adaptive execution strategy',
-    usage: '[list | show <id> | mode | explain | override <strategy> | status | clear | <task description>]',
-    argsHint: '[list|show|mode|explain|override|status|clear|<task>]',
-    handler(args, ctx) {
+    description: 'Inspect or seed TUI-owned project planning state',
+    usage: '[panel | approve | list | show <id> | mode | explain | override <strategy> | status | clear | <planning goal>]',
+    argsHint: '[panel|approve|status|<goal>]',
+    async handler(args, ctx) {
       const planManager = requirePlanManager(ctx);
-      const adaptivePlanner = requireAdaptivePlanner(ctx);
       const sessionLineageTracker = requireSessionLineageTracker(ctx);
       const plannerSubs = ['mode', 'explain', 'override', 'status', 'clear'];
       if (args.length > 0 && plannerSubs.includes(args[0].toLowerCase())) {
@@ -21,14 +19,67 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
+      const projectPlanningService = ctx.workspace.projectPlanningService;
+      const projectId = ctx.workspace.projectPlanningProjectId;
+      const openProjectPlanningPanel = () => ctx.showPanel?.('project-planning');
+
       if (args.length === 0) {
+        if (projectPlanningService && projectId) {
+          const [status, evaluation] = await Promise.all([
+            projectPlanningService.status({ projectId }),
+            projectPlanningService.evaluate({ projectId }),
+          ]);
+          openProjectPlanningPanel();
+          ctx.print(
+            `Project planning: ${evaluation.readiness}\n` +
+            `Project: ${status.projectId}\n` +
+            `Knowledge space: ${status.knowledgeSpaceId}\n` +
+            `Artifacts: ${status.counts.states} state, ${status.counts.decisions} decisions, ${status.counts.languageArtifacts} language\n` +
+            (evaluation.nextQuestion ? `Next question: ${evaluation.nextQuestion.prompt}` : 'No next question recorded.'),
+          );
+          return;
+        }
         const active = planManager.getActive(ctx.session.runtime.sessionId);
         if (!active) {
-          ctx.print('No active plan. Use /plan <task description> to create one.');
+          ctx.print('No active execution plan.');
           return;
         }
         const summary = planManager.getSummary(active);
         ctx.print(`Active plan: "${active.title}" [${active.status.toUpperCase()}]\n${summary}`);
+        return;
+      }
+
+      if (args[0] === 'panel') {
+        openProjectPlanningPanel();
+        ctx.print('Opened project planning panel.');
+        return;
+      }
+
+      if (args[0] === 'approve') {
+        if (!projectPlanningService || !projectId) {
+          ctx.print('Project planning service is not available in this runtime.');
+          return;
+        }
+        const current = await projectPlanningService.getState({ projectId });
+        if (!current.state) {
+          ctx.print('No project planning state exists to approve.');
+          return;
+        }
+        const result = await projectPlanningService.upsertState({
+          projectId,
+          state: {
+            ...current.state,
+            executionApproved: true,
+            metadata: {
+              ...(current.state.metadata ?? {}),
+              approvedFrom: 'plan-command',
+              approvedAt: Date.now(),
+            },
+          },
+        });
+        const evaluation = await projectPlanningService.evaluate({ projectId });
+        openProjectPlanningPanel();
+        ctx.print(`Project planning approved. Readiness: ${evaluation.readiness}. State: ${result.state?.id ?? 'current'}.`);
         return;
       }
 
@@ -62,36 +113,34 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
       }
 
       const taskDescription = args.join(' ');
-      const classification = classifyIntent(taskDescription);
-      const plan = planManager.create(taskDescription, [], ctx.session.runtime.sessionId);
-      plan.awaitingPlan = true;
-      planManager.save(plan);
+      if (!projectPlanningService || !projectId) {
+        ctx.print('Project planning service is not available in this runtime.');
+        return;
+      }
+      const result = await projectPlanningService.upsertState({
+        projectId,
+        state: {
+          goal: taskDescription,
+          knownContext: [
+            `Workspace planning was seeded from the TUI /plan command.`,
+          ],
+          metadata: {
+            active: true,
+            owner: 'tui',
+            source: 'plan-command',
+            lastPromptAt: Date.now(),
+          },
+        },
+      });
+      const evaluation = await projectPlanningService.evaluate({ projectId });
       sessionLineageTracker.setOriginalTask(taskDescription.slice(0, 200));
+      openProjectPlanningPanel();
 
       ctx.print(
-        `Plan created: "${plan.title}" (${plan.id.slice(0, 8)})\n` +
-        `Intent: ${classification.intent} (confidence: ${(classification.confidence * 100).toFixed(0)}%)\n` +
-        `Signals: ${classification.signals.join(', ') || 'none'}\n` +
-        'The model will write the execution plan — agents will be spawned automatically.',
+        `Project planning seeded: "${result.state?.goal ?? taskDescription}"\n` +
+        `Readiness: ${evaluation.readiness}\n` +
+        (evaluation.nextQuestion ? `Next question: ${evaluation.nextQuestion.prompt}` : 'No next question recorded.'),
       );
-
-      ctx.session.conversationManager.addSystemMessage(
-        `You are creating an execution plan for the following task: "${taskDescription}"\n\n` +
-        'Output the plan in EXACTLY this markdown format and nothing else:\n\n' +
-        '## Phase 1: [Phase Name] [PENDING]\n' +
-        '- [ ] [Task description] — PENDING\n' +
-        '- [ ] [Task description] — PENDING (depends: [other task description])\n\n' +
-        '## Phase 2: [Phase Name] [PENDING]\n' +
-        '- [ ] [Task description] — PENDING (depends: [Phase 1 task description])\n\n' +
-        'Rules:\n' +
-        '- Each item must be a concrete, independently executable task\n' +
-        '- Use (depends: ...) only where execution order truly matters\n' +
-        '- Items without dependencies in the same phase can run in parallel\n' +
-        '- Keep phases to 2-4 items each, aim for maximum parallelism\n' +
-        '- Output ONLY the plan markdown — the system will parse it and spawn agents automatically',
-      );
-
-      ctx.activatePlan?.(plan.id, taskDescription);
     },
   });
 }

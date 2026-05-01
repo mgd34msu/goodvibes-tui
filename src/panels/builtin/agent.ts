@@ -5,6 +5,7 @@ import { ThinkingPanel } from '../thinking-panel.ts';
 import { ToolInspectorPanel } from '../tool-inspector-panel.ts';
 import { WrfcPanel } from '../wrfc-panel.ts';
 import { SchedulePanel } from '../schedule-panel.ts';
+import { ProjectPlanningPanel } from '../project-planning-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireAutomationManager, requireUiServices } from './shared.ts';
 
@@ -76,6 +77,20 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       const ui = requireUiServices(deps);
       return new WrfcPanel(ui.events.workflows, { controller: ui.agents.wrfcController });
     },
+  });
+
+  manager.registerType({
+    id: 'project-planning',
+    name: 'Planning',
+    icon: 'P',
+    category: 'agent',
+    description: 'Passive project planning artifacts: readiness, questions, decisions, language, task graph, and agent handoff metadata',
+    preload: true,
+    factory: () => new ProjectPlanningPanel({
+      service: deps.projectPlanningService,
+      projectId: deps.projectPlanningProjectId,
+      requestRender: deps.requestRender,
+    }),
   });
 
   manager.registerType({

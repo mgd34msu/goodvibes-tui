@@ -137,6 +137,7 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
 
   if (handleSettingsModalToken({
     settingsModal: state.settingsModal,
+    commandContext: state.commandContext,
     openModelPickerWithTarget: state.openModelPickerWithTarget,
     openProviderModelPickerWithTarget: state.openProviderModelPickerWithTarget,
     requestRender: state.requestRender,

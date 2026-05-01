@@ -1088,4 +1088,88 @@ describe('ModelPickerModal', () => {
       expect(popular).toContain('Groq');
     });
   });
+
+  describe('target slot navigation', () => {
+    beforeEach(() => {
+      picker.models = ALL_MODELS;
+      picker.providers = ['provA', 'provB', 'provC'];
+      picker.setTargetInfos([
+        {
+          target: 'main',
+          label: 'Main Chat',
+          description: 'Primary chat route',
+          provider: 'provA',
+          model: 'provA:free-1',
+          enabled: true,
+          inherited: false,
+        },
+        {
+          target: 'helper',
+          label: 'Helper Model',
+          description: 'Helper route',
+          provider: 'provC',
+          model: 'provC:reasoning-1',
+          enabled: true,
+          inherited: false,
+        },
+      ]);
+    });
+
+    test('setTargetInfos selects the current target metadata', () => {
+      picker.target = 'helper';
+      picker.setTargetInfos([
+        {
+          target: 'main',
+          label: 'Main Chat',
+          description: 'Primary chat route',
+          provider: 'provA',
+          model: 'provA:free-1',
+          enabled: true,
+          inherited: false,
+        },
+        {
+          target: 'helper',
+          label: 'Helper Model',
+          description: 'Helper route',
+          provider: 'provC',
+          model: 'provC:reasoning-1',
+          enabled: true,
+          inherited: false,
+        },
+      ]);
+
+      expect(picker.targetIndex).toBe(1);
+      expect(picker.getSelectedTargetInfo()?.label).toBe('Helper Model');
+    });
+
+    test('moveTarget changes target and aligns model selection', () => {
+      picker.openAllModels(ALL_MODELS, 'provA:free-1');
+      expect(picker.getSelected()?.id).toBe('free-1');
+
+      picker.moveTarget(1);
+
+      expect(picker.target).toBe('helper');
+      expect(picker.getSelected()?.id).toBe('reasoning-1');
+    });
+
+    test('moveTarget aligns provider selection in provider mode', () => {
+      picker.openProviders(['provA', 'provB', 'provC'], 'provA');
+
+      picker.moveTarget(1);
+
+      expect(picker.target).toBe('helper');
+      expect(picker.getFilteredProviders()[picker.selectedIndex]).toBe('provC');
+    });
+
+    test('focus helpers switch panes without changing target or selection', () => {
+      picker.openAllModels(ALL_MODELS, 'provA:free-1');
+      const selectedBefore = picker.selectedIndex;
+      picker.focusTargets();
+      expect(picker.focusPane).toBe('targets');
+      picker.focusItems();
+      expect(picker.focusPane).toBe('items');
+      expect(picker.selectedIndex).toBe(selectedBefore);
+      expect(picker.target).toBe('main');
+    });
+  });
 });

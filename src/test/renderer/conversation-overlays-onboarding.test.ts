@@ -52,7 +52,7 @@ function wireModelPicker(input: InputHandler): unknown[] {
 }
 
 describe('applyConversationOverlays onboarding shell', () => {
-  test('keeps the onboarding shell viewport-owning while allowing the model picker above it', () => {
+  test('lets the fullscreen model workspace own the viewport while nested from onboarding', () => {
     const width = 100;
     const height = 20;
     const viewport = Array.from({ length: height }, () => createEmptyLine(width));
@@ -72,8 +72,8 @@ describe('applyConversationOverlays onboarding shell', () => {
     expect(lines.length).toBeGreaterThan(0);
     expect(lines.length).toBeLessThanOrEqual(height);
     const text = linesToText(lines).join('\n');
-    expect(text).toContain('Onboarding Wizard');
-    expect(text).toContain('Select Provider');
+    expect(text).toContain('Model Workspace');
+    expect(text).toContain('Provider list');
   });
 
   test('guards duplicate onboarding modal pushes in the shared stack', () => {

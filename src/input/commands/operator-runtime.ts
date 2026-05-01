@@ -12,10 +12,10 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
   registry.register({
     name: 'settings',
     aliases: ['cfg-ui'],
-    description: 'Open the config/settings browser modal',
+    description: 'Open the fullscreen configuration workspace',
     handler(_args, ctx) {
       if (ctx.openSettingsModal) ctx.openSettingsModal();
-      else ctx.print('Settings modal not available. Use /config to view or set values.');
+      else ctx.print('Configuration workspace is not available in this runtime.');
     },
   });
 
@@ -72,7 +72,7 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
         ctx.openProfilePicker();
       } else {
         const profiles = requireProfileManager(ctx).list();
-        if (profiles.length === 0) ctx.print('No profiles saved. Use /config profile save <name> to create one.');
+        if (profiles.length === 0) ctx.print('No profiles saved. Open /profiles and press s to save the current settings as a profile.');
         else ctx.print(['Saved profiles:', ...profiles.map(p => `  ${p.name}`)].join('\n'));
       }
     },

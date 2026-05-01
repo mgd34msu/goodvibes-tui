@@ -80,7 +80,10 @@ export class SpokenTurnController {
       this.enqueueChunks(this.chunker?.push(event.content) ?? []);
       return;
     }
-    if (event.type === 'STREAM_END' || event.type === 'TURN_COMPLETED') {
+    if (event.type === 'STREAM_END') {
+      return;
+    }
+    if (event.type === 'TURN_COMPLETED') {
       this.finishTurn(event.turnId);
       return;
     }

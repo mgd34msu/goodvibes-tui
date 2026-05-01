@@ -1,6 +1,6 @@
 /**
  * SelectionModal - Generic reusable selection modal with fuzzy search.
- * Used by /config, /template, /sessions, /bookmarks, /tools, /permissions.
+ * Used by /template, /sessions, /bookmarks, /tools, and focused pickers.
  */
 
 export interface SelectionItem {

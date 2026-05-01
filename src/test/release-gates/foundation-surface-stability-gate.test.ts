@@ -221,6 +221,7 @@ describe('foundation surface stability gate', () => {
       'extractions',
       'issues',
       'items',
+      'map',
       'nodes',
     ]);
     expect(sortedKeys(foundation.knowledge.jobs)).toEqual([

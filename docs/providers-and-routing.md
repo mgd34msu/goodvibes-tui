@@ -95,6 +95,19 @@ Any OpenAI-compatible API can be added by dropping JSON into:
 
 Provider JSON is hot-reloaded, so custom provider definitions appear in the model/runtime surfaces without restarting the process.
 
+## Daemon OpenAI-Compatible API
+
+SDK 0.28.0 exposes a daemon-hosted OpenAI-compatible surface for local clients that can speak the OpenAI REST shape but need GoodVibes provider routing:
+
+```text
+GET  /v1/models
+POST /v1/chat/completions
+```
+
+Use the normal daemon base URL and bearer token. Model ids include `goodvibes/current`, `goodvibes/default`, provider-qualified registry keys such as `openai:gpt-5.5`, and unambiguous plain model ids. Chat completions accept standard `messages`, optional `tools`, `max_tokens` or `max_completion_tokens`, and `stream: true` for SSE chunks.
+
+This surface is a compatibility adapter over the current GoodVibes provider registry. It does not replace native TUI routing, model pickers, or provider health surfaces.
+
 ## Search providers
 
 Built-in search surfaces include:
@@ -120,7 +133,7 @@ Current voice providers include:
 - `microsoft`
 - `vydra`
 
-The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults through the `/config-tts` modal or direct setters such as `/config-tts provider <id>` and `/config-tts voice <voice-id>`. `/tts` uses the active chat model by default, with an optional separate response-model override via `/config-tts llm`. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
+The TUI `/tts` command uses providers that advertise `tts-stream` for live local playback. Configure defaults through `/config tts`: `tts.provider` chooses the streaming provider, `tts.voice` chooses a provider voice, and `tts.llmProvider` / `tts.llmModel` optionally override the response model. `/tts` uses the active chat model by default when the TTS LLM override is empty. See [Voice and live TTS](voice-and-live-tts.md) for command usage and playback requirements.
 
 ## Media and multimodal providers
 
