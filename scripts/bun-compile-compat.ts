@@ -8,6 +8,7 @@ type SourcePatch = {
 };
 
 export function patchBunCompileCompatibility(root: string): void {
+  const jsdomDefaultStyleSheet = join(root, 'node_modules', 'jsdom', 'lib', 'jsdom', 'browser', 'default-stylesheet.css');
   const patches: SourcePatch[] = [
     {
       file: join(root, 'node_modules', 'css-tree', 'lib', 'data-patch.js'),
@@ -25,6 +26,15 @@ export function patchBunCompileCompatibility(root: string): void {
       to: `import packageInfo from '../package.json';\n\nexport const { version } = packageInfo;\n`,
     },
   ];
+
+  if (existsSync(jsdomDefaultStyleSheet)) {
+    const defaultStyleSheet = JSON.stringify(readFileSync(jsdomDefaultStyleSheet, 'utf8'));
+    patches.push({
+      file: join(root, 'node_modules', 'jsdom', 'lib', 'jsdom', 'living', 'css', 'helpers', 'computed-style.js'),
+      from: `const defaultStyleSheet = fs.readFileSync(\n  path.resolve(__dirname, "../../../browser/default-stylesheet.css"),\n  { encoding: "utf-8" }\n);\n`,
+      to: `const defaultStyleSheet = ${defaultStyleSheet};\n`,
+    });
+  }
 
   for (const patch of patches) {
     if (!existsSync(patch.file)) {
