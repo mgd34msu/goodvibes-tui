@@ -72,6 +72,8 @@ export type CreateBootstrapCommandContextOptions = {
   integrationHelpers?: IntegrationHelperService;
   automationManager?: ShellAutomationManagerRuntimeService;
   knowledgeService?: KnowledgeService;
+  projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge/index').ProjectPlanningService;
+  projectPlanningProjectId?: string;
   providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers/optimizer').ProviderOptimizer;
   pluginManager?: PluginManager;
   hookWorkbench?: HookWorkbench;
@@ -138,6 +140,8 @@ export function createBootstrapCommandContext(
     integrationHelpers,
     automationManager,
     knowledgeService,
+    projectPlanningService,
+    projectPlanningProjectId,
     providerOptimizer,
     pluginManager,
     hookWorkbench,
@@ -227,6 +231,8 @@ export function createBootstrapCommandContext(
     panelManager,
     profileManager,
     bookmarkManager,
+    projectPlanningService,
+    projectPlanningProjectId,
   }, shellServices);
   const platform = createBootstrapCommandPlatformSection({ configManager, voiceProviderRegistry, voiceService }, shellServices);
   const extensions = createBootstrapCommandExtensionsSection({

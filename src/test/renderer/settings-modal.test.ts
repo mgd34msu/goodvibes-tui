@@ -5,7 +5,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
+import { SettingsModal } from '../../input/settings-modal.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import { SecretsManager } from '../../config/secrets.ts';
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
@@ -116,16 +116,15 @@ describe('renderSettingsModal', () => {
 
   test('footer contains navigation hints', () => {
     const lines = renderSettingsModal(modal, W);
-    const footer = lineToString(lines[lines.length - 1]);
+    const footer = lineToString(lines[lines.length - 2]);
     expect(footer).toContain('Tab');
     expect(footer).toContain('Esc');
   });
 
-  test('category tabs row shows active category in brackets', () => {
+  test('category rail and header show the active category count', () => {
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
-    const activeCat = SETTINGS_CATEGORIES[0].toUpperCase();
-    expect(texts).toContain(`[${activeCat}]`);
+    expect(texts).toContain('Display (8)');
   });
 
   test('settings list shows setting keys', () => {
@@ -161,7 +160,7 @@ describe('renderSettingsModal', () => {
     modal.groups.set(modal.currentCategory, [selected!]);
     const lines = renderSettingsModal(modal, W, 40);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('conflict');
+    expect(texts.toLowerCase()).toContain('conflict');
   });
 
   test('selected synced setting surfaces synced provenance', () => {
@@ -177,7 +176,7 @@ describe('renderSettingsModal', () => {
   test('footer shows [Enter] Confirm/[Esc] Cancel in editing mode', () => {
     modal.editingMode = true;
     const lines = renderSettingsModal(modal, W);
-    const footer = lineToString(lines[lines.length - 1]);
+    const footer = lineToString(lines[lines.length - 2]);
     expect(footer).toContain('Confirm');
     expect(footer).toContain('Cancel');
   });
@@ -195,15 +194,14 @@ describe('renderSettingsModal', () => {
     modal.nextCategory();
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
-    const activeCat = SETTINGS_CATEGORIES[1].toUpperCase();
-    expect(texts).toContain(`[${activeCat}]`);
+    expect(texts).toContain('UI (4)');
   });
 
   test('mcp category renders server trust editing surface', () => {
     while (modal.currentCategory !== 'mcp') modal.nextCategory();
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('[MCP]');
+    expect(texts).toContain('MCP (1)');
     expect(texts).toContain('docs-server');
     expect(texts).toContain('ask-on-risk');
   });
@@ -227,7 +225,7 @@ describe('renderSettingsModal', () => {
     }];
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('[SUBSCRIPTIONS]');
+    expect(texts).toContain('Subscriptions (1)');
     expect(texts).toContain('openai');
     expect(texts).toContain('active');
     expect(texts).toContain('ambient key ov');

@@ -7,6 +7,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config/schema';
 import { SecretsManager } from '../../config/secrets.ts';
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef } from '../../config/secret-config.ts';
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
@@ -107,6 +108,16 @@ describe('SettingsModal', () => {
       expect(items).toBeDefined();
       expect(Array.isArray(items)).toBe(true);
     }
+  });
+
+  test('open() routes every SDK config schema key into the workspace', () => {
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    const visibleKeys = new Set<string>();
+    for (const entries of modal.groups.values()) {
+      for (const entry of entries) visibleKeys.add(entry.setting.key);
+    }
+    const missing = CONFIG_SCHEMA.map((entry) => entry.key).filter((key) => !visibleKeys.has(key));
+    expect(missing).toEqual([]);
   });
 
   test('currentCategory returns correct category', () => {
@@ -252,16 +263,60 @@ describe('SettingsModal', () => {
 
   test('commitEdit saves string value', () => {
     modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
-    // Go to provider category which has model (string)
-    while (modal.currentCategory !== 'provider') modal.nextCategory();
+    while (modal.currentCategory !== 'display') modal.nextCategory();
     const items = modal.currentItems;
-    const strIdx = items.findIndex(e => e.setting.type === 'string');
+    const strIdx = items.findIndex(e => e.setting.key === 'display.theme');
     for (let i = 0; i < strIdx; i++) modal.moveDown();
     modal.activateSelected();
     modal.editBuffer = 'new-model-name';
     const editResult = modal.commitEdit();
     expect(editResult).toBe(true);
     expect(modal.editingMode).toBe(false);
+  });
+
+  test('activateSelected delegates main provider/model settings to the shared picker flow', () => {
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'provider') modal.nextCategory();
+
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'provider.provider');
+    modal.activateSelected();
+    expect(modal.pendingProviderModelPickerTarget).toBe('main');
+    expect(modal.pendingModelPickerTarget).toBeNull();
+
+    modal.pendingProviderModelPickerTarget = null;
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'provider.model');
+    modal.activateSelected();
+    expect(modal.pendingModelPickerTarget).toBe('main');
+    expect(modal.pendingProviderModelPickerTarget).toBeNull();
+  });
+
+  test('activateSelected delegates TTS provider and voice settings to external pickers', () => {
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'tts') modal.nextCategory();
+
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'tts.provider');
+    modal.activateSelected();
+    expect(modal.pendingSettingsPickerAction).toBe('tts-provider');
+
+    modal.pendingSettingsPickerAction = null;
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'tts.voice');
+    modal.activateSelected();
+    expect(modal.pendingSettingsPickerAction as 'tts-voice' | null).toBe('tts-voice');
+  });
+
+  test('resetSelected restores selected config value to its schema default', () => {
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'display') modal.nextCategory();
+
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'display.stream');
+    cm.setDynamic('display.stream', false);
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'display.stream');
+
+    const reset = modal.resetSelected();
+    expect(reset).toEqual({ key: 'display.stream', value: true });
+    expect(cm.get('display.stream')).toBe(true);
+    expect(modal.getSelected()?.currentValue).toBe(true);
   });
 
   test('surfaces category exposes editable Home Assistant settings', () => {

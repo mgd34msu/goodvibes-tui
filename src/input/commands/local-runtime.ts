@@ -4,8 +4,6 @@ import { readFile } from 'node:fs/promises';
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import type { ConfigKey } from '../../config/index.ts';
-import { CONFIG_SCHEMA } from '../../config/index.ts';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
 import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
 import { openCommandPanel, requireBookmarkManager, requireProviderApi, requireSecretsManager } from './runtime-services.ts';
@@ -243,84 +241,6 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
       ctx.print('[secrets] Usage: /secrets set <KEY> <value> [--user|--project] [--secure|--plaintext] | link <KEY> <secret-ref> [--user|--project] [--secure|--plaintext] | get <KEY> | test <secret-ref> | providers | list | delete <KEY> [--user|--project] [--secure|--plaintext]');
-    },
-  });
-
-  registry.register({
-    name: 'danger',
-    argsHint: '[key] [value]',
-    description: '⚠ Danger zone settings (agent recursion, daemon, HTTP listener)',
-    usage: '[key] [value]',
-    handler(args, ctx) {
-      if (args.length === 0) {
-        if (ctx.openSelection) {
-          const cm = ctx.platform.configManager;
-          const dangerObj = cm.getAll().danger as Record<string, unknown>;
-          const items: SelectionItem[] = Object.entries(dangerObj).map(([field, val]) => {
-            const key = `danger.${field}`;
-            const schema = CONFIG_SCHEMA.find(s => s.key === key);
-            const toggleable = schema?.type === 'boolean';
-            return {
-              id: key,
-              label: key,
-              detail: String(val),
-              fg: '#ef4444',
-              adjustable: toggleable,
-              primaryAction: toggleable ? 'toggle' : 'select',
-              actions: schema ? `${toggleable ? '[Space/Enter] toggle  [←/→] set' : '[Enter] inspect'}  ${schema.description}` : undefined,
-            };
-          });
-          ctx.openSelection('⚠ Danger Zone', items, { allowSearch: false }, (result) => {
-            if (!result) return;
-            const key = result.item.id as ConfigKey;
-            const schema = CONFIG_SCHEMA.find(s => s.key === key);
-            if (result.action === 'toggle' && schema) {
-              const currentVal = cm.get(key);
-              let newVal: unknown = currentVal;
-              if (schema.type === 'boolean') {
-                newVal = !currentVal;
-                cm.setDynamic(key, newVal);
-              } else if (schema.type === 'number') {
-                ctx.print(`Current: ${key} = ${String(currentVal)}. Use /danger ${key.replace('danger.', '')} <value> to set.`);
-                return;
-              }
-              result.item.detail = String(newVal);
-              ctx.renderRequest();
-            } else if ((result.action === 'increment' || result.action === 'decrement') && schema?.type === 'boolean') {
-              const newVal = result.action === 'increment';
-              cm.setDynamic(key, newVal);
-              result.item.detail = String(newVal);
-              ctx.renderRequest();
-            }
-          });
-        } else {
-          const dangerObj = ctx.platform.configManager.getAll().danger as Record<string, unknown>;
-          ctx.print(['⚠ Danger Zone Settings:', '', ...Object.entries(dangerObj).map(([field, val]) => `  ${`danger.${field}`.padEnd(36)} ${String(val)}`)].join('\n'));
-        }
-        return;
-      }
-      const key = args[0].startsWith('danger.') ? args[0] : `danger.${args[0]}`;
-      if (args.length === 1) {
-        try {
-          ctx.print(`${key} = ${String(ctx.platform.configManager.get(key as Parameters<typeof ctx.platform.configManager.get>[0]))}`);
-        } catch (e) {
-          ctx.print(`Error: ${summarizeError(e)}`);
-        }
-        return;
-      }
-      try {
-        const schema = CONFIG_SCHEMA.find(s => s.key === key);
-        if (!schema) {
-          ctx.print(`Unknown danger key: ${key}`);
-          return;
-        }
-        const rawValue = args.slice(1).join(' ');
-        const coerced: unknown = schema.type === 'boolean' ? (rawValue === 'true' || rawValue === '1' || rawValue === 'yes') : schema.type === 'number' ? Number(rawValue) : rawValue;
-        ctx.platform.configManager.setDynamic(key as Parameters<typeof ctx.platform.configManager.get>[0], coerced);
-        ctx.print(`⚠ Set ${key} = ${String(coerced)}`);
-      } catch (e) {
-        ctx.print(`Error: ${summarizeError(e)}`);
-      }
     },
   });
 

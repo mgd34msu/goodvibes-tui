@@ -82,8 +82,8 @@ bun run build
 
 ## First things to open in the product
 
-- `/model` to choose a provider/model
-- `/settings` or `/config` to inspect runtime settings
+- `/model` to open the fullscreen provider/model workspace for main chat, helper, tool LLM, and TTS LLM routing
+- `/settings` or `/config` to inspect and edit runtime settings in the fullscreen configuration workspace
 - `/knowledge status` to inspect the knowledge runtime
 - `/plugin browse` and `/marketplace` to inspect the plugin ecosystem
 - `/remote` if you are using remote peers or node-host runners

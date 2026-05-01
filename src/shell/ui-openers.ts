@@ -10,6 +10,7 @@ import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
 import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config/secrets';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
+import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
@@ -112,7 +113,8 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   }
 
   const getCurrentModelForPickerTarget = (): string => {
-    const target = input.modelPicker.target;
+    const selectedTarget = input.modelPicker.getSelectedTargetInfo();
+    const target = selectedTarget?.target ?? input.modelPicker.target;
     if (target === 'helper') return String(configManager.get('helper.globalModel') || runtime.model);
     if (target === 'tool') return String(configManager.get('tools.llmModel') || runtime.model);
     if (target === 'tts') return String(configManager.get('tts.llmModel') || runtime.model);
@@ -120,11 +122,62 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   };
 
   const getCurrentProviderForPickerTarget = (): string => {
-    const target = input.modelPicker.target;
+    const selectedTarget = input.modelPicker.getSelectedTargetInfo();
+    const target = selectedTarget?.target ?? input.modelPicker.target;
     if (target === 'helper') return String(configManager.get('helper.globalProvider') || runtime.provider);
     if (target === 'tool') return String(configManager.get('tools.llmProvider') || runtime.provider);
     if (target === 'tts') return String(configManager.get('tts.llmProvider') || runtime.provider);
     return runtime.provider;
+  };
+
+  const buildModelPickerTargets = (): ModelPickerTargetInfo[] => {
+    const mainProvider = String(configManager.get('provider.provider') || runtime.provider || '').trim();
+    const mainModel = String(configManager.get('provider.model') || runtime.model || '').trim();
+    const helperProvider = String(configManager.get('helper.globalProvider') ?? '').trim();
+    const helperModel = String(configManager.get('helper.globalModel') ?? '').trim();
+    const toolProvider = String(configManager.get('tools.llmProvider') ?? '').trim();
+    const toolModel = String(configManager.get('tools.llmModel') ?? '').trim();
+    const ttsProvider = String(configManager.get('tts.llmProvider') ?? '').trim();
+    const ttsModel = String(configManager.get('tts.llmModel') ?? '').trim();
+
+    return [
+      {
+        target: 'main',
+        label: 'Main Chat',
+        description: 'Default provider and model for normal chat turns in this TUI session.',
+        provider: mainProvider,
+        model: mainModel,
+        enabled: true,
+        inherited: false,
+      },
+      {
+        target: 'helper',
+        label: 'Helper Model',
+        description: 'Optional helper route used for supporting work. Empty provider/model values inherit Main Chat.',
+        provider: helperProvider || mainProvider,
+        model: helperModel || mainModel,
+        enabled: Boolean(configManager.get('helper.enabled')),
+        inherited: helperProvider.length === 0 && helperModel.length === 0,
+      },
+      {
+        target: 'tool',
+        label: 'Tool LLM',
+        description: 'Optional LLM route for tool-specific reasoning. Selecting a model enables the tool LLM route.',
+        provider: toolProvider || mainProvider,
+        model: toolModel || mainModel,
+        enabled: Boolean(configManager.get('tools.llmEnabled')),
+        inherited: toolProvider.length === 0 && toolModel.length === 0,
+      },
+      {
+        target: 'tts',
+        label: 'TTS LLM',
+        description: 'Optional LLM override for /tts response generation. Empty values use the current chat model.',
+        provider: ttsProvider || mainProvider,
+        model: ttsModel || mainModel,
+        enabled: true,
+        inherited: ttsProvider.length === 0 && ttsModel.length === 0,
+      },
+    ];
   };
 
   commandContext.openModelPicker = () => {
@@ -140,6 +193,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       });
       void input.modelPicker.loadRecentModels().catch(() => {}); // best-effort: prefetch for UI, failure is non-visible
       input.modalOpened('modelPicker');
+      input.modelPicker.setTargetInfos(buildModelPickerTargets());
       input.modelPicker.openAllModels(models, getCurrentModelForPickerTarget());
       render();
     })().catch((error: unknown) => {
@@ -159,6 +213,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       const secretProviderIds = await resolveSecretProviderIds();
       input.modelPicker.configuredViaMap = buildConfiguredViaMap(providers, configuredIds, subscriptionManager, secretProviderIds);
       input.modalOpened('modelPicker');
+      input.modelPicker.setTargetInfos(buildModelPickerTargets());
       input.modelPicker.openProviders(providers, getCurrentProviderForPickerTarget());
       render();
     })().catch((error: unknown) => {
@@ -206,9 +261,10 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
-  commandContext.openSettingsModal = () => {
+  commandContext.openSettingsModal = (target?: string) => {
     input.modalOpened('settings');
     input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager);
+    input.settingsModal.selectTarget(target);
     render();
   };
 

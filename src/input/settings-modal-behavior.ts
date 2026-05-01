@@ -10,6 +10,8 @@ export type ModelPickerLaunch =
  * provider first; model rows open directly to models for the same target.
  */
 export function modelPickerLaunchForKey(key: string): ModelPickerLaunch | null {
+  if (key === 'provider.provider') return { flow: 'providerModel', target: 'main' };
+  if (key === 'provider.model') return { flow: 'model', target: 'main' };
   if (key === 'helper.globalProvider') return { flow: 'providerModel', target: 'helper' };
   if (key === 'helper.globalModel') return { flow: 'model', target: 'helper' };
   if (key === 'tools.llmProvider') return { flow: 'providerModel', target: 'tool' };

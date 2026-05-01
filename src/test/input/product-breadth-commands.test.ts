@@ -1151,51 +1151,6 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Removed curated skill ops-playbook');
   });
 
-  test('config bundle exports and imports portable operator bundles', async () => {
-    const registry = new CommandRegistry();
-    registerBuiltinCommands(registry);
-    const command = registry.get('config');
-    expect(command).toBeDefined();
-
-    runtimeServices.configManager.setDynamic('provider.model', 'model-1');
-    runtimeServices.configManager.setDynamic('behavior.autoApprove', true);
-
-    mkdirSync(join(root, '.goodvibes', 'tui', 'ecosystem'), { recursive: true });
-    writeFileSync(join(root, '.goodvibes', 'tui', 'services.json'), JSON.stringify({
-      github: {
-        name: 'github',
-        baseUrl: 'https://api.github.com',
-        authType: 'bearer',
-        tokenKey: 'GITHUB_TOKEN',
-      },
-    }, null, 2));
-    writeFileSync(join(root, '.goodvibes', 'tui', 'ecosystem', 'plugins.json'), JSON.stringify({
-      version: 1,
-      entries: [{ id: 'deploy-audit', kind: 'plugin', name: 'Deploy Audit', summary: 'Review deploys', source: 'repo', tags: [] }],
-    }, null, 2));
-
-    const out: string[] = [];
-    const ctx = makeContext(out);
-
-    const bundlePath = join(root, 'artifacts', 'operator-bundle.json');
-    await command!.handler(['bundle', 'export', bundlePath], ctx);
-    expect(out.join('\n')).toContain('Config bundle exported');
-    const bundleText = readFileSync(bundlePath, 'utf-8');
-    expect(bundleText).toContain('"provider.model": "model-1"');
-    expect(bundleText).toContain('"services"');
-
-    runtimeServices.configManager.setDynamic('provider.model', 'changed-model');
-    out.length = 0;
-    await command!.handler(['bundle', 'inspect', bundlePath], ctx);
-    expect(out.join('\n')).toContain('Config Bundle Review');
-    expect(out.join('\n')).toContain('curated plugins: 1');
-
-    out.length = 0;
-    await command!.handler(['bundle', 'import', bundlePath], ctx);
-    expect(out.join('\n')).toContain('Config bundle imported');
-    expect(runtimeServices.configManager.get('provider.model')).toBe('model-1');
-  });
-
   test('setup transfer and links expose self-hosted platform-service flows', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
@@ -1597,15 +1552,16 @@ describe('product breadth commands', () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const profilesync = registry.get('profilesync');
-    const config = registry.get('config');
     expect(profilesync).toBeDefined();
-    expect(config).toBeDefined();
 
     const out: string[] = [];
     const ctx = makeContext(out);
 
-    await config!.handler(['profile', 'save', 'release'], ctx);
-    expect(out.join('\n')).toContain('Profile saved: release');
+    runtimeServices.profileManager.save('release', {
+      provider: { model: 'model-1', reasoningEffort: 'medium' },
+      behavior: {},
+      display: {},
+    });
 
     const bundlePath = join(root, 'artifacts', 'profiles.json');
     out.length = 0;
@@ -1630,16 +1586,15 @@ describe('product breadth commands', () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const managed = registry.get('managed');
-    const config = registry.get('config');
     const settingsSync = registry.get('settingssync');
     expect(managed).toBeDefined();
-    expect(config).toBeDefined();
     expect(settingsSync).toBeDefined();
 
     const out: string[] = [];
     const ctx = makeContext(out);
 
-    await config!.handler(['provider.model', 'model-1'], ctx);
+    runtimeServices.configManager.setDynamic('provider.model', 'model-1');
+    ctx.session.runtime.model = 'model-1';
     const bundlePath = join(root, 'artifacts', 'managed.json');
     mkdirSync(dirname(bundlePath), { recursive: true });
     writeFileSync(bundlePath, JSON.stringify({
@@ -1658,7 +1613,8 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Managed Settings Review');
     expect(out.join('\n')).toContain('changes:');
 
-    await config!.handler(['provider.model', 'changed-model'], ctx);
+    runtimeServices.configManager.setDynamic('provider.model', 'changed-model');
+    ctx.session.runtime.model = 'changed-model';
     out.length = 0;
     await managed!.handler(['apply', bundlePath], ctx);
     expect(out.join('\n')).toContain('Managed settings bundle applied');
@@ -1685,7 +1641,8 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Resolved Setting Review');
     expect(out.join('\n')).toContain('key: provider.model');
 
-    await config!.handler(['provider.model', 'sync-model'], ctx);
+    runtimeServices.configManager.setDynamic('provider.model', 'sync-model');
+    ctx.session.runtime.model = 'sync-model';
     out.length = 0;
     await settingsSync!.handler(['pull', syncPath], ctx);
     expect(out.join('\n')).toContain('Settings sync bundle pulled');
@@ -1697,31 +1654,6 @@ describe('product breadth commands', () => {
     out.length = 0;
     await managed!.handler(['staged'], ctx);
     expect(out.join('\n')).toContain('Staged Managed Bundle Review');
-  });
-
-  test('config profile load restores saved provider settings', async () => {
-    const registry = new CommandRegistry();
-    registerBuiltinCommands(registry);
-    const config = registry.get('config');
-    expect(config).toBeDefined();
-
-    const out: string[] = [];
-    const ctx = makeContext(out);
-
-    await config!.handler(['provider.model', 'model-1'], ctx);
-    runtimeServices.profileManager.save('restore-me', {
-      provider: { model: 'model-1', reasoningEffort: 'medium' },
-      behavior: {},
-      display: {},
-    });
-
-    await config!.handler(['provider.model', 'changed-model'], ctx);
-    expect(ctx.session.runtime.model).toBe('changed-model');
-
-    out.length = 0;
-    await config!.handler(['profile', 'load', 'restore-me'], ctx);
-    expect(out.join('\n')).toContain('Profile loaded: restore-me');
-    expect(ctx.session.runtime.model).toBe('model-1');
   });
 
   test('session command surfaces saved return-context posture in list and info output', async () => {
@@ -2261,7 +2193,8 @@ describe('product breadth commands', () => {
     await registry.get('settingssync')!.handler(['push', syncBundlePath], ctx);
     expect(existsSync(syncBundlePath)).toBe(true);
 
-    await registry.get('config')!.handler(['provider.model', 'local-conflict-model'], ctx);
+    runtimeServices.configManager.setDynamic('provider.model', 'local-conflict-model');
+    ctx.session.runtime.model = 'local-conflict-model';
     out.length = 0;
     await registry.get('settingssync')!.handler(['pull', syncBundlePath], ctx);
     expect(out.join('\n')).toContain('conflicts');

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import type { CommandContext } from './command-registry.ts';
-import type { CategoryFilter, ModelPickerModal } from './model-picker.ts';
+import type { CapabilityFilter, CategoryFilter, ModelPickerModal } from './model-picker.ts';
 import { MODEL_PICKER_CHROME_LINES } from '../renderer/model-picker-overlay.ts';
 import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
@@ -49,6 +49,11 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
       if (state.modelPicker.mode === 'contextCap') state.modelPicker.deleteContextCapChar();
       else if (state.modelPicker.searchFocused && (state.modelPicker.mode === 'model' || state.modelPicker.mode === 'provider')) state.modelPicker.deleteChar();
     } else if (token.logicalName === 'enter') {
+      if (state.modelPicker.focusPane === 'targets') {
+        state.modelPicker.focusItems();
+        state.requestRender();
+        return true;
+      }
       const mode = state.modelPicker.mode;
       const idx = state.modelPicker.selectedIndex;
       if (mode === 'model') {
@@ -102,6 +107,11 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
       }
     } else if (token.logicalName === 'up') {
+      if (state.modelPicker.focusPane === 'targets') {
+        state.modelPicker.moveTarget(-1);
+        state.requestRender();
+        return true;
+      }
       if (state.modelPicker.canFocusSearch() && !state.modelPicker.searchFocused && state.modelPicker.selectedIndex === 0) {
         state.modelPicker.focusSearch();
       } else if (!state.modelPicker.searchFocused) {
@@ -109,19 +119,39 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         state.modelPicker.moveUp(maxVis);
       }
     } else if (token.logicalName === 'down') {
+      if (state.modelPicker.focusPane === 'targets') {
+        state.modelPicker.moveTarget(1);
+        state.requestRender();
+        return true;
+      }
       if (state.modelPicker.searchFocused) {
         state.modelPicker.blurSearch();
       } else {
         const maxVis = Math.max(5, state.getViewportHeight() - MODEL_PICKER_CHROME_LINES - 4);
         state.modelPicker.moveDown(maxVis);
       }
+    } else if (token.logicalName === 'left' && !state.modelPicker.searchFocused && state.modelPicker.mode !== 'contextCap') {
+      state.modelPicker.focusTargets();
+    } else if (token.logicalName === 'right' && !state.modelPicker.searchFocused && state.modelPicker.mode !== 'contextCap') {
+      state.modelPicker.focusItems();
     } else if (token.logicalName === 'tab' && state.modelPicker.mode === 'model') {
-      const cycle: CategoryFilter[] = ['all', 'free', 'paid', 'subscription'];
-      const cur = cycle.indexOf(state.modelPicker.categoryFilter);
-      state.modelPicker.setCategoryFilter(cycle[(cur + 1) % cycle.length]!);
+      if (state.modelPicker.focusPane === 'targets') {
+        state.modelPicker.focusItems();
+      } else {
+        const cycle: CategoryFilter[] = ['all', 'free', 'paid', 'subscription'];
+        const cur = cycle.indexOf(state.modelPicker.categoryFilter);
+        state.modelPicker.setCategoryFilter(cycle[(cur + 1) % cycle.length]!);
+      }
     } else if (!state.modelPicker.searchFocused && token.logicalName === 'g' && state.modelPicker.mode === 'model') {
       state.modelPicker.cycleGroupBy();
+    } else if (!state.modelPicker.searchFocused && token.logicalName === 'c' && state.modelPicker.mode === 'model') {
+      cycleCapabilityFilter(state.modelPicker);
+    } else if (!state.modelPicker.searchFocused && token.logicalName === 'a' && state.modelPicker.mode === 'model') {
+      state.modelPicker.toggleAvailableOnly();
+    } else if (!state.modelPicker.searchFocused && token.logicalName === 'b' && state.modelPicker.mode === 'model') {
+      state.modelPicker.cycleBenchmarkSort();
     } else if (!state.modelPicker.searchFocused && token.logicalName === '/' && state.modelPicker.canFocusSearch()) {
+      state.modelPicker.focusItems();
       state.modelPicker.focusSearch();
     }
   } else if (token.type === 'text') {
@@ -139,15 +169,31 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
     } else if (token.value === ' ' && state.modelPicker.mode === 'model') {
       const selected = state.modelPicker.getSelected();
       if (selected && state.modelPicker.isLocalModel(selected)) state.modelPicker.enterContextCapMode(selected);
+    } else if (token.value === '\t') {
+      if (state.modelPicker.focusPane === 'targets') state.modelPicker.focusItems();
+      else state.modelPicker.focusTargets();
     } else if (token.value === 'g' && state.modelPicker.mode === 'model') {
       state.modelPicker.cycleGroupBy();
+    } else if (token.value === 'c' && state.modelPicker.mode === 'model') {
+      cycleCapabilityFilter(state.modelPicker);
+    } else if (token.value === 'a' && state.modelPicker.mode === 'model') {
+      state.modelPicker.toggleAvailableOnly();
+    } else if (token.value === 'b' && state.modelPicker.mode === 'model') {
+      state.modelPicker.cycleBenchmarkSort();
     } else if (token.value === '/' && state.modelPicker.canFocusSearch()) {
+      state.modelPicker.focusItems();
       state.modelPicker.focusSearch();
     }
   }
 
   state.requestRender();
   return true;
+}
+
+function cycleCapabilityFilter(modelPicker: ModelPickerModal): void {
+  const cycle: CapabilityFilter[] = ['none', 'reasoning', 'toolUse', 'multimodal'];
+  const cur = cycle.indexOf(modelPicker.capabilityFilter);
+  modelPicker.setCapabilityFilter(cycle[(cur + 1) % cycle.length]!);
 }
 
 type ProcessRouteState = {

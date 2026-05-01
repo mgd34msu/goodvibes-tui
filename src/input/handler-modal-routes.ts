@@ -1,6 +1,7 @@
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
 import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { CommandContext } from './command-registry.ts';
+import { openTtsProviderPicker, openTtsVoicePicker } from './tts-settings-actions.ts';
 
 type SelectionRouteState = {
   selectionModal: {
@@ -210,18 +211,28 @@ type SettingsRouteState = {
     active: boolean;
     editingMode: boolean;
     currentCategory: string;
+    focusPane?: 'categories' | 'settings';
     commitEdit: () => void;
     toggleSelectedFlag: () => void;
     activateSelected: () => void;
     adjustSelected: (direction: 'left' | 'right', step?: number) => void;
-    moveUp: () => void;
-    moveDown: () => void;
+    moveFocusedUp?: () => void;
+    moveFocusedDown?: () => void;
+    moveUp?: () => void;
+    moveDown?: () => void;
+    focusCategories?: () => void;
+    focusSettings?: () => void;
+    toggleFocusPane?: () => void;
     nextCategory: () => void;
+    prevCategory?: () => void;
     editBackspace: () => void;
     editChar: (char: string) => void;
     pendingModelPickerTarget: import('./model-picker.ts').ModelPickerTarget | null;
     pendingProviderModelPickerTarget?: import('./model-picker.ts').ModelPickerTarget | null;
+    pendingSettingsPickerAction?: 'tts-provider' | 'tts-voice' | null;
+    resetSelected?: () => { key: string; value: unknown } | null;
   };
+  commandContext?: CommandContext;
   /** Called when the settings modal requests the model picker for a non-main target. */
   openModelPickerWithTarget?: (target: import('./model-picker.ts').ModelPickerTarget) => void;
   /** Called when the settings modal requests provider selection before model selection. */
@@ -230,7 +241,29 @@ type SettingsRouteState = {
   handleEscape: () => void;
 };
 
+function syncRuntimeAfterSettingReset(ctx: CommandContext | undefined, key: string, value: unknown): void {
+  if (!ctx) return;
+  if (key === 'provider.model') ctx.session.runtime.model = String(value);
+  if (key === 'provider.provider') ctx.session.runtime.provider = String(value);
+  if (key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = String(value);
+}
+
 function consumeSettingsPickerRequest(state: SettingsRouteState): void {
+  const settingsAction = state.settingsModal.pendingSettingsPickerAction ?? null;
+  if (settingsAction !== null) {
+    state.settingsModal.pendingSettingsPickerAction = null;
+    if (!state.commandContext) return;
+    if (settingsAction === 'tts-provider') {
+      openTtsProviderPicker(state.commandContext);
+      return;
+    }
+    void openTtsVoicePicker(state.commandContext).catch((error: unknown) => {
+      state.commandContext?.print(`Unable to list TTS voices: ${error instanceof Error ? error.message : String(error)}`);
+      state.requestRender();
+    });
+    return;
+  }
+
   const providerModelTarget = state.settingsModal.pendingProviderModelPickerTarget ?? null;
   if (providerModelTarget !== null) {
     state.settingsModal.pendingProviderModelPickerTarget = null;
@@ -248,32 +281,53 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
   if (!state.settingsModal.active) return false;
 
   if (token.type === 'key') {
+    const focusPane = state.settingsModal.focusPane ?? 'settings';
     if (token.logicalName === 'escape') {
       state.handleEscape();
       return true;
     }
     if (token.logicalName === 'enter' || (token.logicalName === 'space' && !state.settingsModal.editingMode)) {
       if (state.settingsModal.editingMode) state.settingsModal.commitEdit();
+      else if (focusPane === 'categories') state.settingsModal.focusSettings?.();
       else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
       else {
         state.settingsModal.activateSelected();
         consumeSettingsPickerRequest(state);
       }
     } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.settingsModal.editingMode) {
-      state.settingsModal.adjustSelected(token.logicalName, token.shift ? 10 : 1);
-    } else if (token.logicalName === 'up') state.settingsModal.moveUp();
-    else if (token.logicalName === 'down') state.settingsModal.moveDown();
-    else if (token.logicalName === 'tab') state.settingsModal.nextCategory();
+      if (token.logicalName === 'left') state.settingsModal.focusCategories?.();
+      else state.settingsModal.focusSettings?.();
+    } else if (token.logicalName === 'up') {
+      if (state.settingsModal.moveFocusedUp) state.settingsModal.moveFocusedUp();
+      else state.settingsModal.moveUp?.();
+    } else if (token.logicalName === 'down') {
+      if (state.settingsModal.moveFocusedDown) state.settingsModal.moveFocusedDown();
+      else state.settingsModal.moveDown?.();
+    }
+    else if (token.logicalName === 'r' && !state.settingsModal.editingMode) {
+      const reset = state.settingsModal.resetSelected?.();
+      if (reset) syncRuntimeAfterSettingReset(state.commandContext, reset.key, reset.value);
+    }
+    else if (token.logicalName === 'tab') {
+      if (state.settingsModal.toggleFocusPane) state.settingsModal.toggleFocusPane();
+      else if (focusPane === 'categories') state.settingsModal.focusSettings?.();
+      else state.settingsModal.focusCategories?.();
+    }
     else if (token.logicalName === 'backspace' && state.settingsModal.editingMode) state.settingsModal.editBackspace();
   } else if (token.type === 'text') {
     if (token.value === ' ' && !state.settingsModal.editingMode) {
-      if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
+      const focusPane = state.settingsModal.focusPane ?? 'settings';
+      if (focusPane === 'categories') state.settingsModal.focusSettings?.();
+      else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
       else {
         state.settingsModal.activateSelected();
         consumeSettingsPickerRequest(state);
       }
     } else if (state.settingsModal.editingMode) {
       state.settingsModal.editChar(token.value);
+    } else if (token.value === 'r') {
+      const reset = state.settingsModal.resetSelected?.();
+      if (reset) syncRuntimeAfterSettingReset(state.commandContext, reset.key, reset.value);
     }
   }
 

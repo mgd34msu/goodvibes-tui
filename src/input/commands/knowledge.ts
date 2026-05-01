@@ -1,8 +1,12 @@
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
 import type { CommandContext, SlashCommand } from '../command-registry.ts';
 
 const KNOWLEDGE_REVIEW_ACTIONS = ['accept', 'reject', 'resolve', 'reopen', 'edit', 'forget'] as const;
 
 type KnowledgeReviewAction = typeof KNOWLEDGE_REVIEW_ACTIONS[number];
+type KnowledgeAskInput = Parameters<KnowledgeService['ask']>[0];
+type KnowledgeAskResult = Awaited<ReturnType<KnowledgeService['ask']>>;
+type KnowledgeAskMode = NonNullable<KnowledgeAskInput['mode']>;
 
 function requireKnowledgeApi(context: CommandContext) {
   const knowledgeApi = context.clients?.knowledgeApi;
@@ -22,6 +26,13 @@ function readStringListFlag(args: string[], name: string): string[] {
   const value = readFlag(args, name);
   if (!value) return [];
   return value.split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
+function readPositiveIntFlag(args: string[], name: string, fallback: number): number {
+  const raw = readFlag(args, name);
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function readJsonObjectFlag(args: string[], name: string): Record<string, unknown> | null | undefined {
@@ -46,12 +57,84 @@ function positionalArgs(args: string[], valuedFlags: readonly string[] = []): st
   });
 }
 
+function requireKnowledgeAsk(context: CommandContext): ((input: KnowledgeAskInput) => Promise<KnowledgeAskResult>) | null {
+  const serviceAsk = context.extensions.knowledgeService?.ask?.bind(context.extensions.knowledgeService);
+  if (serviceAsk) return serviceAsk;
+
+  const clientAsk = (context.clients?.knowledgeApi as unknown as { ask?: (input: KnowledgeAskInput) => Promise<KnowledgeAskResult> } | undefined)?.ask;
+  if (clientAsk) return clientAsk;
+
+  context.print('[knowledge] Knowledge ask is not available in this runtime.');
+  return null;
+}
+
+function cleanInline(value: unknown): string {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+}
+
+function nodeLabel(node: { readonly kind?: string; readonly title?: string; readonly summary?: string; readonly confidence?: number }): string {
+  const kind = cleanInline(node.kind) || 'node';
+  const title = cleanInline(node.title) || 'untitled';
+  const summary = cleanInline(node.summary);
+  const confidence = typeof node.confidence === 'number' ? ` confidence=${node.confidence}` : '';
+  return summary ? `[${kind}] ${title}${confidence} - ${summary}` : `[${kind}] ${title}${confidence}`;
+}
+
+function sourceLabel(source: {
+  readonly id?: string;
+  readonly sourceType?: string;
+  readonly title?: string;
+  readonly canonicalUri?: string;
+  readonly sourceUri?: string;
+  readonly summary?: string;
+  readonly status?: string;
+}): string {
+  const title = cleanInline(source.title) || cleanInline(source.canonicalUri) || cleanInline(source.sourceUri) || cleanInline(source.id) || 'untitled';
+  const type = cleanInline(source.sourceType) || 'source';
+  const status = cleanInline(source.status);
+  const summary = cleanInline(source.summary);
+  const suffix = status ? `/${status}` : '';
+  return summary ? `[${type}${suffix}] ${title} - ${summary}` : `[${type}${suffix}] ${title}`;
+}
+
+function renderKnowledgeAskResult(result: KnowledgeAskResult): string {
+  const answer = result.answer;
+  const lines = [
+    `[knowledge] ${result.query}`,
+    answer.text,
+    '',
+    `mode: ${answer.mode}  confidence: ${answer.confidence}  synthesized: ${answer.synthesized ? 'yes' : 'no'}`,
+  ];
+
+  if (answer.sources.length > 0) {
+    lines.push('', 'Sources:');
+    for (const source of answer.sources) lines.push(`  - ${sourceLabel(source)}`);
+  }
+
+  if (answer.facts.length > 0) {
+    lines.push('', 'Facts:');
+    for (const fact of answer.facts) lines.push(`  - ${nodeLabel(fact)}`);
+  }
+
+  if (answer.linkedObjects.length > 0) {
+    lines.push('', 'Linked objects:');
+    for (const object of answer.linkedObjects) lines.push(`  - ${nodeLabel(object)}`);
+  }
+
+  if (answer.gaps.length > 0) {
+    lines.push('', 'Gaps:');
+    for (const gap of answer.gaps) lines.push(`  - ${nodeLabel(gap)}`);
+  }
+
+  return lines.join('\n');
+}
+
 export const knowledgeCommand: SlashCommand = {
   name: 'knowledge',
   aliases: ['know', 'kb'],
   description: 'Structured knowledge graph: ingest URLs/bookmarks, inspect issues, and build compact prompt packets.',
   usage: '<subcommand> [args]',
-  argsHint: 'status|ingest-url|import-bookmarks|import-urls|list|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate',
+  argsHint: 'status|ask|ingest-url|import-bookmarks|import-urls|list|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const knowledge = requireKnowledgeApi(context);
     if (!knowledge) {
@@ -65,6 +148,32 @@ export const knowledgeCommand: SlashCommand = {
     const rest = args.slice(1);
 
     switch (sub) {
+      case 'ask': {
+        const ask = requireKnowledgeAsk(context);
+        if (!ask) return;
+        const valuedFlags = ['--space', '--knowledge-space', '--limit', '--mode'];
+        const query = positionalArgs(rest, valuedFlags).join(' ').trim();
+        if (!query) {
+          context.print('[knowledge] Usage: /knowledge ask <query> [--space <knowledgeSpaceId>] [--limit <n>] [--mode <concise|standard|detailed>]');
+          return;
+        }
+        const requestedMode = readFlag(rest, '--mode') as KnowledgeAskMode | undefined;
+        const mode: KnowledgeAskMode = requestedMode && ['concise', 'standard', 'detailed'].includes(requestedMode)
+          ? requestedMode
+          : 'standard';
+        const result = await ask({
+          query,
+          knowledgeSpaceId: readFlag(rest, '--space') ?? readFlag(rest, '--knowledge-space'),
+          limit: readPositiveIntFlag(rest, '--limit', 10),
+          mode,
+          includeSources: true,
+          includeConfidence: true,
+          includeLinkedObjects: true,
+        });
+        context.print(renderKnowledgeAskResult(result));
+        break;
+      }
+
       case 'status': {
         const status = await knowledge.status.get();
         context.print([
@@ -399,6 +508,7 @@ export const knowledgeCommand: SlashCommand = {
         context.print([
           'Usage: /knowledge <subcommand>',
           '  status',
+          '  ask <query> [--space <knowledgeSpaceId>] [--limit <n>] [--mode <concise|standard|detailed>]',
           '  ingest-url <url> [--title <title>] [--tags <a,b>] [--folder <path>]',
           '  import-bookmarks <path>',
           '  import-urls <path>',

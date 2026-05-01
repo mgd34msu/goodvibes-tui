@@ -171,4 +171,72 @@ describe('modal search focus routing', () => {
     expect(picker.groupBy).toBe('family');
     expect(picker.query).toBe('g');
   });
+
+  test('model picker uses left and right to switch target/list panes', () => {
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
+    picker.openAllModels([
+      {
+        id: 'gpt-1',
+        provider: 'openai',
+        registryKey: 'openai:gpt-1',
+        displayName: 'GPT 1',
+        description: '',
+        capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+        contextWindow: 8192,
+        selectable: true,
+        tier: 'premium',
+      },
+    ], 'gpt-1');
+
+    const state = {
+      modelPicker: picker,
+      modalStack: [],
+      commandContext: undefined,
+      getViewportHeight: () => 30,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleModelPickerToken(state, { type: 'key', name: 'left', logicalName: 'left', ctrl: false, shift: false, meta: false });
+    expect(picker.focusPane).toBe('targets');
+
+    handleModelPickerToken(state, { type: 'key', name: 'right', logicalName: 'right', ctrl: false, shift: false, meta: false });
+    expect(picker.focusPane).toBe('items');
+    expect(picker.selectedIndex).toBe(0);
+  });
+
+  test('model picker exposes capability, availability, and benchmark hotkeys outside search', () => {
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
+    picker.openAllModels([
+      {
+        id: 'gpt-1',
+        provider: 'openai',
+        registryKey: 'openai:gpt-1',
+        displayName: 'GPT 1',
+        description: '',
+        capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+        contextWindow: 8192,
+        selectable: true,
+        tier: 'premium',
+      },
+    ], 'gpt-1');
+
+    const state = {
+      modelPicker: picker,
+      modalStack: [],
+      commandContext: undefined,
+      getViewportHeight: () => 30,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleModelPickerToken(state, { type: 'text', value: 'c' });
+    expect(picker.capabilityFilter).toBe('reasoning');
+
+    handleModelPickerToken(state, { type: 'text', value: 'a' });
+    expect(picker.availableOnly).toBe(false);
+
+    handleModelPickerToken(state, { type: 'text', value: 'b' });
+    expect(picker.benchmarkSort).toBe('composite');
+  });
 });

@@ -54,6 +54,7 @@ import { WrfcPanel } from '../../panels/wrfc-panel.ts';
 import { TokenBudgetPanel } from '../../panels/token-budget-panel.ts';
 import { ContextVisualizerPanel } from '../../panels/context-visualizer-panel.ts';
 import { PlanDashboardPanel } from '../../panels/plan-dashboard-panel.ts';
+import { ProjectPlanningPanel } from '../../panels/project-planning-panel.ts';
 
 // ---------------------------------------------------------------------------
 // Minimal mocks
@@ -206,6 +207,50 @@ const EMPTY_SESSION_MEMORY_QUERY = {
 const EMPTY_PLAN_DASHBOARD_QUERY = {
   getActive: () => null,
 } as unknown as import('../../runtime/ui-service-queries.ts').PlanDashboardQuery;
+
+const EMPTY_PROJECT_PLANNING_SERVICE = {
+  status: async () => ({
+    ok: true,
+    projectId: 'proj',
+    knowledgeSpaceId: 'project:proj',
+    passiveOnly: true,
+    counts: { states: 0, decisions: 0, languageArtifacts: 0 },
+    capabilities: ['project-scoped-storage', 'passive-daemon-only'],
+  }),
+  getState: async () => ({ ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', state: null }),
+  evaluate: async () => ({
+    ok: true,
+    projectId: 'proj',
+    knowledgeSpaceId: 'project:proj',
+    readiness: 'needs-user-input',
+    gaps: [],
+    state: {
+      id: 'current',
+      projectId: 'proj',
+      knowledgeSpaceId: 'project:proj',
+      goal: '',
+      knownContext: [],
+      openQuestions: [],
+      answeredQuestions: [],
+      decisions: [],
+      assumptions: [],
+      constraints: [],
+      risks: [],
+      tasks: [],
+      dependencies: [],
+      verificationGates: [],
+      agentAssignments: [],
+      readiness: 'needs-user-input',
+      executionApproved: false,
+      createdAt: 0,
+      updatedAt: 0,
+      metadata: {},
+    },
+  }),
+  listDecisions: async () => ({ ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', decisions: [] }),
+  getLanguage: async () => ({ ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', language: null }),
+  upsertState: async () => ({ ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', state: null }),
+} as unknown as import('@pellux/goodvibes-sdk/platform/knowledge/index').ProjectPlanningService;
 
 const EMPTY_WORKFLOW_EVENT_FEED = {
   on: (_event: string, _cb: unknown) => () => {},
@@ -384,6 +429,13 @@ const PANELS: PanelEntry[] = [
   {
     label: 'PlanDashboardPanel (no plan)',
     factory: () => new PlanDashboardPanel(EMPTY_PLAN_DASHBOARD_QUERY),
+  },
+  {
+    label: 'ProjectPlanningPanel (no state)',
+    factory: () => new ProjectPlanningPanel({
+      service: EMPTY_PROJECT_PLANNING_SERVICE,
+      projectId: 'proj',
+    }),
   },
   // Wave B2 migrations
   {

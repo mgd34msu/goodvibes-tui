@@ -1,5 +1,5 @@
 /**
- * SettingsModal — state management for the /settings config browser modal.
+ * SettingsModal — state management for the /settings and /config fullscreen workspace.
  *
  * Loads CONFIG_SCHEMA, groups settings by category, and tracks UI state:
  *   - Active category (Tab to cycle)
@@ -14,11 +14,9 @@ import { CONFIG_SCHEMA, type ConfigKey, type PersistedFlagState } from '@pellux/
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
-import type { ProviderAuthFreshness, ProviderAuthRoute } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
 import { getResolvedSettingLookup } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
-import { isSecretConfigKey } from '../config/secret-config.ts';
+import { buildGoodVibesSecretKey, isSecretConfigKey } from '../config/secret-config.ts';
 import {
   getNumericAdjustmentMeta,
   modelPickerLaunchForKey,
@@ -28,6 +26,7 @@ import {
   setSecretBackedSettingValue,
   type SettingsSecretsManager,
 } from './settings-modal-secrets.ts';
+import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
 import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
 import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
@@ -39,6 +38,7 @@ import {
   type McpEntry,
   type SettingEntry,
   type SettingsCategory,
+  type SettingsFocusPane,
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
 
@@ -48,6 +48,7 @@ export {
   type McpEntry,
   type SettingEntry,
   type SettingsCategory,
+  type SettingsFocusPane,
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
 
@@ -64,6 +65,9 @@ export class SettingsModal {
   /** Selected setting index within the current category. */
   public selectedIndex = 0;
 
+  /** Which pane receives up/down navigation and Enter/Space actions. */
+  public focusPane: SettingsFocusPane = 'settings';
+
   /** Whether we're in inline edit mode for the selected string/number setting. */
   public editingMode = false;
 
@@ -79,6 +83,8 @@ export class SettingsModal {
   public pendingModelPickerTarget: ModelPickerTarget | null = null;
   /** Set when the highlighted setting should open provider selection before model selection. */
   public pendingProviderModelPickerTarget: ModelPickerTarget | null = null;
+  /** Set when a highlighted setting needs an external picker owned by the shell route. */
+  public pendingSettingsPickerAction: 'tts-provider' | 'tts-voice' | null = null;
   /** Provider awaiting explicit logout confirmation, if any. */
   public subscriptionLogoutConfirmationTarget: string | null = null;
 
@@ -132,10 +138,12 @@ export class SettingsModal {
     this._loadSubscriptionEntries();
     this.categoryIndex = 0;
     this.selectedIndex = 0;
+    this.focusPane = 'settings';
     this.editingMode = false;
     this.editBuffer = '';
     this.pendingModelPickerTarget = null;
     this.pendingProviderModelPickerTarget = null;
+    this.pendingSettingsPickerAction = null;
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
@@ -148,11 +156,13 @@ export class SettingsModal {
     this.editBuffer = '';
     this.pendingModelPickerTarget = null;
     this.pendingProviderModelPickerTarget = null;
+    this.pendingSettingsPickerAction = null;
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
     this.serviceRegistry = null;
     this.secretsManager = null;
+    this.focusPane = 'settings';
   }
 
   /** Cycle to the next category (Tab). */
@@ -183,6 +193,31 @@ export class SettingsModal {
     } else if (this.currentCategory === 'subscriptions') {
       this._loadSubscriptionEntries();
     }
+  }
+
+  focusCategories(): void {
+    if (this.editingMode) return;
+    this.focusPane = 'categories';
+  }
+
+  focusSettings(): void {
+    if (this.editingMode) return;
+    this.focusPane = 'settings';
+  }
+
+  toggleFocusPane(): void {
+    if (this.editingMode) return;
+    this.focusPane = this.focusPane === 'settings' ? 'categories' : 'settings';
+  }
+
+  moveFocusedUp(): void {
+    if (this.focusPane === 'categories') this.prevCategory();
+    else this.moveUp();
+  }
+
+  moveFocusedDown(): void {
+    if (this.focusPane === 'categories') this.nextCategory();
+    else this.moveDown();
   }
 
   moveUp(): void {
@@ -222,23 +257,28 @@ export class SettingsModal {
   }
 
   getSelected(): SettingEntry | null {
-    return this._currentItems()[this.selectedIndex] ?? null;
+    const items = this._currentItems();
+    if (items.length === 0) return null;
+    return items[Math.max(0, Math.min(items.length - 1, this.selectedIndex))] ?? null;
   }
 
   /** Get the currently selected flag entry (flags tab only). */
   getSelectedFlag(): FlagEntry | null {
     if (this.currentCategory !== 'flags') return null;
-    return this.flagEntries[this.selectedIndex] ?? null;
+    if (this.flagEntries.length === 0) return null;
+    return this.flagEntries[Math.max(0, Math.min(this.flagEntries.length - 1, this.selectedIndex))] ?? null;
   }
 
   getSelectedMcp(): McpEntry | null {
     if (this.currentCategory !== 'mcp') return null;
-    return this.mcpEntries[this.selectedIndex] ?? null;
+    if (this.mcpEntries.length === 0) return null;
+    return this.mcpEntries[Math.max(0, Math.min(this.mcpEntries.length - 1, this.selectedIndex))] ?? null;
   }
 
   getSelectedSubscription(): SubscriptionEntry | null {
     if (this.currentCategory !== 'subscriptions') return null;
-    return this.subscriptionEntries[this.selectedIndex] ?? null;
+    if (this.subscriptionEntries.length === 0) return null;
+    return this.subscriptionEntries[Math.max(0, Math.min(this.subscriptionEntries.length - 1, this.selectedIndex))] ?? null;
   }
 
   get currentCategory(): SettingsCategory {
@@ -247,6 +287,31 @@ export class SettingsModal {
 
   get currentItems(): SettingEntry[] {
     return this._currentItems();
+  }
+
+  selectTarget(target?: string): void {
+    const normalized = target?.trim();
+    if (!normalized) return;
+
+    const categoryIndex = SETTINGS_CATEGORIES.indexOf(normalized as SettingsCategory);
+    if (categoryIndex >= 0) {
+      this.categoryIndex = categoryIndex;
+      this.selectedIndex = 0;
+      this.focusPane = 'settings';
+      return;
+    }
+
+    for (let index = 0; index < SETTINGS_CATEGORIES.length; index += 1) {
+      const category = SETTINGS_CATEGORIES[index]!;
+      const entries = this.groups.get(category) ?? [];
+      const entryIndex = entries.findIndex((entry) => entry.setting.key === normalized);
+      if (entryIndex >= 0) {
+        this.categoryIndex = index;
+        this.selectedIndex = entryIndex;
+        this.focusPane = 'settings';
+        return;
+      }
+    }
   }
 
   /**
@@ -283,6 +348,15 @@ export class SettingsModal {
     const { setting } = entry;
 
     // Delegate provider/model picker settings to the model picker UI
+    if (setting.key === 'tts.provider') {
+      this.pendingSettingsPickerAction = 'tts-provider';
+      return;
+    }
+    if (setting.key === 'tts.voice') {
+      this.pendingSettingsPickerAction = 'tts-voice';
+      return;
+    }
+
     const pickerLaunch = modelPickerLaunchForKey(setting.key);
     if (pickerLaunch !== null) {
       if (pickerLaunch.flow === 'providerModel') {
@@ -497,6 +571,20 @@ export class SettingsModal {
     this.mcpAllowAllConfirmationTarget = null;
   }
 
+  resetSelected(): { key: ConfigKey; value: unknown } | null {
+    if (this.editingMode || !this.configManager) return null;
+    const entry = this.getSelected();
+    if (!entry) return null;
+    const key = entry.setting.key as ConfigKey;
+    this._setValue(key, entry.setting.default);
+    if (isSecretConfigKey(key) && this.secretsManager) {
+      void this.secretsManager.delete(buildGoodVibesSecretKey(key), { scope: 'user' }).catch((error) => {
+        logger.error('SettingsModal: failed to clear secret while resetting setting', { key, error: summarizeError(error) });
+      });
+    }
+    return { key, value: entry.setting.default };
+  }
+
   /** Handle a keystroke in edit mode: regular chars appended, Backspace removes last char. */
   editChar(char: string): void {
     if (!this.editingMode) return;
@@ -519,21 +607,7 @@ export class SettingsModal {
 
     for (const setting of CONFIG_SCHEMA) {
       const rawCat = setting.key.split('.')[0] as string;
-      // Route helper.* settings into the tools group for unified display
-      // Route controlPlane.* and httpListener.* into the network group
-      let cat: SettingsCategory;
-      if (rawCat === 'helper') {
-        cat = 'tools';
-      } else if (rawCat === 'controlPlane' || rawCat === 'httpListener' || rawCat === 'web') {
-        cat = 'network';
-      } else if (rawCat === 'surfaces') {
-        cat = 'surfaces';
-      } else if (rawCat === 'cloudflare' || rawCat === 'batch') {
-        cat = 'cloudflare';
-      } else {
-        cat = rawCat as SettingsCategory;
-      }
-      if (!this.groups.has(cat)) continue;
+      const cat = rawCat as SettingsCategory;
       const currentValue = configManager.get(setting.key as ConfigKey);
       const resolved = getResolvedSettingLookup(configManager, setting.key as ConfigKey)?.entry;
       const entry: SettingEntry = {
@@ -546,7 +620,10 @@ export class SettingsModal {
         sourceLabel: resolved?.sourceLabel,
         lockReason: resolved?.lockReason,
       };
-      this.groups.get(cat)!.push(entry);
+      if (this.groups.has(cat)) this.groups.get(cat)!.push(entry);
+      if ((rawCat === 'controlPlane' || rawCat === 'httpListener' || rawCat === 'web') && this.groups.has('network')) {
+        this.groups.get('network')!.push(entry);
+      }
     }
 
     const uiEntries = this.groups.get('ui');
@@ -589,94 +666,7 @@ export class SettingsModal {
   }
 
   private _loadSubscriptionEntries(): void {
-    const manager = this.subscriptionManager;
-    if (!manager) {
-      this.subscriptionEntries = [];
-      return;
-    }
-    const services = this.serviceRegistry?.getAll() ?? {};
-    const providers = new Map<string, SubscriptionEntry>();
-    const builtinProviders = new Set(listBuiltinSubscriptionProviders().map((builtin) => builtin.provider));
-
-    const determineFreshness = (expiresAt?: number): ProviderAuthFreshness => {
-      if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) return 'healthy';
-      if (expiresAt <= Date.now()) return 'expired';
-      if (expiresAt <= Date.now() + 24 * 60 * 60 * 1000) return 'expiring';
-      return 'healthy';
-    };
-
-    for (const provider of builtinProviders) {
-      providers.set(provider, {
-        provider,
-        state: 'available',
-        oauthConfigured: true,
-        preferredRoute: 'subscription',
-        activeRoute: 'unconfigured',
-        authFreshness: 'unconfigured',
-        routeReason: 'Built-in subscription adapter is available, but no active subscription session is stored yet.',
-        nextActions: [`Use /subscription login ${provider} start to begin browser sign-in.`],
-      });
-    }
-
-    for (const service of Object.values(services)) {
-      if (service.authType === 'oauth' && service.oauth) {
-        const provider = service.providerId ?? service.name;
-        providers.set(provider, {
-          provider,
-          state: 'available',
-          oauthConfigured: true,
-          preferredRoute: 'subscription',
-          activeRoute: providers.get(provider)?.activeRoute ?? 'unconfigured',
-          authFreshness: providers.get(provider)?.authFreshness ?? 'unconfigured',
-          routeReason: providers.get(provider)?.routeReason ?? 'OAuth metadata is configured for this provider.',
-          nextActions: providers.get(provider)?.nextActions ?? [`Use /subscription login ${provider} start to begin browser sign-in.`],
-        });
-      }
-    }
-
-    for (const pending of manager.listPending()) {
-      providers.set(pending.provider, {
-        provider: pending.provider,
-        state: 'pending',
-        oauthConfigured: providers.get(pending.provider)?.oauthConfigured ?? false,
-        preferredRoute: 'subscription',
-        activeRoute: 'unconfigured',
-        authFreshness: 'pending',
-        routeReason: 'OAuth login is pending completion for this provider.',
-        nextActions: [`Finish /subscription login ${pending.provider} finish <code> to activate this session.`],
-      });
-    }
-
-    for (const subscription of manager.list()) {
-      const freshness = determineFreshness(subscription.expiresAt);
-      const issues = freshness === 'expired'
-        ? ['Stored subscription session is expired and needs refresh.']
-        : freshness === 'expiring'
-          ? ['Stored subscription session expires within 24 hours.']
-          : [];
-      const nextActions = freshness === 'expired'
-        ? [`Refresh or replace the ${subscription.provider} subscription session.`]
-        : freshness === 'expiring'
-          ? [`Verify or renew the ${subscription.provider} subscription session soon.`]
-          : [];
-      providers.set(subscription.provider, {
-        provider: subscription.provider,
-        state: 'active',
-        tokenType: subscription.tokenType,
-        expiresAt: subscription.expiresAt,
-        oauthConfigured: providers.get(subscription.provider)?.oauthConfigured ?? builtinProviders.has(subscription.provider),
-        activeRoute: freshness === 'expired' ? 'unconfigured' : 'subscription',
-        preferredRoute: 'subscription',
-        authFreshness: freshness,
-        routeReason: subscription.overrideAmbientApiKeys
-          ? 'Subscription route overrides ambient API-key resolution for this provider.'
-          : 'Subscription route is stored for supported flows without automatically replacing ambient API-key resolution.',
-        issues,
-        nextActions,
-      });
-    }
-
-    this.subscriptionEntries = [...providers.values()].sort((a, b) => a.provider.localeCompare(b.provider));
+    this.subscriptionEntries = buildSubscriptionEntries(this.subscriptionManager, this.serviceRegistry);
   }
 
   /**
@@ -706,7 +696,6 @@ export class SettingsModal {
     if (this.currentCategory === 'flags' || this.currentCategory === 'mcp' || this.currentCategory === 'subscriptions') return [];
     const items = this.groups.get(this.currentCategory) ?? [];
     if (this.currentCategory === 'network') {
-      // Hide host fields when the corresponding hostMode is not 'custom'
       return items.filter(entry => {
         if (entry.setting.key === 'controlPlane.host') {
           const hostMode = this.configManager?.get('controlPlane.hostMode');
@@ -733,40 +722,23 @@ export class SettingsModal {
     const isRestartKey = ['host', 'port', 'hostMode', 'enabled'].includes(key.split('.')[1] ?? '');
     try {
       this.configManager.setDynamic(key, value);
-      // Update the cached entry in-place — avoids full schema re-scan on each edit
       const rawCat = key.split('.')[0] as string;
-      // Resolve the display category from the key prefix
-      let cat: SettingsCategory;
-      if (rawCat === 'helper') {
-        cat = 'tools';
-      } else if (rawCat === 'controlPlane') {
-        cat = 'network';
-        // SDK auto-restarts the daemon server on controlPlane binding changes
+      if (rawCat === 'controlPlane') {
         if (isRestartKey && previousValue !== value) {
           this.lastSaveTriggeredRestart = 'control-plane';
         }
       } else if (rawCat === 'httpListener') {
-        cat = 'network';
-        // SDK auto-restarts the HTTP listener on binding changes
         if (isRestartKey && previousValue !== value) {
           this.lastSaveTriggeredRestart = 'http-listener';
         }
       } else if (rawCat === 'web') {
-        cat = 'network';
-        // SDK auto-restarts the web server on binding changes
         if (isRestartKey && previousValue !== value) {
           this.lastSaveTriggeredRestart = 'web';
         }
-      } else if (rawCat === 'surfaces') {
-        cat = 'surfaces';
-      } else if (rawCat === 'cloudflare' || rawCat === 'batch') {
-        cat = 'cloudflare';
-      } else {
-        cat = rawCat as SettingsCategory;
       }
-      const entries = this.groups.get(cat);
-      if (entries) {
-        const entry = entries.find(e => e.setting.key === key);
+
+      for (const entries of this.groups.values()) {
+        const entry = entries.find((candidate) => candidate.setting.key === key);
         if (entry) {
           entry.currentValue = this.configManager!.get(key);
           entry.isDefault = entry.currentValue === entry.setting.default;

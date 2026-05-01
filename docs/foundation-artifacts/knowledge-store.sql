@@ -114,6 +114,33 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_job_runs_job_id ON knowledge_job_runs(j
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_job_runs_requested_at ON knowledge_job_runs(requested_at);
 
+CREATE TABLE IF NOT EXISTS knowledge_refinement_tasks (
+      id TEXT PRIMARY KEY,
+      space_id TEXT NOT NULL,
+      subject_kind TEXT,
+      subject_id TEXT,
+      subject_title TEXT,
+      subject_type TEXT,
+      gap_id TEXT,
+      issue_id TEXT,
+      state TEXT NOT NULL,
+      priority TEXT NOT NULL,
+      trigger TEXT NOT NULL,
+      budget TEXT NOT NULL DEFAULT '{}',
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      blocked_reason TEXT,
+      trace TEXT NOT NULL DEFAULT '[]',
+      metadata TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_refinement_space_state ON knowledge_refinement_tasks(space_id, state);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_refinement_gap ON knowledge_refinement_tasks(gap_id);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_refinement_subject ON knowledge_refinement_tasks(subject_kind, subject_id);
+
 CREATE TABLE IF NOT EXISTS knowledge_usage_records (
       id TEXT PRIMARY KEY,
       target_kind TEXT NOT NULL,

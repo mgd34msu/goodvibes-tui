@@ -4,7 +4,7 @@ import type { CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';
 import { renderFilePickerOverlay } from './file-picker-overlay.ts';
-import { MODEL_PICKER_CHROME_LINES, renderModelPickerOverlay } from './model-picker-overlay.ts';
+import { renderModelWorkspace } from './model-workspace.ts';
 import { renderSelectionModalOverlay } from './selection-modal-overlay.ts';
 import { renderSearchOverlay } from './search-overlay.ts';
 import { renderHistorySearchOverlay } from './history-search-overlay.ts';
@@ -50,9 +50,8 @@ export function applyConversationOverlays(
   }
 
   if (input.modelPicker.active) {
-    const maxVisible = Math.max(5, viewportHeight - MODEL_PICKER_CHROME_LINES - 4);
-    const lines = renderModelPickerOverlay(input.modelPicker, conversationWidth, maxVisible, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
+    const lines = renderModelWorkspace(input.modelPicker, conversationWidth, viewportHeight);
+    next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
   }
 
   if (input.selectionModal.active) {
@@ -90,7 +89,7 @@ export function applyConversationOverlays(
 
   if (input.settingsModal.active) {
     const lines = renderSettingsModal(input.settingsModal, conversationWidth, viewportHeight);
-    next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
+    next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
   }
 
   if (input.sessionPickerModal.active) {

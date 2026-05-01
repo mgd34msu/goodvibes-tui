@@ -2,7 +2,39 @@ import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config/schema
 import type { ProviderAuthFreshness, ProviderAuthRoute } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
 import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
 
-export type SettingsCategory = 'display' | 'ui' | 'provider' | 'subscriptions' | 'behavior' | 'storage' | 'permissions' | 'mcp' | 'sandbox' | 'surfaces' | 'cloudflare' | 'danger' | 'tools' | 'flags' | 'network';
+export type SettingsCategory =
+  | 'display'
+  | 'ui'
+  | 'provider'
+  | 'subscriptions'
+  | 'behavior'
+  | 'storage'
+  | 'permissions'
+  | 'orchestration'
+  | 'wrfc'
+  | 'tools'
+  | 'helper'
+  | 'tts'
+  | 'service'
+  | 'controlPlane'
+  | 'httpListener'
+  | 'web'
+  | 'network'
+  | 'surfaces'
+  | 'cloudflare'
+  | 'batch'
+  | 'automation'
+  | 'watchers'
+  | 'runtime'
+  | 'telemetry'
+  | 'cache'
+  | 'sandbox'
+  | 'mcp'
+  | 'flags'
+  | 'release'
+  | 'danger';
+
+export type SettingsFocusPane = 'categories' | 'settings';
 
 export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'display',
@@ -12,14 +44,29 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
   'behavior',
   'storage',
   'permissions',
+  'orchestration',
+  'wrfc',
+  'tools',
+  'helper',
+  'tts',
+  'service',
+  'controlPlane',
+  'httpListener',
+  'web',
+  'network',
   'mcp',
   'sandbox',
   'surfaces',
   'cloudflare',
+  'batch',
+  'automation',
+  'watchers',
+  'runtime',
+  'telemetry',
+  'cache',
   'danger',
-  'tools',
   'flags',
-  'network',
+  'release',
 ];
 
 export interface SettingEntry {

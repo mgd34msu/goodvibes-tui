@@ -50,8 +50,50 @@ The knowledge runtime supports:
 - projection rendering/materialization
 - scheduled jobs
 - consolidation candidates and reports
+- source-backed semantic ask answers with returned sources, facts, linked objects, gaps, confidence, and synthesized state
 
 The system is designed as a reviewed, self-improving knowledge substrate for future task context.
+
+## Semantic Ask
+
+The SDK owns semantic question answering through:
+
+- `POST /api/knowledge/ask`
+- operator method `knowledge.ask`
+- local TUI command `/knowledge ask <query> [--space <knowledgeSpaceId>] [--limit <n>] [--mode <concise|standard|detailed>]`
+
+SDK-owned semantic enrichment supports provider-backed LLM extraction with timeout, abort, and concurrency controls. Broad reindex caps LLM attempts and then continues with deterministic extraction, so hosts should wire the SDK semantic service rather than implementing their own timeout or concurrency shim.
+
+TUI rendering should display the answer object returned by the SDK:
+
+- `answer.text`
+- `answer.sources`
+- `answer.facts`
+- `answer.linkedObjects`
+- `answer.gaps`
+- `answer.confidence`
+- `answer.synthesized`
+
+Do not reformat search results into local answer snippets. The SDK response is the answer contract; the TUI only presents it.
+
+## Durable Refinement
+
+SDK 0.28.0 adds durable semantic refinement tasks for the base knowledge layer. Refinement records preserve the gap, subject, state, trace, source assessments, blocked reasons, accepted facts, rejected evidence, and follow-up state so clients can explain what the knowledge system attempted instead of only reporting "skipped".
+
+Daemon routes:
+
+```text
+GET  /api/knowledge/refinement/tasks
+GET  /api/knowledge/refinement/tasks/{id}
+POST /api/knowledge/refinement/run
+POST /api/knowledge/refinement/tasks/{id}/cancel
+```
+
+The list route accepts filters such as `knowledgeSpaceId` or `spaceId`, `state`, `subjectKind`, `subjectId`, `gapId`, and `limit`. `POST /api/knowledge/refinement/run` is admin-gated and accepts `knowledgeSpaceId` or `spaceId`, optional `gapIds`, optional `sourceIds`, `limit`, and `force`.
+
+Use these SDK routes directly for task inspection and manual repair runs. Do not duplicate the refinement state machine in the TUI.
+
+The TUI daemon runtime wires SDK semantic refinement to the SDK web gap repairer. Gap repair uses the configured GoodVibes web search providers for source discovery and the knowledge ingest service for accepted repair sources. If web search providers are unavailable or disabled, tasks may still become blocked by search/provider readiness, but they should not report `No semantic gap repairer is configured`.
 
 ## Issue Review
 
@@ -176,6 +218,7 @@ Knowledge jobs include:
 - `refresh-stale`
 - `refresh-bookmarks`
 - `rebuild-projections`
+- `knowledge-semantic-self-improvement`
 - `light-consolidation`
 - `deep-consolidation`
 
@@ -184,7 +227,7 @@ These can be run directly or saved as schedules through the runtime.
 ## High-signal commands
 
 - `/recall add|search|queue|review|explain|promote|capture`
-- `/knowledge status|ingest-url|import-bookmarks|import-urls|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
+- `/knowledge status|ask|ingest-url|import-bookmarks|import-urls|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate`
 - `/memory-sync`
 - `/handoff`
 - `/session-memory`

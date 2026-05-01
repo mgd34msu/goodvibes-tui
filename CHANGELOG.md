@@ -4,6 +4,32 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.54] — 2026-05-01
+
+### Added
+- Added a TUI-owned Project Planning coordinator that detects explicit planning intent in normal terminal conversation, stores project-scoped planning state through the SDK, records open-question answers, and keeps daemon/non-TUI surfaces passive.
+- Added the `Planning` panel for project readiness, next questions, gaps, task graph, verification gates, decisions, project language, and agent handoff metadata.
+- Added documentation for TUI project planning, project-scoped knowledge spaces, the Planning panel, and passive SDK route/operator boundaries.
+- Added `/knowledge ask <query>` to render the SDK-returned semantic answer, sources, facts, linked objects, gaps, confidence, and synthesized state without locally building snippets from search results.
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.28.0`.
+- Reworked `/plan` so it inspects/seeds SDK-backed project planning state and no longer injects a model-authored execution-plan prompt that claims agents will spawn automatically.
+- Wired the SDK semantic knowledge service into both base knowledge and Home Graph routes, using the SDK-owned bounded provider-backed semantic LLM wrapper with timeout, abort, concurrency, and capped broad-reindex LLM attempts.
+- Wired the SDK web-backed semantic gap repairer into the TUI/daemon runtime composition so Home Graph and base knowledge refinement can search, ingest, and repair gaps instead of reporting an unconfigured repairer.
+- Routed main provider/model, helper/tool/TTS model overrides, TTS provider/voice selection, secret-backed settings, MCP trust, subscriptions, feature flags, and all SDK config keys through the fullscreen `/config` workspace.
+- Kept `/model`, `/provider`, and `/effort` as quick access model-selection commands while `/config` owns persistent settings.
+- Documented SDK 0.28.0 durable knowledge refinement routes, Home Graph readiness/refinement tasks/pages/map facets, daemon OpenAI-compatible `/v1/models` and `/v1/chat/completions`, and non-terminal provider-scoped `STREAM_END` semantics.
+
+### Fixed
+- Picked up SDK Home Graph map, ask, PDF repair, reindex, generated-page, and shared semantic knowledge/wiki fixes through `0.27.8`, including SDK-owned knowledge/Home Graph map facets, Home Assistant map filters, trailing-slash/JSON POST map compatibility, tighter TV/media-player question scoping, repair-needed handling for garbled PDF extraction text, compressed PDF stream extraction, source auto-linking by Home Assistant identity/model, `GET /api/homeassistant/home-graph/pages`, base `POST /api/knowledge/ask`, semantic Home Graph answer fields, strict candidate filtering, cleaner deterministic fact filtering by query intent, tighter semantic evidence ranking, safer subject-term handling, generated semantic page/fact anchor suppression, deterministic-to-provider enrichment upgrades, feature/spec boilerplate suppression, generated page fact-quality filtering, semantic artifact exclusion from linked objects, non-blocking Home Graph answer synthesis while semantic enrichment continues in the background, truncated deterministic fragment filtering, and lower-value manual/accessory/service text filtering in feature/spec answer prompts.
+- Kept `/tts` spoken turns active across provider-scoped `STREAM_END` events so tool-using or multi-step turns continue collecting assistant deltas until `TURN_COMPLETED`, `TURN_ERROR`, `TURN_CANCEL`, or `PREFLIGHT_FAIL`.
+
+### Removed
+- Removed the superseded `/config-old` raw config command and `/config-tts` TTS configuration command; TTS settings now live under `/config tts`.
+
+---
+
 ## [0.19.53] — 2026-04-28
 
 ### Added

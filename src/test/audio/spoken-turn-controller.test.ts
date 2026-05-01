@@ -81,6 +81,21 @@ describe('SpokenTurnController', () => {
     expect(played).toEqual(['Hello there.']);
   });
 
+  test('does not treat provider STREAM_END as the logical spoken-turn end', async () => {
+    const { controller, synthesized, played } = makeHarness();
+
+    expect(controller.submitNextTurn('check the weather')).toBe(true);
+    controller.handleTurnEvent(turn({ type: 'TURN_SUBMITTED', turnId: 'turn-tool', prompt: 'check the weather' }));
+    controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 'turn-tool', content: 'Checking. ', accumulated: 'Checking. ' }));
+    controller.handleTurnEvent(turn({ type: 'STREAM_END', turnId: 'turn-tool', scope: 'provider', terminal: false }));
+    controller.handleTurnEvent(turn({ type: 'STREAM_DELTA', turnId: 'turn-tool', content: 'Tonight will be cool.', accumulated: 'Checking. Tonight will be cool.' }));
+    controller.handleTurnEvent(turn({ type: 'TURN_COMPLETED', turnId: 'turn-tool', response: 'Checking. Tonight will be cool.', stopReason: 'completed' }));
+    await drain();
+
+    expect(synthesized).toEqual(['fake-provider:fake-voice:Checking. Tonight will be cool.']);
+    expect(played).toEqual(['Checking. Tonight will be cool.']);
+  });
+
   test('keeps the normal turn alive when player is unavailable', () => {
     const messages: string[] = [];
     const controller = new SpokenTurnController({

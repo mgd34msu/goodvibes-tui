@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.19.53-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.19.54-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -165,7 +165,7 @@ The TUI now consumes the extracted `@pellux/goodvibes-sdk` platform layer for sh
 - Controller-flagged synthetic issues render above reviewer issues as `[CRITICAL]` "Controller flags"
 - Agent-detail modal surfaces `systemPromptAddendum` (WRFC engineer addendum) when present on the agent record
 - System-message router surfaces `WORKFLOW_CONSTRAINTS_ENUMERATED` as an operator-visible message when constraints are loaded
-- Built-in planning/strategy layer with execution plans, adaptive plan modes, and status/explain/override controls
+- Built-in planning/strategy layer with TUI-owned project planning, passive SDK-backed planning artifacts, execution plans, adaptive plan modes, and status/explain/override controls
 
 ### Tools And Intelligence
 - Built-in native tools include `read`, `write`, `edit`, `find`, `exec`, `fetch`, `web-search`, `analyze`, `inspect`, `agent`, `state`, `workflow`, `registry`, `task`, `team`, `worklist`, `mcp`, `packet`, `query`, `remote`, `repl`, `control`, and `channel`
@@ -492,7 +492,7 @@ Settings are layered, not stored in a single working-directory file:
 - project overrides: `.goodvibes/tui/settings.json`
 - CLI/runtime overrides
 
-The shared file `~/.goodvibes/goodvibes.json` is reserved for future cross-app state; TUI settings do not live there. You can view and edit settings live with `/config` or the `/settings` modal.
+The shared file `~/.goodvibes/goodvibes.json` is reserved for future cross-app state; TUI settings do not live there. You can view and edit settings live with the fullscreen `/config` workspace or `/settings`.
 
 Related storage paths:
 
@@ -808,7 +808,8 @@ GoodVibes includes an automation layer with:
 - hook-point contracts with execution authority, mutation/injection permissions, timeout policy, and failure policy metadata
 - workflow state machines such as `wrfc`, `fix_loop`, `test_then_fix`, and `review_only`
 - cron-like scheduled agent tasks with timezone-aware schedules, missed-run tracking, run history, and manual trigger support
-- planning commands with active-plan review, mode/explain/override/status controls, and model-authored execution-plan generation
+- TUI-owned project planning with readiness gaps, one-question-at-a-time clarification, project language, decision records, task/dependency/verification metadata, and explicit execution approval
+- planning commands with project-planning inspection, active-plan review, and mode/explain/override/status controls
 
 Key commands:
 
@@ -1201,16 +1202,15 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `/model [id]` | `/m` | Select or display the current LLM model |
-| `/provider [name]` | `/p` | Switch provider, or `add <name> <baseURL> [apiKey]` / `remove <name>` |
+| `/model [id]` | `/m` | Open the fullscreen provider/model workspace, or set the current model by id |
+| `/provider [name]` | `/p` | Open provider-first model selection, or `add <name> <baseURL> [apiKey]` / `remove <name>` |
 | `/effort [level]` | `/e` | Show or set reasoning effort level |
-| `/config [key] [value]` | `/cfg` | Show, set, or reset config values. Subcommands: `profile`, `diff`, `reset` |
+| `/config [category\|key]` | `/cfg` | Open the fullscreen configuration workspace for all SDK config keys, TTS settings, model routes, secrets-backed settings, MCP trust, subscriptions, and feature flags |
 | `/debug` | — | Toggle debug mode |
-| `/lines [all\|code\|off]` | — | Cycle or set line-number mode |
 | `/expand [type]` | — | Expand blocks by type (all/thinking/tool/code) |
 | `/collapse [type]` | — | Collapse blocks by type |
 | `/bookmarks` | `/bm` | List bookmarked blocks |
-| `/settings` | `/cfg-ui` | Open the config/settings browser modal |
+| `/settings` | `/cfg-ui` | Open the fullscreen configuration workspace |
 | `/clear` | `/cls` | Clear the conversation display (keeps LLM context) |
 | `/reset` | — | Full reset: clear display and conversation context |
 | `/compact` | — | Compact conversation context using hybrid structured compaction (v2) |
@@ -1226,7 +1226,6 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/retry [text]` | `/r` | Re-send the last user message |
 | `/template` | `/tmpl` | Manage prompt templates: save, use, list, edit, delete |
 | `/tools` | `/t` | List available tools |
-| `/permissions` | `/perms` | Show or set permission mode and per-tool settings |
 | `/secrets` | — | Manage encrypted and provider-backed API key secrets (set/link/get/test/list/delete) |
 | `/services` | `/svc` | Manage API service configurations |
 | `/accounts [action]` | — | Review provider-account routes, auth posture, and repair actions |
@@ -1242,7 +1241,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/unpin [id]` | — | Remove a model from favorites |
 | `/git [action]` | `/g` | Git commands: status, log, diff. Opens git panel if no action given |
 | `/scan` | — | Scan for local LLM servers |
-| `/plan [task]` | — | Manage execution plans: create, list, or `show <id>` |
+| `/plan [goal]` | — | Inspect or seed TUI-owned project planning state; `panel`, `approve`, `list`, and `show <id>` are supported |
 | `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split, width, height |
 | `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
 | `/marketplace [action]` | — | Browse curated plugin, skill, hook-pack, and policy-pack surfaces |
@@ -1264,14 +1263,12 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/commands` | `/cmds` | Browse all commands in a scrollable list |
 | `/shortcuts` | `/keys`, `/keybinds` | Show keyboard shortcuts reference |
 | `/keybindings` | `/kb` | List current keyboard bindings and their config file path |
-| `/danger [key] [value]` | — | Danger zone settings (agent recursion, daemon, HTTP listener) |
 | `/schedule [action]` | `/sched` | Manage scheduled agent tasks (cron): add, list, remove, enable, disable, run |
 | `/image <path>` | `/img` | Attach an image file to the next message |
 | `/refresh-models` | — | Refresh model catalog, benchmarks, and token limits |
 | `/notify [action]` | `/ntf` | Manage webhook notifications (ntfy.sh): add, remove, list, clear, test |
 | `/voice [action]` | — | Review optional voice posture and export/inspect voice bundles |
 | `/tts <prompt>` | — | Submit a normal prompt and play the assistant response through live TTS |
-| `/config-tts [action]` | `/tts-config` | Open TTS configuration for provider, voice, and optional `/tts` response-model override |
 | `/cloudflare [action]` | `/cf` | Configure optional Cloudflare Workers/Queues batch and remote control-plane provisioning |
 | `/diff [target]` | `/d` | Show unified diff: session, head, working, staged, or a git ref |
 | `/mcp [tools]` | — | List connected MCP servers and their tools |

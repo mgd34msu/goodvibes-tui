@@ -103,12 +103,8 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/model', label: '/model [id]', detail: 'Select LLM model', category: 'Model & Provider' },
           { id: '/provider', label: '/provider [name]', detail: 'Switch provider', category: 'Model & Provider' },
           { id: '/effort', label: '/effort [level]', detail: 'Reasoning effort (instant/low/medium/high)', category: 'Model & Provider' },
-          { id: '/config', label: '/config [key] [value]', detail: 'Show or set config values', category: 'Config & Display' },
-          { id: '/config diff', label: '/config diff', detail: 'Show changed settings', category: 'Config & Display' },
-          { id: '/config reset', label: '/config reset [key]', detail: 'Reset to defaults', category: 'Config & Display' },
-          { id: '/config profile', label: '/config profile ...', detail: 'Save/load/list/delete profiles', category: 'Config & Display' },
+          { id: '/config', label: '/config [category|key]', detail: 'Open fullscreen configuration workspace', category: 'Config & Display' },
           { id: '/debug', label: '/debug', detail: 'Toggle debug mode', category: 'Config & Display' },
-          { id: '/lines', label: '/lines', detail: 'Set line numbers: all, code, or off', category: 'Config & Display' },
           { id: '/expand', label: '/expand [type]', detail: 'Expand blocks (all|thinking|tool|code)', category: 'Config & Display' },
           { id: '/collapse', label: '/collapse [type]', detail: 'Collapse blocks', category: 'Config & Display' },
           { id: '/bookmarks', label: '/bookmarks', detail: 'List bookmarked blocks', category: 'Config & Display' },
@@ -140,11 +136,9 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/template save', label: '/template save <name>', detail: 'Save prompt as template', category: 'Templates' },
           { id: '/template use', label: '/template use <name>', detail: 'Execute template', category: 'Templates' },
           { id: '/tools', label: '/tools', detail: 'List available tools', category: 'Tools & System' },
-          { id: '/permissions', label: '/permissions', detail: 'Permission settings', category: 'Tools & System' },
           { id: '/shortcuts', label: '/shortcuts', detail: 'View keyboard shortcuts reference', category: 'Tools & System' },
           { id: '/commands', label: '/commands', detail: 'Browse all commands in a scrollable list', category: 'Tools & System' },
           { id: '/secrets', label: '/secrets set|link|get|test|list|delete', detail: 'Manage encrypted and provider-backed secrets', category: 'Tools & System' },
-          { id: '/danger', label: '/danger [key] [value]', detail: 'DANGEROUS SETTINGS', category: 'Tools & System', fg: '#ef4444' },
           { id: '/help', label: '/help', detail: 'This help', category: 'Tools & System' },
           { id: '/quit', label: '/quit', detail: 'Exit', category: 'Tools & System' },
           { id: '/wq', label: '/wq', detail: 'Commit all git changes and then exit', category: 'Tools & System' },
@@ -161,7 +155,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         });
         return;
       }
-      ctx.print('Use /help to open the help modal. Commands: /model, /provider, /config, /template, /tools, /permissions, /sessions, /bookmarks, /save, /load, /undo, /redo, /retry, /clear, /reset, /compact, /export, /title, /effort, /lines, /expand, /collapse, /debug, /quit, /wq');
+      ctx.print('Use /help to open the help modal. Commands: /model, /provider, /config, /template, /tools, /sessions, /bookmarks, /save, /load, /undo, /redo, /retry, /clear, /reset, /compact, /export, /title, /effort, /expand, /collapse, /debug, /quit, /wq');
     },
   });
 
@@ -292,30 +286,4 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     },
   });
 
-  registry.register({
-    name: 'lines',
-    aliases: [],
-    description: 'Set line-number display: all, code, or off',
-    handler(args, ctx) {
-      const current = ctx.platform.configManager.get('display.lineNumbers');
-      const aliases: Record<string, 'all' | 'code' | 'off'> = {
-        on: 'all',
-        all: 'all',
-        code: 'code',
-        blocks: 'code',
-        off: 'off',
-      };
-      const cycle: Array<'all' | 'code' | 'off'> = ['all', 'code', 'off'];
-      const requested = args[0]?.toLowerCase();
-      const next = requested ? aliases[requested] : cycle[(cycle.indexOf(current) + 1) % cycle.length]!;
-      if (requested && !next) {
-        ctx.print('Usage: /lines [all|code|off]');
-        return;
-      }
-      ctx.platform.configManager.set('display.lineNumbers', next);
-      const label = next === 'all' ? 'ON (all lines)' : next === 'code' ? 'CODE BLOCKS ONLY' : 'OFF';
-      ctx.print(`Line numbers: ${label}`);
-      ctx.renderRequest();
-    },
-  });
 }

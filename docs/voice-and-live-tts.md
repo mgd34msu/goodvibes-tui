@@ -12,22 +12,18 @@ The `/tts` command does not replace text output. The normal assistant response s
 ```text
 /tts <prompt>
 /tts stop
-/config-tts
-/config-tts providers
-/config-tts voices [provider]
-/config-tts llm
-/config-tts llm clear
-/config-tts provider <provider-id|clear>
-/config-tts voice <voice-id|clear>
-/config-tts llm-provider <provider-id|clear>
-/config-tts llm-model <model-id|clear>
+/config tts
+/config tts.provider
+/config tts.voice
+/config tts.llmProvider
+/config tts.llmModel
 ```
 
 `/tts <prompt>` submits the prompt through the normal conversation path. It uses the active chat provider/model by default, unless a separate TTS response model override is configured. Assistant deltas are chunked at sentence or phrase boundaries and sent to streaming TTS in order. Audio failures are reported as non-blocking TUI status messages and do not cancel the text turn.
 
 `/tts stop` cancels pending TTS requests, kills active playback, and clears the queued audio chunks.
 
-`/config-tts` opens the TTS configuration modal in the TUI. From there users can choose the streaming TTS provider, choose a voice from that provider, open the shared provider-to-model picker for the TTS response model override, or clear voice/model overrides.
+`/config tts` opens the fullscreen configuration workspace at the TTS category. From there users can choose the streaming TTS provider, choose a voice from that provider, open the fullscreen provider/model workspace for the TTS response model override, clear text fields, or reset selected settings.
 
 The modal and direct commands write the SDK TTS config keys:
 
@@ -36,7 +32,9 @@ The modal and direct commands write the SDK TTS config keys:
 - `tts.llmProvider`
 - `tts.llmModel`
 
-By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config-tts llm`, `/config-tts llm-provider`, or `/config-tts llm-model`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model. The interactive path starts with provider selection and then shows models for that provider, using the same picker flow as the main model/provider commands.
+By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model. Selecting either TTS LLM row opens the same fullscreen provider/model workspace used by the main model/provider commands, with the target route set to `TTS LLM`.
+
+Spoken turns stay active until the logical turn reaches `TURN_COMPLETED`, `TURN_ERROR`, `TURN_CANCEL`, or `PREFLIGHT_FAIL`. SDK `STREAM_END` is provider-stream scoped and non-terminal, so tool-using or multi-step `/tts` turns must not stop audio collection just because one provider stream iteration ended.
 
 ## Playback Requirements
 
@@ -51,14 +49,14 @@ If neither player is on `PATH`, `/tts` still submits and renders the normal text
 
 Live TTS uses voice providers that advertise the `tts-stream` capability. The TUI does not hardcode provider behavior. It asks the SDK voice service for streaming synthesis and uses the configured provider/voice defaults.
 
-Useful discovery commands:
+Useful setup path:
 
 ```text
-/config-tts providers
-/config-tts voices elevenlabs
+/config tts.provider
+/config tts.voice
 ```
 
-In the TUI these open selection modals that set the chosen provider or voice. In non-interactive command contexts they print the available IDs and the direct setter command.
+In the TUI these rows open selection pickers that set the chosen streaming provider or provider-specific voice.
 
 For ElevenLabs, configure provider credentials in the environment before starting GoodVibes:
 
@@ -71,9 +69,10 @@ export XI_API_KEY=...
 Then set the TTS defaults if desired:
 
 ```text
-/config-tts provider elevenlabs
-/config-tts voice <voice-id>
-/config-tts llm
+/config tts.provider
+/config tts.voice
+/config tts.llmProvider
+/config tts.llmModel
 ```
 
 Leaving `tts.voice` empty lets the provider choose its default voice.
