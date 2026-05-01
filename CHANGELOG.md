@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.58] — 2026-05-01
+
+### Fixed
+- Patched Bun compiled binaries for jsdom's synchronous XHR worker path so the daemon no longer tries to resolve `xhr-sync-worker.js` from the build runner path at runtime.
+
+---
+
 ## [0.19.57] — 2026-05-01
 
 ### Changed
