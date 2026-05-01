@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.59] — 2026-05-01
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.28.3`.
+- Picked up SDK Home Graph refinement coalescing so overlapping Refine/Reindex/Ask repair work should not stack and pin the daemon.
+
+### Fixed
+- Picked up SDK preservation of Home Graph `linkedObjects` from repair-source metadata.
+
+---
+
 ## [0.19.58] — 2026-05-01
 
 ### Fixed
