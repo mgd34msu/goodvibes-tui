@@ -141,6 +141,8 @@ SDK 0.28.0 adds durable Home Graph refinement tasks and exposes them through `/a
 
 SDK 0.28.1 keeps Home Graph repair asynchronous for interactive flows. Ask should return quickly with the current evidence plus `answer.refinementTaskIds` when repair is queued. Reindex queues repair work instead of blocking on all repair attempts. Broad refinement runs cap effective work per invocation and report truncation or budget exhaustion. Stale `searching` or `evaluating` tasks older than the SDK recovery window are recovered to retriable blocked state on the next run.
 
+SDK 0.28.2 fixes the published dist guardrail path for Home Graph refinement budgets. Runtime dist now defaults to 12 refinement gaps per run and caps the effective limit at 24. It also reopens historical `No semantic gap repairer is configured` tasks when the TUI daemon has the SDK web-backed repairer wired, so those old blocked tasks should be retried as normal repair candidates rather than treated as evidence of a current host wiring failure.
+
 The TUI daemon composes the SDK Home Graph service with the SDK web-backed semantic gap repairer. Refinement tasks can therefore search for candidate repair sources, ingest accepted sources into knowledge, and continue the SDK refinement state machine. A task blocked with `No semantic gap repairer is configured` indicates a stale daemon or a host composition bug rather than a Home Assistant client issue.
 
 ## Secrets

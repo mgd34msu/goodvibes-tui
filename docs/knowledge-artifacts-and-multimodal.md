@@ -82,6 +82,8 @@ SDK 0.28.0 adds durable semantic refinement tasks for the base knowledge layer. 
 
 SDK 0.28.1 makes refinement runs budget-aware and non-blocking for user-facing routes. Ask routes should answer from current evidence and return `refinementTaskIds` when repair work is queued or still running. Reindex should queue repair instead of waiting for every repair to finish. Broad `refinement/run` calls cap effective work per run and report truncation or budget exhaustion rather than pinning the daemon. Stale `searching` or `evaluating` tasks older than the SDK recovery window are moved back to a retriable blocked state on the next run.
 
+SDK 0.28.2 fixes the published dist guardrail path for refinement budgets. Runtime dist uses 12 refinement gaps as the default run size and 24 as the maximum effective limit. It also reopens historical `No semantic gap repairer is configured` tasks once the host has wired the SDK web-backed repairer, so old blocked tasks should no longer look like current host composition failures after a run reaches them.
+
 Daemon routes:
 
 ```text

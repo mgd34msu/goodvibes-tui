@@ -4,6 +4,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.57] — 2026-05-01
+
+### Changed
+- Updated `@pellux/goodvibes-sdk` to `0.28.2`.
+- Documented SDK `0.28.2` Home Graph refinement guardrails: runtime dist now defaults to 12 refinement gaps per run, caps broad runs at 24 gaps, and reopens historical `No semantic gap repairer is configured` tasks when the host repairer is wired.
+
+### Fixed
+- Picked up SDK fixes for the stale published dist refinement guardrail bug and stale no-repairer task recovery.
+
+---
+
 ## [0.19.56] — 2026-05-01
 
 ### Fixed
