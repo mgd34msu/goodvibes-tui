@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.56] — 2026-05-01
+
+### Fixed
+- Fixed compiled release daemon binaries by inlining `jsdom`'s default stylesheet during the Bun compile compatibility pass, preventing startup failures that referenced the build runner path under `/$bunfs/root/goodvibes-daemon-linux-x64`.
+
+---
+
 ## [0.19.55] — 2026-05-01
 
 ### Changed
