@@ -9,6 +9,8 @@ type SourcePatch = {
 
 export function patchBunCompileCompatibility(root: string): void {
   const jsdomDefaultStyleSheet = join(root, 'node_modules', 'jsdom', 'lib', 'jsdom', 'browser', 'default-stylesheet.css');
+  const sqlWasmJs = join(root, 'node_modules', 'sql.js', 'dist', 'sql-wasm.js');
+  const sqlWasmBinary = join(root, 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
   const patches: SourcePatch[] = [
     {
       file: join(root, 'node_modules', 'css-tree', 'lib', 'data-patch.js'),
@@ -43,6 +45,15 @@ export function patchBunCompileCompatibility(root: string): void {
       file: join(root, 'node_modules', 'jsdom', 'lib', 'jsdom', 'living', 'css', 'helpers', 'computed-style.js'),
       from: `const defaultStyleSheet = fs.readFileSync(\n  path.resolve(__dirname, "../../../browser/default-stylesheet.css"),\n  { encoding: "utf-8" }\n);\n`,
       to: `const defaultStyleSheet = ${defaultStyleSheet};\n`,
+    });
+  }
+
+  if (existsSync(sqlWasmBinary)) {
+    const sqlWasmBase64 = readFileSync(sqlWasmBinary).toString('base64');
+    patches.push({
+      file: sqlWasmJs,
+      from: `k.noExitRuntime&&(Ya=k.noExitRuntime);k.print&&(Da=k.print);k.printErr&&(B=k.printErr);k.wasmBinary&&(Ea=k.wasmBinary);k.thisProgram&&(wa=k.thisProgram);\n`,
+      to: `k.noExitRuntime&&(Ya=k.noExitRuntime);k.print&&(Da=k.print);k.printErr&&(B=k.printErr);k.wasmBinary&&(Ea=k.wasmBinary);if(!Ea&&typeof Buffer!=="undefined"){Ea=new Uint8Array(Buffer.from("${sqlWasmBase64}","base64"));}k.thisProgram&&(wa=k.thisProgram);\n`,
     });
   }
 

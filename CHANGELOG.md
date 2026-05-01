@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.60] — 2026-05-01
+
+### Fixed
+- Embedded the `sql.js` WASM payload during the Bun compile compatibility pass so published daemon binaries no longer try to load `sql-wasm.wasm` from the GitHub runner's `node_modules` path at runtime.
+
+---
+
 ## [0.19.59] — 2026-05-01
 
 ### Changed
