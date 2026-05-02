@@ -7,8 +7,8 @@ All notable changes to GoodVibes TUI.
 ## [Unreleased]
 
 ### Changed
-- Updated `@pellux/goodvibes-sdk` to `0.28.14`.
-- Regenerated the operator contract artifacts for SDK 0.28.14, including bounded Home Graph Ask/refinement timeout fields.
+- Updated `@pellux/goodvibes-sdk` to `0.28.15`.
+- Regenerated the operator contract artifacts for SDK 0.28.15, including top-level `nextRepairAttemptAt` on refinement task records.
 
 ### Verified
 - Rebuilt and relaunched the daemon with SDK 0.28.10, then retested Home Graph reindex coalescing, status responsiveness, TV feature Ask, base `knowledge.ask` with `knowledgeSpaceId: "homeassistant"`, generated pages, and map edge payloads against the live daemon.
@@ -18,6 +18,8 @@ All notable changes to GoodVibes TUI.
 - Live-tested SDK 0.28.13 Home Graph Ask/reindex/refinement: Ask now returns bounded current evidence with refinement task ids, and the coordinated Home Assistant follow-up showed background refinement can close the LG TV answer gaps; SDK follow-up is still needed for refinement-run budget failures, blocked retry-window tasks, and non-synthesized raw-snippet follow-up output.
 - Rebuilt and relaunched the daemon with SDK 0.28.14, smoke-tested the compiled daemon binary, and reran the TTS `STREAM_END` spoken-turn regression.
 - Coordinated the SDK 0.28.14 Home Assistant live pass: refinement runs now return immediately under budget, Ask/base Ask stay bounded, follow-up Ask synthesizes from repaired LG TV evidence, official LG sources appear in the repaired source set, and map/pages remain clean; one LG TV gap remains active with retryable/deferred repair state.
+- Rebuilt and relaunched the daemon with SDK 0.28.15, smoke-tested the compiled daemon binary, reran the TTS `STREAM_END` spoken-turn regression, and coordinated Home Assistant ownership of the live Home Graph route lane.
+- Coordinated the SDK 0.28.15 Home Assistant live pass: sync, reindex, refinement run, Ask, base Ask, and map stayed responsive; remaining SDK-side follow-up includes official-source answer preference, promoted typed facts, generated pages route reliability, and refinement limit accounting.
 
 ---
 
