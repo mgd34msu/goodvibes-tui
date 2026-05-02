@@ -7,8 +7,8 @@ All notable changes to GoodVibes TUI.
 ## [Unreleased]
 
 ### Changed
-- Updated `@pellux/goodvibes-sdk` to `0.28.13`.
-- Regenerated the operator contract artifacts for SDK 0.28.13, including bounded Home Graph Ask timeout fields.
+- Updated `@pellux/goodvibes-sdk` to `0.28.14`.
+- Regenerated the operator contract artifacts for SDK 0.28.14, including bounded Home Graph Ask/refinement timeout fields.
 
 ### Verified
 - Rebuilt and relaunched the daemon with SDK 0.28.10, then retested Home Graph reindex coalescing, status responsiveness, TV feature Ask, base `knowledge.ask` with `knowledgeSpaceId: "homeassistant"`, generated pages, and map edge payloads against the live daemon.
@@ -16,6 +16,8 @@ All notable changes to GoodVibes TUI.
 - Rebuilt and relaunched the daemon with SDK 0.28.12, smoke-tested the compiled daemon binary, and coordinated the Home Assistant restart before live Home Graph validation.
 - Rebuilt and relaunched the daemon with SDK 0.28.13, smoke-tested the compiled daemon binary, and verified TTS spoken turns stay active through provider `STREAM_END` until the logical turn completes.
 - Live-tested SDK 0.28.13 Home Graph Ask/reindex/refinement: Ask now returns bounded current evidence with refinement task ids, and the coordinated Home Assistant follow-up showed background refinement can close the LG TV answer gaps; SDK follow-up is still needed for refinement-run budget failures, blocked retry-window tasks, and non-synthesized raw-snippet follow-up output.
+- Rebuilt and relaunched the daemon with SDK 0.28.14, smoke-tested the compiled daemon binary, and reran the TTS `STREAM_END` spoken-turn regression.
+- Coordinated the SDK 0.28.14 Home Assistant live pass: refinement runs now return immediately under budget, Ask/base Ask stay bounded, follow-up Ask synthesizes from repaired LG TV evidence, official LG sources appear in the repaired source set, and map/pages remain clean; one LG TV gap remains active with retryable/deferred repair state.
 
 ---
 
