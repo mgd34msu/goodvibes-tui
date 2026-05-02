@@ -7,8 +7,8 @@ All notable changes to GoodVibes TUI.
 ## [Unreleased]
 
 ### Changed
-- Updated `@pellux/goodvibes-sdk` to `0.28.16`.
-- Regenerated the operator contract artifacts for SDK 0.28.16.
+- Updated `@pellux/goodvibes-sdk` to `0.28.17`.
+- Regenerated the operator contract artifacts for SDK 0.28.17, including Home Graph reset artifact-clearing fields and top-level Home Assistant map filters.
 
 ### Verified
 - Rebuilt and relaunched the daemon with SDK 0.28.10, then retested Home Graph reindex coalescing, status responsiveness, TV feature Ask, base `knowledge.ask` with `knowledgeSpaceId: "homeassistant"`, generated pages, and map edge payloads against the live daemon.
@@ -22,6 +22,8 @@ All notable changes to GoodVibes TUI.
 - Coordinated the SDK 0.28.15 Home Assistant live pass: sync, reindex, refinement run, Ask, base Ask, and map stayed responsive; remaining SDK-side follow-up includes official-source answer preference, promoted typed facts, generated pages route reliability, and refinement limit accounting.
 - Rebuilt and relaunched the daemon with SDK 0.28.16, smoke-tested the compiled daemon binary, reran the TTS `STREAM_END` spoken-turn regression, and coordinated Home Assistant ownership of the live Home Graph route lane.
 - Coordinated the SDK 0.28.16 Home Assistant live pass: reset, sync, changed-only reindex, refinement run, pages, maps, and status checks stayed responsive; remaining SDK-side follow-up includes slow initial Home Graph Ask, weak first-answer synthesis with zero promoted facts, base knowledge Ask missing the official LG source, follow-up answers preferring secondary sources, and Home Graph map filters returning unchanged result counts.
+- Rebuilt and relaunched the daemon with SDK 0.28.17, smoke-tested the compiled daemon binary, reran the TTS `STREAM_END` spoken-turn regression, and ran the TUI-owned Home Graph evaluation before handing the route lane to Home Assistant.
+- Live-tested SDK 0.28.17 Home Graph reset/sync/reindex/refinement/Ask/pages/map behavior: destructive reset now deletes scoped generated artifacts, HA sync remains bounded, reindex coalesces overlapping calls, nested Home Assistant map filters narrow results, and base `knowledge.ask` now links concrete TV queries to the scoped LG Home Assistant device while leaving generic "the device" queries unlinked. Remaining SDK-side follow-up includes slow first Home Graph Ask, official LG source not driving the final/follow-up answer, top-level map filters being ignored, and generated page/follow-up prose still containing raw-snippet-style sections.
 
 ---
 
