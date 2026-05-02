@@ -7,8 +7,8 @@ All notable changes to GoodVibes TUI.
 ## [Unreleased]
 
 ### Changed
-- Updated `@pellux/goodvibes-sdk` to `0.28.15`.
-- Regenerated the operator contract artifacts for SDK 0.28.15, including top-level `nextRepairAttemptAt` on refinement task records.
+- Updated `@pellux/goodvibes-sdk` to `0.28.16`.
+- Regenerated the operator contract artifacts for SDK 0.28.16.
 
 ### Verified
 - Rebuilt and relaunched the daemon with SDK 0.28.10, then retested Home Graph reindex coalescing, status responsiveness, TV feature Ask, base `knowledge.ask` with `knowledgeSpaceId: "homeassistant"`, generated pages, and map edge payloads against the live daemon.
@@ -20,6 +20,8 @@ All notable changes to GoodVibes TUI.
 - Coordinated the SDK 0.28.14 Home Assistant live pass: refinement runs now return immediately under budget, Ask/base Ask stay bounded, follow-up Ask synthesizes from repaired LG TV evidence, official LG sources appear in the repaired source set, and map/pages remain clean; one LG TV gap remains active with retryable/deferred repair state.
 - Rebuilt and relaunched the daemon with SDK 0.28.15, smoke-tested the compiled daemon binary, reran the TTS `STREAM_END` spoken-turn regression, and coordinated Home Assistant ownership of the live Home Graph route lane.
 - Coordinated the SDK 0.28.15 Home Assistant live pass: sync, reindex, refinement run, Ask, base Ask, and map stayed responsive; remaining SDK-side follow-up includes official-source answer preference, promoted typed facts, generated pages route reliability, and refinement limit accounting.
+- Rebuilt and relaunched the daemon with SDK 0.28.16, smoke-tested the compiled daemon binary, reran the TTS `STREAM_END` spoken-turn regression, and coordinated Home Assistant ownership of the live Home Graph route lane.
+- Coordinated the SDK 0.28.16 Home Assistant live pass: reset, sync, changed-only reindex, refinement run, pages, maps, and status checks stayed responsive; remaining SDK-side follow-up includes slow initial Home Graph Ask, weak first-answer synthesis with zero promoted facts, base knowledge Ask missing the official LG source, follow-up answers preferring secondary sources, and Home Graph map filters returning unchanged result counts.
 
 ---
 
