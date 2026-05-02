@@ -7,8 +7,8 @@ All notable changes to GoodVibes TUI.
 ## [Unreleased]
 
 ### Changed
-- Updated `@pellux/goodvibes-sdk` to `0.28.21`.
-- Regenerated the operator contract artifacts for SDK 0.28.21.
+- Updated `@pellux/goodvibes-sdk` to `0.28.22`.
+- Regenerated the operator contract artifacts for SDK 0.28.22.
 
 ### Verified
 - Rebuilt and relaunched the daemon with SDK 0.28.10, then retested Home Graph reindex coalescing, status responsiveness, TV feature Ask, base `knowledge.ask` with `knowledgeSpaceId: "homeassistant"`, generated pages, and map edge payloads against the live daemon.
@@ -32,6 +32,8 @@ All notable changes to GoodVibes TUI.
 - Live-tested SDK 0.28.20 Home Graph reindex/refinement/Ask/pages/map behavior: overlapping reindex now exposes a coalesced bounded result, Home Graph and base knowledge TV asks continue to synthesize clean official/vendor-backed prose with only the real LG Home Assistant device linked, generic "the device" asks still return no unrelated facts or gaps, generated LG passports no longer match raw-evidence/direct-comparison/table-debris markers, and legitimate `2 x 10W`-style speaker specs remain present. Remaining SDK-side follow-up includes generated passport quality still containing low-value canonical fact text such as truncated marketing/spec fragments and page metadata still missing subject/target/neighbors/relatedPages fields.
 - Rebuilt and relaunched the daemon with SDK 0.28.21, smoke-tested the compiled daemon binary, reran the TTS `STREAM_END` spoken-turn regression, and ran the TUI-owned cold/warm Home Graph evaluation before handing the route lane to Home Assistant.
 - Live-tested SDK 0.28.21 Home Graph reset/sync/reindex/refinement/Ask/pages behavior: reset dry-run stayed non-destructive, destructive reset deleted 57 scoped artifacts, Home Assistant sync returned in 4.49s with status checks staying responsive, changed-only reindex finished in 592ms and skipped generated-page artifacts, concrete TV asks linked only the real LG Home Assistant device, generic "the device" asks returned no unrelated facts/gaps, warm Home Graph/base asks synthesized clean source-backed prose with 24 subject-linked facts, and `nextRepairAttemptAt` is present on blocked repair tasks. Remaining SDK-side follow-up includes slow cold asks, cold Home Graph Ask returning active repair metadata with 0 promoted facts before base Ask repairs the evidence, refinement/run exhausting its budget after 63.9s with `requestedLimit: 500` / `effectiveLimit: 24`, generated page metadata still missing subject/target/neighbors/relatedPages, and LG passport canonical facts still containing low-value truncated spec fragments despite no raw-evidence marker matches.
+- Rebuilt and relaunched the daemon with SDK 0.28.22, smoke-tested the compiled daemon binary, reran the TTS `STREAM_END` spoken-turn regression, and ran the TUI-owned focused warm Home Graph page-refresh validation before handing the route lane to Home Assistant.
+- Live-tested SDK 0.28.22 Home Graph Ask-to-page propagation: warm Home Graph Ask returned in 14.64s with status probes responsive, synthesized official/vendor-backed prose, linked only the real LG Home Assistant device, returned 12 subject-linked facts, and reported `pageRefreshRequested`/`pageRefreshed`; pages rendered 40 markdown pages in 103ms, the LG passport no longer shows `0 source(s)` or stale manual/source questions, preserves a `2 x 10W` speaker fact, and map sanity returned 95 titled non-self-loop edges in 27ms. Remaining SDK-side follow-up includes the LG passport still lacking explicit official LG source text, page metadata still missing subject/target/neighbors/relatedPages, and the passport still rendering low-value truncated canonical fact fragments such as HDMI quantity/table debris.
 
 ---
 
