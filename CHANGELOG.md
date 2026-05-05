@@ -8,6 +8,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.62] — 2026-05-05
+
+### Changed
+- Recut the SDK 0.33.4 TUI migration release so the GitHub Release workflow owns npm publication and can finish green after `0.19.61` was already published manually.
+
+---
+
 ## [0.19.61] — 2026-05-05
 
 ### Changed
