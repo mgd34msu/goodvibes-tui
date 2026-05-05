@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createDaemonTelemetryRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/telemetry-routes';
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createDaemonTelemetryRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { TelemetryApiService } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/api';
+import { TelemetryApiService } from '@/runtime/index.ts';
 
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.

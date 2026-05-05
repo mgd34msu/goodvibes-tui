@@ -1,8 +1,8 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import type { RuntimeTask, TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
-import type { ManagedWorktreeMeta } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
+import type { RuntimeTask, TaskLifecycleState } from '@/runtime/index.ts';
+import type { ManagedWorktreeMeta } from '@/runtime/index.ts';
 import type { UiReadModel, UiTasksSnapshot, UiWorktreeSnapshot } from '../runtime/ui-read-models.ts';
 import {
   buildDetailBlock,
@@ -118,7 +118,7 @@ interface TaskWorktreeAttachmentReview {
   readonly paused: number;
   readonly kept: number;
   readonly discard: number;
-  readonly cleanupPending: number;
+  readonly pendingCleanup: number;
   readonly records: readonly ManagedWorktreeMeta[];
 }
 
@@ -133,7 +133,7 @@ function reviewTaskWorktreeAttachments(
     paused: summary.paused + (record.state === 'paused' ? 1 : 0),
     kept: summary.kept + (record.state === 'kept' ? 1 : 0),
     discard: summary.discard + (record.state === 'discard' ? 1 : 0),
-    cleanupPending: summary.cleanupPending + (record.state === 'cleanup-pending' ? 1 : 0),
+    pendingCleanup: summary.pendingCleanup + (record.state === 'pending-cleanup' ? 1 : 0),
     records: [...summary.records, record],
   }), {
     total: 0,
@@ -141,7 +141,7 @@ function reviewTaskWorktreeAttachments(
     paused: 0,
     kept: 0,
     discard: 0,
-    cleanupPending: 0,
+    pendingCleanup: 0,
     records: [],
   });
 }

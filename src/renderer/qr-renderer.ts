@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { generateQrMatrix } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
+import { generateQrMatrix } from '@pellux/goodvibes-sdk/platform/pairing';
 
 export { generateQrMatrix };
 

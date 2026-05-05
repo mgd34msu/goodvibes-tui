@@ -2,12 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/index';
-import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';

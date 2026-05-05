@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/index';
-import { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery';
+import { HelperModel } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerLocalProviderRuntimeCommands } from '../../input/commands/local-provider-runtime.ts';
@@ -16,8 +16,8 @@ import type {
   ProviderApiModelRecord,
   ProviderApiRuntimeQuery,
   ProviderApiRuntimeQueryResult,
-} from '@pellux/goodvibes-sdk/platform/providers/provider-api';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+} from '@pellux/goodvibes-sdk/platform/providers';
+import { createShellPathService } from '@/runtime/index.ts';
 
 function failOnAccess(label: string): never {
   throw new Error(`unexpected raw access: ${label}`);
@@ -235,7 +235,6 @@ describe('provider command provider-api migration', () => {
     expect(context.session.runtime.provider).toBe('anthropic');
     expect(context.session.runtime.model).toBe('anthropic:claude-sonnet');
     expect(configWrites).toEqual([
-      { key: 'provider.provider', value: 'anthropic' },
       { key: 'provider.model', value: 'anthropic:claude-sonnet' },
     ]);
     expect(printed.join('\n')).toContain('Switched to provider: anthropic (model: claude-sonnet)');
@@ -289,7 +288,7 @@ describe('provider command provider-api migration', () => {
     await registry.execute('unpin', ['openai:gpt-4o'], context);
 
     expect(pinCalls).toEqual(['openai:gpt-4o']);
-    expect(unpinCalls).toEqual(['gpt-4o']);
+    expect(unpinCalls).toEqual(['openai:gpt-4o']);
     expect(printed.join('\n')).toContain('Model catalog refreshed: 42 models from 7 providers');
     expect(printed.join('\n')).toContain('Benchmarks refreshed: 18 model records available.');
     expect(printed.join('\n')).toContain('Token limits refreshed: 11 models updated.');

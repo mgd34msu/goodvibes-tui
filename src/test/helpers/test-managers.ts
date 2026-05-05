@@ -1,17 +1,18 @@
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
+import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
-import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
-import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { LLMProvider, ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 
 export interface TestManagers {
   readonly configManager: ConfigManager;
@@ -24,6 +25,33 @@ export interface TestManagers {
   readonly panelManager: PanelManager;
   readonly bookmarkManager: BookmarkManager;
   readonly toolLLM: ToolLLM;
+}
+
+export function buildTestModelDefinition(provider: string, modelId: string): ModelDefinition {
+  return {
+    id: modelId,
+    provider,
+    registryKey: `${provider}:${modelId}`,
+    displayName: modelId,
+    description: 'Test model',
+    capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
+    contextWindow: 4096,
+    selectable: true,
+    tier: 'standard',
+  };
+}
+
+export function patchTestProviderRegistry(providerRegistry: ProviderRegistry): void {
+  const originalRegister = providerRegistry.register.bind(providerRegistry);
+  providerRegistry.register = ((provider: LLMProvider): void => {
+    originalRegister(provider);
+    if (provider.models.length === 0) return;
+    providerRegistry.registerRuntimeProvider({
+      provider,
+      replace: true,
+      models: provider.models.map((modelId) => buildTestModelDefinition(provider.name, modelId)),
+    });
+  }) as ProviderRegistry['register'];
 }
 
 export function createTestManagers(): TestManagers {
@@ -60,6 +88,7 @@ export function createTestManagers(): TestManagers {
     favoritesStore,
     benchmarkStore,
   });
+  patchTestProviderRegistry(providerRegistry);
   const panelManager = new PanelManager();
   const bookmarkManager = new BookmarkManager(bookmarksDir);
   const toolLLM = new ToolLLM({ configManager, providerRegistry });

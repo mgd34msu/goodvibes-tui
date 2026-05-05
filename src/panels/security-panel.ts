@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security/token-audit';
+import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security';
 import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.ts';
 import {
   buildEmptyState,

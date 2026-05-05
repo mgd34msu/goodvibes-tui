@@ -24,8 +24,8 @@ import {
   OverflowHandler,
   createSpillBackend,
   overflowCleanup,
-} from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
-import type { SpillBackend, RetentionPolicyConfig } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
+} from '@pellux/goodvibes-sdk/platform/tools';
+import type { SpillBackend, RetentionPolicyConfig } from '@pellux/goodvibes-sdk/platform/tools';
 
 // ---------------------------------------------------------------------------
 // Helpers

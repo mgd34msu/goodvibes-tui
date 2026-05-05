@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ConfigManager } from '../config/index.ts';
+import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
 import { readOnboardingCheckMarkers } from '../runtime/onboarding/index.ts';
-import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import { configureActivityLogger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
+import { createShellPathService } from '@/runtime/index.ts';
+import { configureActivityLogger } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   applyRuntimeCommandEndpointFlagOverrides,
   applyRuntimeConfigOverrides,
@@ -105,11 +106,11 @@ export async function prepareShellCliRuntime(
     disableFeatures: cli.flags.disableFeatures,
   });
 
-  if (cli.flags.provider !== undefined) {
-    applyRuntimeConfigValue(configManager, 'provider.provider', cli.flags.provider);
-  }
-  if (cli.flags.model !== undefined) {
-    applyRuntimeConfigValue(configManager, 'provider.model', cli.flags.model);
+  if (cli.flags.provider !== undefined || cli.flags.model !== undefined) {
+    const currentModel = configManager.get('provider.model');
+    const provider = cli.flags.provider ?? getProviderIdFromModel(currentModel);
+    const model = cli.flags.model ?? getModelIdFromProviderModel(currentModel);
+    applyRuntimeConfigValue(configManager, 'provider.model', formatProviderModel(provider, model));
   }
   const endpointOverrideErrors = applyRuntimeCommandEndpointFlagOverrides(configManager, cli.command, cli.flags);
   if (endpointOverrideErrors.length > 0) {

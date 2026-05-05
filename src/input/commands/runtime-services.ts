@@ -8,17 +8,17 @@ import type {
   CommandWorkspaceServices,
 } from '../command-registry.ts';
 import type { UiReadModels } from '../../runtime/ui-read-models.ts';
-import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import type { EcosystemCatalogPathOptions } from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
+import type { ShellPathService } from '@/runtime/index.ts';
+import type { EcosystemCatalogPathOptions } from '@/runtime/index.ts';
 import type { PluginPathOptions } from '../../plugins/loader';
-import type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
-import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
-import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks/hook-api';
-import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp/mcp-api';
-import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
-import type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
-import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
-import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
+import type { DirectTransport } from '@/runtime/index.ts';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
+import type { OperatorClient } from '@/runtime/index.ts';
+import type { OpsApi } from '@/runtime/index.ts';
+import type { PeerClient } from '@/runtime/index.ts';
+import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
 import type {
   ShellAgentManagerService,
   ShellAcpManagerService,
@@ -27,7 +27,7 @@ import type {
   ShellModeManagerService,
   ShellPlanManagerService,
   ShellSessionOrchestrationService,
-} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
+} from '@/runtime/index.ts';
 
 function requireContextValue<T>(value: T | null | undefined, name: string): T {
   if (value == null) {

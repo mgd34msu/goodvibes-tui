@@ -1,17 +1,17 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import { MockLLMProvider } from '../setup.ts';
-import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
-import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
+import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { createEventEnvelope } from '@/runtime/index.ts';
+import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -513,7 +513,7 @@ describe('Orchestrator', () => {
 
       const mockAcp = {
         spawn: mock(async (_task: unknown) => 'agent-id-123'),
-      } as unknown as import('@pellux/goodvibes-sdk/platform/acp/manager').AcpManager;
+      } as unknown as import('@pellux/goodvibes-sdk/platform/acp').AcpManager;
 
       orch.registerDelegateTool(mockAcp);
 
@@ -525,7 +525,7 @@ describe('Orchestrator', () => {
 
       const mockAcp = {
         spawn: mock(async (_task: unknown) => 'agent-id'),
-      } as unknown as import('@pellux/goodvibes-sdk/platform/acp/manager').AcpManager;
+      } as unknown as import('@pellux/goodvibes-sdk/platform/acp').AcpManager;
 
       orch.registerDelegateTool(mockAcp);
 
@@ -542,7 +542,7 @@ describe('Orchestrator', () => {
       const { orch } = await buildOrchestrator();
 
       const spawnMock = mock(async (_task: unknown) => 'spawned-agent-id');
-      const mockAcp = { spawn: spawnMock } as unknown as import('@pellux/goodvibes-sdk/platform/acp/manager').AcpManager;
+      const mockAcp = { spawn: spawnMock } as unknown as import('@pellux/goodvibes-sdk/platform/acp').AcpManager;
 
       orch.registerDelegateTool(mockAcp);
 
@@ -563,7 +563,7 @@ describe('Orchestrator', () => {
       // Register WITHOUT calling registerDelegateTool - then directly inject
       // We test the internal null-check by accessing the tool function after registration
       // First register with a real mock to get the tool registered
-      const mockAcp = { spawn: mock(async () => 'id') } as unknown as import('@pellux/goodvibes-sdk/platform/acp/manager').AcpManager;
+      const mockAcp = { spawn: mock(async () => 'id') } as unknown as import('@pellux/goodvibes-sdk/platform/acp').AcpManager;
       orch.registerDelegateTool(mockAcp);
 
       // Now manually clear the internal acpManager via type cast to simulate null scenario

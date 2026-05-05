@@ -3,11 +3,11 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { EvalRunner } from '@pellux/goodvibes-sdk/platform/runtime/eval/runner';
-import { scoreScenario, DIMENSION_FLOOR } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
-import { captureBaseline, serialiseBaseline, deserialiseBaseline } from '@pellux/goodvibes-sdk/platform/runtime/eval/baseline';
-import { BUILTIN_SUITES, ALL_SCENARIOS } from '@pellux/goodvibes-sdk/platform/runtime/eval/suites';
-import type { EvalScenario, EvalRawResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
+import { EvalRunner } from '@/runtime/index.ts';
+import { scoreScenario, DIMENSION_FLOOR } from '@/runtime/index.ts';
+import { captureBaseline, serialiseBaseline, deserialiseBaseline } from '@/runtime/index.ts';
+import { BUILTIN_SUITES, ALL_SCENARIOS } from '@/runtime/index.ts';
+import type { EvalScenario, EvalRawResult } from '@/runtime/index.ts';
 
 // ── scoreScenario ──────────────────────────────────────────────────────────────
 

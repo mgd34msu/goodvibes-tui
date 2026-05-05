@@ -2,8 +2,8 @@ import { promises as fsPromises, watch, type FSWatcher } from 'fs';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
+import type { AgentEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildEmptyState,

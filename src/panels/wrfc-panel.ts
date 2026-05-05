@@ -1,9 +1,9 @@
 import type { Line } from '../types/grid.ts';
-import type { WrfcChain, WrfcState, QualityGateResult } from '@pellux/goodvibes-sdk/platform/agents/wrfc-types';
-import type { Constraint, ConstraintFinding } from '@pellux/goodvibes-sdk/platform/agents/completion-report';
-import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
+import type { WrfcChain, WrfcState, QualityGateResult } from '@pellux/goodvibes-sdk/platform/agents';
+import type { Constraint, ConstraintFinding } from '@pellux/goodvibes-sdk/platform/agents';
+import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { BasePanel } from './base-panel.ts';
-import type { WorkflowEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { WorkflowEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildPanelLine,

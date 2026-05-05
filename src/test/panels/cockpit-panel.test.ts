@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { CockpitPanel } from '../../panels/cockpit-panel.ts';
-import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
+import type { FailureReport } from '@/runtime/index.ts';
 import type { Line } from '../../types/grid.ts';
 import { createCockpitReadModel } from '../helpers/ui-read-models.ts';
 

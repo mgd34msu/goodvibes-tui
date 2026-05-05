@@ -12,10 +12,10 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { parseCommandAST, parseAST } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/parser';
-import { collectCommandNodes } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/ast';
-import { tokenize } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/tokenizer';
-import type { CommandNode, PipeNode, SequenceNode, SubshellNode } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/ast';
+import { parseCommandAST, parseAST } from '@/runtime/index.ts';
+import { collectCommandNodes } from '@/runtime/index.ts';
+import { tokenize } from '@/runtime/index.ts';
+import type { CommandNode, PipeNode, SequenceNode, SubshellNode } from '@/runtime/index.ts';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -263,7 +263,7 @@ describe('parseAST — from token list', () => {
         },
         enumerable: true,
       },
-    ) as unknown as import('@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/types').CommandToken;
+    ) as unknown as import('@/runtime/index.ts').CommandToken;
 
     const result = parseAST([poisonToken]);
     expect(result.kind).toBe('command');

@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import {
   SHARED_SESSION_INPUT_RECORD_SCHEMA,
   SHARED_SESSION_ROUTING_INTENT_SCHEMA,
-} from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract-schemas';
+} from '@pellux/goodvibes-sdk/platform/control-plane';
 import {
   AUTOMATION_RUN_SCHEMA,
   ROUTE_BINDING_SCHEMA,
-} from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract-schemas-admin';
+} from '@pellux/goodvibes-sdk/platform/control-plane';
 
 function objectProperties(schema: Record<string, unknown>): Record<string, unknown> {
   return (schema.properties ?? {}) as Record<string, unknown>;

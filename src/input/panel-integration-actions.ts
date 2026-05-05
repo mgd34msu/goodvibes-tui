@@ -1,5 +1,5 @@
 import type { CommandContext } from './command-registry.ts';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { Panel } from '../panels/types.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import { FileExplorerPanel } from '../panels/file-explorer-panel.ts';

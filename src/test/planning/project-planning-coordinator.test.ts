@@ -4,7 +4,7 @@ import {
   type ProjectPlanningEvaluation,
   type ProjectPlanningService,
   type ProjectPlanningState,
-} from '@pellux/goodvibes-sdk/platform/knowledge/index';
+} from '@pellux/goodvibes-sdk/platform/knowledge';
 import { ProjectPlanningCoordinator, hasProjectPlanningIntent } from '../../planning/project-planning-coordinator.ts';
 
 function makeState(input: Partial<ProjectPlanningState> = {}): ProjectPlanningState {

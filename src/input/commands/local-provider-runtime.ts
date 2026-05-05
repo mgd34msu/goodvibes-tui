@@ -2,10 +2,10 @@ import { join } from 'node:path';
 import { existsSync, mkdirSync } from 'node:fs';
 import { writeFile, unlink } from 'node:fs/promises';
 import type { CommandRegistry } from '../command-registry.ts';
-import { fetchModelContextWindows } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
-import type { CustomProviderConfig } from '@pellux/goodvibes-sdk/platform/providers/custom-loader';
+import { fetchModelContextWindows } from '@pellux/goodvibes-sdk/platform/discovery';
+import type { CustomProviderConfig } from '@pellux/goodvibes-sdk/platform/providers';
 import { requireProviderApi, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function isValidProviderName(name: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(name);
@@ -159,7 +159,6 @@ export function registerLocalProviderRuntimeCommands(registry: CommandRegistry):
         const selected = await providerApi.selectModel(match.registryKey);
         ctx.session.runtime.model = selected.registryKey;
         ctx.session.runtime.provider = selected.providerId;
-        ctx.platform.configManager.set('provider.provider', selected.providerId);
         ctx.platform.configManager.set('provider.model', selected.registryKey);
         ctx.print(`Switched to provider: ${selected.providerId} (model: ${selected.modelId})`);
       } catch (e) {

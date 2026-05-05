@@ -3,16 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { createInitialTasksState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
+import { createInitialTasksState } from '@/runtime/index.ts';
 import { TasksPanel } from '../../panels/tasks-panel.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import type { Line } from '../../types/grid.ts';
 import type { UiWorktreeSnapshot } from '../../runtime/ui-read-models.ts';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 import { createStaticUiReadModel, createTasksReadModel } from '../helpers/ui-read-models.ts';
 import { buildProviderAccountSnapshot } from '../../panels/provider-account-snapshot.ts';
@@ -59,7 +59,7 @@ describe('TasksPanel', () => {
         total: 1,
         active: 0,
         paused: 1,
-        cleanupPending: 0,
+        pendingCleanup: 0,
         discard: 0,
       },
       records: [{

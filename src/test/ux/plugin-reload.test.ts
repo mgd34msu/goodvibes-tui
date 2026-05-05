@@ -15,7 +15,7 @@ import {
   selectPanels,
   selectActivePanels,
 } from '../../runtime/store/selectors/index.ts';
-import type { PluginDomainState, RuntimePlugin } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/plugins';
+import type { PluginDomainState, RuntimePlugin } from '@/runtime/index.ts';
 import type { PanelDomainState } from '../../runtime/store/domains/panels.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

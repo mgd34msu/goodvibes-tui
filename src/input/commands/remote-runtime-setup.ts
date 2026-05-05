@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { getDefaultAcpAgentCommand } from '@pellux/goodvibes-sdk/platform/acp/manager';
+import { getDefaultAcpAgentCommand } from '@pellux/goodvibes-sdk/platform/acp';
 import type { CommandContext, RemoteCommandService } from '../command-registry.ts';
-import type { RemoteSessionBundle } from '@pellux/goodvibes-sdk/platform/runtime/remote/types';
+import type { RemoteSessionBundle } from '@/runtime/index.ts';
 import { requireShellPaths } from './runtime-services.ts';
 
 type RemoteRegistryLike = Pick<RemoteCommandService, 'listContracts' | 'exportSessionBundle' | 'importSessionBundle'>;

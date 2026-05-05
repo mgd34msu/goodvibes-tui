@@ -1,8 +1,8 @@
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
-import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import type { ProviderEvent, TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ProviderEvent, TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   type ProviderRuntimeInspectionQuery,
@@ -24,7 +24,7 @@ import type {
   UiSettingsSnapshot,
   UiWorktreeSnapshot,
 } from '../runtime/ui-read-models.ts';
-import { evaluateSessionMaintenance } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
+import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import {
   buildBodyText,
   buildDetailBlock,

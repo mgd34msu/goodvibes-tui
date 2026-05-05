@@ -10,7 +10,7 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiOrchestrationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
-import type { OrchestrationGraphRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';
+import type { OrchestrationGraphRecord } from '@/runtime/index.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,

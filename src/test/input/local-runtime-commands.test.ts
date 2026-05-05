@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerRemoteRuntimeCommands } from '../../input/commands/remote-runtime.ts';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { createShellPathService } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import {
   getTestAgentManager,

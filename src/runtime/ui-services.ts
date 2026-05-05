@@ -1,14 +1,14 @@
 import type { RuntimeServices } from './services.ts';
-import type { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
-import type { RemoteSupervisor } from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
+import type { RemoteRunnerRegistry } from '@/runtime/index.ts';
+import type { RemoteSupervisor } from '@/runtime/index.ts';
 import { createUiRuntimeEvents, type UiRuntimeEvents } from './ui-events.ts';
 import { createUiReadModels, type UiReadModels, type UiReadModelOptions } from './ui-read-models.ts';
-import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
-import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/index';
-import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane/approval-broker';
-import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
-import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import type { HostServiceStatus } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
+import type { ForensicsRegistry } from '@/runtime/index.ts';
+import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { ShellPathService } from '@/runtime/index.ts';
+import type { HostServiceStatus } from '@/runtime/index.ts';
 import type { SecretsManager } from '../config/secrets.ts';
 
 export interface UiEnvironmentServices {

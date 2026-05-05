@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
-import { AGENT_TEMPLATES } from '@pellux/goodvibes-sdk/platform/tools/agent/manager';
+import { AGENT_TEMPLATES } from '@pellux/goodvibes-sdk/platform/tools';
 import { handleRemoteSetupCommand } from './remote-runtime-setup.ts';
 import { handleRemotePoolCommand } from './remote-runtime-pool.ts';
 import { requireAgentManager, requireAcpManager, requirePeerClient, requireShellPaths } from './runtime-services.ts';

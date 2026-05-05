@@ -6,15 +6,15 @@ import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config/schema';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef } from '../../config/secret-config.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import type { FeatureFlagManager } from '@/runtime/index.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -278,16 +278,10 @@ describe('SettingsModal', () => {
     modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
     while (modal.currentCategory !== 'provider') modal.nextCategory();
 
-    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'provider.provider');
+    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'provider.model');
     modal.activateSelected();
     expect(modal.pendingProviderModelPickerTarget).toBe('main');
     expect(modal.pendingModelPickerTarget).toBeNull();
-
-    modal.pendingProviderModelPickerTarget = null;
-    modal.selectedIndex = modal.currentItems.findIndex((entry) => entry.setting.key === 'provider.model');
-    modal.activateSelected();
-    expect(modal.pendingModelPickerTarget).toBe('main');
-    expect(modal.pendingProviderModelPickerTarget).toBeNull();
   });
 
   test('activateSelected delegates TTS provider and voice settings to external pickers', () => {

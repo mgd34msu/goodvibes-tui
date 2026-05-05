@@ -1,4 +1,4 @@
-import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config/schema';
+import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
 import type { ModelPickerTarget } from './model-picker.ts';
 
 export type ModelPickerLaunch =
@@ -6,12 +6,10 @@ export type ModelPickerLaunch =
   | { readonly flow: 'model'; readonly target: ModelPickerTarget };
 
 /**
- * Map config keys to the shared provider/model picker flows. Provider rows open
- * provider first; model rows open directly to models for the same target.
+ * Map config keys to the shared provider/model picker flows.
  */
 export function modelPickerLaunchForKey(key: string): ModelPickerLaunch | null {
-  if (key === 'provider.provider') return { flow: 'providerModel', target: 'main' };
-  if (key === 'provider.model') return { flow: 'model', target: 'main' };
+  if (key === 'provider.model') return { flow: 'providerModel', target: 'main' };
   if (key === 'helper.globalProvider') return { flow: 'providerModel', target: 'helper' };
   if (key === 'helper.globalModel') return { flow: 'model', target: 'helper' };
   if (key === 'tools.llmProvider') return { flow: 'providerModel', target: 'tool' };

@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers/index';
-import { loadWatcherSnapshotFromPath, resolveWatcherStorePath, saveWatcherSnapshotToPath } from '@pellux/goodvibes-sdk/platform/watchers/store';
+import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
+import { loadWatcherSnapshotFromPath, resolveWatcherStorePath, saveWatcherSnapshotToPath } from '@pellux/goodvibes-sdk/platform/watchers';
 
 function createTempWatcherStore(): { readonly root: string; readonly storePath: string } {
   const root = mkdtempSync(join(tmpdir(), 'goodvibes-watchers-'));

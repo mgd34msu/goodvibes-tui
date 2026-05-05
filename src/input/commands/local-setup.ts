@@ -3,8 +3,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
-import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
-import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
+import { renderQemuWrapperTemplate } from '@/runtime/index.ts';
 import type { SetupTransferBundle } from './local-setup-transfer.ts';
 import {
   buildSetupTransferBundle,
@@ -15,7 +15,7 @@ import {
 } from './local-setup-transfer.ts';
 import { buildSetupReviewSnapshot, exportSetupSupportBundle, renderSetupSandboxReview } from './local-setup-review.ts';
 import { openOnboardingWizard, requirePanelManager, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 type SetupSnapshot = Awaited<ReturnType<typeof buildSetupReviewSnapshot>>;
 

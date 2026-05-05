@@ -15,19 +15,19 @@ import {
   describeScore,
   escalateStrategy,
   LOW_QUALITY_THRESHOLD,
-} from '@pellux/goodvibes-sdk/platform/runtime/compaction/quality-score';
-import type { CompactionQualityScore } from '@pellux/goodvibes-sdk/platform/runtime/compaction/quality-score';
+} from '@/runtime/index.ts';
+import type { CompactionQualityScore } from '@/runtime/index.ts';
 import {
   createCompactionManager,
-} from '@pellux/goodvibes-sdk/platform/runtime/compaction/index';
+} from '@/runtime/index.ts';
 import type {
   StrategyInput,
   StrategyOutput,
   CompactionStrategy,
-} from '@pellux/goodvibes-sdk/platform/runtime/compaction/types';
-import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
+} from '@/runtime/index.ts';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers';
+import type { RuntimeEventBus } from '@/runtime/index.ts';
+import type { FeatureFlagManager } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

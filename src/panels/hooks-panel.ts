@@ -1,12 +1,12 @@
 import type { Line } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
-import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import type { HookPointContract } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
-import type { HookActivityRecord, HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
-import type { HookAuthoringAction, HookSimulationResult } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
-import type { HookChain, HookDefinition } from '@pellux/goodvibes-sdk/platform/hooks/types';
-import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookPointContract } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookActivityRecord, HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookAuthoringAction, HookSimulationResult } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookChain, HookDefinition } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildPanelLine,

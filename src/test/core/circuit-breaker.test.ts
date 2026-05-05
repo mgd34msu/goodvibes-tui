@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ConsecutiveErrorBreaker, CONSECUTIVE_ERROR_WARN, CONSECUTIVE_ERROR_BREAK } from '@pellux/goodvibes-sdk/platform/core/circuit-breaker';
+import { ConsecutiveErrorBreaker, CONSECUTIVE_ERROR_WARN, CONSECUTIVE_ERROR_BREAK } from '@pellux/goodvibes-sdk/platform/core';
 
 describe('ConsecutiveErrorBreaker', () => {
   let breaker: ConsecutiveErrorBreaker;

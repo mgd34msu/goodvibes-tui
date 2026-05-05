@@ -7,9 +7,9 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, existsSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { createRegistryTool } from '@pellux/goodvibes-sdk/platform/tools/registry-tool/index';
-import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import { createRegistryTool } from '@pellux/goodvibes-sdk/platform/tools';
+import type { Tool, ToolDefinition } from '@pellux/goodvibes-sdk/platform/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
 import {
   computeSchemaFingerprintSync,
   computeSchemaFingerprint,
@@ -19,7 +19,7 @@ import {
   appendSchemaFingerprint,
   SCHEMA_SHAPE_IDS,
   type SchemaFingerprintMeta,
-} from '@pellux/goodvibes-sdk/platform/tools/shared/schema-fingerprint';
+} from '@pellux/goodvibes-sdk/platform/tools';
 
 // ---------------------------------------------------------------------------
 // computeSchemaFingerprintSync — stability

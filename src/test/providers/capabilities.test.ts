@@ -5,8 +5,8 @@ import {
   type RouteRejectionDetail,
   type ProviderCapability,
   type RequestProfile,
-} from '@pellux/goodvibes-sdk/platform/providers/capabilities';
-import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
+} from '@pellux/goodvibes-sdk/platform/providers';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // Helpers

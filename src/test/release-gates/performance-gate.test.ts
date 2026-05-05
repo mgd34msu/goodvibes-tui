@@ -10,16 +10,16 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { DEFAULT_BUDGETS } from '@pellux/goodvibes-sdk/platform/runtime/perf/budgets';
+import { DEFAULT_BUDGETS } from '@/runtime/index.ts';
 import {
   computeQualityScore,
   escalateStrategy,
   LOW_QUALITY_THRESHOLD,
-} from '@pellux/goodvibes-sdk/platform/runtime/compaction/quality-score';
-import { SloCollector } from '@pellux/goodvibes-sdk/platform/runtime/perf/slo-collector';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { FEATURE_FLAGS } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/flags';
-import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
+} from '@/runtime/index.ts';
+import { SloCollector } from '@/runtime/index.ts';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { FEATURE_FLAGS } from '@/runtime/index.ts';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // Helpers

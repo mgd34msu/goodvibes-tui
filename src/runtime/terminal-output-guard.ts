@@ -1,5 +1,5 @@
 import { format } from 'node:util';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 type WritableStreamLike = {
   write: {

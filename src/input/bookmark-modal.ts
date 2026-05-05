@@ -5,7 +5,7 @@
  * selected index, scroll offset, and pending action.
  */
 
-import type { BookmarkEntry, BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
+import type { BookmarkEntry, BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
 
 // ---------------------------------------------------------------------------
 // BookmarkModal

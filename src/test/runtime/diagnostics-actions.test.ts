@@ -27,12 +27,12 @@ import {
   diagnosticFromAgentFailure,
   diagnosticFromToolContractViolation,
   diagnosticFromForensicsRun,
-} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/actions';
+} from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { createTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/index';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { OpsControlPlane } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
-import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core/deterministic-replay';
+import { createTaskManager } from '@/runtime/index.ts';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { OpsControlPlane } from '@/runtime/index.ts';
+import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,7 +73,7 @@ function makeSimulator(diverged: boolean) {
         authoritativeDecision: { allowed: true },
       };
     },
-  } as unknown as import('@pellux/goodvibes-sdk/platform/runtime/permissions/simulation').PermissionSimulator;
+  } as unknown as import('@/runtime/index.ts').PermissionSimulator;
 }
 
 // ---------------------------------------------------------------------------
@@ -449,7 +449,7 @@ describe('error handling', () => {
   test('catches handler errors and returns failure result', async () => {
     const brokenEngine = {
       reset() { throw new Error('engine exploded'); },
-    } as unknown as import('@pellux/goodvibes-sdk/platform/core/deterministic-replay').DeterministicReplayEngine;
+    } as unknown as import('@pellux/goodvibes-sdk/platform/core').DeterministicReplayEngine;
 
     const dispatcher = new DiagnosticActionDispatcher({
       replayEngine: brokenEngine,

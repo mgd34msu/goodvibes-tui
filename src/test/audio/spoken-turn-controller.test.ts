@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { VoiceAudioChunk, VoiceSynthesisRequest, VoiceSynthesisStreamResult } from '@pellux/goodvibes-sdk/platform/voice/index';
+import type { TurnEvent } from '@/runtime/index.ts';
+import type { VoiceAudioChunk, VoiceSynthesisRequest, VoiceSynthesisStreamResult } from '@pellux/goodvibes-sdk/platform/voice';
 import { SpokenTurnController } from '../../audio/spoken-turn-controller.ts';
 import type { StreamingAudioPlayer } from '../../audio/player.ts';
 

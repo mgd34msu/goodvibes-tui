@@ -1,8 +1,8 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import type { RuntimeTask, TaskLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
-import { reviewWorktreeAttachments } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
+import type { RuntimeTask, TaskLifecycleState } from '@/runtime/index.ts';
+import { reviewWorktreeAttachments } from '@/runtime/index.ts';
 import { requireOperatorClient, requireOpsApi, requirePanelManager, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function sortRuntimeTasks(tasks: RuntimeTask[]): RuntimeTask[] {
   const statusOrder: TaskLifecycleState[] = ['running', 'queued', 'blocked', 'failed', 'completed', 'cancelled'];
@@ -95,7 +95,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
             });
             return worktrees.total > 0
               ? [
-                  `  worktrees: ${worktrees.total} tracked (${worktrees.active} active / ${worktrees.paused} paused / ${worktrees.cleanupPending} cleanup)`,
+                  `  worktrees: ${worktrees.total} tracked (${worktrees.active} active / ${worktrees.paused} paused / ${worktrees.pendingCleanup} cleanup)`,
                   `  worktree next: /worktree task ${task.id}`,
                 ]
               : [];
@@ -140,7 +140,7 @@ export function registerTasksRuntimeCommands(registry: CommandRegistry): void {
           return;
         }
         const task = opsApi.tasks.create({
-          kind: kind as import('@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks').TaskKind,
+          kind: kind as import('@/runtime/index.ts').TaskKind,
           owner,
           title,
           description: title,

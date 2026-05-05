@@ -1,31 +1,32 @@
 import { ConversationManager } from '../core/conversation';
 import { SelectionManager } from '../input/selection.ts';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { ConfigManager, getConfiguredSystemPrompt } from '../config/index.ts';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
-import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations/notifier';
-import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations/webhooks';
+import { getProviderIdFromModel } from '../config/provider-model.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
+import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
+import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
+import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
 import { Compositor } from '../renderer/compositor.ts';
-import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
-import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core/conversation-follow-ups';
+import type { ConversationFollowUpItem } from '@pellux/goodvibes-sdk/platform/core';
 import type { OrchestratorUserInputOptions } from '../core/orchestrator.ts';
-import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
-import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
+import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { MutableRuntimeState } from '@/runtime/index.ts';
 import type { BootstrapOptions } from './context.ts';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { SessionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import type { SessionEvent } from '@/runtime/index.ts';
 import { createRuntimeStore, createDomainDispatch, type RuntimeStore } from './store/index.ts';
-import { ForensicsCollector, ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
+import { ForensicsCollector, ForensicsRegistry } from '@/runtime/index.ts';
 import {
   generateUserSessionId,
-} from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
-import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
-import { registerBootstrapHookBridge } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-hook-bridge';
-import { registerBootstrapRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-runtime-events';
+} from '@/runtime/index.ts';
+import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@/runtime/index.ts';
+import { registerBootstrapHookBridge } from '@/runtime/index.ts';
+import { registerBootstrapRuntimeEvents } from '@/runtime/index.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
 
@@ -93,7 +94,7 @@ export async function initializeBootstrapCore(
 
   const featureFlags = createFeatureFlagManager();
   featureFlags.loadFromConfig({
-    flags: (configManager.getCategory('featureFlags') as Record<string, import('@pellux/goodvibes-sdk/platform/runtime/feature-flags/types').FlagState>) ?? {},
+    flags: (configManager.getCategory('featureFlags') as Record<string, import('@/runtime/index.ts').FlagState>) ?? {},
   });
 
   const userSessionId = `user-${generateUserSessionId()}`;
@@ -320,7 +321,7 @@ export async function initializeBootstrapCore(
   // adds them here so operators can observe constraint enumeration and violations
   // in the SystemMessagesPanel and main conversation.
   runtimeUnsubs.push(
-    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').WorkflowEvent, { type: 'WORKFLOW_CONSTRAINTS_ENUMERATED' }>>(
+    runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_CONSTRAINTS_ENUMERATED' }>>(
       'WORKFLOW_CONSTRAINTS_ENUMERATED',
       ({ payload }) => {
         const router = systemMessageRouterRef.value;
@@ -337,7 +338,7 @@ export async function initializeBootstrapCore(
     ),
   );
   runtimeUnsubs.push(
-    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').WorkflowEvent, { type: 'WORKFLOW_FIX_ATTEMPTED' }>>(
+    runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_FIX_ATTEMPTED' }>>(
       'WORKFLOW_FIX_ATTEMPTED',
       ({ payload }) => {
         const router = systemMessageRouterRef.value;
@@ -354,7 +355,7 @@ export async function initializeBootstrapCore(
     ),
   );
   runtimeUnsubs.push(
-    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').WorkflowEvent, { type: 'WORKFLOW_REVIEW_COMPLETED' }>>(
+    runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_REVIEW_COMPLETED' }>>(
       'WORKFLOW_REVIEW_COMPLETED',
       ({ payload }) => {
         const router = systemMessageRouterRef.value;
@@ -463,7 +464,7 @@ export async function initializeBootstrapCore(
 
   const runtime: MutableRuntimeState = {
     model: configManager.get('provider.model') as string,
-    provider: configManager.get('provider.provider') as string,
+    provider: getProviderIdFromModel(configManager.get('provider.model')),
     debugMode: false,
     systemPrompt: loadBootstrapSystemPrompt(configManager) || getConfiguredSystemPrompt(configManager) || '',
     reasoningEffort: (configManager.get('provider.reasoningEffort') as string | undefined) ?? '',

@@ -1,13 +1,13 @@
 import { randomBytes } from 'node:crypto';
 
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { type SessionMeta } from '@pellux/goodvibes-sdk/platform/sessions/manager';
-import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
+import { type SessionMeta } from '@pellux/goodvibes-sdk/platform/sessions';
+import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationTitleSource } from '../../core/conversation';
-import type { SessionReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
-import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
+import type { SessionReturnContextSummary } from '@/runtime/index.ts';
+import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
 import { requirePanelManager, requireProviderApi, requireSessionManager } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
   const normalized = (raw ?? 'all').toLowerCase().replace(/-/g, '_');

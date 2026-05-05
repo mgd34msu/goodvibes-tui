@@ -5,17 +5,17 @@ import {
   normalizeAtSchedule,
   normalizeCronSchedule,
   normalizeEverySchedule,
-} from '@pellux/goodvibes-sdk/platform/automation/index';
-import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/index';
-import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
-import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation/schedules';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+} from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type {
   AutomationExecutionPolicy,
   AutomationExternalContentSource,
   AutomationSessionTarget,
   AutomationWakeMode,
-} from '@pellux/goodvibes-sdk/platform/automation/session-targets';
+} from '@pellux/goodvibes-sdk/platform/automation';
 
 function formatSchedule(schedule: AutomationScheduleDefinition): string {
   switch (schedule.kind) {

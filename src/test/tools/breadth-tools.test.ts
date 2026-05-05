@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTaskTool } from '@pellux/goodvibes-sdk/platform/tools/task/index';
-import { createTeamTool } from '@pellux/goodvibes-sdk/platform/tools/team/index';
-import { createWorklistTool } from '@pellux/goodvibes-sdk/platform/tools/worklist/index';
-import { createPacketTool } from '@pellux/goodvibes-sdk/platform/tools/packet/index';
-import { createQueryTool } from '@pellux/goodvibes-sdk/platform/tools/query/index';
-import { createRemoteTool } from '@pellux/goodvibes-sdk/platform/tools/remote-trigger/index';
-import { controlTool } from '@pellux/goodvibes-sdk/platform/tools/control/index';
-import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
-import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
+import { createTaskTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { createTeamTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { createWorklistTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { createPacketTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { createQueryTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { createRemoteTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { controlTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions';
+import { RemoteRunnerRegistry } from '@/runtime/index.ts';
 
 describe('tool breadth additions', () => {
   const originalCwd = process.cwd();

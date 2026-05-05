@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------

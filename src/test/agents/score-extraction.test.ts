@@ -3,7 +3,7 @@ import {
   extractScoreFromText,
   extractPassedFromText,
   extractIssuesFromText,
-} from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
+} from '@pellux/goodvibes-sdk/platform/agents';
 
 // ---------------------------------------------------------------------------
 // extractScoreFromText

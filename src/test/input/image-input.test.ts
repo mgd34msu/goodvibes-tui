@@ -5,13 +5,13 @@ import { join } from 'node:path';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { getTestProviderRegistry } from '../helpers/runtime-services.ts';
-import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 
 type InputHandlerImageTestAccess = {
   pasteRegistry: Map<string, string>;
@@ -212,10 +212,10 @@ describe('addUserMessage with ContentPart[]', () => {
 
 describe('Orchestrator capability check for non-multimodal models', () => {
   test('strips images and adds warning when model lacks multimodal capability', async () => {
-    const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools/registry');
+    const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools');
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { RuntimeEventBus } = await import('@pellux/goodvibes-sdk/platform/runtime/events/index');
+    const { RuntimeEventBus } = await import('@/runtime/index.ts');
 
     const runtimeBus = new RuntimeEventBus();
     const toolRegistry = new ToolRegistry();
@@ -245,6 +245,7 @@ describe('Orchestrator capability check for non-multimodal models', () => {
     // Inject a non-multimodal model into provider registry for this test
     const originalGetCurrentModel = providerRegistry.getCurrentModel.bind(providerRegistry);
     const mockBackingProvider = providerRegistry.get('openrouter');
+    if (!mockBackingProvider) throw new Error('Expected openrouter provider in test registry');
     const originalChat = mockBackingProvider.chat.bind(mockBackingProvider);
     let systemMessages: string[] = [];
     const origAddSystem = cm.addSystemMessage.bind(cm);

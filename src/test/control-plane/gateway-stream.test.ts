@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { RuntimeEventBus } from '@/runtime/index.ts';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };

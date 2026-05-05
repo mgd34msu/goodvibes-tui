@@ -1,14 +1,14 @@
 import { InfiniteBuffer } from './history.ts';
 import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
 import type { SplashOptions } from '../utils/splash-lines.ts';
-import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core/transcript-events/index';
+import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types';
+import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
 import {
   ConversationManager as SdkConversationManager,
   type BlockMeta as SdkBlockMeta,
-} from '@pellux/goodvibes-sdk/platform/core/conversation';
+} from '@pellux/goodvibes-sdk/platform/core';
 import {
   addConversationSplashScreen,
   appendConversationMessages,
@@ -33,7 +33,7 @@ export type {
   TokenUsage,
   ConversationMessageSnapshot,
   ConversationTitleSource,
-} from '@pellux/goodvibes-sdk/platform/core/conversation';
+} from '@pellux/goodvibes-sdk/platform/core';
 
 export type { SdkBlockMeta };
 
@@ -50,7 +50,7 @@ export interface BlockMeta extends SdkBlockMeta {
 }
 
 // Import internal types needed for rendering helpers
-import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core/conversation';
+import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 type Message = ConversationMessageSnapshot;
 
 export class ConversationManager extends SdkConversationManager {
@@ -120,7 +120,7 @@ export class ConversationManager extends SdkConversationManager {
       toolCalls?: ToolCall[];
       reasoningContent?: string;
       reasoningSummary?: string;
-      usage?: import('@pellux/goodvibes-sdk/platform/core/conversation').TokenUsage;
+      usage?: import('@pellux/goodvibes-sdk/platform/core').TokenUsage;
       model?: string;
       provider?: string;
     },
@@ -269,7 +269,7 @@ export class ConversationManager extends SdkConversationManager {
     branches?: Record<string, Message[]>;
     currentBranch?: string;
     title?: string;
-    titleSource?: import('@pellux/goodvibes-sdk/platform/core/conversation').ConversationTitleSource;
+    titleSource?: import('@pellux/goodvibes-sdk/platform/core').ConversationTitleSource;
   }): void {
     super.fromJSON(data);
     this.history.clear();
@@ -548,4 +548,4 @@ export class ConversationManager extends SdkConversationManager {
   }
 }
 
-export { parseDiffForApply, applyDiffContent } from '@pellux/goodvibes-sdk/platform/core/conversation-diff';
+export { parseDiffForApply, applyDiffContent } from '@pellux/goodvibes-sdk/platform/core';

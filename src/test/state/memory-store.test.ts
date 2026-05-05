@@ -3,15 +3,15 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { MemoryStore, MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
-import { resolveMemoryVectorDbPath } from '@pellux/goodvibes-sdk/platform/state/memory-vector-store';
-import { DEFAULT_MEMORY_EMBEDDING_DIMS, MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
+import { MemoryStore, MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { resolveMemoryVectorDbPath } from '@pellux/goodvibes-sdk/platform/state';
+import { DEFAULT_MEMORY_EMBEDDING_DIMS, MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { unlinkSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 function tempDbPath(): string {
   return join(tmpdir(), `memory-test-${randomUUID()}.db`);

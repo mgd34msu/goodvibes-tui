@@ -1,44 +1,44 @@
-import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ConversationManager } from '../core/conversation';
 import type { ConfigManager } from '../config/index.ts';
 import type { DeepReadonly, GoodVibesConfig } from '../config/index.ts';
-import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SelectionItem, SelectionResult, SelectionAction } from './selection-modal.ts';
-import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
+import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
 import type { OpenOnboardingWizardOptions } from './handler-ui-state.ts';
-import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
-import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks/hook-api';
-import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp/mcp-api';
-import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
-import type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
-import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
-import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
-import type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
-import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
+import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
+import type { OpsApi } from '@/runtime/index.ts';
+import type { OperatorClient } from '@/runtime/index.ts';
+import type { PeerClient } from '@/runtime/index.ts';
+import type { DirectTransport } from '@/runtime/index.ts';
+import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import type {
   CommandWorkspaceShellServices,
-} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-workspace';
+} from '@/runtime/index.ts';
 import type {
   CommandPlatformShellServices,
-} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-platform';
+} from '@/runtime/index.ts';
 import type {
   CommandExtensionShellServices,
-} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-extensions';
+} from '@/runtime/index.ts';
 import type {
   CommandOpsShellServices,
   RemoteCommandService,
   PlanRuntimeService,
-} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
+} from '@/runtime/index.ts';
 
 export type {
   RemoteCommandService,
   PlanRuntimeService,
-} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
+} from '@/runtime/index.ts';
 
 export interface CommandRuntimeState {
   model: string;
@@ -58,8 +58,8 @@ export interface CommandUiActions {
   renderRequest: () => void;
   print: (text: string) => void;
   exit: () => void;
-  submitInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[]) => void;
-  submitSpokenInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[]) => void;
+  submitInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers').ContentPart[]) => void;
+  submitSpokenInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers').ContentPart[]) => void;
   stopSpokenOutput?: () => void;
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
   cancelGeneration?: () => void;
@@ -119,17 +119,17 @@ export interface CommandShellUiOpeners {
 export interface CommandSessionServices {
   readonly conversationManager: ConversationManager;
   readonly runtime: CommandRuntimeState;
-  readonly sessionManager?: import('@pellux/goodvibes-sdk/platform/sessions/manager').SessionManager;
-  readonly sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core/session-memory').SessionMemoryStore;
-  readonly sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core/session-lineage').SessionLineageTracker;
-  readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions/change-tracker').SessionChangeTracker;
+  readonly sessionManager?: import('@pellux/goodvibes-sdk/platform/sessions').SessionManager;
+  readonly sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core').SessionMemoryStore;
+  readonly sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core').SessionLineageTracker;
+  readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions').SessionChangeTracker;
 }
 
 export interface CommandProviderServices {
   readonly providerRegistry: ProviderRegistry;
-  readonly providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers/optimizer').ProviderOptimizer;
-  readonly favoritesStore?: import('@pellux/goodvibes-sdk/platform/providers/favorites').FavoritesStore;
-  readonly benchmarkStore?: import('@pellux/goodvibes-sdk/platform/providers/model-benchmarks').BenchmarkStore;
+  readonly providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers').ProviderOptimizer;
+  readonly favoritesStore?: import('@pellux/goodvibes-sdk/platform/providers').FavoritesStore;
+  readonly benchmarkStore?: import('@pellux/goodvibes-sdk/platform/providers').BenchmarkStore;
 }
 
 /**
@@ -140,9 +140,9 @@ export interface CommandWorkspaceUiServices {
   keybindingsManager?: KeybindingsManager;
   fileUndoManager?: FileUndoManager;
   panelManager?: PanelManager;
-  profileManager?: import('@pellux/goodvibes-sdk/platform/profiles/manager').ProfileManager;
-  bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks/manager').BookmarkManager;
-  projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge/index').ProjectPlanningService;
+  profileManager?: import('@pellux/goodvibes-sdk/platform/profiles').ProfileManager;
+  bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks').BookmarkManager;
+  projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
   projectPlanningProjectId?: string;
 }
 

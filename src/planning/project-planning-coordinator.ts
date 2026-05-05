@@ -3,7 +3,7 @@ import type {
   ProjectPlanningQuestion,
   ProjectPlanningService,
   ProjectPlanningState,
-} from '@pellux/goodvibes-sdk/platform/knowledge/index';
+} from '@pellux/goodvibes-sdk/platform/knowledge';
 
 export interface ProjectPlanningCoordinatorOptions {
   readonly service: ProjectPlanningService;

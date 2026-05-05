@@ -5,7 +5,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SessionPickerModal } from '../../input/session-picker-modal.ts';
-import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { renderSessionPickerModal } from '../../renderer/session-picker-modal.ts';
 import { lineToString, linesToText } from '../setup.ts';
 

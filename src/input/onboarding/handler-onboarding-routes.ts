@@ -1,4 +1,4 @@
-import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import {
   getOnboardingWizardVisibleFieldCount,
   type OnboardingWizardAction,

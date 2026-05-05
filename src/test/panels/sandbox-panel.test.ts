@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SandboxPanel } from '../../panels/sandbox-panel.ts';
-import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
+import { SandboxSessionRegistry } from '@/runtime/index.ts';
 
 describe('SandboxPanel', () => {
   let sessions: SandboxSessionRegistry;

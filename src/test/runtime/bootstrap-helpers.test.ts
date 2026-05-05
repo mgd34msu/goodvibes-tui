@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { loadBootstrapSystemPrompt } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { loadBootstrapSystemPrompt } from '@/runtime/index.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeTempDir(): string {

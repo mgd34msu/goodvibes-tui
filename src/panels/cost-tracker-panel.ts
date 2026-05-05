@@ -5,7 +5,7 @@
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { AgentEvent, TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { AgentEvent, TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
   buildEmptyState,

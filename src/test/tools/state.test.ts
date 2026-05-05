@@ -7,11 +7,11 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, existsSync, rmSync, mkdtempSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
-import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
-import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import { createStateTool } from '@pellux/goodvibes-sdk/platform/tools/state/index';
+import { KVState } from '@pellux/goodvibes-sdk/platform/state';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
+import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import { createStateTool } from '@pellux/goodvibes-sdk/platform/tools';
 import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
@@ -207,21 +207,20 @@ describe('StateTool', () => {
   // set — reserved key rejection
   // -------------------------------------------------------------------------
 
-  test('set silently ignores reserved key "id"', async () => {
-    // KVState silently drops reserved keys; tool should still succeed
+  test('set rejects reserved key "id" without partially writing safe values', async () => {
     const res = await tool.execute({ mode: 'set', values: { id: 'hack', myData: 'ok' } });
-    expect(res.success).toBe(true);
-    // "id" should NOT have been overwritten
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('reserved');
     const getRes = await run<StateGetOutput>(tool, { mode: 'get', keys: ['id', 'myData'] });
-    // id was reserved so get might return the session id or nothing — but myData must be set
-    expect(getRes.parsed.values.myData).toBe('ok');
+    expect(getRes.parsed.values.myData).toBeUndefined();
   });
 
-  test('set silently ignores reserved key "started_at"', async () => {
+  test('set rejects reserved key "started_at" without partially writing safe values', async () => {
     const res = await tool.execute({ mode: 'set', values: { started_at: '1970', safe: true } });
-    expect(res.success).toBe(true);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('reserved');
     const getRes = await run<StateGetOutput>(tool, { mode: 'get', keys: ['safe'] });
-    expect(getRes.parsed.values.safe).toBe(true);
+    expect(getRes.parsed.values.safe).toBeUndefined();
   });
 
   test('set with no values object returns error', async () => {

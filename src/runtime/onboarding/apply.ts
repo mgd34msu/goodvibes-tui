@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
+import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config';
 import { CONFIG_SCHEMA, DEFAULT_CONFIG } from '../../config/index.ts';
 import type { FeatureFlagConfigKey } from '../surface-feature-flags.ts';
 import {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import {
   attachSpokenTurnModelRouting,
   createSpokenTurnInputOptions,

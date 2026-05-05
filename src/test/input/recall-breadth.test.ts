@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { recallCommand } from '../../input/commands/memory.ts';
-import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
-import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/memory-store';
-import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { createShellPathService } from '@/runtime/index.ts';
 
 function makeBaseContext(registry: MemoryRegistry, printed: string[]): CommandContext {
   const providerRegistry = {} as never;

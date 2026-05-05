@@ -7,12 +7,12 @@ import { createEmptyLine, type Line, type Cell } from '../types/grid.ts';
 import { getSplashLines, type SplashOptions } from '../utils/splash-lines.ts';
 import { interpolateColor, getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from '../renderer/layout.ts';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
 import type { BlockMeta, ConversationMessageSnapshot } from './conversation';
-import { parseDiffForApply } from '@pellux/goodvibes-sdk/platform/core/conversation-diff';
-import { extractUserDisplayText } from '@pellux/goodvibes-sdk/platform/core/conversation-utils';
+import { parseDiffForApply } from '@pellux/goodvibes-sdk/platform/core';
+import { extractUserDisplayText } from '@pellux/goodvibes-sdk/platform/core';
 
 type Message = ConversationMessageSnapshot;
 

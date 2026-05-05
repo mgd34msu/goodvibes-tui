@@ -1,4 +1,4 @@
-import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { CommandContext, CommandRegistry } from './command-registry.ts';
 import { AutocompleteEngine } from './autocomplete.ts';
@@ -151,7 +151,7 @@ export interface InputFeedContext {
   readonly handleBlockToggle: () => void;
   readonly findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   readonly cleanupMarkerRegistry: (text: string) => void;
-  readonly expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[];
+  readonly expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers').ContentPart[];
   readonly openModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
   readonly openProviderModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
   readonly onModelPickerCommit: () => boolean;

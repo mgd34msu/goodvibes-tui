@@ -1,8 +1,8 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import net from 'node:net';
 import { join } from 'node:path';
-import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon/service-manager';
-import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon/service-manager';
+import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon';
+import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
 import type { ConfigManager } from '../config/index.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import type { RuntimeEndpointBinding, RuntimeEndpointId } from './endpoints.ts';

@@ -1,4 +1,4 @@
-import type { HostServiceStatus } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
+import type { HostServiceStatus } from '@/runtime/index.ts';
 
 export interface OnboardingExternalServiceState {
   readonly daemonRunning?: boolean;

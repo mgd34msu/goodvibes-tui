@@ -1,11 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { createWorkflowServices, createWorkflowTool } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
+import { createWorkflowServices, createWorkflowTool } from '@pellux/goodvibes-sdk/platform/tools';
 import {
   WorkflowManager,
   TriggerManager,
   ScheduleManager,
   WORKFLOW_DEFINITIONS,
-} from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
+} from '@pellux/goodvibes-sdk/platform/tools';
 
 // ---------------------------------------------------------------------------
 // Helpers

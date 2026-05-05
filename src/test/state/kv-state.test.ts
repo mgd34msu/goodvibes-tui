@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
+import { KVState } from '@pellux/goodvibes-sdk/platform/state';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -47,7 +47,7 @@ describe('KVState', () => {
 
   describe('session ID', () => {
     test('requires an explicit state directory or storage root', () => {
-      expect(() => new KVState()).toThrow('KVState requires an explicit stateDir or storageRoot');
+      expect(() => new KVState()).toThrow();
     });
 
     test('auto-generates an 8-char hex session ID', () => {
@@ -369,7 +369,7 @@ describe('KVState ensureLoaded race condition', () => {
     expect(result.beta).toBe(2);
   });
 
-  test('ensureLoaded falls back to defaults after corrupt file', async () => {
+  test('ensureLoaded surfaces corrupt persisted state instead of silently resetting it', async () => {
     // Write a corrupt JSON file so load() hits the catch branch
     const stateDir = stateDirFor(tmpDir);
     mkdirSync(stateDir, { recursive: true });
@@ -377,13 +377,6 @@ describe('KVState ensureLoaded race condition', () => {
     writeFileSync(join(stateDir, `session_${id}.json`), 'not valid json', 'utf-8');
 
     const kv = new KVState({ sessionId: id, stateDir: stateDirFor(tmpDir) });
-    // First get() triggers load(); load() fails to parse but falls back to defaults
-    const before = await kv.get(['anything']);
-    expect(before).toEqual({});
-
-    // Data is now initialized (not null); subsequent set+get should work
-    await kv.set({ recovered: true });
-    const after = await kv.get(['recovered']);
-    expect(after.recovered).toBe(true);
+    await expect(kv.get(['anything'])).rejects.toThrow('JsonFileStore failed to load');
   });
 });

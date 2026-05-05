@@ -3,17 +3,17 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
-import { RuntimeEventBus, createEventEnvelope, type AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import { createDirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
-import { createHttpTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http';
-import { createRealtimeTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/realtime';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
+import { RuntimeEventBus, createEventEnvelope, type AgentEvent } from '@/runtime/index.ts';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import { createDirectTransport } from '@/runtime/index.ts';
+import { createHttpTransport } from '@/runtime/index.ts';
+import { createRealtimeTransport } from '@/runtime/index.ts';
 import { createAuthenticatedWebSocket } from '../helpers/authenticated-websocket.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 
 type TransportKind = 'direct' | 'http' | 'realtime';
 

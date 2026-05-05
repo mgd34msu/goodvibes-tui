@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
-import { createHttpJsonTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-json-transport';
-import { createPeerRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/peer-remote-client';
+import { getDistributedNodeHostContract } from '@/runtime/index.ts';
+import { createHttpJsonTransport } from '@/runtime/index.ts';
+import { createPeerRemoteClient } from '@/runtime/index.ts';
 
 function createJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -24,7 +24,22 @@ describe('PeerRemoteClient', () => {
       authToken: 'peer-token',
       fetchImpl: createFetchStub(async (input?: unknown, init?: unknown) => {
         calls.push({ url: String(input), init: init as RequestInit | undefined });
-        return createJsonResponse({ ok: true });
+        return createJsonResponse({
+          work: {
+            id: 'work-1',
+            peerId: 'peer-1',
+            peerKind: 'node',
+            type: 'invoke',
+            command: 'run',
+            priority: 'default',
+            status: 'completed',
+            createdAt: 1,
+            updatedAt: 2,
+            queuedBy: 'operator',
+            result: { ok: true },
+            metadata: {},
+          },
+        });
       }),
     });
     const client = createPeerRemoteClient(transport, getDistributedNodeHostContract());

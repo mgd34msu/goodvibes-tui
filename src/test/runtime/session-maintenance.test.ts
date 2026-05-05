@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
-import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
+import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '@/runtime/index.ts';
 
 const configManager = createTestConfigManager();
 

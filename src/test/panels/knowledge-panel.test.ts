@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/memory-store';
-import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { KnowledgePanel } from '../../panels/knowledge-panel.ts';
 import type { Line } from '../../types/grid.ts';
 

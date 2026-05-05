@@ -2,12 +2,12 @@ import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { existsSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AgentOrchestrator, summarizeToolArgs } from '@pellux/goodvibes-sdk/platform/agents/orchestrator';
-import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
-import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/index';
-import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
+import { AgentOrchestrator, summarizeToolArgs } from '@pellux/goodvibes-sdk/platform/agents';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
+import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
 import { randomUUID } from 'node:crypto';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
@@ -63,9 +63,32 @@ const MOCK_MODEL = {
   displayName: 'Mock',
   description: '',
   capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
-  contextWindow: 8192,
+  contextWindow: 128000,
   selectable: true,
 };
+
+function registerRuntimeModel(
+  reg: ReturnType<typeof getActualRegistry>,
+  providerId: string,
+  modelId: string,
+  provider: LLMProvider,
+): void {
+  const runtimeProvider = { ...provider, name: providerId, models: [modelId] };
+  reg.registerRuntimeProvider({
+    provider: runtimeProvider,
+    replace: true,
+    models: [{
+      id: modelId,
+      provider: providerId,
+      registryKey: `${providerId}:${modelId}`,
+      displayName: modelId,
+      description: 'Test model',
+      capabilities: { toolCalling: true, codeEditing: false, reasoning: false, multimodal: false },
+      contextWindow: 128000,
+      selectable: true,
+    }],
+  });
+}
 
 /**
  * Return the actual ProviderRegistry instance that the proxy delegates to.
@@ -87,6 +110,7 @@ async function withMockProvider<T>(provider: LLMProvider, fn: () => Promise<T>):
   const reg = getActualRegistry();
   const origGetForModel = reg.getForModel.bind(reg);
   const origGetCurrentModel = reg.getCurrentModel.bind(reg);
+  registerRuntimeModel(reg, 'mock', 'mock-model', provider);
   reg.getForModel = mock(() => provider);
   reg.getCurrentModel = mock(() => MOCK_MODEL);
   try {
@@ -238,28 +262,11 @@ describe('AgentOrchestrator', () => {
       }
     });
 
-    test('falls back to current model when requested model is not found', async () => {
-      const provider = makeMockProvider([{ content: 'Task done via fallback.' }]);
-      const reg = getActualRegistry();
-      const origGetForModel = reg.getForModel.bind(reg);
-      const origGetCurrentModel = reg.getCurrentModel.bind(reg);
-      let callCount = 0;
-      reg.getForModel = mock((..._args: Parameters<typeof origGetForModel>) => {
-        callCount++;
-        if (callCount === 1) throw new Error('model not found');
-        return provider;
-      });
-      reg.getCurrentModel = mock(() => MOCK_MODEL);
-      try {
-        const record = makeRecord({ model: 'some-other-model' });
-        await orchestrator.runAgent(record);
-        expect(record.status).toBe('completed');
-        // getForModel called twice: once for requested model (throws), once for fallback
-        expect(callCount).toBe(2);
-      } finally {
-        reg.getForModel = origGetForModel;
-        reg.getCurrentModel = origGetCurrentModel;
-      }
+    test('fails when an agent model override is not provider-qualified', async () => {
+      const record = makeRecord({ model: 'some-other-model' });
+      await orchestrator.runAgent(record);
+      expect(record.status).toBe('failed');
+      expect(record.error).toContain("Agent model overrides must be provider-qualified registry keys");
     });
 
     test('injects agent context and reasoning effort into provider requests', async () => {
@@ -297,6 +304,7 @@ describe('AgentOrchestrator', () => {
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
       const seen: Array<{ modelId: string; provider?: string }> = [];
+      registerRuntimeModel(reg, 'openai', 'gpt-5.4', provider);
       reg.getForModel = mock((modelId: string, providerId?: string) => {
         seen.push({ modelId, provider: providerId });
         return provider;
@@ -308,22 +316,23 @@ describe('AgentOrchestrator', () => {
         registryKey: 'openai:gpt-5.4',
       }));
       try {
-        const record = makeRecord({ model: 'gpt-5.4' });
+        const record = makeRecord({ model: 'openai:gpt-5.4' });
         await orchestrator.runAgent(record);
         expect(record.status).toBe('completed');
-        expect(seen[0]).toEqual({ modelId: 'gpt-5.4', provider: 'openai' });
+        expect(seen[0]).toEqual({ modelId: 'openai:gpt-5.4', provider: 'openai' });
       } finally {
         reg.getForModel = origGetForModel;
         reg.getCurrentModel = origGetCurrentModel;
       }
     });
 
-    test('keeps explicitly concrete providers scoped even when a mismatched registry key is requested', async () => {
+    test('rejects explicitly concrete providers when the registry key belongs to another provider', async () => {
       const provider = makeMockProvider([{ content: 'Task done.' }]);
       const reg = getActualRegistry();
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
       const seen: Array<{ modelId: string; provider?: string }> = [];
+      registerRuntimeModel(reg, 'abacus', 'gpt-5.4', provider);
       reg.getForModel = mock((modelId: string, providerId?: string) => {
         seen.push({ modelId, provider: providerId });
         return provider;
@@ -341,8 +350,9 @@ describe('AgentOrchestrator', () => {
           routing: { providerSelection: 'concrete' },
         });
         await orchestrator.runAgent(record);
-        expect(record.status).toBe('completed');
-        expect(seen[0]).toEqual({ modelId: 'gpt-5.4', provider: 'openai' });
+        expect(record.status).toBe('failed');
+        expect(record.error).toContain("conflicts with provider 'openai'");
+        expect(seen).toEqual([]);
       } finally {
         reg.getForModel = origGetForModel;
         reg.getCurrentModel = origGetCurrentModel;
@@ -355,6 +365,7 @@ describe('AgentOrchestrator', () => {
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
       const seen: Array<{ modelId: string; provider?: string }> = [];
+      registerRuntimeModel(reg, 'abacus', 'gpt-5.4', provider);
       reg.getForModel = mock((modelId: string, providerId?: string) => {
         seen.push({ modelId, provider: providerId });
         return provider;
@@ -379,7 +390,7 @@ describe('AgentOrchestrator', () => {
       }
     });
 
-    test('honors explicit unresolved-model fail policy instead of falling back to the current model', async () => {
+    test('fails unresolved provider-qualified model overrides instead of falling back to the current model', async () => {
       const reg = getActualRegistry();
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
@@ -396,8 +407,7 @@ describe('AgentOrchestrator', () => {
       }));
       try {
         const record = makeRecord({
-          model: 'missing-model',
-          routing: { unresolvedModelPolicy: 'fail' },
+          model: 'openai:missing-model',
         });
         await orchestrator.runAgent(record);
         expect(record.status).toBe('failed');
@@ -429,10 +439,17 @@ describe('AgentOrchestrator', () => {
       const reg = getActualRegistry();
       const origGetForModel = reg.getForModel.bind(reg);
       const origGetCurrentModel = reg.getCurrentModel.bind(reg);
-      reg.getForModel = mock((modelId: string) => modelId === 'fallback-model' ? fallbackProvider : primaryProvider);
-      reg.getCurrentModel = mock(() => ({ ...MOCK_MODEL, id: 'primary-model', provider: 'primary' }));
+      registerRuntimeModel(reg, 'primary', 'primary-model', primaryProvider);
+      registerRuntimeModel(reg, 'fallback', 'fallback-model', fallbackProvider);
+      reg.getForModel = mock((modelId: string) => modelId === 'fallback:fallback-model' ? fallbackProvider : primaryProvider);
+      reg.getCurrentModel = mock(() => ({
+        ...MOCK_MODEL,
+        id: 'primary-model',
+        provider: 'primary',
+        registryKey: 'primary:primary-model',
+      }));
       try {
-        const record = makeRecord({ model: 'primary-model', fallbackModels: ['fallback-model'] });
+        const record = makeRecord({ model: 'primary:primary-model', fallbackModels: ['fallback:fallback-model'] });
         await orchestrator.runAgent(record);
         expect(record.status).toBe('completed');
         expect(fallbackProvider.chat).toHaveBeenCalled();

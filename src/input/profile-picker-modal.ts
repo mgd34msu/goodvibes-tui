@@ -5,11 +5,11 @@
  * and handles load/delete/save actions.
  */
 
-import type { ProfileInfo, ProfileData, ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import type { ProfileInfo, ProfileData, ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 /** Known display setting keys (subset of ConfigKey that maps to display.*). */
 const DISPLAY_KEYS: ConfigKey[] = [

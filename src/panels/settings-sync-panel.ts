@@ -10,7 +10,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
-import { getSettingsControlPlaneSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
+import { getSettingsControlPlaneSnapshot } from '@/runtime/index.ts';
 import type { ConfigManager } from '../config/index.ts';
 
 const C = {

@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { ForensicsCollector } from '@pellux/goodvibes-sdk/platform/runtime/forensics/collector';
-import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import { PhasedToolExecutor } from '@pellux/goodvibes-sdk/platform/runtime/tools/phased-executor';
-import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
-import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
+import type { TurnEvent } from '@/runtime/index.ts';
+import type { TaskEvent } from '@/runtime/index.ts';
+import { ForensicsCollector } from '@/runtime/index.ts';
+import { ForensicsRegistry } from '@/runtime/index.ts';
+import { PhasedToolExecutor } from '@/runtime/index.ts';
+import type { ToolRuntimeContext } from '@/runtime/index.ts';
+import type { Tool, ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };

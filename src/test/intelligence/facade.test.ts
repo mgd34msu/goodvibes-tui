@@ -7,11 +7,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { createShellPathService } from '@/runtime/index.ts';
 
-import { CodeIntelligence, pathToUri, uriToPath } from '@pellux/goodvibes-sdk/platform/intelligence/facade';
-import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/service';
-import { LspService } from '@pellux/goodvibes-sdk/platform/intelligence/lsp/service';
+import { CodeIntelligence, pathToUri, uriToPath } from '@pellux/goodvibes-sdk/platform/intelligence';
+import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence';
+import { LspService } from '@pellux/goodvibes-sdk/platform/intelligence';
 import {
   getTestCodeIntelligence,
   getTestLspService,
@@ -23,7 +23,7 @@ import {
   loadLanguageConfigs,
   getLanguageConfig,
   getDefaultConfigs,
-} from '@pellux/goodvibes-sdk/platform/intelligence/config';
+} from '@pellux/goodvibes-sdk/platform/intelligence';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -507,6 +507,7 @@ function makeMockLspService(responses: Record<string, unknown> = {}) {
   const mockClient = {
     isRunning: true,
     request: async (method: string, _params: unknown) => responses[method] ?? null,
+    takeNotifications: () => [],
     notify: () => {},
     stop: async () => {},
   };

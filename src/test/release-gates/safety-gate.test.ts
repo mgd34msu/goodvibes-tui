@@ -10,13 +10,13 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { permissionPhase } from '@pellux/goodvibes-sdk/platform/runtime/tools/phases/permission';
-import { guardExecCommand, formatDenialResponse } from '@pellux/goodvibes-sdk/platform/tools/exec/ast-guard';
-import { applySanitizer, resolveSanitizeMode } from '@pellux/goodvibes-sdk/platform/tools/fetch/sanitizer';
-import { PhasedToolExecutor } from '@pellux/goodvibes-sdk/platform/runtime/tools/phased-executor';
-import type { ToolCall, Tool } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
-import type { ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
+import { permissionPhase } from '@/runtime/index.ts';
+import { guardExecCommand, formatDenialResponse } from '@pellux/goodvibes-sdk/platform/tools';
+import { applySanitizer, resolveSanitizeMode } from '@pellux/goodvibes-sdk/platform/tools';
+import { PhasedToolExecutor } from '@/runtime/index.ts';
+import type { ToolCall, Tool } from '@pellux/goodvibes-sdk/platform/types';
+import type { ToolRuntimeContext } from '@/runtime/index.ts';
+import type { ToolExecutionRecord } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

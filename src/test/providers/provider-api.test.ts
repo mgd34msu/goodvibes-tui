@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/index';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { ProviderRuntimeMetadata, LLMProvider, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/index';
-import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ProviderRuntimeMetadata, LLMProvider, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers';
+import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers';
 import {
   createProviderApi,
   type ProviderApiDependencies,
-} from '@pellux/goodvibes-sdk/platform/providers/index';
-import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+} from '@pellux/goodvibes-sdk/platform/providers';
+import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 
 function cloneFavorites(data: FavoritesData): FavoritesData {
   return {
@@ -103,10 +103,10 @@ function createHarness() {
 
   let currentModel = models[0]!;
   let favoritesState: FavoritesData = {
-    pinned: [{ modelId: 'gpt-4o', pinnedAt: '2026-01-01T00:00:00.000Z' }],
+    pinned: [{ registryKey: 'openai:gpt-4o', pinnedAt: '2026-01-01T00:00:00.000Z' }],
     history: [
-      { modelId: 'claude-sonnet', lastUsed: '2026-01-03T00:00:00.000Z', count: 2 },
-      { modelId: 'gpt-4o', lastUsed: '2026-01-02T00:00:00.000Z', count: 1 },
+      { registryKey: 'anthropic:claude-sonnet', lastUsed: '2026-01-03T00:00:00.000Z', count: 2 },
+      { registryKey: 'openai:gpt-4o', lastUsed: '2026-01-02T00:00:00.000Z', count: 1 },
     ],
   };
 
@@ -202,6 +202,10 @@ function createHarness() {
         return provider;
       },
       getCostFromCatalog: (modelId: string) => pricing.get(modelId) ?? { input: 0, output: 0 },
+      getPricingForModel: (modelId: string) => {
+        const cost = pricing.get(modelId);
+        return cost ? { prompt: cost.input, completion: cost.output } : null;
+      },
       has: (id: string) => providers.has(id),
       require: (id: string) => {
         const provider = providers.get(id);
@@ -212,22 +216,22 @@ function createHarness() {
     },
     favoritesStore: {
       load: async () => cloneFavorites(favoritesState),
-      pinModel: async (modelId: string) => {
-        if (!favoritesState.pinned.some((entry) => entry.modelId === modelId)) {
+      pinModel: async (registryKey: string) => {
+        if (!favoritesState.pinned.some((entry) => entry.registryKey === registryKey)) {
           favoritesState = {
             ...favoritesState,
-            pinned: [...favoritesState.pinned, { modelId, pinnedAt: '2026-02-01T00:00:00.000Z' }],
+            pinned: [...favoritesState.pinned, { registryKey, pinnedAt: '2026-02-01T00:00:00.000Z' }],
           };
         }
       },
-      unpinModel: async (modelId: string) => {
+      unpinModel: async (registryKey: string) => {
         favoritesState = {
           ...favoritesState,
-          pinned: favoritesState.pinned.filter((entry) => entry.modelId !== modelId),
+          pinned: favoritesState.pinned.filter((entry) => entry.registryKey !== registryKey),
         };
       },
-      recordUsage: async (modelId: string) => {
-        const existing = favoritesState.history.find((entry) => entry.modelId === modelId);
+      recordUsage: async (registryKey: string) => {
+        const existing = favoritesState.history.find((entry) => entry.registryKey === registryKey);
         if (existing) {
           existing.count += 1;
           existing.lastUsed = '2026-03-01T00:00:00.000Z';
@@ -237,7 +241,7 @@ function createHarness() {
           ...favoritesState,
           history: [
             ...favoritesState.history,
-            { modelId, lastUsed: '2026-03-01T00:00:00.000Z', count: 1 },
+            { registryKey, lastUsed: '2026-03-01T00:00:00.000Z', count: 1 },
           ],
         };
       },
@@ -295,21 +299,21 @@ describe('provider api', () => {
     const { api } = createHarness();
 
     const pinned = await api.pinModel('anthropic:claude-sonnet');
-    expect(pinned.pinned.map((entry) => entry.modelId)).toEqual(['gpt-4o', 'claude-sonnet']);
+    expect(pinned.pinned.map((entry) => entry.registryKey)).toEqual(['openai:gpt-4o', 'anthropic:claude-sonnet']);
 
     const usage = await api.recordModelUsage('synthetic:best-coder');
-    expect(usage.recent[0]?.modelId).toBe('best-coder');
+    expect(usage.recent[0]?.registryKey).toBe('synthetic:best-coder');
     expect(usage.recent[0]?.useCount).toBe(1);
     expect(usage.recent[0]?.available).toBe(true);
 
-    const unpinned = await api.unpinModel('gpt-4o');
-    expect(unpinned.pinned.map((entry) => entry.modelId)).toEqual(['claude-sonnet']);
+    const unpinned = await api.unpinModel('openai:gpt-4o');
+    expect(unpinned.pinned.map((entry) => entry.registryKey)).toEqual(['anthropic:claude-sonnet']);
   });
 
   test('lists benchmark records and supports runtime metadata queries', async () => {
     const { api } = createHarness();
 
-    const benchmarks = await api.listBenchmarks({ modelRefs: ['synthetic:best-coder', 'openai:gpt-4o'] });
+    const benchmarks = await api.listBenchmarks({ registryKeys: ['synthetic:best-coder', 'openai:gpt-4o'] });
     expect(benchmarks).toHaveLength(2);
     expect(benchmarks[0]?.registryKey).toBe('synthetic:best-coder');
     expect(benchmarks[1]?.registryKey).toBe('openai:gpt-4o');
@@ -379,6 +383,6 @@ describe('provider api', () => {
       getCategory: () => ({}),
     };
     const helper = (api.createHelperModel as (config: unknown) => ReturnType<typeof api.createHelperModel>)(helperConfig);
-    await expect(helper.chat('tool_summarize', 'hello', { helperOnly: true })).resolves.toBe('');
+    await expect(helper.chat('tool_summarize', 'hello', { helperOnly: true })).resolves.toBeNull();
   });
 });

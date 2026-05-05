@@ -1,9 +1,9 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { buildSandboxReview, listSandboxPresets, listSandboxProfiles } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
-import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { buildSandboxReview, listSandboxPresets, listSandboxProfiles } from '@/runtime/index.ts';
+import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 import {
   buildBodyText,
   buildEmptyState,

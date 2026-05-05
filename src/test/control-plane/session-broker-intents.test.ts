@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
-import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
-import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
-import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
 
 describe('SharedSessionBroker explicit intents', () => {
   let root = '';

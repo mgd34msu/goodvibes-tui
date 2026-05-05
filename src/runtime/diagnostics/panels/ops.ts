@@ -8,11 +8,11 @@
  * Controls are only shown when the OpsControlPlane reports the action is legal
  * (state machine allows it), satisfying requirement: "No illegal action appears in UI".
  */
-import type { RuntimeEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { PanelConfig } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
-import { DEFAULT_PANEL_CONFIG, appendBounded, applyFilter } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
-import type { DiagnosticFilter } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
-import type { OpsInterventionReason, OpsEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/ops';
+import type { RuntimeEventEnvelope } from '@/runtime/index.ts';
+import type { PanelConfig } from '@/runtime/index.ts';
+import { DEFAULT_PANEL_CONFIG, appendBounded, applyFilter } from '@/runtime/index.ts';
+import type { DiagnosticFilter } from '@/runtime/index.ts';
+import type { OpsInterventionReason, OpsEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../../ui-events.ts';
 
 // ---------------------------------------------------------------------------
@@ -109,8 +109,8 @@ export class OpsPanel {
       note: payload.note,
       outcome: payload.outcome,
       errorMessage: payload.errorMessage,
-      traceId: envelope.traceId,
-      sessionId: envelope.sessionId,
+      traceId: envelope.traceId ?? '',
+      sessionId: envelope.sessionId ?? '',
     };
 
     appendBounded(this._audit, record, this._config.bufferLimit);

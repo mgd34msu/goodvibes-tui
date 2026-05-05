@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // REASONING_BUDGET_MAP constant

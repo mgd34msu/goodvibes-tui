@@ -12,8 +12,8 @@ import {
   canonicalise,
   signBundle,
   verifyBundle,
-} from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-signer';
-import type { SignedPolicyBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-signer';
+} from '@/runtime/index.ts';
+import type { SignedPolicyBundle } from '@/runtime/index.ts';
 
 // ── Fixture helpers ───────────────────────────────────────────────────────────
 

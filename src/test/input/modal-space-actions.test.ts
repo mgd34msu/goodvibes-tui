@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { handleSelectionModalToken, handleSettingsModalToken } from '../../input/handler-modal-routes.ts';
 import { SettingsModal } from '../../input/settings-modal.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { mkdirSync, rmSync } from 'fs';

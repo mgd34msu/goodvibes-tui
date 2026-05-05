@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'path';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { FavoritesStore, type FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { FavoritesStore, type FavoritesData } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // Test isolation — redirect favorites to a per-test temp directory
@@ -41,23 +41,21 @@ describe('FavoritesStore.load', () => {
 
   test('persistence round-trip: save then load', async () => {
     const input: FavoritesData = {
-      pinned: [{ modelId: 'model-a', pinnedAt: '2024-01-01T00:00:00.000Z' }],
-      history: [{ modelId: 'model-b', lastUsed: '2024-01-02T00:00:00.000Z', count: 3 }],
+      pinned: [{ registryKey: 'test:model-a', pinnedAt: '2024-01-01T00:00:00.000Z' }],
+      history: [{ registryKey: 'test:model-b', lastUsed: '2024-01-02T00:00:00.000Z', count: 3 }],
     };
     const store = makeStore();
     await store.save(input);
     const loaded = await store.load();
     expect(loaded.pinned).toHaveLength(1);
-    expect(loaded.pinned[0]?.modelId).toBe('model-a');
+    expect(loaded.pinned[0]?.registryKey).toBe('test:model-a');
     expect(loaded.history).toHaveLength(1);
     expect(loaded.history[0]?.count).toBe(3);
   });
 
   test('returns empty defaults on invalid JSON', async () => {
     writeFileSync(join(tmpDir, 'favorites.json'), 'not-valid-json', 'utf-8');
-    const data = await makeStore().load();
-    expect(data.pinned).toEqual([]);
-    expect(data.history).toEqual([]);
+    await expect(makeStore().load()).rejects.toThrow();
   });
 });
 
@@ -149,7 +147,7 @@ describe('FavoritesStore.recordUsage', () => {
     await store.recordUsage('counted-model');
     await store.recordUsage('counted-model');
     const data = await store.load();
-    const entry = data.history.find((e) => e.modelId === 'counted-model');
+    const entry = data.history.find((e) => e.registryKey === 'counted-model');
     expect(entry?.count).toBe(3);
   });
 
@@ -157,13 +155,13 @@ describe('FavoritesStore.recordUsage', () => {
     const store = makeStore();
     await store.recordUsage('ts-model');
     const data1 = await store.load();
-    const ts1 = data1.history.find((e) => e.modelId === 'ts-model')!.lastUsed;
+    const ts1 = data1.history.find((e) => e.registryKey === 'ts-model')!.lastUsed;
 
     await new Promise((resolve) => setTimeout(resolve, 5));
 
     await store.recordUsage('ts-model');
     const data2 = await store.load();
-    const ts2 = data2.history.find((e) => e.modelId === 'ts-model')!.lastUsed;
+    const ts2 = data2.history.find((e) => e.registryKey === 'ts-model')!.lastUsed;
 
     expect(ts2 > ts1).toBe(true);
   });
@@ -171,7 +169,7 @@ describe('FavoritesStore.recordUsage', () => {
   test('caps history — oldest entries evicted when over 100', async () => {
     const store = makeStore();
     const history = Array.from({ length: 105 }, (_, i) => ({
-      modelId: `model-${String(i).padStart(3, '0')}`,
+      registryKey: `test:model-${String(i).padStart(3, '0')}`,
       lastUsed: new Date(1_000_000 + i * 1000).toISOString(),
       count: 1,
     }));
@@ -179,9 +177,9 @@ describe('FavoritesStore.recordUsage', () => {
     await store.recordUsage('trigger-eviction');
     const data = await store.load();
     expect(data.history.length).toBeLessThanOrEqual(100);
-    const ids = data.history.map((entry) => entry.modelId);
+    const ids = data.history.map((entry) => entry.registryKey);
     for (let i = 0; i < 5; i++) {
-      expect(ids).not.toContain(`model-${String(i).padStart(3, '0')}`);
+      expect(ids).not.toContain(`test:model-${String(i).padStart(3, '0')}`);
     }
     expect(ids).toContain('trigger-eviction');
   });
@@ -189,7 +187,7 @@ describe('FavoritesStore.recordUsage', () => {
   test('caps history at 100 entries via sequential recordUsage', async () => {
     const store = makeStore();
     const history = Array.from({ length: 100 }, (_, i) => ({
-      modelId: `seq-model-${String(i).padStart(3, '0')}`,
+      registryKey: `test:seq-model-${String(i).padStart(3, '0')}`,
       lastUsed: new Date(1_000_000 + i * 1000).toISOString(),
       count: 1,
     }));
@@ -210,16 +208,16 @@ describe('FavoritesStore.getRecentModels', () => {
     await store.save({
       pinned: [],
       history: [
-        { modelId: 'alpha', lastUsed: '2024-01-01T00:00:00.000Z', count: 1 },
-        { modelId: 'beta', lastUsed: '2024-01-02T00:00:00.000Z', count: 1 },
-        { modelId: 'gamma', lastUsed: '2024-01-03T00:00:00.000Z', count: 1 },
+        { registryKey: 'test:alpha', lastUsed: '2024-01-01T00:00:00.000Z', count: 1 },
+        { registryKey: 'test:beta', lastUsed: '2024-01-02T00:00:00.000Z', count: 1 },
+        { registryKey: 'test:gamma', lastUsed: '2024-01-03T00:00:00.000Z', count: 1 },
       ],
     });
 
     const recent = await store.getRecentModels(3);
-    expect(recent[0]).toBe('gamma');
-    expect(recent[1]).toBe('beta');
-    expect(recent[2]).toBe('alpha');
+    expect(recent[0]).toBe('test:gamma');
+    expect(recent[1]).toBe('test:beta');
+    expect(recent[2]).toBe('test:alpha');
   });
 
   test('returns at most N models', async () => {
@@ -227,7 +225,7 @@ describe('FavoritesStore.getRecentModels', () => {
     await store.save({
       pinned: [],
       history: ['a', 'b', 'c', 'd', 'e'].map((id, i) => ({
-        modelId: id,
+        registryKey: `test:${id}`,
         lastUsed: new Date(1_000_000 + i * 1000).toISOString(),
         count: 1,
       })),
@@ -246,11 +244,11 @@ describe('FavoritesStore.getRecentModels', () => {
     await store.save({
       pinned: [],
       history: [
-        { modelId: 'first-used', lastUsed: '2024-01-01T00:00:00.000Z', count: 1 },
-        { modelId: 'last-used', lastUsed: '2024-01-02T00:00:00.000Z', count: 1 },
+        { registryKey: 'test:first-used', lastUsed: '2024-01-01T00:00:00.000Z', count: 1 },
+        { registryKey: 'test:last-used', lastUsed: '2024-01-02T00:00:00.000Z', count: 1 },
       ],
     });
     const recent = await store.getRecentModels(2);
-    expect(recent[0]).toBe('last-used');
+    expect(recent[0]).toBe('test:last-used');
   });
 });

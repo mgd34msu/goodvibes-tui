@@ -16,7 +16,7 @@ import {
   reviewEcosystemCatalogEntry,
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
-} from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
+} from '@/runtime/index.ts';
 import type { UiMarketplaceSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 
 const C = {
@@ -188,7 +188,7 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
         [selectedRow.entry.source.slice(0, Math.max(0, width - 11)), C.value],
       ]));
       selectedLines.push(buildKeyValueLine(width, [
-        { label: 'Compatibility', value: review.compatibility.status, valueColor: review.compatibility.status === 'compatible' ? C.good : C.warn },
+        { label: 'Compatibility', value: review.compatibility.status, valueColor: review.compatibility.status === 'supported' ? C.good : C.warn },
         { label: 'Risk', value: review.riskLevel, valueColor: review.riskLevel === 'low' ? C.good : C.warn },
         { label: 'State', value: selectedRow.installed ? 'installed' : 'curated', valueColor: statusColor(selectedRow.installed) },
       ], C));

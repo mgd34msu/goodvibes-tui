@@ -5,28 +5,28 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { ForensicsRegistry } from '@/runtime/index.ts';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { ConversationManager } from '../../core/conversation';
-import { createOperatorClientServices } from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
+import { createOperatorClientServices } from '@/runtime/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
-import { createRuntimeHookApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-hook-api';
-import { createRuntimeKnowledgeApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-knowledge-api';
-import { createRuntimeMcpApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-mcp-api';
-import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
-import { createOperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
-import { createPeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
+import { createRuntimeHookApi } from '@/runtime/index.ts';
+import { createRuntimeKnowledgeApi } from '@/runtime/index.ts';
+import { createRuntimeMcpApi } from '@/runtime/index.ts';
+import { createRuntimeProviderApi } from '@/runtime/index.ts';
+import { createOperatorClient } from '@/runtime/index.ts';
+import { createPeerClient } from '@/runtime/index.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
-import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/contracts';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
 
 type CommandContextOverrides =
   Omit<Partial<CommandContext>, 'session' | 'provider' | 'workspace' | 'platform' | 'ops' | 'extensions'> & {
@@ -39,7 +39,7 @@ type CommandContextOverrides =
     ops?: Partial<CommandContext['ops']>;
     extensions?: Partial<CommandContext['extensions']>;
   };
-import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 
 describe('operator surfaces gate', () => {
   let configManager: ConfigManager;

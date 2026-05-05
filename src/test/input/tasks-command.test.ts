@@ -3,13 +3,13 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createRuntimeOpsApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-ops-api';
-import { createTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/index';
-import { OpsControlPlane } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { createRuntimeOpsApi } from '@/runtime/index.ts';
+import { createTaskManager } from '@/runtime/index.ts';
+import { OpsControlPlane } from '@/runtime/index.ts';
+import { createShellPathService } from '@/runtime/index.ts';
 import { createTasksReadModel } from '../helpers/ui-read-models.ts';
-import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
+import type { OperatorClient } from '@/runtime/index.ts';
 
 const shellPaths = createShellPathService({
   workingDirectory: '/tmp/goodvibes-test',

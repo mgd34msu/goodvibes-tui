@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:
 import { mkdirSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
   applyOutboundTlsToFetchInit,
   createNetworkFetch,
   inspectOutboundTls,
-} from '@pellux/goodvibes-sdk/platform/runtime/network/index';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+} from '@/runtime/index.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 describe('runtime/network outbound TLS', () => {
   let root: string;

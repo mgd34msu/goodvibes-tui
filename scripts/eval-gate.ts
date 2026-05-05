@@ -14,11 +14,11 @@
  *   --save-baseline     Save the fresh results as the new baseline after comparison.
  */
 
-import { EvalRunner } from '@pellux/goodvibes-sdk/platform/runtime/eval/runner';
-import { BUILTIN_SUITES } from '@pellux/goodvibes-sdk/platform/runtime/eval/suites';
-import { loadBaseline, captureBaseline, writeBaseline } from '@pellux/goodvibes-sdk/platform/runtime/eval/baseline';
-import { formatSuiteResult, formatGateResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/format';
-import { formatScorecard } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
+import { EvalRunner } from '@/runtime/index.ts';
+import { BUILTIN_SUITES } from '@/runtime/index.ts';
+import { loadBaseline, captureBaseline, writeBaseline } from '@/runtime/index.ts';
+import { formatSuiteResult, formatGateResult } from '@/runtime/index.ts';
+import { formatScorecard } from '@/runtime/index.ts';
 
 // ── Argument parsing ──────────────────────────────────────────────────────────
 

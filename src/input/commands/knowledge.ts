@@ -1,4 +1,4 @@
-import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { CommandContext, SlashCommand } from '../command-registry.ts';
 
 const KNOWLEDGE_REVIEW_ACTIONS = ['accept', 'reject', 'resolve', 'reopen', 'edit', 'forget'] as const;

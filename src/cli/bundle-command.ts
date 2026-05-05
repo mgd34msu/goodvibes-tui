@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import { listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { createShellPathService } from '@/runtime/index.ts';
+import { listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/providers';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { getOnboardingCheckMarkerPath } from '../runtime/onboarding/index.ts';

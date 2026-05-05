@@ -3,12 +3,12 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import {
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
-} from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+} from '@/runtime/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
   getTestAgentManager,
   getTestHookDispatcher,

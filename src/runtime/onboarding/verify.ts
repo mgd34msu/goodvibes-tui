@@ -1,4 +1,4 @@
-import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
+import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config';
 import { readOnboardingRuntimeState } from './state.ts';
 import type {
   OnboardingApplyOperation,

@@ -1,11 +1,11 @@
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
-import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers/effort-levels';
-import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers';
+import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers';
 import { executeWriteQuit } from './quit-shared.ts';
 import { compactConversation, requireKeybindingsManager, requireProviderApi } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 export function registerShellCoreCommands(registry: CommandRegistry): void {
   registry.register({
@@ -33,7 +33,6 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           ctx.session.runtime.model = selected.registryKey;
           ctx.session.runtime.provider = selected.providerId;
           ctx.platform.configManager.set('provider.model', selected.registryKey);
-          ctx.platform.configManager.set('provider.provider', selected.providerId);
           ctx.print(`Switched to model: ${selected.displayName} (${selected.providerId})`);
           void providerApi.recordModelUsage(selected.registryKey).catch((err) => { logger.debug('model usage record failed', { err }); });
         } catch (e) {

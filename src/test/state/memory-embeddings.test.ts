@@ -6,8 +6,8 @@ import {
   DEFAULT_MEMORY_EMBEDDING_DIMS,
   HASHED_MEMORY_EMBEDDING_PROVIDER,
   MemoryEmbeddingProviderRegistry,
-} from '@pellux/goodvibes-sdk/platform/state/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+} from '@pellux/goodvibes-sdk/platform/state';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 describe('MemoryEmbeddingProviderRegistry', () => {
   let previousHome: string | undefined;

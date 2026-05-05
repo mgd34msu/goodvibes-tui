@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
 import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { Line } from '../../types/grid.ts';
 import { ProviderStatsPanel } from '../../panels/provider-stats-panel.ts';
 import { ToolInspectorPanel } from '../../panels/tool-inspector-panel.ts';
@@ -19,9 +19,9 @@ import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { OpsStrategyPanel } from '../../panels/ops-strategy-panel.ts';
 import { AgentLogsPanel } from '../../panels/agent-logs-panel.ts';
 import { AgentInspectorPanel } from '../../panels/agent-inspector-panel.ts';
-import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
-import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
-import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
+import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
+import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 
 

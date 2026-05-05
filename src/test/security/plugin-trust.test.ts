@@ -16,18 +16,18 @@ import {
   validatePluginSignature,
   filterCapabilitiesByTrust,
   SAFE_CAPABILITIES,
-} from '@pellux/goodvibes-sdk/platform/runtime/plugins/trust';
-import { PluginQuarantineEngine } from '@pellux/goodvibes-sdk/platform/runtime/plugins/quarantine';
+} from '@/runtime/index.ts';
+import { PluginQuarantineEngine } from '@/runtime/index.ts';
 import {
   resolveCapabilityManifest,
   isHighRiskCapability,
-} from '@pellux/goodvibes-sdk/platform/runtime/plugins/manifest';
+} from '@/runtime/index.ts';
 import {
   HIGH_RISK_CAPABILITIES,
   ALL_CAPABILITIES,
-} from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
-import type { PluginCapability, PluginCapabilityManifest, PluginManifestV2 } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
-import type { PluginTrustTier } from '@pellux/goodvibes-sdk/platform/runtime/plugins/trust';
+} from '@/runtime/index.ts';
+import type { PluginCapability, PluginCapabilityManifest, PluginManifestV2 } from '@/runtime/index.ts';
+import type { PluginTrustTier } from '@/runtime/index.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

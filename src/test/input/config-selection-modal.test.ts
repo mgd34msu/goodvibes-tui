@@ -6,11 +6,11 @@ import { mkdirSync, rmSync } from 'fs';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerConfigCommand } from '../../input/commands/config.ts';
 import { SettingsModal } from '../../input/settings-modal.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config/schema';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
 
 function makeConfigManager(dir: string): ConfigManager {

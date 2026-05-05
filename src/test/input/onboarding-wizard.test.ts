@@ -8,12 +8,13 @@ import { buildGoodVibesSecretKey, buildGoodVibesSecretRef } from '../../input/on
 import { handleOnboardingWizardToken } from '../../input/onboarding/handler-onboarding-routes.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { DEFAULT_CONFIG } from '../../config/index.ts';
+import { getProviderIdFromModel } from '../../config/provider-model.ts';
 import { readOnboardingCheckMarker, type OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 import type { UiRuntimeServices } from '../../runtime/ui-services.ts';
-import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
-import type { HostServiceStatus } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
+import type { HostServiceStatus } from '@/runtime/index.ts';
 
 afterEach(() => {
   resetTestRuntimeServices();
@@ -81,7 +82,7 @@ function makeOnboardingSnapshot(
     capturedAt: 1,
     config,
     providerRouting: {
-      primaryProviderId: config.provider.provider,
+      primaryProviderId: getProviderIdFromModel(config.provider.model),
       primaryModelId: config.provider.model,
       primaryReasoningEffort: config.provider.reasoningEffort,
       embeddingProviderId: config.provider.embeddingProvider,
@@ -653,9 +654,7 @@ describe('OnboardingWizardController', () => {
     expect(configValues.get('featureFlags.web-surface')).toBe('enabled');
     expect(configValues.get('featureFlags.route-binding')).toBe('enabled');
     expect(configValues.get('featureFlags.delivery-engine')).toBe('enabled');
-    expect(configValues.get('featureFlags.omnichannel-surface-adapters')).toBe('enabled');
-    expect(configValues.get('provider.provider')).toBe('openai');
-    expect(configValues.get('provider.model')).toBe('gpt-5-test');
+    expect(configValues.get('provider.model')).toBe('openai:gpt-5-test');
     expect(configValues.get('provider.reasoningEffort')).toBe('high');
     expect(configValues.get('storage.secretPolicy')).toBe('plaintext_allowed');
     expect(configValues.get('behavior.hitlMode')).toBe('operator');

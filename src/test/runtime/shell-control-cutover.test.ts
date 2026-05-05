@@ -589,7 +589,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   });
 
   test('replay engine does not emit replay events through the legacy global bus path', () => {
-    const resolvedPath = import.meta.resolve('@pellux/goodvibes-sdk/platform/core/deterministic-replay');
+    const resolvedPath = import.meta.resolve('@pellux/goodvibes-sdk/platform/core');
     const absPath = resolvedPath.startsWith('file:') ? fileURLToPath(resolvedPath) : resolvedPath;
     const relPath = relative(projectRoot, absPath);
     const content = readFileSync(absPath, 'utf8');

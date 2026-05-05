@@ -13,7 +13,7 @@ import {
   DEFAULT_CONTEXT_WINDOW,
   LocalContextIngestionService,
   type ContextWindowProvenance,
-} from '@pellux/goodvibes-sdk/platform/providers/local-context-ingestion';
+} from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // resolveContextWindow — unit tests (pure function, no network)

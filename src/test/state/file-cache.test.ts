@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
 
 // ---------------------------------------------------------------------------
 // Helpers

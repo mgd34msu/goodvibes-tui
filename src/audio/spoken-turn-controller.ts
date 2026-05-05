@@ -1,8 +1,8 @@
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
-import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { VoiceService, VoiceSynthesisStreamResult } from '@pellux/goodvibes-sdk/platform/voice/index';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import type { TurnEvent } from '@/runtime/index.ts';
+import type { VoiceService, VoiceSynthesisStreamResult } from '@pellux/goodvibes-sdk/platform/voice';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { TtsTextChunker } from './text-chunker.ts';
 import type { StreamingAudioPlayer } from './player.ts';
 

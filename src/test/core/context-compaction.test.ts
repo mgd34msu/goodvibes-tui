@@ -14,10 +14,10 @@ import {
   COMPACTION_BUFFER_TOKENS,
   SMALL_WINDOW_THRESHOLD,
   compactSmallWindow,
-} from '@pellux/goodvibes-sdk/platform/core/context-compaction';
-import type { ProviderMessage, ContentPart, LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { CompactionContext } from '@pellux/goodvibes-sdk/platform/core/compaction-types';
+} from '@pellux/goodvibes-sdk/platform/core';
+import type { ProviderMessage, ContentPart, LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { CompactionContext } from '@pellux/goodvibes-sdk/platform/core';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -274,6 +274,15 @@ function makeMockProvider(summaryContent: string): LLMProvider {
 function makeMockRegistry(provider: LLMProvider): ProviderRegistry {
   return {
     getForModel: (_modelId: string) => provider,
+    listModels: () => [{
+      id: 'mock-model',
+      registryKey: 'mock-model',
+      provider: 'mock-provider',
+      displayName: 'Mock Model',
+      contextWindow: 128_000,
+      maxOutputTokens: 4096,
+      source: 'runtime',
+    }],
   } as unknown as ProviderRegistry;
 }
 

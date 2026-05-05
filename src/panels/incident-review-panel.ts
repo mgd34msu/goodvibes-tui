@@ -1,5 +1,5 @@
 import type { Line } from '../types/grid.ts';
-import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
+import type { ForensicsRegistry } from '@/runtime/index.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildBodyText,
@@ -12,7 +12,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
-import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
+import type { FailureReport } from '@/runtime/index.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,

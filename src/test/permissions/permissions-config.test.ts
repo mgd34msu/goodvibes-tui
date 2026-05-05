@@ -2,16 +2,16 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { PermissionManager, createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import {
   DEFAULT_CONFIG,
   type ConfigKey,
   type PermissionAction,
   type PermissionMode,
-} from '@pellux/goodvibes-sdk/platform/config/schema';
-import type { PermissionPromptRequest, PermissionPromptDecision } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+} from '@pellux/goodvibes-sdk/platform/config';
+import type { PermissionPromptRequest, PermissionPromptDecision } from '@pellux/goodvibes-sdk/platform/permissions';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 
 const setPermissionMode = (cm: ConfigManager, mode: PermissionMode): void => {
   cm.set('permissions.mode', mode);

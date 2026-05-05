@@ -243,7 +243,7 @@ const requiredSnippets: Array<{ file: string; snippets: readonly string[]; messa
     file: 'scripts/project-surfaces.ts',
     snippets: [
       'GatewayMethodCatalog',
-      '@pellux/goodvibes-sdk/platform/control-plane/operator-contract',
+      '@pellux/goodvibes-sdk/platform/control-plane',
     ],
     message: 'foundation artifacts must be generated from SDK control-plane surfaces',
   },
@@ -257,7 +257,7 @@ for (const requirement of requiredSnippets) {
   }
 }
 
-const { GatewayMethodCatalog } = await import('@pellux/goodvibes-sdk/platform/control-plane/method-catalog');
+const { GatewayMethodCatalog } = await import('@pellux/goodvibes-sdk/platform/control-plane');
 const catalog = new GatewayMethodCatalog();
 const methodIds = new Set(catalog.list().map((method) => method.id));
 if (!methodIds.has('control.contract')) {

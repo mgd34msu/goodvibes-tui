@@ -3,16 +3,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SchedulePanel } from '../../panels/schedule-panel.ts';
-import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/index';
-import { normalizeCronSchedule } from '@pellux/goodvibes-sdk/platform/automation/schedules';
-import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
-import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
-import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
-import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
-import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
-import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
+import { normalizeCronSchedule } from '@pellux/goodvibes-sdk/platform/automation';
+import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
+import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function linesText(lines: ReturnType<SchedulePanel['render']>): string {

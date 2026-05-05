@@ -5,28 +5,28 @@ import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createOperatorClientServices } from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
-import { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { createOperatorClientServices } from '@/runtime/index.ts';
+import { IntegrationHelperService } from '@/runtime/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
-import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import type { MemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state/memory-store';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
-import { RemoteSupervisor } from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
+import { ForensicsRegistry } from '@/runtime/index.ts';
+import type { MemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { RemoteRunnerRegistry } from '@/runtime/index.ts';
+import { RemoteSupervisor } from '@/runtime/index.ts';
 import { createUiReadModels } from '../../runtime/ui-read-models.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
-import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
-import { createRuntimeOpsApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-ops-api';
-import { createOperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
-import { createPeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
-import { createRuntimeHookApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-hook-api';
-import { createRuntimeKnowledgeApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-knowledge-api';
-import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
-import { createRuntimeMcpApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-mcp-api';
-import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
+import { createRuntimeOpsApi } from '@/runtime/index.ts';
+import { createOperatorClient } from '@/runtime/index.ts';
+import { createPeerClient } from '@/runtime/index.ts';
+import { createRuntimeHookApi } from '@/runtime/index.ts';
+import { createRuntimeKnowledgeApi } from '@/runtime/index.ts';
+import { createMemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { createRuntimeMcpApi } from '@/runtime/index.ts';
+import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { wireShellUiOpeners } from '../../shell/ui-openers.ts';
 import {
   resetTestRuntimeServices,
@@ -1593,8 +1593,8 @@ describe('product breadth commands', () => {
     const out: string[] = [];
     const ctx = makeContext(out);
 
-    runtimeServices.configManager.setDynamic('provider.model', 'model-1');
-    ctx.session.runtime.model = 'model-1';
+    runtimeServices.configManager.setDynamic('provider.model', 'openai:model-1');
+    ctx.session.runtime.model = 'openai:model-1';
     const bundlePath = join(root, 'artifacts', 'managed.json');
     mkdirSync(dirname(bundlePath), { recursive: true });
     writeFileSync(bundlePath, JSON.stringify({
@@ -1602,7 +1602,7 @@ describe('product breadth commands', () => {
       exportedAt: Date.now(),
       profileName: 'ops',
       settings: {
-        'provider.model': 'model-1',
+        'provider.model': 'openai:model-1',
         'provider.provider': 'openai',
         'provider.reasoningEffort': 'low',
       },
@@ -1613,12 +1613,12 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Managed Settings Review');
     expect(out.join('\n')).toContain('changes:');
 
-    runtimeServices.configManager.setDynamic('provider.model', 'changed-model');
-    ctx.session.runtime.model = 'changed-model';
+    runtimeServices.configManager.setDynamic('provider.model', 'openai:changed-model');
+    ctx.session.runtime.model = 'openai:changed-model';
     out.length = 0;
     await managed!.handler(['apply', bundlePath], ctx);
     expect(out.join('\n')).toContain('Managed settings bundle applied');
-    expect(ctx.session.runtime.model).toBe('model-1');
+    expect(ctx.session.runtime.model).toBe('openai:model-1');
 
     const rollbackToken = out.join('\n').match(/rollback ([A-Za-z0-9-]+)/)?.[1];
     expect(rollbackToken).toBeDefined();
@@ -1641,8 +1641,8 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Resolved Setting Review');
     expect(out.join('\n')).toContain('key: provider.model');
 
-    runtimeServices.configManager.setDynamic('provider.model', 'sync-model');
-    ctx.session.runtime.model = 'sync-model';
+    runtimeServices.configManager.setDynamic('provider.model', 'openai:sync-model');
+    ctx.session.runtime.model = 'openai:sync-model';
     out.length = 0;
     await settingsSync!.handler(['pull', syncPath], ctx);
     expect(out.join('\n')).toContain('Settings sync bundle pulled');
@@ -1789,8 +1789,8 @@ describe('product breadth commands', () => {
     expect(out.join('\n')).toContain('Auth Review Bundle');
     expect(out.join('\n')).toContain('active subscriptions: 0');
 
-    const { DaemonServer } = await import('@pellux/goodvibes-sdk/platform/daemon/server');
-    const { UserAuthManager } = await import('@pellux/goodvibes-sdk/platform/security/user-auth');
+    const { DaemonServer } = await import('@pellux/goodvibes-sdk/platform/daemon');
+    const { UserAuthManager } = await import('@pellux/goodvibes-sdk/platform/security');
     const daemon = new DaemonServer({
       port: 39451,
       host: '127.0.0.1',
@@ -2193,8 +2193,8 @@ describe('product breadth commands', () => {
     await registry.get('settingssync')!.handler(['push', syncBundlePath], ctx);
     expect(existsSync(syncBundlePath)).toBe(true);
 
-    runtimeServices.configManager.setDynamic('provider.model', 'local-conflict-model');
-    ctx.session.runtime.model = 'local-conflict-model';
+    runtimeServices.configManager.setDynamic('provider.model', 'local:local-conflict-model');
+    ctx.session.runtime.model = 'local:local-conflict-model';
     out.length = 0;
     await registry.get('settingssync')!.handler(['pull', syncBundlePath], ctx);
     expect(out.join('\n')).toContain('conflicts');

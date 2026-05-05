@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
 
 describe('automation/control-plane foundation', () => {
   let root = '';
@@ -59,19 +59,19 @@ describe('automation/control-plane foundation', () => {
   test('feature flag manager registers automation and gateway cutover flags', () => {
     const flags = createFeatureFlagManager();
 
-    expect(flags.isEnabled('automation-runtime')).toBe(false);
-    expect(flags.isEnabled('gateway-control-plane')).toBe(false);
+    expect(flags.isEnabled('automation-domain')).toBe(false);
+    expect(flags.isEnabled('control-plane-gateway')).toBe(false);
 
     flags.loadFromConfig({
       flags: {
-        'automation-runtime': 'enabled',
-        'gateway-control-plane': 'enabled',
-        'omnichannel-route-binding': 'enabled',
+        'automation-domain': 'enabled',
+        'control-plane-gateway': 'enabled',
+        'route-binding': 'enabled',
       },
     });
 
-    expect(flags.isEnabled('automation-runtime')).toBe(true);
-    expect(flags.isEnabled('gateway-control-plane')).toBe(true);
-    expect(flags.isEnabled('omnichannel-route-binding')).toBe(true);
+    expect(flags.isEnabled('automation-domain')).toBe(true);
+    expect(flags.isEnabled('control-plane-gateway')).toBe(true);
+    expect(flags.isEnabled('route-binding')).toBe(true);
   });
 });

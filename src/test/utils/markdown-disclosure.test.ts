@@ -8,7 +8,7 @@ import {
   materializeMarkdownBody,
   parseMarkdownFrontmatter,
   readMarkdownDisclosure,
-} from '@pellux/goodvibes-sdk/platform/utils/markdown-disclosure';
+} from '@pellux/goodvibes-sdk/platform/utils';
 
 describe('markdown disclosure', () => {
   let dir = '';

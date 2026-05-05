@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import type { HookDefinition, HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookDefinition, HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks';
 
 /** Helper to create a minimal HookEvent */
 function makeEvent(overrides: Partial<HookEvent> = {}): HookEvent {

@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { resolveToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
+import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers';
+import { resolveToolLLM } from '@pellux/goodvibes-sdk/platform/config';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 // ---------------------------------------------------------------------------
@@ -61,13 +61,13 @@ describe('resolveToolLLM', () => {
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
     configManager.set('tools.llmProvider', 'test-explicit-provider');
-    configManager.set('tools.llmModel', 'some-model');
+    configManager.set('tools.llmModel', 'test-model');
 
     try {
       const resolved = resolveToolLLM({ configManager, providerRegistry });
       expect(resolved).not.toBeNull();
       expect(resolved!.provider.name).toBe('test-explicit-provider');
-      expect(resolved!.modelId).toBe('some-model');
+      expect(resolved!.modelId).toBe('test-model');
     } finally {
       // Restore original config
       configManager.set('tools.llmProvider', origProvider);
@@ -116,49 +116,25 @@ describe('resolveToolLLM', () => {
     }
   });
 
-  test('falls back when only one of llmProvider/llmModel is set', async () => {
-    // getProviderRegistry() returns the underlying instance (bypasses the Proxy),
-    // allowing direct method patching for test isolation.
+  test('throws when only one of llmProvider/llmModel is set', async () => {
     const { providerRegistry: instance, configManager } = testManagers;
 
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
-    // Only provider is set, model is empty -> should fall back
     configManager.set('tools.llmProvider', 'anthropic');
     configManager.set('tools.llmModel', '');
 
-    // Stub methods on the real instance so the fallback path works regardless
-    // of what providers are registered in the test environment.
-    const fakeFallbackProvider2 = makeProvider('test-fallback-only-provider');
-    const fakeFallbackDef2 = {
-      id: 'test-fallback-only-model',
-      provider: 'test-fallback-only-provider',
-      registryKey: 'test-fallback-only-provider:test-fallback-only-model',
-      displayName: 'Test Fallback Only',
-      description: 'Stub',
-      capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
-      contextWindow: 4096,
-      selectable: true,
-      tier: 'standard' as const,
-    };
-    const origGetCurrent2 = instance.getCurrentModel.bind(instance);
-    const origGetForModel2 = instance.getForModel.bind(instance);
-    instance.getCurrentModel = () => fakeFallbackDef2;
-    instance.getForModel = () => fakeFallbackProvider2;
-
     try {
-      const resolved = resolveToolLLM({ configManager, providerRegistry: instance });
-      expect(resolved).not.toBeNull();
-      expect(resolved!.modelId).toBe('test-fallback-only-model');
+      expect(() => resolveToolLLM({ configManager, providerRegistry: instance })).toThrow(
+        'Tool LLM routing requires both tools.llmProvider and tools.llmModel.',
+      );
     } finally {
-      instance.getCurrentModel = origGetCurrent2;
-      instance.getForModel = origGetForModel2;
       configManager.set('tools.llmProvider', origProvider);
       configManager.set('tools.llmModel', origModel);
     }
   });
 
-  test('returns null when explicit provider name is not registered', async () => {
+  test('throws when explicit provider name is not registered', async () => {
     const { configManager } = testManagers;
 
     const origProvider = configManager.get('tools.llmProvider');
@@ -167,8 +143,9 @@ describe('resolveToolLLM', () => {
     configManager.set('tools.llmModel', 'some-model');
 
     try {
-      const resolved = resolveToolLLM({ configManager, providerRegistry: testManagers.providerRegistry });
-      expect(resolved).toBeNull();
+      expect(() => resolveToolLLM({ configManager, providerRegistry: testManagers.providerRegistry })).toThrow(
+        "No model 'nonexistent-provider-xyz:some-model' for provider 'nonexistent-provider-xyz' in registry.",
+      );
     } finally {
       configManager.set('tools.llmProvider', origProvider);
       configManager.set('tools.llmModel', origModel);
@@ -227,7 +204,7 @@ describe('ToolLLM.chat', () => {
     }
   });
 
-  test('returns empty string when provider throws (no API key)', async () => {
+  test('throws when provider throws (no API key)', async () => {
     const { providerRegistry, configManager, toolLLM } = testManagers;
 
     const badProvider = makeErrorProvider('test-error-provider');
@@ -239,16 +216,15 @@ describe('ToolLLM.chat', () => {
     configManager.set('tools.llmModel', 'bad-model');
 
     try {
-      const result = await toolLLM.chat('some prompt');
-      expect(result).toBe('');
+      await expect(toolLLM.chat('some prompt')).rejects.toThrow('API key missing or invalid');
     } finally {
       configManager.set('tools.llmProvider', origProvider);
       configManager.set('tools.llmModel', origModel);
     }
   });
 
-  test('returns empty string when no provider can be resolved', async () => {
-    const { configManager, toolLLM, providerRegistry } = testManagers;
+  test('throws when no provider can be resolved', async () => {
+    const { configManager, toolLLM } = testManagers;
 
     const origProvider = configManager.get('tools.llmProvider');
     const origModel = configManager.get('tools.llmModel');
@@ -256,8 +232,9 @@ describe('ToolLLM.chat', () => {
     configManager.set('tools.llmModel', 'no-model');
 
     try {
-      const result = await toolLLM.chat('some prompt');
-      expect(result).toBe('');
+      await expect(toolLLM.chat('some prompt')).rejects.toThrow(
+        "No model 'completely-unknown-provider-abc:no-model' for provider 'completely-unknown-provider-abc' in registry.",
+      );
     } finally {
       configManager.set('tools.llmProvider', origProvider);
       configManager.set('tools.llmModel', origModel);

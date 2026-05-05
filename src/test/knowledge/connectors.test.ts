@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   createDefaultKnowledgeConnectorRegistry,
   KnowledgeConnectorRegistry,
-} from '@pellux/goodvibes-sdk/platform/knowledge/index';
+} from '@pellux/goodvibes-sdk/platform/knowledge';
 
 describe('KnowledgeConnectorRegistry', () => {
   test('default connectors parse URL, bookmark export, and URL-list inputs', async () => {

@@ -1,6 +1,6 @@
-import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config/schema';
-import type { ProviderAuthFreshness, ProviderAuthRoute } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
-import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
+import type { ConfigSetting } from '@pellux/goodvibes-sdk/platform/config';
+import type { ProviderAuthFreshness, ProviderAuthRoute } from '@/runtime/index.ts';
+import type { FeatureFlag, FlagState } from '@/runtime/index.ts';
 
 export type SettingsCategory =
   | 'display'
@@ -88,7 +88,7 @@ export interface FlagEntry {
 export interface McpEntry {
   name: string;
   connected: boolean;
-  role: 'general' | 'docs' | 'filesystem' | 'git' | 'database' | 'browser' | 'automation' | 'ops' | 'remote';
+  role: string;
   trustMode: 'constrained' | 'ask-on-risk' | 'allow-all' | 'blocked';
   allowedPaths: string[];
   allowedHosts: string[];

@@ -2,9 +2,9 @@ import { describe, test, expect } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { CONFIG_SCHEMA, DEFAULT_CONFIG, isValidConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
-import { FEATURE_FLAGS } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/flags';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { CONFIG_SCHEMA, DEFAULT_CONFIG, isValidConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import { FEATURE_FLAGS } from '@/runtime/index.ts';
 
 function makeTmpDir(): string {
   const dir = join(tmpdir(), `gv-automation-foundation-${Date.now()}-${Math.random().toString(36).slice(2)}`);

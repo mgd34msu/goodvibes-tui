@@ -29,7 +29,7 @@
  */
 
 import { getConfigSnapshot } from '../config/index.ts';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConversationManager } from './conversation';
 import type { SystemMessagesPanel, SystemMessagePriority } from '../panels/system-messages-panel.ts';
 import {
@@ -39,12 +39,12 @@ import {
   resolveSystemMessageDelivery,
   type SystemMessageKind,
   type SystemMessageTarget,
-} from '@pellux/goodvibes-sdk/platform/runtime/system-message-policy';
+} from '@/runtime/index.ts';
 
 export type {
   SystemMessageKind,
   SystemMessageTarget,
-} from '@pellux/goodvibes-sdk/platform/runtime/system-message-policy';
+} from '@/runtime/index.ts';
 
 function targetForKind(
   configManager: Pick<ConfigManager, 'getRaw'>,

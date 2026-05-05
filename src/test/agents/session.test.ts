@@ -2,9 +2,9 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 
-import { AgentSession } from '@pellux/goodvibes-sdk/platform/agents/session';
-import { ConversationManager } from '@pellux/goodvibes-sdk/platform/core/conversation';
-import { KVState } from '@pellux/goodvibes-sdk/platform/state/kv-state';
+import { AgentSession } from '@pellux/goodvibes-sdk/platform/agents';
+import { ConversationManager } from '@pellux/goodvibes-sdk/platform/core';
+import { KVState } from '@pellux/goodvibes-sdk/platform/state';
 
 const TEST_TMP_ROOT = join(import.meta.dir, '../../../.tmp-tests');
 

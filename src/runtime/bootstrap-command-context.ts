@@ -1,43 +1,43 @@
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationManager } from '../core/conversation';
-import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
-import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks/hook-api';
-import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp/mcp-api';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { HookApi } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { McpApi } from '@pellux/goodvibes-sdk/platform/mcp';
 import type { PanelManager } from '../panels/panel-manager.ts';
-import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
-import type { OpsApi } from '@pellux/goodvibes-sdk/platform/runtime/ops-api';
-import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
+import type { OpsApi } from '@/runtime/index.ts';
+import type { MutableRuntimeState } from '@/runtime/index.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';
-import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
-import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/index';
-import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
-import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
-import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
-import type { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
-import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
-import type { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins/manager';
-import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
-import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
-import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import type { ForensicsRegistry } from '@/runtime/index.ts';
+import type { PolicyRuntimeState } from '@/runtime/index.ts';
+import type { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import type { IntegrationHelperService } from '@/runtime/index.ts';
+import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins';
+import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { WorktreeRegistry } from '@/runtime/index.ts';
+import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 import type { UiReadModels } from './ui-read-models.ts';
-import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import type { ShellPathService } from '@/runtime/index.ts';
 import type {
   ShellAgentManagerService,
   ShellAutomationManagerRuntimeService,
   ShellModeManagerService,
   ShellPlanManagerService,
   ShellSessionOrchestrationService,
-} from '@pellux/goodvibes-sdk/platform/runtime/shell-command-ops';
-import { createBootstrapCommandShellServices, type PlanRuntimeService, type RemoteCommandService } from '@pellux/goodvibes-sdk/platform/runtime/shell-command-services';
-import type { OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
-import type { PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
-import type { DirectTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
-import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
+} from '@/runtime/index.ts';
+import { createBootstrapCommandShellServices, type PlanRuntimeService, type RemoteCommandService } from '@/runtime/index.ts';
+import type { OperatorClient } from '@/runtime/index.ts';
+import type { PeerClient } from '@/runtime/index.ts';
+import type { DirectTransport } from '@/runtime/index.ts';
+import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import {
   createBootstrapCommandActions,
   createBootstrapCommandClientsSection,
@@ -72,28 +72,28 @@ export type CreateBootstrapCommandContextOptions = {
   integrationHelpers?: IntegrationHelperService;
   automationManager?: ShellAutomationManagerRuntimeService;
   knowledgeService?: KnowledgeService;
-  projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge/index').ProjectPlanningService;
+  projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
   projectPlanningProjectId?: string;
-  providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers/optimizer').ProviderOptimizer;
+  providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers').ProviderOptimizer;
   pluginManager?: PluginManager;
   hookWorkbench?: HookWorkbench;
   agentManager?: ShellAgentManagerService;
   modeManager?: ShellModeManagerService;
-  sessionManager?: import('@pellux/goodvibes-sdk/platform/sessions/manager').SessionManager;
-  profileManager?: import('@pellux/goodvibes-sdk/platform/profiles/manager').ProfileManager;
-  bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks/manager').BookmarkManager;
-  favoritesStore?: import('@pellux/goodvibes-sdk/platform/providers/favorites').FavoritesStore;
-  benchmarkStore?: import('@pellux/goodvibes-sdk/platform/providers/model-benchmarks').BenchmarkStore;
+  sessionManager?: import('@pellux/goodvibes-sdk/platform/sessions').SessionManager;
+  profileManager?: import('@pellux/goodvibes-sdk/platform/profiles').ProfileManager;
+  bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks').BookmarkManager;
+  favoritesStore?: import('@pellux/goodvibes-sdk/platform/providers').FavoritesStore;
+  benchmarkStore?: import('@pellux/goodvibes-sdk/platform/providers').BenchmarkStore;
   providerApi?: ProviderApi;
-  subscriptionManager?: import('@pellux/goodvibes-sdk/platform/config/subscriptions').SubscriptionManager;
+  subscriptionManager?: import('@pellux/goodvibes-sdk/platform/config').SubscriptionManager;
   secretsManager?: import('../config/secrets.ts').SecretsManager;
-  serviceRegistry?: import('@pellux/goodvibes-sdk/platform/config/service-registry').ServiceRegistry;
-  localUserAuthManager?: import('@pellux/goodvibes-sdk/platform/security/user-auth').UserAuthManager;
-  tokenAuditor?: import('@pellux/goodvibes-sdk/platform/security/token-audit').ApiTokenAuditor;
-  replayEngine?: import('@pellux/goodvibes-sdk/platform/core/deterministic-replay').DeterministicReplayEngine;
-  webhookNotifier?: import('@pellux/goodvibes-sdk/platform/integrations/webhooks').WebhookNotifier;
-  sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core/session-memory').SessionMemoryStore;
-  changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions/change-tracker').SessionChangeTracker;
+  serviceRegistry?: import('@pellux/goodvibes-sdk/platform/config').ServiceRegistry;
+  localUserAuthManager?: import('@pellux/goodvibes-sdk/platform/security').UserAuthManager;
+  tokenAuditor?: import('@pellux/goodvibes-sdk/platform/security').ApiTokenAuditor;
+  replayEngine?: import('@pellux/goodvibes-sdk/platform/core').DeterministicReplayEngine;
+  webhookNotifier?: import('@pellux/goodvibes-sdk/platform/integrations').WebhookNotifier;
+  sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core').SessionMemoryStore;
+  changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions').SessionChangeTracker;
   planManager?: ShellPlanManagerService;
   adaptivePlanner?: AdaptivePlanner;
   sessionOrchestration?: ShellSessionOrchestrationService;
@@ -110,8 +110,8 @@ export type CreateBootstrapCommandContextOptions = {
   loadSystemPrompt: () => string;
   activatePlan: (planId: string, task: string) => void;
   completeModelSelectionSideEffect?: () => void;
-  sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core/session-lineage').SessionLineageTracker;
-  componentHealthMonitor: import('@pellux/goodvibes-sdk/platform/runtime/perf/component-health-monitor').ComponentHealthMonitor;
+  sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core').SessionLineageTracker;
+  componentHealthMonitor: import('@/runtime/index.ts').ComponentHealthMonitor;
 };
 
 export function createBootstrapCommandContext(

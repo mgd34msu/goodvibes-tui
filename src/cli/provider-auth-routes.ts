@@ -1,4 +1,4 @@
-import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers';
 
 function routeUsable(route: ProviderAuthRouteDescriptor): boolean {
   return route.usable ?? route.configured;

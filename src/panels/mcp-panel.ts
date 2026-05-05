@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
-import type { McpDecisionRecord } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import type { McpDecisionRecord } from '@/runtime/index.ts';
 
 type McpServerSecurityEntry = ReturnType<McpRegistry['listServerSecurity']>[number];
 import { truncateDisplay } from '../utils/terminal-width.ts';

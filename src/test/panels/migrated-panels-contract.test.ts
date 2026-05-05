@@ -123,17 +123,17 @@ const EMPTY_SUBSCRIPTION_MANAGER = {
   get: (_p: string) => null,
   getPending: (_p: string) => null,
   logout: (_p: string) => {},
-} as unknown as import('@pellux/goodvibes-sdk/platform/config/subscriptions').SubscriptionManager;
+} as unknown as import('@pellux/goodvibes-sdk/platform/config').SubscriptionManager;
 
 const EMPTY_SERVICE_REGISTRY = {
   getAll: () => ({}),
-} as unknown as import('@pellux/goodvibes-sdk/platform/config/service-registry').ServiceRegistry;
+} as unknown as import('@pellux/goodvibes-sdk/platform/config').ServiceRegistry;
 
 const EMPTY_PLUGIN_MANAGER = {
   list: () => [],
   getAll: () => [],
   subscribe: (_cb: () => void) => () => {},
-} as unknown as import('@pellux/goodvibes-sdk/platform/plugins/manager').PluginManagerObserver;
+} as unknown as import('@pellux/goodvibes-sdk/platform/plugins').PluginManagerObserver;
 
 const EMPTY_LOCAL_AUTH_MANAGER = {
   inspect: () => ({
@@ -162,11 +162,11 @@ const EMPTY_AGENT_DEPS = {
 const EMPTY_WORKTREE_REGISTRY = {
   list: async () => [],
   subscribe: (_cb: () => void) => () => {},
-} as unknown as import('@pellux/goodvibes-sdk/platform/runtime/worktree/registry').WorktreeRegistry;
+} as unknown as import('@/runtime/index.ts').WorktreeRegistry;
 
 const EMPTY_POLICY_RUNTIME_STATE = {
   getSnapshot: () => ({ recentPermissionAudit: [] }),
-} as unknown as import('@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime').PolicyRuntimeState;
+} as unknown as import('@/runtime/index.ts').PolicyRuntimeState;
 
 const EMPTY_PROVIDER_ACCOUNTS_DEPS = {
   providerAccounts: {
@@ -179,7 +179,7 @@ const EMPTY_MEMORY_REGISTRY = {
   subscribe: (_cb: () => void) => () => {},
   reviewQueue: (_limit: number) => [],
   review: (_id: string, _opts: unknown) => {},
-} as unknown as import('@pellux/goodvibes-sdk/platform/state/memory-store').MemoryRegistry;
+} as unknown as import('@pellux/goodvibes-sdk/platform/state').MemoryRegistry;
 
 const EMPTY_HOOKS_WORKBENCH = {
   listManagedHooks: () => [],
@@ -250,7 +250,7 @@ const EMPTY_PROJECT_PLANNING_SERVICE = {
   listDecisions: async () => ({ ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', decisions: [] }),
   getLanguage: async () => ({ ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', language: null }),
   upsertState: async () => ({ ok: true, projectId: 'proj', knowledgeSpaceId: 'project:proj', state: null }),
-} as unknown as import('@pellux/goodvibes-sdk/platform/knowledge/index').ProjectPlanningService;
+} as unknown as import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
 
 const EMPTY_WORKFLOW_EVENT_FEED = {
   on: (_event: string, _cb: unknown) => () => {},
@@ -312,9 +312,9 @@ const PANELS: PanelEntry[] = [
   {
     label: 'HooksPanel',
     factory: () => new HooksPanel(
-      null as unknown as import('@pellux/goodvibes-sdk/platform/hooks/dispatcher').HookDispatcher,
-      null as unknown as import('@pellux/goodvibes-sdk/platform/hooks/workbench').HookWorkbench,
-      null as unknown as import('@pellux/goodvibes-sdk/platform/hooks/activity').HookActivityTracker,
+      null as unknown as import('@pellux/goodvibes-sdk/platform/hooks').HookDispatcher,
+      null as unknown as import('@pellux/goodvibes-sdk/platform/hooks').HookWorkbench,
+      null as unknown as import('@pellux/goodvibes-sdk/platform/hooks').HookActivityTracker,
       {
         listContracts: () => [],
         listHooks: () => [],
@@ -587,7 +587,7 @@ describe('MemoryPanel — populated records', () => {
     subscribe: (_cb: () => void) => () => {},
     reviewQueue: (_limit: number) => [],
     review: (_id: string, _opts: unknown) => {},
-  } as unknown as import('@pellux/goodvibes-sdk/platform/state/memory-store').MemoryRegistry);
+  } as unknown as import('@pellux/goodvibes-sdk/platform/state').MemoryRegistry);
 
   test('render() returns exactly H lines with records', () => {
     const panel = new MemoryPanel(makeRegistry());
@@ -625,7 +625,7 @@ describe('KnowledgePanel — populated records', () => {
     subscribe: (_cb: () => void) => () => {},
     reviewQueue: (_limit: number) => [SAMPLE_MEMORY_RECORD],
     review: (_id: string, _opts: unknown) => {},
-  } as unknown as import('@pellux/goodvibes-sdk/platform/state/memory-store').MemoryRegistry);
+  } as unknown as import('@pellux/goodvibes-sdk/platform/state').MemoryRegistry);
 
   test('render() returns exactly H lines with records', () => {
     const panel = new KnowledgePanel(makeRegistry());

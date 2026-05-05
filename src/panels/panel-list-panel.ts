@@ -39,7 +39,7 @@ import {
   isPanelSearchCommit,
   isPanelSearchPrintable,
 } from './search-focus.ts';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {

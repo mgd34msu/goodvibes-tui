@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 
 describe('ArtifactStore', () => {
   const roots: string[] = [];

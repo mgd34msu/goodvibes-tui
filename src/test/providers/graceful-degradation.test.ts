@@ -3,7 +3,7 @@ import {
   ProviderError,
   isNonTransientProviderFailure,
   isRateLimitOrQuotaError,
-} from '@pellux/goodvibes-sdk/platform/types/errors';
+} from '@pellux/goodvibes-sdk/platform/types';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 const { providerRegistry } = createTestManagers();

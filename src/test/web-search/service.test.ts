@@ -9,8 +9,8 @@ import {
   createPerplexitySearchProvider,
   createSearxngSearchProvider,
   createTavilySearchProvider,
-} from '@pellux/goodvibes-sdk/platform/web-search/index';
-import type { SearchProviderContext } from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
+} from '@pellux/goodvibes-sdk/platform/web-search';
+import type { SearchProviderContext } from '@pellux/goodvibes-sdk/platform/web-search';
 
 const TEST_SEARCH_CONTEXT: SearchProviderContext = {
   env: {},

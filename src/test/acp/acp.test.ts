@@ -14,16 +14,16 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
-import { AcpConnection } from '@pellux/goodvibes-sdk/platform/acp/connection';
-import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
+import { AcpConnection } from '@pellux/goodvibes-sdk/platform/acp';
+import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import type { TransportEvent } from '@/runtime/index.ts';
 import type {
   SubagentInfo,
   SubagentResult,
   SubagentTask,
   SubagentStatus,
-} from '@pellux/goodvibes-sdk/platform/acp/protocol';
+} from '@pellux/goodvibes-sdk/platform/acp';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -275,7 +275,7 @@ describe('AcpConnection', () => {
         throw new Error('spawn failure');
       };
       const errors: Array<{ agentId: string; error: string }> = [];
-      runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/agents').AgentEvent, { type: 'AGENT_FAILED' }>>(
+      runtimeBus.on<Extract<import('@/runtime/index.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
         'AGENT_FAILED',
         ({ payload }) => errors.push(payload),
       );
@@ -442,7 +442,7 @@ describe('AcpManager', () => {
         return makeResult({ id: this.id });
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       const id = await mgr.spawn(makeTask());
 
       proto.run = originalRun;
@@ -458,12 +458,12 @@ describe('AcpManager', () => {
       });
 
       const spawned: Array<{ agentId: string; task: string }> = [];
-      runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/agents').AgentEvent, { type: 'AGENT_SPAWNING' }>>(
+      runtimeBus.on<Extract<import('@/runtime/index.ts').AgentEvent, { type: 'AGENT_SPAWNING' }>>(
         'AGENT_SPAWNING',
         ({ payload }) => spawned.push(payload),
       );
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       await mgr.spawn(makeTask({ description: 'Fix the bug' }));
 
       proto.run = originalRun;
@@ -482,7 +482,7 @@ describe('AcpManager', () => {
         });
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       const id1 = await mgr.spawn(makeTask());
       const id2 = await mgr.spawn(makeTask());
       const id3 = await mgr.spawn(makeTask());
@@ -499,7 +499,7 @@ describe('AcpManager', () => {
 
   describe('getActive', () => {
     test('getActive returns empty array initially', () => {
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       expect(mgr.getActive()).toEqual([]);
     });
 
@@ -513,7 +513,7 @@ describe('AcpManager', () => {
         });
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       await mgr.spawn(makeTask({ description: 'Long running task' }));
 
       const active = mgr.getActive();
@@ -532,7 +532,7 @@ describe('AcpManager', () => {
         return makeResult({ id: this.id });
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       const id = await mgr.spawn(makeTask());
       // Wait for run to settle
       await mgr.waitAll();
@@ -545,7 +545,7 @@ describe('AcpManager', () => {
 
   describe('cancel', () => {
     test('cancel no-ops for unknown ID', async () => {
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       await expect(mgr.cancel('nonexistent-id')).resolves.toBeUndefined();
     });
 
@@ -568,7 +568,7 @@ describe('AcpManager', () => {
         };
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       const id = await mgr.spawn(makeTask());
       await mgr.cancel(id);
 
@@ -582,7 +582,7 @@ describe('AcpManager', () => {
 
   describe('cancelAll', () => {
     test('cancelAll resolves immediately when no active connections', async () => {
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       await expect(mgr.cancelAll()).resolves.toBeUndefined();
     });
 
@@ -602,7 +602,7 @@ describe('AcpManager', () => {
         cancelledIds.push(this.id);
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       await mgr.spawn(makeTask());
       await mgr.spawn(makeTask());
 
@@ -630,7 +630,7 @@ describe('AcpManager', () => {
         // no-op stub
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       await mgr.spawn(makeTask());
       await mgr.spawn(makeTask());
       await mgr.cancelAll();
@@ -645,7 +645,7 @@ describe('AcpManager', () => {
 
   describe('waitAll', () => {
     test('waitAll returns empty array when no pending tasks', async () => {
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       const results = await mgr.waitAll();
       expect(results).toEqual([]);
     });
@@ -665,7 +665,7 @@ describe('AcpManager', () => {
         });
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       // spawn() fires run() without awaiting it; pending map still holds the promises
       const id1 = await mgr.spawn(makeTask());
       const id2 = await mgr.spawn(makeTask());
@@ -706,7 +706,7 @@ describe('AcpManager', () => {
         });
       });
 
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       await mgr.spawn(makeTask());
       await mgr.spawn(makeTask());
 
@@ -722,7 +722,7 @@ describe('AcpManager', () => {
     });
 
     test('waitAll can be called multiple times safely', async () => {
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       const first = await mgr.waitAll();
       const second = await mgr.waitAll();
       expect(first).toEqual([]);
@@ -750,7 +750,7 @@ describe('AcpManager', () => {
 
       const savedEnv = process.env.ACP_AGENT_CMD;
       process.env.ACP_AGENT_CMD = 'my-agent --headless';
-      const mgr = new AcpManager(undefined, runtimeBus);
+      const mgr = new AcpManager({ runtimeBus });
       await mgr.spawn(makeTask());
       await mgr.waitAll();
       process.env.ACP_AGENT_CMD = savedEnv;
@@ -765,14 +765,14 @@ describe('AcpManager', () => {
       // constructs without error when ACP_AGENT_CMD is set
       const savedEnv = process.env.ACP_AGENT_CMD;
       process.env.ACP_AGENT_CMD = 'bun run --smol src/main.ts';
-      expect(() => new AcpManager(undefined, runtimeBus)).not.toThrow();
+      expect(() => new AcpManager({ runtimeBus })).not.toThrow();
       process.env.ACP_AGENT_CMD = savedEnv;
     });
 
     test('manager constructs without ACP_AGENT_CMD set', () => {
       const savedEnv = process.env.ACP_AGENT_CMD;
       delete process.env.ACP_AGENT_CMD;
-      expect(() => new AcpManager(undefined, runtimeBus)).not.toThrow();
+      expect(() => new AcpManager({ runtimeBus })).not.toThrow();
       process.env.ACP_AGENT_CMD = savedEnv;
     });
   });
@@ -818,7 +818,7 @@ describe('Error handling', () => {
       throw new Error('timeout');
     };
     const errors: Array<{ agentId: string; error: string }> = [];
-    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/agents').AgentEvent, { type: 'AGENT_FAILED' }>>(
+    runtimeBus.on<Extract<import('@/runtime/index.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
       'AGENT_FAILED',
       ({ payload }) => errors.push(payload),
     );
@@ -835,7 +835,7 @@ describe('Error handling', () => {
       throw new Error('fail');
     };
     const errors: string[] = [];
-    runtimeBus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/agents').AgentEvent, { type: 'AGENT_FAILED' }>>(
+    runtimeBus.on<Extract<import('@/runtime/index.ts').AgentEvent, { type: 'AGENT_FAILED' }>>(
       'AGENT_FAILED',
       ({ payload }) => errors.push(payload.agentId),
     );

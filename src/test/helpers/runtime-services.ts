@@ -1,45 +1,46 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
-import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
-import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents/orchestrator';
-import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
-import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/manager-runtime';
-import { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels/policy-manager';
-import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
-import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
-import { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane/approval-broker';
-import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
-import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
-import { GitService } from '@pellux/goodvibes-sdk/platform/git/service';
-import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
-import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence/facade';
-import { LspService } from '@pellux/goodvibes-sdk/platform/intelligence/lsp/service';
-import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/service';
-import { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/provider-registry';
-import { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins/manager';
-import { createFeatureFlagManager, type FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
-import { RemoteSupervisor } from '@pellux/goodvibes-sdk/platform/runtime/remote/supervisor';
+import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
+import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents';
+import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
+import { ChannelPolicyManager } from '@pellux/goodvibes-sdk/platform/channels';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
+import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
+import { ApprovalBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
+import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence';
+import { LspService } from '@pellux/goodvibes-sdk/platform/intelligence';
+import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence';
+import { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media';
+import { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins';
+import { createFeatureFlagManager, type FeatureFlagManager } from '@/runtime/index.ts';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { RemoteRunnerRegistry } from '@/runtime/index.ts';
+import { RemoteSupervisor } from '@/runtime/index.ts';
 import { createRuntimeServices, type RuntimeServices } from '../../runtime/services.ts';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { createShellPathService } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { TaskScheduler } from '@pellux/goodvibes-sdk/platform/scheduler/scheduler';
-import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security/spawn-tokens';
-import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
-import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-embeddings';
-import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
-import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import { AgentManager, type AgentExecutor } from '@pellux/goodvibes-sdk/platform/tools/agent/manager';
-import { AutoHealer } from '@pellux/goodvibes-sdk/platform/tools/shared/auto-heal';
-import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
-import { ScheduleManager, TriggerManager, WorkflowManager } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
-import { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/provider-registry';
-import { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search/provider-registry';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { TaskScheduler } from '@pellux/goodvibes-sdk/platform/scheduler';
+import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
+import { AgentManager, type AgentExecutor } from '@pellux/goodvibes-sdk/platform/tools';
+import { AutoHealer } from '@pellux/goodvibes-sdk/platform/tools';
+import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { ScheduleManager, TriggerManager, WorkflowManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice';
+import { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { makeProjectTempDir } from './project-temp.ts';
+import { buildTestModelDefinition, patchTestProviderRegistry } from './test-managers.ts';
 
 type IntelligenceTestRoots = {
   root: string;
@@ -115,6 +116,27 @@ function applyExecutorIfPresent(services: RuntimeServices): void {
   services.agentManager.setExecutor(agentExecutorForTests);
 }
 
+function seedRuntimeProviderTestModels(services: RuntimeServices): void {
+  patchTestProviderRegistry(services.providerRegistry);
+  const mockProvider = {
+    name: 'mock',
+    models: ['mock-model'],
+    async chat() {
+      return {
+        content: 'ok',
+        toolCalls: [],
+        usage: { inputTokens: 1, outputTokens: 1 },
+        stopReason: 'completed' as const,
+      };
+    },
+  };
+  services.providerRegistry.registerRuntimeProvider({
+    provider: mockProvider,
+    replace: true,
+    models: [buildTestModelDefinition('mock', 'mock-model')],
+  });
+}
+
 export function resetTestRuntimeServices(): void {
   runtimeServices = null;
   wrfcController = null;
@@ -138,6 +160,7 @@ export function getTestRuntimeServices(): RuntimeServices {
       homeDirectory: workingDir,
       getConversationTitle: () => 'test-runtime',
     });
+    seedRuntimeProviderTestModels(runtimeServices);
     applyExecutorIfPresent(runtimeServices);
   }
   return runtimeServices;

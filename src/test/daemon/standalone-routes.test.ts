@@ -13,10 +13,10 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
@@ -183,14 +183,13 @@ describe('F1 — companion-chat routes on standalone DaemonServer', () => {
     expect(getBody.session.systemPrompt).toBe('patched prompt');
   });
 
-  test('GET /api/providers/current returns 200 with model field', async () => {
-    const res = await fetch(`http://127.0.0.1:${port}/api/providers/current`, {
+  test('GET /api/models/current returns 200 with model field', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/models/current`, {
       headers: bearerHeaders(),
     });
     // Should return 200. SDK shape: { model: null | {...}, configured: bool, configuredVia?: string }
     expect(res.status).toBe(200);
     const body = await res.json() as Record<string, unknown>;
-    // SDK 0.21.x: GET /api/providers/current returns {model, configured, configuredVia?}
     expect('model' in body).toBe(true);
     expect('configured' in body).toBe(true);
   });

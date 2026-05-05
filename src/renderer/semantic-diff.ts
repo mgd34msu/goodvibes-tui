@@ -11,12 +11,12 @@
  * unsupported — callers should treat null as "no semantic info available".
  */
 
-import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/service';
-import { extractSymbols } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/queries';
-import type { SymbolInfo } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/queries';
-import { detectLanguage } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/languages';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence';
+import { extractSymbols } from '@pellux/goodvibes-sdk/platform/intelligence';
+import type { SymbolInfo } from '@pellux/goodvibes-sdk/platform/intelligence';
+import { detectLanguage } from '@pellux/goodvibes-sdk/platform/intelligence';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Public types

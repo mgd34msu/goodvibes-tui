@@ -1,13 +1,13 @@
 import { readFile } from 'fs/promises';
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
-import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
-import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
+import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
+import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { formatDuration } from './modal-utils.ts';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

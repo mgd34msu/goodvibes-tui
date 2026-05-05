@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { validatePublicWebhookUrl } from '@pellux/goodvibes-sdk/platform/utils/url-safety';
+import { validatePublicWebhookUrl } from '@pellux/goodvibes-sdk/platform/utils';
 
 describe('validatePublicWebhookUrl', () => {
   test('accepts normalized public https webhook URLs', () => {

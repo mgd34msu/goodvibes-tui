@@ -2,7 +2,7 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { buildKeyValueLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, resolvePrimaryScrollableSection, type PanelWorkspaceSection } from './polish.ts';
-import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
+import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '@/runtime/index.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -90,7 +90,7 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
             { label: 'total', value: String(summary.total), valueColor: C.value },
             { label: 'active', value: String(summary.active), valueColor: C.ok },
             { label: 'paused', value: String(summary.paused), valueColor: summary.paused > 0 ? C.warn : C.dim },
-            { label: 'cleanup', value: String(summary.cleanupPending), valueColor: summary.cleanupPending > 0 ? C.warn : C.dim },
+            { label: 'cleanup', value: String(summary.pendingCleanup), valueColor: summary.pendingCleanup > 0 ? C.warn : C.dim },
           ], C),
           buildKeyValueLine(width, [
             { label: 'session attached', value: String(summary.sessionAttached), valueColor: summary.sessionAttached > 0 ? C.info : C.dim },
@@ -104,10 +104,10 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
         title: 'Next Actions',
         lines: [
           buildPanelLine(width, [[
-            summary.cleanupPending > 0 || summary.discard > 0
-              ? ' Review cleanup-pending and discard-marked worktrees before they drift from orchestrator ownership.'
+            summary.pendingCleanup > 0 || summary.discard > 0
+              ? ' Review pending-cleanup and discard-marked worktrees before they drift from orchestrator ownership.'
               : ' Worktree ownership is healthy. Use the task and session links below for restore, merge, or cleanup review.',
-            summary.cleanupPending > 0 || summary.discard > 0 ? C.warn : C.dim,
+            summary.pendingCleanup > 0 || summary.discard > 0 ? C.warn : C.dim,
           ]]),
           buildPanelLine(width, [['  /worktree task <task-id>  /worktree session <session-id>  /worktree inspect <path>', C.info]]),
         ],
@@ -129,7 +129,7 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
           buildPanelLine(width, [[
             selected.state === 'paused'
               ? ` Next: /worktree resume ${selected.path}`
-              : selected.state === 'discard' || selected.state === 'cleanup-pending'
+              : selected.state === 'discard' || selected.state === 'pending-cleanup'
                 ? ` Next: /worktree cleanup ${selected.path}`
                 : selected.taskId
                   ? ` Next: /worktree task ${selected.taskId}`

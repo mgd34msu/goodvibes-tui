@@ -1,13 +1,13 @@
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
-import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core/context-compaction';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '@/runtime/index.ts';
+import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core';
 import type { CommandRegistry } from '../command-registry.ts';
 import { buildSetupReviewSnapshot } from './local-setup-review.ts';
-import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
-import { getSettingsControlPlaneSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
-import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
-import { checkRecoveryFile, readLastSessionPointer } from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
+import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
+import { getSettingsControlPlaneSnapshot } from '@/runtime/index.ts';
+import { listPersistedWorktreeMeta, summarizeWorktreeOwnership } from '@/runtime/index.ts';
+import { checkRecoveryFile, readLastSessionPointer } from '@/runtime/index.ts';
 import {
   openCommandPanel,
   requireLocalUserAuthManager,
@@ -263,7 +263,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         const summary = readModels.worktrees.getSnapshot().summary;
         const issues: string[] = [];
         if (summary.discard > 0) issues.push(`${summary.discard} worktree(s) marked discard still tracked`);
-        if (summary.cleanupPending > 0) issues.push(`${summary.cleanupPending} worktree(s) awaiting cleanup`);
+        if (summary.pendingCleanup > 0) issues.push(`${summary.pendingCleanup} worktree(s) awaiting cleanup`);
         if ('kept' in summary && typeof (summary as { kept?: number }).kept === 'number' && (summary as { kept?: number }).kept! > 0) {
           // read-model summary may include kept in some implementations; ignored in rendering below if absent
         }
@@ -274,7 +274,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
           `  active: ${summary.active}`,
           `  paused: ${summary.paused}`,
           `  discard: ${summary.discard}`,
-          `  cleanup pending: ${summary.cleanupPending}`,
+          `  cleanup pending: ${summary.pendingCleanup}`,
           ...(issues.length > 0 ? issues.map((issue) => `  issue: ${issue}`) : ['  no active worktree lifecycle issues detected']),
           '  next: /worktree review',
           '  next: /worktree recover <session|task> <id>',

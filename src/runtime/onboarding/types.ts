@@ -1,8 +1,8 @@
 import type { ConfigManager, ConfigKey, GoodVibesConfig } from '../../config/index.ts';
 import type { SecretsManager, SecretRecord, SecretStorageReview } from '../../config/secrets.ts';
 import type { FeatureFlagConfigKey } from '../surface-feature-flags.ts';
-import type { LocalAuthSnapshot, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import type { LocalAuthSnapshot, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import type { ShellPathService } from '@/runtime/index.ts';
 import type {
   LocalAuthInspectionQuery,
   ServiceInspectionQuery,

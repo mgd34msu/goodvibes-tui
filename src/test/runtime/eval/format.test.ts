@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { formatSuiteResult, formatGateResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/format';
-import type { EvalSuiteResult, EvalGateResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
+import { formatSuiteResult, formatGateResult } from '@/runtime/index.ts';
+import type { EvalSuiteResult, EvalGateResult } from '@/runtime/index.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

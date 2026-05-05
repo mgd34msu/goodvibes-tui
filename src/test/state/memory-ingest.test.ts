@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { buildIncidentMemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state/memory-ingest';
-import type { ForensicsBundle } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
+import { buildIncidentMemoryAddOptions } from '@pellux/goodvibes-sdk/platform/state';
+import type { ForensicsBundle } from '@/runtime/index.ts';
 
 describe('buildIncidentMemoryAddOptions', () => {
   test('maps a forensics bundle into a durable incident memory record', () => {

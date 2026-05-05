@@ -1,1 +1,1 @@
-export * from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability';
+export * from '@/runtime/index.ts';

@@ -6,11 +6,23 @@ All notable changes to GoodVibes TUI.
 
 ## [Unreleased]
 
+---
+
+## [0.19.61] — 2026-05-05
+
 ### Changed
 - Updated `@pellux/goodvibes-sdk` to `0.28.22`.
 - Regenerated the operator contract artifacts for SDK 0.28.22.
+- Updated `@pellux/goodvibes-sdk` and all split GoodVibes packages to `0.33.4`.
+- Migrated TUI imports to SDK public package/subpath seams after the SDK removed private `_internal` and catch-all platform exports.
+- Regenerated foundation/operator contract artifacts for the SDK 0.33 public contract shape.
 
 ### Verified
+- Verified the previously blocked `runtime/http-transport`, `runtime/realtime-transport`, and `release-gates/transport-parity` tests pass against SDK 0.33.4.
+- Verified the full intended TUI test suite passes without quarantines or skipped migration failures: 480 test files passed, 0 failed.
+- Rebuilt production TUI and daemon binaries with SDK 0.33.4 and smoke-tested the compiled daemon binary.
+- Restarted the compiled daemon against the existing `.goodvibes/tui/control-plane/sessions.json` control-plane store and verified authenticated `/status` reports SDK 0.33.4 without session-normalization startup errors.
+- Reran the TTS `STREAM_END` regression and verified provider-scoped `STREAM_END` does not end a spoken turn before the logical turn completes.
 - Rebuilt and relaunched the daemon with SDK 0.28.10, then retested Home Graph reindex coalescing, status responsiveness, TV feature Ask, base `knowledge.ask` with `knowledgeSpaceId: "homeassistant"`, generated pages, and map edge payloads against the live daemon.
 - Rebuilt and relaunched the daemon with SDK 0.28.11, verified reset `dryRun` is non-destructive against the live Home Graph space, and reran the full local test suite.
 - Rebuilt and relaunched the daemon with SDK 0.28.12, smoke-tested the compiled daemon binary, and coordinated the Home Assistant restart before live Home Graph validation.

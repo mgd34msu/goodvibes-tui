@@ -1,4 +1,4 @@
-import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
+import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import type {
   ProviderAccountInspectionQuery,
 } from '../runtime/ui-service-queries.ts';

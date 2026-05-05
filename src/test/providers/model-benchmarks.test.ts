@@ -6,8 +6,8 @@ import {
   getQualityTier,
   getQualityTierFromScore,
   BenchmarkStore,
-} from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { ModelBenchmarks, BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+} from '@pellux/goodvibes-sdk/platform/providers';
+import type { ModelBenchmarks, BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers';
 import { writeBenchmarksCache } from '../helpers/provider-cache.ts';
 
 // ---------------------------------------------------------------------------

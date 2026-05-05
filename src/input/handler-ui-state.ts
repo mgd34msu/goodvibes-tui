@@ -1,4 +1,4 @@
-import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { SearchManager } from './search.ts';
 import type { HistorySearch } from './input-history.ts';

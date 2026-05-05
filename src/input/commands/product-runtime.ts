@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { listInstalledEcosystemEntries, loadEcosystemCatalog } from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
-import { BUILTIN_SUITES } from '@pellux/goodvibes-sdk/platform/runtime/eval/suites';
+import { listInstalledEcosystemEntries, loadEcosystemCatalog } from '@/runtime/index.ts';
+import { BUILTIN_SUITES } from '@/runtime/index.ts';
 import { requireEcosystemCatalogPaths, requireReadModels, requireSecretsManager, requireServiceRegistry, requireShellPaths } from './runtime-services.ts';
 
 interface TrustReviewBundle {

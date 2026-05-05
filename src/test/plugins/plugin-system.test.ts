@@ -9,21 +9,21 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { SessionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
+import type { SessionEvent } from '@/runtime/index.ts';
 import type { CommandRegistry, SlashCommand } from '../../input/command-registry.ts';
-import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 import type { LoadedPlugin, PluginLoaderDeps } from '../../plugins/loader';
-import type { PluginAPIContext } from '@pellux/goodvibes-sdk/platform/plugins/api';
-import { ChannelDeliveryRouter, ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
-import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/index';
-import { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media/index';
-import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/index';
-import { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice/index';
-import { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search/index';
-import type { SearchProviderContext } from '@pellux/goodvibes-sdk/platform/web-search/providers/shared';
+import type { PluginAPIContext } from '@pellux/goodvibes-sdk/platform/plugins';
+import { ChannelDeliveryRouter, ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { MediaProviderRegistry } from '@pellux/goodvibes-sdk/platform/media';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { VoiceProviderRegistry } from '@pellux/goodvibes-sdk/platform/voice';
+import { WebSearchProviderRegistry } from '@pellux/goodvibes-sdk/platform/web-search';
+import type { SearchProviderContext } from '@pellux/goodvibes-sdk/platform/web-search';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ type FakeProviderRegistry = Pick<ProviderRegistry, 'register' | 'registerRuntime
   _models: ModelDefinition[];
 };
 
-type PluginManagerCtor = typeof import('@pellux/goodvibes-sdk/platform/plugins/manager').PluginManager;
+type PluginManagerCtor = typeof import('@pellux/goodvibes-sdk/platform/plugins').PluginManager;
 
 type PluginManagerTestAccess = {
   state: {
@@ -482,7 +482,7 @@ describe('unloadPlugin', () => {
 
 describe('createPluginAPI', () => {
   test('registerCommand namespaces and tracks cleanup', async () => {
-    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins/api');
+    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const cmdReg = makeFakeCommandRegistry();
     const cleanup: Array<() => void> = [];
     const ctx = makePluginApiContext({
@@ -503,7 +503,7 @@ describe('createPluginAPI', () => {
   });
 
   test('registerTool adds to registry and tracks cleanup', async () => {
-    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins/api');
+    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const toolReg = makeFakeToolRegistry();
     const cleanup: Array<() => void> = [];
     const ctx = makePluginApiContext({
@@ -521,7 +521,7 @@ describe('createPluginAPI', () => {
   });
 
   test('registerTool skips duplicate registrations', async () => {
-    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins/api');
+    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const toolReg = makeFakeToolRegistry();
     const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as PluginAPIContext['commandRegistry'],
@@ -536,7 +536,7 @@ describe('createPluginAPI', () => {
   });
 
   test('onEvent subscribes and returns unsubscribe, cleanup tracks it', async () => {
-    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins/api');
+    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const bus = makeFakeRuntimeBus();
     const cleanup: Array<() => void> = [];
     const ctx = makePluginApiContext({
@@ -580,7 +580,7 @@ describe('createPluginAPI', () => {
   });
 
   test('getConfig reads from pluginConfig', async () => {
-    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins/api');
+    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as PluginAPIContext['commandRegistry'],
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
@@ -595,7 +595,7 @@ describe('createPluginAPI', () => {
   });
 
   test('registerProvider returns Promise', async () => {
-    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins/api');
+    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const ctx = makePluginApiContext({
       commandRegistry: makeFakeCommandRegistry() as unknown as PluginAPIContext['commandRegistry'],
       providerRegistry: makeFakeProviderRegistry() as unknown as ProviderRegistry,
@@ -615,7 +615,7 @@ describe('createPluginAPI', () => {
   });
 
   test('registerProviderInstance registers cleanup-aware provider models', async () => {
-    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins/api');
+    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const cleanup: Array<() => void> = [];
     const providerRegistry = makeFakeProviderRegistry();
     const ctx = makePluginApiContext({
@@ -653,7 +653,7 @@ describe('createPluginAPI', () => {
   });
 
   test('registers extension SDK contributions for gateway, memory, voice, and media domains', async () => {
-    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins/api');
+    const { createPluginAPI } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const gatewayMethods = new GatewayMethodCatalog({ includeBuiltins: false });
     const configRoot = makeTempDir();
     const configManager = new ConfigManager({ surfaceRoot: 'tui',  workingDir: configRoot, configDir: join(configRoot, '.goodvibes', 'tui') });
@@ -723,7 +723,7 @@ describe('createPluginAPI', () => {
 
 describe('PluginManager', () => {
   test('enable returns error for unknown plugin name', async () => {
-    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins/manager');
+    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins');
     // Use a fresh instance directly so the test owns the plugin manager lifecycle.
     const manager = getPluginManagerTestAccess(PluginManager);
     const result = await manager.enable('nonexistent-plugin-xyz');
@@ -732,7 +732,7 @@ describe('PluginManager', () => {
   });
 
   test('disable returns error for not-enabled plugin', async () => {
-    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins/manager');
+    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const manager = getPluginManagerTestAccess(PluginManager);
     const result = await manager.disable('nonexistent-plugin-xyz');
     expect(result.ok).toBe(false);
@@ -740,7 +740,7 @@ describe('PluginManager', () => {
   });
 
   test('enable returns error when already enabled', async () => {
-    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins/manager');
+    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const manager = getPluginManagerTestAccess(PluginManager);
     // Manually set state to simulate an enabled plugin
     manager.state = manager.state ?? { enabled: {}, config: {}, trust: {}, quarantine: {} };
@@ -753,19 +753,19 @@ describe('PluginManager', () => {
   });
 
   test('isEnabled returns false for unknown plugin', async () => {
-    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins/manager');
+    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const manager = getPluginManagerTestAccess(PluginManager);
     expect(manager.isEnabled('totally-unknown-xyz')).toBe(false);
   });
 
   test('getPluginConfig returns empty object for unknown plugin', async () => {
-    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins/manager');
+    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const manager = getPluginManagerTestAccess(PluginManager);
     expect(manager.getPluginConfig('unknown')).toEqual({});
   });
 
   test('reload returns reloaded/failed counts', async () => {
-    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins/manager');
+    const { PluginManager } = await import('@pellux/goodvibes-sdk/platform/plugins');
     const manager = getPluginManagerTestAccess(PluginManager);
     // With no enabled plugins and no deps, reload should succeed vacuously
     const prevEnabled = manager.state?.enabled ?? {};

@@ -10,10 +10,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   DeterministicReplayEngine,
-} from '@pellux/goodvibes-sdk/platform/core/deterministic-replay';
-import { handleReplayCommand } from '@pellux/goodvibes-sdk/platform/core/replay-command-handler';
-import type { LedgerEntry } from '@pellux/goodvibes-sdk/platform/runtime/telemetry/exporters/local-ledger';
-import type { RuntimeStateSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
+} from '@pellux/goodvibes-sdk/platform/core';
+import { handleReplayCommand } from '@pellux/goodvibes-sdk/platform/core';
+import type { LedgerEntry } from '@/runtime/index.ts';
+import type { RuntimeStateSnapshot } from '@/runtime/index.ts';
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 

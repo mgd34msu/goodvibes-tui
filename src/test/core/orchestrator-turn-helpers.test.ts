@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { ConversationManager } from '../../core/conversation.ts';
-import type { ConversationManager as SdkConversationManager } from '@pellux/goodvibes-sdk/platform/core/conversation';
-import { prepareConversationForTurn } from '@pellux/goodvibes-sdk/platform/core/orchestrator-turn-helpers';
+import type { ConversationManager as SdkConversationManager } from '@pellux/goodvibes-sdk/platform/core';
+import { prepareConversationForTurn } from '@pellux/goodvibes-sdk/platform/core';
 
 const providerRegistry = {
   getCurrentModel: () => ({

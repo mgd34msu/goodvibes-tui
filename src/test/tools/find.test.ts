@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { join } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { makeTempDir, writeTempFile } from '../setup.ts';
-import { createFindTool } from '@pellux/goodvibes-sdk/platform/tools/find/index';
+import { createFindTool } from '@pellux/goodvibes-sdk/platform/tools';
 
 let findTool: ReturnType<typeof createFindTool>;
 
@@ -621,7 +621,7 @@ describe('references mode', () => {
       }],
     });
     const r = queryResult<{ locations: Array<{ file: string; line: number }>; count: number; source: string }>(results, 'refs');
-    expect(r.source).toBe('fallback');
+    expect(r.source).toBe('grep_fallback');
     // Should find the declaration in src/utils/helper.ts
     expect(r.count).toBeGreaterThan(0);
     expect(r.locations.some((l) => l.file.endsWith('helper.ts'))).toBe(true);
@@ -645,7 +645,7 @@ describe('references mode', () => {
     const r = queryResult<{ locations: unknown[]; count: number; source: string }>(results, 'refs');
     expect(r.count).toBe(0);
     expect(r.locations).toHaveLength(0);
-    expect(r.source).toBe('fallback');
+    expect(r.source).toBe('grep_fallback');
   });
 
   test('count_only format returns count only', async () => {

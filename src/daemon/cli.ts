@@ -1,31 +1,31 @@
 import { homedir, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import type { FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { formatProviderModel, getModelIdFromProviderModel, getProviderIdFromModel } from '../config/provider-model.ts';
+import { RuntimeEventBus, GlobalNetworkTransportInstaller } from '@/runtime/index.ts';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import type { FlagState } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
-import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
-import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { GlobalNetworkTransportInstaller } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { DaemonServer, HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   getOrCreateCompanionToken,
   pruneStaleOperatorTokens,
   buildCompanionConnectionInfo,
   encodeConnectionPayload,
   formatConnectionBlock,
-} from '@pellux/goodvibes-sdk/platform/pairing/index';
-import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
+  generateQrMatrix,
+  renderQrToString,
+} from '@pellux/goodvibes-sdk/platform/pairing';
 import { workspaceOperatorTokenCandidates } from '../runtime/operator-token-cleanup.ts';
 import {
   scan,
   loadPersistedProviders,
   persistProviders,
-} from '@pellux/goodvibes-sdk/platform/discovery/index';
+} from '@pellux/goodvibes-sdk/platform/discovery';
 import { createSafeHostServeFactory } from './safe-serve.ts';
 
 import {
@@ -138,13 +138,13 @@ async function main(): Promise<void> {
 
   // Apply remaining CLI flags before the provider registry is constructed.
   // These are runtime-only overrides; they must not rewrite settings.json.
-  if (cliFlags.provider !== undefined) {
-    applyRuntimeConfigValue(config, 'provider.provider', cliFlags.provider);
-    logger.info('daemon: --provider flag applied', { provider: cliFlags.provider });
-  }
-  if (cliFlags.model !== undefined) {
-    applyRuntimeConfigValue(config, 'provider.model', cliFlags.model);
-    logger.info('daemon: --model flag applied', { model: cliFlags.model });
+  if (cliFlags.provider !== undefined || cliFlags.model !== undefined) {
+    const currentModel = config.get('provider.model');
+    const provider = cliFlags.provider ?? getProviderIdFromModel(currentModel);
+    const model = cliFlags.model ?? getModelIdFromProviderModel(currentModel);
+    const registryKey = formatProviderModel(provider, model);
+    applyRuntimeConfigValue(config, 'provider.model', registryKey);
+    logger.info('daemon: provider/model flags applied', { provider, model: registryKey });
   }
   const endpointOverrideErrors = applyRuntimeEndpointFlagOverrides(config, 'controlPlane', cliFlags);
   if (endpointOverrideErrors.length > 0) {

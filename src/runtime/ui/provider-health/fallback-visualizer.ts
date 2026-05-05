@@ -5,9 +5,9 @@
  * provider health records into a structured FallbackChainData snapshot
  * suitable for UI rendering.
  */
-import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import type { ProviderHealthDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
-import type { FallbackChainData, FallbackChainNode } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/types';
+import type { ModelDomainState } from '@/runtime/index.ts';
+import type { ProviderHealthDomainState } from '@/runtime/index.ts';
+import type { FallbackChainData, FallbackChainNode } from '@/runtime/index.ts';
 
 /**
  * Build a FallbackChainData snapshot from the current model and health state.
@@ -28,6 +28,7 @@ export function buildFallbackChainData(
   // Node 0 — primary (active model)
   const primaryRecord = healthState.providers.get(modelState.activeProviderId);
   nodes.push({
+    registryKey: `${modelState.activeProviderId}:${modelState.activeModelId}`,
     providerId: modelState.activeProviderId,
     modelId: modelState.activeModelId,
     displayName: modelState.displayName,
@@ -42,6 +43,7 @@ export function buildFallbackChainData(
     const entry = modelState.fallbackChain[i];
     const record = healthState.providers.get(entry.providerId);
     nodes.push({
+      registryKey: `${entry.providerId}:${entry.modelId}`,
       providerId: entry.providerId,
       modelId: entry.modelId,
       displayName: entry.displayName,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
-import { createChannelTool } from '@pellux/goodvibes-sdk/platform/tools/channel/index';
+import { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels';
+import { createChannelTool } from '@pellux/goodvibes-sdk/platform/tools';
 
 describe('channel tool', () => {
   test('lists channel capabilities and accounts from the active registry', async () => {

@@ -6,9 +6,9 @@ import { describe, test, expect, beforeEach, afterEach, setDefaultTimeout } from
 setDefaultTimeout(15_000);
 import { mkdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { createEditTool } from '@pellux/goodvibes-sdk/platform/tools/edit/index';
-import type { EditToolOptions } from '@pellux/goodvibes-sdk/platform/tools/edit/index';
-import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
+import { createEditTool } from '@pellux/goodvibes-sdk/platform/tools';
+import type { EditToolOptions } from '@pellux/goodvibes-sdk/platform/tools';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
 
 // ---------------------------------------------------------------------------
 // Helpers

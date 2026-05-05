@@ -7,16 +7,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ModelPickerModal, detectFamily, tierToCategoryFilter, POPULAR_PROVIDERS } from '../../input/model-picker.ts';
 import type { CategoryFilter, PickerMode } from '../../input/model-picker.ts';
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
-import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
-import { BenchmarkStore, type BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { BenchmarkStore, type BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // Helpers

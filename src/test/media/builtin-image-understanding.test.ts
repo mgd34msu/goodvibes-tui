@@ -2,14 +2,14 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import {
   createBuiltinImageUnderstandingProvider,
   createLocalImageUnderstandingProvider,
   createOpenAIImageUnderstandingProvider,
-} from '@pellux/goodvibes-sdk/platform/media/builtin-image-understanding';
-import type { LLMProvider, ProviderMessage, ProviderRuntimeMetadataDeps } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+} from '@pellux/goodvibes-sdk/platform/media';
+import type { LLMProvider, ProviderMessage, ProviderRuntimeMetadataDeps } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 
 type ImageModelRegistry = Pick<ProviderRegistry, 'describeRuntime' | 'getCurrentModel' | 'getForModel' | 'listModels'>;
 

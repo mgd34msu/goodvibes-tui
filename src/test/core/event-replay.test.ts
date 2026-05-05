@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { EventReplayQueue } from '@pellux/goodvibes-sdk/platform/core/event-replay';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
+import { EventReplayQueue } from '@pellux/goodvibes-sdk/platform/core';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { createEventEnvelope } from '@/runtime/index.ts';
 
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.

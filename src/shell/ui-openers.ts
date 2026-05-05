@@ -1,14 +1,15 @@
 import type { ConfigManager } from '../config/index.ts';
+import { getProviderIdFromModel } from '../config/provider-model.ts';
 import type { ConversationManager } from '../core/conversation';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
-import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
-import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config/secrets';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { MutableRuntimeState } from '@/runtime/index.ts';
+import type { FeatureFlagManager } from '@/runtime/index.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
 
@@ -131,7 +132,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   };
 
   const buildModelPickerTargets = (): ModelPickerTargetInfo[] => {
-    const mainProvider = String(configManager.get('provider.provider') || runtime.provider || '').trim();
+    const mainProvider = getProviderIdFromModel(configManager.get('provider.model') || runtime.provider).trim();
     const mainModel = String(configManager.get('provider.model') || runtime.model || '').trim();
     const helperProvider = String(configManager.get('helper.globalProvider') ?? '').trim();
     const helperModel = String(configManager.get('helper.globalModel') ?? '').trim();

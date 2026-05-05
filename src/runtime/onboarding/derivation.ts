@@ -1,4 +1,5 @@
 import { DEFAULT_CONFIG } from '../../config/index.ts';
+import { getProviderIdFromModel } from '../../config/provider-model.ts';
 import type {
   OnboardingAcknowledgementState,
   OnboardingAcknowledgementTarget,
@@ -97,7 +98,7 @@ function countPermissionToolOverrides(snapshot: OnboardingSnapshotState): number
 }
 
 function hasCustomizedProviderRouting(snapshot: OnboardingSnapshotState): boolean {
-  return snapshot.providerRouting.primaryProviderId !== DEFAULT_CONFIG.provider.provider
+  return snapshot.providerRouting.primaryProviderId !== getProviderIdFromModel(DEFAULT_CONFIG.provider.model)
     || snapshot.providerRouting.primaryModelId !== DEFAULT_CONFIG.provider.model
     || snapshot.providerRouting.primaryReasoningEffort !== DEFAULT_CONFIG.provider.reasoningEffort
     || snapshot.providerRouting.embeddingProviderId !== DEFAULT_CONFIG.provider.embeddingProvider
@@ -236,7 +237,7 @@ function getProviderIdentityIds(snapshot: OnboardingSnapshotState): Set<string> 
     snapshot.providerRouting.embeddingProviderId,
     snapshot.providerRouting.helperProviderId,
     snapshot.providerRouting.toolProviderId,
-  ].filter((value) => value.trim().length > 0));
+  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0));
 }
 
 function getExternalIntegrationServiceIds(snapshot: OnboardingSnapshotState): string[] {

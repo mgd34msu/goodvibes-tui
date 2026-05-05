@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildPolicyPreflightReview } from '@pellux/goodvibes-sdk/platform/runtime/permissions/preflight';
+import { buildPolicyPreflightReview } from '@/runtime/index.ts';
 import type { GoodVibesConfig } from '../../../config/index.ts';
 
 const baseConfig = {

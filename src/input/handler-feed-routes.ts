@@ -1,7 +1,7 @@
-import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { BlockMeta, ConversationManager } from '../core/conversation';
 import type { InputHistory } from './input-history.ts';
-import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { SelectionManager } from './selection.ts';
@@ -9,7 +9,7 @@ import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, registerPaste } from './handler-content-actions.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export type PanelFocusRouteState = {
   panelManager: PanelManager;

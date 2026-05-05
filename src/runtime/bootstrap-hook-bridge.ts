@@ -1,18 +1,18 @@
 import type { ConversationManager } from '../core/conversation';
-import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/index';
-import type { MutableRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/mutable-runtime-state';
-import { registerBootstrapHookBridge } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-hook-bridge';
-import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { emitSessionResumed } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
-import { HelperModel } from '@pellux/goodvibes-sdk/platform/config/helper-model';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
-import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
-import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { MutableRuntimeState } from '@/runtime/index.ts';
+import { registerBootstrapHookBridge } from '@/runtime/index.ts';
+import type { RuntimeEventBus } from '@/runtime/index.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { emitSessionResumed } from '@/runtime/index.ts';
+import { HelperModel } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
+import type { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { PanelManager } from '../panels/panel-manager.ts';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export interface ResumeSessionOptions {
   readonly runtimeBus: RuntimeEventBus;
@@ -26,7 +26,7 @@ export interface ResumeSessionOptions {
   readonly sessionManager: SessionManager;
   readonly panelManager: PanelManager;
   readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;
-  readonly providerRegistry: Pick<ProviderRegistry, 'get' | 'getCurrentModel' | 'getForModel'>;
+  readonly providerRegistry: Pick<ProviderRegistry, 'get' | 'getCurrentModel' | 'getForModel' | 'require'>;
 }
 
 export function createResumeSessionHandler(options: ResumeSessionOptions): (sessionId: string) => void {

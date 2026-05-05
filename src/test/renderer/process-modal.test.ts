@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ProcessModal, renderProcessModal } from '../../renderer/process-modal.ts';
 import { UI_TONES } from '../../renderer/ui-primitives.ts';
-import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import type { BackgroundProcess } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
+import type { BackgroundProcess } from '@pellux/goodvibes-sdk/platform/tools';
 import { lineToString, linesToText } from '../setup.ts';
 
 const W = 100;

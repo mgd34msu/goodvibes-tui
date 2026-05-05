@@ -1,7 +1,7 @@
-import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { SecretsManager } from '../config/secrets.ts';
 import {
   buildSecretBackedConfigUpdate,

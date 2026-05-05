@@ -7,13 +7,13 @@ export type {
   SecretStorageMode,
   SecretStorageReview,
   SecretWriteOptions,
-} from '@pellux/goodvibes-sdk/platform/config/secrets';
+} from '@pellux/goodvibes-sdk/platform/config';
 
 import {
   SecretsManager as SdkSecretsManager,
   type SecretsManagerOptions as SdkSecretsManagerOptions,
-} from '@pellux/goodvibes-sdk/platform/config/secrets';
-import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
+} from '@pellux/goodvibes-sdk/platform/config';
+import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config';
 
 export type SecretsManagerOptions = Omit<SdkSecretsManagerOptions, 'surfaceRoot'>;
 

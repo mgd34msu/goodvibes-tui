@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { OllamaProvider } from '@pellux/goodvibes-sdk/platform/providers/ollama';
-import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { OllamaProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types';
 
 function ndjson(lines: Record<string, unknown>[]): string {
   return lines.map((line) => JSON.stringify(line)).join('\n');
@@ -118,7 +118,7 @@ describe('OllamaProvider', () => {
       apiKey: '',
       defaultModel: 'qwen3',
       models: ['qwen3'],
-      fallbackProvider,
+      compatProvider: fallbackProvider,
       nativeFetch: async () => {
         throw new ProviderError('Ollama native chat error 404: not found', 404);
       },
@@ -152,7 +152,7 @@ describe('OllamaProvider', () => {
       apiKey: '',
       defaultModel: 'qwen3',
       models: ['qwen3'],
-      fallbackProvider,
+      compatProvider: fallbackProvider,
       nativeFetch: async () => {
         nativeCalled = true;
         throw new Error('native path should not be used');

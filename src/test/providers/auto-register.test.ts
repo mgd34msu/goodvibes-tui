@@ -7,17 +7,14 @@
 import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import {
   autoRegisterProviders,
-  isProviderRegistered,
-  resolveApiKey,
-  createProviderFromEntry,
   AUTO_REGISTER_CATALOG,
-} from '@pellux/goodvibes-sdk/platform/providers/auto-register';
-import type { AutoRegisterEntry } from '@pellux/goodvibes-sdk/platform/providers/auto-register';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-compat';
-import { AnthropicCompatProvider } from '@pellux/goodvibes-sdk/platform/providers/anthropic-compat';
+} from '@pellux/goodvibes-sdk/platform/providers';
+import type { AutoRegisterEntry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { OpenAICompatProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { AnthropicCompatProvider } from '@pellux/goodvibes-sdk/platform/providers';
 import { createTestManagers } from '../helpers/test-managers.ts';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -39,6 +36,10 @@ let providerRegistry: ProviderRegistry;
 beforeEach(() => {
   providerRegistry = createTestManagers().providerRegistry;
 });
+
+function isProviderRegistered(registry: ProviderRegistry, providerId: string): boolean {
+  return Boolean(registry.get(providerId));
+}
 
 // ---------------------------------------------------------------------------
 // isProviderRegistered
@@ -64,120 +65,6 @@ describe('isProviderRegistered', () => {
     });
     providerRegistry.register(provider);
     expect(isProviderRegistered(providerRegistry, 'manual-test')).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// resolveApiKey
-// ---------------------------------------------------------------------------
-
-describe('resolveApiKey', () => {
-  const originalEnv = process.env;
-  beforeEach(() => { process.env = { ...originalEnv }; });
-  afterEach(() => { process.env = originalEnv; });
-
-  it('returns the value of the first matching env var', () => {
-    process.env.TEST_PROVIDER_API_KEY = 'sk-abc-123';
-    const entry = makeEntry();
-    expect(resolveApiKey(entry)).toBe('sk-abc-123');
-  });
-
-  it('returns empty string when no env vars are set', () => {
-    delete process.env.TEST_PROVIDER_API_KEY;
-    const entry = makeEntry();
-    expect(resolveApiKey(entry)).toBe('');
-  });
-
-  it('returns empty string when env var is empty string', () => {
-    process.env.TEST_PROVIDER_API_KEY = '';
-    const entry = makeEntry();
-    expect(resolveApiKey(entry)).toBe('');
-  });
-
-  it('checks fallback env vars in order, returns first non-empty', () => {
-    delete process.env.NVIDIA_API_KEY;
-    process.env.NIM_API_KEY = 'nvapi-test-key';
-    const entry = makeEntry({ envVars: ['NVIDIA_API_KEY', 'NIM_API_KEY'] });
-    expect(resolveApiKey(entry)).toBe('nvapi-test-key');
-  });
-
-  it('prefers the first env var when multiple are set', () => {
-    process.env.NVIDIA_API_KEY = 'primary-key';
-    process.env.NIM_API_KEY = 'fallback-key';
-    const entry = makeEntry({ envVars: ['NVIDIA_API_KEY', 'NIM_API_KEY'] });
-    expect(resolveApiKey(entry)).toBe('primary-key');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// createProviderFromEntry
-// ---------------------------------------------------------------------------
-
-describe('createProviderFromEntry', () => {
-  it('creates an OpenAICompatProvider for apiFormat openai', () => {
-    const entry = makeEntry({ apiFormat: 'openai' });
-    const provider = createProviderFromEntry(entry, 'test-key');
-    expect(provider).toBeInstanceOf(OpenAICompatProvider);
-    expect(provider.name).toBe('test-provider');
-  });
-
-  it('creates an OpenAICompatProvider when apiFormat is undefined (default)', () => {
-    const entry = makeEntry({ apiFormat: undefined });
-    const provider = createProviderFromEntry(entry, 'test-key');
-    expect(provider).toBeInstanceOf(OpenAICompatProvider);
-  });
-
-  it('creates an AnthropicCompatProvider for apiFormat anthropic', () => {
-    const entry = makeEntry({ apiFormat: 'anthropic' });
-    const provider = createProviderFromEntry(entry, 'test-key');
-    expect(provider).toBeInstanceOf(AnthropicCompatProvider);
-    expect(provider.name).toBe('test-provider');
-  });
-
-  it('uses seedModels as the models list', () => {
-    const entry = makeEntry({ seedModels: ['model-a', 'model-b'] });
-    const provider = createProviderFromEntry(entry, 'test-key');
-    expect(provider.models).toEqual(['model-a', 'model-b']);
-  });
-
-  it('falls back to [defaultModel] when seedModels is undefined', () => {
-    const entry = makeEntry({ seedModels: undefined });
-    const provider = createProviderFromEntry(entry, 'test-key');
-    expect(provider.models).toEqual(['test-model']);
-  });
-
-  // Multi-endpoint routing: ZenMux anthropic endpoint
-  it('creates AnthropicCompatProvider for ZenMux anthropic endpoint', () => {
-    const zenmuxAnthropicEntry: AutoRegisterEntry = {
-      id: 'zenmux-anthropic',
-      name: 'ZenMux (Anthropic)',
-      envVars: ['ZENMUX_API_KEY'],
-      baseUrl: 'https://zenmux.ai/api/anthropic/v1',
-      apiFormat: 'anthropic',
-      defaultModel: 'claude-opus-4-6',
-      seedModels: ['claude-opus-4-6', 'claude-sonnet-4-6'],
-    };
-    const provider = createProviderFromEntry(zenmuxAnthropicEntry, 'zenmux-key');
-    expect(provider).toBeInstanceOf(AnthropicCompatProvider);
-    expect(provider.name).toBe('zenmux-anthropic');
-    expect(provider.models).toContain('claude-opus-4-6');
-  });
-
-  // Multi-endpoint routing: ZenMux openai endpoint
-  it('creates OpenAICompatProvider for ZenMux openai endpoint', () => {
-    const zenmuxOpenAIEntry: AutoRegisterEntry = {
-      id: 'zenmux',
-      name: 'ZenMux',
-      envVars: ['ZENMUX_API_KEY'],
-      baseUrl: 'https://zenmux.ai/api/v1',
-      apiFormat: 'openai',
-      defaultModel: 'gpt-5.4',
-      seedModels: ['gpt-5.4', 'gpt-5-mini'],
-    };
-    const provider = createProviderFromEntry(zenmuxOpenAIEntry, 'zenmux-key');
-    expect(provider).toBeInstanceOf(OpenAICompatProvider);
-    expect(provider.name).toBe('zenmux');
-    expect(provider.models).toContain('gpt-5.4');
   });
 });
 

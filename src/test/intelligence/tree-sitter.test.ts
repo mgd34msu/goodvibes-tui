@@ -5,17 +5,17 @@
  * actual parsed tree use test.skipIf() to skip gracefully.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/service';
+import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence';
 import {
   detectLanguage,
   getGrammarPackage,
   getSupportedLanguages,
-} from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/languages';
+} from '@pellux/goodvibes-sdk/platform/intelligence';
 import {
   extractSymbols,
   extractOutline,
   findEnclosingScope,
-} from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/queries';
+} from '@pellux/goodvibes-sdk/platform/intelligence';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { getTestTreeSitterService } from '../helpers/runtime-services.ts';

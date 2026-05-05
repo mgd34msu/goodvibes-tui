@@ -1,11 +1,11 @@
 import type { CommandContext } from '../command-registry.ts';
-import type { ProvenanceLink } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { ProvenanceLink } from '@pellux/goodvibes-sdk/platform/state';
 import {
   buildIncidentMemoryAddOptions,
   buildMcpSecurityMemoryAddOptions,
   buildPluginSecurityMemoryAddOptions,
   buildPolicyPreflightMemoryAddOptions,
-} from '@pellux/goodvibes-sdk/platform/state/memory-ingest';
+} from '@pellux/goodvibes-sdk/platform/state';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope } from './recall-shared.ts';
 import { getMemoryApi } from './recall-query.ts';
 

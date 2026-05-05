@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
-import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks';
 
 function makeEvent(): HookEvent {
   return {

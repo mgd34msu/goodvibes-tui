@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createDaemonControlRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon/http/control-routes';
+import { createDaemonControlRouteHandlers } from '@pellux/goodvibes-sdk/platform/daemon';
 
 describe('daemon control routes', () => {
   test('builds status and auth responses from injected host services', async () => {

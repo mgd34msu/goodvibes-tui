@@ -1,9 +1,10 @@
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { OnboardingCheckMarkersState } from '../runtime/onboarding/index.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { isNetworkFacing } from './network-posture.ts';
 import type { GoodVibesCliOutputFormat } from './types.ts';
 import type { CliServicePosture } from './service-posture.ts';
+import { getProviderIdFromModel } from '../config/provider-model.ts';
 
 export interface CliStatusOptions {
   readonly configManager: Pick<ConfigManager, 'get'>;
@@ -254,7 +255,7 @@ export function buildCliStatusSnapshot(options: CliStatusOptions): CliStatusSnap
     workingDirectory: options.workingDirectory,
     homeDirectory: options.homeDirectory,
     provider: {
-      provider: String(config.get('provider.provider')),
+      provider: getProviderIdFromModel(config.get('provider.model')),
       model: String(config.get('provider.model')),
       reasoning: String(config.get('provider.reasoningEffort')),
     },
@@ -308,7 +309,7 @@ export function renderCliStatus(options: CliStatusOptions): string {
     `  homeDir: ${options.homeDirectory}`,
     '',
     'Provider:',
-    `  provider: ${String(config.get('provider.provider'))}`,
+    `  provider: ${getProviderIdFromModel(config.get('provider.model'))}`,
     `  model: ${String(config.get('provider.model'))}`,
     `  reasoning: ${String(config.get('provider.reasoningEffort'))}`,
     '',

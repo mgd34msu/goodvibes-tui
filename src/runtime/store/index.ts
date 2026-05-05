@@ -7,17 +7,19 @@
 
 import { createStore } from 'zustand/vanilla';
 import type { StoreApi } from 'zustand';
-import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/turn';
-import type { ToolEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tools';
-import type { PermissionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/permissions';
-import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tasks';
-import type { AgentEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/agents';
-import type { OrchestrationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/orchestration';
-import type { CommunicationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/communication';
-import type { PluginEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/plugins';
-import type { McpEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/mcp';
-import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
-import type { CompactionEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/compaction';
+import type {
+  AgentEvent,
+  CommunicationEvent,
+  CompactionEvent,
+  McpEvent,
+  OrchestrationEvent,
+  PermissionEvent,
+  PluginEvent,
+  TaskEvent,
+  ToolEvent,
+  TransportEvent,
+  TurnEvent,
+} from '@pellux/goodvibes-sdk/events';
 import type {
   SessionDomainState,
   ConversationDomainState,
@@ -47,13 +49,13 @@ import type {
   WatcherRecord,
   SurfaceDomainState,
   SurfaceRecord,
-} from '@pellux/goodvibes-sdk/platform/runtime/store/domains/index';
-import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
-import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
-import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
-import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
-import type { AutomationSurfaceKind } from '@pellux/goodvibes-sdk/platform/automation/types';
-import type { AutomationDeliveryAttempt } from '@pellux/goodvibes-sdk/platform/automation/delivery';
+} from '@pellux/goodvibes-sdk/platform/runtime/state';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationSurfaceKind } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationDeliveryAttempt } from '@pellux/goodvibes-sdk/platform/automation';
 import { createInitialRuntimeState } from './state.ts';
 import type { RuntimeState } from './state.ts';
 import {
@@ -82,7 +84,7 @@ import {
   updateTaskState,
   updateTransportState,
   updateWatcherDomainFromRecord,
-} from '@pellux/goodvibes-sdk/platform/runtime/store/helpers/reducers';
+} from '@pellux/goodvibes-sdk/platform/runtime/state';
 
 export type RuntimeStore = StoreApi<RuntimeState>;
 
@@ -301,4 +303,3 @@ export function createDomainDispatch(store: RuntimeStore): DomainDispatch {
 export type { RuntimeState } from './state.ts';
 export { createInitialRuntimeState } from './state.ts';
 export * from './selectors/index.ts';
-export * from '@pellux/goodvibes-sdk/platform/runtime/store/domains/index';

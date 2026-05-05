@@ -3,10 +3,10 @@ import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
-import { exportToMarkdown } from '@pellux/goodvibes-sdk/platform/export/markdown';
-import { TemplateManager, parseTemplateArgs } from '@pellux/goodvibes-sdk/platform/templates/manager';
+import { exportToMarkdown } from '@pellux/goodvibes-sdk/platform/export';
+import { TemplateManager, parseTemplateArgs } from '@pellux/goodvibes-sdk/platform/templates';
 import { requireSessionManager, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export function registerSessionContentCommands(registry: CommandRegistry): void {
   registry.register({
@@ -43,9 +43,9 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
           const exportMsgs = msgs.map(m => ({
             role: String(m.role ?? 'user') as 'user' | 'assistant' | 'system' | 'tool',
             content: Array.isArray(m.content)
-              ? m.content as import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[]
+              ? m.content as import('@pellux/goodvibes-sdk/platform/providers').ContentPart[]
               : String(m.content ?? ''),
-            toolCalls: m.toolCalls as import('@pellux/goodvibes-sdk/platform/types/tools').ToolCall[] | undefined,
+            toolCalls: m.toolCalls as import('@pellux/goodvibes-sdk/platform/types').ToolCall[] | undefined,
             callId: m.callId as string | undefined,
             toolName: m.toolName as string | undefined,
             reasoningContent: m.reasoningContent as string | undefined,

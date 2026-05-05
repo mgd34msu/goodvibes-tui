@@ -10,7 +10,7 @@ import {
   loadEcosystemCatalog,
   searchEcosystemCatalog,
   uninstallEcosystemCatalogEntry,
-} from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
+} from '@/runtime/index.ts';
 
 describe('ecosystem catalog', () => {
   const originalHome = process.env.HOME;

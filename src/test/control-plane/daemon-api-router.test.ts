@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { dispatchDaemonApiRoutes } from '@pellux/goodvibes-sdk/platform/control-plane/routes/api-router';
+import { dispatchDaemonApiRoutes } from '@pellux/goodvibes-sdk/platform/control-plane';
 
 describe('daemon api router', () => {
   test('dispatches telemetry event routes to the matching handler', async () => {

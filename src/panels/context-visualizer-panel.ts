@@ -2,11 +2,11 @@
 // ContextVisualizerPanel — stacked bar showing context window composition.
 // ---------------------------------------------------------------------------
 
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { evaluateSessionMaintenance } from '@pellux/goodvibes-sdk/platform/runtime/session-maintenance';
-import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { evaluateSessionMaintenance } from '@/runtime/index.ts';
+import type { TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
 import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';

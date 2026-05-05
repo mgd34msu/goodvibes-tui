@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createDeferredStartupCoordinator } from '@pellux/goodvibes-sdk/platform/runtime/deferred-startup';
+import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
 
 describe('createDeferredStartupCoordinator', () => {
   test('runs tasks asynchronously after scheduling', async () => {

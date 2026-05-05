@@ -14,11 +14,11 @@ import {
   evaluateSegmentNode,
   evaluateCommandAST,
   buildDenialExplanation,
-} from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/verdict';
-import { parseCommandAST } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/parser';
-import { collectCommandNodes } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/ast';
-import type { CommandNode } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/ast';
-import type { CommandClassification } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/types';
+} from '@/runtime/index.ts';
+import { parseCommandAST } from '@/runtime/index.ts';
+import { collectCommandNodes } from '@/runtime/index.ts';
+import type { CommandNode } from '@/runtime/index.ts';
+import type { CommandClassification } from '@/runtime/index.ts';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

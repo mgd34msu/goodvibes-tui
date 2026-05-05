@@ -14,10 +14,10 @@
  *   1 — one or more budgets exceeded tolerance
  */
 
-import { PerfMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
-import { formatReport, exitCode } from '@pellux/goodvibes-sdk/platform/runtime/perf/reporter';
-import { createInitialSurfacePerfState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surface-perf';
-import type { PerfSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/perf/monitor';
+import { PerfMonitor } from '@/runtime/index.ts';
+import { formatReport, exitCode } from '@/runtime/index.ts';
+import { createInitialSurfacePerfState } from '@/runtime/index.ts';
+import type { PerfSnapshot } from '@/runtime/index.ts';
 
 /**
  * Builds a PerfSnapshot for use in CI.

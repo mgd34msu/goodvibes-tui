@@ -1,1 +1,1 @@
-export * from '@pellux/goodvibes-sdk/platform/runtime/ui-service-queries';
+export * from '@/runtime/index.ts';

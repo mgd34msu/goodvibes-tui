@@ -10,7 +10,7 @@ import {
   uninstallEcosystemCatalogEntry,
   updateInstalledEcosystemEntry,
   upsertEcosystemCatalogEntry,
-} from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
+} from '@/runtime/index.ts';
 import { requireEcosystemCatalogPaths, requirePanelManager, requireShellPaths } from './runtime-services.ts';
 
 export function registerSkillsRuntimeCommands(registry: CommandRegistry): void {

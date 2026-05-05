@@ -2,7 +2,7 @@ import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import type {
   ProviderAccountRecord,
   ProviderAccountSnapshot,
-} from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
+} from '@/runtime/index.ts';
 import {
   openCommandPanel,
   requireOperatorClient,

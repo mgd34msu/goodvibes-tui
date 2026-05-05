@@ -6,17 +6,18 @@
  * - Pure helpers that derive values from an explicit ConfigManager instance
  */
 
-export { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-export type { DeepReadonly } from '@pellux/goodvibes-sdk/platform/config/manager';
-export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig, PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config/schema';
-export { DEFAULT_CONFIG, CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config/schema';
-export { ConfigError } from '@pellux/goodvibes-sdk/platform/types/errors';
+export { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+export type { DeepReadonly } from '@pellux/goodvibes-sdk/platform/config';
+export type { GoodVibesConfig, ConfigKey, ConfigValue, ConfigSetting, PermissionMode, PermissionAction, PermissionsToolConfig, NotificationsConfig, PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config';
+export { DEFAULT_CONFIG, CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
+export { ConfigError } from '@pellux/goodvibes-sdk/platform/types';
 
 import { readFileSync } from 'fs';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config/schema';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { GoodVibesConfig } from '@pellux/goodvibes-sdk/platform/config';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { getProviderIdFromModel } from './provider-model.ts';
 
 export function getConfigSnapshot(configManager: Pick<ConfigManager, 'getRaw'>): Readonly<GoodVibesConfig> {
   return configManager.getRaw();
@@ -27,7 +28,7 @@ export function getConfiguredModelId(configManager: Pick<ConfigManager, 'get'>):
 }
 
 export function getConfiguredProviderId(configManager: Pick<ConfigManager, 'get'>): string {
-  return configManager.get('provider.provider');
+  return getProviderIdFromModel(configManager.get('provider.model'));
 }
 
 export function getConfiguredEmbeddingProviderId(configManager: Pick<ConfigManager, 'get'>): string {
@@ -53,4 +54,4 @@ export function getConfiguredSystemPrompt(configManager: Pick<ConfigManager, 'ge
   }
 }
 
-export { getConfiguredApiKeys, resolveApiKeys } from '@pellux/goodvibes-sdk/platform/config/api-keys';
+export { getConfiguredApiKeys, resolveApiKeys } from '@pellux/goodvibes-sdk/platform/config';

@@ -386,7 +386,6 @@ describe('parseCliFlags', () => {
     expect(featureFlagState(configManager, 'service-management')).toBe('enabled');
     expect(featureFlagState(configManager, 'route-binding')).toBe('enabled');
     expect(featureFlagState(configManager, 'delivery-engine')).toBe('enabled');
-    expect(featureFlagState(configManager, 'omnichannel-surface-adapters')).toBe('enabled');
     expect(featureFlagState(configManager, 'slack-surface')).toBe('enabled');
   });
 

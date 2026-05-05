@@ -5,7 +5,7 @@
  * stable workspace with explicit target slots instead of a compact overlay.
  */
 
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
 import type { Line } from '../types/grid.ts';

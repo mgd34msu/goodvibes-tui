@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { createPermissionSimulator, DivergenceDashboard } from '@pellux/goodvibes-sdk/platform/runtime/permissions/index';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
-import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
+import { createPermissionSimulator, DivergenceDashboard } from '@/runtime/index.ts';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
+import { createUnsignedBundle } from '@/runtime/index.ts';
+import type { PolicyBundlePayload } from '@/runtime/index.ts';
 import { PolicyPanel } from '../../panels/policy-panel.ts';
-import type { PolicyRule } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
+import type { PolicyRule } from '@/runtime/index.ts';
 import type { Line } from '../../types/grid.ts';
-import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions/analysis';
+import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 
 function linesText(lines: Line[]): string {
   return lines
