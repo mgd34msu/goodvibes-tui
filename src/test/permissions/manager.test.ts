@@ -1,15 +1,15 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { PermissionPromptRequest, PermissionPromptDecision } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import { createUnsignedBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
-import type { PolicyBundlePayload } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
-import type { PolicyRule } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { PermissionPromptRequest, PermissionPromptDecision } from '@pellux/goodvibes-sdk/platform/permissions';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
+import { createUnsignedBundle } from '@/runtime/index.ts';
+import type { PolicyBundlePayload } from '@/runtime/index.ts';
+import type { PolicyRule } from '@/runtime/index.ts';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
 // behavior.autoApprove reflects the --no-worries-just-vibes flag.

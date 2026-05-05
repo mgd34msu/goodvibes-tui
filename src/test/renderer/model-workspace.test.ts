@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import { ModelPickerModal } from '../../input/model-picker.ts';
 import { renderModelWorkspace } from '../../renderer/model-workspace.ts';
 import { linesToText } from '../setup.ts';

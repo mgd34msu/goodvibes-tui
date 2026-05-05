@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus } from '@/runtime/index.ts';
 import {
   registeredEventTypes,
   validateEvent,
-} from '@pellux/goodvibes-sdk/platform/runtime/events/contracts';
+} from '@/runtime/index.ts';
 import {
   emitAutomationJobCreated,
   emitControlPlaneClientConnected,
@@ -13,7 +13,7 @@ import {
   emitSurfaceEnabled,
   emitUiRenderRequest,
   emitWatcherStarted,
-} from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+} from '@/runtime/index.ts';
 import {
   CONTROL_PLANE_CLIENT_KINDS,
   CONTROL_PLANE_TRANSPORT_KINDS,
@@ -21,7 +21,7 @@ import {
   ROUTE_SURFACE_KINDS,
   SURFACE_KINDS,
   isRuntimeEventDomain,
-} from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+} from '@/runtime/index.ts';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };

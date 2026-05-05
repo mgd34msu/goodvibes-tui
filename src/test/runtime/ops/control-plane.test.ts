@@ -11,10 +11,10 @@
  */
 
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
-import { OpsControlPlane, OpsIllegalActionError, OpsTargetNotFoundError } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
+import { OpsControlPlane, OpsIllegalActionError, OpsTargetNotFoundError } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
-import { createTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/index';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createTaskManager } from '@/runtime/index.ts';
+import { RuntimeEventBus } from '@/runtime/index.ts';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };

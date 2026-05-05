@@ -10,13 +10,13 @@
  */
 
 import { describe, test, expect, mock } from 'bun:test';
-import { classifyFailure, summariseFailure } from '@pellux/goodvibes-sdk/platform/runtime/forensics/classifier';
-import { ForensicsRegistry, DEFAULT_REGISTRY_LIMIT } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import { ForensicsCollector } from '@pellux/goodvibes-sdk/platform/runtime/forensics/collector';
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
+import { classifyFailure, summariseFailure } from '@/runtime/index.ts';
+import { ForensicsRegistry, DEFAULT_REGISTRY_LIMIT } from '@/runtime/index.ts';
+import { ForensicsCollector } from '@/runtime/index.ts';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
+import type { TurnEvent } from '@/runtime/index.ts';
+import type { TaskEvent } from '@/runtime/index.ts';
+import type { FailureReport } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -264,8 +264,8 @@ describe('ForensicsRegistry — push and retrieve', () => {
     expect(reg.getById('nope')).toBeUndefined();
   });
 
-  test('latest returns undefined when empty', async () => {
-    expect(makeRegistry().latest()).toBeUndefined();
+  test('latest returns null when empty', async () => {
+    expect(makeRegistry().latest()).toBeNull();
   });
 });
 

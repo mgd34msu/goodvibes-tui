@@ -8,7 +8,7 @@ import type { ComponentHealthMonitor } from '../../perf/panel-health-monitor.ts'
 import type {
   ComponentResourceEntry,
   ComponentResourceSnapshot,
-} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
+} from '@/runtime/index.ts';
 
 const DEFAULT_POLL_INTERVAL_MS = 500;
 

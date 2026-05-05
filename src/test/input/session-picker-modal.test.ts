@@ -4,7 +4,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { rmSync, existsSync } from 'fs';
 import { SessionPickerModal } from '../../input/session-picker-modal.ts';
-import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 // ---------------------------------------------------------------------------

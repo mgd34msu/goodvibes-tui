@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 function makeServer(name: string): DiscoveredServer {

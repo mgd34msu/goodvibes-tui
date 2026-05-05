@@ -1,4 +1,4 @@
-import type { SharedApprovalRecord, SharedSessionRecord, ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/index';
+import type { SharedApprovalRecord, SharedSessionRecord, ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type {
   UiAutomationSnapshot,
   UiCockpitSnapshot,
@@ -11,14 +11,14 @@ import type {
   UiWatchersSnapshot,
 } from '../../runtime/ui-read-models.ts';
 import type { RuntimeStore } from '../../runtime/store/index.ts';
-import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
-import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
-import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
-import type { WatcherRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/watchers';
-import type { RuntimeCommunicationRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/communication';
-import type { RuntimeTask } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/tasks';
-import type { OrchestrationGraphRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';
-import type { ControlPlaneClientRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/control-plane';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation';
+import type { WatcherRecord } from '@/runtime/index.ts';
+import type { RuntimeCommunicationRecord } from '@/runtime/index.ts';
+import type { RuntimeTask } from '@/runtime/index.ts';
+import type { OrchestrationGraphRecord } from '@/runtime/index.ts';
+import type { ControlPlaneClientRecord } from '@/runtime/index.ts';
 
 export function createStaticUiReadModel<TSnapshot>(snapshot: TSnapshot): UiReadModel<TSnapshot> {
   return {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/index';
-import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane';
 
 function schemaProperty(schema: unknown, ...path: string[]): unknown {
   let current: unknown = schema;
@@ -56,11 +56,11 @@ describe('GatewayMethodCatalog', () => {
     expect(events.some((event) => event.id === 'control.ready')).toBe(true);
 
     expect(catalog.findByHttpBinding('GET', '/api/control-plane/methods/control.status')?.id).toBe('control.methods.get');
-    expect(catalog.findByHttpBinding('GET', '/api/control-plane/whoami')?.id).toBe('control.auth.current');
-    expect(catalog.findByHttpBinding('GET', '/api/telemetry')?.id).toBe('telemetry.snapshot');
+    expect(catalog.findByHttpBinding('GET', '/api/control-plane/auth')?.id).toBe('control.auth.current');
+    expect(catalog.findByHttpBinding('GET', '/api/v1/telemetry')?.id).toBe('telemetry.snapshot');
     expect(catalog.findByHttpBinding('GET', '/api/v1/telemetry/events')?.id).toBe('telemetry.events.list');
     expect(catalog.findByHttpBinding('GET', '/api/artifacts/art-123/content')?.id).toBe('artifacts.content.get');
-    expect(catalog.findByHttpBinding('GET', '/api/remote/device/contract')?.id).toBe('remote.node_host.contract');
+    expect(catalog.findByHttpBinding('GET', '/api/remote/node-host/contract')?.id).toBe('remote.node_host.contract');
     expect(catalog.findByHttpBinding('GET', '/api/channels/setup/telegram')?.id).toBe('channels.setup.get');
     expect(catalog.findByHttpBinding('POST', '/api/channels/allowlist/signal/edit')?.id).toBe('channels.allowlist.edit');
     expect(catalog.findByHttpBinding('GET', '/api/providers/openai')?.id).toBe('providers.get');

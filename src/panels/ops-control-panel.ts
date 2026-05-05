@@ -8,7 +8,7 @@
  * Open via Ctrl+O keybind or `/ops view` command.
  */
 import type { Line } from '../types/grid.ts';
-import type { OpsEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { OpsEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsAuditEntry } from '../runtime/diagnostics/panels/ops.ts';
 import { OpsPanel } from '../runtime/diagnostics/panels/ops.ts';

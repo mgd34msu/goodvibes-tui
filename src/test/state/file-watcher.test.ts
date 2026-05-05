@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { FileWatcher } from '@pellux/goodvibes-sdk/platform/state/file-watcher';
-import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
-import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
+import { FileWatcher } from '@pellux/goodvibes-sdk/platform/state';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
@@ -182,7 +182,7 @@ describe('FileWatcher', () => {
     });
 
     // Spy on fire using bun:test spyOn
-    const fireSpy = spyOn(hookDispatcher, 'fire').mockImplementation(async (event: import('@pellux/goodvibes-sdk/platform/hooks/types').HookEvent) => {
+    const fireSpy = spyOn(hookDispatcher, 'fire').mockImplementation(async (event: import('@pellux/goodvibes-sdk/platform/hooks').HookEvent) => {
       firedPaths.push((event.payload as { filePath: string }).filePath);
       return { ok: true };
     });

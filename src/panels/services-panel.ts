@@ -5,7 +5,7 @@ import {
   type ServiceConfig,
   type ServiceInspection,
   type ServiceConnectionTestResult,
-} from '@pellux/goodvibes-sdk/platform/config/service-registry';
+} from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,

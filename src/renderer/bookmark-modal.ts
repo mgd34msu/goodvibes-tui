@@ -10,7 +10,7 @@
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import { BookmarkModal } from '../input/bookmark-modal.ts';
-import type { BookmarkEntry } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
+import type { BookmarkEntry } from '@pellux/goodvibes-sdk/platform/bookmarks';
 import { getOverlayContentBudget, getStableOverlayContentRows } from './overlay-viewport.ts';
 
 // ---------------------------------------------------------------------------

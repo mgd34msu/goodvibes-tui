@@ -1,6 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
-import type { ProviderEvent, TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import type { ProviderEvent, TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { UiProvidersSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import {

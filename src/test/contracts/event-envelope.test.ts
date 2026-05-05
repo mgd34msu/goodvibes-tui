@@ -3,8 +3,8 @@ import {
   createEventEnvelope,
   type RuntimeEventEnvelope,
   type EnvelopeContext,
-} from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import type { TaskEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/tasks';
+} from '@/runtime/index.ts';
+import type { TaskEvent } from '@/runtime/index.ts';
 
 describe('event-envelope contract', () => {
   const baseContext: EnvelopeContext = {
@@ -24,8 +24,7 @@ describe('event-envelope contract', () => {
       expect(envelope.type).toBe('TASK_CREATED');
       expect(typeof envelope.ts).toBe('number');
       expect(envelope.ts).toBeGreaterThan(0);
-      expect(typeof envelope.traceId).toBe('string');
-      expect(envelope.traceId.length).toBeGreaterThan(0);
+      expect(envelope.traceId).toBeUndefined();
       expect(envelope.sessionId).toBe('session-001');
       expect(envelope.source).toBe('test-module');
       expect(envelope.payload).toBe(payload);
@@ -84,22 +83,7 @@ describe('event-envelope contract', () => {
     });
   });
 
-  describe('traceId generation', () => {
-    test('traceId is auto-generated when not provided', () => {
-      const e1 = createEventEnvelope('TASK_CREATED', { type: 'TASK_CREATED' as const, taskId: 't1', description: 'd', priority: 0 }, baseContext);
-      const e2 = createEventEnvelope('TASK_CREATED', { type: 'TASK_CREATED' as const, taskId: 't2', description: 'd', priority: 0 }, baseContext);
-
-      // Each envelope gets a unique trace ID
-      expect(e1.traceId).not.toBe(e2.traceId);
-    });
-
-    test('traceId is UUID v4 format when auto-generated', () => {
-      const envelope = createEventEnvelope('TASK_STARTED', { type: 'TASK_STARTED' as const, taskId: 't1' }, baseContext);
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-      expect(envelope.traceId).toMatch(uuidRegex);
-    });
-
+  describe('traceId propagation', () => {
     test('provided traceId is preserved verbatim', () => {
       const ctx: EnvelopeContext = { ...baseContext, traceId: 'custom-trace-abc-123' };
       const envelope = createEventEnvelope('TASK_BLOCKED', { type: 'TASK_BLOCKED' as const, taskId: 't1', reason: 'dep' }, ctx);

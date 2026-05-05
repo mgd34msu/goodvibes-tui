@@ -2,9 +2,9 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { mkdtempSync, writeFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createExecTool } from '@pellux/goodvibes-sdk/platform/tools/exec/index';
-import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
-import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
+import { createExecTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools';
 
 // ---------------------------------------------------------------------------
 // Helpers

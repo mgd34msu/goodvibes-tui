@@ -4,8 +4,8 @@ import {
   HITL_QUIET,
   HITL_BALANCED,
   HITL_OPERATOR,
-} from '@pellux/goodvibes-sdk/platform/state/mode-manager';
-import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
+} from '@pellux/goodvibes-sdk/platform/state';
+import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
 import { getTestModeManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 beforeEach(() => {

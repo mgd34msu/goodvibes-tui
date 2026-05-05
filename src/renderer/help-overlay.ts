@@ -10,7 +10,7 @@ import type { SlashCommand } from '../input/command-registry.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 import { getVisibleWindow } from './surface-layout.ts';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 function toModalSections(rows: readonly string[]): import('./modal-factory.ts').ModalSection[] {
   return rows.map((row) => {

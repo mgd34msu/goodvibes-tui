@@ -10,14 +10,14 @@
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
-import { EvalRunner } from '@pellux/goodvibes-sdk/platform/runtime/eval/runner';
-import { BUILTIN_SUITES } from '@pellux/goodvibes-sdk/platform/runtime/eval/suites';
-import { formatScorecard } from '@pellux/goodvibes-sdk/platform/runtime/eval/scorecard';
-import { loadBaseline, captureBaseline, formatBaselineComparison, writeBaseline } from '@pellux/goodvibes-sdk/platform/runtime/eval/baseline';
+import { EvalRunner } from '@/runtime/index.ts';
+import { BUILTIN_SUITES } from '@/runtime/index.ts';
+import { formatScorecard } from '@/runtime/index.ts';
+import { loadBaseline, captureBaseline, formatBaselineComparison, writeBaseline } from '@/runtime/index.ts';
 import type { EvalRegistry } from '../../panels/eval-panel.ts';
-import { formatSuiteResult, formatGateResult } from '@pellux/goodvibes-sdk/platform/runtime/eval/format';
+import { formatSuiteResult, formatGateResult } from '@/runtime/index.ts';
 import { requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ── Subcommand helpers ────────────────────────────────────────────────────────
 

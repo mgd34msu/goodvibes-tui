@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadSkillByTrigger } from '@pellux/goodvibes-sdk/platform/tools/registry-tool/skill-loader';
+import { loadSkillByTrigger } from '@pellux/goodvibes-sdk/platform/tools';
 
 const PROJECT_ROOT = process.cwd();
 

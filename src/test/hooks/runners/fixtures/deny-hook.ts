@@ -1,4 +1,4 @@
-import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import type { HookEvent, HookResult } from '@pellux/goodvibes-sdk/platform/hooks';
 
 export default async function handler(_event: HookEvent): Promise<HookResult> {
   return { ok: true, decision: 'deny', reason: 'blocked by ts hook' };

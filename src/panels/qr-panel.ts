@@ -6,7 +6,7 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 import { renderQrMatrix, generateQrMatrix } from '../renderer/qr-renderer.ts';
-import { encodeConnectionPayload } from '@pellux/goodvibes-sdk/platform/pairing/index';
+import { encodeConnectionPayload } from '@pellux/goodvibes-sdk/platform/pairing';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,

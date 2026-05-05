@@ -6,8 +6,8 @@ import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ProfilePickerModal } from '../../input/profile-picker-modal.ts';
-import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 // ---------------------------------------------------------------------------
 // Helpers

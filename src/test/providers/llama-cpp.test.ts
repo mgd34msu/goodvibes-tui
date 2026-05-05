@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { LlamaCppProvider } from '@pellux/goodvibes-sdk/platform/providers/llama-cpp';
+import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { LlamaCppProvider } from '@pellux/goodvibes-sdk/platform/providers';
 
 describe('LlamaCppProvider', () => {
   beforeEach(() => {
@@ -107,7 +107,7 @@ describe('LlamaCppProvider', () => {
       apiKey: '',
       defaultModel: 'qwen',
       models: ['qwen'],
-      fallbackProvider,
+      compatProvider: fallbackProvider,
       nativeFetch: async () => {
         throw new Error('native non-stream path should not be used');
       },
@@ -130,7 +130,7 @@ describe('LlamaCppProvider', () => {
       apiKey: '',
       defaultModel: 'qwen',
       models: ['qwen'],
-      fallbackProvider: {
+      compatProvider: {
         name: 'compat',
         models: ['qwen'],
         chat: async () => {

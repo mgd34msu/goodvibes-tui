@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { Line } from '../../types/grid.ts';
 import type { Orchestrator } from '../../core/orchestrator';
 const TEST_ROOT = '/tmp/goodvibes-test';
@@ -241,7 +241,7 @@ describe('DiffPanel', () => {
 // ---------------------------------------------------------------------------
 
 import { TokenBudgetPanel } from '../../panels/token-budget-panel.ts';
-import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
+import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 
 describe('TokenBudgetPanel', () => {
   let panel: TokenBudgetPanel;

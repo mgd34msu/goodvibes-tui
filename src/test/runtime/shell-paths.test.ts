@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { createShellPathService } from '@/runtime/index.ts';
 
 describe('createShellPathService', () => {
   test('derives project and user roots from explicit absolute ownership', () => {

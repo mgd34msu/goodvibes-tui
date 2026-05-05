@@ -1,12 +1,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { SecretsManager } from '../config/secrets.ts';
-import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
-import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
-import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
-import { inspectProviderAuth } from '@pellux/goodvibes-sdk/platform/runtime/auth/inspection';
-import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing/index';
-import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
+import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config';
+import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
+import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
+import { inspectProviderAuth } from '@/runtime/index.ts';
+import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing';
+import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import type { CliCommandRuntime } from './management.ts';

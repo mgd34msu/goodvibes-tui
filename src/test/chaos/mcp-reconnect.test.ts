@@ -18,10 +18,10 @@ import {
   isOperational,
   isTerminal,
   reachableFrom,
-} from '@pellux/goodvibes-sdk/platform/runtime/mcp/lifecycle';
-import { McpPermissionManager } from '@pellux/goodvibes-sdk/platform/runtime/mcp/permissions';
-import { DEFAULT_RECONNECT_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
-import type { McpServerState } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
+} from '@/runtime/index.ts';
+import { McpPermissionManager } from '@/runtime/index.ts';
+import { DEFAULT_RECONNECT_CONFIG } from '@/runtime/index.ts';
+import type { McpServerState } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // MCP lifecycle state transitions

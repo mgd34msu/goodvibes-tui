@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers';
 import { formatProviderAuthRoute, summarizeProviderAuthRoutes } from '../../cli/provider-auth-routes.ts';
 
 describe('provider auth route formatting', () => {

@@ -1,19 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
-import { createInitialAutomationState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/automation';
-import { createInitialRoutesState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/routes';
-import { createInitialControlPlaneState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/control-plane';
-import { createInitialDeliveryState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/deliveries';
-import { createInitialWatcherState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/watchers';
-import { createInitialSurfaceState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/surfaces';
-import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
-import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
-import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
-import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
-import type { AutomationDeliveryPolicy } from '@pellux/goodvibes-sdk/platform/automation/delivery';
-import type { AutomationFailurePolicy } from '@pellux/goodvibes-sdk/platform/automation/failures';
-import type { AutomationExecutionPolicy } from '@pellux/goodvibes-sdk/platform/automation/session-targets';
+import { createInitialAutomationState } from '@/runtime/index.ts';
+import { createInitialRoutesState } from '@/runtime/index.ts';
+import { createInitialControlPlaneState } from '@/runtime/index.ts';
+import { createInitialDeliveryState } from '@/runtime/index.ts';
+import { createInitialWatcherState } from '@/runtime/index.ts';
+import { createInitialSurfaceState } from '@/runtime/index.ts';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationDeliveryPolicy } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationFailurePolicy } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationExecutionPolicy } from '@pellux/goodvibes-sdk/platform/automation';
 
 function roundTrip<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;

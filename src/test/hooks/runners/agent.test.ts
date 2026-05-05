@@ -1,10 +1,10 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { run } from '@pellux/goodvibes-sdk/platform/hooks/runners/agent';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { HookDefinition, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { run } from '@pellux/goodvibes-sdk/platform/hooks';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { HookDefinition, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks';
 
 const testAgentExecutor = {
   async runAgent() {
@@ -137,13 +137,13 @@ describe('agent runner - spawning', () => {
   });
 
   test('uses hook model override when provided', async () => {
-    const hook = makeHook({ model: 'gpt-5', timeout: 1 });
+    const hook = makeHook({ model: 'openai:gpt-5', timeout: 1 });
     const runPromise = run(hook, makeEvent(), agentManager);
     await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
     const agents = agentManager.list();
     expect(agents.length).toBeGreaterThan(0);
-    expect(agents[0].model).toBe('gpt-5');
+    expect(agents[0].model).toBe('openai:gpt-5');
 
     await runPromise;
   });

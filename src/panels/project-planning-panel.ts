@@ -5,7 +5,7 @@ import type {
   ProjectPlanningService,
   ProjectPlanningState,
   ProjectPlanningStatus,
-} from '@pellux/goodvibes-sdk/platform/knowledge/index';
+} from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import {

@@ -14,5 +14,5 @@
 
 export {
   ComponentHealthMonitor,
-  PanelHealthMonitor,
-} from '@pellux/goodvibes-sdk/platform/runtime/perf/component-health-monitor';
+  ComponentHealthMonitor as PanelHealthMonitor,
+} from '@/runtime/index.ts';

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import {
   checkRecoveryFile,
   deleteRecoveryFile,
@@ -13,7 +13,7 @@ import {
   persistConversation,
   readLastSessionPointer,
   writeRecoveryFile,
-} from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
+} from '@/runtime/index.ts';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 function makeTmpDir(prefix: string): string {

@@ -4,7 +4,7 @@ import {
   GOODVIBES_NTFY_CHAT_TOPIC,
   GOODVIBES_NTFY_REMOTE_TOPIC,
   resolveGoodVibesNtfyTopics,
-} from '@pellux/goodvibes-sdk/platform/integrations/ntfy';
+} from '@pellux/goodvibes-sdk/platform/integrations';
 import { enableFeatureFlags, getMissingSurfaceFeatureFlags, getServerSurfaceFeatureFlags } from '../runtime/surface-feature-flags.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';

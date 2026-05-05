@@ -3,10 +3,10 @@
  * Kept in a separate file to avoid growing fetch.test.ts further.
  */
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
+import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';

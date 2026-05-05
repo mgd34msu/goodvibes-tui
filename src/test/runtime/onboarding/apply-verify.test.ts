@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createShellPathService } from '@/runtime/index.ts';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { SecretsManager } from '../../../config/secrets.ts';
 import {
   applyOnboardingRequest,

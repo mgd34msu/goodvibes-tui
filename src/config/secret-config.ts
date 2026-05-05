@@ -1,4 +1,4 @@
-import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
+import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigKey } from './index.ts';
 import type { SecretScope, SecretStorageMedium } from './secrets.ts';
 

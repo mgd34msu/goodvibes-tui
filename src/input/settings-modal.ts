@@ -10,11 +10,11 @@
  * Saves changes via configManager.set(key, value) or featureFlagManager methods.
  */
 
-import { CONFIG_SCHEMA, type ConfigKey, type PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config/schema';
+import { CONFIG_SCHEMA, type ConfigKey, type PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config';
 import type { ModelPickerTarget } from './model-picker.ts';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { getResolvedSettingLookup } from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { getResolvedSettingLookup } from '@/runtime/index.ts';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import { buildGoodVibesSecretKey, isSecretConfigKey } from '../config/secret-config.ts';
 import {
@@ -27,11 +27,11 @@ import {
   type SettingsSecretsManager,
 } from './settings-modal-secrets.ts';
 import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
-import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import type { FeatureFlag, FlagState } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/types';
-import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import type { FeatureFlagManager } from '@/runtime/index.ts';
+import type { FeatureFlag, FlagState } from '@/runtime/index.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   SETTINGS_CATEGORIES,
   type FlagEntry,

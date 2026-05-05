@@ -23,7 +23,7 @@ import type {
   EvalResult,
   EvalGateResult,
   EvalDimension,
-} from '@pellux/goodvibes-sdk/platform/runtime/eval/types';
+} from '@/runtime/index.ts';
 
 /**
  * Holds the latest eval run state for display in EvalPanel.

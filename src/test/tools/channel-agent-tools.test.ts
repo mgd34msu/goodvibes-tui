@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
-import { registerChannelAgentTools } from '@pellux/goodvibes-sdk/platform/tools/channel/agent-tools';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
+import { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels';
+import { registerChannelAgentTools } from '@pellux/goodvibes-sdk/platform/tools';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
 
 describe('channel agent tools', () => {
   test('registers direct plugin-owned tools and skips duplicate names', () => {

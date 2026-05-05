@@ -1,30 +1,30 @@
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { Orchestrator } from '../../core/orchestrator';
-import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-store';
-import type { ApprovalBroker, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
-import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/index';
-import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane/gateway';
+import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import type { ApprovalBroker, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
+import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { UiRuntimeServices } from '../../runtime/ui-services.ts';
-import type { PluginManagerObserver } from '@pellux/goodvibes-sdk/platform/plugins/manager';
-import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
-import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import type { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
-import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
-import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
-import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
-import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
-import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
-import type { ProjectPlanningService } from '@pellux/goodvibes-sdk/platform/knowledge/index';
-import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
+import type { PluginManagerObserver } from '@pellux/goodvibes-sdk/platform/plugins';
+import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import type { PolicyRuntimeState } from '@/runtime/index.ts';
+import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import type { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
+import type { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core';
+import type { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
+import type { ProjectPlanningService } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security';
 import type { ComponentHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
-import type { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
-import type { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
+import type { WorktreeRegistry } from '@/runtime/index.ts';
+import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 
 export interface BuiltinPanelDeps {
   /** Config manager for settings-sync and other config-backed panels. */
@@ -56,13 +56,13 @@ export interface BuiltinPanelDeps {
   /** Request a shell repaint directly rather than routing through a retired event path. */
   requestRender?: () => void;
   /** ForensicsRegistry for the Forensics panel. */
-  forensicsRegistry?: import('@pellux/goodvibes-sdk/platform/runtime/forensics/registry').ForensicsRegistry;
+  forensicsRegistry?: import('@/runtime/index.ts').ForensicsRegistry;
   /** EvalRegistry for the Eval panel. */
   evalRegistry?: import('../eval-panel.ts').EvalRegistry;
   /** MemoryRegistry for the Memory panel. */
   memoryRegistry?: MemoryRegistry;
   /** Shared policy runtime state for governance/policy diagnostics. */
-  policyRuntimeState?: import('@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime').PolicyRuntimeState;
+  policyRuntimeState?: import('@/runtime/index.ts').PolicyRuntimeState;
   /** Approval broker for control-plane/operator panels. */
   approvalBroker?: ApprovalBroker;
   /** Shared session broker for control-plane/operator panels. */

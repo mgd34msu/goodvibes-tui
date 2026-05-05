@@ -5,8 +5,8 @@
  * through the full Pre/Post/Fail lifecycle.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import type { HookEvent, HookDefinition } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookEvent, HookDefinition } from '@pellux/goodvibes-sdk/platform/hooks';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -149,7 +149,7 @@ describe('Hook lifecycle — phase transitions', () => {
   });
 
   test('hook deny decision propagates correctly', () => {
-    const result: import('@pellux/goodvibes-sdk/platform/hooks/types').HookResult = {
+    const result: import('@pellux/goodvibes-sdk/platform/hooks').HookResult = {
       ok: true,
       decision: 'deny',
       reason: 'blocked by policy',
@@ -159,7 +159,7 @@ describe('Hook lifecycle — phase transitions', () => {
   });
 
   test('hook allow decision propagates correctly', () => {
-    const result: import('@pellux/goodvibes-sdk/platform/hooks/types').HookResult = {
+    const result: import('@pellux/goodvibes-sdk/platform/hooks').HookResult = {
       ok: true,
       decision: 'allow',
     };

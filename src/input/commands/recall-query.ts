@@ -1,6 +1,6 @@
 import type { CommandContext } from '../command-registry.ts';
-import type { MemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge/knowledge-api';
-import type { MemorySearchFilter } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { MemoryApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { MemorySearchFilter } from '@pellux/goodvibes-sdk/platform/state';
 import { VALID_CLASSES, VALID_SCOPES, isValidClass, isValidScope } from './recall-shared.ts';
 
 export function getMemoryApi(context: CommandContext): MemoryApi | null {

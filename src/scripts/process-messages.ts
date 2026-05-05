@@ -1,6 +1,6 @@
 // CLI utility script — not imported by the app. console usage is intentional.
 import { readFileSync } from 'fs';
-import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
 
 // Simple script to read messages from a file and broadcast them via the AgentMessageBus.
 // Expected file format: each line contains an optional index and a message separated by '|', e.g. "1 | Hello".

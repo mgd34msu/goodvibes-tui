@@ -8,10 +8,10 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import type { ProviderRegistry, ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
-import { ProviderOptimizer } from '@pellux/goodvibes-sdk/platform/providers/optimizer';
+import type { ProviderRegistry, ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import type { LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderOptimizer } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // Helpers

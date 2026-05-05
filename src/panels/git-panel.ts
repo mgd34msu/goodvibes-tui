@@ -1,8 +1,8 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
-import { GitService } from '@pellux/goodvibes-sdk/platform/git/service';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   buildEmptyState,
   buildPanelLine,

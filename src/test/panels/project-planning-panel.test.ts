@@ -5,7 +5,7 @@ import {
   type ProjectPlanningLanguageArtifact,
   type ProjectPlanningService,
   type ProjectPlanningState,
-} from '@pellux/goodvibes-sdk/platform/knowledge/index';
+} from '@pellux/goodvibes-sdk/platform/knowledge';
 import { ProjectPlanningPanel } from '../../panels/project-planning-panel.ts';
 
 function makeState(input: Partial<ProjectPlanningState> = {}): ProjectPlanningState {

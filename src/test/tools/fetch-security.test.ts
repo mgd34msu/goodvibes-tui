@@ -11,19 +11,19 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
 import {
   applySanitizer,
   resolveSanitizeMode,
   type SanitizeMode,
-} from '@pellux/goodvibes-sdk/platform/tools/fetch/sanitizer';
+} from '@pellux/goodvibes-sdk/platform/tools';
 import {
   classifyHostTrustTier,
   extractHostname,
   TRUST_TIER_EVENTS,
   type TrustTierConfig,
-} from '@pellux/goodvibes-sdk/platform/tools/fetch/trust-tiers';
-import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools/fetch/index';
+} from '@pellux/goodvibes-sdk/platform/tools';
+import { createFetchTool } from '@pellux/goodvibes-sdk/platform/tools';
 
 function createFetchHarness() {
   const featureFlags = createFeatureFlagManager();

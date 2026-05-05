@@ -18,8 +18,8 @@
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
-import type { CancellationScope, CrossSessionTaskRef } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
-import { VALID_SCOPES } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
+import type { CancellationScope, CrossSessionTaskRef } from '@pellux/goodvibes-sdk/platform/sessions';
+import { VALID_SCOPES } from '@pellux/goodvibes-sdk/platform/sessions';
 import { handleSessionWorkflowCommand } from './session-workflow.ts';
 import { requireSessionOrchestration } from './runtime-services.ts';
 

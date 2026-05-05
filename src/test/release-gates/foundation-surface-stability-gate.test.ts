@@ -1,25 +1,25 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import * as Channels from '@pellux/goodvibes-sdk/platform/channels/index';
-import * as Hooks from '@pellux/goodvibes-sdk/platform/hooks/index';
-import * as Knowledge from '@pellux/goodvibes-sdk/platform/knowledge/index';
-import * as Mcp from '@pellux/goodvibes-sdk/platform/mcp/index';
-import * as Providers from '@pellux/goodvibes-sdk/platform/providers/index';
-import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge/index';
-import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers/index';
+import * as Channels from '@pellux/goodvibes-sdk/platform/channels';
+import * as Hooks from '@pellux/goodvibes-sdk/platform/hooks';
+import * as Knowledge from '@pellux/goodvibes-sdk/platform/knowledge';
+import * as Mcp from '@pellux/goodvibes-sdk/platform/mcp';
+import * as Providers from '@pellux/goodvibes-sdk/platform/providers';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { ProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
 import {
   createDirectTransportServices,
   createOperatorClientServices,
   createPeerClientDependencies,
-} from '@pellux/goodvibes-sdk/platform/runtime/foundation-services';
-import { createOperatorClient, type OperatorClient } from '@pellux/goodvibes-sdk/platform/runtime/operator-client';
-import { createPeerClient, type PeerClient } from '@pellux/goodvibes-sdk/platform/runtime/peer-client';
+} from '@/runtime/index.ts';
+import { createOperatorClient, type OperatorClient } from '@/runtime/index.ts';
+import { createPeerClient, type PeerClient } from '@/runtime/index.ts';
 import {
   createDirectTransport,
   createDirectTransportFromServices,
   type DirectTransport,
-} from '@pellux/goodvibes-sdk/platform/runtime/transports/direct';
+} from '@/runtime/index.ts';
 import { getTestRuntimeServices, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function resetPeerFoundationState(): void {

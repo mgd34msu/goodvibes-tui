@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
 import { getTestAgentManager, resetTestRuntimeServices } from '../../helpers/runtime-services.ts';
-import { RemoteRunnerRegistry } from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
+import { RemoteRunnerRegistry } from '@/runtime/index.ts';
 import {
   exportRemoteArtifactForAgent,
   importRemoteArtifact,
-} from '@pellux/goodvibes-sdk/platform/runtime/remote/runner-registry';
+} from '@/runtime/index.ts';
 
 describe('RemoteRunnerRegistry', () => {
   beforeEach(() => {

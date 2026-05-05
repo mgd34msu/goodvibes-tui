@@ -129,15 +129,15 @@ describe('Config persistence — provider fields', () => {
   });
 
   test('provider.model can be set and retrieved', () => {
-    configManager.set('provider.model', 'gpt-4o-mini');
-    expect(configManager.get('provider.model')).toBe('gpt-4o-mini');
+    configManager.set('provider.model', 'openai:gpt-4o-mini');
+    expect(configManager.get('provider.model')).toBe('openai:gpt-4o-mini');
   });
 
   test('provider.provider + provider.model can be set together', () => {
     configManager.set('provider.provider', 'anthropic');
-    configManager.set('provider.model', 'claude-3-5-sonnet');
+    configManager.set('provider.model', 'anthropic:claude-3-5-sonnet');
     expect(configManager.get('provider.provider')).toBe('anthropic');
-    expect(configManager.get('provider.model')).toBe('claude-3-5-sonnet');
+    expect(configManager.get('provider.model')).toBe('anthropic:claude-3-5-sonnet');
   });
 });
 

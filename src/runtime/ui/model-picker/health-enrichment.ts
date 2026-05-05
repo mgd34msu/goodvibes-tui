@@ -5,20 +5,20 @@
  * telemetry from ProviderHealthDomainState to produce enriched
  * ModelPickerEntry objects ready for UI consumption.
  */
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { ProviderHealthDomainState, ProviderHealthRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
-import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ProviderHealthDomainState, ProviderHealthRecord } from '@/runtime/index.ts';
+import type { ModelDomainState } from '@/runtime/index.ts';
 import { detectFamily, tierToCategoryFilter } from '../../../input/model-picker.ts';
-import { getQualityTier, getQualityTierFromScore, compositeScore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import { getQualityTier, getQualityTierFromScore, compositeScore } from '@pellux/goodvibes-sdk/platform/providers';
 import type {
   ModelPickerEntry,
   ModelPickerGroup,
   ProviderHealthContext,
   CapabilityFlags,
   ProviderLatencyStats,
-} from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/types';
+} from '@/runtime/index.ts';
 
 /** Status sort priority (lower = shown first). */
 const STATUS_ORDER: Record<string, number> = {

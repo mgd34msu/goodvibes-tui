@@ -1,5 +1,6 @@
 import type { SecretStorageReview } from '../../config/secrets.ts';
-import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security/user-auth';
+import { getProviderIdFromModel } from '../../config/provider-model.ts';
+import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security';
 import { readOnboardingRuntimeState } from './state.ts';
 import type {
   OnboardingAcknowledgementSnapshot,
@@ -50,7 +51,7 @@ function buildProviderRoutingSnapshot(
   config: OnboardingConfigSnapshot,
 ): OnboardingProviderRoutingSnapshot {
   return {
-    primaryProviderId: config.provider.provider,
+    primaryProviderId: getProviderIdFromModel(config.provider.model),
     primaryModelId: config.provider.model,
     primaryReasoningEffort: config.provider.reasoningEffort,
     embeddingProviderId: config.provider.embeddingProvider,

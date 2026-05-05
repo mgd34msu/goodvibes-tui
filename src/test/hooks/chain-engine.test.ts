@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import { ChainEngine } from '@pellux/goodvibes-sdk/platform/hooks/chain-engine';
-import type { HookChain, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import { ChainEngine } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookChain, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks';
 
 function makeEvent(overrides: Partial<HookEvent> = {}): HookEvent {
   return {

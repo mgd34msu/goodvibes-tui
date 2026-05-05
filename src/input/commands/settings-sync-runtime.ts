@@ -14,12 +14,13 @@ import {
   recordSettingsSyncFailure,
   setManagedSettingLock,
   type SettingsSyncBundle,
-} from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
+} from '@/runtime/index.ts';
+import { getProviderIdFromModel } from '../../config/provider-model.ts';
 import { type ConfigKey } from '../../config/index.ts';
-import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config/schema';
+import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandRegistry } from '../command-registry.ts';
 import { openCommandPanel, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -71,7 +72,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
           return;
         }
         ctx.session.runtime.model = String(ctx.platform.configManager.get('provider.model'));
-        ctx.session.runtime.provider = String(ctx.platform.configManager.get('provider.provider'));
+        ctx.session.runtime.provider = getProviderIdFromModel(ctx.platform.configManager.get('provider.model'));
         ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
         ctx.print(`Resolved synced conflict for ${key} using the ${resolution} value.`);
         return;

@@ -22,11 +22,11 @@ export type {
   PanelHealthStatus,
   PanelResourceContract,
   PanelHealthState,
-} from '@pellux/goodvibes-sdk/platform/runtime/perf/component-contracts';
+} from '@/runtime/index.ts';
 
 export {
   CATEGORY_CONTRACTS,
   buildContract,
   createInitialComponentHealthState,
   createInitialPanelHealthState,
-} from '@pellux/goodvibes-sdk/platform/runtime/perf/component-contracts';
+} from '@/runtime/index.ts';

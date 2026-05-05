@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
-import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import { InputTokenizer } from '@pellux/goodvibes-sdk/platform/core';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 
 describe('InputTokenizer', () => {
   let tokenizer: InputTokenizer;

@@ -9,9 +9,9 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { PluginLifecycleManager } from '@pellux/goodvibes-sdk/platform/runtime/plugins/manager';
-import { isOperational, isReloadable, isTerminal, canTransition } from '@pellux/goodvibes-sdk/platform/runtime/plugins/lifecycle';
-import type { PluginManifestV2 } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
+import { PluginLifecycleManager } from '@/runtime/index.ts';
+import { isOperational, isReloadable, isTerminal, canTransition } from '@/runtime/index.ts';
+import type { PluginManifestV2 } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

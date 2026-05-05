@@ -2,9 +2,9 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 const originalFetch = globalThis.fetch;
 
 // ---------------------------------------------------------------------------

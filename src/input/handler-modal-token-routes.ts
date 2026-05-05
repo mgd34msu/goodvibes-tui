@@ -1,4 +1,4 @@
-import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { InfiniteBuffer } from '../core/history.ts';
 import type { SelectionResult, SelectionModal } from './selection-modal.ts';
 import type { BookmarkModal } from './bookmark-modal.ts';

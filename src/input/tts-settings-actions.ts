@@ -1,4 +1,4 @@
-import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config/schema';
+import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext } from './command-registry.ts';
 import type { SelectionItem } from './selection-modal.ts';
 

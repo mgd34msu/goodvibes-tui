@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
-import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
-import { createHttpJsonTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-json-transport';
-import { createOperatorRemoteClient } from '@pellux/goodvibes-sdk/platform/runtime/transports/operator-remote-client';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { createHttpJsonTransport } from '@/runtime/index.ts';
+import { createOperatorRemoteClient } from '@/runtime/index.ts';
 
 function createJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -25,7 +25,24 @@ describe('OperatorRemoteClient', () => {
       authToken: 'token-123',
       fetchImpl: createFetchStub(async (input?: unknown, init?: unknown) => {
         calls.push({ url: String(input), init: init as RequestInit | undefined });
-        return createJsonResponse({ ok: true });
+        return createJsonResponse({
+          session: {
+            id: 'session-1',
+            kind: 'tui',
+            title: 'Session 1',
+            status: 'active',
+            createdAt: 1,
+            updatedAt: 1,
+            lastActivityAt: 1,
+            messageCount: 0,
+            pendingInputCount: 0,
+            routeIds: [],
+            surfaceKinds: [],
+            participants: [],
+            metadata: {},
+          },
+          messages: [],
+        });
       }),
     });
     const contract = buildOperatorContract(new GatewayMethodCatalog());
@@ -49,7 +66,7 @@ describe('OperatorRemoteClient', () => {
       baseUrl: 'http://127.0.0.1:3210',
       fetchImpl: createFetchStub(async (input?: unknown, init?: unknown) => {
         calls.push({ url: String(input), init: init as RequestInit | undefined });
-        return createJsonResponse({ taskId: 'task-1' });
+        return createJsonResponse({ acknowledged: true, task: 'ship it', sessionId: 'session-1' });
       }),
     });
     const contract = buildOperatorContract(new GatewayMethodCatalog());

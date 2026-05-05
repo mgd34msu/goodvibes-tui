@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { createEventEnvelope, RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { createEventEnvelope, RuntimeEventBus } from '@/runtime/index.ts';
 import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { ProviderHealthPanel } from '../../panels/provider-health-panel.ts';
 import type { Line } from '../../types/grid.ts';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/index';
-import { createProviderApi } from '@pellux/goodvibes-sdk/platform/providers/provider-api';
+import { buildMcpAttackPathReview } from '@/runtime/index.ts';
+import { createProviderApi } from '@pellux/goodvibes-sdk/platform/providers';
 import { createProviderRuntimeInspectionQuery } from '../../runtime/ui-service-queries.ts';
 
 function linesText(lines: Line[]): string {
@@ -20,6 +20,20 @@ function linesText(lines: Line[]): string {
 
 function createPanel(runtimeBus = new RuntimeEventBus()): ProviderHealthPanel {
   const managers = createTestManagers();
+  managers.configManager.setDynamic('provider.model', 'openai:model-1');
+  managers.providerRegistry.register({
+    name: 'openai',
+    models: ['model-1'],
+    async chat() {
+      return {
+        content: '',
+        toolCalls: [],
+        usage: { inputTokens: 0, outputTokens: 0 },
+        stopReason: 'completed',
+      };
+    },
+  });
+  managers.providerRegistry.setCurrentModel('openai:model-1');
   const store = createRuntimeStore();
   const events = createUiRuntimeEvents(runtimeBus);
   const baseProviderRuntime = createProviderRuntimeInspectionQuery(createProviderApi({
@@ -150,7 +164,7 @@ function createPanel(runtimeBus = new RuntimeEventBus()): ProviderHealthPanel {
           total: 0,
           active: 0,
           paused: 0,
-          cleanupPending: 0,
+          pendingCleanup: 0,
           discard: 0,
         },
         records: [],

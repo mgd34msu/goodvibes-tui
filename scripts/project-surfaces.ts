@@ -1,9 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
-import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '@pellux/goodvibes-sdk/platform/knowledge/index';
-import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
-import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
+import { getPeerContract } from '@pellux/goodvibes-sdk/contracts';
+import { GatewayMethodCatalog, buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '@pellux/goodvibes-sdk/platform/knowledge';
 
 const ROOT = join(import.meta.dir, '..');
 
@@ -73,9 +72,8 @@ export function syncFoundationArtifacts(root = ROOT): void {
 
   mkdirSync(outputDir, { recursive: true });
 
-  const catalog = new GatewayMethodCatalog();
-  const operatorContract = buildOperatorContract(catalog);
-  const peerContract = getDistributedNodeHostContract();
+  const operatorContract = buildOperatorContract(new GatewayMethodCatalog());
+  const peerContract = getPeerContract();
 
   writeJsonArtifact(outputDir, 'operator-contract.json', operatorContract);
   writeJsonArtifact(outputDir, 'peer-contract.json', peerContract);

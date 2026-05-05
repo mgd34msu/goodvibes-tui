@@ -1,8 +1,8 @@
 import type { StatusResult } from 'simple-git';
 import { basename } from 'path';
 import type { CommandContext } from '../command-registry.ts';
-import { GitService } from '@pellux/goodvibes-sdk/platform/git/service';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 type GitLike = Pick<GitService, 'addAll' | 'status' | 'commit'>;
 

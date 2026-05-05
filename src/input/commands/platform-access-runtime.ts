@@ -2,9 +2,9 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
 import { VERSION } from '../../version.ts';
-import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
+import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { handleLocalAuthCommand } from './local-auth-runtime.ts';
-import { buildAuthInspectionSnapshot, inspectProviderAuth } from '@pellux/goodvibes-sdk/platform/runtime/auth/inspection';
+import { buildAuthInspectionSnapshot, inspectProviderAuth } from '@/runtime/index.ts';
 import { requireProfileManager, requireSecretsManager, requireServiceRegistry, requireShellPaths, requireSubscriptionManager } from './runtime-services.ts';
 
 interface InstallBundle {

@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { repairToolCall } from '@pellux/goodvibes-sdk/platform/tools/auto-repair';
-import type { ToolDefinition } from '@pellux/goodvibes-sdk/platform/types/tools';
+import { repairToolCall } from '@pellux/goodvibes-sdk/platform/tools';
+import type { ToolDefinition } from '@pellux/goodvibes-sdk/platform/types';
 
 // ---------------------------------------------------------------------------
 // Test schema helpers

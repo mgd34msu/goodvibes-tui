@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon/service-manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon';
 
 describe('PlatformServiceManager', () => {
   let root = '';

@@ -3,16 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConversationManager } from '../../core/conversation.ts';
 import { Orchestrator } from '../../core/orchestrator.ts';
-import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { ChatRequest, ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ChatRequest, ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch, createRuntimeStore } from '../../runtime/store/index.ts';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 const configManager = new ConfigManager({ surfaceRoot: 'tui',

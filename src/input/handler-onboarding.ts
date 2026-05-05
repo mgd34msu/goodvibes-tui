@@ -1,7 +1,8 @@
-import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config/oauth-local-listener';
-import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
-import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils/open-external';
-import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
+import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config';
+import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
+import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils';
+import { getProviderIdFromModel } from '../config/provider-model.ts';
+import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
 import { handleCloudflareOnboardingActionForHandler, maybeProvisionCloudflareOnFinalApplyForHandler } from './handler-onboarding-cloudflare.ts';
 import { applyOnboardingRequest, collectOnboardingSnapshot, verifyOnboardingRequest } from '../runtime/onboarding/index.ts';
@@ -545,8 +546,10 @@ export function syncRuntimeFromOnboardingRequestForHandler(handler: InputHandler
 
     for (const operation of request.operations) {
       if (operation.kind !== 'set-config') continue;
-      if (operation.key === 'provider.model' && typeof operation.value === 'string') runtime.model = operation.value;
-      if (operation.key === 'provider.provider' && typeof operation.value === 'string') runtime.provider = operation.value;
+      if (operation.key === 'provider.model' && typeof operation.value === 'string') {
+        runtime.model = operation.value;
+        runtime.provider = getProviderIdFromModel(operation.value);
+      }
       if (operation.key === 'provider.reasoningEffort' && typeof operation.value === 'string') runtime.reasoningEffort = operation.value;
     }
   }

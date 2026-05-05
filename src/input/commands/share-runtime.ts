@@ -7,10 +7,10 @@ import {
   exportToHTML,
   exportToJSON,
   exportToMarkdownExtended,
-} from '@pellux/goodvibes-sdk/platform/export/session-export';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+} from '@pellux/goodvibes-sdk/platform/export';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export function registerShareRuntimeCommands(registry: CommandRegistry): void {
   registry.register({

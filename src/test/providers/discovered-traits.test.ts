@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getDiscoveredTraits } from '@pellux/goodvibes-sdk/platform/providers/discovered-traits';
+import { getDiscoveredTraits } from '@pellux/goodvibes-sdk/platform/providers';
 
 describe('getDiscoveredTraits', () => {
   test('LM Studio advertises reasoning-aware native capabilities', () => {

@@ -3,22 +3,22 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
-import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
-import { GOODVIBES_NTFY_AGENT_TOPIC } from '@pellux/goodvibes-sdk/platform/integrations/ntfy';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { TransportEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/transport';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
+import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
+import { GOODVIBES_NTFY_AGENT_TOPIC } from '@pellux/goodvibes-sdk/platform/integrations';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import type { TransportEvent } from '@/runtime/index.ts';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
-import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge/index';
+import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { KnowledgeService, KnowledgeStore } from '@pellux/goodvibes-sdk/platform/knowledge';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 import { createAuthenticatedWebSocket } from '../helpers/authenticated-websocket.ts';
-import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane';
 
 const TEST_TOKEN = 'test-secret-token-abc123';
 
@@ -378,7 +378,7 @@ describe('DaemonServer', () => {
       roles: [],
     });
 
-    const shared = await fetch('http://127.0.0.1:39421/api/control-plane/whoami', {
+    const shared = await fetch('http://127.0.0.1:39421/api/control-plane/auth', {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(shared.status).toBe(200);
@@ -1190,7 +1190,7 @@ describe('DaemonServer', () => {
         prompt: 'Run metadata automation',
         target: { kind: 'main', createIfMissing: true },
         wakeMode: 'now',
-        fallbacks: ['openrouter/gpt-4.1-mini'],
+        fallbackModels: ['openrouter:gpt-4.1-mini'],
         reasoningEffort: 'high',
         thinking: 'high',
         externalContentSource: 'webhook',
@@ -1216,7 +1216,7 @@ describe('DaemonServer', () => {
     expect(created.schedule.staggerMs).toBe(0);
     expect(created.execution.target.kind).toBe('main');
     expect(created.execution.wakeMode).toBe('now');
-    expect(created.execution.fallbackModels).toEqual(['openrouter/gpt-4.1-mini']);
+    expect(created.execution.fallbackModels).toEqual(['openrouter:gpt-4.1-mini']);
     expect(created.execution.reasoningEffort).toBe('high');
     expect(created.execution.thinking).toBe('high');
     expect(created.execution.externalContentSource).toBe('webhook');
@@ -1411,7 +1411,7 @@ describe('DaemonServer', () => {
     const statusInvoke = await fetch('http://127.0.0.1:39421/api/control-plane/methods/control.status/invoke', {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ body: {} }),
     });
     expect(statusInvoke.status).toBe(200);
     expect((await statusInvoke.json() as { status?: string }).status).toBe('running');
@@ -1490,6 +1490,7 @@ describe('DaemonServer', () => {
       headers: auth,
       body: JSON.stringify({
         query: { methodId: 'control.status' },
+        body: {},
       }),
     });
     expect(method.status).toBe(200);
@@ -1533,7 +1534,7 @@ describe('DaemonServer', () => {
         Authorization: `Bearer ${operatorToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ body: {} }),
     });
     expect(readInvoke.status).toBe(200);
 
@@ -2102,29 +2103,33 @@ describe('DaemonServer', () => {
     });
     expect(integratedAccounts.status).toBe(200);
     const integratedBody = await integratedAccounts.json() as {
-      channelCount: number;
-      channels: Array<{ surface: string }>;
+      providers: Array<{
+        providerId: string;
+        availableRoutes: string[];
+        notes: string[];
+        routeRecords: Array<{ route: string; usable: boolean; detail: string }>;
+      }>;
+      configuredCount: number;
+      issueCount: number;
     };
-    expect(integratedBody.channelCount).toBeGreaterThan(0);
-    expect(integratedBody.channels.some((entry) => entry.surface === 'slack')).toBe(true);
+    expect(Array.isArray(integratedBody.providers)).toBe(true);
+    expect(typeof integratedBody.configuredCount).toBe('number');
+    expect(typeof integratedBody.issueCount).toBe('number');
+    const openaiAccount = integratedBody.providers.find((entry) => entry.providerId === 'openai');
+    expect(openaiAccount).toBeDefined();
+    expect(Array.isArray(openaiAccount?.availableRoutes)).toBe(true);
+    expect(Array.isArray(openaiAccount?.notes)).toBe(true);
+    expect(Array.isArray(openaiAccount?.routeRecords)).toBe(true);
+    expect(openaiAccount?.routeRecords.every((entry) => typeof entry.route === 'string' && typeof entry.detail === 'string')).toBe(true);
 
     const providers = await fetch('http://127.0.0.1:39421/api/providers', {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
     });
     expect(providers.status).toBe(200);
-    // GET /api/providers is now handled by SDK provider-routes.ts (since 0.21.x) which
-    // groups providers by model catalog data. Without a loaded catalog in the test harness,
-    // the providers array is empty — but the endpoint contract (200, { providers, currentModel })
-    // is still verified here. Individual provider endpoints use listProviderRuntimeSnapshots
-    // (backed by listProviders()) and are verified below with the /api/providers/:id calls.
-    // SDK 0.21.7 follow-up: provider-routes.ts should fall back to listProviders() when
-    // the model catalog is empty so the list endpoint surfaces providers without catalog data.
     const providersBody = await providers.json() as {
       providers: Array<{ id: string }>;
-      currentModel: unknown;
     };
     expect(Array.isArray(providersBody.providers)).toBe(true);
-    expect('currentModel' in providersBody).toBe(true);
 
     const provider = await fetch('http://127.0.0.1:39421/api/providers/openai', {
       headers: { Authorization: `Bearer ${TEST_TOKEN}` },
@@ -2208,7 +2213,7 @@ describe('DaemonServer', () => {
     };
     expect(doctorBody.surface).toBe('signal');
     expect(doctorBody.checks.some((check) => check.id === 'configured')).toBe(true);
-    expect(doctorBody.repairActions.some((action) => action.id === 'migrate-lifecycle')).toBe(true);
+    expect(doctorBody.repairActions.some((action) => action.id === 'inspect')).toBe(true);
 
     const repairs = await fetch('http://127.0.0.1:39421/api/channels/repair-actions/telegram', { headers: auth });
     expect(repairs.status).toBe(200);
@@ -2221,14 +2226,15 @@ describe('DaemonServer', () => {
     expect(lifecycleBeforeBody.currentVersion).toBe(0);
     expect(lifecycleBeforeBody.targetVersion).toBe(1);
 
-    const migrate = await fetch('http://127.0.0.1:39421/api/channels/lifecycle/telegram/migrate', {
+    const inspectAction = await fetch('http://127.0.0.1:39421/api/channels/accounts/telegram/actions/inspect', {
       method: 'POST',
       headers: auth,
       body: JSON.stringify({}),
     });
-    expect(migrate.status).toBe(200);
-    const migrateBody = await migrate.json() as { currentVersion: number };
-    expect(migrateBody.currentVersion).toBe(1);
+    expect(inspectAction.status).toBe(200);
+    const inspectActionBody = await inspectAction.json() as { action: string; result: { action: string } };
+    expect(inspectActionBody.action).toBe('inspect');
+    expect(inspectActionBody.result.action).toBe('inspect');
 
     const allowlistResolve = await fetch('http://127.0.0.1:39421/api/channels/allowlist/telegram/resolve', {
       method: 'POST',
@@ -2280,14 +2286,14 @@ describe('DaemonServer', () => {
       },
       body: JSON.stringify({
         label: 'API watcher updated',
-        kind: 'manual',
+        kind: 'integration',
         sourceKind: 'api',
       }),
     });
     expect(update.status).toBe(200);
     const updated = await update.json() as { label?: string; kind?: string };
     expect(updated.label).toBe('API watcher updated');
-    expect(updated.kind).toBe('manual');
+    expect(updated.kind).toBe('integration');
 
     const start = await fetch('http://127.0.0.1:39421/api/watchers/watcher-api-test/start', {
       method: 'POST',

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { fetchModelContextWindows } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
+import { fetchModelContextWindows } from '@pellux/goodvibes-sdk/platform/discovery';
 
 // ---------------------------------------------------------------------------
 // fetch mock helpers

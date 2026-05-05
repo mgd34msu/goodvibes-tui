@@ -19,9 +19,9 @@ import {
   resolveCapabilityManifest,
   hasCapability,
   validateManifestV2,
-} from '@pellux/goodvibes-sdk/platform/runtime/plugins/manifest';
-import { ALL_CAPABILITIES } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
-import type { PluginManifestV2, PluginCapability } from '@pellux/goodvibes-sdk/platform/runtime/plugins/types';
+} from '@/runtime/index.ts';
+import { ALL_CAPABILITIES } from '@/runtime/index.ts';
+import type { PluginManifestV2, PluginCapability } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -2,8 +2,8 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config/schema';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { DEFAULT_CONFIG } from '@pellux/goodvibes-sdk/platform/config';
 
 // Helper to create an isolated temporary directory for each test suite.
 function makeTempDir(): string {
@@ -50,11 +50,11 @@ describe('ConfigManager', () => {
 
   test('set and get a simple key', () => {
     const cm = new ConfigManager({ surfaceRoot: 'tui',  configDir: tempDir, workingDir: tempDir });
-    cm.set('provider.model', 'gpt-4');
-    expect(cm.get('provider.model')).toBe('gpt-4');
+    cm.set('provider.model', 'openai:gpt-4');
+    expect(cm.get('provider.model')).toBe('openai:gpt-4');
     // Persisted to disk – create a new instance and verify value persists.
     const cm2 = new ConfigManager({ surfaceRoot: 'tui',  configDir: tempDir, workingDir: tempDir });
-    expect(cm2.get('provider.model')).toBe('gpt-4');
+    expect(cm2.get('provider.model')).toBe('openai:gpt-4');
   });
 
   test('reset a key restores default value', () => {

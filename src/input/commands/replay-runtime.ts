@@ -1,5 +1,5 @@
 import type { CommandRegistry } from '../command-registry.ts';
-import { handleReplayCommand } from '@pellux/goodvibes-sdk/platform/core/replay-command-handler';
+import { handleReplayCommand } from '@pellux/goodvibes-sdk/platform/core';
 import { requireReplayEngine } from './runtime-services.ts';
 
 export function registerReplayRuntimeCommands(registry: CommandRegistry): void {

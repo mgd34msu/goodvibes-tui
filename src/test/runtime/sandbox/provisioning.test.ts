@@ -7,7 +7,7 @@ import {
   inspectSandboxQemuSetupManifest,
   loadSandboxQemuSetupManifest,
   scaffoldSandboxQemuSetupBundle,
-} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/provisioning';
+} from '@/runtime/index.ts';
 
 function makeManager(overrides: Partial<Record<string, unknown>> = {}) {
   const values = new Map<string, unknown>([
@@ -40,7 +40,7 @@ describe('sandbox provisioning', () => {
       const bundle = scaffoldSandboxQemuSetupBundle(manager as never, cwd, '.goodvibes/tui/sandbox', { surfaceRoot: 'tui' });
       const manifest = loadSandboxQemuSetupManifest(cwd, bundle.manifestPath);
       expect(manifest.recommendedSettings.backend).toBe('qemu');
-      expect(inspectSandboxQemuSetupManifest(manifest)).toContain('Sandbox QEMU Setup Manifest');
+      expect(inspectSandboxQemuSetupManifest(manifest)).toContain('QEMU sandbox setup manifest');
 
       const target = makeManager();
       applySandboxQemuSetupManifest(target as never, manifest);

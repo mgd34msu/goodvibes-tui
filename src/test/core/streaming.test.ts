@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConversationManager } from '../../core/conversation';
-import { RuntimeEventBus, createEventEnvelope, type TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { RuntimeEventBus, createEventEnvelope, type TurnEvent } from '@/runtime/index.ts';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
@@ -188,8 +188,8 @@ describe('Orchestrator: abort during streaming cleanup', () => {
   async function buildOrchestrator() {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions/manager');
-    const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools/registry');
+    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions');
+    const { ToolRegistry } = await import('@pellux/goodvibes-sdk/platform/tools');
     const configManager = createTestConfigManager();
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();

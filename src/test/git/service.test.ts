@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { GitService } from '@pellux/goodvibes-sdk/platform/git/service';
-import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookEvent } from '@pellux/goodvibes-sdk/platform/hooks';
 import { getTestGitService, resetTestGitServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

@@ -150,7 +150,7 @@ export interface FeedContextClosures {
   handleBlockToggle: () => void;
   findMarkerAtPos: (pos: number) => { start: number; end: number } | null;
   cleanupMarkerRegistry: (text: string) => void;
-  expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers/interface').ContentPart[];
+  expandPrompt: (text: string) => string | import('@pellux/goodvibes-sdk/platform/providers').ContentPart[];
   openModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
   openProviderModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
   onModelPickerCommit: () => boolean;

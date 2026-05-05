@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { LMStudioProvider } from '@pellux/goodvibes-sdk/platform/providers/lm-studio';
-import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import type { ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { LMStudioProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 
 function sse(events: Array<{ event: string; data: Record<string, unknown> }>): string {
   return events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join('');
@@ -211,7 +211,7 @@ describe('LMStudioProvider', () => {
       apiKey: '',
       defaultModel: 'model-a',
       models: ['model-a'],
-      fallbackProvider,
+      compatProvider: fallbackProvider,
       nativeFetch: async () => {
         throw new Error('native path should not be used');
       },
@@ -259,7 +259,7 @@ describe('LMStudioProvider', () => {
       apiKey: '',
       defaultModel: 'model-a',
       models: ['model-a'],
-      fallbackProvider,
+      compatProvider: fallbackProvider,
     });
 
     const embedding = await provider.embed({

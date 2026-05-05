@@ -10,7 +10,7 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { IdempotencyStore } from '@pellux/goodvibes-sdk/platform/runtime/idempotency/index';
+import { IdempotencyStore } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,6 +1,6 @@
-import { GitService } from '@pellux/goodvibes-sdk/platform/git/service';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 /** Git state shown in the header bar. */
 export interface GitHeaderInfo {

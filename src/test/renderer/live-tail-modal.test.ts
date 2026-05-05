@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { LiveTailModal, renderLiveTailModal } from '../../renderer/live-tail-modal.ts';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
 import type { ProcessEntry } from '../../renderer/process-modal.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { lineToString, linesToText } from '../setup.ts';

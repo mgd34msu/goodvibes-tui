@@ -1,7 +1,7 @@
 import { type Line, createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { LAYOUT, TOOL_STATUS } from './layout.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
-import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { stripDangerousAnsi } from './ansi-sanitize.ts';
 
 const TOOL_NAME_MIN_WIDTH = 8;

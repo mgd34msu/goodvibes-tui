@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { createHttpJsonTransport } from '@pellux/goodvibes-sdk/platform/runtime/transports/http-json-transport';
+import { createHttpJsonTransport } from '@/runtime/index.ts';
 
 function createJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -26,13 +26,13 @@ describe('HttpJsonTransport', () => {
       limit: 25,
       before: 'cursor-1',
       tags: ['a', 'b'],
-      routing: { target: 'main' },
+      routeId: 'main',
     });
 
     expect(resolved.method).toBe('GET');
     expect(resolved.body).toBeUndefined();
     expect(resolved.url).toBe(
-      'http://127.0.0.1:3210/api/sessions/session-1/messages?limit=25&before=cursor-1&tags=a&tags=b&routing=%7B%22target%22%3A%22main%22%7D',
+      'http://127.0.0.1:3210/api/sessions/session-1/messages?limit=25&before=cursor-1&tags=a&tags=b&routeId=main',
     );
   });
 

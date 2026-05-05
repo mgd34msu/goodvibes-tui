@@ -3,8 +3,8 @@
  */
 import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
+import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 
 // ---------------------------------------------------------------------------
 // Mock LLM Provider

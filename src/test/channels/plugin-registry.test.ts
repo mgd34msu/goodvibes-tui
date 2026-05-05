@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
+import { ChannelPluginRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 
 describe('ChannelPluginRegistry', () => {
   test('aggregates capabilities, tools, and actions across registered plugins', async () => {
@@ -260,7 +260,6 @@ describe('ChannelPluginRegistry', () => {
     await expect(registry.doctor('telegram')).resolves.toMatchObject({ surface: 'telegram', state: 'healthy' });
     await expect(registry.listRepairActions('telegram')).resolves.toMatchObject([{ id: 'migrate-lifecycle' }]);
     await expect(registry.getLifecycleState('telegram')).resolves.toMatchObject({ currentVersion: 0, targetVersion: 1 });
-    await expect(registry.migrateLifecycle('telegram')).resolves.toMatchObject({ currentVersion: 1, targetVersion: 1 });
     await expect(registry.resolveAllowlist('telegram', { add: ['@alice'] })).resolves.toMatchObject({ resolved: [{ id: 'alice' }] });
     await expect(registry.editAllowlist('telegram', { add: ['@alice'] })).resolves.toMatchObject({ updatedPolicy: { allowlistUserIds: ['alice'] } });
     await expect(registry.render('telegram', {

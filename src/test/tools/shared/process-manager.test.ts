@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
-import type { BackgroundProcess } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
+import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
+import type { BackgroundProcess } from '@pellux/goodvibes-sdk/platform/tools';
 
 let processManager: ProcessManager;
 

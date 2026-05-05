@@ -9,11 +9,11 @@
  * for the emit paths.
  */
 import { describe, test, expect, mock } from 'bun:test';
-import { budgetPhase } from '@pellux/goodvibes-sdk/platform/runtime/tools/phases/budget';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ToolRuntimeContext } from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
-import type { ToolExecutionRecord } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
+import { budgetPhase } from '@/runtime/index.ts';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types';
+import type { ToolRuntimeContext } from '@/runtime/index.ts';
+import type { ToolExecutionRecord } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 import { createHmac } from 'crypto';
-import { GitHubIntegration } from '@pellux/goodvibes-sdk/platform/integrations/github';
-import type { GitHubWebhookEvent } from '@pellux/goodvibes-sdk/platform/integrations/github';
+import { GitHubIntegration } from '@pellux/goodvibes-sdk/platform/integrations';
+import type { GitHubWebhookEvent } from '@pellux/goodvibes-sdk/platform/integrations';
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { PolicyPanelSnapshot } from '../runtime/diagnostics/panels/policy.ts';
 import {
   buildPanelLine,

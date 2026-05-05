@@ -4,7 +4,7 @@ export {
   discoverPlugins,
   loadPlugin,
   unloadPlugin,
-} from '@pellux/goodvibes-sdk/platform/plugins/loader';
+} from '@pellux/goodvibes-sdk/platform/plugins';
 export type {
   PluginPathOptions,
   PluginManifest,
@@ -12,4 +12,4 @@ export type {
   LoadedPlugin,
   DiscoveredPlugin,
   PluginLoaderDeps,
-} from '@pellux/goodvibes-sdk/platform/plugins/loader';
+} from '@pellux/goodvibes-sdk/platform/plugins';

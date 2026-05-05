@@ -1,14 +1,14 @@
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/index';
-import { ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels/index';
-import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels/delivery-router';
-import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/index';
-import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers/index';
-import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
+import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels';
+import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import {
   HomeGraphService,
   KnowledgeService,
@@ -18,70 +18,117 @@ import {
   createProviderBackedKnowledgeSemanticLlm,
   createWebKnowledgeGapRepairer,
   projectPlanningProjectIdFromPath,
-} from '@pellux/goodvibes-sdk/platform/knowledge/index';
-import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media/index';
-import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal/index';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
-import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
-import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents/orchestrator';
-import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents/archetypes';
-import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools/shared/process-manager';
-import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
-import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
-import { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-registry';
-import { MemoryStore } from '@pellux/goodvibes-sdk/platform/state/memory-store';
-import type { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+} from '@pellux/goodvibes-sdk/platform/knowledge';
+import { MediaProviderRegistry, ensureBuiltinMediaProviders } from '@pellux/goodvibes-sdk/platform/media';
+import { MultimodalService } from '@pellux/goodvibes-sdk/platform/multimodal';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
+import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
+import { AgentOrchestrator } from '@pellux/goodvibes-sdk/platform/agents';
+import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
+import { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
+import { MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
+import type { RuntimeEventBus } from '@/runtime/index.ts';
 import { createDomainDispatch } from './store/index.ts';
 import type { DomainDispatch, RuntimeStore } from './store/index.ts';
-import { DistributedRuntimeManager } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-manager';
-import { RemoteRunnerRegistry, RemoteSupervisor } from '@pellux/goodvibes-sdk/platform/runtime/remote/index';
-import { IntegrationHelperService } from '@pellux/goodvibes-sdk/platform/runtime/integration/helpers';
-import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice/index';
-import { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search/index';
-import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state/memory-embeddings';
+import { DistributedRuntimeManager } from '@/runtime/index.ts';
+import { RemoteRunnerRegistry, RemoteSupervisor } from '@/runtime/index.ts';
+import { IntegrationHelperService } from '@/runtime/index.ts';
+import { VoiceProviderRegistry, VoiceService, ensureBuiltinVoiceProviders } from '@pellux/goodvibes-sdk/platform/voice';
+import { WebSearchProviderRegistry, WebSearchService } from '@pellux/goodvibes-sdk/platform/web-search';
+import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { PanelManager } from '../panels/panel-manager.ts';
-import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks/activity';
-import { HookDispatcher, createHookWorkbench, type HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/index';
-import { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins/manager';
-import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
-import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles/manager';
-import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions/manager';
-import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/index';
-import { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security/token-audit';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations/webhooks';
-import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
-import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core/deterministic-replay';
-import { ProviderOptimizer } from '@pellux/goodvibes-sdk/platform/providers/optimizer';
-import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
-import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
-import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import { ModelLimitsService } from '@pellux/goodvibes-sdk/platform/providers/model-limits';
+import { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
+import { HookDispatcher, createHookWorkbench, type HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
+import { PluginManager } from '@pellux/goodvibes-sdk/platform/plugins';
+import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
+import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
+import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
+import { CrossSessionTaskRegistry } from '@pellux/goodvibes-sdk/platform/sessions';
+import { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { WebhookNotifier } from '@pellux/goodvibes-sdk/platform/integrations';
+import { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
+import { DeterministicReplayEngine } from '@pellux/goodvibes-sdk/platform/core';
+import { ProviderOptimizer } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { ModelLimitsService } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
-import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core/session-memory';
-import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core/session-lineage';
-import { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions/change-tracker';
-import { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core/execution-plan';
-import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core/adaptive-planner';
-import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
-import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import { IdempotencyStore } from '@pellux/goodvibes-sdk/platform/runtime/idempotency/index';
-import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools/shared/overflow';
-import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config/tool-llm';
-import { ComponentHealthMonitor } from '@pellux/goodvibes-sdk/platform/runtime/perf/component-health-monitor';
-import { WorktreeRegistry } from '@pellux/goodvibes-sdk/platform/runtime/worktree/registry';
-import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
-import { createShellPathService, type ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
+import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core';
+import { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
+import { ExecutionPlanManager } from '@pellux/goodvibes-sdk/platform/core';
+import { AdaptivePlanner } from '@pellux/goodvibes-sdk/platform/core';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
+import { IdempotencyStore } from '@/runtime/index.ts';
+import { OverflowHandler } from '@pellux/goodvibes-sdk/platform/tools';
+import { ToolLLM } from '@pellux/goodvibes-sdk/platform/config';
+import { ComponentHealthMonitor } from '@/runtime/index.ts';
+import { WorktreeRegistry } from '@/runtime/index.ts';
+import { SandboxSessionRegistry } from '@/runtime/index.ts';
+import { createShellPathService, type ShellPathService } from '@/runtime/index.ts';
+import type { FeatureFlagManager } from '@/runtime/index.ts';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 import {
   createWorkflowServices,
   type WorkflowServices,
-} from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
+} from '@pellux/goodvibes-sdk/platform/tools';
+
+function buildFallbackModelDefinition(provider: string, modelId: string): ModelDefinition {
+  const providerLower = provider.toLowerCase();
+  const isReasoningProvider = providerLower.includes('openai')
+    || providerLower.includes('anthropic')
+    || providerLower.includes('gemini')
+    || providerLower.includes('google');
+
+  return {
+    id: modelId,
+    provider,
+    registryKey: `${provider}:${modelId}`,
+    displayName: modelId,
+    description: 'Configured model available before the model catalog cache has loaded.',
+    capabilities: {
+      toolCalling: true,
+      codeEditing: true,
+      reasoning: isReasoningProvider,
+      multimodal: isReasoningProvider,
+    },
+    contextWindow: isReasoningProvider ? 128_000 : 32_000,
+    contextWindowProvenance: 'fallback',
+    selectable: true,
+    tier: 'standard',
+    ...(isReasoningProvider ? { reasoningEffort: ['instant', 'low', 'medium', 'high'] } : {}),
+  };
+}
+
+function ensureConfiguredModelIsRoutable(providerRegistry: ProviderRegistry, configManager: ConfigManager): void {
+  const configuredModel = String(configManager.get('provider.model') ?? '').trim();
+  if (!configuredModel.includes(':')) return;
+  if (providerRegistry.listModels().some((model) => model.registryKey === configuredModel)) return;
+
+  const [providerId, ...modelParts] = configuredModel.split(':');
+  const modelId = modelParts.join(':').trim();
+  if (!providerId || !modelId) return;
+
+  const provider = providerRegistry.tryGet(providerId);
+  if (!provider) return;
+
+  providerRegistry.registerRuntimeProvider({
+    provider,
+    replace: true,
+    models: [buildFallbackModelDefinition(providerId, modelId)],
+  });
+}
 
 export interface RuntimeServicesOptions {
   readonly runtimeBus: RuntimeEventBus;
@@ -242,6 +289,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     featureFlags,
     runtimeBus: options.runtimeBus,
   });
+  ensureConfiguredModelIsRoutable(providerRegistry, configManager);
   providerRegistry.initCustomProviders();
   const toolLLM = new ToolLLM({
     configManager,
@@ -311,7 +359,6 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
         ? {
             routing: {
               providerSelection: input.routing.providerSelection ?? (input.routing.providerId ? 'concrete' : 'inherit-current'),
-              unresolvedModelPolicy: input.routing.unresolvedModelPolicy ?? 'fallback-to-current',
               providerFailurePolicy: input.routing.providerFailurePolicy ?? 'ordered-fallbacks',
               ...(input.routing.fallbackModels?.length ? { fallbackModels: [...input.routing.fallbackModels] } : {}),
             },

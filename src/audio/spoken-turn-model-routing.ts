@@ -1,6 +1,6 @@
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ModelDefinition, ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import type { Orchestrator, OrchestratorUserInputOptions } from '../core/orchestrator.ts';
 
 const SPOKEN_TURN_SOURCE = 'tts';

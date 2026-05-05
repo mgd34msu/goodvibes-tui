@@ -4,8 +4,8 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import type { SessionInfo } from '@pellux/goodvibes-sdk/platform/sessions/manager';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { SessionInfo } from '@pellux/goodvibes-sdk/platform/sessions';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { SessionBrowserQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
@@ -18,7 +18,7 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,

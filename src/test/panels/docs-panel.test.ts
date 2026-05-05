@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { DocsPanel } from '../../panels/docs-panel.ts';
-import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 
 function linesText(lines: ReturnType<DocsPanel['render']>): string {
   return lines.map((line) => line.map((cell) => cell.char ?? ' ').join('').trimEnd()).join('\n');

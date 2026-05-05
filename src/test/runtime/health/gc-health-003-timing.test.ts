@@ -11,11 +11,11 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { CascadeTimer, deriveCascadeSeverity } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-timing';
-import { CascadeEngine } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-engine';
-import { RuntimeHealthAggregator } from '@pellux/goodvibes-sdk/platform/runtime/health/aggregator';
-import { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
-import { createCascadeAppliedEvent } from '@pellux/goodvibes-sdk/platform/runtime/health/types';
+import { CascadeTimer, deriveCascadeSeverity } from '@/runtime/index.ts';
+import { CascadeEngine } from '@/runtime/index.ts';
+import { RuntimeHealthAggregator } from '@/runtime/index.ts';
+import { CASCADE_RULES } from '@/runtime/index.ts';
+import { createCascadeAppliedEvent } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

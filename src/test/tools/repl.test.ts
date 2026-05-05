@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createReplTool } from '@pellux/goodvibes-sdk/platform/tools/repl/index';
-import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
+import { createReplTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { SandboxSessionRegistry } from '@/runtime/index.ts';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
 
 let workspaceRoot = process.cwd();
@@ -32,30 +32,28 @@ afterEach(() => {
 });
 
 describe('repl tool', () => {
-  test('evaluates javascript expressions', async () => {
+  test('requires configured QEMU sandbox backend for javascript eval', async () => {
     const result = await replTool.execute(withWorkspace({ mode: 'eval', runtime: 'javascript', expression: '1 + 2' }));
-    expect(result.success).toBe(true);
-    expect(result.output).toBe('3');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('requires an explicit QEMU sandbox backend');
   });
 
-  test('evaluates typescript expressions', async () => {
+  test('requires configured QEMU sandbox backend for typescript eval', async () => {
     const result = await replTool.execute(withWorkspace({ mode: 'eval', runtime: 'typescript', expression: 'const value: number = 4; value * 2;' }));
-    expect(result.success).toBe(true);
-    expect(result.output).toBe('8');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('requires an explicit QEMU sandbox backend');
   });
 
-  test('evaluates SQL expressions against ephemeral sqlite', async () => {
+  test('requires configured QEMU sandbox backend for SQL eval', async () => {
     const result = await replTool.execute(withWorkspace({ mode: 'eval', runtime: 'sql', expression: 'select value from sandbox_eval order by id;' }));
-    expect(result.success).toBe(true);
-    expect(result.output).toContain('alpha');
-    expect(result.output).toContain('beta');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('requires an explicit QEMU sandbox backend');
   });
 
-  test('normalizes graphql expressions into structured output', async () => {
+  test('requires configured QEMU sandbox backend for GraphQL eval', async () => {
     const result = await replTool.execute(withWorkspace({ mode: 'eval', runtime: 'graphql', expression: 'query Viewer { viewer { id name } }' }));
-    expect(result.success).toBe(true);
-    expect(result.output).toContain('viewer');
-    expect(result.output).toContain('"operation":"query"');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('requires an explicit QEMU sandbox backend');
   });
 
   test('records runtime-tagged history entries', async () => {
@@ -68,21 +66,21 @@ describe('repl tool', () => {
     expect(existsSync(historyPath)).toBe(true);
   });
 
-  test('records sandbox session execution metadata for eval runs', async () => {
+  test('records sandbox session startup metadata when eval is blocked before execution', async () => {
     const result = await replTool.execute(withWorkspace({ mode: 'eval', runtime: 'javascript', expression: '21 + 21' }));
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     const sessions = sandboxSessionRegistry.list();
-    expect(sessions.length).toBeGreaterThan(0);
-    expect(sessions[0]?.executionCount).toBeGreaterThan(0);
-    expect(sessions[0]?.lastCommandSummary).toContain(process.execPath);
-    expect(sessions[0]?.lastExitStatus).toBe(0);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.profileId).toBe('eval-js');
+    expect(sessions[0]?.label).toBe('repl:javascript');
+    expect(sessions[0]?.executionCount).toBeUndefined();
   });
 
-  test('evaluates python expressions when python3 is available', async () => {
+  test('requires configured QEMU sandbox backend for python eval', async () => {
     if (spawnSync('python3', ['--version']).status !== 0) return;
     const result = await replTool.execute(withWorkspace({ mode: 'eval', runtime: 'python', expression: '[x * 2 for x in range(3)]' }));
-    expect(result.success).toBe(true);
-    expect(result.output).toContain('[0, 2, 4]');
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('requires an explicit QEMU sandbox backend');
   });
 
   test('requires an explicit workspace root', async () => {

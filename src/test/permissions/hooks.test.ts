@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { createHookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/index';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
+import { createHookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 
 describe('PermissionManager hook coverage', () => {
   let dispatcher = createHookDispatcher();

@@ -7,15 +7,15 @@
  * This class is a data provider only — it contains no rendering logic.
  * Subscribe to change notifications and call getSnapshot() to render.
  */
-import type { ProviderHealthDomainState, ProviderHealthRecord } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
-import type { ModelDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import { buildFallbackChainData } from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/fallback-visualizer';
+import type { ProviderHealthDomainState, ProviderHealthRecord } from '@/runtime/index.ts';
+import type { ModelDomainState } from '@/runtime/index.ts';
+import { buildFallbackChainData } from '@/runtime/index.ts';
 import type {
   ProviderHealthData,
   ProviderHealthEntry,
   HealthTimeline,
   HealthTimelinePoint,
-} from '@pellux/goodvibes-sdk/platform/runtime/ui/provider-health/types';
+} from '@/runtime/index.ts';
 
 /**
  * Number of timeline points retained per provider.

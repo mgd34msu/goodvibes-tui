@@ -3,7 +3,7 @@ import {
   getHookPointContract,
   listHookPointContracts,
   parseHookPath,
-} from '@pellux/goodvibes-sdk/platform/hooks/index';
+} from '@pellux/goodvibes-sdk/platform/hooks';
 
 describe('hook point contracts', () => {
   test('lists known contracts', () => {

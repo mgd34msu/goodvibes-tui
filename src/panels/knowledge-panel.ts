@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
-import type { MemoryClass, MemoryRecord, MemoryRegistry, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state/memory-store';
+import type { MemoryClass, MemoryRecord, MemoryRegistry, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state';
 import {
   buildBodyText,
   buildEmptyState,

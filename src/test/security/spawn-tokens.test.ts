@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security/spawn-tokens';
-import type { SpawnToken, OrchestrationPolicyConfig } from '@pellux/goodvibes-sdk/platform/security/spawn-tokens';
+import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security';
+import type { SpawnToken, OrchestrationPolicyConfig } from '@pellux/goodvibes-sdk/platform/security';
 import { getTestSpawnTokenManager, resetTestSpawnTokenManagers } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

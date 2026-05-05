@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 
 describe('UserAuthManager local admin management', () => {
   let dir: string;

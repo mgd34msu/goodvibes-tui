@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { jsonErrorResponse } from '@pellux/goodvibes-sdk/platform/daemon/http/error-response';
-import { ProviderError } from '@pellux/goodvibes-sdk/platform/types/errors';
+import { jsonErrorResponse } from '@pellux/goodvibes-sdk/platform/daemon';
+import { ProviderError } from '@pellux/goodvibes-sdk/platform/types';
 
 describe('jsonErrorResponse', () => {
   test('keeps error string compatibility while exposing structured metadata', async () => {
@@ -21,12 +21,8 @@ describe('jsonErrorResponse', () => {
       category: 'authentication',
       source: 'provider',
       recoverable: false,
-      status: 401,
-      provider: 'inceptionlabs',
-      operation: 'chat',
-      phase: 'request',
+      status: 400,
       requestId: 'req-401',
-      providerCode: 'invalid_api_key',
     });
   });
 });

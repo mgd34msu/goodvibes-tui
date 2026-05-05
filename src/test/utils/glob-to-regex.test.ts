@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { globToRegex, buildGlobMatcher } from '@pellux/goodvibes-sdk/platform/utils/glob-to-regex';
+import { globToRegex, buildGlobMatcher } from '@pellux/goodvibes-sdk/platform/utils';
 
 describe('globToRegex', () => {
   test('matches exact filename', () => {

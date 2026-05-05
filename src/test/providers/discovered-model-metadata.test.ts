@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type { PricingCatalog } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
-import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery/scanner';
+import type { PricingCatalog } from '@pellux/goodvibes-sdk/platform/providers';
+import type { DiscoveredServer } from '@pellux/goodvibes-sdk/platform/discovery';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { createProviderCacheFixture, writeModelCatalogCache } from '../helpers/provider-cache.ts';
 
@@ -64,6 +64,7 @@ describe('discovered model metadata', () => {
     registry.registerDiscoveredProviders([server]);
     const model = registry.listModels().find((entry) => entry.registryKey === 'Ollama:qwen3');
     const provider = registry.get('Ollama');
+    if (!provider) throw new Error('Expected discovered Ollama provider');
 
     expect(model?.capabilities.reasoning).toBe(true);
     expect(model?.reasoningEffort).toEqual(['instant', 'low', 'medium', 'high']);

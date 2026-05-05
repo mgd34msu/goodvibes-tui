@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks/dispatcher';
-import { startExternalServices } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
+import { startExternalServices } from '@/runtime/index.ts';
 import { getTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 function createConfig(overrides: {
@@ -66,13 +66,13 @@ describe('startExternalServices', () => {
       createConfig({ daemon: true, httpListener: true }),
       runtimeBus,
       hookDispatcher,
+      runtimeServices,
       {
         createDaemonServer: daemonFactory,
         createHttpListener: listenerFactory,
         probeDaemonPortInUse: async () => false,
         probeHttpListenerPortInUse: async () => false,
       },
-      runtimeServices,
     );
 
     expect(daemonFactory).toHaveBeenCalledTimes(1);
@@ -108,11 +108,11 @@ describe('startExternalServices', () => {
       createConfig(),
       runtimeBus,
       hookDispatcher,
+      runtimeServices,
       {
         createDaemonServer: daemonFactory,
         createHttpListener: listenerFactory,
       },
-      runtimeServices,
     );
 
     expect(daemonFactory).not.toHaveBeenCalled();
@@ -127,6 +127,7 @@ describe('startExternalServices', () => {
       createConfig({ daemon: true, httpListener: true }),
       runtimeBus,
       hookDispatcher,
+      runtimeServices,
       {
         probeDaemonPortInUse: async () => false,
         probeHttpListenerPortInUse: async () => false,
@@ -144,7 +145,6 @@ describe('startExternalServices', () => {
           stop: mock(async () => {}),
         }),
       },
-      runtimeServices,
     );
 
     expect(services.daemonServer).toBeNull();
@@ -158,6 +158,7 @@ describe('startExternalServices', () => {
       createConfig({ daemon: true, httpListener: true }),
       runtimeBus,
       hookDispatcher,
+      runtimeServices,
       {
         probeDaemonPortInUse: async () => false,
         probeHttpListenerPortInUse: async () => false,
@@ -175,7 +176,6 @@ describe('startExternalServices', () => {
           stop: mock(async () => {}),
         }),
       },
-      runtimeServices,
     );
 
     expect(services.daemonServer).not.toBeNull();
@@ -189,6 +189,7 @@ describe('startExternalServices', () => {
       createConfig({ daemon: true }),
       runtimeBus,
       hookDispatcher,
+      runtimeServices,
       {
         probeDaemonPortInUse: async () => true,
         createDaemonServer: () => ({
@@ -198,7 +199,6 @@ describe('startExternalServices', () => {
           listRecentControlPlaneEvents: mock(() => []),
         }),
       },
-      runtimeServices,
     );
 
     expect(services.daemonServer).toBeNull();
@@ -215,6 +215,7 @@ describe('startExternalServices', () => {
       createConfig({ daemon: true, httpListener: true }),
       runtimeBus,
       hookDispatcher,
+      runtimeServices,
       {
         startupTimeoutMs: 20,
         probeDaemonPortInUse: async () => false,
@@ -231,7 +232,6 @@ describe('startExternalServices', () => {
           stop: mock(async () => {}),
         }),
       },
-      runtimeServices,
     );
 
     expect(services.daemonServer).toBeNull();
@@ -254,6 +254,7 @@ describe('startExternalServices', () => {
       }),
       runtimeBus,
       hookDispatcher,
+      runtimeServices,
       {
         probeDaemonPortInUse,
         probeHttpListenerPortInUse,
@@ -269,7 +270,6 @@ describe('startExternalServices', () => {
           stop: mock(async () => {}),
         }),
       },
-      runtimeServices,
     );
 
     expect(probeDaemonPortInUse).toHaveBeenCalledTimes(1);

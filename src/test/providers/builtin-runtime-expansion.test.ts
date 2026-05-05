@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
-import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 
 const CLEAN_ENV_KEYS = [
   'AWS_BEARER_TOKEN_BEDROCK',

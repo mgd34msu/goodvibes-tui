@@ -1,7 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import type { PluginManagerObserver, PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins/manager';
+import type { PluginManagerObserver, PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins';
 import {
   buildEmptyState,
   buildPanelLine,

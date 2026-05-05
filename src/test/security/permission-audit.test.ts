@@ -11,15 +11,15 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PermissionPromptUI, type PermissionPromptRequest } from '../../permissions/prompt.ts';
-import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions/analysis';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
-import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
-import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security/user-auth';
-import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security/spawn-tokens';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
+import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createPermissionConfigReader, PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
+import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
+import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import { SpawnTokenManager } from '@pellux/goodvibes-sdk/platform/security';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
+import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
 import { resetTestSpawnTokenManagers } from '../helpers/runtime-services.ts';
 import { resetSettingsControlPlaneStore } from '../helpers/settings-control-plane.ts';
 
@@ -324,24 +324,24 @@ describe('Path traversal protection via resolveAndValidatePath', () => {
 
   test('resolveAndValidatePath is used by write tool (import exists)', async () => {
     // Verify the guard is imported and used — import the module to confirm no errors
-    const { createWriteTool } = await import('@pellux/goodvibes-sdk/platform/tools/write/index');
+    const { createWriteTool } = await import('@pellux/goodvibes-sdk/platform/tools');
     expect(typeof createWriteTool).toBe('function');
   });
 
   test('resolveAndValidatePath is used by edit tool (import exists)', async () => {
-    const { createEditTool } = await import('@pellux/goodvibes-sdk/platform/tools/edit/index');
+    const { createEditTool } = await import('@pellux/goodvibes-sdk/platform/tools');
     expect(typeof createEditTool).toBe('function');
   });
 
   test('resolveAndValidatePath is used by read tool (import exists)', async () => {
-    const { ReadTool } = await import('@pellux/goodvibes-sdk/platform/tools/read/index');
+    const { ReadTool } = await import('@pellux/goodvibes-sdk/platform/tools');
     expect(typeof ReadTool).toBe('function');
   });
 
   test('resolveAndValidatePath is used by exec tool (import exists)', async () => {
-    const { createExecTool } = await import('@pellux/goodvibes-sdk/platform/tools/exec/index');
-    const { ProcessManager } = await import('@pellux/goodvibes-sdk/platform/tools/shared/process-manager');
-    const { OverflowHandler } = await import('@pellux/goodvibes-sdk/platform/tools/shared/overflow');
+    const { createExecTool } = await import('@pellux/goodvibes-sdk/platform/tools');
+    const { ProcessManager } = await import('@pellux/goodvibes-sdk/platform/tools');
+    const { OverflowHandler } = await import('@pellux/goodvibes-sdk/platform/tools');
     const execTool = createExecTool(new ProcessManager(), {
       overflowHandler: new OverflowHandler({ baseDir: PROJECT_ROOT }),
     });

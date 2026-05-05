@@ -1,1 +1,1 @@
-export { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
+export { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';

@@ -1,5 +1,5 @@
 import { join } from 'path';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { CommandRegistry } from '../command-registry.ts';
 import { requirePanelManager, requireSessionChangeTracker, requireShellPaths } from './runtime-services.ts';
 

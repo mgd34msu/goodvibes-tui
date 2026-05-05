@@ -9,17 +9,17 @@
  * call `recordTrendEntry()` periodically if a divergence panel is attached.
  */
 
-import type { PolicyBundleVersion, PolicyDiffResult } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-registry';
-import { PolicyRegistry } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-registry';
-import type { DivergenceDashboardSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/permissions/divergence-dashboard';
-import type { DivergencePanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/divergence';
-import type { PanelConfig } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
-import { DEFAULT_PANEL_CONFIG } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/types';
-import type { PermissionAuditEntry } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import type { PolicyLintFinding } from '@pellux/goodvibes-sdk/platform/runtime/permissions/lint';
-import type { PolicySimulationSummary } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation-scenarios';
-import type { PolicyPreflightReview } from '@pellux/goodvibes-sdk/platform/runtime/permissions/preflight';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import type { PolicyBundleVersion, PolicyDiffResult } from '@/runtime/index.ts';
+import { PolicyRegistry } from '@/runtime/index.ts';
+import type { DivergenceDashboardSnapshot } from '@/runtime/index.ts';
+import type { DivergencePanel } from '@/runtime/index.ts';
+import type { PanelConfig } from '@/runtime/index.ts';
+import { DEFAULT_PANEL_CONFIG } from '@/runtime/index.ts';
+import type { PermissionAuditEntry } from '@/runtime/index.ts';
+import type { PolicyLintFinding } from '@/runtime/index.ts';
+import type { PolicySimulationSummary } from '@/runtime/index.ts';
+import type { PolicyPreflightReview } from '@/runtime/index.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 /**
  * A point-in-time snapshot of policy state for diagnostics rendering.

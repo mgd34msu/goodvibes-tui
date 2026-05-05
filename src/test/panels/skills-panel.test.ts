@@ -4,14 +4,14 @@ import { join } from 'node:path';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { SkillsPanel, discoverSkills } from '../../panels/skills-panel.ts';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus } from '@/runtime/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import type { Line } from '../../types/grid.ts';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
-import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import type { ShellPathService } from '@/runtime/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 function linesText(lines: Line[]): string {
   return lines

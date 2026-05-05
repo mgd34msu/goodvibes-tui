@@ -1,17 +1,15 @@
 import type { ConfigKey, ConfigManager, PersistedFlagState } from '../config/index.ts';
-import { surfaceFeatureGateId } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/index';
+import { surfaceFeatureGateId } from '@/runtime/index.ts';
 
 export const CONTROL_PLANE_FEATURE_FLAG = 'control-plane-gateway';
 export const ROUTE_BINDING_FEATURE_FLAG = 'route-binding';
 export const DELIVERY_ENGINE_FEATURE_FLAG = 'delivery-engine';
-export const OMNICHANNEL_SURFACE_FEATURE_FLAG = 'omnichannel-surface-adapters';
 export const SERVICE_MANAGEMENT_FEATURE_FLAG = 'service-management';
 
 const CORE_CHANNEL_FEATURE_FLAGS = [
   CONTROL_PLANE_FEATURE_FLAG,
   ROUTE_BINDING_FEATURE_FLAG,
   DELIVERY_ENGINE_FEATURE_FLAG,
-  OMNICHANNEL_SURFACE_FEATURE_FLAG,
 ] as const;
 
 export type FeatureFlagConfigKey = 'featureFlags' | `featureFlags.${string}`;

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { McpLifecycleManager } from '@pellux/goodvibes-sdk/platform/runtime/mcp/manager';
+import { McpLifecycleManager } from '@/runtime/index.ts';
 
 describe('McpLifecycleManager trust profiles', () => {
   test('can update and inspect trust profiles for registered servers', async () => {

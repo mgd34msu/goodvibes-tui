@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { createRemoteRuntimeEvents, createRemoteUiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/transports/remote-events';
-import { createWebSocketConnector } from '@pellux/goodvibes-sdk/platform/runtime/transports/runtime-events-client';
+import { createEventEnvelope, createRemoteRuntimeEvents, createRemoteUiRuntimeEvents } from '@/runtime/index.ts';
+import { createWebSocketConnector } from '@/runtime/index.ts';
 
 describe('remote runtime transport events', () => {
   test('disconnects an async event stream if listeners unsubscribe before connect resolves', async () => {
@@ -61,10 +61,13 @@ describe('remote runtime transport events', () => {
             data: JSON.stringify({
               type: 'event',
               event: 'agents',
-              payload: {
+              payload: createEventEnvelope('AGENT_COMPLETED', {
                 type: 'AGENT_COMPLETED',
-                payload: { ok: true },
-              },
+                ok: true,
+              }, {
+                source: 'remote-events-test',
+                sessionId: 'session-1',
+              }),
             }),
           });
         }, 0);
@@ -112,9 +115,15 @@ describe('remote runtime transport events', () => {
     disconnect?.();
 
     expect(FakeWebSocket.instances).toHaveLength(2);
-    expect(envelopes).toEqual([{
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0]).toMatchObject({
       type: 'AGENT_COMPLETED',
-      payload: { ok: true },
-    }]);
+      payload: {
+        type: 'AGENT_COMPLETED',
+        ok: true,
+      },
+      source: 'remote-events-test',
+      sessionId: 'session-1',
+    });
   });
 });

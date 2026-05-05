@@ -1,5 +1,5 @@
 import { resolve } from 'path';
-import type { PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins/manager';
+import type { PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins';
 import { getPluginDirectories, getUserPluginDirectory } from '../../plugins/loader';
 import type { CommandRegistry } from '../command-registry.ts';
 import {
@@ -12,7 +12,7 @@ import {
   updateInstalledEcosystemEntry,
   upsertEcosystemCatalogEntry,
   uninstallEcosystemCatalogEntry,
-} from '@pellux/goodvibes-sdk/platform/runtime/ecosystem/catalog';
+} from '@/runtime/index.ts';
 import { requireEcosystemCatalogPaths, requirePluginPathOptions } from './runtime-services.ts';
 
 export function registerIntegrationRuntimeCommands(registry: CommandRegistry): void {

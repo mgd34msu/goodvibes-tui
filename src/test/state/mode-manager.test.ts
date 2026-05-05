@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ModeManager } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
-import type { ModeDefinition } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
+import { ModeManager } from '@pellux/goodvibes-sdk/platform/state';
+import type { ModeDefinition } from '@pellux/goodvibes-sdk/platform/state';
 import { getTestModeManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

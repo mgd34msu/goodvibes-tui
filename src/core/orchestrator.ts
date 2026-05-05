@@ -4,4 +4,4 @@ export {
   Orchestrator,
   type OrchestratorOptions,
   type OrchestratorUserInputOptions,
-} from '@pellux/goodvibes-sdk/platform/core/orchestrator';
+} from '@pellux/goodvibes-sdk/platform/core';

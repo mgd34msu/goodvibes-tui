@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CatalogModel } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
-import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import type { CatalogModel } from '@pellux/goodvibes-sdk/platform/providers';
+import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers';
 
 export interface ProviderCacheFixture {
   readonly cacheDir: string;

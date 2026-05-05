@@ -19,15 +19,15 @@ import {
   detectUnresolvedToolCalls,
   type SyntheticToolResult,
   type ReconciliationReason,
-} from '@pellux/goodvibes-sdk/platform/core/tool-reconciliation';
-import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types/tools';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import type { ReconciliationEvent } from '@pellux/goodvibes-sdk/platform/core/tool-reconciliation';
-import { createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/envelope';
-import { RuntimeEventBus, type ToolEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+} from '@pellux/goodvibes-sdk/platform/core';
+import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import type { ReconciliationEvent } from '@pellux/goodvibes-sdk/platform/core';
+import { createEventEnvelope } from '@/runtime/index.ts';
+import { RuntimeEventBus, type ToolEvent } from '@/runtime/index.ts';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createTestConfigManager } from '../helpers/test-managers.ts';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
@@ -163,7 +163,7 @@ describe('Orchestrator tool result reconciliation', () => {
   async function buildOrchestrator() {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions/manager');
+    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions');
     const configManager = createTestConfigManager();
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();
@@ -363,8 +363,8 @@ describe('Orchestrator tool result reconciliation', () => {
   test('isReconciliationEnabled returns false when flag is disabled in manager', async () => {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions/manager');
-    const { createFeatureFlagManager } = await import('@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager');
+    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions');
+    const { createFeatureFlagManager } = await import('@/runtime/index.ts');
     const configManager = createTestConfigManager();
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();
@@ -396,8 +396,8 @@ describe('Orchestrator tool result reconciliation', () => {
   test('reconcileUnresolvedToolCalls does NOT emit event when flag is disabled', async () => {
     const { Orchestrator } = await import('../../core/orchestrator.ts');
     const { ConversationManager } = await import('../../core/conversation.ts');
-    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions/manager');
-    const { createFeatureFlagManager } = await import('@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager');
+    const { PermissionManager, createPermissionConfigReader } = await import('@pellux/goodvibes-sdk/platform/permissions');
+    const { createFeatureFlagManager } = await import('@/runtime/index.ts');
     const configManager = createTestConfigManager();
     const cm = new ConversationManager(() => 80, configManager);
     const policyRuntimeState = new PolicyRuntimeState();

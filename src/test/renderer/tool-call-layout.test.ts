@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToolCallBlock } from '../../renderer/tool-call.ts';
-import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
+import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { lineToString } from '../setup.ts';
 
 describe('tool call layout', () => {

@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
-import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/manager';
-import { normalizeEverySchedule } from '@pellux/goodvibes-sdk/platform/automation/schedules';
-import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation/store/jobs';
-import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation/store/routes';
-import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation/store/runs';
-import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
-import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
-import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation/migration';
-import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
+import { normalizeEverySchedule } from '@pellux/goodvibes-sdk/platform/automation';
+import { AutomationJobStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { AutomationRouteStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { AutomationRunStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
+import type { LegacySchedulerSnapshot } from '@pellux/goodvibes-sdk/platform/automation';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 
 const testAgentExecutor = {
   async runAgent() {

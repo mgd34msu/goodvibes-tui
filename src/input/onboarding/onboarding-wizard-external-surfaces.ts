@@ -3,7 +3,7 @@ import {
   GOODVIBES_NTFY_CHAT_TOPIC,
   GOODVIBES_NTFY_REMOTE_TOPIC,
   resolveGoodVibesNtfyTopics,
-} from '@pellux/goodvibes-sdk/platform/integrations/ntfy';
+} from '@pellux/goodvibes-sdk/platform/integrations';
 import { DEFAULT_CONFIG, type ConfigKey } from '../../config/index.ts';
 import type { OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { TELEGRAM_MODE_OPTIONS, WHATSAPP_PROVIDER_OPTIONS } from './onboarding-wizard-constants.ts';

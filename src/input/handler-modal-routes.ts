@@ -1,4 +1,4 @@
-import type { InputToken } from '@pellux/goodvibes-sdk/platform/core/tokenizer';
+import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { CommandContext } from './command-registry.ts';
 import { openTtsProviderPicker, openTtsVoicePicker } from './tts-settings-actions.ts';
@@ -244,7 +244,6 @@ type SettingsRouteState = {
 function syncRuntimeAfterSettingReset(ctx: CommandContext | undefined, key: string, value: unknown): void {
   if (!ctx) return;
   if (key === 'provider.model') ctx.session.runtime.model = String(value);
-  if (key === 'provider.provider') ctx.session.runtime.provider = String(value);
   if (key === 'provider.reasoningEffort') ctx.session.runtime.reasoningEffort = String(value);
 }
 

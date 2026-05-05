@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { readPromptFile, loadSystemPrompt } from '@pellux/goodvibes-sdk/platform/utils/prompt-loader';
+import { readPromptFile, loadSystemPrompt } from '@pellux/goodvibes-sdk/platform/utils';
 
 // --- helpers ---
 

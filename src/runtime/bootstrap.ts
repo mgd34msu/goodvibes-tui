@@ -11,10 +11,10 @@
  */
 import { join } from 'node:path';
 import { Orchestrator, type OrchestratorUserInputOptions } from '../core/orchestrator.ts';
-import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
-import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers/tier-prompts';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
-import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions/prompt';
+import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
+import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
+import type { PermissionRequestHandler } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { CommandContext } from '../input/command-registry.ts';
 import type { InputHistory } from '../input/input-history.ts';
 import type { GitStatusProvider } from '../renderer/git-status.ts';
@@ -23,31 +23,31 @@ import type { SelectionManager } from '../input/selection.ts';
 import type { Compositor } from '../renderer/compositor.ts';
 
 import type { RuntimeContext, BootstrapOptions } from './context.ts';
-import { shutdownRuntime, fireSessionStart, saveSession } from '@pellux/goodvibes-sdk/platform/runtime/lifecycle';
-import { createTaskManager } from '@pellux/goodvibes-sdk/platform/runtime/tasks/index';
-import { OpsControlPlane } from '@pellux/goodvibes-sdk/platform/runtime/ops/control-plane';
-import { AcpTaskAdapter } from '@pellux/goodvibes-sdk/platform/runtime/tasks/adapters/acp-adapter';
+import { shutdownRuntime, fireSessionStart, saveSession } from '@/runtime/index.ts';
+import { createTaskManager } from '@/runtime/index.ts';
+import { OpsControlPlane } from '@/runtime/index.ts';
+import { AcpTaskAdapter } from '@/runtime/index.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
-import { emitSessionReady, emitSessionStarted } from '@pellux/goodvibes-sdk/platform/runtime/emitters/index';
+import { emitSessionReady, emitSessionStarted } from '@/runtime/index.ts';
 import {
   loadLastConversation,
   writeLastSessionPointer,
-} from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
-import { startBackgroundProviderRegistration } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-background';
-import { restoreSavedModel } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-helpers';
-import { startExternalServices, type ExternalServicesHandle, type HostServiceStatus } from '@pellux/goodvibes-sdk/platform/runtime/bootstrap-services';
-import { getOrCreateCompanionToken, pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing/companion-token';
+} from '@/runtime/index.ts';
+import { startBackgroundProviderRegistration } from '@/runtime/index.ts';
+import { restoreSavedModel } from '@/runtime/index.ts';
+import { startExternalServices, type ExternalServicesHandle, type HostServiceStatus } from '@/runtime/index.ts';
+import { getOrCreateCompanionToken, pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
 import { workspaceOperatorTokenCandidates } from './operator-token-cleanup.ts';
 import type { UiRuntimeServices } from './ui-services.ts';
-import { createDeferredStartupCoordinator } from '@pellux/goodvibes-sdk/platform/runtime/deferred-startup';
+import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
 import { initializeBootstrapCore } from './bootstrap-core.ts';
 import { createBootstrapShell } from './bootstrap-shell.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon/server';
-import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon/http-listener';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
+import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
 
-type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[3]>;
+type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[4]>;
 
 // ── Bootstrap context type ──────────────────────────────────────────────────
 
@@ -136,7 +136,7 @@ export async function bootstrapRuntime(
   const workingDir = options.workingDir;
   const configManager = options.configManager;
   const controlPlaneRecentEventsRef: {
-    value: (limit: number) => readonly import('@pellux/goodvibes-sdk/platform/control-plane/gateway').ControlPlaneRecentEvent[];
+    value: (limit: number) => readonly import('@pellux/goodvibes-sdk/platform/control-plane').ControlPlaneRecentEvent[];
   } = {
     value: (_limit) => [],
   };
@@ -227,11 +227,11 @@ export async function bootstrapRuntime(
   });
   conversation.setSessionLineageTracker(services.sessionLineageTracker);
 
-  const acpManager = new AcpManager(
-    (request) => permissionPromptRef.requestPermission(request),
+  const acpManager = new AcpManager({
+    requestPermission: (request) => permissionPromptRef.requestPermission(request),
     runtimeBus,
-    services.hookDispatcher,
-  );
+    hookDispatcher: services.hookDispatcher,
+  });
   const acpTaskAdapter = new AcpTaskAdapter(store);
   const ACP_TASK_SYNC_INTERVAL_MS = 1_000;
   const acpTaskSyncInterval = setInterval(() => {
@@ -401,8 +401,8 @@ export async function bootstrapRuntime(
         configManager,
         runtimeBus,
         hookDispatcher,
-        createExternalServiceFactories(companionTokenRecord.token),
         services,
+        createExternalServiceFactories(companionTokenRecord.token),
       );
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
@@ -464,8 +464,8 @@ export async function bootstrapRuntime(
         configManager,
         runtimeBus,
         hookDispatcher,
-        createExternalServiceFactories(companionTokenRecord.token),
         services,
+        createExternalServiceFactories(companionTokenRecord.token),
       );
       externalServices = await externalServicesPromise;
       controlPlaneRecentEventsRef.value = (limit) => externalServices.listRecentControlPlaneEvents(limit);
@@ -495,7 +495,7 @@ export async function bootstrapRuntime(
     providerRegistry,
     runtime,
     requestRender,
-    restoreSavedModel,
+    restoreRuntimeModel: restoreSavedModel,
     systemMessageRouter,
     shellPaths: services.shellPaths,
     surfaceRoot: 'tui',

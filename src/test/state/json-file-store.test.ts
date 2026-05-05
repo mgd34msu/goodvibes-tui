@@ -1,6 +1,6 @@
 // Tests for JsonFileStore
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { JsonFileStore } from '@pellux/goodvibes-sdk/platform/state/json-file-store';
+import { JsonFileStore } from '@pellux/goodvibes-sdk/platform/state';
 import { makeTempDir, writeTempFile } from '../setup.ts';
 import { rm } from 'node:fs/promises';
 
@@ -36,8 +36,7 @@ describe('JsonFileStore', () => {
     const filePath = `${tempDir}/invalid.json`;
     await writeTempFile(tempDir, 'invalid.json', '{ not: valid json }');
     const store = new JsonFileStore<unknown>(filePath);
-    const data = await store.load();
-    expect(data).toBeNull();
+    await expect(store.load()).rejects.toThrow('JsonFileStore failed to load');
   });
 
   it('save writes data atomically and creates directory', async () => {

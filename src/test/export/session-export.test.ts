@@ -5,9 +5,9 @@ import {
   exportToHTML,
   exportToMarkdownExtended,
   defaultExportPath,
-} from '@pellux/goodvibes-sdk/platform/export/session-export';
-import { redactSensitiveData } from '@pellux/goodvibes-sdk/platform/utils/redaction';
-import type { ExportMessage, ExportMetadata } from '@pellux/goodvibes-sdk/platform/export/session-export';
+} from '@pellux/goodvibes-sdk/platform/export';
+import { redactSensitiveData } from '@pellux/goodvibes-sdk/platform/utils';
+import type { ExportMessage, ExportMetadata } from '@pellux/goodvibes-sdk/platform/export';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

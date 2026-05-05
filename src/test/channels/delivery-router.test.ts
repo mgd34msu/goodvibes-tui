@@ -2,14 +2,14 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts/index';
-import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
+import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
+import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane/index';
-import type { ChannelDeliveryRequest } from '@pellux/goodvibes-sdk/platform/channels/index';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { ControlPlaneGateway } from '@pellux/goodvibes-sdk/platform/control-plane';
+import type { ChannelDeliveryRequest } from '@pellux/goodvibes-sdk/platform/channels';
 
 function serviceRequest(): ChannelDeliveryRequest {
   return {

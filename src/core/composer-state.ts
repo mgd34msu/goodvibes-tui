@@ -1,6 +1,6 @@
 import type { SubmissionIntent } from '../input/submission-intent.ts';
 import { routeSubmissionIntent, type SubmissionRouterInput } from '../input/submission-router.ts';
-import type { TurnState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
+import type { TurnState } from '@/runtime/index.ts';
 
 export interface ComposerState {
   readonly intent: SubmissionIntent;

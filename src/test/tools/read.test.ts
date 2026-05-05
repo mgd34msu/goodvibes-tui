@@ -7,10 +7,10 @@
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 import { mkdirSync, writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { ReadTool } from '@pellux/goodvibes-sdk/platform/tools/read/index';
-import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state/file-cache';
-import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
-import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence/facade';
+import { ReadTool } from '@pellux/goodvibes-sdk/platform/tools';
+import { FileStateCache } from '@pellux/goodvibes-sdk/platform/state';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
+import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence';
 import { getTestCodeIntelligence, getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------
@@ -618,7 +618,7 @@ describe('ReadTool', () => {
         files: [{ path: rel, extract: 'outline' }],
       });
       const parsed = (r as { parsed: { files: Array<{ content: string }> } }).parsed;
-      expect(parsed.files[0].content).toBe('');
+      expect(parsed.files[0].content).toContain('tree-sitter outline unavailable');
     });
 
     test('symbols of empty file returns empty string', async () => {
@@ -627,7 +627,7 @@ describe('ReadTool', () => {
         files: [{ path: rel, extract: 'symbols' }],
       });
       const parsed = (r as { parsed: { files: Array<{ content: string }> } }).parsed;
-      expect(parsed.files[0].content).toBe('');
+      expect(parsed.files[0].content).toContain('tree-sitter symbols unavailable');
     });
   });
 

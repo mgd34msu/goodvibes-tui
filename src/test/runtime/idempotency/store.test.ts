@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { IdempotencyStore } from '@pellux/goodvibes-sdk/platform/runtime/idempotency/index';
+import { IdempotencyStore } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -303,14 +303,14 @@ describe('markComplete and markFailed', () => {
     }
   });
 
-  test('markFailed on unknown key is a no-op (does not throw)', () => {
+  test('markFailed on unknown key reports a lifecycle error', () => {
     const store = makeStore();
-    expect(() => store.markFailed('nonexistent-key')).not.toThrow();
+    expect(() => store.markFailed('nonexistent-key')).toThrow('IdempotencyStore.markFailed');
   });
 
-  test('markComplete on unknown key is a no-op (does not throw)', () => {
+  test('markComplete on unknown key reports a lifecycle error', () => {
     const store = makeStore();
-    expect(() => store.markComplete('nonexistent-key', 'value')).not.toThrow();
+    expect(() => store.markComplete('nonexistent-key', 'value')).toThrow('IdempotencyStore.markComplete');
   });
 
   test('markFailed allows subsequent checkAndRecord to return new (retry)', () => {

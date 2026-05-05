@@ -10,20 +10,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   LocalContextIngestionService,
-} from '@pellux/goodvibes-sdk/platform/providers/local-context-ingestion';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+} from '@pellux/goodvibes-sdk/platform/providers';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { enrichModelEntries } from '@pellux/goodvibes-sdk/platform/runtime/ui/model-picker/health-enrichment';
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import { createInitialProviderHealthState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/provider-health';
-import { createInitialModelState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/model';
-import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
-import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
-import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { enrichModelEntries } from '@/runtime/index.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { createInitialProviderHealthState } from '@/runtime/index.ts';
+import { createInitialModelState } from '@/runtime/index.ts';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 
 // ---------------------------------------------------------------------------
 // Test helpers

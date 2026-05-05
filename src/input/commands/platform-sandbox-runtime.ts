@@ -13,17 +13,17 @@ import {
   renderSandboxRecommendation,
   renderSandboxReview,
   renderSandboxSessions,
-} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
-import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
-import { buildSandboxLaunchPlan, executeSandboxManagedCommand, probeSandboxBackends } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/backend';
-import type { SandboxBundle, SandboxProbe } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
+} from '@/runtime/index.ts';
+import { renderQemuWrapperTemplate } from '@/runtime/index.ts';
+import { buildSandboxLaunchPlan, executeSandboxManagedCommand, probeSandboxBackends } from '@/runtime/index.ts';
+import type { SandboxBundle, SandboxProbe } from '@/runtime/index.ts';
 import {
   exportSandboxGuestBundle,
   inspectSandboxGuestBundle,
   renderSandboxDoctor,
   scaffoldSandboxQemuInitBundle,
   type SandboxGuestBundle,
-} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/provisioning';
+} from '@/runtime/index.ts';
 import { handleSandboxQemuCommand } from './platform-sandbox-qemu.ts';
 import { handleSandboxSessionCommand } from './platform-sandbox-session.ts';
 
@@ -145,7 +145,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
             ? '/sandbox qemu bootstrap .goodvibes/tui/sandbox 20'
             : '/sandbox doctor',
         };
-        ctx.print([inspectSandboxProbe(probe), ...backendProbe.warnings.map((warning) => `  warning: ${warning}`)].join('\n'));
+        ctx.print([inspectSandboxProbe(probe), ...backendProbe.warnings.map((warning: string) => `  warning: ${warning}`)].join('\n'));
         return;
       }
       if (sub === 'doctor') {

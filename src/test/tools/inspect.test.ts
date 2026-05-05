@@ -14,7 +14,7 @@ import {
   existsSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { InspectTool } from '@pellux/goodvibes-sdk/platform/tools/inspect/index';
+import { InspectTool } from '@pellux/goodvibes-sdk/platform/tools';
 
 // ---------------------------------------------------------------------------
 // Helpers

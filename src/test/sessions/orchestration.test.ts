@@ -2,11 +2,11 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { mkdtempSync, existsSync } from 'fs';
-import { SessionTaskGraph } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/graph';
+import { SessionTaskGraph } from '@pellux/goodvibes-sdk/platform/sessions';
 import {
   CrossSessionTaskRegistry,
-} from '@pellux/goodvibes-sdk/platform/sessions/orchestration/registry';
-import type { CrossSessionTaskRef, SessionTaskGraphSnapshot } from '@pellux/goodvibes-sdk/platform/sessions/orchestration/types';
+} from '@pellux/goodvibes-sdk/platform/sessions';
+import type { CrossSessionTaskRef, SessionTaskGraphSnapshot } from '@pellux/goodvibes-sdk/platform/sessions';
 
 function graphPath(root: string): string {
   return join(root, '.goodvibes', 'tui', 'sessions', 'task-graph.json');

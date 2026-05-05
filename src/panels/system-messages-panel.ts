@@ -24,7 +24,7 @@ import {
   type PanelPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 const MAX_MESSAGES = 500;
 

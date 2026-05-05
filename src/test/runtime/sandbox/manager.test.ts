@@ -11,16 +11,16 @@ import {
   renderSandboxProfiles,
   renderSandboxRecommendation,
   renderSandboxReview,
-} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
+} from '@/runtime/index.ts';
 import {
   buildSandboxLaunchPlan,
   executeSandboxCommand,
   executeSandboxManagedCommand,
   probeSandboxBackends,
   resolveSandboxCommandPlan,
-} from '@pellux/goodvibes-sdk/platform/runtime/sandbox/backend';
-import { SandboxSessionRegistry } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/session-registry';
-import { renderQemuWrapperTemplate } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/qemu-wrapper-template';
+} from '@/runtime/index.ts';
+import { SandboxSessionRegistry } from '@/runtime/index.ts';
+import { renderQemuWrapperTemplate } from '@/runtime/index.ts';
 
 function makeManager(overrides: Partial<Record<string, unknown>> = {}) {
   const values = new Map<string, unknown>([

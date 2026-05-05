@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SubscriptionPanel } from '../../panels/subscription-panel.ts';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { Line } from '../../types/grid.ts';
 
 function linesText(lines: Line[]): string {

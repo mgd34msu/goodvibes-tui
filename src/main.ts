@@ -6,21 +6,21 @@ import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
-import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools/index';
-import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state/file-undo';
-import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp/manager';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import { registerAllTools } from '@pellux/goodvibes-sdk/platform/tools';
+import { FileUndoManager } from '@pellux/goodvibes-sdk/platform/state';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
+import { AcpManager } from '@pellux/goodvibes-sdk/platform/acp';
 import { PermissionPromptUI } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
-import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
+import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { registerBuiltinCommands } from './input/commands.ts';
-import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools/workflow/index';
+import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { InputHistory } from './input/input-history.ts';
-import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers/tier-prompts';
+import { getTierPromptSupplement, getTierForContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
 import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
@@ -30,25 +30,25 @@ import {
 } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils/logger';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
 import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
-import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state/mode-manager';
-import type { HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
+import type { HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks';
 import {
   checkRecoveryFile,
   deleteRecoveryFile,
   loadRecoveryConversation,
   persistConversation,
   writeRecoveryFile,
-} from '@pellux/goodvibes-sdk/platform/runtime/session-persistence';
+} from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
-import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState } from './cli/tui-startup.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
@@ -290,8 +290,7 @@ async function main() {
         const def = providerRegistry.getCurrentModel();
         runtime.model = def.id;
         runtime.provider = def.provider;
-        configManager.set('provider.model', def.id);
-        configManager.set('provider.provider', def.provider);
+        configManager.set('provider.model', def.registryKey);
         systemMessageRouter.high(`[Model] Switched to ${def.displayName} (${def.provider}) via @model:`);
       } catch {
         systemMessageRouter.high(`[Model] Unknown model: ${modelId}`);

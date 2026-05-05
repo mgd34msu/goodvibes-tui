@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { createShellPathService } from '@/runtime/index.ts';
 import {
   getOnboardingCheckMarkerPath,
   readOnboardingCheckMarkers,

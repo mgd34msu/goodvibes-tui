@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { run as runCommand } from '@pellux/goodvibes-sdk/platform/hooks/runners/command';
-import { run as runAgent } from '@pellux/goodvibes-sdk/platform/hooks/runners/agent';
-import { run as runPrompt } from '@pellux/goodvibes-sdk/platform/hooks/runners/prompt';
-import type { HookDefinition, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { run as runCommand } from '@pellux/goodvibes-sdk/platform/hooks';
+import { run as runAgent } from '@pellux/goodvibes-sdk/platform/hooks';
+import { run as runPrompt } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookDefinition, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks';
 
 function makeEvent(overrides: Partial<HookEvent> = {}): HookEvent {
   return {
@@ -71,7 +71,11 @@ describe('command runner', () => {
 describe('agent runner', () => {
   test('returns ok:false with error when prompt field is missing', async () => {
     const hook: HookDefinition = { match: '*:*:*', type: 'agent' };
-    const result = await runAgent(hook, makeEvent(), {} as never);
+    const result = await runAgent(hook, makeEvent(), {
+      spawn: () => ({ id: 'agent-test' }),
+      getStatus: () => null,
+      cancel: () => undefined,
+    } as never);
     expect(result.ok).toBe(false);
     expect(result.error).toBeTruthy();
     expect(result.error).toContain('prompt');

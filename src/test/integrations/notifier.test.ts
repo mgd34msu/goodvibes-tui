@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations/notifier';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { Notifier } from '@pellux/goodvibes-sdk/platform/integrations';
 
 describe('Notifier.fromConfig', () => {
   let root: string;

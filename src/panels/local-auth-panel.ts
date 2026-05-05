@@ -11,7 +11,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
-import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security/user-auth';
+import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security';
 import type { LocalAuthInspectionQuery } from '../runtime/ui-service-queries.ts';
 
 const C = {

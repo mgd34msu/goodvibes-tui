@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { TelemetryDB } from '@pellux/goodvibes-sdk/platform/state/telemetry';
+import { TelemetryDB } from '@pellux/goodvibes-sdk/platform/state';
 
 // ---------------------------------------------------------------------------
 // Helpers

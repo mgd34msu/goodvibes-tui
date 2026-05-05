@@ -7,10 +7,10 @@ import { join } from 'path';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../../runtime/store/index.ts';
-import { createStuckTurnPlaybook } from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/stuck-turn';
-import { createSessionUnrecoverablePlaybook } from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/session-unrecoverable';
+import { createStuckTurnPlaybook } from '@/runtime/index.ts';
+import { createSessionUnrecoverablePlaybook } from '@/runtime/index.ts';
 
 describe('ops playbook runtime context', () => {
   test('stuck-turn checks inspect live conversation state', async () => {

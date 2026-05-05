@@ -1,6 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
-import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import type { ShellPathService } from '@/runtime/index.ts';
 
 /**
  * FilePickerModal - Fuzzy file finder triggered by @ in the input area.

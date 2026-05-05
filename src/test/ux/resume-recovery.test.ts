@@ -17,7 +17,7 @@ import {
   selectAnyOverlayVisible,
 } from '../../runtime/store/selectors/index.ts';
 import type { PanelDomainState, PanelId } from '../../runtime/store/domains/panels.ts';
-import type { SessionDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/session';
+import type { SessionDomainState } from '@/runtime/index.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

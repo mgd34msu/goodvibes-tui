@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createShellPathService } from '@/runtime/index.ts';
 import { collectOnboardingSnapshot } from '../../../runtime/onboarding/index.ts';
 
 function buildLocalAuthSnapshot() {

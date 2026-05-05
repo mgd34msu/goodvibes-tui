@@ -1,8 +1,8 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
 import { join } from 'node:path';
-import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents/wrfc-controller';
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
+import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };

@@ -16,8 +16,8 @@ import {
   selectIsTurnActive,
   selectRunningAgents,
 } from '../../runtime/store/selectors/index.ts';
-import type { ConversationDomainState, ActiveToolCall } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/conversation';
-import type { RuntimeAgent, AgentDomainState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/agents';
+import type { ConversationDomainState, ActiveToolCall } from '@/runtime/index.ts';
+import type { RuntimeAgent, AgentDomainState } from '@/runtime/index.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

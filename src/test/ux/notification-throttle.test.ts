@@ -13,7 +13,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
 import type { RuntimeState } from '../../runtime/store/state.ts';
 import { selectMcp } from '../../runtime/store/selectors/index.ts';
-import type { McpServerRecord, McpServerLifecycleState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/mcp';
+import type { McpServerRecord, McpServerLifecycleState } from '@/runtime/index.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

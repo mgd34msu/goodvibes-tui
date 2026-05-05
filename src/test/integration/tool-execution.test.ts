@@ -9,12 +9,12 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools/registry';
-import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions/manager';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
+import { ToolRegistry } from '@pellux/goodvibes-sdk/platform/tools';
+import { PermissionManager } from '@pellux/goodvibes-sdk/platform/permissions';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createPermissionConfigReader } from '@pellux/goodvibes-sdk/platform/permissions';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };

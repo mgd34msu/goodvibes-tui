@@ -5,11 +5,11 @@ import {
   diffCatalogs,
   filterRelevantChanges,
   formatChangeNotifications,
-} from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
-import type { CatalogModel, CatalogDiff } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
-import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers/favorites';
-import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
+} from '@pellux/goodvibes-sdk/platform/providers';
+import type { CatalogModel, CatalogDiff } from '@pellux/goodvibes-sdk/platform/providers';
+import type { FavoritesData } from '@pellux/goodvibes-sdk/platform/providers';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
+import type { BenchmarkEntry } from '@pellux/goodvibes-sdk/platform/providers';
 import { writeBenchmarksCache } from '../helpers/provider-cache.ts';
 
 // ---------------------------------------------------------------------------
@@ -182,7 +182,7 @@ describe('filterRelevantChanges', () => {
     };
     const favorites: FavoritesData = {
       pinned: [],
-      history: [{ modelId: 'used-model', lastUsed: '2024-01-01T00:00:00.000Z', count: 5 }],
+      history: [{ registryKey: 'acme:used-model', lastUsed: '2024-01-01T00:00:00.000Z', count: 5 }],
     };
 
     const filtered = filterRelevantChanges(diff, favorites, []);
@@ -201,7 +201,7 @@ describe('filterRelevantChanges', () => {
       changed: [],
     };
     const favorites: FavoritesData = {
-      pinned: [{ modelId: 'pinned-model', pinnedAt: '2024-01-01T00:00:00.000Z' }],
+      pinned: [{ registryKey: 'acme:pinned-model', pinnedAt: '2024-01-01T00:00:00.000Z' }],
       history: [],
     };
 
@@ -258,8 +258,8 @@ describe('filterRelevantChanges', () => {
       changed: [],
     };
     const favorites: FavoritesData = {
-      pinned: [{ modelId: 'shared-model', pinnedAt: '2024-01-01T00:00:00.000Z' }],
-      history: [{ modelId: 'shared-model', lastUsed: '2024-01-02T00:00:00.000Z', count: 1 }],
+      pinned: [{ registryKey: 'acme:shared-model', pinnedAt: '2024-01-01T00:00:00.000Z' }],
+      history: [{ registryKey: 'acme:shared-model', lastUsed: '2024-01-02T00:00:00.000Z', count: 1 }],
     };
 
     const filtered = filterRelevantChanges(diff, favorites, []);

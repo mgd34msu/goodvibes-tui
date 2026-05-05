@@ -12,13 +12,13 @@ import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { createFeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { FeatureFlagManager } from '@pellux/goodvibes-sdk/platform/runtime/feature-flags/manager';
-import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp/registry';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { createFeatureFlagManager } from '@/runtime/index.ts';
+import type { FeatureFlagManager } from '@/runtime/index.ts';
+import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 
 // ---------------------------------------------------------------------------
 // Helpers

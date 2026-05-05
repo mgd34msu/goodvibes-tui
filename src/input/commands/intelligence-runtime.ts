@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
-import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence/facade';
-import type { DocumentSymbol } from '@pellux/goodvibes-sdk/platform/intelligence/lsp/protocol';
-import type { SymbolInfo } from '@pellux/goodvibes-sdk/platform/intelligence/tree-sitter/queries';
+import { CodeIntelligence } from '@pellux/goodvibes-sdk/platform/intelligence';
+import type { DocumentSymbol } from '@pellux/goodvibes-sdk/platform/intelligence';
+import type { SymbolInfo } from '@pellux/goodvibes-sdk/platform/intelligence';
 import { openCommandPanel, requireReadModels, requireShellPaths } from './runtime-services.ts';
 
 function resolveTargetPath(pathArg: string, ctx: CommandContext): string {

@@ -19,17 +19,17 @@ import {
   buildRetryTaskAction,
   buildCancelTaskAction,
   buildCancelAgentAction,
-} from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/actions';
+} from '@/runtime/index.ts';
 import {
   classifyFailure,
   summariseFailure,
-} from '@pellux/goodvibes-sdk/platform/runtime/forensics/classifier';
+} from '@/runtime/index.ts';
 import type {
   FailureClass,
   FailureReport,
   CausalChainEntry,
   ForensicsBundle,
-} from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
+} from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // 1. Forensics classifier: all known failure classes are reachable

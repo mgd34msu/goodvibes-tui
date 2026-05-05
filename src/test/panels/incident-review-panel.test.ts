@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import type { FailureReport } from '@pellux/goodvibes-sdk/platform/runtime/forensics/types';
+import { ForensicsRegistry } from '@/runtime/index.ts';
+import type { FailureReport } from '@/runtime/index.ts';
 import { IncidentReviewPanel } from '../../panels/incident-review-panel.ts';
 import type { Line } from '../../types/grid.ts';
-import type { ReplaySnapshotInput } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
+import type { ReplaySnapshotInput } from '@/runtime/index.ts';
 
 function linesText(lines: Line[]): string {
   return lines

@@ -3,8 +3,8 @@
  * and time-travel step/seek controls.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { TimelineBuffer } from '@pellux/goodvibes-sdk/platform/runtime/inspection/state-inspector';
-import type { TimelineEvent } from '@pellux/goodvibes-sdk/platform/runtime/inspection/state-inspector';
+import { TimelineBuffer } from '@/runtime/index.ts';
+import type { TimelineEvent } from '@/runtime/index.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

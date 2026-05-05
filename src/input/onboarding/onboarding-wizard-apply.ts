@@ -1,4 +1,5 @@
 import type { OnboardingAcknowledgementTarget, OnboardingApplyOperation, OnboardingApplyRequest } from '../../runtime/onboarding/index.ts';
+import { formatProviderModel } from '../../config/provider-model.ts';
 import { getServerSurfaceFeatureFlags } from '../../runtime/surface-feature-flags.ts';
 import {
   buildCloudflareApiTokenRef,
@@ -108,8 +109,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
 
     const defaultModel = controller.modelSelectionState.get('main');
     if (defaultModel && defaultModel.enabled !== false && defaultModel.providerId.length > 0 && defaultModel.modelId.length > 0) {
-      setConfig('provider.provider', defaultModel.providerId);
-      setConfig('provider.model', defaultModel.modelId);
+      setConfig('provider.model', formatProviderModel(defaultModel.providerId, defaultModel.modelId));
     }
     setConfig('provider.reasoningEffort', controller.getStringFieldValue('default-model.reasoning', controller.runtimeSnapshot?.providerRouting.primaryReasoningEffort ?? 'medium'));
     setConfig('behavior.hitlMode', controller.getStringFieldValue('experience.hitl', controller.runtimeSnapshot?.runtimeDefaults.behavior.hitlMode ?? 'balanced'));

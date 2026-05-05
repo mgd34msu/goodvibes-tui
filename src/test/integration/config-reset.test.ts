@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 // Use a fresh ConfigManager instance for each test to avoid pollution from
 // leaked module state in other test files that used to replace shared config helpers.
@@ -35,9 +35,9 @@ describe('ConfigManager reset functionality', () => {
 
     // Change multiple config values
     mgr.set('behavior.autoApprove', true);
-    mgr.set('provider.model', 'gpt-4o-mini');
+    mgr.set('provider.model', 'openai:gpt-4o-mini');
     expect(mgr.getRaw().behavior.autoApprove).toBe(true);
-    expect(mgr.getRaw().provider.model).toBe('gpt-4o-mini');
+    expect(mgr.getRaw().provider.model).toBe('openai:gpt-4o-mini');
     // Reset all
     mgr.reset();
     // Verify defaults

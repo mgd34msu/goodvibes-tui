@@ -1,16 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { createInitialOrchestrationState } from '@pellux/goodvibes-sdk/platform/runtime/store/domains/orchestration';
+import { createInitialOrchestrationState } from '@/runtime/index.ts';
 import { OrchestrationPanel } from '../../panels/orchestration-panel.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus } from '@/runtime/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import type { Line } from '../../types/grid.ts';
 import { createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 function linesText(lines: Line[]): string {
   return lines

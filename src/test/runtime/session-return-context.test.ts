@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildLocalReturnContextSummary, formatReturnContextForDisplay } from '@pellux/goodvibes-sdk/platform/runtime/session-return-context';
+import { buildLocalReturnContextSummary, formatReturnContextForDisplay } from '@/runtime/index.ts';
 
 describe('runtime/session-return-context', () => {
   test('builds deterministic summary from message flow', () => {

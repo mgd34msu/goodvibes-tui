@@ -3,8 +3,8 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdtempSync } from 'node:fs';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { inspectInboundTls } from '@pellux/goodvibes-sdk/platform/runtime/network/index';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { inspectInboundTls } from '@/runtime/index.ts';
 
 describe('runtime/network inbound TLS', () => {
   let root: string;

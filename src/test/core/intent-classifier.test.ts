@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { classifyIntent } from '@pellux/goodvibes-sdk/platform/core/intent-classifier';
+import { classifyIntent } from '@pellux/goodvibes-sdk/platform/core';
 
 describe('classifyIntent', () => {
   // ── Chat classification ───────────────────────────────────────────────────

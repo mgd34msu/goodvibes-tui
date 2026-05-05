@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks/manager';
+import { BookmarkManager } from '@pellux/goodvibes-sdk/platform/bookmarks';
 
 describe('BookmarkManager', () => {
   let dir: string;

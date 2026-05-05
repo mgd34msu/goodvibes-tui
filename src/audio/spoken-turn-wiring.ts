@@ -1,6 +1,6 @@
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { UiRuntimeEvents } from '@pellux/goodvibes-sdk/platform/runtime/ui-events';
-import type { VoiceService } from '@pellux/goodvibes-sdk/platform/voice/index';
+import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { UiRuntimeEvents } from '@/runtime/index.ts';
+import type { VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import { LocalStreamingAudioPlayer } from './player.ts';
 import { SpokenTurnController } from './spoken-turn-controller.ts';
 

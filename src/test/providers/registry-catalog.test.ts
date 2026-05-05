@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import type { CatalogModel, PricingCatalog } from '@pellux/goodvibes-sdk/platform/providers/model-catalog';
+import type { CatalogModel, PricingCatalog } from '@pellux/goodvibes-sdk/platform/providers';
 import { createTestManagers } from '../helpers/test-managers.ts';
 import { createProviderCacheFixture, writeModelCatalogCache } from '../helpers/provider-cache.ts';
 
@@ -380,17 +380,19 @@ describe('ProviderRegistry.get() — alias resolution', () => {
   it('registry.get("inception") resolves via alias to the inceptionlabs provider', () => {
     const provider = providerRegistry.get('inception');
     expect(provider).toBeDefined();
+    if (!provider) throw new Error('Expected inception provider alias');
     expect(provider.name).toBe('inceptionlabs');
   });
 
   it('registry.get("inceptionlabs") returns the inceptionlabs provider directly', () => {
     const provider = providerRegistry.get('inceptionlabs');
     expect(provider).toBeDefined();
+    if (!provider) throw new Error('Expected inceptionlabs provider');
     expect(provider.name).toBe('inceptionlabs');
   });
 
-  it('registry.get("nonexistent") throws', () => {
-    expect(() => providerRegistry.get('nonexistent')).toThrow();
+  it('registry.get("nonexistent") returns undefined', () => {
+    expect(providerRegistry.get('nonexistent')).toBeUndefined();
   });
 });
 

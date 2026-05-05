@@ -12,15 +12,15 @@
  * All tests use pure in-memory routing — no I/O, no real event bus.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { NotificationRouter } from '@pellux/goodvibes-sdk/platform/runtime/notifications/router';
-import { BurstPolicy } from '@pellux/goodvibes-sdk/platform/runtime/notifications/policies/burst-policy';
-import { applyModeContextPolicy } from '@pellux/goodvibes-sdk/platform/runtime/notifications/policies/mode-context-policy';
+import { NotificationRouter } from '@/runtime/index.ts';
+import { BurstPolicy } from '@/runtime/index.ts';
+import { applyModeContextPolicy } from '@/runtime/index.ts';
 import type {
   Notification,
   NotificationLevel,
   NotificationTag,
   DomainVerbosity,
-} from '@pellux/goodvibes-sdk/platform/runtime/notifications/types';
+} from '@/runtime/index.ts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

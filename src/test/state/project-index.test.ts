@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state/project-index';
+import { ProjectIndex } from '@pellux/goodvibes-sdk/platform/state';
 import { getTestProjectIndex, resetTestProjectIndexes } from '../helpers/runtime-services.ts';
 
 // ---------------------------------------------------------------------------

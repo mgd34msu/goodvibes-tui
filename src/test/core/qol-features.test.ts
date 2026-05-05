@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { ConversationManager } from '../../core/conversation';
-import { RuntimeEventBus, createEventEnvelope } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
 
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
@@ -90,7 +90,7 @@ describe('Token budget warning', () => {
   test('OPS_CONTEXT_WARNING event has correct shape', async () => {
     const bus = new RuntimeEventBus();
     const events: Array<{ usage: number; threshold: number }> = [];
-    bus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
+    bus.on<Extract<import('@/runtime/index.ts').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
       'OPS_CONTEXT_WARNING',
       ({ payload }) => events.push(payload),
     );
@@ -114,7 +114,7 @@ describe('Token budget warning', () => {
     // Simulate the logic: warning fires only when usagePct >= threshold
     const bus = new RuntimeEventBus();
     const events: Array<{ usage: number; threshold: number }> = [];
-    bus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
+    bus.on<Extract<import('@/runtime/index.ts').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
       'OPS_CONTEXT_WARNING',
       ({ payload }) => events.push(payload),
     );
@@ -139,7 +139,7 @@ describe('Token budget warning', () => {
   test('OPS_CONTEXT_WARNING fires at threshold exactly', async () => {
     const bus = new RuntimeEventBus();
     const events: Array<{ usage: number; threshold: number }> = [];
-    bus.on<Extract<import('@pellux/goodvibes-sdk/platform/runtime/events/index').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
+    bus.on<Extract<import('@/runtime/index.ts').OpsEvent, { type: 'OPS_CONTEXT_WARNING' }>>(
       'OPS_CONTEXT_WARNING',
       ({ payload }) => events.push(payload),
     );

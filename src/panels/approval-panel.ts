@@ -6,8 +6,8 @@ import {
   buildPanelLine,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import type { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
-import { buildPermissionRuleSuggestions } from '@pellux/goodvibes-sdk/platform/runtime/permissions/rule-suggestions';
+import type { PolicyRuntimeState } from '@/runtime/index.ts';
+import { buildPermissionRuleSuggestions } from '@/runtime/index.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,

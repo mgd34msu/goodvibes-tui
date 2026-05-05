@@ -12,7 +12,7 @@ import {
   getOrCreateCompanionToken,
   regenerateCompanionToken,
   buildCompanionConnectionInfo,
-} from '@pellux/goodvibes-sdk/platform/pairing/index';
+} from '@pellux/goodvibes-sdk/platform/pairing';
 import { copyToClipboard } from '../../utils/clipboard.ts';
 
 function getLocalNetworkIp(): string {
@@ -63,7 +63,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
         surface: 'tui',
       });
       const regenerate = (): typeof connectionInfo => {
-        const newRecord = regenerateCompanionToken('tui', { daemonHomeDir });
+        const newRecord = regenerateCompanionToken({ daemonHomeDir });
         return buildCompanionConnectionInfo({
           daemonUrl,
           token: newRecord.token,

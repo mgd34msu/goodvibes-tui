@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { registerBuiltinCommands } from '../../input/commands.ts';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks/index';
-import { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks/workbench';
-import { createRuntimeHookApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-hook-api';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { listHookPointContracts } from '@pellux/goodvibes-sdk/platform/hooks';
+import { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
+import { createRuntimeHookApi } from '@/runtime/index.ts';
 import {
   getTestHookDispatcher,
 } from '../helpers/runtime-services.ts';

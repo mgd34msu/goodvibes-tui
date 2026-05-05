@@ -2,16 +2,16 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { SecurityPanel } from '../../panels/security-panel.ts';
 import {
   ApiTokenAuditor,
-} from '@pellux/goodvibes-sdk/platform/security/token-audit';
+} from '@pellux/goodvibes-sdk/platform/security';
 import type { Line } from '../../types/grid.ts';
-import { PolicyRuntimeState } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-runtime';
+import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
-import { ForensicsRegistry } from '@pellux/goodvibes-sdk/platform/runtime/forensics/registry';
-import type { PluginManagerObserver, PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins/manager';
-import type { McpDecisionRecord } from '@pellux/goodvibes-sdk/platform/runtime/mcp/types';
+import { ForensicsRegistry } from '@/runtime/index.ts';
+import type { PluginManagerObserver, PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins';
+import type { McpDecisionRecord } from '@/runtime/index.ts';
 import type { UiSecuritySnapshot } from '../../runtime/ui-read-models.ts';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
-import { buildMcpAttackPathReview } from '@pellux/goodvibes-sdk/platform/runtime/mcp/index';
+import { buildMcpAttackPathReview } from '@/runtime/index.ts';
 
 function linesText(lines: Line[]): string {
   return lines

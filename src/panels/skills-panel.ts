@@ -6,7 +6,7 @@ import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './con
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { SearchableListPanel } from './scrollable-list-panel.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
-import type { ShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
+import type { ShellPathService } from '@/runtime/index.ts';
 import {
   buildPanelLine,
   buildPanelWorkspace,

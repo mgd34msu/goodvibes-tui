@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach, spyOn } from 'bun:test';
-import { createAgentTool, AgentManager } from '@pellux/goodvibes-sdk/platform/tools/agent/index';
-import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents/message-bus';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import type { OrchestrationEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/orchestration';
+import { createAgentTool, AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { OrchestrationEvent } from '@/runtime/index.ts';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 

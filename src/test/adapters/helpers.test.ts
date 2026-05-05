@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readBearerOrHeaderToken, readTextBodyWithinLimit, verifySha256HmacSignature } from '@pellux/goodvibes-sdk/platform/adapters/helpers';
+import { readBearerOrHeaderToken, readTextBodyWithinLimit, verifySha256HmacSignature } from '@pellux/goodvibes-sdk/platform/adapters';
 import { createHmac } from 'node:crypto';
 
 describe('adapter helpers', () => {

@@ -5,21 +5,22 @@ import { spawn } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
 import type { ConfigManager, ConfigKey, GoodVibesConfig } from '../config/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
+import { formatProviderModel, getModelIdFromProviderModel } from '../config/provider-model.ts';
 import { bootstrapRuntime } from '../runtime/bootstrap.ts';
 import { createRuntimeServices } from '../runtime/services.ts';
 import { createRuntimeStore } from '../runtime/store/index.ts';
 import type { RuntimeServices } from '../runtime/services.ts';
 import { SecretsManager } from '../config/secrets.ts';
-import { RuntimeEventBus, type TurnEvent } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import { createShellPathService } from '@pellux/goodvibes-sdk/platform/runtime/shell-paths';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
-import { listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
-import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
-import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
-import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config/openai-codex-auth';
-import { inspectProviderAuth } from '@pellux/goodvibes-sdk/platform/runtime/auth/inspection';
-import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing/index';
-import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing/qr-generator';
+import { RuntimeEventBus, type TurnEvent } from '@/runtime/index.ts';
+import { createShellPathService } from '@/runtime/index.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/providers';
+import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config';
+import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
+import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
+import { inspectProviderAuth } from '@/runtime/index.ts';
+import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing';
+import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
 import type { GoodVibesCliParseResult } from './types.ts';
 import { formatProviderAuthRoute, summarizeProviderAuthRoutes } from './provider-auth-routes.ts';
 import { classifyProviderSetup } from './provider-classification.ts';
@@ -409,13 +410,15 @@ async function renderProviders(runtime: CliCommandRuntime): Promise<string> {
         ? providerModels.find((model) => model.registryKey === requestedModel || model.id === requestedModel)
         : providerModels.find((model) => model.registryKey === current.registryKey) ?? providerModels[0];
       if (providerModels.length === 0 || !selected) {
-        runtime.configManager.setDynamic('provider.provider', provider);
-        if (requestedModel) runtime.configManager.setDynamic('provider.model', requestedModel);
+        if (requestedModel) {
+          runtime.configManager.setDynamic('provider.model', formatProviderModel(provider, requestedModel));
+        } else {
+          runtime.configManager.setDynamic('provider.model', formatProviderModel(provider, getModelIdFromProviderModel(runtime.configManager.get('provider.model'))));
+        }
         return requestedModel
           ? `Provider selected: ${provider} (${requestedModel})\n  warning: model catalog entry was not available locally; saved explicit selection.`
           : `Provider selected: ${provider}\n  warning: model catalog entry was not available locally; model selection was left unchanged.`;
       }
-      runtime.configManager.setDynamic('provider.provider', selected.provider);
       runtime.configManager.setDynamic('provider.model', selected.registryKey);
       return `Provider selected: ${selected.provider} (${selected.registryKey})`;
     }
@@ -519,12 +522,10 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
         .find((candidate) => candidate.registryKey === modelKey || candidate.id === modelKey);
       if (!model) {
         const provider = inferProviderFromRegistryKey(modelKey);
-        runtime.configManager.setDynamic('provider.provider', provider);
-        runtime.configManager.setDynamic('provider.model', modelKey);
+        runtime.configManager.setDynamic('provider.model', formatProviderModel(provider, modelKey));
         await services.favoritesStore.recordUsage(modelKey);
         return `Model selected: ${modelKey}\n  warning: model catalog entry was not available locally; saved explicit selection.`;
       }
-      runtime.configManager.setDynamic('provider.provider', model.provider);
       runtime.configManager.setDynamic('provider.model', model.registryKey);
       await services.favoritesStore.recordUsage(model.registryKey);
       return `Model selected: ${model.registryKey}`;

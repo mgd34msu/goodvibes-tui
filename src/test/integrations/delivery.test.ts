@@ -4,8 +4,8 @@ import {
   DeliveryError,
   classifyDeliveryError,
   snapshotQueueStatus,
-} from '@pellux/goodvibes-sdk/platform/integrations/delivery';
-import type { DeadLetterEntry, DeliveryOutcome } from '@pellux/goodvibes-sdk/platform/integrations/delivery';
+} from '@pellux/goodvibes-sdk/platform/integrations';
+import type { DeadLetterEntry, DeliveryOutcome } from '@pellux/goodvibes-sdk/platform/integrations';
 
 // ---------------------------------------------------------------------------
 // classifyDeliveryError

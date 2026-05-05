@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { OpenAICodexProvider } from '@pellux/goodvibes-sdk/platform/providers/openai-codex';
-import { OpenAIProvider } from '@pellux/goodvibes-sdk/platform/providers/openai';
+import { OpenAICodexProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { OpenAIProvider } from '@pellux/goodvibes-sdk/platform/providers';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 const testManagers = createTestManagers();
@@ -50,6 +50,7 @@ describe('OpenAI subscription-backed Codex path', () => {
       updatedAt: Date.now(),
     });
     const provider = testManagers.providerRegistry.get('openai');
+    if (!provider) throw new Error('Expected openai provider');
     expect(provider.name).toBe('openai-subscriber');
   });
 

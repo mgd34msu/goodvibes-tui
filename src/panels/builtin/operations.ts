@@ -35,7 +35,7 @@ import {
   createEnvironmentVariableQuery,
   createProviderRuntimeInspectionQuery,
 } from '../../runtime/ui-service-queries.ts';
-import { createRuntimeProviderApi } from '@pellux/goodvibes-sdk/platform/runtime/runtime-provider-api';
+import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requireMcpRegistry, requirePluginManager, requireUiServices } from './shared.ts';
 

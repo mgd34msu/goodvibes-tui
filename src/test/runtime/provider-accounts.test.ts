@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildProviderAccountSnapshot } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
+import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
 
 describe('provider account snapshot', () => {
@@ -16,6 +16,19 @@ describe('provider account snapshot', () => {
 
   beforeEach(() => {
     testManagers = createTestManagers();
+    testManagers.providerRegistry.register({
+      name: 'openai',
+      models: ['gpt-5'],
+      async chat() {
+        return {
+          content: '',
+          toolCalls: [],
+          usage: { inputTokens: 0, outputTokens: 0 },
+          stopReason: 'completed',
+        };
+      },
+    });
+    testManagers.providerRegistry.setCurrentModel('openai:gpt-5');
     root = mkdtempSync(join(tmpdir(), 'gv-provider-accounts-'));
     process.env.HOME = root;
     process.chdir(root);

@@ -7,11 +7,11 @@ import {
   AutomationRouteStore,
   AutomationRunStore,
   AutomationSourceStore,
-} from '@pellux/goodvibes-sdk/platform/automation/index';
-import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
-import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
-import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation/runs';
-import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
+} from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation';
 
 describe('automation persistent stores', () => {
   let root = '';

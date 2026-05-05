@@ -1,11 +1,11 @@
-export type { UiReadModel } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-base';
+export type { UiReadModel } from '@/runtime/index.ts';
 export type {
   UiCoreReadModels,
   UiProvidersSnapshot,
   UiSessionSnapshot,
   UiAgentsSnapshot,
   UiTasksSnapshot,
-} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-core';
+} from '@/runtime/index.ts';
 export type {
   UiOperationsReadModels,
   UiAutomationSnapshot,
@@ -14,7 +14,7 @@ export type {
   UiOrchestrationSnapshot,
   UiCommunicationSnapshot,
   UiControlPlaneSnapshot,
-} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-operations';
+} from '@/runtime/index.ts';
 export type {
   UiObservabilityReadModels,
   UiRemoteSnapshot,
@@ -29,21 +29,21 @@ export type {
   UiSettingsSnapshot,
   UiContinuitySnapshot,
   UiWorktreeSnapshot,
-} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability';
-export type { UiObservabilityReadModelOptions } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability-options';
+} from '@/runtime/index.ts';
+export type { UiObservabilityReadModelOptions } from '@/runtime/index.ts';
 
 import type { RuntimeServices } from './services.ts';
-import { createCoreReadModels, type UiCoreReadModels } from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-core';
+import { createCoreReadModels, type UiCoreReadModels } from '@/runtime/index.ts';
 import {
   createOperationsReadModels,
   type UiOperationsReadModels,
   type UiOperationsReadModelOptions,
-} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-operations';
+} from '@/runtime/index.ts';
 import {
   createObservabilityReadModels,
   type UiObservabilityReadModels,
   type UiObservabilityReadModelOptions,
-} from '@pellux/goodvibes-sdk/platform/runtime/ui-read-models-observability';
+} from '@/runtime/index.ts';
 
 export type UiReadModelOptions = UiOperationsReadModelOptions & UiObservabilityReadModelOptions;
 

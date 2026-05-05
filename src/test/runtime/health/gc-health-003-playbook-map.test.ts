@@ -9,8 +9,8 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { CASCADE_RULES } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-rules';
-import { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from '@pellux/goodvibes-sdk/platform/runtime/health/cascade-playbook-map';
+import { CASCADE_RULES } from '@/runtime/index.ts';
+import { CASCADE_PLAYBOOK_MAP, ALL_CASCADE_RULE_IDS } from '@/runtime/index.ts';
 import {
   stuckTurnPlaybook,
   reconnectFailurePlaybook,
@@ -19,7 +19,7 @@ import {
   exportRecoveryPlaybook,
   sessionUnrecoverablePlaybook,
   compactionFailurePlaybook,
-} from '@pellux/goodvibes-sdk/platform/runtime/ops/playbooks/index';
+} from '@/runtime/index.ts';
 
 // Build the set of all known playbook IDs from the registry
 const ALL_KNOWN_PLAYBOOKS = new Map([

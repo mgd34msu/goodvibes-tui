@@ -2,15 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AutomationJobStore, AutomationRouteStore, AutomationRunStore, AutomationService, AutomationSourceStore } from '@pellux/goodvibes-sdk/platform/automation/index';
-import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation/manager';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels/route-manager';
-import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane/session-broker';
-import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state/persistent-store';
-import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation/jobs';
-import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation/routes';
-import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation/sources';
+import { AutomationJobStore, AutomationRouteStore, AutomationRunStore, AutomationService, AutomationSourceStore } from '@pellux/goodvibes-sdk/platform/automation';
+import { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { RouteBindingManager } from '@pellux/goodvibes-sdk/platform/channels';
+import { SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { PersistentStore } from '@pellux/goodvibes-sdk/platform/state';
+import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationRouteBinding } from '@pellux/goodvibes-sdk/platform/automation';
+import type { AutomationSourceRecord } from '@pellux/goodvibes-sdk/platform/automation';
 
 describe('automation service', () => {
   let root = '';
@@ -142,25 +142,4 @@ describe('automation service', () => {
     expect(reloaded.listSources()[0]).toMatchObject({ id: 'source-1' });
   });
 
-  test('seeds from legacy scheduler only when empty', async () => {
-    const service = createService();
-    await service.load();
-    await service.seedFromLegacyScheduler({
-      tasks: [
-        {
-          id: 'sched-1',
-          name: 'nightly',
-          cron: '0 2 * * *',
-          prompt: 'nightly status',
-          enabled: true,
-          runCount: 0,
-          missedRuns: 0,
-          createdAt: 1,
-        },
-      ],
-    });
-
-    expect(service.listJobs()).toHaveLength(1);
-    expect(service.listJobs()[0]?.id).toBe('sched-1');
-  });
 });

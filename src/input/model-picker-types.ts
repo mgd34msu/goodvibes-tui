@@ -1,4 +1,4 @@
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 
 export type PickerMode = 'model' | 'provider' | 'effort' | 'contextCap';
 

@@ -2,16 +2,17 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config/manager';
-import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config/service-registry';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
-import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers/cache-strategy';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers/capabilities';
-import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import { getProviderRuntimeSnapshot, getProviderUsageSnapshot } from '@pellux/goodvibes-sdk/platform/providers/runtime-snapshot';
+import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
+import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
+import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
+import { OpenAIProvider } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
+import { getProviderRuntimeSnapshot, getProviderUsageSnapshot } from '@pellux/goodvibes-sdk/platform/providers';
 
 function goodVibesRef(source: string, id: string): string {
   return `goodvibes://secrets/${source}/${encodeURIComponent(id)}`;
@@ -38,8 +39,10 @@ describe('provider runtime snapshots', () => {
     });
     const favoritesStore = new FavoritesStore({ dir: join(root, '.goodvibes', 'tui') });
     const benchmarkStore = new BenchmarkStore({ dir: join(root, '.goodvibes', 'tui') });
+    const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui') });
+    configManager.setDynamic('provider.model', 'openai:gpt-5-test');
     providerRegistry = new ProviderRegistry({
-      configManager: new ConfigManager({ surfaceRoot: 'tui',  configDir: join(root, '.goodvibes', 'tui') }),
+      configManager,
       subscriptionManager: subscriptions,
       secretsManager: secrets,
       serviceRegistry,
@@ -47,6 +50,19 @@ describe('provider runtime snapshots', () => {
       cacheHitTracker: new CacheHitTracker(),
       favoritesStore,
       benchmarkStore,
+    });
+    providerRegistry.registerRuntimeProvider({
+      provider: new OpenAIProvider(''),
+      replace: true,
+      models: [{
+        id: 'gpt-5-test',
+        provider: 'openai',
+        registryKey: 'openai:gpt-5-test',
+        displayName: 'GPT-5 Test',
+        capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: false },
+        contextWindow: 128_000,
+        selectable: true,
+      }],
     });
     delete process.env.OPENAI_API_KEY;
   });

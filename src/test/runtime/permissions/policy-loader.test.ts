@@ -16,11 +16,11 @@ import {
   loadPolicyBundle,
   createUnsignedBundle,
   PolicySignatureError,
-} from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
-import { signBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-signer';
-import { createPermissionEvaluator } from '@pellux/goodvibes-sdk/platform/runtime/permissions/index';
-import type { PolicyBundlePayload, BundleProvenance } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-loader';
-import type { SignedPolicyBundle } from '@pellux/goodvibes-sdk/platform/runtime/permissions/policy-signer';
+} from '@/runtime/index.ts';
+import { signBundle } from '@/runtime/index.ts';
+import { createPermissionEvaluator } from '@/runtime/index.ts';
+import type { PolicyBundlePayload, BundleProvenance } from '@/runtime/index.ts';
+import type { SignedPolicyBundle } from '@/runtime/index.ts';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 

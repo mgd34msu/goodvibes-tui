@@ -9,9 +9,9 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { runSafetyChecks } from '@pellux/goodvibes-sdk/platform/runtime/permissions/safety-checks';
-import { LayeredPolicyEvaluator } from '@pellux/goodvibes-sdk/platform/runtime/permissions/evaluator';
-import type { PermissionsConfig } from '@pellux/goodvibes-sdk/platform/runtime/permissions/types';
+import { runSafetyChecks } from '@/runtime/index.ts';
+import { LayeredPolicyEvaluator } from '@/runtime/index.ts';
+import type { PermissionsConfig } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

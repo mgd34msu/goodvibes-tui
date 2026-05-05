@@ -1,9 +1,9 @@
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers/registry';
-import type { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers/favorites';
-import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers/effort-levels';
-import { getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers/model-benchmarks';
-import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers/registry';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import type { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
+import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers';
+import { getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '@pellux/goodvibes-sdk/platform/providers';
+import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
+import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { detectFamily, POPULAR_PROVIDERS, tierToCategoryFilter } from './model-picker-types.ts';
 import type { BenchmarkSort, CapabilityFilter, CategoryFilter, FilteredModelsCache, FilteredProvidersCache, GroupByMode, ModelItemsCache, ModelPickerFocusPane, ModelPickerTarget, ModelPickerTargetInfo, PickerItem, PickerMode, ProviderItemsCache } from './model-picker-types.ts';
 import { filterProviders, groupProviders } from './model-picker-provider-filter.ts';

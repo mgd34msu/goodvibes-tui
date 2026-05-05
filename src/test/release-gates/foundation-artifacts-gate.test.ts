@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane/method-catalog';
-import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '@pellux/goodvibes-sdk/platform/knowledge/index';
-import { getDistributedNodeHostContract } from '@pellux/goodvibes-sdk/platform/runtime/remote/distributed-runtime-contract';
-import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane/operator-contract';
+import { GatewayMethodCatalog } from '@pellux/goodvibes-sdk/platform/control-plane';
+import { getKnowledgeGraphqlSchemaText, renderKnowledgeSchemaSql } from '@pellux/goodvibes-sdk/platform/knowledge';
+import { getDistributedNodeHostContract } from '@/runtime/index.ts';
+import { buildOperatorContract } from '@pellux/goodvibes-sdk/platform/control-plane';
 
 const ROOT = join(import.meta.dir, '..', '..', '..');
 const ARTIFACTS_DIR = join(ROOT, 'docs', 'foundation-artifacts');

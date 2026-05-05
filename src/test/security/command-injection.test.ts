@@ -7,9 +7,9 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { classifySegment, classifyCommand, higherPriority } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/classifier';
-import { canonicalize } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/canonicalizer';
-import type { CommandSegment } from '@pellux/goodvibes-sdk/platform/runtime/permissions/normalization/types';
+import { classifySegment, classifyCommand, higherPriority } from '@/runtime/index.ts';
+import { canonicalize } from '@/runtime/index.ts';
+import type { CommandSegment } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers

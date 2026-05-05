@@ -3,11 +3,11 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { readFile } from 'node:fs/promises';
 import type { CommandRegistry, CommandContext } from '../command-registry.ts';
 import type { SelectionItem } from '../selection-modal.ts';
-import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers/interface';
-import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils/path-safety';
-import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config/secret-refs';
+import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
+import { resolveAndValidatePath } from '@pellux/goodvibes-sdk/platform/utils';
+import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config';
 import { openCommandPanel, requireBookmarkManager, requireProviderApi, requireSecretsManager } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function isGoodVibesSecretRefInput(value: string): boolean {
   const normalized = value.trim();
@@ -380,12 +380,12 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
       const favorites = await providerApi.getFavorites();
-      const pinned = favorites.pinned.find((entry) => entry.modelId === modelId || entry.registryKey === modelId);
+      const pinned = favorites.pinned.find((entry) => entry.registryKey === modelId);
       if (!pinned) {
         ctx.print(`Model is not pinned: ${modelId}`);
         return;
       }
-      await providerApi.unpinModel(pinned.modelId);
+      await providerApi.unpinModel(pinned.registryKey);
       ctx.print(`Unpinned: ${modelId}`);
     },
   });

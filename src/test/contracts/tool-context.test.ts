@@ -3,9 +3,9 @@ import type {
   ToolRuntimeContext,
   TaskHooks,
   RuntimeStoreAccess,
-} from '@pellux/goodvibes-sdk/platform/runtime/tools/context';
-import { RuntimeEventBus } from '@pellux/goodvibes-sdk/platform/runtime/events/index';
-import type { PhaseResult, ToolExecutionPhase } from '@pellux/goodvibes-sdk/platform/runtime/tools/types';
+} from '@/runtime/index.ts';
+import { RuntimeEventBus } from '@/runtime/index.ts';
+import type { PhaseResult, ToolExecutionPhase } from '@/runtime/index.ts';
 
 // ---------------------------------------------------------------------------
 // Minimal stubs — test structural invariants without real implementations

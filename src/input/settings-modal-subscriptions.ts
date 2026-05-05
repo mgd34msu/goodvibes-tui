@@ -1,6 +1,6 @@
-import type { ProviderAuthFreshness } from '@pellux/goodvibes-sdk/platform/runtime/provider-accounts/registry';
-import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config/subscription-providers';
-import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config/subscriptions';
+import type { ProviderAuthFreshness } from '@/runtime/index.ts';
+import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
+import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { SubscriptionEntry } from './settings-modal-types.ts';
 

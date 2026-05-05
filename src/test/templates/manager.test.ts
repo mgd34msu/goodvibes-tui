@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { rmSync, existsSync } from 'fs';
-import { TemplateManager, parseTemplateArgs } from '@pellux/goodvibes-sdk/platform/templates/manager';
+import { TemplateManager, parseTemplateArgs } from '@pellux/goodvibes-sdk/platform/templates';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 /** Create an isolated temp directory for each test run. */

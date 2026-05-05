@@ -10,9 +10,9 @@ import {
   fromGeminiParts,
   toGeminiContents,
   extractTextToolCalls,
-} from '@pellux/goodvibes-sdk/platform/providers/tool-formats';
-import type { ToolDefinition, ToolCall } from '@pellux/goodvibes-sdk/platform/types/tools';
-import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers/interface';
+} from '@pellux/goodvibes-sdk/platform/providers';
+import type { ToolDefinition, ToolCall } from '@pellux/goodvibes-sdk/platform/types';
+import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers';
 
 const sampleTool: ToolDefinition = {
   name: 'read',
@@ -64,12 +64,11 @@ describe('fromOpenAIToolCalls', () => {
     expect(result.arguments).toEqual({ path: 'foo.ts' });
   });
 
-  test('handles malformed JSON arguments gracefully', () => {
+  test('skips malformed JSON arguments gracefully', () => {
     const openAICalls = [
       { id: 'c2', type: 'function' as const, function: { name: 'tool', arguments: 'not-json' } },
     ];
-    const [result] = fromOpenAIToolCalls(openAICalls);
-    expect(result.arguments).toEqual({});
+    expect(fromOpenAIToolCalls(openAICalls)).toEqual([]);
   });
 });
 
@@ -290,11 +289,10 @@ describe('extractTextToolCalls', () => {
     expect(cleanedContent).toBe('');
   });
 
-  test('returns {} arguments for malformed JSON', () => {
+  test('skips malformed JSON tool calls', () => {
     const content = makeCall('bad_tool', 0, 'not-valid-json');
     const { toolCalls } = extractTextToolCalls(content);
-    expect(toolCalls).toHaveLength(1);
-    expect(toolCalls[0].arguments).toEqual({});
+    expect(toolCalls).toEqual([]);
   });
 
   test('removes tool-call tokens and trims surrounding content', () => {

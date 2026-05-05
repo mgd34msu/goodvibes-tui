@@ -1,10 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import type { CommandRegistry } from '../command-registry.ts';
-import { profileDataToConfigSnapshot } from '@pellux/goodvibes-sdk/platform/profiles/shape';
+import { profileDataToConfigSnapshot } from '@pellux/goodvibes-sdk/platform/profiles';
 import { CONFIG_SCHEMA, type ConfigKey } from '../../config/index.ts';
-import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config/schema';
-import type { ManagedSettingsBundle } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/types';
+import { getProviderIdFromModel } from '../../config/provider-model.ts';
+import { CONFIG_KEYS } from '@pellux/goodvibes-sdk/platform/config';
+import type { ManagedSettingsBundle } from '@/runtime/index.ts';
 import {
   applyStagedManagedBundle,
   clearManagedSettingLock,
@@ -16,9 +17,9 @@ import {
   rollbackManagedApply,
   setManagedSettingLock,
   stageManagedSettingsBundle,
-} from '@pellux/goodvibes-sdk/platform/runtime/settings/control-plane';
+} from '@/runtime/index.ts';
 import { requireProfileManager, requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function buildConfigSnapshot(
   manager: { get: (key: ConfigKey) => unknown },
@@ -137,7 +138,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
         try {
           const result = applyStagedManagedBundle(ctx.platform.configManager, requestedKeys);
           ctx.session.runtime.model = String(ctx.platform.configManager.get('provider.model'));
-          ctx.session.runtime.provider = String(ctx.platform.configManager.get('provider.provider'));
+          ctx.session.runtime.provider = getProviderIdFromModel(ctx.platform.configManager.get('provider.model'));
           ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
           ctx.print(`Staged managed settings applied (${result.appliedCount} changes, rollback ${result.rollbackToken}${result.remainingCount > 0 ? `, ${result.remainingCount} still staged` : ''}).`);
         } catch (error) {
@@ -156,7 +157,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
         try {
           const restored = rollbackManagedApply(ctx.platform.configManager, token);
           ctx.session.runtime.model = String(ctx.platform.configManager.get('provider.model'));
-          ctx.session.runtime.provider = String(ctx.platform.configManager.get('provider.provider'));
+          ctx.session.runtime.provider = getProviderIdFromModel(ctx.platform.configManager.get('provider.model'));
           ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
           ctx.print(`Managed rollback ${token} restored ${restored} setting(s).`);
         } catch (error) {
@@ -195,7 +196,7 @@ export function registerManagedRuntimeCommands(registry: CommandRegistry): void 
         stageManagedSettingsBundle(ctx.platform.configManager, bundle, sourcePath);
         const result = applyStagedManagedBundle(ctx.platform.configManager, requestedKeys);
         ctx.session.runtime.model = String(ctx.platform.configManager.get('provider.model'));
-        ctx.session.runtime.provider = String(ctx.platform.configManager.get('provider.provider'));
+        ctx.session.runtime.provider = getProviderIdFromModel(ctx.platform.configManager.get('provider.model'));
         ctx.session.runtime.reasoningEffort = ctx.platform.configManager.get('provider.reasoningEffort') as string;
         ctx.print(`Managed settings bundle applied from ${sourcePath} (${result.appliedCount} changes, rollback ${result.rollbackToken}${result.remainingCount > 0 ? `, ${result.remainingCount} still staged` : ''}).`);
         return;

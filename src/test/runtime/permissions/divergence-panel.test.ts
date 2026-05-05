@@ -10,9 +10,9 @@
  */
 
 import { describe, it, expect, mock } from 'bun:test';
-import { PermissionSimulator } from '@pellux/goodvibes-sdk/platform/runtime/permissions/simulation';
-import { DivergenceDashboard } from '@pellux/goodvibes-sdk/platform/runtime/permissions/divergence-dashboard';
-import { DivergencePanel } from '@pellux/goodvibes-sdk/platform/runtime/diagnostics/panels/divergence';
+import { PermissionSimulator } from '@/runtime/index.ts';
+import { DivergenceDashboard } from '@/runtime/index.ts';
+import { DivergencePanel } from '@/runtime/index.ts';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };

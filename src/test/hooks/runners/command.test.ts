@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import { run } from '@pellux/goodvibes-sdk/platform/hooks/runners/command';
-import type { HookDefinition, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks/types';
+import { run } from '@pellux/goodvibes-sdk/platform/hooks';
+import type { HookDefinition, HookEvent } from '@pellux/goodvibes-sdk/platform/hooks';
 
 function makeEvent(overrides: Partial<HookEvent> = {}): HookEvent {
   return {

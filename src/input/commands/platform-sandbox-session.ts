@@ -1,8 +1,8 @@
 import { resolve } from 'node:path';
 import type { CommandContext } from '../command-registry.ts';
-import { inspectSandboxSessionArtifact, listSandboxProfiles, renderSandboxSessions } from '@pellux/goodvibes-sdk/platform/runtime/sandbox/manager';
+import { inspectSandboxSessionArtifact, listSandboxProfiles, renderSandboxSessions } from '@/runtime/index.ts';
 import { requireShellPaths } from './runtime-services.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils/error-display';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const SANDBOX_PROFILE_IDS = [
   'eval-js',
