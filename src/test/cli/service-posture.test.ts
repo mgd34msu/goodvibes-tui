@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync }
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
 import {
   buildCliServicePosture,
   getServiceStateRoot,
@@ -12,6 +13,20 @@ import {
 function makeExecutable(path: string): void {
   writeFileSync(path, '#!/bin/sh\nexit 0\n', 'utf-8');
   chmodSync(path, 0o755);
+}
+
+function createManagedStatus(overrides: Partial<ManagedServiceStatus> = {}): ManagedServiceStatus {
+  return {
+    platform: 'systemd',
+    path: '/tmp/goodvibes.service',
+    installed: true,
+    autostart: true,
+    running: false,
+    commandPreview: '/tmp/goodvibes.service',
+    suggestedCommands: [],
+    lastAction: 'status',
+    ...overrides,
+  };
 }
 
 describe('CLI service posture', () => {
@@ -124,5 +139,60 @@ describe('CLI service posture', () => {
     expect(posture.managed.pidPath).toBe(join(homeRoot, '.goodvibes', 'daemon', 'service', 'manual.pid'));
     expect(posture.managed.commandPreview).not.toContain(join(projectRoot, 'src', 'daemon', 'cli.ts'));
     expect(posture.managed.commandPreview).not.toContain('src/daemon/cli.ts');
+  });
+
+  test('service posture reconciles systemd active state instead of trusting stale pid-file status', async () => {
+    const projectRoot = join(root, 'project');
+    const homeRoot = join(root, 'home');
+    mkdirSync(projectRoot, { recursive: true });
+    mkdirSync(homeRoot, { recursive: true });
+    const config = new ConfigManager({
+      surfaceRoot: 'tui',
+      workingDir: projectRoot,
+      homeDir: homeRoot,
+    });
+    config.setDynamic('service.enabled', true);
+    config.setDynamic('service.autostart', true);
+    config.setDynamic('service.restartOnFailure', true);
+    config.setDynamic('service.platform', 'systemd');
+    config.setDynamic('service.serviceName', 'goodvibes');
+
+    const posture = await buildCliServicePosture(
+      {
+        configManager: config,
+        workingDirectory: projectRoot,
+        homeDirectory: homeRoot,
+      },
+      {
+        manager: {
+          status: () => createManagedStatus({ installed: true, autostart: true, running: false }),
+        },
+        runCommand: (command, args) => {
+          expect(command).toBe('systemctl');
+          expect(args).toEqual([
+            '--user',
+            'show',
+            'goodvibes.service',
+            '--property=LoadState,ActiveState,UnitFileState,MainPID',
+            '--no-page',
+          ]);
+          return {
+            status: 0,
+            stdout: [
+              'LoadState=loaded',
+              'ActiveState=active',
+              'UnitFileState=enabled',
+              'MainPID=12345',
+            ].join('\n'),
+          };
+        },
+      },
+    );
+
+    expect(posture.managed.installed).toBe(true);
+    expect(posture.managed.autostart).toBe(true);
+    expect(posture.managed.running).toBe(true);
+    expect(posture.managed.pid).toBe(12345);
+    expect(posture.issues).not.toContain('Service mode is enabled but the managed service is not running.');
   });
 });
