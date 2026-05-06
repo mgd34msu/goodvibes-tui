@@ -6,6 +6,7 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
 import {
   buildCliServicePosture,
+  createPlatformServiceManager,
   getServiceStateRoot,
   resolveGoodVibesDaemonExecutable,
 } from '../../cli/service-posture.ts';
@@ -139,6 +140,42 @@ describe('CLI service posture', () => {
     expect(posture.managed.pidPath).toBe(join(homeRoot, '.goodvibes', 'daemon', 'service', 'manual.pid'));
     expect(posture.managed.commandPreview).not.toContain(join(projectRoot, 'src', 'daemon', 'cli.ts'));
     expect(posture.managed.commandPreview).not.toContain('src/daemon/cli.ts');
+  });
+
+  test('installed systemd service reads shared GoodVibes home config from daemon mode', () => {
+    const projectRoot = join(root, 'project');
+    const homeRoot = join(root, 'home');
+    mkdirSync(projectRoot, { recursive: true });
+    mkdirSync(homeRoot, { recursive: true });
+    const config = new ConfigManager({
+      surfaceRoot: 'tui',
+      workingDir: projectRoot,
+      homeDir: homeRoot,
+    });
+    config.setDynamic('service.platform', 'systemd');
+    config.setDynamic('service.serviceName', 'goodvibes-test');
+    config.setDynamic('service.restartOnFailure', true);
+
+    const savedHome = process.env.HOME;
+    process.env.HOME = homeRoot;
+    try {
+      const manager = createPlatformServiceManager({
+        configManager: config,
+        workingDirectory: projectRoot,
+        homeDirectory: homeRoot,
+      });
+      const installed = manager.install();
+
+      expect(installed.contents).toContain(`WorkingDirectory=${join(homeRoot, '.goodvibes', 'daemon')}`);
+      expect(installed.contents).toContain(`Environment=GOODVIBES_DAEMON_HOME=${homeRoot}`);
+      expect(installed.contents).not.toContain(`Environment=GOODVIBES_DAEMON_HOME=${join(homeRoot, '.goodvibes', 'daemon')}`);
+    } finally {
+      if (savedHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = savedHome;
+      }
+    }
   });
 
   test('service posture reconciles systemd active state instead of trusting stale pid-file status', async () => {
