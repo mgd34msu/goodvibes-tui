@@ -127,6 +127,15 @@ describe('renderSettingsModal', () => {
     expect(texts).toContain('Display (8)');
   });
 
+  test('category rail is grouped and opens with category focus', () => {
+    const lines = renderSettingsModal(modal, W);
+    const texts = linesToText(lines).join('\n');
+    expect(modal.focusPane).toBe('categories');
+    expect(texts).toContain('INTERFACE');
+    expect(texts).toContain('AI ROUTING');
+    expect(texts).toContain('▸ Display (8)');
+  });
+
   test('settings list shows setting keys', () => {
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');

@@ -314,6 +314,7 @@ describe('modal space actions', () => {
         serviceRegistry,
         { listServerSecurity: () => [], setServerTrustMode: () => {} } as never,
       );
+      modal.focusSettings();
       const idx = modal.currentItems.findIndex((entry) => entry.setting.key === 'display.stream');
       for (let i = 0; i < idx; i++) modal.moveDown();
       const before = cm.get('display.stream') as boolean;
@@ -375,6 +376,7 @@ describe('modal space actions', () => {
         serviceRegistry,
         { listServerSecurity: () => [], setServerTrustMode: () => {} } as never,
       );
+      modal.focusSettings();
 
       const before = modal.selectedIndex;
       const handled = handleSettingsModalToken({

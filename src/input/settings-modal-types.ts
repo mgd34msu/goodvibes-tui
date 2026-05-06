@@ -36,38 +36,20 @@ export type SettingsCategory =
 
 export type SettingsFocusPane = 'categories' | 'settings';
 
-export const SETTINGS_CATEGORIES: SettingsCategory[] = [
-  'display',
-  'ui',
-  'provider',
-  'subscriptions',
-  'behavior',
-  'storage',
-  'permissions',
-  'orchestration',
-  'wrfc',
-  'tools',
-  'helper',
-  'tts',
-  'service',
-  'controlPlane',
-  'httpListener',
-  'web',
-  'network',
-  'mcp',
-  'sandbox',
-  'surfaces',
-  'cloudflare',
-  'batch',
-  'automation',
-  'watchers',
-  'runtime',
-  'telemetry',
-  'cache',
-  'danger',
-  'flags',
-  'release',
+export const SETTINGS_CATEGORY_GROUPS: ReadonlyArray<{
+  readonly label: string;
+  readonly categories: readonly SettingsCategory[];
+}> = [
+  { label: 'Interface', categories: ['display', 'ui', 'behavior', 'permissions'] },
+  { label: 'AI Routing', categories: ['provider', 'subscriptions', 'helper', 'tools', 'tts'] },
+  { label: 'Service & Network', categories: ['service', 'network', 'controlPlane', 'httpListener', 'web'] },
+  { label: 'Surfaces & Cloud', categories: ['surfaces', 'mcp', 'cloudflare'] },
+  { label: 'Automation', categories: ['batch', 'automation', 'watchers', 'orchestration', 'wrfc'] },
+  { label: 'Runtime & Data', categories: ['storage', 'sandbox', 'runtime', 'cache', 'telemetry'] },
+  { label: 'Advanced', categories: ['flags', 'release', 'danger'] },
 ];
+
+export const SETTINGS_CATEGORIES: SettingsCategory[] = SETTINGS_CATEGORY_GROUPS.flatMap(group => group.categories);
 
 export interface SettingEntry {
   setting: ConfigSetting;

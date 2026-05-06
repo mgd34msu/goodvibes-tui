@@ -6,12 +6,25 @@ All notable changes to GoodVibes TUI.
 
 ## [Unreleased]
 
+---
+
+## [0.19.66] — 2026-05-06
+
 ### Fixed
+- Changed `/config` to open with focus on the category rail at the first category instead of dropping users directly into the selected setting list.
+- Reorganized the `/config` category rail into logical groups so related settings are easier to scan.
 - Corrected `goodvibes service status` / service posture reporting for systemd-managed daemons by reconciling status against `systemctl --user show`, so running/enabled OS services are no longer reported as stopped because of stale pid-file state.
 
 ### Verified
+- `bun test src/test/input/settings-modal.test.ts src/test/renderer/settings-modal.test.ts`
+- `bun test src/test/input/modal-space-actions.test.ts`
 - `bun test src/test/cli/service-posture.test.ts`
+- `bun run test`
 - `bunx tsc --noEmit`
+- `bun run build:prod`
+- `bun run smoke:tui`
+- `bun run smoke:daemon`
+- `git diff --check`
 
 ---
 

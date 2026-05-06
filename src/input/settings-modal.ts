@@ -34,6 +34,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   SETTINGS_CATEGORIES,
+  SETTINGS_CATEGORY_GROUPS,
   type FlagEntry,
   type McpEntry,
   type SettingEntry,
@@ -60,6 +61,7 @@ export interface SettingsModalOpenOptions {
 
 export {
   SETTINGS_CATEGORIES,
+  SETTINGS_CATEGORY_GROUPS,
   type FlagEntry,
   type McpEntry,
   type SettingEntry,
@@ -158,7 +160,7 @@ export class SettingsModal {
     this._loadSubscriptionEntries();
     this.categoryIndex = 0;
     this.selectedIndex = 0;
-    this.focusPane = 'settings';
+    this.focusPane = 'categories';
     this.editingMode = false;
     this.editBuffer = '';
     this.pendingModelPickerTarget = null;
