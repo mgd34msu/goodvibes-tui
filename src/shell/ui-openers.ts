@@ -12,6 +12,7 @@ import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config'
 import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
+import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
@@ -26,6 +27,8 @@ type WireShellUiOpenersOptions = {
   subscriptionManager: SubscriptionManager;
   secretsManager?: Pick<SecretsManager, 'delete' | 'get' | 'set'>;
   serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
+  workingDirectory: string;
+  homeDirectory: string;
   getConfiguredProviderIds: () => string[];
   getPinned: () => Promise<string[]>;
   render: () => void;
@@ -89,6 +92,8 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     subscriptionManager,
     secretsManager,
     serviceRegistry,
+    workingDirectory,
+    homeDirectory,
     getConfiguredProviderIds,
     getPinned,
     render,
@@ -264,7 +269,12 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
 
   commandContext.openSettingsModal = (target?: string) => {
     input.modalOpened('settings');
-    input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager);
+    input.settingsModal.open(configManager, featureFlags, subscriptionManager, serviceRegistry, mcpRegistry, secretsManager, {
+      onSettingApplied: (change) => syncServiceSettingToPlatform(
+        { configManager, workingDirectory, homeDirectory },
+        change,
+      ),
+    });
     input.settingsModal.selectTarget(target);
     render();
   };

@@ -678,6 +678,8 @@ async function main() {
     subscriptionManager,
     secretsManager,
     serviceRegistry: ctx.services.serviceRegistry,
+    workingDirectory: workingDir,
+    homeDirectory,
     getConfiguredProviderIds: ctx._getConfiguredProviderIds,
     getPinned: ctx._getPinned,
     render,

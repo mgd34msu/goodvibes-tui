@@ -42,6 +42,22 @@ import {
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
 
+export interface SettingsModalChange {
+  readonly key: ConfigKey;
+  readonly previousValue: unknown;
+  readonly value: unknown;
+}
+
+export interface SettingsModalChangeResult {
+  readonly message?: string;
+}
+
+export type SettingsModalChangeHandler = (change: SettingsModalChange) => SettingsModalChangeResult | void;
+
+export interface SettingsModalOpenOptions {
+  readonly onSettingApplied?: SettingsModalChangeHandler;
+}
+
 export {
   SETTINGS_CATEGORIES,
   type FlagEntry,
@@ -104,6 +120,7 @@ export class SettingsModal {
    * Cleared on next open() or close().
    */
   public lastSaveTriggeredRestart: 'control-plane' | 'http-listener' | 'web' | null = null;
+  public lastSettingEffectMessage: string | null = null;
 
   private configManager: ConfigManager | null = null;
   private secretsManager: SettingsSecretsManager | null = null;
@@ -111,6 +128,7 @@ export class SettingsModal {
   private mcpRegistry: McpRegistry | null = null;
   private subscriptionManager: SubscriptionManager | null = null;
   private serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'> | null = null;
+  private onSettingApplied: SettingsModalChangeHandler | null = null;
 
   /**
    * Open the modal, loading current config values from configManager.
@@ -125,6 +143,7 @@ export class SettingsModal {
     serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>,
     mcpRegistry?: McpRegistry,
     secretsManager?: SettingsSecretsManager,
+    options?: SettingsModalOpenOptions,
   ): void {
     this.configManager = configManager;
     this.secretsManager = secretsManager ?? null;
@@ -132,6 +151,7 @@ export class SettingsModal {
     this.subscriptionManager = subscriptionManager;
     this.serviceRegistry = serviceRegistry;
     this.mcpRegistry = mcpRegistry ?? null;
+    this.onSettingApplied = options?.onSettingApplied ?? null;
     this._loadGroups(configManager);
     this._loadFlagEntries();
     this._loadMcpEntries();
@@ -147,6 +167,7 @@ export class SettingsModal {
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
+    this.lastSettingEffectMessage = null;
     this.active = true;
   }
 
@@ -160,8 +181,10 @@ export class SettingsModal {
     this.mcpAllowAllConfirmationTarget = null;
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
+    this.lastSettingEffectMessage = null;
     this.serviceRegistry = null;
     this.secretsManager = null;
+    this.onSettingApplied = null;
     this.focusPane = 'settings';
   }
 
@@ -715,6 +738,16 @@ export class SettingsModal {
     return items;
   }
 
+  private _refreshAllEntries(): void {
+    if (!this.configManager) return;
+    for (const entries of this.groups.values()) {
+      for (const entry of entries) {
+        entry.currentValue = this.configManager.get(entry.setting.key as ConfigKey);
+        entry.isDefault = entry.currentValue === entry.setting.default;
+      }
+    }
+  }
+
   private _setValue(key: ConfigKey, value: unknown): void {
     if (!this.configManager) return;
     // Diff previous value before writing — avoids false restart notices on no-op saves
@@ -744,8 +777,14 @@ export class SettingsModal {
           entry.isDefault = entry.currentValue === entry.setting.default;
         }
       }
+      if (previousValue !== value && this.onSettingApplied) {
+        const result = this.onSettingApplied({ key, previousValue, value });
+        this.lastSettingEffectMessage = result?.message ?? null;
+        this._refreshAllEntries();
+      }
     } catch (e) {
       logger.error('SettingsModal: failed to set config value', { key, error: summarizeError(e) });
+      this.lastSettingEffectMessage = `Save failed: ${summarizeError(e)}`;
     }
   }
 

@@ -8,6 +8,26 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.65] — 2026-05-05
+
+### Fixed
+- Made `/config service` changes apply to the OS service layer instead of only writing `~/.goodvibes/tui/settings.json`.
+- Enabling `service.autostart` now enables service mode if needed, writes the platform service definition, reloads systemd user units when applicable, and starts/enables the service.
+- Disabling `service.autostart` or `service.enabled` now disables/removes the platform service definition instead of leaving stale OS autostart state behind.
+- Service definition changes such as restart-on-failure, platform, service name, or log path now rewrite and restart the OS service when service mode and autostart are active.
+- Added a visible `/config` status notice for service install/start/disable/update results after a setting change.
+
+### Verified
+- `bun test src/test/shell/service-settings-sync.test.ts src/test/input/settings-modal-network.test.ts`
+- `bun run test`
+- `bunx tsc --noEmit`
+- `bun run build:prod`
+- `bun run smoke:tui`
+- `bun run smoke:daemon`
+- `git diff --check`
+
+---
+
 ## [0.19.64] — 2026-05-05
 
 ### Fixed

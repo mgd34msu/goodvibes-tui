@@ -590,7 +590,11 @@ export function renderSettingsModal(
   const header = contentLine(safeWidth, PALETTE.footerBg);
   drawVertical(header, dividerX, PALETTE.footerBg);
   writeText(header, leftStart + 1, leftWidth - 2, 'Categories', { fg: PALETTE.subtitle, bold: true, bg: PALETTE.footerBg });
-  const headerText = `${CATEGORY_LABELS[modal.currentCategory]} (${categoryItemCount(modal, modal.currentCategory)})${modal.lastSaveTriggeredRestart ? ` · Restarting ${modal.lastSaveTriggeredRestart}` : ''}`;
+  const notices = [
+    ...(modal.lastSaveTriggeredRestart ? [`Restarting ${modal.lastSaveTriggeredRestart}`] : []),
+    ...(modal.lastSettingEffectMessage ? [modal.lastSettingEffectMessage] : []),
+  ];
+  const headerText = `${CATEGORY_LABELS[modal.currentCategory]} (${categoryItemCount(modal, modal.currentCategory)})${notices.length > 0 ? ` · ${notices.join(' · ')}` : ''}`;
   writeText(header, centerStart + 1, centerWidth - 2, headerText, { fg: PALETTE.subtitle, bold: true, bg: PALETTE.footerBg });
   lines.push(header);
 
