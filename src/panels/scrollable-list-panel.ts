@@ -200,6 +200,18 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
     }
   }
 
+  handleScroll(deltaRows: number): boolean {
+    if (this.lastError !== null) this.clearError();
+    const total = this.getItems().length;
+    const rows = Math.trunc(deltaRows);
+    if (total === 0 || rows === 0) return false;
+    const next = Math.max(0, Math.min(total - 1, this.selectedIndex + rows));
+    if (next === this.selectedIndex) return false;
+    this.selectedIndex = next;
+    this.needsRender = true;
+    return true;
+  }
+
   // -------------------------------------------------------------------------
   // Scroll state helpers
   // -------------------------------------------------------------------------

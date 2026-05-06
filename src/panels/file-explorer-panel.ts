@@ -196,6 +196,14 @@ export class FileExplorerPanel extends BasePanel {
     }
   }
 
+  handleScroll(deltaRows: number): boolean {
+    const rows = Math.trunc(deltaRows);
+    if (this.flat.length === 0 || rows === 0) return false;
+    const previous = this.cursor;
+    this._setCursor(this.cursor + rows);
+    return this.cursor !== previous;
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   render(width: number, height: number): Line[] {

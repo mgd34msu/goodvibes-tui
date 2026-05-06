@@ -36,6 +36,10 @@ export interface Panel {
 
   // Input (optional)
   handleInput?(key: string): boolean;
+
+  // Scroll input (optional)
+  // Positive delta scrolls down; negative delta scrolls up.
+  handleScroll?(deltaRows: number): boolean;
 }
 
 export interface PanelRegistration extends Pick<Panel, 'id' | 'name' | 'icon' | 'category'> {

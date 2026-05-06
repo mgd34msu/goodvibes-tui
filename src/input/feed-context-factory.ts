@@ -37,6 +37,7 @@ import type { Panel } from '../panels/types.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
+import type { PanelMouseLayout } from './handler-feed-routes.ts';
 
 /**
  * Initial mutable scalar values for InputFeedContext.
@@ -67,6 +68,7 @@ export interface FeedContextMutableInit {
   mouseDownRow: number;
   mouseDownCol: number;
   contentWidth: number;
+  panelMouseLayout: PanelMouseLayout | null;
   selectionCallback: ((result: SelectionResult | null) => void) | null;
 }
 
@@ -241,4 +243,5 @@ export function syncFeedContextMutableFields(
   ctx.mouseDownRow = fields.mouseDownRow;
   ctx.mouseDownCol = fields.mouseDownCol;
   ctx.contentWidth = fields.contentWidth;
+  ctx.panelMouseLayout = fields.panelMouseLayout;
 }

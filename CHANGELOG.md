@@ -8,6 +8,26 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.63] — 2026-05-05
+
+### Changed
+- Made the npm registry install path explicitly Bun-first: `bun add -g @pellux/goodvibes-tui` is now the documented global install command, while `npm install -g` requires Bun to already be installed.
+- Switched the published `goodvibes`, `goodvibes-daemon`, and postinstall entrypoints to Bun.
+- Added a preinstall Bun availability check so npm users get a clear error before postinstall runs.
+- Added package verification coverage for Bun shebangs and the Bun preinstall script.
+- Updated service management so daemon services use the global daemon state directory and resolve packaged/vendored daemon binaries before falling back to source or PATH wrappers.
+- Added mouse-wheel routing for scrollable panels such as the file explorer without stealing normal transcript scrolling.
+
+### Verified
+- `bun test src/test/cli/package-verification.test.ts src/test/cli/service-posture.test.ts src/test/daemon/service-manager.test.ts src/test/cli-flags.test.ts --timeout 30000`
+- `bun run tsc --noEmit --pretty false`
+- `bun run publish:check`
+- `bun run package:install-check`
+- `bun run build`
+- `git diff --check`
+
+---
+
 ## [0.19.62] — 2026-05-05
 
 ### Changed

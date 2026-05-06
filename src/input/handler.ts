@@ -64,6 +64,7 @@ import {
   handlePanelFocusToken,
   handlePromptKeyToken,
   handlePromptTextToken,
+  type PanelMouseLayout,
 } from './handler-feed-routes.ts';
 import {
   ensureInputCursorVisible,
@@ -263,7 +264,8 @@ export class InputHandler {
         shortcutsOverlayActive: this.shortcutsOverlayActive, shortcutsScrollOffset: this.shortcutsScrollOffset,
         nextPasteId: this.nextPasteId, nextImageId: this.nextImageId,
         mouseDownRow: this.mouseDownRow, mouseDownCol: this.mouseDownCol,
-        contentWidth: this.contentWidth, selectionCallback: this.selectionCallback,
+        contentWidth: this.contentWidth, panelMouseLayout: this.panelMouseLayout,
+        selectionCallback: this.selectionCallback,
       },
       {
         selection: this.selection,
@@ -341,7 +343,8 @@ export class InputHandler {
       helpScrollOffset: h.helpScrollOffset, shortcutsOverlayActive: h.shortcutsOverlayActive,
       shortcutsScrollOffset: h.shortcutsScrollOffset, selectionCallback: h.selectionCallback,
       nextPasteId: h.nextPasteId, nextImageId: h.nextImageId, mouseDownRow: h.mouseDownRow,
-      mouseDownCol: h.mouseDownCol, contentWidth: h.contentWidth }, this.feedContext);
+      mouseDownCol: h.mouseDownCol, contentWidth: h.contentWidth,
+      panelMouseLayout: h.panelMouseLayout }, this.feedContext);
   }
 
   /** Wire in the InputHistory instance. Optional; disables history navigation if unset. */
@@ -455,6 +458,7 @@ export class InputHandler {
       context.mouseDownRow = this.mouseDownRow;
       context.mouseDownCol = this.mouseDownCol;
       context.contentWidth = this.contentWidth;
+      context.panelMouseLayout = this.panelMouseLayout;
       // Sync semi-stable refs that may be wired after construction.
       context.commandRegistry = this.commandRegistry;
       context.commandContext = this.commandContext;
@@ -516,10 +520,15 @@ export class InputHandler {
 
   /** Content width for wrapping — set by main.ts via setContentWidth(). */
   public contentWidth = 76;
+  public panelMouseLayout: PanelMouseLayout | null = null;
 
   /** Set the content width used for wrapping calculations. Call from main.ts. */
   public setContentWidth(w: number): void {
     this.contentWidth = w;
+  }
+
+  public setPanelMouseLayout(layout: PanelMouseLayout | null): void {
+    this.panelMouseLayout = layout;
   }
 
   /**

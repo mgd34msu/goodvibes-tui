@@ -10,12 +10,14 @@ describe('package CLI install verification', () => {
     expect(report.issues).toEqual([]);
     expect(report.bins.map((bin) => bin.command)).toEqual(['goodvibes', 'goodvibes-daemon']);
     expect(report.bins.every((bin) => bin.exists && bin.executable)).toBe(true);
+    expect(report.bins.every((bin) => bin.usesBunShebang)).toBe(true);
     expect(report.bins.every((bin) => bin.hasLocalPlatformBuildFallback)).toBe(true);
     expect(report.bins.every((bin) => bin.hasLocalBuildFallback)).toBe(true);
     expect(report.bins.every((bin) => bin.hasVendoredBinaryFallback)).toBe(true);
     expect(report.bins.every((bin) => bin.hasSourceFallback)).toBe(true);
     expect(report.tarball.requiredPathsPresent).toContain('bin/goodvibes');
     expect(report.tarball.requiredPathsPresent).toContain('bin/goodvibes-daemon');
+    expect(report.tarball.requiredPathsPresent).toContain('scripts/check-bun.sh');
     expect(report.tarball.forbiddenPaths).toEqual([]);
   });
 });

@@ -54,10 +54,12 @@ export function handleGlobalShortcutToken(
 
   // Fast-path: bare pageup/pagedown have no keybinding entry.
   if (token.logicalName === 'pageup') {
+    if (state.panelFocused) return false;
     state.scroll(-Math.max(1, viewportHeight - 2));
     return true;
   }
   if (token.logicalName === 'pagedown') {
+    if (state.panelFocused) return false;
     state.scroll(Math.max(1, viewportHeight - 2));
     return true;
   }

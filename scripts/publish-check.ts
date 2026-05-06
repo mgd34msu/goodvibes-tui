@@ -50,7 +50,7 @@ for (const filePath of filePaths) {
   }
 }
 
-for (const requiredPath of ['README.md', 'CHANGELOG.md', 'src/main.ts', 'src/daemon/cli.ts', 'bin/goodvibes', 'bin/goodvibes-daemon', 'scripts/postinstall.js', '.goodvibes/GOODVIBES.md']) {
+for (const requiredPath of ['README.md', 'CHANGELOG.md', 'src/main.ts', 'src/daemon/cli.ts', 'bin/goodvibes', 'bin/goodvibes-daemon', 'scripts/check-bun.sh', 'scripts/postinstall.js', '.goodvibes/GOODVIBES.md']) {
   if (!filePaths.includes(requiredPath)) {
     throw new Error(`published tarball is missing required path: ${requiredPath}`);
   }
