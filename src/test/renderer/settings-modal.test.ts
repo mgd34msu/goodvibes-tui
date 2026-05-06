@@ -133,7 +133,11 @@ describe('renderSettingsModal', () => {
     expect(modal.focusPane).toBe('categories');
     expect(texts).toContain('INTERFACE');
     expect(texts).toContain('AI ROUTING');
-    expect(texts).toContain('▸ Display (8)');
+    expect(texts).toContain('  ▸ Display (8)');
+    const interfaceLine = lines.find(line => lineToString(line).includes('INTERFACE'));
+    expect(interfaceLine).toBeDefined();
+    const interfaceIndex = lineToString(interfaceLine!).indexOf('INTERFACE');
+    expect(interfaceLine![interfaceIndex]?.bold).toBe(true);
   });
 
   test('settings list shows setting keys', () => {
