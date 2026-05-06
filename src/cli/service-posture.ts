@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { accessSync, closeSync, constants, existsSync, openSync, readSync, realpathSync, statSync } from 'node:fs';
 import net from 'node:net';
 import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
@@ -80,6 +81,23 @@ interface ServiceDefinitionOverride {
   readonly args: readonly string[];
   readonly env: Readonly<Record<string, string>>;
   readonly restartOnFailure: boolean;
+}
+
+interface CliServiceStatusCommandResult {
+  readonly status: number | null;
+  readonly stdout?: string;
+  readonly stderr?: string;
+}
+
+interface CliServiceStatusManager {
+  status(): ManagedServiceStatus;
+}
+
+interface CliServicePostureOptions {
+  readonly probe?: boolean;
+  readonly logTailBytes?: number;
+  readonly manager?: CliServiceStatusManager;
+  readonly runCommand?: (command: string, args: readonly string[]) => CliServiceStatusCommandResult;
 }
 
 function connectHostForBindHost(host: string): string {
@@ -227,6 +245,58 @@ function pidFilePath(runtime: CliServiceRuntime, platform: ManagedServiceStatus[
   return join(getServiceStateRoot(runtime), 'service', `${platform}.pid`);
 }
 
+function runStatusCommand(
+  command: string,
+  args: readonly string[],
+  options: CliServicePostureOptions,
+): CliServiceStatusCommandResult {
+  if (options.runCommand) return options.runCommand(command, args);
+  return spawnSync(command, [...args], {
+    stdio: 'pipe',
+    encoding: 'utf-8',
+    timeout: 1500,
+  });
+}
+
+function parseSystemdShowValue(lines: readonly string[], key: string): string | null {
+  const prefix = `${key}=`;
+  const match = lines.find((line) => line.startsWith(prefix));
+  return match ? match.slice(prefix.length).trim() : null;
+}
+
+function reconcileSystemdServiceStatus(
+  runtime: CliServiceRuntime,
+  status: ManagedServiceStatus,
+  options: CliServicePostureOptions,
+): ManagedServiceStatus {
+  if (status.platform !== 'systemd') return status;
+
+  const name = String(runtime.configManager.get('service.serviceName') ?? 'goodvibes').trim() || 'goodvibes';
+  const result = runStatusCommand('systemctl', [
+    '--user',
+    'show',
+    `${name}.service`,
+    '--property=LoadState,ActiveState,UnitFileState,MainPID',
+    '--no-page',
+  ], options);
+  if ((result.status ?? 1) !== 0) return status;
+
+  const lines = (result.stdout ?? '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const loadState = parseSystemdShowValue(lines, 'LoadState');
+  const activeState = parseSystemdShowValue(lines, 'ActiveState');
+  const unitFileState = parseSystemdShowValue(lines, 'UnitFileState');
+  const rawPid = Number.parseInt(parseSystemdShowValue(lines, 'MainPID') ?? '', 10);
+  const pid = Number.isFinite(rawPid) && rawPid > 0 ? rawPid : undefined;
+
+  return {
+    ...status,
+    installed: loadState === 'loaded' || status.installed,
+    autostart: unitFileState === 'enabled' || unitFileState === 'linked' || status.autostart,
+    running: activeState === 'active',
+    ...(pid === undefined ? {} : { pid }),
+  };
+}
+
 function readLogPosture(path: string | undefined, tailBytes: number): CliServiceLogPosture {
   if (!path) return { path: null, exists: false, size: 0, modifiedAt: null };
   if (!existsSync(path)) return { path, exists: false, size: 0, modifiedAt: null };
@@ -298,10 +368,10 @@ export function createPlatformServiceManager(runtime: CliServiceRuntime): Platfo
 
 export async function buildCliServicePosture(
   runtime: CliServiceRuntime,
-  options: { readonly probe?: boolean; readonly logTailBytes?: number } = {},
+  options: CliServicePostureOptions = {},
 ): Promise<CliServicePosture> {
-  const manager = createPlatformServiceManager(runtime);
-  const status = manager.status();
+  const manager = options.manager ?? createPlatformServiceManager(runtime);
+  const status = reconcileSystemdServiceStatus(runtime, manager.status(), options);
   const endpoints = await Promise.all(ENDPOINTS.map(async (endpoint): Promise<CliServiceEndpointPosture> => {
     const enabled = runtime.configManager.get(endpoint.enabledKey as never) === true;
     const binding = resolveRuntimeEndpointBinding(runtime.configManager, endpoint.id);

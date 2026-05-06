@@ -6,6 +6,13 @@ All notable changes to GoodVibes TUI.
 
 ## [Unreleased]
 
+### Fixed
+- Corrected `goodvibes service status` / service posture reporting for systemd-managed daemons by reconciling status against `systemctl --user show`, so running/enabled OS services are no longer reported as stopped because of stale pid-file state.
+
+### Verified
+- `bun test src/test/cli/service-posture.test.ts`
+- `bunx tsc --noEmit`
+
 ---
 
 ## [0.19.65] — 2026-05-05
