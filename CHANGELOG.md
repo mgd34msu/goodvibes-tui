@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.68] — 2026-05-06
+
+### Changes
+- 7ff4ab69 fix installed daemon service home
+- 8303819d docs: document Bun global trust setup
+
 ## [Unreleased]
 
 ---
