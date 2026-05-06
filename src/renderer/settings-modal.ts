@@ -8,7 +8,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import type { SettingsModal, SettingEntry, FlagEntry, McpEntry, SubscriptionEntry, SettingsCategory } from '../input/settings-modal.ts';
-import { SETTINGS_CATEGORIES } from '../input/settings-modal.ts';
+import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../input/settings-modal.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { CATEGORY_LABELS, describeUiRouting, formatValue, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
@@ -413,18 +413,46 @@ function categoryItemCount(modal: SettingsModal, category: SettingsCategory): nu
   return modal.groups.get(category)?.length ?? 0;
 }
 
+type CategoryRailEntry =
+  | { readonly type: 'group'; readonly label: string }
+  | { readonly type: 'category'; readonly category: SettingsCategory; readonly index: number };
+
+function buildCategoryRailEntries(): CategoryRailEntry[] {
+  const entries: CategoryRailEntry[] = [];
+  for (const group of SETTINGS_CATEGORY_GROUPS) {
+    const categories = group.categories.filter(category => SETTINGS_CATEGORIES.includes(category));
+    if (categories.length === 0) continue;
+    entries.push({ type: 'group', label: group.label });
+    for (const category of categories) {
+      entries.push({
+        type: 'category',
+        category,
+        index: SETTINGS_CATEGORIES.indexOf(category),
+      });
+    }
+  }
+  return entries;
+}
+
 function renderCategories(modal: SettingsModal, width: number, height: number): string[] {
   const rows: string[] = [];
-  const window = stableWindow(SETTINGS_CATEGORIES.length, modal.categoryIndex, height);
-  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more categor${window.start === 1 ? 'y' : 'ies'} above`);
-  for (let index = window.start; index < window.end; index += 1) {
-    const category = SETTINGS_CATEGORIES[index]!;
-    const active = index === modal.categoryIndex;
+  const entries = buildCategoryRailEntries();
+  const selectedEntryIndex = Math.max(0, entries.findIndex(entry => entry.type === 'category' && entry.index === modal.categoryIndex));
+  const window = stableWindow(entries.length, selectedEntryIndex, height);
+  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more row(s) above`);
+  for (let railIndex = window.start; railIndex < window.end; railIndex += 1) {
+    const entry = entries[railIndex]!;
+    if (entry.type === 'group') {
+      rows.push(`  ${entry.label.toUpperCase()}`);
+      continue;
+    }
+    const category = entry.category;
+    const active = entry.index === modal.categoryIndex;
     const count = categoryItemCount(modal, category);
     const cursor = active ? (modal.focusPane === 'categories' ? GLYPHS.navigation.selected : '•') : ' ';
     rows.push(`${cursor} ${CATEGORY_LABELS[category]} (${count})`);
   }
-  if (window.end < SETTINGS_CATEGORIES.length) rows.push(`${GLYPHS.navigation.moreBelow} ${SETTINGS_CATEGORIES.length - window.end} more categor${SETTINGS_CATEGORIES.length - window.end === 1 ? 'y' : 'ies'} below`);
+  if (window.end < entries.length) rows.push(`${GLYPHS.navigation.moreBelow} ${entries.length - window.end} more row(s) below`);
   while (rows.length < height) rows.push('');
   return rows.slice(0, height);
 }

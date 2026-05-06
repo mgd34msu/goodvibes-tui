@@ -555,6 +555,7 @@ describe('parseCliFlags', () => {
     configManager.setDynamic('service.enabled', true);
     configManager.setDynamic('service.autostart', true);
     configManager.setDynamic('service.restartOnFailure', true);
+    configManager.setDynamic('service.platform', 'manual');
     configManager.setDynamic('controlPlane.enabled', true);
 
     const text = await captureGoodVibesCliCommand(['service', 'check'], configManager, root);

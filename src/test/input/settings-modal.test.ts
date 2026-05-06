@@ -5,7 +5,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { SettingsModal, SETTINGS_CATEGORIES } from '../../input/settings-modal.ts';
+import { SettingsModal, SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../../input/settings-modal.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { CONFIG_SCHEMA } from '@pellux/goodvibes-sdk/platform/config';
 import { SecretsManager } from '../../config/secrets.ts';
@@ -94,7 +94,23 @@ describe('SettingsModal', () => {
     expect(modal.active).toBe(true);
     expect(modal.categoryIndex).toBe(0);
     expect(modal.selectedIndex).toBe(0);
+    expect(modal.focusPane).toBe('categories');
     expect(modal.editingMode).toBe(false);
+  });
+
+  test('category rail is grouped into a complete non-duplicated navigation order', () => {
+    const grouped = SETTINGS_CATEGORY_GROUPS.flatMap(group => group.categories);
+    expect(grouped).toEqual(SETTINGS_CATEGORIES);
+    expect(new Set(grouped).size).toBe(grouped.length);
+    expect(SETTINGS_CATEGORY_GROUPS.map(group => group.label)).toEqual([
+      'Interface',
+      'AI Routing',
+      'Service & Network',
+      'Surfaces & Cloud',
+      'Automation',
+      'Runtime & Data',
+      'Advanced',
+    ]);
   });
 
   test('open() populates all categories', () => {
