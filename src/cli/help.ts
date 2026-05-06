@@ -16,7 +16,6 @@ function readJsonVersion(path: string): string | null {
 export function getPackageVersion(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   return readJsonVersion(join(here, '..', '..', 'package.json'))
-    ?? process.env.npm_package_version
     ?? VERSION;
 }
 
