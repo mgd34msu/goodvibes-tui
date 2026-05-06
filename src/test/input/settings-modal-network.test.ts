@@ -325,4 +325,27 @@ describe('SettingsModal — network category', () => {
       .join('\n');
     expect(text).toContain('Restarting');
   });
+
+  test('setting apply handler is called after a persisted setting change', () => {
+    const calls: Array<{ key: string; previousValue: unknown; value: unknown }> = [];
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, emptyMcpRegistry, undefined, {
+      onSettingApplied: (change) => {
+        calls.push(change);
+        cm.setDynamic('service.enabled', true);
+        return { message: 'OS service installed and started' };
+      },
+    });
+    modal.categoryIndex = SETTINGS_CATEGORIES.indexOf('service');
+    const idx = modal.currentItems.findIndex(e => e.setting.key === 'service.autostart');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    modal.selectedIndex = idx;
+    modal.activateSelected();
+
+    expect(calls).toEqual([
+      { key: 'service.autostart', previousValue: false, value: true },
+    ]);
+    expect(modal.lastSettingEffectMessage).toBe('OS service installed and started');
+    const serviceEnabledEntry = modal.groups.get('service')?.find((entry) => entry.setting.key === 'service.enabled');
+    expect(serviceEnabledEntry?.currentValue).toBe(true);
+  });
 });
