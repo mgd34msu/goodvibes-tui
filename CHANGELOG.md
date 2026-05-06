@@ -8,6 +8,17 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.67] — 2026-05-06
+
+### Fixed
+- Styled `/config` category group headings in bold and indented category rows so the category rail hierarchy is easier to scan.
+
+### Verified
+- `bun test src/test/renderer/settings-modal.test.ts`
+- `bunx tsc --noEmit`
+
+---
+
 ## [0.19.66] — 2026-05-06
 
 ### Fixed

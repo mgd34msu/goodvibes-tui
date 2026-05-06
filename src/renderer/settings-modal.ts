@@ -417,6 +417,12 @@ type CategoryRailEntry =
   | { readonly type: 'group'; readonly label: string }
   | { readonly type: 'category'; readonly category: SettingsCategory; readonly index: number };
 
+type CategoryRailRow = {
+  readonly text: string;
+  readonly type: CategoryRailEntry['type'] | 'more' | 'empty';
+  readonly selected: boolean;
+};
+
 function buildCategoryRailEntries(): CategoryRailEntry[] {
   const entries: CategoryRailEntry[] = [];
   for (const group of SETTINGS_CATEGORY_GROUPS) {
@@ -434,26 +440,26 @@ function buildCategoryRailEntries(): CategoryRailEntry[] {
   return entries;
 }
 
-function renderCategories(modal: SettingsModal, width: number, height: number): string[] {
-  const rows: string[] = [];
+function renderCategories(modal: SettingsModal, width: number, height: number): CategoryRailRow[] {
+  const rows: CategoryRailRow[] = [];
   const entries = buildCategoryRailEntries();
   const selectedEntryIndex = Math.max(0, entries.findIndex(entry => entry.type === 'category' && entry.index === modal.categoryIndex));
   const window = stableWindow(entries.length, selectedEntryIndex, height);
-  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more row(s) above`);
+  if (window.start > 0) rows.push({ text: `${GLYPHS.navigation.moreAbove} ${window.start} more row(s) above`, type: 'more', selected: false });
   for (let railIndex = window.start; railIndex < window.end; railIndex += 1) {
     const entry = entries[railIndex]!;
     if (entry.type === 'group') {
-      rows.push(`  ${entry.label.toUpperCase()}`);
+      rows.push({ text: entry.label.toUpperCase(), type: 'group', selected: false });
       continue;
     }
     const category = entry.category;
     const active = entry.index === modal.categoryIndex;
     const count = categoryItemCount(modal, category);
     const cursor = active ? (modal.focusPane === 'categories' ? GLYPHS.navigation.selected : '•') : ' ';
-    rows.push(`${cursor} ${CATEGORY_LABELS[category]} (${count})`);
+    rows.push({ text: `  ${cursor} ${CATEGORY_LABELS[category]} (${count})`, type: 'category', selected: active });
   }
-  if (window.end < entries.length) rows.push(`${GLYPHS.navigation.moreBelow} ${entries.length - window.end} more row(s) below`);
-  while (rows.length < height) rows.push('');
+  if (window.end < entries.length) rows.push({ text: `${GLYPHS.navigation.moreBelow} ${entries.length - window.end} more row(s) below`, type: 'more', selected: false });
+  while (rows.length < height) rows.push({ text: '', type: 'empty', selected: false });
   return rows.slice(0, height);
 }
 
@@ -643,13 +649,12 @@ export function renderSettingsModal(
     fillRange(line, 1, dividerX - 1, PALETTE.categoryBg);
     drawVertical(line, dividerX, bg);
 
-    const categoryText = categoryRows[row] ?? '';
-    const categoryActive = categoryText.startsWith(GLYPHS.navigation.selected) || categoryText.startsWith('•');
-    if (categoryText.startsWith(GLYPHS.navigation.selected)) fillRange(line, leftStart, dividerX - 1, PALETTE.selectedBg);
-    writeText(line, leftStart + 1, leftWidth - 3, categoryText, {
-      fg: categoryActive ? PALETTE.text : PALETTE.muted,
-      bg: categoryText.startsWith(GLYPHS.navigation.selected) ? PALETTE.selectedBg : PALETTE.categoryBg,
-      bold: categoryActive,
+    const categoryRow = categoryRows[row] ?? { text: '', type: 'empty' as const, selected: false };
+    if (categoryRow.selected) fillRange(line, leftStart, dividerX - 1, PALETTE.selectedBg);
+    writeText(line, leftStart + 1, leftWidth - 3, categoryRow.text, {
+      fg: categoryRow.selected ? PALETTE.text : categoryRow.type === 'group' ? PALETTE.subtitle : PALETTE.muted,
+      bg: categoryRow.selected ? PALETTE.selectedBg : PALETTE.categoryBg,
+      bold: categoryRow.selected || categoryRow.type === 'group',
     });
 
     if (inSeparator) {
