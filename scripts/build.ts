@@ -77,11 +77,11 @@ function buildTarget(
 ): boolean {
   const outPath = join(distDir, config.outfile);
 
-  // F5: External flag prevents sqlite-vec .so from being bundled into the single-file
-  // binary (Bun compile cannot embed native addons). The .so is copied to dist/lib/
-  // and shipped in a tarball alongside the binary.
+  // F5: Bun compile cannot embed native addons, so only the platform-specific
+  // native addon package stays external. The sqlite-vec JS wrapper itself must
+  // be bundled because the SDK imports it statically before choosing the
+  // compiled-binary native-addon path.
   const externalFlags = [
-    '--external', 'sqlite-vec',
     '--external', config.sqliteVecPackage,
   ];
 

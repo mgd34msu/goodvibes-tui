@@ -8,6 +8,25 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.64] — 2026-05-05
+
+### Fixed
+- Fixed the packaged platform TUI binaries so the `sqlite-vec` JavaScript wrapper is bundled into the executable instead of being resolved from `/$bunfs/root` at startup.
+- Kept only the platform-native sqlite-vec addon external and shipped beside the binary under `dist/lib/sqlite-vec-<platform>-<arch>/`.
+- Fixed `goodvibes --version` and `goodvibes-daemon --version` for installed wrappers so they report the GoodVibes package version instead of the consuming project's `npm_package_version`.
+- Added release smoke coverage that runs the compiled TUI binary and verifies installed `goodvibes` and `goodvibes-daemon` wrappers so startup/version failures block publication.
+
+### Verified
+- `bun run scripts/build.ts --target linux-x64`
+- `bun run smoke:tui`
+- `bun test src/test/cli/help.test.ts src/test/cli/package-verification.test.ts --timeout 30000`
+- `bun run tsc --noEmit --pretty false`
+- `bun run smoke:daemon`
+- local `npm pack` install smoke with `GOODVIBES_ASSET_SOURCE_DIR=dist`
+- `/home/buzzkill/Projects/goodvibes-tui/dist/goodvibes-linux-x64 --version` from `/home/buzzkill/Projects/ttest1`
+
+---
+
 ## [0.19.63] — 2026-05-05
 
 ### Changed

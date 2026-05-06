@@ -84,11 +84,14 @@ jobs:
         uses: ./.github/actions/setup
       - name: Build binary (${{ matrix.target }})
         # Delegates to scripts/build.ts which runs prebuild, applies
-        # --external sqlite-vec flags (F5), copies native addons, and
+        # native-addon externalization (F5), copies native addons, and
         # builds both TUI and daemon binaries for the given target.
         run: bun run scripts/build.ts --target ${{ matrix.target }}
       - name: Report binary size
         run: ls -lh dist/${{ matrix.app_artifact }} dist/${{ matrix.daemon_artifact }}
+      - name: TUI binary smoke test (linux-x64 only)
+        if: matrix.target == 'linux-x64'
+        run: bun run smoke:tui
       - name: Post-build smoke test (linux-x64 only)
         if: matrix.target == 'linux-x64'
         run: bun run smoke:daemon
@@ -146,6 +149,8 @@ jobs:
           test -x node_modules/.bin/goodvibes-daemon
           test -x node_modules/@pellux/goodvibes-tui/vendor/goodvibes-linux-x64
           test -x node_modules/@pellux/goodvibes-tui/vendor/goodvibes-daemon-linux-x64
+          test "$(node_modules/.bin/goodvibes --version)" = "goodvibes ${VERSION}"
+          test "$(node_modules/.bin/goodvibes-daemon --version)" = "goodvibes-daemon ${VERSION}"
 
   release:
     name: Create GitHub Release
