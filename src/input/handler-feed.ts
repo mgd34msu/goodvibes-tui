@@ -31,6 +31,7 @@ import {
   handlePanelFocusToken,
   handlePromptKeyToken,
   handlePromptTextToken,
+  type PanelMouseLayout,
 } from './handler-feed-routes.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
@@ -119,6 +120,7 @@ export interface InputFeedContext {
   readonly blockActionsMenu: BlockActionsMenu;
   readonly searchManager: SearchManager;
   readonly panelManager: PanelManager;
+  panelMouseLayout: PanelMouseLayout | null;
   readonly keybindingsManager: KeybindingsManager;
   readonly modalStack: string[];
   inputHistory: InputHistory | null;
@@ -385,6 +387,8 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       const mouseRoute = handleMouseToken({
         conversationManager: context.conversationManager,
         selection: context.selection,
+        panelManager: context.panelManager,
+        panelMouseLayout: context.panelMouseLayout,
         mouseDownRow: context.mouseDownRow,
         mouseDownCol: context.mouseDownCol,
         scrollTop,

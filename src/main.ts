@@ -25,9 +25,7 @@ import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
 import { buildShellFooter, estimateShellFooterHeight } from './renderer/shell-surface.ts';
-import {
-  buildConversationViewport,
-} from './renderer/conversation-layout.ts';
+import { buildConversationViewport } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -52,10 +50,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState } from './cli/tui-startup.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
-import {
-  attachSpokenTurnModelRouting,
-  createSpokenTurnInputOptions,
-} from './audio/spoken-turn-model-routing.ts';
+import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
 import { ProjectPlanningCoordinator } from './planning/project-planning-coordinator.ts';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
@@ -394,7 +389,6 @@ async function main() {
       render();
     });
 
-  // ── InputHandler — created here so getViewportHeight can reference it ──────
   const input: InputHandler = new InputHandler(
     () => render(),
     selection,
@@ -449,7 +443,6 @@ async function main() {
     },
   );
 
-  // Wire orchestratorRefs now that InputHandler is created
   orchestratorRefs.getViewportHeight = getViewportHeight;
   orchestratorRefs.scrollToEnd = scrollToEnd;
 
@@ -460,13 +453,9 @@ async function main() {
   input.agentDetailModal.setOnRefresh(() => render());
   input.processModal.setOnRefresh(() => render());
 
-  // --- Model picker wiring ---
-  // Model picker callback is handled in bootstrap.ts — do not duplicate here
-
-  // inputHistory comes from bootstrap, already set up — wire it to the input handler
+  // Model picker callback is handled in bootstrap.ts — do not duplicate here.
   input.setHistory(inputHistory);
 
-  // --- Splash options ---
   const toolCount = toolRegistry.list().length;
   conversation.splashOptions = {
     workingDir,
@@ -475,8 +464,6 @@ async function main() {
     toolCount,
   };
 
-
-  // --- Render function ---
   const render = () => {
     const width = stdout.columns || 80;
     const height = stdout.rows || 24;
@@ -486,7 +473,6 @@ async function main() {
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
-    // Build header and footer FIRST so we know the exact viewport height
     const headerLines = UIFactory.createHeader(width, currentModel.id, currentModel.provider, conversation.title || undefined, lastGitInfoRef.value);
     const managerAgents = agentManager.list().filter(
       (a) => a.status === 'running' || a.status === 'pending',
@@ -569,6 +555,16 @@ async function main() {
       footerHeight: shellFooterLines.length,
       panelWidth,
     });
+    input.setPanelMouseLayout(shellLayout.panel
+      ? {
+          x: shellLayout.panel.x,
+          y: shellLayout.panel.y,
+          width: shellLayout.panel.width,
+          height: shellLayout.panel.height,
+          hasBottomPane: panelManager.isBottomPaneVisible() && panelManager.getBottomPane().panels.length > 0,
+          verticalSplitRatio: panelManager.getVerticalSplitRatio(),
+        }
+      : null);
     const vHeight = shellLayout.body.height;
     const conversationWidth = shellLayout.conversation.width;
     activeConversationWidth = conversationWidth;

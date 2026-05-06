@@ -72,4 +72,23 @@ describe('handleGlobalShortcutToken', () => {
     expect(handled).toBe(false);
     expect(state.handleEscape).not.toHaveBeenCalled();
   });
+
+  test('page scroll keys do not bypass focused panel handling', () => {
+    const state = buildState({ panelFocused: true });
+
+    const pageUpHandled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x1b[5~', logicalName: 'pageup', ctrl: false, shift: false, meta: false },
+      24,
+    );
+    const pageDownHandled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x1b[6~', logicalName: 'pagedown', ctrl: false, shift: false, meta: false },
+      24,
+    );
+
+    expect(pageUpHandled).toBe(false);
+    expect(pageDownHandled).toBe(false);
+    expect(state.scroll).not.toHaveBeenCalled();
+  });
 });

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.19.62-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.19.63-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -14,12 +14,14 @@ A terminal-native AI coding, operations, automation, knowledge, and integration 
 
 ## Start Here
 
-Install from npm:
+GoodVibes is a Bun program. Install Bun first and make sure `bun` is on `PATH`, then install GoodVibes from the npm registry:
 
 ```sh
-npm install -g @pellux/goodvibes-tui
+bun add -g @pellux/goodvibes-tui
 goodvibes
 ```
+
+`npm install -g @pellux/goodvibes-tui` is also supported, but it does not install Bun for you. The package preinstall check fails with a clear message if `bun` is missing from `PATH`.
 
 Or run from source:
 
@@ -41,7 +43,8 @@ Common entrypoints:
 Release distribution:
 
 - GitHub Releases are the primary distribution path for compiled binaries
-- `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL; the install script downloads the matching TUI and daemon binaries for the current platform
+- `bun add -g @pellux/goodvibes-tui` is the recommended global install path; the package is hosted on the npm registry and Bun installs from that registry directly
+- `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL when Bun is already installed; the preinstall check verifies Bun, and the install script downloads the matching TUI and daemon binaries for the current platform
 - native Windows is not supported; use WSL on Windows
 
 Common paths:

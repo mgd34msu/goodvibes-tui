@@ -1,5 +1,6 @@
+import { mkdirSync } from 'node:fs';
 import type { CliCommandRuntime } from './management.ts';
-import { buildCliServicePosture, createPlatformServiceManager, formatCliServicePosture } from './service-posture.ts';
+import { buildCliServicePosture, createPlatformServiceManager, formatCliServicePosture, getServiceStateRoot } from './service-posture.ts';
 import type { CliCommandOutput } from './types.ts';
 
 function enableServicePosture(runtime: CliCommandRuntime): void {
@@ -21,6 +22,9 @@ export async function handleServiceCommand(runtime: CliCommandRuntime): Promise<
   if (sub === 'install' || sub === 'start' || sub === 'restart' || sub === 'stop' || sub === 'uninstall') {
     const manager = createPlatformServiceManager(runtime);
     if (sub === 'install' || sub === 'start' || sub === 'restart') enableServicePosture(runtime);
+    if (sub === 'install' || sub === 'start' || sub === 'restart') {
+      mkdirSync(getServiceStateRoot(runtime), { recursive: true });
+    }
     const result =
       sub === 'install' ? manager.install()
         : sub === 'start' ? manager.start()

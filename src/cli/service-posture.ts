@@ -1,6 +1,7 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
+import { accessSync, closeSync, constants, existsSync, openSync, readSync, realpathSync, statSync } from 'node:fs';
 import net from 'node:net';
-import { join } from 'node:path';
+import { basename, delimiter, dirname, isAbsolute, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PlatformServiceManager } from '@pellux/goodvibes-sdk/platform/daemon';
 import type { ManagedServiceStatus } from '@pellux/goodvibes-sdk/platform/daemon';
 import type { ConfigManager } from '../config/index.ts';
@@ -56,6 +57,31 @@ const ENDPOINTS: readonly { readonly id: RuntimeEndpointId; readonly label: stri
   { id: 'web', label: 'web surface', enabledKey: 'web.enabled' },
 ];
 
+const SOURCE_PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+export interface DaemonExecutableResolutionOptions {
+  readonly env?: NodeJS.ProcessEnv;
+  readonly argv?: readonly string[];
+  readonly execPath?: string;
+  readonly packageRoot?: string;
+}
+
+export interface DaemonExecutableResolution {
+  readonly command: string;
+  readonly source: 'env' | 'sibling' | 'package' | 'path' | 'fallback';
+  readonly absolute: boolean;
+}
+
+interface ServiceDefinitionOverride {
+  readonly name: string;
+  readonly description: string;
+  readonly workingDirectory: string;
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly env: Readonly<Record<string, string>>;
+  readonly restartOnFailure: boolean;
+}
+
 function connectHostForBindHost(host: string): string {
   if (host === '0.0.0.0' || host === '::') return '127.0.0.1';
   return host || '127.0.0.1';
@@ -76,8 +102,129 @@ async function probeTcp(host: string, port: number, timeoutMs = 750): Promise<bo
   });
 }
 
+function isExecutable(path: string): boolean {
+  try {
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function platformDaemonArtifactName(platform = process.platform, arch = process.arch): string {
+  if (platform === 'linux' && arch === 'x64') return 'goodvibes-daemon-linux-x64';
+  if (platform === 'linux' && arch === 'arm64') return 'goodvibes-daemon-linux-arm64';
+  if (platform === 'darwin' && arch === 'x64') return 'goodvibes-daemon-macos-x64';
+  if (platform === 'darwin' && arch === 'arm64') return 'goodvibes-daemon-macos-arm64';
+  if (platform === 'win32') return 'goodvibes-daemon-windows.exe';
+  return 'goodvibes-daemon';
+}
+
+function executablePathCandidates(path: string): string[] {
+  if (!path.trim() || !isAbsolute(path)) return [];
+  const dir = dirname(path);
+  const name = basename(path);
+  const artifact = platformDaemonArtifactName();
+  const candidates = [
+    join(dir, 'goodvibes-daemon'),
+    join(dir, artifact),
+  ];
+  if (name.startsWith('goodvibes-') && !name.startsWith('goodvibes-daemon-')) {
+    candidates.push(join(dir, name.replace(/^goodvibes-/, 'goodvibes-daemon-')));
+  }
+  if (name === 'goodvibes') candidates.push(join(dir, 'goodvibes-daemon'));
+  return [...new Set(candidates)];
+}
+
+function resolveCommandFromPath(command: string, pathValue: string | undefined): string | null {
+  const pathEntries = (pathValue ?? '').split(delimiter).filter(Boolean);
+  const extensions = process.platform === 'win32'
+    ? (process.env.PATHEXT ?? '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean)
+    : [''];
+  for (const entry of pathEntries) {
+    for (const extension of extensions) {
+      const candidate = join(entry, `${command}${extension}`);
+      if (isExecutable(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+function firstExecutable(paths: readonly string[]): string | null {
+  for (const path of paths) {
+    if (isExecutable(path)) return path;
+  }
+  return null;
+}
+
+function packageArtifactForBinWrapper(path: string): string | null {
+  let realPath = path;
+  try {
+    realPath = realpathSync(path);
+  } catch {
+    // Keep the original path if resolving a symlink fails.
+  }
+  if (basename(realPath) !== 'goodvibes-daemon') return null;
+  const binDir = dirname(realPath);
+  if (basename(binDir) !== 'bin') return null;
+  const packageRoot = dirname(binDir);
+  return firstExecutable([
+    join(packageRoot, 'vendor', platformDaemonArtifactName()),
+    join(packageRoot, 'dist', platformDaemonArtifactName()),
+    join(packageRoot, 'dist', 'goodvibes-daemon'),
+  ]);
+}
+
+export function resolveGoodVibesDaemonExecutable(
+  options: DaemonExecutableResolutionOptions = {},
+): DaemonExecutableResolution {
+  const env = options.env ?? process.env;
+  const override = env.GOODVIBES_DAEMON_COMMAND?.trim();
+  if (override) {
+    return { command: override, source: 'env', absolute: isAbsolute(override) };
+  }
+
+  const packageRoot = options.packageRoot ?? SOURCE_PACKAGE_ROOT;
+  const packaged = firstExecutable([
+    join(packageRoot, 'dist', platformDaemonArtifactName()),
+    join(packageRoot, 'dist', 'goodvibes-daemon'),
+    join(packageRoot, 'vendor', platformDaemonArtifactName()),
+    join(packageRoot, 'bin', 'goodvibes-daemon'),
+  ]);
+  if (packaged) return { command: packaged, source: 'package', absolute: true };
+
+  const argv = options.argv ?? process.argv;
+  const execPath = options.execPath ?? process.execPath;
+  const sibling = firstExecutable([
+    ...executablePathCandidates(execPath),
+    ...executablePathCandidates(argv[1] ?? ''),
+  ]);
+  if (sibling) {
+    return {
+      command: packageArtifactForBinWrapper(sibling) ?? sibling,
+      source: 'sibling',
+      absolute: true,
+    };
+  }
+
+  const pathResolved = resolveCommandFromPath('goodvibes-daemon', env.PATH);
+  if (pathResolved) {
+    return {
+      command: packageArtifactForBinWrapper(pathResolved) ?? pathResolved,
+      source: 'path',
+      absolute: true,
+    };
+  }
+
+  return { command: 'goodvibes-daemon', source: 'fallback', absolute: false };
+}
+
+export function getServiceStateRoot(runtime: CliServiceRuntime): string {
+  return join(runtime.homeDirectory, '.goodvibes', 'daemon');
+}
+
 function pidFilePath(runtime: CliServiceRuntime, platform: ManagedServiceStatus['platform']): string {
-  return join(runtime.workingDirectory, '.goodvibes', 'tui', 'service', `${platform}.pid`);
+  return join(getServiceStateRoot(runtime), 'service', `${platform}.pid`);
 }
 
 function readLogPosture(path: string | undefined, tailBytes: number): CliServiceLogPosture {
@@ -122,11 +269,28 @@ function endpointsConflict(a: CliServiceEndpointPosture, b: CliServiceEndpointPo
 }
 
 export function createPlatformServiceManager(runtime: CliServiceRuntime): PlatformServiceManager {
+  const daemonHomeDir = getServiceStateRoot(runtime);
+  const serviceName = String(runtime.configManager.get('service.serviceName') ?? 'goodvibes').trim() || 'goodvibes';
+  const daemonExecutable = resolveGoodVibesDaemonExecutable();
+  const definition: ServiceDefinitionOverride = {
+    name: serviceName,
+    description: 'GoodVibes daemon, control-plane, listener, and web host',
+    workingDirectory: daemonHomeDir,
+    command: daemonExecutable.command,
+    args: [],
+    env: {
+      GOODVIBES_DAEMON_HOME: daemonHomeDir,
+      GOODVIBES_DAEMON_TOKEN: process.env.GOODVIBES_DAEMON_TOKEN ?? '',
+      GOODVIBES_HTTP_TOKEN: process.env.GOODVIBES_HTTP_TOKEN ?? '',
+      NODE_ENV: process.env.NODE_ENV ?? 'production',
+    },
+    restartOnFailure: runtime.configManager.get('service.restartOnFailure') === true,
+  };
   return new PlatformServiceManager(runtime.configManager, {
-    workingDirectory: runtime.workingDirectory,
+    workingDirectory: runtime.homeDirectory,
     homeDirectory: runtime.homeDirectory,
-    surfaceRoot: 'tui',
-    binaryBaseName: 'goodvibes-daemon',
+    surfaceRoot: 'daemon',
+    definitionOverride: definition,
     defaultServiceName: 'goodvibes',
     defaultServiceDescription: 'GoodVibes daemon, control-plane, listener, and web host',
   });

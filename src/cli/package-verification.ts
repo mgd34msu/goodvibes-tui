@@ -7,6 +7,7 @@ export interface PackageCliBinVerification {
   readonly target: string;
   readonly exists: boolean;
   readonly executable: boolean;
+  readonly usesBunShebang: boolean;
   readonly hasLocalPlatformBuildFallback: boolean;
   readonly hasLocalBuildFallback: boolean;
   readonly hasVendoredBinaryFallback: boolean;
@@ -35,6 +36,7 @@ const REQUIRED_TARBALL_PATHS = [
   'src/daemon/cli.ts',
   'bin/goodvibes',
   'bin/goodvibes-daemon',
+  'scripts/check-bun.sh',
   'scripts/postinstall.js',
   '.goodvibes/GOODVIBES.md',
 ] as const;
@@ -58,6 +60,7 @@ function verifyBin(root: string, command: typeof REQUIRED_BIN_COMMANDS[number], 
     target: target ?? '',
     exists: Boolean(target) && existsSync(binPath),
     executable: Boolean(target) && hasExecutableBit(binPath),
+    usesBunShebang: source.startsWith('#!/usr/bin/env bun'),
     hasLocalPlatformBuildFallback: source.includes("dist', artifactName"),
     hasLocalBuildFallback: source.includes(expectedLocalBuild),
     hasVendoredBinaryFallback: source.includes('vendor'),
@@ -92,6 +95,7 @@ export function verifyPackageCliInstall(root: string): PackageCliVerificationRep
     if (!item.target) issues.push(`package.json bin is missing ${item.command}.`);
     if (!item.exists) issues.push(`bin target does not exist: ${item.command} -> ${item.target}`);
     if (!item.executable) issues.push(`bin target is not executable: ${item.command} -> ${item.target}`);
+    if (!item.usesBunShebang) issues.push(`bin target does not use Bun shebang: ${item.command} -> ${item.target}`);
     if (!item.hasLocalPlatformBuildFallback) issues.push(`bin target lacks local platform dist fallback: ${item.command}`);
     if (!item.hasLocalBuildFallback) issues.push(`bin target lacks local dist fallback: ${item.command}`);
     if (!item.hasVendoredBinaryFallback) issues.push(`bin target lacks vendored binary fallback: ${item.command}`);

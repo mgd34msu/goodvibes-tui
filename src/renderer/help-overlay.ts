@@ -202,7 +202,7 @@ export function renderShortcutsOverlay(
     row('PageUp / PageDn', 'Scroll by full page'),
     row('Home / End', 'Jump to start / end of line'),
     row(kb('search'), 'Search conversation'),
-    row('Mouse wheel', 'Scroll conversation'),
+    row('Mouse wheel', 'Scroll conversation or hovered panel'),
     '',
     '  Editing',
     '  ' + '\u2500'.repeat(40),
