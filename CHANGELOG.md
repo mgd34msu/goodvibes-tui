@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.72] — 2026-05-07
+
+### Changes
+- 103a367e chore: update goodvibes sdk to 0.33.10
+
 ## [0.19.71] — 2026-05-07
 
 ### Changes
