@@ -345,22 +345,24 @@ input KnowledgePacketInput {
   limit: Int
   detail: KnowledgePacketDetail
   budgetLimit: Int
+  knowledgeSpaceId: String
+  includeAllSpaces: Boolean
 }
 
 type Query {
-  status: KnowledgeStatus!
+  status(knowledgeSpaceId: String, includeAllSpaces: Boolean): KnowledgeStatus!
   connectors: [KnowledgeConnector!]!
   connectorDoctor(id: String!): KnowledgeConnectorDoctorReport
-  sources(limit: Int, offset: Int, knowledgeSpaceId: String): [KnowledgeSource!]!
-  nodes(limit: Int, offset: Int, knowledgeSpaceId: String): [KnowledgeNode!]!
-  issues(limit: Int, offset: Int, knowledgeSpaceId: String): [KnowledgeIssue!]!
+  sources(limit: Int, offset: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): [KnowledgeSource!]!
+  nodes(limit: Int, offset: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): [KnowledgeNode!]!
+  issues(limit: Int, offset: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): [KnowledgeIssue!]!
   itemView(kind: String!, id: String!): KnowledgeItemView
-  extractions(limit: Int, sourceId: String, knowledgeSpaceId: String): [KnowledgeExtraction!]!
+  extractions(limit: Int, sourceId: String, knowledgeSpaceId: String, includeAllSpaces: Boolean): [KnowledgeExtraction!]!
   neighbors(kind: String!, id: String!, relation: String, limit: Int): [KnowledgeEdge!]!
-  search(query: String!, limit: Int, knowledgeSpaceId: String): [KnowledgeSearchResult!]!
-  packet(task: String!, writeScope: [String!], limit: Int, detail: KnowledgePacketDetail, budgetLimit: Int): KnowledgePacket!
-  projectionTargets(limit: Int): [KnowledgeProjectionTarget!]!
-  projection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeProjectionBundle!
+  search(query: String!, limit: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): [KnowledgeSearchResult!]!
+  packet(task: String!, writeScope: [String!], limit: Int, detail: KnowledgePacketDetail, budgetLimit: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): KnowledgePacket!
+  projectionTargets(limit: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): [KnowledgeProjectionTarget!]!
+  projection(kind: KnowledgeProjectionKind!, id: String, limit: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): KnowledgeProjectionBundle!
   jobs: [KnowledgeJob!]!
   job(id: String!): KnowledgeJob
   jobRuns(limit: Int, jobId: String): [KnowledgeJobRun!]!
@@ -380,8 +382,8 @@ type Mutation {
   ingestBookmarkSeeds(seeds: [String!]!, connectorId: String, sessionId: String): KnowledgeBatchIngestResult!
   ingestWithConnector(connectorId: String!, input: String!, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
   ingestConnectorInput(input: String!, connectorId: String, sessionId: String, allowPrivateHosts: Boolean): KnowledgeBatchIngestResult!
-  renderProjection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeProjectionBundle!
-  materializeProjection(kind: KnowledgeProjectionKind!, id: String, limit: Int): KnowledgeMaterializedProjection!
+  renderProjection(kind: KnowledgeProjectionKind!, id: String, limit: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): KnowledgeProjectionBundle!
+  materializeProjection(kind: KnowledgeProjectionKind!, id: String, limit: Int, knowledgeSpaceId: String, includeAllSpaces: Boolean): KnowledgeMaterializedProjection!
   reindex: KnowledgeStatus!
   runJob(id: String!, mode: KnowledgeJobMode): KnowledgeJobRun!
   saveSchedule(id: String, jobId: String!, label: String!, enabled: Boolean!, schedule: JSON!, metadata: JSON): KnowledgeSchedule!
