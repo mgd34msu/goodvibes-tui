@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.75] — 2026-05-07
+
+### Changes
+- 0668f421 test: allow package verification pack dry-run to finish
+
 ## [0.19.74] — 2026-05-07
 
 ### Changes
