@@ -15,11 +15,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
-import { RuntimeEventBus } from '@/runtime/index.ts';
+import { createFeatureFlagManager, RuntimeEventBus } from '@/runtime/index.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import type { ChatRequest, ChatResponse, LLMProvider } from '@pellux/goodvibes-sdk/platform/providers';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { buildTestModelDefinition } from '../helpers/test-managers.ts';
 
 const TEST_TOKEN = 'standalone-test-token-abc123';
 const TEST_PORT_BASE = 39600;
@@ -61,8 +63,15 @@ async function startDaemon(
 ): Promise<{ daemon: DaemonServer; runtimeServices: ReturnType<typeof createRuntimeServices> }> {
   const runtimeBus = new RuntimeEventBus();
   const runtimeStore = createRuntimeStore();
+  const featureFlags = createFeatureFlagManager();
+  featureFlags.loadFromConfig({
+    flags: {
+      'control-plane-gateway': 'enabled',
+    },
+  });
   const runtimeServices = createRuntimeServices({
     configManager: env.config,
+    featureFlags,
     runtimeBus,
     runtimeStore,
     workingDir: env.workingDir,
@@ -82,6 +91,60 @@ async function startDaemon(
 
 function bearerHeaders(): HeadersInit {
   return { Authorization: `Bearer ${TEST_TOKEN}`, 'Content-Type': 'application/json' };
+}
+
+async function waitForCondition(description: string, predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
+async function readSseUntil(
+  url: string,
+  predicate: (raw: string) => boolean,
+  action: () => Promise<void>,
+  timeoutMs = 5_000,
+): Promise<string> {
+  const controller = new AbortController();
+  const response = await fetch(url, {
+    headers: bearerHeaders(),
+    signal: controller.signal,
+  });
+  expect(response.status).toBe(200);
+  expect(response.headers.get('content-type') ?? '').toContain('text/event-stream');
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('SSE response did not expose a body reader');
+
+  const decoder = new TextDecoder();
+  let raw = '';
+  const readLoop = (async () => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline && !predicate(raw)) {
+      const remainingMs = Math.max(1, deadline - Date.now());
+      const read = await Promise.race([
+        reader.read(),
+        new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
+          setTimeout(() => resolve({ done: true, value: undefined }), remainingMs);
+        }),
+      ]);
+      if (read.done) break;
+      raw += decoder.decode(read.value, { stream: true });
+    }
+    return raw;
+  })();
+
+  await action();
+  try {
+    const result = await readLoop;
+    expect(predicate(result)).toBe(true);
+    return result;
+  } finally {
+    controller.abort();
+    try { reader.releaseLock(); } catch {}
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +244,107 @@ describe('F1 — companion-chat routes on standalone DaemonServer', () => {
     const getBody = await getRes.json() as { session: { title: string; systemPrompt: string | null } };
     expect(getBody.session.title).toBe('after patch');
     expect(getBody.session.systemPrompt).toBe('patched prompt');
+  });
+
+  test('companion chat messages resolve artifact attachments into stored messages, SSE, and provider prompts', async () => {
+    const observedRequests: ChatRequest[] = [];
+    const provider: LLMProvider = {
+      name: 'attachment-test',
+      models: ['attachment-model'],
+      isConfigured: () => true,
+      async chat(params: ChatRequest): Promise<ChatResponse> {
+        observedRequests.push(params);
+        params.onDelta?.({ content: 'attachment prompt ok' });
+        return {
+          content: 'attachment prompt ok',
+          toolCalls: [],
+          usage: { inputTokens: 1, outputTokens: 1 },
+          stopReason: 'completed',
+        };
+      },
+    };
+    const runtimeServices = (daemon as unknown as { runtimeServices: ReturnType<typeof createRuntimeServices> }).runtimeServices;
+    runtimeServices.providerRegistry.registerRuntimeProvider({
+      provider,
+      replace: true,
+      models: [buildTestModelDefinition('attachment-test', 'attachment-model')],
+    });
+
+    const artifactRes = await fetch(`http://127.0.0.1:${port}/api/artifacts`, {
+      method: 'POST',
+      headers: bearerHeaders(),
+      body: JSON.stringify({
+        kind: 'attachment',
+        mimeType: 'text/plain',
+        filename: 'companion-note.txt',
+        text: 'ATTACHMENT_MARKER_TEXT reaches the provider prompt.',
+        metadata: { source: 'standalone-route-test' },
+      }),
+    });
+    expect(artifactRes.status).toBe(201);
+    const artifactBody = await artifactRes.json() as { artifact: { id: string; mimeType: string; sizeBytes: number } };
+    expect(artifactBody.artifact.mimeType).toBe('text/plain');
+    expect(artifactBody.artifact.sizeBytes).toBeGreaterThan(0);
+
+    const createRes = await fetch(`http://127.0.0.1:${port}/api/companion/chat/sessions`, {
+      method: 'POST',
+      headers: bearerHeaders(),
+      body: JSON.stringify({
+        title: 'attachment test',
+        provider: 'attachment-test',
+        model: 'attachment-model',
+      }),
+    });
+    expect(createRes.status).toBe(201);
+    const { sessionId } = await createRes.json() as { sessionId: string };
+
+    const sseRaw = await readSseUntil(
+      `http://127.0.0.1:${port}/api/companion/chat/sessions/${sessionId}/events`,
+      (raw) => raw.includes('companion-chat.turn.started') && raw.includes('companion-note'),
+      async () => {
+        const messageRes = await fetch(`http://127.0.0.1:${port}/api/companion/chat/sessions/${sessionId}/messages`, {
+          method: 'POST',
+          headers: bearerHeaders(),
+          body: JSON.stringify({
+            body: 'Summarize this attachment.',
+            attachments: [{ artifactId: artifactBody.artifact.id, label: 'companion-note' }],
+          }),
+        });
+        expect(messageRes.status).toBe(202);
+      },
+    );
+    expect(sseRaw).toContain(artifactBody.artifact.id);
+
+    await waitForCondition('provider to receive attachment prompt', () => observedRequests.length > 0);
+    const lastMessage = observedRequests[0]?.messages.at(-1);
+    expect(lastMessage?.role).toBe('user');
+    expect(String(lastMessage?.content)).toContain('ATTACHMENT_MARKER_TEXT reaches the provider prompt.');
+    expect(String(lastMessage?.content)).toContain('Attached file');
+
+    const messagesRes = await fetch(`http://127.0.0.1:${port}/api/companion/chat/sessions/${sessionId}/messages`, {
+      headers: bearerHeaders(),
+    });
+    expect(messagesRes.status).toBe(200);
+    const messagesBody = await messagesRes.json() as {
+      messages: Array<{ role: string; content: string; attachments: Array<{ artifactId: string; label?: string }> }>;
+    };
+    const userMessage = messagesBody.messages.find((message) => message.role === 'user');
+    expect(userMessage?.attachments[0]?.artifactId).toBe(artifactBody.artifact.id);
+    expect(userMessage?.attachments[0]?.label).toBe('companion-note');
+    expect(messagesBody.messages.some((message) => message.role === 'assistant' && message.content === 'attachment prompt ok')).toBe(true);
+
+    const unknownRes = await fetch(`http://127.0.0.1:${port}/api/companion/chat/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      headers: bearerHeaders(),
+      body: JSON.stringify({
+        body: 'This should fail cleanly.',
+        attachments: [{ artifactId: 'missing-artifact-id', label: 'missing' }],
+      }),
+    });
+    expect(unknownRes.status).toBe(404);
+    const unknownBody = await unknownRes.json() as { code: string; error: string };
+    expect(unknownBody.code).toBe('UNKNOWN_ARTIFACT');
+    expect(unknownBody.error).toContain('Unknown attachment artifact');
   });
 
   test('GET /api/models/current returns 200 with model field', async () => {
