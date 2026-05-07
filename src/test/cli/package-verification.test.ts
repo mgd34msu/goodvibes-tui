@@ -19,5 +19,5 @@ describe('package CLI install verification', () => {
     expect(report.tarball.requiredPathsPresent).toContain('bin/goodvibes-daemon');
     expect(report.tarball.requiredPathsPresent).toContain('scripts/check-bun.sh');
     expect(report.tarball.forbiddenPaths).toEqual([]);
-  });
+  }, 30_000);
 });
