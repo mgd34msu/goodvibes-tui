@@ -18,7 +18,7 @@ GoodVibes is a Bun program. Install Bun first and make sure `bun` is on `PATH`, 
 
 ```sh
 bun add -g @pellux/goodvibes-tui
-bun pm -g trust @pellux/goodvibes-tui core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
+bun pm trust -g @pellux/goodvibes-tui core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
 goodvibes
 ```
 
