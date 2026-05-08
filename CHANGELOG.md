@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.79] — 2026-05-08
+
+### Changes
+- bff5d1a7 Update SDK 0.33.17 and isolate HomeGraph knowledge
+
 ## [0.19.78] — 2026-05-08
 
 ### Changes
