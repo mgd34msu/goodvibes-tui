@@ -1,17 +1,49 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
+import type { WrfcChain, WrfcChildRouteSelection } from '@pellux/goodvibes-sdk/platform/agents';
 
-// Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
-const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
+const flushMicrotasks = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+};
 
-const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+function makeEngineerOutput(overrides?: Record<string, unknown>): string {
+  return JSON.stringify({
+    version: 1,
+    archetype: 'engineer',
+    summary: 'implemented requested changes',
+    gatheredContext: ['src/test.ts'],
+    plannedActions: ['update code'],
+    appliedChanges: ['changed code'],
+    filesCreated: [],
+    filesModified: ['src/test.ts'],
+    filesDeleted: [],
+    decisions: [],
+    issues: [],
+    uncertainties: [],
+    ...overrides,
+  });
+}
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+function makeReviewerOutput(score: number, passed: boolean): string {
+  return JSON.stringify({
+    version: 1,
+    archetype: 'reviewer',
+    summary: score >= 9.9 ? 'review passed' : 'review failed',
+    score,
+    passed,
+    dimensions: [],
+    issues: passed
+      ? []
+      : [{ severity: 'major', description: 'Missing error handling', file: 'src/foo.ts', line: 10, pointValue: 1 }],
+  });
+}
 
 function makeRecord(overrides?: Partial<AgentRecord>): AgentRecord {
   return {
@@ -22,40 +54,13 @@ function makeRecord(overrides?: Partial<AgentRecord>): AgentRecord {
     status: 'completed',
     startedAt: Date.now(),
     orchestrationDepth: 0,
-    toolCallCount: 5,
+    toolCallCount: 0,
     executionProtocol: 'gather-plan-apply',
     reviewMode: 'wrfc',
     communicationLane: 'direct',
-    fullOutput: JSON.stringify({
-      version: 1,
-      archetype: 'engineer',
-      summary: 'test summary',
-      gatheredContext: ['src/test.ts'],
-      plannedActions: ['update src/test.ts'],
-      appliedChanges: ['implemented src/test.ts'],
-      filesCreated: [],
-      filesModified: ['src/test.ts'],
-      filesDeleted: [],
-      decisions: [],
-      issues: [],
-      uncertainties: [],
-    }),
+    fullOutput: makeEngineerOutput(),
     ...overrides,
   };
-}
-
-function makeReviewerOutput(score: number, passed: boolean): string {
-  return JSON.stringify({
-    version: 1,
-    archetype: 'reviewer',
-    summary: 'review summary',
-    score,
-    passed,
-    dimensions: [],
-    issues: [
-      { severity: 'major', description: 'Missing error handling', file: 'src/foo.ts', line: 10, pointValue: 1 },
-    ],
-  });
 }
 
 function makeEnvelopeContext(agentId?: string): { sessionId: string; traceId: string; source: string; agentId?: string } {
@@ -63,7 +68,7 @@ function makeEnvelopeContext(agentId?: string): { sessionId: string; traceId: st
     sessionId: 'test-session',
     traceId: `test-trace:${agentId ?? 'root'}`,
     source: 'wrfc-controller-test',
-    agentId,
+    ...(agentId ? { agentId } : {}),
   };
 }
 
@@ -88,118 +93,113 @@ async function emitAgentFailed(runtimeBus: RuntimeEventBus, agentId: string, err
   await flushMicrotasks();
 }
 
-// ---------------------------------------------------------------------------
-// Module mocks — set up before importing WrfcController
-// ---------------------------------------------------------------------------
-
-const mockSpawn = mock((_input: unknown): AgentRecord => makeRecord({ id: 'mock-spawned-agent' }));
-const mockGetStatus = mock((_id: string): AgentRecord | null => null);
-
-// Mock configManager — uses a mutable config state so tests can override values directly
-const mockConfigState: Record<string, unknown> = {
-  'wrfc.scoreThreshold': 9.9,
-  'wrfc.maxFixAttempts': 3,
-  'wrfc.autoCommit': false,
+type SpawnInput = {
+  task: string;
+  template?: string;
+  parentAgentId?: string;
+  model?: string;
+  provider?: string;
+  fallbackModels?: string[];
+  reasoningEffort?: AgentRecord['reasoningEffort'];
+  dangerously_disable_wrfc?: boolean;
 };
-const mockConfigGet = mock((key: string): unknown => mockConfigState[key] ?? null);
-
-const mockConfigGetCategoryState = {
-  gates: [] as Array<{ name: string; command: string; enabled: boolean }>,
-  scoreThreshold: 9.9,
-  maxFixAttempts: 3,
-  autoCommit: false,
-};
-const mockConfig = {
-  autoApprove: false,
-  apiKeys: {} as Record<string, string>,
-  display: { stream: false },
-  permissions: {
-    mode: 'prompt',
-    tools: {} as Record<string, unknown>,
-  },
-};
-const mockConfigSet = mock((key: string, value: unknown) => {
-  if (key === 'behavior.autoApprove') {
-    mockConfig.autoApprove = Boolean(value);
-    return;
-  }
-  if (key === 'display.stream') {
-    mockConfig.display.stream = Boolean(value);
-    return;
-  }
-  if (key === 'permissions.mode') {
-    mockConfig.permissions.mode = String(value);
-    return;
-  }
-  if (key.startsWith('permissions.tools.')) {
-    mockConfig.permissions.tools[key.slice('permissions.tools.'.length)] = value;
-  }
-});
-
-const mockConfigManager = {
-  get: (key: string) => mockConfigState[key],
-  getCategory: (_category: string) => mockConfigGetCategoryState,
-};
-
-const mockAgentManager = {
-  spawn: mockSpawn,
-  getStatus: mockGetStatus,
-  list: () => [],
-  cancel: () => false,
-  listByCohort: () => [],
-  clear: () => {},
-};
-
-function initTestWrfcController(runtimeBus: RuntimeEventBus): WrfcController {
-  return new WrfcController(runtimeBus, { registerAgent: mockRegisterAgent }, {
-    agentManager: mockAgentManager,
-    configManager: mockConfigManager as never,
-    projectRoot: REPO_ROOT,
-    createWorktree: () => ({
-      merge: mockMerge,
-      cleanup: mockCleanup,
-    }),
-  });
-}
-
-const mockMerge = mock(async (_agentId: string) => true);
-const mockCleanup = mock(async (_agentId: string) => {});
-
-// Mock message bus
-const mockRegisterAgent = mock((_identity: unknown) => {});
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('WrfcController', () => {
   let runtimeBus: RuntimeEventBus;
   let emitSpy: ReturnType<typeof spyOn>;
+  let projectRoot: string;
+  let agentStore: Map<string, AgentRecord>;
+  let spawnInputs: SpawnInput[];
+  let spawnedRecords: AgentRecord[];
+  let spawnCounter: number;
+  let mockSpawn: ReturnType<typeof mock>;
+  let mockGetStatus: ReturnType<typeof mock>;
+  let mockCancel: ReturnType<typeof mock>;
+  let mockRegisterAgent: ReturnType<typeof mock>;
+  let mockMerge: ReturnType<typeof mock>;
+  let mockCleanup: ReturnType<typeof mock>;
+  let childRouteSelector: ((context: Parameters<NonNullable<ConstructorParameters<typeof WrfcController>[2]['selectChildRoute']>>[0]) => WrfcChildRouteSelection | null | undefined) | null;
+
+  const mockConfigState: Record<string, unknown> = {
+    'wrfc.scoreThreshold': 9.9,
+    'wrfc.maxFixAttempts': 3,
+    'wrfc.autoCommit': false,
+  };
+  const mockConfigGetCategoryState = {
+    gates: [] as Array<{ name: string; command: string; enabled: boolean }>,
+    scoreThreshold: 9.9,
+    maxFixAttempts: 3,
+    autoCommit: false,
+  };
+  const mockConfigManager = {
+    get: (key: string) => mockConfigState[key],
+    getCategory: (_category: string) => mockConfigGetCategoryState,
+  };
+
   const workflowCalls = (type: string) => emitSpy.mock.calls.filter(
-    (args: unknown[]) =>
-      args[0] === 'workflows' &&
-      typeof args[1] === 'object' &&
-      args[1] !== null &&
-      'type' in (args[1] as object) &&
-      (args[1] as { type: string }).type === type,
+    (args: unknown[]) => args[0] === 'workflows' && typeof args[1] === 'object' && args[1] !== null
+      && 'type' in (args[1] as object) && (args[1] as { type: string }).type === type,
   );
   const orchestrationCalls = (type: string) => emitSpy.mock.calls.filter(
-    (args: unknown[]) =>
-      args[0] === 'orchestration' &&
-      typeof args[1] === 'object' &&
-      args[1] !== null &&
-      'type' in (args[1] as object) &&
-      (args[1] as { type: string }).type === type,
+    (args: unknown[]) => args[0] === 'orchestration' && typeof args[1] === 'object' && args[1] !== null
+      && 'type' in (args[1] as object) && (args[1] as { type: string }).type === type,
   );
 
-  beforeEach(async () => {
-    mockSpawn.mockClear();
-    mockGetStatus.mockClear();
-    mockMerge.mockClear();
-    mockCleanup.mockClear();
-    mockRegisterAgent.mockClear();
+  function remember(record: AgentRecord): AgentRecord {
+    agentStore.set(record.id, record);
+    return record;
+  }
 
-    // Reset mutable config state to defaults
+  function initTestWrfcController(): WrfcController {
+    return new WrfcController(runtimeBus, { registerAgent: mockRegisterAgent }, {
+      agentManager: {
+        spawn: mockSpawn,
+        getStatus: mockGetStatus,
+        list: () => Array.from(agentStore.values()),
+        cancel: mockCancel,
+        listByCohort: () => [],
+        clear: () => {},
+      },
+      configManager: mockConfigManager as never,
+      projectRoot,
+      createWorktree: () => ({
+        merge: mockMerge,
+        cleanup: mockCleanup,
+      }),
+      ...(childRouteSelector ? { selectChildRoute: childRouteSelector } : {}),
+    });
+  }
+
+  function createStartedChain(controller: WrfcController, ownerOverrides?: Partial<AgentRecord>): {
+    owner: AgentRecord;
+    chain: WrfcChain;
+    engineer: AgentRecord;
+  } {
+    const owner = remember(makeRecord({
+      id: 'agent-owner',
+      task: 'implement the feature end to end',
+      status: 'running',
+      wrfcRole: undefined,
+      ...ownerOverrides,
+    }));
+    const chain = controller.createChain(owner);
+    const engineer = agentStore.get(chain.engineerAgentId ?? '');
+    if (!engineer) {
+      throw new Error('Expected createChain to spawn an engineer child');
+    }
+    return { owner, chain, engineer };
+  }
+
+  beforeEach(() => {
+    runtimeBus = new RuntimeEventBus();
+    emitSpy = spyOn(runtimeBus, 'emit');
+    projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-wrfc-test-'));
+    agentStore = new Map();
+    spawnInputs = [];
+    spawnedRecords = [];
+    spawnCounter = 0;
+    childRouteSelector = null;
+
     mockConfigState['wrfc.scoreThreshold'] = 9.9;
     mockConfigState['wrfc.maxFixAttempts'] = 3;
     mockConfigState['wrfc.autoCommit'] = false;
@@ -208,1059 +208,332 @@ describe('WrfcController', () => {
     mockConfigGetCategoryState.maxFixAttempts = 3;
     mockConfigGetCategoryState.autoCommit = false;
 
-    runtimeBus = new RuntimeEventBus();
-    emitSpy = spyOn(runtimeBus, 'emit');
+    mockRegisterAgent = mock((_identity: unknown) => {});
+    mockGetStatus = mock((id: string) => agentStore.get(id) ?? null);
+    mockCancel = mock((id: string) => {
+      const record = agentStore.get(id);
+      if (!record) return false;
+      record.status = 'cancelled';
+      return true;
+    });
+    mockMerge = mock(async (_agentId: string) => true);
+    mockCleanup = mock(async (_agentId: string) => {});
+    mockSpawn = mock((input: SpawnInput) => {
+      spawnInputs.push(input);
+      const record = makeRecord({
+        id: `agent-child-${spawnCounter++}`,
+        task: input.task,
+        template: input.template ?? 'general',
+        status: 'pending',
+        model: input.model,
+        provider: input.provider,
+        fallbackModels: input.fallbackModels,
+        reasoningEffort: input.reasoningEffort,
+        dangerously_disable_wrfc: input.dangerously_disable_wrfc,
+        parentAgentId: input.parentAgentId,
+        fullOutput: input.template === 'reviewer' ? makeReviewerOutput(10, true) : makeEngineerOutput(),
+      });
+      spawnedRecords.push(record);
+      remember(record);
+      return record;
+    });
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     emitSpy?.mockRestore();
+    rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  // -------------------------------------------------------------------------
-  // Chain lifecycle
-  // -------------------------------------------------------------------------
-
-  describe('chain lifecycle', () => {
-    test('createChain() generates valid wrfc-{uuid8} ID format', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
+  describe('owner-driven lifecycle', () => {
+    test('createChain creates a durable owner and immediately spawns an engineer child', () => {
+      const controller = initTestWrfcController();
+      const { owner, chain, engineer } = createStartedChain(controller);
 
       expect(chain.id).toMatch(/^wrfc-[a-f0-9]{8}$/);
-    });
-
-    test('createChain() links engineer record to chain via wrfcId', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
-
-      expect(record.wrfcId).toBe(chain.id);
-    });
-
-    test('createChain() transitions from pending to engineering', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
-
       expect(chain.state).toBe('engineering');
-    });
-
-    test('createChain() emits WORKFLOW_CHAIN_CREATED event', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
-
-      const chainCreatedCalls = workflowCalls('WORKFLOW_CHAIN_CREATED');
-      expect(chainCreatedCalls.length).toBe(1);
-      expect((chainCreatedCalls[0][1] as { payload: object }).payload).toMatchObject({ chainId: chain.id, task: record.task });
-    });
-
-    test('createChain() emits orchestration graph and engineer node events', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
-
-      const graphCreatedCalls = orchestrationCalls('ORCHESTRATION_GRAPH_CREATED');
-      const nodeAddedCalls = orchestrationCalls('ORCHESTRATION_NODE_ADDED');
-      const nodeStartedCalls = orchestrationCalls('ORCHESTRATION_NODE_STARTED');
-
-      expect(graphCreatedCalls.length).toBe(1);
-      expect((graphCreatedCalls[0][1] as { payload: object }).payload).toMatchObject({
-        graphId: `wrfc:${chain.id}`,
-        mode: 'review-loop',
+      expect(chain.ownerAgentId).toBe(owner.id);
+      expect(owner.wrfcId).toBe(chain.id);
+      expect(owner.wrfcRole).toBe('owner');
+      expect(engineer.wrfcId).toBe(chain.id);
+      expect(engineer.wrfcRole).toBe('engineer');
+      expect(chain.allAgentIds).toEqual([owner.id, engineer.id]);
+      expect(spawnInputs[0]).toMatchObject({
+        template: 'engineer',
+        task: owner.task,
+        parentAgentId: owner.id,
+        dangerously_disable_wrfc: true,
       });
-      expect(nodeAddedCalls.length).toBeGreaterThanOrEqual(1);
-      expect((nodeAddedCalls[0][1] as { payload: object }).payload).toMatchObject({
-        graphId: `wrfc:${chain.id}`,
-        role: 'engineer',
-      });
-      expect(nodeStartedCalls.length).toBeGreaterThanOrEqual(1);
     });
 
-    test('createChain() initializes allAgentIds with engineer ID', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
+    test('createChain emits chain, graph, node, and owner decision records', () => {
+      const controller = initTestWrfcController();
+      const { chain } = createStartedChain(controller);
 
-      expect(chain.allAgentIds).toContain(record.id);
-      expect(chain.allAgentIds.length).toBe(1);
+      expect(workflowCalls('WORKFLOW_CHAIN_CREATED')).toHaveLength(1);
+      expect(orchestrationCalls('ORCHESTRATION_GRAPH_CREATED')).toHaveLength(1);
+      expect(orchestrationCalls('ORCHESTRATION_NODE_STARTED').length).toBeGreaterThanOrEqual(1);
+      expect(chain.ownerDecisions.map((decision) => decision.action)).toEqual(['chain_created', 'spawn_engineer']);
+      expect(controller.getWorkmap().read(chain.id).some((event) => event.event === 'owner_decision')).toBe(true);
     });
 
-    test('getChain() returns chain by ID', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
+    test('getChain/listChains expose owner-driven chain records', () => {
+      const controller = initTestWrfcController();
+      const { chain } = createStartedChain(controller);
 
-      const found = controller.getChain(chain.id);
-      expect(found).toBe(chain);
+      expect(controller.getChain(chain.id)).toBe(chain);
+      expect(controller.listChains()).toEqual([chain]);
+      expect(controller.getChain('wrfc-missing')).toBeNull();
     });
 
-    test('getChain() returns null for unknown ID', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const result = controller.getChain('wrfc-nonexistent');
-      expect(result).toBeNull();
-    });
+    test('resumeChain skips active child chains and records an owner decision', () => {
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
+      engineer.status = 'running';
 
-    test('listChains() returns all chains', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const r1 = makeRecord();
-      const r2 = makeRecord({ id: 'agent-other001' });
-
-      const c1 = controller.createChain(r1);
-      const c2 = controller.createChain(r2);
-
-      const chains = controller.listChains();
-      expect(chains.length).toBe(2);
-      expect(chains.map((c) => c.id)).toContain(c1.id);
-      expect(chains.map((c) => c.id)).toContain(c2.id);
+      expect(controller.resumeChain(chain.id)).toBe(true);
+      expect(chain.ownerDecisions.at(-1)?.action).toBe('resume_skipped');
+      expect(chain.ownerDecisions.at(-1)?.reason).toContain('active child agent');
     });
   });
 
-  // -------------------------------------------------------------------------
-  // State transitions
-  // -------------------------------------------------------------------------
+  describe('review and fix cycle', () => {
+    test('engineer completion spawns a reviewer with the full-scope review prompt', async () => {
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
+      engineer.status = 'completed';
+      engineer.fullOutput = makeEngineerOutput({ summary: 'engineer finished' });
 
-  describe('state transitions', () => {
-    test('valid transition pending → engineering succeeds', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
-      // createChain already does pending → engineering
-      expect(chain.state).toBe('engineering');
-    });
-
-    test('every transition emits WORKFLOW_STATE_CHANGED', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      controller.createChain(record);
-
-      // The pending → engineering transition should have emitted state-changed
-      const stateChangedCalls = workflowCalls('WORKFLOW_STATE_CHANGED');
-      expect(stateChangedCalls.length).toBeGreaterThanOrEqual(1);
-
-      const firstChange = (stateChangedCalls[0][1] as { payload: { from: string; to: string } }).payload;
-      expect(firstChange.from).toBe('pending');
-      expect(firstChange.to).toBe('engineering');
-    });
-
-    test('invalid transition throws error', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
-      // Chain is now in 'engineering' state
-      // Try to trigger an invalid transition by completing an agent with no fullOutput
-      // so it fails. But first, let's verify state is engineering.
-      expect(chain.state).toBe('engineering');
-
-      // Trigger agent complete with no output to force a fail path via event
-      // The onAgentFailed path transitions engineering → failed (valid)
-      await emitAgentFailed(runtimeBus, record.id, 'test error');
-      expect(chain.state).toBe('failed');
-
-      // Now chain is in 'failed'. 'failed' has no valid outgoing transitions.
-      // Emitting another subagent:error for the same agent would hit failChain again.
-      // But failChain catches the invalid transition internally.
-      // We can't directly test that the error throws without accessing private methods.
-      // Instead verify the chain remains in failed state (double-fail is handled gracefully).
-      await emitAgentFailed(runtimeBus, record.id, 'second error');
-      expect(chain.state).toBe('failed');
-    });
-
-    test('failChain handles double-fail gracefully (does not throw)', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      const chain = controller.createChain(record);
-
-      // First fail
-      await emitAgentFailed(runtimeBus, record.id, 'first fail');
-      expect(chain.state).toBe('failed');
-
-      // Second fail on same chain — should not throw
-      expect(() => {
-        void emitAgentFailed(runtimeBus, record.id, 'second fail');
-      }).not.toThrow();
-      await flushMicrotasks();
-      expect(chain.state).toBe('failed');
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Review cycle
-  // -------------------------------------------------------------------------
-
-  describe('review cycle', () => {
-    test('engineer completion spawns reviewer agent', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      controller.createChain(engineerRecord);
-
-      // Mock getStatus to return the engineer record when asked
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return null;
-      });
-
-      // Emit subagent:complete for the engineer
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-
-      // Allow async handler to complete
+      await emitAgentCompleted(runtimeBus, engineer.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      expect(mockSpawn).toHaveBeenCalledTimes(1);
-      const spawnCall = mockSpawn.mock.calls[0][0] as { template: string };
-      expect(spawnCall.template).toBe('reviewer');
+      const reviewer = agentStore.get(chain.reviewerAgentId ?? '');
+      expect(reviewer).toBeDefined();
+      expect(reviewer?.wrfcRole).toBe('reviewer');
+      expect(reviewer?.wrfcId).toBe(chain.id);
+      expect(spawnInputs[1]).toMatchObject({ template: 'reviewer', dangerously_disable_wrfc: true });
+      expect(spawnInputs[1].task).toContain('WRFC Review Request');
+      expect(spawnInputs[1].task).toContain('Original WRFC ask');
+      expect(spawnInputs[1].task).toContain('Engineer report digest');
+      expect(chain.state).toBe('reviewing');
+      expect(chain.ownerDecisions.at(-1)?.action).toBe('spawn_reviewer');
     });
 
-    test('reviewer gets engineer report as task input', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      controller.createChain(engineerRecord);
+    test('child route selector can set provider, model, fallback models, and reasoning effort', async () => {
+      childRouteSelector = ({ role }) => role === 'reviewer'
+        ? {
+            provider: 'openai-subscriber',
+            model: 'gpt-5.5',
+            fallbackModels: ['openai:gpt-5.4'],
+            reasoningEffort: 'high',
+            reason: 'reviewers use high reasoning',
+          }
+        : null;
+      const controller = initTestWrfcController();
+      const { engineer, chain } = createStartedChain(controller, { provider: 'anthropic', model: 'claude-sonnet' });
 
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
+      await emitAgentCompleted(runtimeBus, engineer.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      const spawnInput = mockSpawn.mock.calls[0][0] as { task: string };
-      expect(spawnInput.task).toContain('WRFC Review Request');
-      expect(spawnInput.task).toContain('Engineer report digest');
-      expect(spawnInput.task).toContain('Gathered context');
-      expect(spawnInput.task).toContain('Planned actions');
-      expect(spawnInput.task).toContain('Applied changes');
+      expect(spawnInputs[1]).toMatchObject({
+        provider: 'openai-subscriber',
+        model: 'gpt-5.5',
+        fallbackModels: ['openai:gpt-5.4'],
+        reasoningEffort: 'high',
+      });
+      expect(chain.ownerDecisions.at(-1)?.reason).toContain('reviewers use high reasoning');
+      expect(chain.ownerDecisions.at(-1)).toMatchObject({
+        action: 'spawn_reviewer',
+        provider: 'openai-subscriber',
+        model: 'gpt-5.5',
+        reasoningEffort: 'high',
+      });
     });
 
-    test('reviewer record has dangerously_disable_wrfc=true and same wrfcId', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
+    test('passing review runs gates and completes the owner when no gates are configured', async () => {
+      const controller = initTestWrfcController();
+      const { owner, chain, engineer } = createStartedChain(controller);
+      await emitAgentCompleted(runtimeBus, engineer.id);
+      const reviewer = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewer.fullOutput = makeReviewerOutput(10, true);
 
-      const reviewerRecord = makeRecord({ id: 'agent-reviewer1' });
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return null;
-      });
+      await emitAgentCompleted(runtimeBus, reviewer.id);
+      await new Promise((r) => setTimeout(r, 50));
 
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      const spawnInput = mockSpawn.mock.calls[0][0] as { dangerously_disable_wrfc: boolean };
-      expect(spawnInput.dangerously_disable_wrfc).toBe(true);
-      expect(reviewerRecord.wrfcId).toBe(chain.id);
+      expect(chain.state).toBe('passed');
+      expect(chain.gatesPassed).toBe(true);
+      expect(chain.ownerTerminalEmitted).toBe(true);
+      expect(owner.status).toBe('completed');
+      expect(chain.ownerDecisions.map((decision) => decision.action)).toContain('review_passed');
+      expect(chain.ownerDecisions.map((decision) => decision.action)).toContain('chain_passed');
+      expect(workflowCalls('WORKFLOW_CHAIN_PASSED')).toHaveLength(1);
     });
 
-    test('reviewer spawn inherits the engineer model and provider', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord({ model: 'gpt-5.4', provider: 'openai' });
-      controller.createChain(engineerRecord);
+    test('failing review starts same-chain fixer and records owner decision', async () => {
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
+      await emitAgentCompleted(runtimeBus, engineer.id);
+      const reviewer = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewer.fullOutput = makeReviewerOutput(5, false);
 
-      const reviewerRecord = makeRecord({ id: 'agent-reviewer-provider' });
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
+      await emitAgentCompleted(runtimeBus, reviewer.id);
       await new Promise((r) => setTimeout(r, 10));
 
-      const spawnInput = mockSpawn.mock.calls[0][0] as { model?: string; provider?: string };
-      expect(spawnInput.model).toBe('gpt-5.4');
-      expect(spawnInput.provider).toBe('openai');
-    });
-
-    test('review score >= threshold transitions chain to gating', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer2',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true), // score 10 >= threshold 9.9
-      });
-
-      let spawnCallCount = 0;
-      mockSpawn.mockImplementation((_input: unknown) => {
-        spawnCallCount++;
-        return reviewerRecord;
-      });
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      // Engineer completes → spawns reviewer
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Reviewer completes with passing score
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Score >= threshold → runGates → transition to gating (then passed if no gates)
-      expect(['gating', 'passed']).toContain(chain.state);
-      expect(chain.reviewCycles).toBe(1);
-    });
-
-    test('review score < threshold transitions chain to fixing', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer3',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(5, false), // score 5 < threshold 9.9
-      });
-
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      // Engineer completes → spawns reviewer
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Reviewer completes with failing score
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
+      const fixer = agentStore.get(chain.fixerAgentId ?? '');
       expect(chain.state).toBe('fixing');
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Fix cycle
-  // -------------------------------------------------------------------------
-
-  describe('fix cycle', () => {
-    test('fixer gets full issue list with point values in task', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer4',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(5, false),
-      });
-
-      const spawnedRecords: AgentRecord[] = [];
-      mockSpawn.mockImplementation((input: unknown) => {
-        const r = makeRecord({ id: `agent-spawned-${spawnedRecords.length}` });
-        Object.assign(r, { task: (input as { task: string }).task });
-        spawnedRecords.push(r);
-        return r;
-      });
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return spawnedRecords.find((r) => r.id === id) ?? null;
-      });
-
-      // Engineer completes
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Reviewer (first spawned) completes with failing score
-      const firstSpawned = spawnedRecords[0];
-      firstSpawned.fullOutput = reviewerRecord.fullOutput;
-      await emitAgentCompleted(runtimeBus, firstSpawned.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Second spawn should be the fixer
-      expect(spawnedRecords.length).toBeGreaterThanOrEqual(2);
-      const fixerTask = spawnedRecords[1].task;
-      expect(fixerTask).toContain('WRFC Fix Request');
-      expect(fixerTask).toContain('-1 pts');
-      expect(fixerTask).toContain('Missing error handling');
-    });
-
-    test('fixer record has dangerously_disable_wrfc=true and same wrfcId', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer5',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(5, false),
-      });
-
-      const spawnInputs: unknown[] = [];
-      const spawnedRecords: AgentRecord[] = [];
-      mockSpawn.mockImplementation((input: unknown) => {
-        spawnInputs.push(input);
-        const r = makeRecord({ id: `agent-spawned-${spawnedRecords.length}` });
-        spawnedRecords.push(r);
-        return r;
-      });
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return spawnedRecords.find((r) => r.id === id) ?? null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      const firstSpawned = spawnedRecords[0];
-      firstSpawned.fullOutput = reviewerRecord.fullOutput;
-      await emitAgentCompleted(runtimeBus, firstSpawned.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Second spawn is the fixer
-      const fixerInput = spawnInputs[1] as { dangerously_disable_wrfc: boolean };
-      expect(fixerInput.dangerously_disable_wrfc).toBe(true);
-
-      // Fixer record gets wrfcId set
-      expect(spawnedRecords[1].wrfcId).toBe(chain.id);
-    });
-
-    test('fixAttempts increments on each fix', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const failingOutput = makeReviewerOutput(5, false);
-
-      const spawnedRecords: AgentRecord[] = [];
-      mockSpawn.mockImplementation((_input: unknown) => {
-        const r = makeRecord({ id: `agent-sp-${spawnedRecords.length}`, fullOutput: failingOutput });
-        spawnedRecords.push(r);
-        return r;
-      });
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return spawnedRecords.find((r) => r.id === id) ?? null;
-      });
-
-      // Engineer completes → spawns reviewer (index 0)
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(chain.fixAttempts).toBe(0);
-
-      // Reviewer 0 completes with failing score → fixAttempts becomes 1, spawns fixer (index 1)
-      await emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
-      await new Promise((r) => setTimeout(r, 10));
-
       expect(chain.fixAttempts).toBe(1);
+      expect(fixer?.wrfcRole).toBe('fixer');
+      expect(fixer?.wrfcId).toBe(chain.id);
+      expect(spawnInputs[2]).toMatchObject({ template: 'engineer', dangerously_disable_wrfc: true });
+      expect(spawnInputs[2].task).toContain('WRFC Fix Request');
+      expect(spawnInputs[2].task).toContain('Missing error handling');
+      expect(workflowCalls('WORKFLOW_FIX_ATTEMPTED')).toHaveLength(1);
+      expect(chain.ownerDecisions.at(-1)?.action).toBe('spawn_fixer');
     });
 
-    test('fix completion spawns reviewer again', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      controller.createChain(engineerRecord);
-
-      const failingOutput = makeReviewerOutput(5, false);
-
-      const spawnedRecords: AgentRecord[] = [];
-      const spawnInputs: unknown[] = [];
-      mockSpawn.mockImplementation((input: unknown) => {
-        spawnInputs.push(input);
-        const r = makeRecord({
-          id: `agent-sp-${spawnedRecords.length}`,
-          fullOutput: failingOutput,
-          template: (input as { template: string }).template,
-        });
-        spawnedRecords.push(r);
-        return r;
-      });
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return spawnedRecords.find((r) => r.id === id) ?? null;
-      });
-
-      // Engineer → reviewer spawned (index 0, template=reviewer)
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Reviewer fails → fixer spawned (index 1, template=engineer)
-      await emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Fixer completes → another reviewer spawned (index 2, template=reviewer)
-      await emitAgentCompleted(runtimeBus, spawnedRecords[1].id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Third spawn should be reviewer again
-      expect(spawnedRecords.length).toBeGreaterThanOrEqual(3);
-      const thirdTemplate = (spawnInputs[2] as { template: string }).template;
-      expect(thirdTemplate).toBe('reviewer');
-    });
-
-    test('chain fails after maxFixAttempts exhausted', async () => {
-      // Override maxFixAttempts to 1 for this test
+    test('fix completion returns to reviewer and max fix attempts eventually fails the owner chain', async () => {
       mockConfigState['wrfc.maxFixAttempts'] = 1;
+      mockConfigGetCategoryState.maxFixAttempts = 1;
+      const controller = initTestWrfcController();
+      const { owner, chain, engineer } = createStartedChain(controller);
 
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
+      await emitAgentCompleted(runtimeBus, engineer.id);
+      const reviewerOne = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewerOne.fullOutput = makeReviewerOutput(5, false);
+      await emitAgentCompleted(runtimeBus, reviewerOne.id);
+      const fixer = agentStore.get(chain.fixerAgentId ?? '')!;
+      fixer.fullOutput = makeEngineerOutput({ summary: 'fix attempt complete' });
+      await emitAgentCompleted(runtimeBus, fixer.id);
+      const reviewerTwo = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewerTwo.fullOutput = makeReviewerOutput(5, false);
+      await emitAgentCompleted(runtimeBus, reviewerTwo.id);
+      await new Promise((r) => setTimeout(r, 20));
 
-      const failingOutput = makeReviewerOutput(5, false);
-
-      const spawnedRecords: AgentRecord[] = [];
-      mockSpawn.mockImplementation((_input: unknown) => {
-        const r = makeRecord({
-          id: `agent-sp-${spawnedRecords.length}`,
-          fullOutput: failingOutput,
-        });
-        spawnedRecords.push(r);
-        return r;
-      });
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return spawnedRecords.find((r) => r.id === id) ?? null;
-      });
-
-      // Engineer → reviewer (index 0)
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Reviewer fails → fixer (index 1), fixAttempts=1
-      await emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Fixer completes → reviewer (index 2)
-      await emitAgentCompleted(runtimeBus, spawnedRecords[1].id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Second reviewer fails → fixAttempts=1 >= maxFixAttempts=1 → chain fails
-      await emitAgentCompleted(runtimeBus, spawnedRecords[2].id);
-      await new Promise((r) => setTimeout(r, 10));
-
+      expect(chain.reviewCycles).toBe(2);
       expect(chain.state).toBe('failed');
       expect(chain.error).toContain('below threshold');
-      expect(chain.reviewCycles).toBe(2);
-    });
-
-    test('WORKFLOW_FIX_ATTEMPTED event emitted on each fix', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      controller.createChain(engineerRecord);
-
-      const failingOutput = makeReviewerOutput(5, false);
-      const spawnedRecords: AgentRecord[] = [];
-
-      mockSpawn.mockImplementation((_input: unknown) => {
-        const r = makeRecord({ id: `agent-sp-${spawnedRecords.length}`, fullOutput: failingOutput });
-        spawnedRecords.push(r);
-        return r;
-      });
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return spawnedRecords.find((r) => r.id === id) ?? null;
-      });
-
-      // Engineer completes
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Reviewer fails → fix attempt 1
-      await emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      const fixAttemptCalls = workflowCalls('WORKFLOW_FIX_ATTEMPTED');
-      expect(fixAttemptCalls.length).toBe(1);
-      expect((fixAttemptCalls[0][1] as { payload: object }).payload).toMatchObject({ attempt: 1 });
+      expect(owner.status).toBe('failed');
+      expect(chain.ownerTerminalEmitted).toBe(true);
+      expect(workflowCalls('WORKFLOW_CHAIN_FAILED')).toHaveLength(1);
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Quality gates
-  // -------------------------------------------------------------------------
-
-  describe('quality gates', () => {
-    test('all gates pass → chain transitions to passed', async () => {
-      // Configure a passing gate
-      mockConfigGetCategoryState.gates = [{ name: 'typecheck', command: 'exit 0', enabled: true }];
-
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-gates',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      // Allow extra time for gate execution
-      await new Promise((r) => setTimeout(r, 200));
-
-      expect(['gating', 'passed']).toContain(chain.state);
-    });
-
-    test('no gates configured → chain transitions to passed directly', async () => {
-      // Default mock: gates = []
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-nogates',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      await new Promise((r) => setTimeout(r, 50));
-
-      expect(chain.state).toBe('passed');
-    });
-
-    test('gatesPassed set to true when all gates pass', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-gp',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      await new Promise((r) => setTimeout(r, 50));
-
-      expect(chain.gatesPassed).toBe(true);
-    });
-
-    test('WORKFLOW_GATE_RESULT emitted per gate', async () => {
+  describe('gates and auto-commit', () => {
+    test('enabled gate results are emitted before a passing chain completes', async () => {
       mockConfigGetCategoryState.gates = [
-        { name: 'typecheck', command: 'exit 0', enabled: true },
+        { name: 'custom-pass-one', command: 'exit 0', enabled: true },
         { name: 'lint', command: 'exit 0', enabled: true },
       ];
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
+      await emitAgentCompleted(runtimeBus, engineer.id);
+      const reviewer = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewer.fullOutput = makeReviewerOutput(10, true);
 
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-gr',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
+      await emitAgentCompleted(runtimeBus, reviewer.id);
       await new Promise((r) => setTimeout(r, 500));
 
-      const gateResultCalls = workflowCalls('WORKFLOW_GATE_RESULT');
-      expect(gateResultCalls.length).toBe(2);
-    });
-
-    test('gate failure → new chain spawned (without dangerously_disable_wrfc)', async () => {
-      mockConfigGetCategoryState.gates = [{ name: 'typecheck', command: 'exit 1', enabled: true }];
-
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-gf',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-
-      const spawnInputs: unknown[] = [];
-      mockSpawn.mockImplementation((input: unknown) => {
-        spawnInputs.push(input);
-        return reviewerRecord;
-      });
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      await new Promise((r) => setTimeout(r, 500));
-
-      // Current chain should transition to passed (gate failure means CURRENT chain passed review)
       expect(chain.state).toBe('passed');
-
-      // A follow-up agent should have been spawned WITHOUT dangerously_disable_wrfc for the gate failure
-      // spawnInputs[0] = reviewer, spawnInputs[1] = follow-up engineer (no dangerously_disable_wrfc)
-      expect(spawnInputs.length).toBeGreaterThanOrEqual(2);
-      const followUpInput = spawnInputs[1] as { dangerously_disable_wrfc?: boolean; task: string };
-      expect(followUpInput.dangerously_disable_wrfc).toBeUndefined();
-      expect(followUpInput.task).toContain('WRFC Gate Failure Fix');
+      expect(chain.gateResults?.map((result) => result.gate)).toEqual(['custom-pass-one', 'lint']);
+      expect(workflowCalls('WORKFLOW_GATE_RESULT')).toHaveLength(2);
+      expect(chain.ownerDecisions.map((decision) => decision.action)).toContain('gate_passed');
     });
-  });
 
-  // -------------------------------------------------------------------------
-  // Auto-commit
-  // -------------------------------------------------------------------------
+    test('gate failure creates a same-chain gate fixer instead of spawning a new WRFC chain', async () => {
+      mockConfigGetCategoryState.gates = [{ name: 'custom-fail', command: 'exit 1', enabled: true }];
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
+      await emitAgentCompleted(runtimeBus, engineer.id);
+      const reviewer = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewer.fullOutput = makeReviewerOutput(10, true);
 
-  describe('auto-commit', () => {
-    // Helper: set up configGet to return autoCommit=true
-    function enableAutoCommit() {
+      await emitAgentCompleted(runtimeBus, reviewer.id);
+      await new Promise((r) => setTimeout(r, 500));
+
+      const fixer = agentStore.get(chain.fixerAgentId ?? '');
+      expect(chain.state).toBe('fixing');
+      expect(fixer?.wrfcRole).toBe('fixer');
+      expect(spawnInputs.at(-1)?.task).toContain('WRFC Gate Failure Fix');
+      expect(spawnInputs.at(-1)?.dangerously_disable_wrfc).toBe(true);
+      expect(chain.ownerDecisions.at(-1)?.action).toBe('spawn_gate_fixer');
+    });
+
+    test('auto-commit merges and cleans every owner-chain agent on pass', async () => {
       mockConfigState['wrfc.autoCommit'] = true;
-    }
+      mockConfigGetCategoryState.autoCommit = true;
+      mkdirSync(join(projectRoot, '.git'));
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
+      await emitAgentCompleted(runtimeBus, engineer.id);
+      const reviewer = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewer.fullOutput = makeReviewerOutput(10, true);
 
-    test('auto-commit on gate pass: transitions through committing to passed', async () => {
-      enableAutoCommit();
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-ac1',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
+      await emitAgentCompleted(runtimeBus, reviewer.id);
       await new Promise((r) => setTimeout(r, 100));
 
-      expect(chain.state).toBe('passed');
-      expect(mockMerge).toHaveBeenCalledTimes(1);
-    });
-
-    test('auto-commit on gate pass: emits WORKFLOW_AUTO_COMMITTED event', async () => {
-      enableAutoCommit();
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-ac2',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      await new Promise((r) => setTimeout(r, 100));
-
-      const autoCommitCalls = workflowCalls('WORKFLOW_AUTO_COMMITTED');
-      expect(autoCommitCalls.length).toBe(1);
-    });
-
-    test('auto-commit on gate pass: calls mockMerge with last agent ID', async () => {
-      enableAutoCommit();
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-ac3',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      await new Promise((r) => setTimeout(r, 100));
-
-      // The last agent ID in allAgentIds is the reviewer (last pushed)
       const lastAgentId = chain.allAgentIds[chain.allAgentIds.length - 1];
-      expect(mockMerge).toHaveBeenCalledTimes(1);
-      expect(mockMerge.mock.calls[0][0]).toBe(lastAgentId);
-    });
-
-    test('auto-commit on gate pass: calls mockCleanup for all agents in chain', async () => {
-      enableAutoCommit();
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-ac4',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
-      await new Promise((r) => setTimeout(r, 100));
-
-      // Wait for async cleanup to settle
-      await new Promise((r) => setTimeout(r, 50));
-
-      const cleanedIds = mockCleanup.mock.calls.map((call) => call[0]);
+      expect(chain.state).toBe('passed');
+      expect(mockMerge).toHaveBeenCalledWith(lastAgentId);
       for (const id of chain.allAgentIds) {
-        expect(cleanedIds).toContain(id);
+        expect(mockCleanup.mock.calls.map((call) => call[0])).toContain(id);
       }
+      expect(workflowCalls('WORKFLOW_AUTO_COMMITTED')).toHaveLength(1);
     });
 
-    test('auto-commit merge failure transitions chain to failed', async () => {
-      enableAutoCommit();
-      mockMerge.mockImplementation(async (_id: string) => {
-        throw new Error('merge conflict');
-      });
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
+    test('auto-commit merge failure fails the owner chain with the merge error', async () => {
+      mockConfigState['wrfc.autoCommit'] = true;
+      mockConfigGetCategoryState.autoCommit = true;
+      mkdirSync(join(projectRoot, '.git'));
+      mockMerge.mockImplementation(async () => { throw new Error('merge conflict'); });
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
+      await emitAgentCompleted(runtimeBus, engineer.id);
+      const reviewer = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewer.fullOutput = makeReviewerOutput(10, true);
 
-      const reviewerRecord = makeRecord({
-        id: 'agent-reviewer-ac5',
-        template: 'reviewer',
-        fullOutput: makeReviewerOutput(10, true),
-      });
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        if (id === reviewerRecord.id) return reviewerRecord;
-        return null;
-      });
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-      await emitAgentCompleted(runtimeBus, reviewerRecord.id);
+      await emitAgentCompleted(runtimeBus, reviewer.id);
       await new Promise((r) => setTimeout(r, 100));
 
       expect(chain.state).toBe('failed');
       expect(chain.error).toContain('merge conflict');
-    });
-
-    test('auto-commit with fixer as last agent: mockMerge called with fixer ID', async () => {
-      enableAutoCommit();
-
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      const failingOutput = makeReviewerOutput(5, false);
-      const passingOutput = makeReviewerOutput(10, true);
-
-      const spawnedRecords: AgentRecord[] = [];
-      const spawnInputs: unknown[] = [];
-      mockSpawn.mockImplementation((input: unknown) => {
-        spawnInputs.push(input);
-        const tmpl = (input as { template: string }).template;
-        // reviewer1 gets failing output, fixer gets engineer output, reviewer2 gets passing output
-        const idx = spawnedRecords.length;
-        const r = makeRecord({
-          id: `agent-sp-${idx}`,
-          template: tmpl,
-          fullOutput: tmpl === 'reviewer'
-            ? (idx === 0 ? failingOutput : passingOutput)
-            : undefined,
-        });
-        spawnedRecords.push(r);
-        return r;
-      });
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return spawnedRecords.find((r) => r.id === id) ?? null;
-      });
-
-      // Engineer completes → reviewer0 spawned
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // reviewer0 completes (failing) → fixer spawned (index 1)
-      await emitAgentCompleted(runtimeBus, spawnedRecords[0].id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // fixer completes → reviewer2 spawned (index 2)
-      await emitAgentCompleted(runtimeBus, spawnedRecords[1].id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // reviewer2 completes (passing) → autoCommit
-      await emitAgentCompleted(runtimeBus, spawnedRecords[2].id);
-      await new Promise((r) => setTimeout(r, 100));
-
-      // Last agent in allAgentIds is reviewer2 (index 2)
-      const lastAgentId = chain.allAgentIds[chain.allAgentIds.length - 1];
-      expect(mockMerge).toHaveBeenCalledTimes(1);
-      expect(mockMerge.mock.calls[0][0]).toBe(lastAgentId);
+      expect(workflowCalls('WORKFLOW_CHAIN_FAILED')).toHaveLength(1);
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Error handling
-  // -------------------------------------------------------------------------
+  describe('failure handling', () => {
+    test('child failure fails the owner chain and cancels running children', async () => {
+      const controller = initTestWrfcController();
+      const { owner, chain, engineer } = createStartedChain(controller);
+      engineer.status = 'running';
 
-  describe('error handling', () => {
-    test('chain fails when agent has no fullOutput (null output)', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord({ fullOutput: undefined });
-      const chain = controller.createChain(engineerRecord);
-
-      mockGetStatus.mockImplementation((id: string) => {
-        if (id === engineerRecord.id) return engineerRecord;
-        return null;
-      });
-
-      // Engineer with no fullOutput — controller constructs minimal report, spawns reviewer
-      // This is valid behavior (fallback path), chain should move to reviewing
-      const reviewerRecord = makeRecord({ id: 'agent-reviewer-noout', template: 'reviewer' });
-      mockSpawn.mockImplementation((_input: unknown) => reviewerRecord);
-
-      await emitAgentCompleted(runtimeBus, engineerRecord.id);
-      await new Promise((r) => setTimeout(r, 10));
-
-      // Chain moved to reviewing (fallback minimal report was created)
-      expect(chain.state).toBe('reviewing');
-    });
-
-    test('chain fails when engineer agent fails (subagent:error)', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
-
-      await emitAgentFailed(runtimeBus, engineerRecord.id, 'LLM call failed');
+      await emitAgentFailed(runtimeBus, engineer.id, 'LLM call failed');
 
       expect(chain.state).toBe('failed');
       expect(chain.error).toContain('LLM call failed');
-      expect(chain.completedAt).toBeDefined();
+      expect(owner.status).toBe('failed');
+      expect(chain.ownerDecisions.at(-1)?.action).toBe('chain_failed');
+      expect(workflowCalls('WORKFLOW_CHAIN_FAILED')).toHaveLength(1);
     });
 
-    test('chain emits WORKFLOW_CHAIN_FAILED on failure', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const engineerRecord = makeRecord();
-      const chain = controller.createChain(engineerRecord);
+    test('owner completion before terminal chain state is treated as controller failure', async () => {
+      const controller = initTestWrfcController();
+      const { owner, chain } = createStartedChain(controller);
 
-      await emitAgentFailed(runtimeBus, engineerRecord.id, 'API timeout');
+      await emitAgentCompleted(runtimeBus, owner.id);
 
-      const failedCalls = workflowCalls('WORKFLOW_CHAIN_FAILED');
-      expect(failedCalls.length).toBe(1);
-      expect((failedCalls[0][1] as { payload: object }).payload).toMatchObject({ chainId: chain.id });
-    });
-
-    test('subagent:error for unknown agent ID is ignored', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-
-      // No chain exists for this agent
-      expect(() => {
-        void emitAgentFailed(runtimeBus, 'agent-unknown-xyz', 'fail');
-      }).not.toThrow();
-      await flushMicrotasks();
-    });
-
-    test('subagent:complete for unknown agent ID is ignored', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-
-      // No chain exists for this agent
-      await emitAgentCompleted(runtimeBus, 'agent-unknown-xyz');
-      await flushMicrotasks();
-      // No throw = ignored successfully
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // Factory behavior
-  // -------------------------------------------------------------------------
-
-  describe('factory', () => {
-    test('initTestWrfcController returns a controller instance', async () => {
-      const a = initTestWrfcController(runtimeBus);
-      expect(a).toBeInstanceOf(WrfcController);
-    });
-
-    test('initTestWrfcController creates distinct controller instances', async () => {
-      const a = initTestWrfcController(runtimeBus);
-      const b = initTestWrfcController(new RuntimeEventBus());
-      expect(a).not.toBe(b);
+      expect(chain.state).toBe('failed');
+      expect(chain.error).toContain('WRFC owner agent completed before the chain reached a terminal state');
     });
 
     test('dispose stops event listener processing', async () => {
-      const controller = initTestWrfcController(runtimeBus);
-      const record = makeRecord();
-      controller.createChain(record);
-      const chain = controller.getChain(record.wrfcId!);
-
-      // Dispose removes all event listeners
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
       controller.dispose();
 
-      // Emit completion event after dispose — should be ignored (no transition)
-      await emitAgentCompleted(runtimeBus, record.id);
+      await emitAgentCompleted(runtimeBus, engineer.id);
       await new Promise((r) => setTimeout(r, 20));
 
-      // Chain should still be in 'engineering' — event was not processed
-      expect(chain!.state).toBe('engineering');
+      expect(chain.state).toBe('engineering');
+      expect(chain.reviewerAgentId).toBeUndefined();
     });
   });
 });

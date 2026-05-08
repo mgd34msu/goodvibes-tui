@@ -22,8 +22,10 @@ function makeEngineerReport(overrides?: Partial<EngineerReport>): EngineerReport
 
 describe('wrfc-reporting buildReviewTask', () => {
   test('builds a compact digest instead of embedding full JSON', () => {
-    const task = buildReviewTask('wrfc-12345678', makeEngineerReport(), 9.5);
+    const task = buildReviewTask('wrfc-12345678', 'Implement provider diagnostics', makeEngineerReport(), 9.5);
 
+    expect(task).toContain('Original WRFC ask (authoritative full review scope):');
+    expect(task).toContain('Implement provider diagnostics');
     expect(task).toContain('Engineer report digest:');
     expect(task).toContain('Files modified (2): src/agents/wrfc-reporting.ts, src/providers/openai-compat.ts');
     expect(task).toContain('Decisions:');
@@ -32,7 +34,7 @@ describe('wrfc-reporting buildReviewTask', () => {
   });
 
   test('truncates large file and action lists in the digest', () => {
-    const task = buildReviewTask('wrfc-12345678', makeEngineerReport({
+    const task = buildReviewTask('wrfc-12345678', 'Implement provider diagnostics', makeEngineerReport({
       filesModified: [
         'src/a.ts',
         'src/b.ts',
