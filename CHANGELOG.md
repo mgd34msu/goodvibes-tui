@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.80] — 2026-05-08
+
+### Changes
+- 2b40d30e Fix Bun global trust command
+
 ## [0.19.79] — 2026-05-08
 
 ### Changes
