@@ -1,21 +1,28 @@
-import { beforeEach, describe, expect, test, mock } from 'bun:test';
-import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
-import { getTestAgentManager, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
+import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
+import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
+import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { makeProjectTempDir } from '../helpers/project-temp.ts';
 
 describe('Agent lifecycle integration', () => {
-  let manager: AgentManager;
-
-  beforeEach(async () => {
-    // Some earlier suites use process-global module mocks for agent surfaces.
-    // Restore them here and re-import the concrete implementations.
-    mock.restore();
-
-    const { AgentManager } = await import('@pellux/goodvibes-sdk/platform/tools');
-    resetTestRuntimeServices();
-    manager = getTestAgentManager();
-  });
+  function createManager(): AgentManager {
+    const root = makeProjectTempDir('gv-agent-lifecycle');
+    const configDir = join(root, 'config');
+    const configManager = new ConfigManager({
+      surfaceRoot: 'tui',
+      configDir,
+      workingDir: root,
+      homeDir: root,
+    });
+    return new AgentManager({
+      configManager,
+      messageBus: new AgentMessageBus(),
+    });
+  }
 
   test('spawn returns a pending record with a valid ID', () => {
+    const manager = createManager();
     const record = manager.spawn({ mode: 'spawn', task: 'Stuck task' });
     expect(record.status).toBe('pending');
     expect(record.id).toMatch(/^agent-[0-9a-f]{8}$/);
@@ -23,6 +30,7 @@ describe('Agent lifecycle integration', () => {
   });
 
   test('multiple spawned records remain independently addressable', () => {
+    const manager = createManager();
     const a = manager.spawn({ mode: 'spawn', task: 'Task A' });
     const b = manager.spawn({ mode: 'spawn', task: 'Task B' });
     const c = manager.spawn({ mode: 'spawn', task: 'Task C' });
@@ -35,6 +43,7 @@ describe('Agent lifecycle integration', () => {
   });
 
   test('list reflects spawned agents', () => {
+    const manager = createManager();
     manager.spawn({ mode: 'spawn', task: 'List test A' });
     manager.spawn({ mode: 'spawn', task: 'List test B' });
 
@@ -45,12 +54,14 @@ describe('Agent lifecycle integration', () => {
   });
 
   test('cancel transitions a pending agent to cancelled', () => {
+    const manager = createManager();
     const record = manager.spawn({ mode: 'spawn', task: 'Stuck task' });
     expect(manager.cancel(record.id)).toBe(true);
     expect(manager.getStatus(record.id)?.status).toBe('cancelled');
   });
 
   test('cancel returns false for unknown agents', () => {
+    const manager = createManager();
     expect(manager.cancel('agent-nonexistent')).toBe(false);
   });
 });

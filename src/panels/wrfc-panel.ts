@@ -269,14 +269,12 @@ export class WrfcPanel extends BasePanel {
               const total = selectedChain.constraints.length;
               const findings = selectedChain.reviewerReport?.constraintFindings;
               const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
-              const inherited = selectedChain.constraints.filter(c => c.source === 'inherited').length;
-              const inheritedPart = inherited > 0 ? ` (${inherited} inherited)` : '';
               const satFg = !findings || findings.length === 0
                 ? DEFAULT_PANEL_PALETTE.dim
                 : satisfied === total ? C.constraintSat : C.constraintUnsat;
               return [
                 [' Constraints ', DEFAULT_PANEL_PALETTE.label],
-                [`${satisfied} sat / ${total} total${inheritedPart}`, satFg],
+                [`${satisfied} sat / ${total} total`, satFg],
               ] as Array<[string, string]>;
             })()),
           ] : []),
@@ -452,8 +450,7 @@ export class WrfcPanel extends BasePanel {
       for (const constraint of displayed) {
         if (lines.length >= maxLines) break;
         const marker = constraintStatusMarker(constraint, findings);
-        const inheritedMark = constraint.source === 'inherited' ? ' *' : '';
-        const statusTag = `${marker.tag}${inheritedMark}`;
+        const statusTag = marker.tag;
         const rowPrefix = `${indent}  ${statusTag}  `;
         const textMax = Math.max(8, width - rowPrefix.length);
         const constraintText = truncate(constraint.text, textMax);

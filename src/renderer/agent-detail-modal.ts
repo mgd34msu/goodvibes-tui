@@ -199,11 +199,10 @@ export function renderAgentDetailModal(
           style: { dim: true },
         });
         for (const c of chain.constraints) {
-          const src = c.source === 'inherited' ? ' [inherited]' : '';
           const text = c.text.length > 80 ? c.text.slice(0, 77) + '…' : c.text;
           sections.push({
             type: 'text',
-            content: `  [${c.id}]${src} ${text}`,
+            content: `  [${c.id}] ${text}`,
             style: { fg: '246' },
           });
         }
