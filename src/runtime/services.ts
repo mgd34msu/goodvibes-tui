@@ -11,6 +11,7 @@ import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import {
   HomeGraphService,
+  HOME_GRAPH_KNOWLEDGE_EXTENSION,
   KnowledgeService,
   KnowledgeSemanticService,
   KnowledgeStore,
@@ -83,6 +84,9 @@ import {
   createWorkflowServices,
   type WorkflowServices,
 } from '@pellux/goodvibes-sdk/platform/tools';
+
+const REGULAR_KNOWLEDGE_DB_FILE = 'knowledge-wiki.sqlite';
+const HOME_GRAPH_KNOWLEDGE_DB_FILE = 'knowledge-home-graph.sqlite';
 
 function buildFallbackModelDefinition(provider: string, modelId: string): ModelDefinition {
   const providerLower = provider.toLowerCase();
@@ -409,13 +413,26 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
       return record.id;
     },
   });
-  const knowledgeStore = new KnowledgeStore({ configManager });
+  const knowledgeStore = new KnowledgeStore({
+    configManager,
+    dbFileName: REGULAR_KNOWLEDGE_DB_FILE,
+  });
+  const homeGraphKnowledgeStore = new KnowledgeStore({
+    configManager,
+    dbFileName: HOME_GRAPH_KNOWLEDGE_DB_FILE,
+  });
+  const knowledgeSemanticLlm = createProviderBackedKnowledgeSemanticLlm(providerRegistry, {
+    timeoutMs: 20_000,
+    maxConcurrent: 1,
+  });
   const knowledgeSemanticService = new KnowledgeSemanticService(knowledgeStore, {
-    llm: createProviderBackedKnowledgeSemanticLlm(providerRegistry, {
-      timeoutMs: 20_000,
-      maxConcurrent: 1,
-    }),
+    llm: knowledgeSemanticLlm,
     maxLlmSourcesPerReindex: 3,
+  });
+  const homeGraphSemanticService = new KnowledgeSemanticService(homeGraphKnowledgeStore, {
+    llm: knowledgeSemanticLlm,
+    maxLlmSourcesPerReindex: 3,
+    objectProfiles: HOME_GRAPH_KNOWLEDGE_EXTENSION.objectProfiles,
   });
   const knowledgeService = new KnowledgeService(knowledgeStore, artifactStore, undefined, {
     memoryRegistry,
@@ -423,8 +440,8 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     semanticService: knowledgeSemanticService,
   });
   knowledgeService.attachRuntimeBus(options.runtimeBus);
-  const homeGraphService = new HomeGraphService(knowledgeStore, artifactStore, {
-    semanticService: knowledgeSemanticService,
+  const homeGraphService = new HomeGraphService(homeGraphKnowledgeStore, artifactStore, {
+    semanticService: homeGraphSemanticService,
   });
   const projectPlanningProjectId = projectPlanningProjectIdFromPath(workingDirectory);
   const projectPlanningService = new ProjectPlanningService(knowledgeStore, {
@@ -444,6 +461,10 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   knowledgeSemanticService.setGapRepairer(createWebKnowledgeGapRepairer({
     searchService: webSearchService,
     ingestService: knowledgeService,
+  }));
+  homeGraphSemanticService.setGapRepairer(createWebKnowledgeGapRepairer({
+    searchService: webSearchService,
+    ingestService: homeGraphService,
   }));
   const mediaProviders = new MediaProviderRegistry();
   ensureBuiltinMediaProviders(mediaProviders, artifactStore, providerRegistry);

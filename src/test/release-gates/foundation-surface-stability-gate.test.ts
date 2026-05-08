@@ -201,7 +201,7 @@ describe('foundation surface stability gate', () => {
     expect(typeof Knowledge.KnowledgeGraphqlService).toBe('function');
     expect(typeof Knowledge.inspectKnowledgeGraphqlAccess).toBe('function');
     expect(typeof Knowledge.resolveKnowledgeDbPathFromControlPlaneDir).toBe('function');
-    expect(Knowledge.resolveKnowledgeDbPathFromControlPlaneDir(join('/tmp/control-plane'))).toBe(join('/tmp/control-plane', 'knowledge.sqlite'));
+    expect(Knowledge.resolveKnowledgeDbPathFromControlPlaneDir(join('/tmp/control-plane'))).toBe(join('/tmp/control-plane', 'knowledge-wiki.sqlite'));
     expect(Knowledge.inspectKnowledgeGraphqlAccess('{ status { sourceCount } }')).toEqual({
       operation: 'query',
       requiredScopes: ['read:knowledge'],
