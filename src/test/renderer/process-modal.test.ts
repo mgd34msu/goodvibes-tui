@@ -22,6 +22,10 @@ const wrfcChains = new Map<string, {
   task: string;
   ownerAgentId: string;
   state: string;
+  engineerAgentId?: string;
+  reviewerAgentId?: string;
+  fixerAgentId?: string;
+  allAgentIds?: string[];
   constraints: unknown[];
 }>();
 
@@ -83,7 +87,10 @@ function createProcessModal(): ProcessModal {
         return true;
       },
     },
-    wrfcController: { getChain: (id: string) => wrfcChains.get(id) as never ?? null },
+    wrfcController: {
+      getChain: (id: string) => wrfcChains.get(id) as never ?? null,
+      listChains: () => Array.from(wrfcChains.values()) as never,
+    },
   });
 }
 
@@ -270,6 +277,94 @@ describe('ProcessModal state', () => {
     expect(modal.entries[1].treePrefix).toBe('└─ ');
     expect(modal.entries[0].label).toContain('[WRFC owner]');
     expect(modal.entries[1].label).toContain('[Engineer]');
+  });
+
+  test('refresh() infers WRFC tree from chain when live records are generic engineers', () => {
+    const wrfcId = 'wrfc-inferred-chain';
+    const ownerId = seedAgent('Design a minimal Python rate limiter library API for an empty project.', 'running', {
+      template: 'engineer',
+      reviewMode: 'wrfc',
+      startedAt: Date.now() - 2000,
+    });
+    const engineerId = seedAgent('Design a minimal Python rate limiter library API for an empty project.', 'running', {
+      template: 'engineer',
+      reviewMode: 'wrfc',
+      startedAt: Date.now() - 1000,
+    });
+    wrfcChains.set(wrfcId, {
+      id: wrfcId,
+      task: 'Build a simple rate limiter',
+      ownerAgentId: ownerId,
+      engineerAgentId: engineerId,
+      allAgentIds: [ownerId, engineerId],
+      state: 'engineering',
+      constraints: [],
+    });
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.map((entry) => entry.id)).toEqual([ownerId, engineerId]);
+    expect(modal.entries[0].treePrefix ?? '').toBe('');
+    expect(modal.entries[1].treePrefix).toBe('└─ ');
+    expect(modal.entries[0].label).toContain('[WRFC owner]');
+    expect(modal.entries[1].label).toContain('[Engineer]');
+  });
+
+  test('refresh() infers duplicate WRFC owner rows when chain metadata has not reached the records yet', () => {
+    const ownerId = seedAgent('Complete the requested work as a single WRFC owner chain.', 'running', {
+      template: 'engineer',
+      reviewMode: 'wrfc',
+      startedAt: Date.now() - 2000,
+    });
+    const childId = seedAgent('Complete the requested work as a single WRFC owner chain.', 'running', {
+      template: 'engineer',
+      reviewMode: 'wrfc',
+      startedAt: Date.now() - 1000,
+    });
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.map((entry) => entry.id)).toEqual([ownerId, childId]);
+    expect(modal.entries[0].label).toContain('[WRFC owner]');
+    expect(modal.entries[1].treePrefix).toBe('└─ ');
+    expect(modal.entries[1].label).toContain('[Engineer]');
+  });
+
+  test('refresh() keeps WRFC owner visible until chain reaches a terminal state', () => {
+    const wrfcId = 'wrfc-owner-visible';
+    const ownerId = seedAgent('Complete the requested work as a single WRFC owner chain.', 'completed', {
+      wrfcId,
+      wrfcRole: 'owner',
+      template: 'engineer',
+      completedAt: Date.now() - 100,
+      startedAt: Date.now() - 3000,
+    });
+    const reviewerId = seedAgent('WRFC Review Request\nOriginal task', 'running', {
+      wrfcId,
+      wrfcRole: 'reviewer',
+      template: 'reviewer',
+      parentAgentId: ownerId,
+      startedAt: Date.now() - 1000,
+    });
+    wrfcChains.set(wrfcId, {
+      id: wrfcId,
+      task: 'Build a simple rate limiter',
+      ownerAgentId: ownerId,
+      reviewerAgentId: reviewerId,
+      allAgentIds: [ownerId, reviewerId],
+      state: 'reviewing',
+      constraints: [],
+    });
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.map((entry) => entry.id)).toEqual([ownerId, reviewerId]);
+    expect(modal.entries[0].status).toBe('running');
+    expect(modal.entries[0].label).toContain('[WRFC owner]');
+    expect(modal.entries[1].treePrefix).toBe('└─ ');
   });
 
   test('refresh() draws branch and final connectors for multiple WRFC children', () => {
