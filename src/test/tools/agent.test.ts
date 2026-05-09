@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, spyOn } from 'bun:test';
 import { createAgentTool, AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
-import { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
+import { AgentMessageBus, WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { RuntimeEventBus } from '@/runtime/index.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { OrchestrationEvent } from '@/runtime/index.ts';
@@ -18,11 +18,19 @@ const flushMicrotasks = async () => { await Promise.resolve(); await Promise.res
 function makeAgentHarness() {
   const configDir = join(tmpdir(), `gv-agent-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const configManager = new ConfigManager({ surfaceRoot: 'tui',  configDir });
+  const runtimeBus = new RuntimeEventBus();
+  const messageBus = new AgentMessageBus();
   const manager = new AgentManager({
-    messageBus: new AgentMessageBus(),
+    messageBus,
     configManager,
   });
-  const messageBus = new AgentMessageBus();
+  manager.setRuntimeBus(runtimeBus);
+  const wrfcController = new WrfcController(runtimeBus, messageBus, {
+    agentManager: manager,
+    configManager,
+    projectRoot: configDir,
+  });
+  manager.setWrfcController(wrfcController);
   const agentTool = createAgentTool({
     manager,
     messageBus,
@@ -126,9 +134,34 @@ describe('spawn mode', () => {
     expect(result.template).toBe('engineer');
     expect(result.reviewMode).toBe('wrfc');
     expect(result.task).toBe('Review code');
-    expect(result.successCriteria).toEqual([
-      'Keep the work as one WRFC owner chain; review, test, verification, and fix phases must remain lifecycle children.',
-    ]);
+    expect(result.authoritativeWrfcChain).toBe(true);
+    expect(result.continueRootSpawning).toBe(false);
+    expect(result.orchestrationStopSignal).toBe('wrfc_owner_chain_started');
+    expect(result.wrfcRole).toBe('owner');
+    expect(result.wrfcRouteReason).toBe('root-review-role-normalized');
+    expect(result.successCriteria).toContain('Keep the work as one WRFC owner chain; review, test, verification, and fix phases must remain lifecycle children.');
+  });
+
+  test('exact WRFC review root request from live repro normalizes into owner chain', async () => {
+    const result = await runAgent({
+      mode: 'spawn',
+      task: 'WRFC review for a token bucket rate limiter',
+      template: 'reviewer',
+      reviewMode: 'wrfc',
+      tools: ['read', 'find'],
+      restrictTools: true,
+    });
+
+    expect(result.template).toBe('engineer');
+    expect(result.reviewMode).toBe('wrfc');
+    expect(result.task).toBe('WRFC review for a token bucket rate limiter');
+    expect(result.authoritativeWrfcChain).toBe(true);
+    expect(result.continueRootSpawning).toBe(false);
+    expect(result.orchestrationStopSignal).toBe('wrfc_owner_chain_started');
+    expect(result.wrfcRole).toBe('owner');
+    expect(result.wrfcRouteReason).toBe('root-review-role-normalized');
+    expect(result.successCriteria).toContain('Keep the work as one WRFC owner chain; review, test, verification, and fix phases must remain lifecycle children.');
+    expect(harness.manager.list().filter((record) => record.parentAgentId == null)).toHaveLength(1);
   });
 
   test('spawn without template defaults to general', async () => {
@@ -220,10 +253,12 @@ describe('spawn mode', () => {
     expect(agents[0]?.cohort).toBe('bad-wrfc-fanout');
     const record = await runAgent({ mode: 'get', agentId: agents[0]!.id });
     expect(record.reviewMode).toBe('wrfc');
-    expect(record.task).toContain('Complete the requested work as a single WRFC owner chain');
-    expect(record.task).toContain('Implement the feature as WRFC owner.');
-    expect(record.task).toContain('Review the feature at the same time.');
-    expect(harness.manager.list()).toHaveLength(1);
+    expect(record.wrfcRole).toBe('owner');
+    expect(record.task).toBe('Implement the feature as WRFC owner.');
+    expect(result.authoritativeWrfcChain).toBe(true);
+    expect(result.continueRootSpawning).toBe(false);
+    expect(result.orchestrationStopSignal).toBe('wrfc_owner_chain_started');
+    expect(harness.manager.list().filter((agent) => agent.parentAgentId == null)).toHaveLength(1);
   });
 
   test('allows exactly one WRFC owner task to start one chain', async () => {
@@ -247,8 +282,8 @@ describe('spawn mode', () => {
     expect(agents[0]?.cohort).toBe('single-wrfc-owner');
   });
 
-  test('blocks reviewer or verifier templates as WRFC root owners', async () => {
-    const result = await runAgentMayFail({
+  test('normalizes explicit reviewer WRFC root owners instead of blocking', async () => {
+    const result = await runAgent({
       mode: 'spawn',
       task: 'Review the feature through WRFC.',
       template: 'reviewer',
@@ -257,12 +292,18 @@ describe('spawn mode', () => {
       restrictTools: true,
     });
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('WRFC root task must be an owner');
-    expect(harness.manager.list()).toHaveLength(0);
+    expect(result.template).toBe('engineer');
+    expect(result.reviewMode).toBe('wrfc');
+    expect(result.task).toBe('Review the feature through WRFC.');
+    expect(result.authoritativeWrfcChain).toBe(true);
+    expect(result.continueRootSpawning).toBe(false);
+    expect(result.orchestrationStopSignal).toBe('wrfc_owner_chain_started');
+    expect(result.wrfcRole).toBe('owner');
+    expect(result.wrfcRouteReason).toBe('root-review-role-normalized');
+    expect(harness.manager.list().filter((agent) => agent.parentAgentId == null)).toHaveLength(1);
   });
 
-  test('normalizes the original rate limiter WRFC batch into one owner prompt', () => {
+  test('passes the original rate limiter WRFC batch through for SDK collapse', () => {
     const normalized = normalizeWrfcAgentToolInvocation({
       mode: 'batch-spawn',
       cohort: 'rate-limiter-wrfc',
@@ -286,13 +327,14 @@ describe('spawn mode', () => {
 
     expect(normalized.mode).toBe('batch-spawn');
     expect(normalized.reviewMode).toBe('wrfc');
-    expect((normalized.tasks as unknown[])).toHaveLength(1);
-    const [owner] = normalized.tasks as Array<Record<string, unknown>>;
+    expect((normalized.tasks as unknown[])).toHaveLength(2);
+    const [owner, tester] = normalized.tasks as Array<Record<string, unknown>>;
     expect(owner.template).toBe('engineer');
     expect(owner.reviewMode).toBe('wrfc');
-    expect(owner.task).toContain('single WRFC owner chain');
     expect(owner.task).toContain('Plan a minimal standalone JavaScript rate limiter');
-    expect(owner.task).toContain('Plan concise tests');
+    expect(tester.template).toBe('tester');
+    expect(tester.reviewMode).toBe('wrfc');
+    expect(tester.task).toContain('Plan concise tests');
   });
 
   test('normalizes plain batch-spawn to disable WRFC on every root agent', () => {
