@@ -98,6 +98,7 @@ describe('project planning coordinator', () => {
     expect(opened).toBe(1);
     expect(fake.state?.goal).toContain('implementation plan');
     expect(fake.state?.metadata?.['owner']).toBe('tui');
+    expect(result?.handledLocally).toBe(true);
     expect(result?.systemMessage).toContain('TUI-owned project planning loop');
     expect(result?.evaluation.nextQuestion?.prompt).toBeTruthy();
   });
@@ -123,7 +124,63 @@ describe('project planning coordinator', () => {
 
     expect(fake.state?.answeredQuestions.some((question) => question.id === 'scope')).toBe(true);
     expect(fake.state?.answeredQuestions[0]?.answer).toContain('Only update');
+    expect(fake.state?.scope).toContain('Only update');
     expect(fake.state?.openQuestions.some((question) => question.id === 'scope')).toBe(false);
     expect(fake.state?.openQuestions.length).toBeGreaterThan(0);
+  });
+
+  test('accepting the default scope creates concrete scope instead of persisting SDK placeholder text', async () => {
+    const fake = makeService(makeState({
+      goal: 'make a simple rate limiter',
+      openQuestions: [{
+        id: 'missing-scope',
+        prompt: 'What is in scope, and what should be left out for this pass?',
+        recommendedAnswer: 'Define the first-pass scope and separate out-of-scope work from the current acceptance criteria.',
+        status: 'open',
+      }],
+      metadata: { active: true },
+    }));
+    const coordinator = new ProjectPlanningCoordinator({
+      service: fake.service,
+      projectId: 'proj',
+      workingDirectory: '/tmp/project',
+      now: () => 789,
+    });
+
+    const result = await coordinator.prepareTurn('Use a focused first-pass scope for this goal.');
+
+    expect(result?.handledLocally).toBe(true);
+    expect(fake.state?.scope).toContain('make a simple rate limiter');
+    expect(fake.state?.scope).not.toContain('Define the first-pass scope');
+    expect(fake.state?.openQuestions.some((question) => question.id === 'missing-scope')).toBe(false);
+  });
+
+  test('go-ahead answer fills structural planning artifacts and approves execution', async () => {
+    const fake = makeService(makeState({
+      goal: 'make a simple rate limiter',
+      openQuestions: [{
+        id: 'missing-scope',
+        prompt: 'What is in scope, and what should be left out for this pass?',
+        recommendedAnswer: 'Define the first-pass scope and separate out-of-scope work from the current acceptance criteria.',
+        status: 'open',
+      }],
+      metadata: { active: true },
+    }));
+    const coordinator = new ProjectPlanningCoordinator({
+      service: fake.service,
+      projectId: 'proj',
+      workingDirectory: '/tmp/project',
+      now: () => 999,
+    });
+
+    const result = await coordinator.prepareTurn("ok, let's go");
+
+    expect(result?.handledLocally).toBe(true);
+    expect(fake.state?.scope).toContain('make a simple rate limiter');
+    expect(fake.state?.tasks.length).toBeGreaterThanOrEqual(4);
+    expect(fake.state?.dependencies.length).toBeGreaterThan(0);
+    expect(fake.state?.verificationGates.length).toBeGreaterThan(0);
+    expect(fake.state?.executionApproved).toBe(true);
+    expect(result?.evaluation.readiness).toBe('executable');
   });
 });

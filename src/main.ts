@@ -311,6 +311,11 @@ async function main() {
           try {
             const planning = await projectPlanningCoordinator.prepareTurn(processedText);
             if (planning) {
+              if (planning.handledLocally) {
+                systemMessageRouter.high(planning.statusMessage);
+                render();
+                return;
+              }
               conversation.addSystemMessage(planning.systemMessage);
               inputOptions = {
                 origin: {

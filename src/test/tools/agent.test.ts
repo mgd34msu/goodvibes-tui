@@ -6,6 +6,7 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { OrchestrationEvent } from '@/runtime/index.ts';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { wrapWrfcAgentTool } from '../../tools/wrfc-agent-guard.ts';
 
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
@@ -27,6 +28,7 @@ function makeAgentHarness() {
     messageBus,
     configManager,
   });
+  wrapWrfcAgentTool(agentTool);
   return { agentTool, manager, messageBus, configManager };
 }
 
@@ -182,6 +184,69 @@ describe('spawn mode', () => {
 
     expect(statusB.tools).toEqual(['read']);
     expect((statusB.tools as string[])).not.toContain('write');
+  });
+
+  test('blocks batch-spawn from starting multiple WRFC root chains', async () => {
+    const result = await runAgentMayFail({
+      mode: 'batch-spawn',
+      cohort: 'bad-wrfc-fanout',
+      tasks: [
+        {
+          task: 'Implement the feature as WRFC owner.',
+          template: 'engineer',
+          reviewMode: 'wrfc',
+          tools: ['read', 'find'],
+          restrictTools: true,
+        },
+        {
+          task: 'Review the feature at the same time.',
+          template: 'reviewer',
+          reviewMode: 'wrfc',
+          tools: ['read', 'find'],
+          restrictTools: true,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('WRFC batch-spawn blocked');
+    expect(harness.manager.list()).toHaveLength(0);
+  });
+
+  test('allows exactly one WRFC owner task to start one chain', async () => {
+    const result = await runAgent({
+      mode: 'batch-spawn',
+      cohort: 'single-wrfc-owner',
+      tasks: [
+        {
+          task: 'Implement the feature as the WRFC owner.',
+          template: 'engineer',
+          reviewMode: 'wrfc',
+          tools: ['read', 'find'],
+          restrictTools: true,
+        },
+      ],
+    });
+    const agents = result.agents as Array<{ id: string; template: string; cohort: string }>;
+
+    expect(agents).toHaveLength(1);
+    expect(agents[0]?.template).toBe('engineer');
+    expect(agents[0]?.cohort).toBe('single-wrfc-owner');
+  });
+
+  test('blocks reviewer or verifier templates as WRFC root owners', async () => {
+    const result = await runAgentMayFail({
+      mode: 'spawn',
+      task: 'Review the feature through WRFC.',
+      template: 'reviewer',
+      reviewMode: 'wrfc',
+      tools: ['read', 'find'],
+      restrictTools: true,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('WRFC root task must be an owner');
+    expect(harness.manager.list()).toHaveLength(0);
   });
 
   test('child spawn inherits and enforces the parent capability ceiling', async () => {
