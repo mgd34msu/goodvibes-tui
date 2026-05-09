@@ -103,6 +103,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     providerRegistry: services.providerRegistry,
   });
 
+  let commandContextRef: CommandContext | null = null;
   registerBuiltinPanels(services.panelManager, {
     configManager,
     getOrchestratorUsage: () => orchestrator.usage as { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
@@ -113,6 +114,12 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     getCtxWindow: () => services.providerRegistry.getContextWindowForModel(services.providerRegistry.getCurrentModel()),
     resumeSession,
     requestRender,
+    submitPlanningAnswer: (answer) => {
+      if (!commandContextRef?.submitInput) {
+        throw new Error('Planning answer submission is not wired yet.');
+      }
+      commandContextRef.submitInput(answer);
+    },
     forensicsRegistry,
     policyRuntimeState,
     approvalBroker: services.approvalBroker,
@@ -243,6 +250,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     completeModelSelectionSideEffect,
     componentHealthMonitor: services.componentHealthMonitor,
   });
+  commandContextRef = commandContext;
 
   const gitStatusProvider = new GitStatusProvider(services.workingDirectory);
   const lastGitInfoRef = { value: undefined as GitHeaderInfo | undefined };

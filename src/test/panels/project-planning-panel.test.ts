@@ -92,7 +92,7 @@ describe('ProjectPlanningPanel', () => {
     await flushPanelAsync();
     await flushPanelAsync();
 
-    const rendered = text(panel.render(100, 28));
+    const rendered = text(panel.render(100, 42));
     expect(rendered).toContain('Project Planning');
     expect(rendered).toContain('TUI-owned passive backing store');
     expect(rendered).toContain('Plan the provider/model workspace');
@@ -109,11 +109,46 @@ describe('ProjectPlanningPanel', () => {
     await flushPanelAsync();
     await flushPanelAsync();
 
-    expect(panel.handleInput('a')).toBe(true);
+    expect(panel.handleInput('enter')).toBe(true);
     await flushPanelAsync();
     await flushPanelAsync();
 
     const rendered = text(panel.render(100, 28));
     expect(rendered).toContain('approved yes');
+  });
+
+  test('submits selectable or typed answers through the planning answer callback', async () => {
+    const submitted: string[] = [];
+    const service = makeService(makeState({
+      openQuestions: [{
+        id: 'scope',
+        prompt: 'What is in or out of scope?',
+        recommendedAnswer: 'TUI-only unless SDK wiring is required.',
+        status: 'open',
+      }],
+    }));
+    const panel = new ProjectPlanningPanel({
+      service,
+      projectId: 'proj',
+      submitAnswer: (answer) => submitted.push(answer),
+    });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    const rendered = text(panel.render(120, 32));
+    expect(rendered).toContain('Answer Current Question');
+    expect(rendered).toContain('Use recommended answer');
+    expect(rendered).toContain('I am not sure yet');
+
+    for (const ch of 'Only the TUI planning loop') panel.handleInput(ch);
+    panel.handleInput('down');
+    panel.handleInput('down');
+    panel.handleInput('down');
+    panel.handleInput('down');
+    expect(panel.handleInput('enter')).toBe(true);
+    await flushPanelAsync();
+
+    expect(submitted.at(-1)).toBe('Only the TUI planning loop');
   });
 });

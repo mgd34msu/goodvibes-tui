@@ -123,5 +123,7 @@ describe('project planning coordinator', () => {
 
     expect(fake.state?.answeredQuestions.some((question) => question.id === 'scope')).toBe(true);
     expect(fake.state?.answeredQuestions[0]?.answer).toContain('Only update');
+    expect(fake.state?.openQuestions.some((question) => question.id === 'scope')).toBe(false);
+    expect(fake.state?.openQuestions.length).toBeGreaterThan(0);
   });
 });
