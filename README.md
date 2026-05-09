@@ -18,7 +18,7 @@ GoodVibes is a Bun program. Install Bun first and make sure `bun` is on `PATH`, 
 
 ```sh
 bun add -g @pellux/goodvibes-tui
-bun pm trust -g @pellux/goodvibes-tui core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
+bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-sdk core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
 goodvibes
 ```
 
@@ -53,7 +53,7 @@ Release distribution:
 
 - GitHub Releases are the primary distribution path for compiled binaries
 - `bun add -g @pellux/goodvibes-tui` is the recommended global install path; the package is hosted on the npm registry and Bun installs from that registry directly
-- Bun global installs require trusting `@pellux/goodvibes-tui` so the package postinstall can download the matching TUI and daemon binaries; the dependency lifecycle packages currently requiring trust are `core-js`, `tree-sitter-css`, `tree-sitter-javascript`, `tree-sitter-json`, `tree-sitter-python`, and `tree-sitter-typescript`
+- Bun global installs require trusting `@pellux/goodvibes-tui` so the package postinstall can download the matching TUI and daemon binaries; the dependency lifecycle packages currently requiring trust are `@pellux/goodvibes-sdk`, `core-js`, `tree-sitter-css`, `tree-sitter-javascript`, `tree-sitter-json`, `tree-sitter-python`, and `tree-sitter-typescript`
 - `npm install -g @pellux/goodvibes-tui` is supported on Linux, macOS, and WSL when Bun is already installed; the preinstall check verifies Bun, and the install script downloads the matching TUI and daemon binaries for the current platform
 - native Windows is not supported; use WSL on Windows
 
