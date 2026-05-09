@@ -267,7 +267,7 @@ export class ProjectPlanningPanel extends BasePanel {
     if (question.whyItMatters) {
       lines.push(...buildBodyText(width, `Why this matters: ${question.whyItMatters}`, C, C.dim));
     }
-    if (question.recommendedAnswer) {
+    if (question.recommendedAnswer && !this.isGenericRecommendation(question.recommendedAnswer)) {
       lines.push(...buildBodyText(width, `Recommendation: ${question.recommendedAnswer}`, C, C.good));
     }
     lines.push(...buildBodyText(
@@ -321,7 +321,7 @@ export class ProjectPlanningPanel extends BasePanel {
       if (evaluation.nextQuestion.whyItMatters) {
         lines.push(...buildBodyText(width, `Why it matters: ${evaluation.nextQuestion.whyItMatters}`, C, C.dim));
       }
-      if (evaluation.nextQuestion.recommendedAnswer) {
+      if (evaluation.nextQuestion.recommendedAnswer && !this.isGenericRecommendation(evaluation.nextQuestion.recommendedAnswer)) {
         lines.push(...buildBodyText(width, `Recommended answer: ${evaluation.nextQuestion.recommendedAnswer}`, C, C.good));
       }
     }
@@ -469,6 +469,8 @@ export class ProjectPlanningPanel extends BasePanel {
     const actions: PlanningAnswerAction[] = [];
     const prompt = question.prompt.toLowerCase();
     const isScopeQuestion = prompt.includes('scope') || prompt.includes('in or out');
+    const isTaskQuestion = prompt.includes('task') || prompt.includes('dependency') || prompt.includes('work breakdown');
+    const isVerificationQuestion = prompt.includes('verification') || prompt.includes('test') || prompt.includes('prove');
     const isApprovalQuestion = prompt.includes('approved') || prompt.includes('approve') || prompt.includes('execution');
     if (isApprovalQuestion) {
       actions.push({
@@ -479,7 +481,31 @@ export class ProjectPlanningPanel extends BasePanel {
         kind: 'approve',
       });
     }
-    if (question.recommendedAnswer?.trim()) {
+    if (isScopeQuestion) {
+      actions.push({
+        id: 'scope-focused-first-pass',
+        label: 'Use focused first-pass scope',
+        detail: 'Fill a concrete end-to-end scope for this goal and keep unrelated work out.',
+        answer: 'Use a focused first-pass scope for this goal.',
+      });
+    }
+    if (isTaskQuestion) {
+      actions.push({
+        id: 'tasks-default-breakdown',
+        label: 'Create default task breakdown',
+        detail: 'Create inspect, implement, wire, and verify tasks with dependencies.',
+        answer: 'Create the default task breakdown for this goal.',
+      });
+    }
+    if (isVerificationQuestion) {
+      actions.push({
+        id: 'verification-default-gates',
+        label: 'Use standard verification gates',
+        detail: 'Require focused regression coverage, typecheck/build validation, and a runtime smoke where feasible.',
+        answer: 'Use standard verification gates for this goal.',
+      });
+    }
+    if (question.recommendedAnswer?.trim() && !this.isGenericRecommendation(question.recommendedAnswer)) {
       actions.push({
         id: 'recommended',
         label: 'Use recommended answer',
@@ -515,6 +541,13 @@ export class ProjectPlanningPanel extends BasePanel {
       disabled: !this.draftAnswer.trim(),
     });
     return actions;
+  }
+
+  private isGenericRecommendation(value: string): boolean {
+    return /\bdefine the first-pass scope\b/i.test(value)
+      || /\bcreate task records\b/i.test(value)
+      || /\brecord concrete tests\b/i.test(value)
+      || /\bseparate out-of-scope work\b/i.test(value);
   }
 
   private submitSelectedAction(question: ProjectPlanningQuestion, actions: readonly PlanningAnswerAction[]): void {

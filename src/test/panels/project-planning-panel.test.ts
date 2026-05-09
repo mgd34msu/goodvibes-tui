@@ -138,6 +138,7 @@ describe('ProjectPlanningPanel', () => {
 
     const rendered = text(panel.render(120, 32));
     expect(rendered).toContain('Answer Current Question');
+    expect(rendered).toContain('Use focused first-pass scope');
     expect(rendered).toContain('Use recommended answer');
     expect(rendered).toContain('I am not sure yet');
 
@@ -146,9 +147,30 @@ describe('ProjectPlanningPanel', () => {
     panel.handleInput('down');
     panel.handleInput('down');
     panel.handleInput('down');
+    panel.handleInput('down');
     expect(panel.handleInput('enter')).toBe(true);
     await flushPanelAsync();
 
     expect(submitted.at(-1)).toBe('Only the TUI planning loop');
+  });
+
+  test('does not surface generic SDK placeholder recommendations as answer actions', async () => {
+    const service = makeService(makeState({
+      openQuestions: [{
+        id: 'missing-scope',
+        prompt: 'What is in scope, and what should be left out for this pass?',
+        recommendedAnswer: 'Define the first-pass scope and separate out-of-scope work from the current acceptance criteria.',
+        status: 'open',
+      }],
+    }));
+    const panel = new ProjectPlanningPanel({ service, projectId: 'proj' });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    const rendered = text(panel.render(120, 32));
+    expect(rendered).toContain('Use focused first-pass scope');
+    expect(rendered).not.toContain('Use recommended answer');
+    expect(rendered).not.toContain('Define the first-pass scope');
   });
 });
