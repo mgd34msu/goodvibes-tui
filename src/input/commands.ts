@@ -55,6 +55,7 @@ import { registerQrcodeRuntimeCommands } from './commands/qrcode-runtime.ts';
 import { registerOnboardingRuntimeCommands } from './commands/onboarding-runtime.ts';
 import { registerTtsRuntimeCommands } from './commands/tts-runtime.ts';
 import { registerCloudflareRuntimeCommands } from './commands/cloudflare-runtime.ts';
+import { registerWorkPlanRuntimeCommands } from './commands/work-plan-runtime.ts';
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -104,6 +105,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerOnboardingRuntimeCommands(registry);
   registerTtsRuntimeCommands(registry);
   registerCloudflareRuntimeCommands(registry);
+  registerWorkPlanRuntimeCommands(registry);
   registerLocalRuntimeCommands(registry);
   registerSessionWorkflowCommands(registry);
   registerDiscoveryRuntimeCommands(registry);

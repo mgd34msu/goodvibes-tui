@@ -121,15 +121,10 @@ describe('spawn mode', () => {
     expect(tools).toContain('analyze');
   });
 
-  test('spawn with reviewer template uses reviewer defaults', async () => {
-    const result = await runAgent({ mode: 'spawn', task: 'Review code', template: 'reviewer' });
-    expect(result.template).toBe('reviewer');
-    const tools = result.tools as string[];
-    expect(tools).toContain('read');
-    expect(tools).toContain('analyze');
-    // reviewer does not include exec or write
-    expect(tools).not.toContain('exec');
-    expect(tools).not.toContain('write');
+  test('spawn with reviewer template is rejected as an independent root', async () => {
+    const result = await runAgentMayFail({ mode: 'spawn', task: 'Review code', template: 'reviewer' });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Root reviewer/tester/verifier agents are not valid independent roots');
   });
 
   test('spawn without template defaults to general', async () => {
@@ -352,8 +347,8 @@ describe('spawn mode', () => {
   test('child spawn fails when parent capability ceiling would remove all tools', async () => {
     const parent = await runAgent({
       mode: 'spawn',
-      task: 'Parent reviewer',
-      template: 'reviewer',
+      task: 'Parent engineer',
+      template: 'engineer',
       tools: ['read'],
       restrictTools: true,
     });
@@ -825,13 +820,13 @@ describe('budget mode', () => {
 
 describe('plan mode', () => {
   test('plan returns task, template, and tools', async () => {
-    const spawned = await runAgent({ mode: 'spawn', task: 'Plan task', template: 'reviewer' });
+    const spawned = await runAgent({ mode: 'spawn', task: 'Plan task', template: 'engineer' });
     const agentId = spawned.agentId as string;
 
     const result = await runAgent({ mode: 'plan', agentId });
     expect(result.agentId).toBe(agentId);
     expect(result.task).toBe('Plan task');
-    expect(result.template).toBe('reviewer');
+    expect(result.template).toBe('engineer');
     expect(Array.isArray(result.tools)).toBe(true);
     expect(typeof result.templateDescription).toBe('string');
   });

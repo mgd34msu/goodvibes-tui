@@ -205,6 +205,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     knowledgeService: services.knowledgeService,
     projectPlanningService: services.projectPlanningService,
     projectPlanningProjectId: services.projectPlanningProjectId,
+    workPlanStore: services.workPlanStore,
     providerOptimizer: services.providerOptimizer,
     pluginManager: services.pluginManager,
     hookWorkbench: services.hookWorkbench,
