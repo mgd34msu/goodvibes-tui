@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.85] — 2026-05-09
+
+### Changes
+- 72733e04 feat: add persistent work plan tracking
+
 ## [0.19.84] — 2026-05-09
 
 ### Changes
