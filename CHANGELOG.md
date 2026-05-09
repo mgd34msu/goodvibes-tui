@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.86] — 2026-05-09
+
+### Changes
+- 79d0cb5f chore: update sdk to 0.33.21
+- 03e79135 fix process summary line budget
+- 6fdebda5 fix wrfc process modal hierarchy inference
+- 6d3eb4cf fix process modal agent hierarchy rendering
+
 ## [0.19.85] — 2026-05-09
 
 ### Changes
