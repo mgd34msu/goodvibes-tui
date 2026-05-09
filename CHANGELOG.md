@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.83] — 2026-05-09
+
+### Changes
+- debd3a93 Fix planning loop and WRFC root spawning
+
 ## [0.19.82] — 2026-05-09
 
 ### Changes
