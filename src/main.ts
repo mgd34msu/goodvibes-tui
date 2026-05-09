@@ -16,7 +16,6 @@ import { PermissionPromptUI } from './permissions/prompt.ts';
 import { CommandRegistry } from './input/command-registry.ts';
 import type { CommandContext } from './input/command-registry.ts';
 import { renderProcessIndicator } from './renderer/process-indicator.ts';
-import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
 import { registerBuiltinCommands } from './input/commands.ts';
 import { ScheduleManager } from '@pellux/goodvibes-sdk/platform/tools';
 import { InputHistory } from './input/input-history.ts';
@@ -54,6 +53,7 @@ import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './au
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
 import { ProjectPlanningCoordinator } from './planning/project-planning-coordinator.ts';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
+import { summarizeRunningAgents } from './renderer/process-summary.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -483,31 +483,8 @@ async function main() {
       (a) => a.status === 'running' || a.status === 'pending',
     );
     const runtimeAgents = agentSnapshot.active;
-    const runningAgentIds = new Set<string>();
-    let runningAgentProgress: string | undefined;
-    for (const agent of managerAgents) {
-      runningAgentIds.add(agent.id);
-      if (!runningAgentProgress && agent.progress) runningAgentProgress = agent.progress;
-    }
-    for (const agent of runtimeAgents) {
-      runningAgentIds.add(agent.id);
-      if (!runningAgentProgress && agent.latestProgress) runningAgentProgress = agent.latestProgress;
-    }
-    for (const chain of ctx.services.wrfcController.listChains()) {
-      if (chain.state === 'passed' || chain.state === 'failed') continue;
-      const chainAgentIds = new Set([
-        chain.ownerAgentId,
-        chain.engineerAgentId,
-        chain.reviewerAgentId,
-        chain.fixerAgentId,
-        ...chain.allAgentIds,
-      ].filter((id): id is string => typeof id === 'string' && id.length > 0));
-      const hasVisibleChainWork = Array.from(chainAgentIds).some((id) => runningAgentIds.has(id));
-      if (!hasVisibleChainWork) continue;
-      runningAgentIds.add(chain.ownerAgentId);
-      if (!runningAgentProgress) runningAgentProgress = `WRFC chain ${chain.state}`;
-    }
-    const runningAgentCount = runningAgentIds.size;
+    const runningAgentSummary = summarizeRunningAgents(managerAgents, runtimeAgents, ctx.services.wrfcController.listChains());
+    const runningAgentCount = runningAgentSummary.count;
     const runningProcessCount = processManager.list().filter((p) => !p.status.startsWith('done')).length;
     const cw = getPromptContentWidth();
     const promptInfo = input.getWrappedPromptInfo(cw);
@@ -554,7 +531,7 @@ async function main() {
       runningAgentCount,
       runningProcessCount,
       indicatorFocused: input.indicatorFocused,
-      runningAgentProgress,
+      runningAgentProgress: runningAgentSummary.progress,
       composerMode: composerState.modeLabel,
       composerStatus: composerState.statusLabel,
       composerFlags: composerState.flags,
