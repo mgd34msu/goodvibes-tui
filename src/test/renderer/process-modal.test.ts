@@ -17,31 +17,48 @@ type TestProcessRecord = BackgroundProcess & {
 
 const agents = new Map<string, TestAgentRecord>();
 const processes = new Map<string, TestProcessRecord>();
+const wrfcChains = new Map<string, {
+  id: string;
+  task: string;
+  ownerAgentId: string;
+  state: string;
+  constraints: unknown[];
+}>();
 
 beforeEach(() => {
   agents.clear();
   processes.clear();
+  wrfcChains.clear();
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function seedAgent(task: string, status: TestAgentStatus = 'running'): string {
+function seedAgent(
+  task: string,
+  status: TestAgentStatus = 'running',
+  overrides: Partial<TestAgentRecord> = {},
+): string {
   const id = `agent-${agents.size + 1}`;
-  agents.set(id, {
+  const record: TestAgentRecord = {
     id,
     task,
     template: 'default',
     tools: [],
-      status,
-      startedAt: Date.now(),
-      orchestrationDepth: 0,
-      toolCallCount: 0,
-      executionProtocol: 'gather-plan-apply',
-      reviewMode: 'wrfc',
-      communicationLane: 'direct',
-      fullOutput: '',
-    });
-  return id;
+    status,
+    startedAt: Date.now(),
+    orchestrationDepth: 0,
+    toolCallCount: 0,
+    executionProtocol: 'gather-plan-apply',
+    reviewMode: 'wrfc',
+    communicationLane: 'direct',
+    fullOutput: '',
+    ...overrides,
+    id: overrides.id ?? id,
+    task: overrides.task ?? task,
+    status: overrides.status ?? status,
+  };
+  agents.set(record.id, record);
+  return record.id;
 }
 
 function createProcessModal(): ProcessModal {
@@ -66,7 +83,7 @@ function createProcessModal(): ProcessModal {
         return true;
       },
     },
-    wrfcController: { getChain: () => null },
+    wrfcController: { getChain: (id: string) => wrfcChains.get(id) as never ?? null },
   });
 }
 
@@ -221,6 +238,165 @@ describe('ProcessModal state', () => {
     expect(modal.entries[0].label.length).toBeLessThanOrEqual(80);
     expect(modal.entries[0].label.endsWith('...')).toBe(true);
   });
+
+  test('refresh() groups WRFC owner and child agents as a tree', () => {
+    const wrfcId = 'wrfc-tree-1';
+    const ownerId = seedAgent('Complete the requested work as a single WRFC owner chain.', 'running', {
+      wrfcId,
+      wrfcRole: 'owner',
+      template: 'engineer',
+      startedAt: Date.now() - 2000,
+    });
+    const engineerId = seedAgent('Complete the requested work as a single WRFC owner chain.', 'running', {
+      wrfcId,
+      wrfcRole: 'engineer',
+      template: 'engineer',
+      parentAgentId: ownerId,
+      startedAt: Date.now() - 1000,
+    });
+    wrfcChains.set(wrfcId, {
+      id: wrfcId,
+      task: 'Build a simple rate limiter',
+      ownerAgentId: ownerId,
+      state: 'engineering',
+      constraints: [],
+    });
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.map((entry) => entry.id)).toEqual([ownerId, engineerId]);
+    expect(modal.entries[0].treePrefix ?? '').toBe('');
+    expect(modal.entries[1].treePrefix).toBe('└─ ');
+    expect(modal.entries[0].label).toContain('[WRFC owner]');
+    expect(modal.entries[1].label).toContain('[Engineer]');
+  });
+
+  test('refresh() draws branch and final connectors for multiple WRFC children', () => {
+    const wrfcId = 'wrfc-tree-2';
+    const ownerId = seedAgent('Owner task', 'running', {
+      wrfcId,
+      wrfcRole: 'owner',
+      template: 'engineer',
+      startedAt: Date.now() - 3000,
+    });
+    const engineerId = seedAgent('Engineer task', 'running', {
+      wrfcId,
+      wrfcRole: 'engineer',
+      template: 'engineer',
+      parentAgentId: ownerId,
+      startedAt: Date.now() - 2000,
+    });
+    const reviewerId = seedAgent('WRFC Review Request\nOriginal task', 'running', {
+      wrfcId,
+      wrfcRole: 'reviewer',
+      template: 'reviewer',
+      parentAgentId: ownerId,
+      startedAt: Date.now() - 1000,
+    });
+    wrfcChains.set(wrfcId, {
+      id: wrfcId,
+      task: 'Build a simple rate limiter',
+      ownerAgentId: ownerId,
+      state: 'reviewing',
+      constraints: [],
+    });
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.map((entry) => entry.id)).toEqual([ownerId, engineerId, reviewerId]);
+    expect(modal.entries[1].treePrefix).toBe('├─ ');
+    expect(modal.entries[2].treePrefix).toBe('└─ ');
+  });
+
+  test('refresh() keeps vertical tree guides for nested WRFC children', () => {
+    const wrfcId = 'wrfc-tree-3';
+    const ownerId = seedAgent('Owner task', 'running', {
+      wrfcId,
+      wrfcRole: 'owner',
+      template: 'engineer',
+      startedAt: Date.now() - 4000,
+    });
+    const engineerId = seedAgent('Engineer task', 'running', {
+      wrfcId,
+      wrfcRole: 'engineer',
+      template: 'engineer',
+      parentAgentId: ownerId,
+      startedAt: Date.now() - 3000,
+    });
+    const reviewerId = seedAgent('WRFC Review Request\nOriginal task', 'running', {
+      wrfcId,
+      wrfcRole: 'reviewer',
+      template: 'reviewer',
+      parentAgentId: ownerId,
+      startedAt: Date.now() - 2000,
+    });
+    const fixerId = seedAgent('WRFC Fix Request\nOriginal task', 'running', {
+      wrfcId,
+      wrfcRole: 'fixer',
+      template: 'engineer',
+      parentAgentId: engineerId,
+      startedAt: Date.now() - 1000,
+    });
+    wrfcChains.set(wrfcId, {
+      id: wrfcId,
+      task: 'Build a simple rate limiter',
+      ownerAgentId: ownerId,
+      state: 'fixing',
+      constraints: [],
+    });
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.map((entry) => entry.id)).toEqual([ownerId, engineerId, fixerId, reviewerId]);
+    expect(modal.entries[1].treePrefix).toBe('├─ ');
+    expect(modal.entries[2].treePrefix).toBe('│  └─ ');
+    expect(modal.entries[3].treePrefix).toBe('└─ ');
+  });
+
+  test('refresh() keeps independent agent hierarchies grouped by parent', () => {
+    const rootA = seedAgent('Root A', 'running', {
+      startedAt: Date.now() - 4000,
+    });
+    const rootB = seedAgent('Root B', 'running', {
+      startedAt: Date.now() - 3000,
+    });
+    const childA = seedAgent('Child A', 'running', {
+      parentAgentId: rootA,
+      startedAt: Date.now() - 1000,
+    });
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.map((entry) => entry.id)).toEqual([rootA, childA, rootB]);
+    expect(modal.entries[1].treePrefix).toBe('└─ ');
+  });
+
+  test('refresh() preserves hierarchy position when an active parent exits', () => {
+    const rootA = seedAgent('Root A', 'running', {
+      startedAt: Date.now() - 4000,
+    });
+    const rootB = seedAgent('Root B', 'running', {
+      startedAt: Date.now() - 3000,
+    });
+    const modal = createProcessModal();
+    modal.refresh();
+    expect(modal.entries.map((entry) => entry.id)).toEqual([rootA, rootB]);
+
+    const childA = seedAgent('Child A', 'running', {
+      parentAgentId: rootA,
+      startedAt: Date.now() - 1000,
+    });
+    const rootARecord = agents.get(rootA);
+    if (!rootARecord) throw new Error('expected root agent');
+    rootARecord.status = 'completed';
+    modal.refresh();
+
+    expect(modal.entries.map((entry) => entry.id)).toEqual([childA, rootB]);
+  });
 });
 
 // ─── renderProcessModal ────────────────────────────────────────────────────────
@@ -272,6 +448,37 @@ describe('renderProcessModal', () => {
     const lines = renderProcessModal(modal, W);
     const text = linesToText(lines).join('\n');
     expect(text).toContain('[agent]');
+  });
+
+  test('renders WRFC child connector in entry label', () => {
+    const wrfcId = 'wrfc-render';
+    const ownerId = seedAgent('Owner task', 'running', {
+      wrfcId,
+      wrfcRole: 'owner',
+      template: 'engineer',
+      startedAt: Date.now() - 2000,
+    });
+    seedAgent('Engineer task', 'running', {
+      wrfcId,
+      wrfcRole: 'engineer',
+      template: 'engineer',
+      parentAgentId: ownerId,
+      startedAt: Date.now() - 1000,
+    });
+    wrfcChains.set(wrfcId, {
+      id: wrfcId,
+      task: 'Build a simple rate limiter',
+      ownerAgentId: ownerId,
+      state: 'engineering',
+      constraints: [],
+    });
+    const modal = createProcessModal();
+    modal.open();
+
+    const lines = renderProcessModal(modal, W);
+    const text = linesToText(lines).join('\n');
+
+    expect(text).toContain('└─ [Engineer]');
   });
 
   test('renders duration in entry label', () => {

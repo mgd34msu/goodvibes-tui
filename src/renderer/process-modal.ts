@@ -14,6 +14,8 @@ export interface ProcessEntry {
   id: string;
   /** Display label (agent task or exec command) */
   label: string;
+  /** Tree prefix for child processes, e.g. "└─ " under a WRFC owner. */
+  treePrefix?: string;
   /** Process type */
   type: 'agent' | 'exec';
   /** Current status string */
@@ -31,6 +33,14 @@ const MAX_LABEL_LENGTH = 80;
 /** Border and margin width subtracted from terminal width to get modal content width. */
 const MODAL_BORDER_WIDTH = 8;
 
+const WRFC_ROLE_ORDER: Record<string, number> = {
+  owner: 0,
+  engineer: 1,
+  reviewer: 2,
+  fixer: 3,
+  verifier: 4,
+};
+
 export interface ProcessModalDeps {
   readonly agentManager: Pick<AgentManager, 'list' | 'getStatus' | 'cancel'>;
   readonly processManager: Pick<ProcessManager, 'list' | 'getStatus' | 'stop'>;
@@ -43,6 +53,21 @@ function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
 
   // Look up the original task from the WRFC chain if available
   const originalTask = getChainTask(rec.wrfcId, deps);
+
+  if (rec.wrfcRole === 'owner') {
+    const desc = truncateFirst(originalTask ?? task, MAX_LABEL_LENGTH - 13);
+    return `[WRFC owner] ${desc}`;
+  }
+
+  if (rec.wrfcRole === 'engineer') {
+    const desc = truncateFirst(originalTask ?? task, MAX_LABEL_LENGTH - 11);
+    return `[Engineer] ${desc}`;
+  }
+
+  if (rec.wrfcRole === 'verifier') {
+    const desc = truncateFirst(originalTask ?? task, MAX_LABEL_LENGTH - 13);
+    return `[Verifier] ${desc}`;
+  }
 
   // WRFC Review agent
   if (task.startsWith('WRFC Review Request')) {
@@ -77,13 +102,180 @@ function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
   return `[${tag}] ${truncateFirst(task, maxDesc)}`;
 }
 
+function isActiveAgent(rec: AgentRecord): boolean {
+  return rec.status !== 'completed' && rec.status !== 'failed' && rec.status !== 'cancelled';
+}
+
+function getStreamSnippet(rec: AgentRecord): string | undefined {
+  if (!rec.streamingContent) return undefined;
+  const raw = rec.streamingContent.replace(/\n/g, ' ').trim();
+  return raw.length > 60 ? '...' + raw.slice(-57) : raw;
+}
+
+function compareAgents(a: AgentRecord, b: AgentRecord): number {
+  const roleDelta = (WRFC_ROLE_ORDER[a.wrfcRole ?? ''] ?? 50) - (WRFC_ROLE_ORDER[b.wrfcRole ?? ''] ?? 50);
+  if (roleDelta !== 0) return roleDelta;
+  return a.startedAt - b.startedAt || a.id.localeCompare(b.id);
+}
+
+function buildAgentEntry(
+  rec: AgentRecord,
+  deps: ProcessModalDeps,
+  now: number,
+  treePrefix = '',
+): ProcessEntry {
+  return {
+    id: rec.id,
+    label: buildAgentLabel(rec, deps),
+    treePrefix,
+    type: 'agent',
+    status: rec.status,
+    elapsedMs: now - rec.startedAt,
+    streamSnippet: getStreamSnippet(rec),
+  };
+}
+
+function appendAgentSubtree(
+  result: ProcessEntry[],
+  rec: AgentRecord,
+  childrenByParent: Map<string, AgentRecord[]>,
+  deps: ProcessModalDeps,
+  now: number,
+  prefix: string,
+  connector: string,
+  visited: Set<string>,
+): void {
+  if (visited.has(rec.id)) return;
+  visited.add(rec.id);
+  result.push(buildAgentEntry(rec, deps, now, `${prefix}${connector}`));
+
+  const children = (childrenByParent.get(rec.id) ?? []).slice().sort(compareAgents);
+  const descendantPrefix = connector === '├─ ' ? '│  ' : connector === '└─ ' ? '   ' : '';
+  children.forEach((child, index) => {
+    const last = index === children.length - 1;
+    appendAgentSubtree(
+      result,
+      child,
+      childrenByParent,
+      deps,
+      now,
+      `${prefix}${descendantPrefix}`,
+      last ? '└─ ' : '├─ ',
+      visited,
+    );
+  });
+}
+
+function appendAgentGroupEntries(
+  result: ProcessEntry[],
+  records: AgentRecord[],
+  deps: ProcessModalDeps,
+  now: number,
+): void {
+  const group = records.slice().sort(compareAgents);
+  const byId = new Map(group.map((rec) => [rec.id, rec]));
+  const childrenByParent = new Map<string, AgentRecord[]>();
+
+  for (const rec of group) {
+    if (!rec.parentAgentId || !byId.has(rec.parentAgentId)) continue;
+    const children = childrenByParent.get(rec.parentAgentId) ?? [];
+    children.push(rec);
+    childrenByParent.set(rec.parentAgentId, children);
+  }
+
+  const chain = group[0]?.wrfcId ? safeGetChain(group[0].wrfcId, deps) : null;
+  const owner = group.find((rec) => rec.id === chain?.ownerAgentId)
+    ?? group.find((rec) => rec.wrfcRole === 'owner');
+  const roots = owner
+    ? [owner]
+    : group.filter((rec) => !rec.parentAgentId || !byId.has(rec.parentAgentId));
+  const visited = new Set<string>();
+
+  roots.forEach((root, index) => {
+    const connector = owner || roots.length === 1 ? '' : (index === roots.length - 1 ? '└─ ' : '├─ ');
+    appendAgentSubtree(result, root, childrenByParent, deps, now, '', connector, visited);
+  });
+
+  const leftovers = group.filter((rec) => !visited.has(rec.id));
+  leftovers.forEach((rec, index) => {
+    appendAgentSubtree(
+      result,
+      rec,
+      childrenByParent,
+      deps,
+      now,
+      '',
+      index === leftovers.length - 1 ? '└─ ' : '├─ ',
+      visited,
+    );
+  });
+}
+
+function buildAgentEntries(
+  activeAgents: AgentRecord[],
+  deps: ProcessModalDeps,
+  now: number,
+  getGroupOrder?: (key: string) => number | undefined,
+  ensureGroupOrder?: (key: string) => number,
+): ProcessEntry[] {
+  const result: ProcessEntry[] = [];
+  const activeById = new Map(activeAgents.map((agent) => [agent.id, agent]));
+  const groups = new Map<string, AgentRecord[]>();
+
+  for (const agent of activeAgents) {
+    const groupKey = getAgentGroupKey(agent, activeById);
+    const group = groups.get(groupKey) ?? [];
+    group.push(agent);
+    groups.set(groupKey, group);
+  }
+
+  const sortedGroups = Array.from(groups.entries()).sort(([aKey, a], [bKey, b]) => {
+    const aOrder = getGroupOrder?.(aKey);
+    const bOrder = getGroupOrder?.(bKey);
+    if (aOrder !== undefined || bOrder !== undefined) {
+      if (aOrder === undefined) return 1;
+      if (bOrder === undefined) return -1;
+      return aOrder - bOrder;
+    }
+    const aStarted = Math.min(...a.map((rec) => rec.startedAt));
+    const bStarted = Math.min(...b.map((rec) => rec.startedAt));
+    return aStarted - bStarted || aKey.localeCompare(bKey);
+  });
+  for (const [key, group] of sortedGroups) {
+    ensureGroupOrder?.(key);
+    appendAgentGroupEntries(result, group, deps, now);
+  }
+
+  return result;
+}
+
+function getAgentGroupKey(agent: AgentRecord, activeById: Map<string, AgentRecord>): string {
+  if (agent.wrfcId) return `wrfc:${agent.wrfcId}`;
+
+  const seen = new Set<string>();
+  let root = agent;
+  while (root.parentAgentId && activeById.has(root.parentAgentId) && !seen.has(root.parentAgentId)) {
+    seen.add(root.id);
+    root = activeById.get(root.parentAgentId)!;
+  }
+
+  // If the active root is an orphaned child, keep it anchored to its missing parent id
+  // so it does not jump to a new group when the parent exits before its children.
+  return `root:${root.parentAgentId ?? root.id}`;
+}
+
+function safeGetChain(wrfcId: string, deps: Pick<ProcessModalDeps, 'wrfcController'>) {
+  try {
+    return deps.wrfcController.getChain(wrfcId);
+  } catch {
+    return null;
+  }
+}
+
 /** Get the original task description from a WRFC chain. */
 function getChainTask(wrfcId: string | undefined, deps: Pick<ProcessModalDeps, 'wrfcController'>): string | null {
   if (!wrfcId) return null;
-  try {
-    const chain = deps.wrfcController.getChain(wrfcId);
-    return chain?.task ?? null;
-  } catch { return null; }
+  return safeGetChain(wrfcId, deps)?.task ?? null;
 }
 
 /** Truncate to first line, capped at max chars. */
@@ -113,6 +305,8 @@ export class ProcessModal {
   public entries: ProcessEntry[] = [];
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private onRefresh: (() => void) | null = null;
+  private groupOrder = new Map<string, number>();
+  private nextGroupOrder = 0;
 
   constructor(private readonly deps: ProcessModalDeps) {}
 
@@ -147,23 +341,14 @@ export class ProcessModal {
     const now = Date.now();
     const result: ProcessEntry[] = [];
 
-    // Agents — only show active (pending/running)
-    for (const a of manager.list()) {
-      if (a.status === 'completed' || a.status === 'failed' || a.status === 'cancelled') continue;
-      let streamSnippet: string | undefined;
-      if (a.streamingContent) {
-        const raw = a.streamingContent.replace(/\n/g, ' ').trim();
-        streamSnippet = raw.length > 60 ? '...' + raw.slice(-57) : raw;
-      }
-      result.push({
-        id: a.id,
-        label: buildAgentLabel(a, this.deps),
-        type: 'agent',
-        status: a.status,
-        elapsedMs: now - a.startedAt,
-        streamSnippet,
-      });
-    }
+    // Agents — only show active (pending/running), grouped by stable parent/child hierarchy.
+    result.push(...buildAgentEntries(
+      manager.list().filter(isActiveAgent),
+      this.deps,
+      now,
+      (key) => this.groupOrder.get(key),
+      (key) => this.ensureGroupOrder(key),
+    ));
 
     // Background exec processes — only show running
     const pm = this.deps.processManager;
@@ -185,6 +370,14 @@ export class ProcessModal {
     if (this.selectedIndex >= this.entries.length) {
       this.selectedIndex = Math.max(0, this.entries.length - 1);
     }
+  }
+
+  private ensureGroupOrder(key: string): number {
+    const existing = this.groupOrder.get(key);
+    if (existing !== undefined) return existing;
+    const next = this.nextGroupOrder++;
+    this.groupOrder.set(key, next);
+    return next;
   }
 
   moveUp(): void {
@@ -270,9 +463,10 @@ export function renderProcessModal(modal: ProcessModal, width: number, viewportH
     const dur = formatDuration(e.elapsedMs);
     const statusStr = e.streamSnippet ? `streaming  ${dur}` : `${e.status}  ${dur}`;
     const suffix = `  ${statusStr}`;
-    const maxDescW = maxLabelW - typeTag.length - suffix.length - 4; // icon + spaces
+    const treePrefix = e.treePrefix ?? '';
+    const maxDescW = maxLabelW - typeTag.length - treePrefix.length - suffix.length - 4; // icon + spaces
     const desc = e.label.length > maxDescW ? e.label.slice(0, Math.max(0, maxDescW - 3)) + '...' : e.label;
-    const label = `${statusIcon} ${typeTag} ${desc}${suffix}`;
+    const label = `${statusIcon} ${typeTag} ${treePrefix}${desc}${suffix}`;
     return {
       label,
       selected: absoluteIndex === modal.selectedIndex,
