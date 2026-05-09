@@ -6,6 +6,7 @@ import { ToolInspectorPanel } from '../tool-inspector-panel.ts';
 import { WrfcPanel } from '../wrfc-panel.ts';
 import { SchedulePanel } from '../schedule-panel.ts';
 import { ProjectPlanningPanel } from '../project-planning-panel.ts';
+import { WorkPlanPanel } from '../work-plan-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireAutomationManager, requireUiServices } from './shared.ts';
 
@@ -77,6 +78,16 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       const ui = requireUiServices(deps);
       return new WrfcPanel(ui.events.workflows, { controller: ui.agents.wrfcController });
     },
+  });
+
+  manager.registerType({
+    id: 'work-plan',
+    name: 'Work Plan',
+    icon: 'L',
+    category: 'agent',
+    description: 'Persistent workspace checklist for multi-step work and cross-session task tracking',
+    preload: true,
+    factory: () => new WorkPlanPanel(deps.workPlanStore),
   });
 
   manager.registerType({

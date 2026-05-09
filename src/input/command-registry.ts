@@ -144,6 +144,7 @@ export interface CommandWorkspaceUiServices {
   bookmarkManager?: import('@pellux/goodvibes-sdk/platform/bookmarks').BookmarkManager;
   projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
   projectPlanningProjectId?: string;
+  workPlanStore?: import('../work-plans/work-plan-store.ts').WorkPlanStore;
 }
 
 export interface CommandWorkspaceServices

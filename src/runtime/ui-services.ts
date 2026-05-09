@@ -81,6 +81,7 @@ export interface UiPlanningServices {
   readonly adaptivePlanner: RuntimeServices['adaptivePlanner'];
   readonly projectPlanningService: RuntimeServices['projectPlanningService'];
   readonly projectPlanningProjectId: RuntimeServices['projectPlanningProjectId'];
+  readonly workPlanStore: RuntimeServices['workPlanStore'];
 }
 
 export interface UiCoordinationServices {
@@ -173,6 +174,7 @@ export function createUiRuntimeServices(
       adaptivePlanner: runtimeServices.adaptivePlanner,
       projectPlanningService: runtimeServices.projectPlanningService,
       projectPlanningProjectId: runtimeServices.projectPlanningProjectId,
+      workPlanStore: runtimeServices.workPlanStore,
     },
     coordination: {
       approvalBroker: runtimeServices.approvalBroker,

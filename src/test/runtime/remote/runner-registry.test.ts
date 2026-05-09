@@ -55,7 +55,7 @@ describe('RemoteRunnerRegistry', () => {
     const manager = getTestAgentManager();
     const agent = manager.spawn({
       mode: 'spawn',
-      task: 'Review remote artifact export',
+      task: 'Capture remote artifact export',
       template: 'engineer',
       tools: ['read'],
       dangerously_disable_wrfc: true,

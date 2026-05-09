@@ -87,6 +87,7 @@ export interface BootstrapCommandSectionOptions {
   readonly knowledgeService?: KnowledgeService;
   readonly projectPlanningService?: import('@pellux/goodvibes-sdk/platform/knowledge').ProjectPlanningService;
   readonly projectPlanningProjectId?: string;
+  readonly workPlanStore?: import('../work-plans/work-plan-store.ts').WorkPlanStore;
   readonly pluginManager?: PluginManager;
   readonly hookWorkbench?: HookWorkbench;
   readonly providerOptimizer?: import('@pellux/goodvibes-sdk/platform/providers').ProviderOptimizer;
@@ -313,7 +314,7 @@ export function createBootstrapCommandWorkspaceSection(
   options: Pick<
     BootstrapCommandSectionOptions,
     'keybindingsManager' | 'fileUndoManager' | 'panelManager' | 'profileManager' | 'bookmarkManager'
-    | 'projectPlanningService' | 'projectPlanningProjectId'
+    | 'projectPlanningService' | 'projectPlanningProjectId' | 'workPlanStore'
   >,
   shellServices: BootstrapCommandShellServices,
 ): BootstrapCommandWorkspaceSection {
@@ -325,6 +326,7 @@ export function createBootstrapCommandWorkspaceSection(
     bookmarkManager: options.bookmarkManager,
     projectPlanningService: options.projectPlanningService,
     projectPlanningProjectId: options.projectPlanningProjectId,
+    workPlanStore: options.workPlanStore,
     ...shellServices.workspace,
   };
 }

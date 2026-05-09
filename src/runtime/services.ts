@@ -84,6 +84,7 @@ import {
   createWorkflowServices,
   type WorkflowServices,
 } from '@pellux/goodvibes-sdk/platform/tools';
+import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
 
 const REGULAR_KNOWLEDGE_DB_FILE = 'knowledge-wiki.sqlite';
 const HOME_GRAPH_KNOWLEDGE_DB_FILE = 'knowledge-home-graph.sqlite';
@@ -171,6 +172,7 @@ export interface RuntimeServices {
   readonly homeGraphService: HomeGraphService;
   readonly projectPlanningService: ProjectPlanningService;
   readonly projectPlanningProjectId: string;
+  readonly workPlanStore: WorkPlanStore;
   readonly memoryStore: MemoryStore;
   readonly memoryRegistry: MemoryRegistry;
   readonly serviceRegistry: ServiceRegistry;
@@ -447,6 +449,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const projectPlanningService = new ProjectPlanningService(knowledgeStore, {
     defaultProjectId: projectPlanningProjectId,
   });
+  const workPlanStore = new WorkPlanStore({
+    homeDirectory,
+    projectId: projectPlanningProjectId,
+    projectRoot: workingDirectory,
+  });
   const voiceProviders = new VoiceProviderRegistry();
   ensureBuiltinVoiceProviders(voiceProviders);
   const voiceService = new VoiceService(voiceProviders);
@@ -596,6 +603,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     homeGraphService,
     projectPlanningService,
     projectPlanningProjectId,
+    workPlanStore,
     memoryStore,
     memoryRegistry,
     serviceRegistry,

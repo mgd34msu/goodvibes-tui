@@ -96,6 +96,8 @@ export interface BuiltinPanelDeps {
   projectPlanningService?: ProjectPlanningService;
   /** Stable workspace project id for project:<projectId> planning spaces. */
   projectPlanningProjectId?: string;
+  /** TUI-owned persistent work plan store. */
+  workPlanStore?: import('../../work-plans/work-plan-store.ts').WorkPlanStore;
   /** Shared system-messages panel instance attached from boot so low-priority chatter stays out of conversation. */
   systemMessagesPanel?: import('../system-messages-panel.ts').SystemMessagesPanel;
   /** Explicit UI-facing runtime services for agent/process/WRFC/remote panels and modals. */
@@ -124,6 +126,7 @@ export type ResolvedBuiltinPanelDeps = Omit<
   | 'adaptivePlanner'
   | 'projectPlanningService'
   | 'projectPlanningProjectId'
+  | 'workPlanStore'
   | 'policyRuntimeState'
   | 'systemMessagesPanel'
 > & {
@@ -137,6 +140,7 @@ export type ResolvedBuiltinPanelDeps = Omit<
   readonly adaptivePlanner: AdaptivePlanner;
   readonly projectPlanningService: ProjectPlanningService;
   readonly projectPlanningProjectId: string;
+  readonly workPlanStore: import('../../work-plans/work-plan-store.ts').WorkPlanStore;
   readonly policyRuntimeState: PolicyRuntimeState;
   readonly systemMessagesPanel: import('../system-messages-panel.ts').SystemMessagesPanel;
 };
@@ -197,6 +201,10 @@ export function resolveBuiltinPanelDeps(deps: BuiltinPanelDeps): ResolvedBuiltin
     projectPlanningProjectId: requireBuiltinPanelDep(
       uiServices.planning.projectPlanningProjectId,
       'Project planning project id must be wired at bootstrap for builtin panels.',
+    ),
+    workPlanStore: requireBuiltinPanelDep(
+      uiServices.planning.workPlanStore,
+      'Work plan store must be wired at bootstrap for builtin panels.',
     ),
     policyRuntimeState: requireBuiltinPanelDep(
       uiServices.platform.policyRuntimeState,
