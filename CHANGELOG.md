@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.84] — 2026-05-09
+
+### Changes
+- 5aeb69ce Fix agent WRFC normalization
+
 ## [0.19.83] — 2026-05-09
 
 ### Changes
