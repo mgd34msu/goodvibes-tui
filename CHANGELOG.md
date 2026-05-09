@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.87] — 2026-05-09
+
+### Changes
+- e8f6269e fix: defer wrfc topology to sdk 0.33.22
+
 ## [0.19.86] — 2026-05-09
 
 ### Changes
