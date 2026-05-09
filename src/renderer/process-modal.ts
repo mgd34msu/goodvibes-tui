@@ -44,8 +44,20 @@ const WRFC_ROLE_ORDER: Record<string, number> = {
 export interface ProcessModalDeps {
   readonly agentManager: Pick<AgentManager, 'list' | 'getStatus' | 'cancel'>;
   readonly processManager: Pick<ProcessManager, 'list' | 'getStatus' | 'stop'>;
-  readonly wrfcController: Pick<WrfcController, 'getChain'>;
+  readonly wrfcController: Pick<WrfcController, 'getChain'> & Partial<Pick<WrfcController, 'listChains'>>;
 }
+
+type WrfcChainLike = {
+  readonly id: string;
+  readonly state: string;
+  readonly task: string;
+  readonly ownerAgentId: string;
+  readonly engineerAgentId?: string;
+  readonly reviewerAgentId?: string;
+  readonly fixerAgentId?: string;
+  readonly allAgentIds?: readonly string[];
+  readonly constraints?: readonly unknown[];
+};
 
 /** Build a display label for an agent based on its task and template. */
 function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
@@ -86,8 +98,8 @@ function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
     const attempt = attemptMatch ? attemptMatch[1] : '?';
     const desc = truncateFirst(originalTask ?? 'fix in progress', 45);
     // Show constraint count when the chain has constraints to target (SDK 0.23.0)
-    const chain = rec.wrfcId ? (() => { try { return deps.wrfcController.getChain(rec.wrfcId!); } catch { return null; } })() : null;
-    const constraintCount = chain && chain.constraints.length > 0 ? chain.constraints.length : 0;
+    const chain = rec.wrfcId ? safeGetChain(rec.wrfcId, deps) : null;
+    const constraintCount = chain && (chain.constraints?.length ?? 0) > 0 ? chain.constraints?.length ?? 0 : 0;
     const constraintSuffix = constraintCount > 0 ? `  [${constraintCount}c]` : '';
     return `[Fix #${attempt}] ${desc}  (${fromScore} \u2192 ${toScore}/10)${constraintSuffix}`;
   }
@@ -104,6 +116,10 @@ function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
 
 function isActiveAgent(rec: AgentRecord): boolean {
   return rec.status !== 'completed' && rec.status !== 'failed' && rec.status !== 'cancelled';
+}
+
+function isActiveWrfcState(state: string): boolean {
+  return state !== 'passed' && state !== 'failed';
 }
 
 function getStreamSnippet(rec: AgentRecord): string | undefined {
@@ -212,17 +228,18 @@ function appendAgentGroupEntries(
 }
 
 function buildAgentEntries(
-  activeAgents: AgentRecord[],
+  agents: AgentRecord[],
   deps: ProcessModalDeps,
   now: number,
   getGroupOrder?: (key: string) => number | undefined,
   ensureGroupOrder?: (key: string) => number,
 ): ProcessEntry[] {
   const result: ProcessEntry[] = [];
-  const activeById = new Map(activeAgents.map((agent) => [agent.id, agent]));
+  const displayAgents = prepareAgentRecordsForDisplay(agents, deps);
+  const activeById = new Map(displayAgents.map((agent) => [agent.id, agent]));
   const groups = new Map<string, AgentRecord[]>();
 
-  for (const agent of activeAgents) {
+  for (const agent of displayAgents) {
     const groupKey = getAgentGroupKey(agent, activeById);
     const group = groups.get(groupKey) ?? [];
     group.push(agent);
@@ -249,6 +266,151 @@ function buildAgentEntries(
   return result;
 }
 
+function prepareAgentRecordsForDisplay(agents: AgentRecord[], deps: ProcessModalDeps): AgentRecord[] {
+  const chains = listWrfcChains(deps);
+  const agentById = new Map(agents.map((agent) => [agent.id, agent]));
+  const normalizedById = new Map<string, AgentRecord>();
+
+  for (const agent of agents) {
+    if (!isActiveAgent(agent)) continue;
+    normalizedById.set(agent.id, normalizeWrfcAgentRecord(agent, chains));
+  }
+
+  // A WRFC owner is the durable root of the chain. Keep it visible until the
+  // chain itself is terminal, even if the underlying owner agent has already
+  // emitted a completed phase event before reviewer/fixer/gate work finishes.
+  for (const chain of chains) {
+    if (!isActiveWrfcState(chain.state)) continue;
+    const owner = agentById.get(chain.ownerAgentId);
+    if (!owner || normalizedById.has(owner.id)) continue;
+    const chainHasActiveMember = agents.some((agent) =>
+      agent.id !== owner.id
+      && isActiveAgent(agent)
+      && isAgentInChain(agent, chain)
+    );
+    if (!chainHasActiveMember) continue;
+    normalizedById.set(owner.id, normalizeWrfcAgentRecord({
+      ...owner,
+      status: 'running',
+      completedAt: undefined,
+      progress: owner.progress ?? `WRFC chain ${chain.state}`,
+    }, chains));
+  }
+
+  const normalized = Array.from(normalizedById.values());
+  return inferDuplicateWrfcOwnerRows(normalized);
+}
+
+function normalizeWrfcAgentRecord(agent: AgentRecord, chains: WrfcChainLike[]): AgentRecord {
+  const chain = findChainForAgent(agent, chains);
+  if (!chain) return agent;
+
+  const role = inferWrfcRole(agent, chain);
+  const parentAgentId = role && role !== 'owner'
+    ? agent.parentAgentId ?? chain.ownerAgentId
+    : agent.parentAgentId;
+
+  return {
+    ...agent,
+    wrfcId: agent.wrfcId ?? chain.id,
+    wrfcRole: agent.wrfcRole ?? role,
+    parentAgentId,
+  };
+}
+
+function inferDuplicateWrfcOwnerRows(agents: AgentRecord[]): AgentRecord[] {
+  const byTask = new Map<string, AgentRecord[]>();
+  for (const agent of agents) {
+    if (agent.wrfcId || agent.wrfcRole || agent.parentAgentId) continue;
+    if (agent.reviewMode !== 'wrfc') continue;
+    const key = agent.task.trim();
+    if (!key) continue;
+    const group = byTask.get(key) ?? [];
+    group.push(agent);
+    byTask.set(key, group);
+  }
+
+  const inferredIds = new Set<string>();
+  const inferred = new Map<string, AgentRecord>();
+  for (const [task, group] of byTask) {
+    if (group.length < 2) continue;
+    const sorted = group.slice().sort((a, b) => a.startedAt - b.startedAt || a.id.localeCompare(b.id));
+    const owner = sorted[0]!;
+    const syntheticWrfcId = `inferred:${owner.id}`;
+    inferred.set(owner.id, {
+      ...owner,
+      wrfcId: syntheticWrfcId,
+      wrfcRole: 'owner',
+    });
+    inferredIds.add(owner.id);
+    for (const child of sorted.slice(1)) {
+      inferred.set(child.id, {
+        ...child,
+        wrfcId: syntheticWrfcId,
+        wrfcRole: child.template === 'reviewer' ? 'reviewer' : 'engineer',
+        parentAgentId: owner.id,
+      });
+      inferredIds.add(child.id);
+    }
+
+    // Avoid accidentally grouping unrelated long-running WRFC roots that just
+    // happen to share an empty or generic task after this exact duplicate group.
+    byTask.delete(task);
+  }
+
+  if (inferredIds.size === 0) return agents;
+  return agents.map((agent) => inferred.get(agent.id) ?? agent);
+}
+
+function listWrfcChains(deps: ProcessModalDeps): WrfcChainLike[] {
+  const controller = deps.wrfcController as ProcessModalDeps['wrfcController'] & {
+    listChains?: () => unknown;
+  };
+  if (typeof controller.listChains !== 'function') return [];
+  try {
+    const value = controller.listChains();
+    return Array.isArray(value) ? value.filter(isWrfcChainLike) : [];
+  } catch {
+    return [];
+  }
+}
+
+function isWrfcChainLike(value: unknown): value is WrfcChainLike {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.id === 'string'
+    && typeof record.state === 'string'
+    && typeof record.task === 'string'
+    && typeof record.ownerAgentId === 'string';
+}
+
+function findChainForAgent(agent: AgentRecord, chains: WrfcChainLike[]): WrfcChainLike | null {
+  if (agent.wrfcId) {
+    const direct = chains.find((chain) => chain.id === agent.wrfcId);
+    if (direct) return direct;
+  }
+  return chains.find((chain) => isAgentInChain(agent, chain)) ?? null;
+}
+
+function isAgentInChain(agent: AgentRecord, chain: WrfcChainLike): boolean {
+  return chain.ownerAgentId === agent.id
+    || chain.engineerAgentId === agent.id
+    || chain.reviewerAgentId === agent.id
+    || chain.fixerAgentId === agent.id
+    || (chain.allAgentIds?.includes(agent.id) ?? false)
+    || agent.wrfcId === chain.id;
+}
+
+function inferWrfcRole(agent: AgentRecord, chain: WrfcChainLike): AgentRecord['wrfcRole'] {
+  if (agent.wrfcRole) return agent.wrfcRole;
+  if (chain.ownerAgentId === agent.id) return 'owner';
+  if (chain.engineerAgentId === agent.id) return 'engineer';
+  if (chain.reviewerAgentId === agent.id) return 'reviewer';
+  if (chain.fixerAgentId === agent.id) return 'fixer';
+  if (agent.template === 'reviewer') return 'reviewer';
+  return 'engineer';
+}
+
 function getAgentGroupKey(agent: AgentRecord, activeById: Map<string, AgentRecord>): string {
   if (agent.wrfcId) return `wrfc:${agent.wrfcId}`;
 
@@ -264,9 +426,10 @@ function getAgentGroupKey(agent: AgentRecord, activeById: Map<string, AgentRecor
   return `root:${root.parentAgentId ?? root.id}`;
 }
 
-function safeGetChain(wrfcId: string, deps: Pick<ProcessModalDeps, 'wrfcController'>) {
+function safeGetChain(wrfcId: string, deps: Pick<ProcessModalDeps, 'wrfcController'>): WrfcChainLike | null {
   try {
-    return deps.wrfcController.getChain(wrfcId);
+    const chain = deps.wrfcController.getChain(wrfcId);
+    return isWrfcChainLike(chain) ? chain : null;
   } catch {
     return null;
   }
@@ -343,7 +506,7 @@ export class ProcessModal {
 
     // Agents — only show active (pending/running), grouped by stable parent/child hierarchy.
     result.push(...buildAgentEntries(
-      manager.list().filter(isActiveAgent),
+      manager.list(),
       this.deps,
       now,
       (key) => this.groupOrder.get(key),

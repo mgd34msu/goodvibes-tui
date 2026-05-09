@@ -493,6 +493,20 @@ async function main() {
       runningAgentIds.add(agent.id);
       if (!runningAgentProgress && agent.latestProgress) runningAgentProgress = agent.latestProgress;
     }
+    for (const chain of ctx.services.wrfcController.listChains()) {
+      if (chain.state === 'passed' || chain.state === 'failed') continue;
+      const chainAgentIds = new Set([
+        chain.ownerAgentId,
+        chain.engineerAgentId,
+        chain.reviewerAgentId,
+        chain.fixerAgentId,
+        ...chain.allAgentIds,
+      ].filter((id): id is string => typeof id === 'string' && id.length > 0));
+      const hasVisibleChainWork = Array.from(chainAgentIds).some((id) => runningAgentIds.has(id));
+      if (!hasVisibleChainWork) continue;
+      runningAgentIds.add(chain.ownerAgentId);
+      if (!runningAgentProgress) runningAgentProgress = `WRFC chain ${chain.state}`;
+    }
     const runningAgentCount = runningAgentIds.size;
     const runningProcessCount = processManager.list().filter((p) => !p.status.startsWith('done')).length;
     const cw = getPromptContentWidth();
