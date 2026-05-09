@@ -55,6 +55,8 @@ export interface BuiltinPanelDeps {
   resumeSession?: (sessionId: string) => void;
   /** Request a shell repaint directly rather than routing through a retired event path. */
   requestRender?: () => void;
+  /** Submit a Planning panel answer through the normal TUI chat/planning coordinator path. */
+  submitPlanningAnswer?: (answer: string) => void;
   /** ForensicsRegistry for the Forensics panel. */
   forensicsRegistry?: import('@/runtime/index.ts').ForensicsRegistry;
   /** EvalRegistry for the Eval panel. */

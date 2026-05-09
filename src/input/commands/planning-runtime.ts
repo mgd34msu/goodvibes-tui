@@ -1,5 +1,51 @@
+import type {
+  ProjectPlanningEvaluation,
+  ProjectPlanningQuestion,
+  ProjectPlanningService,
+  ProjectPlanningState,
+} from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { CommandRegistry } from '../command-registry.ts';
 import { requirePlanManager, requireSessionLineageTracker } from './runtime-services.ts';
+
+function recordNextQuestion(
+  state: Partial<ProjectPlanningState>,
+  question: ProjectPlanningQuestion | undefined,
+): Partial<ProjectPlanningState> {
+  if (!question) return state;
+  const answered = new Set((state.answeredQuestions ?? []).map((entry) => entry.id));
+  if (answered.has(question.id)) return state;
+  const openQuestions = [...(state.openQuestions ?? [])];
+  const existingIndex = openQuestions.findIndex((entry) => entry.id === question.id);
+  const normalized = { ...question, status: question.status ?? 'open' } satisfies ProjectPlanningQuestion;
+  if (existingIndex >= 0) openQuestions[existingIndex] = normalized;
+  else openQuestions.unshift(normalized);
+  return { ...state, openQuestions };
+}
+
+async function persistEvaluatedNextQuestion(
+  service: ProjectPlanningService,
+  projectId: string,
+  state: ProjectPlanningState,
+  evaluation: ProjectPlanningEvaluation,
+): Promise<{ state: ProjectPlanningState; evaluation: ProjectPlanningEvaluation }> {
+  if (!evaluation.nextQuestion) return { state, evaluation };
+  if (state.openQuestions.some((question) => question.id === evaluation.nextQuestion?.id)) {
+    return { state, evaluation };
+  }
+  const withQuestion = recordNextQuestion(evaluation.state ?? state, evaluation.nextQuestion);
+  const saved = await service.upsertState({ projectId, state: withQuestion });
+  const nextState = saved.state ?? state;
+  const nextEvaluation = await service.evaluate({ projectId, state: nextState });
+  return { state: nextState, evaluation: nextEvaluation };
+}
+
+function formatNextQuestion(question: ProjectPlanningQuestion | undefined): string {
+  if (!question) return 'No next question recorded.';
+  const lines = [`Next question: ${question.prompt}`];
+  if (question.recommendedAnswer) lines.push(`Recommended answer: ${question.recommendedAnswer}`);
+  lines.push('Answer in the prompt, or focus the Planning panel to choose/type an answer.');
+  return lines.join('\n');
+}
 
 export function registerPlanningRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -25,17 +71,24 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
 
       if (args.length === 0) {
         if (projectPlanningService && projectId) {
-          const [status, evaluation] = await Promise.all([
+          const [status, stateResult] = await Promise.all([
             projectPlanningService.status({ projectId }),
-            projectPlanningService.evaluate({ projectId }),
+            projectPlanningService.getState({ projectId }),
           ]);
+          const initialEvaluation = await projectPlanningService.evaluate({
+            projectId,
+            ...(stateResult.state ? { state: stateResult.state } : {}),
+          });
+          const { evaluation } = stateResult.state
+            ? await persistEvaluatedNextQuestion(projectPlanningService, projectId, stateResult.state, initialEvaluation)
+            : { evaluation: initialEvaluation };
           openProjectPlanningPanel();
           ctx.print(
             `Project planning: ${evaluation.readiness}\n` +
             `Project: ${status.projectId}\n` +
             `Knowledge space: ${status.knowledgeSpaceId}\n` +
             `Artifacts: ${status.counts.states} state, ${status.counts.decisions} decisions, ${status.counts.languageArtifacts} language\n` +
-            (evaluation.nextQuestion ? `Next question: ${evaluation.nextQuestion.prompt}` : 'No next question recorded.'),
+            formatNextQuestion(evaluation.nextQuestion),
           );
           return;
         }
@@ -132,14 +185,20 @@ export function registerPlanningRuntimeCommands(registry: CommandRegistry): void
           },
         },
       });
-      const evaluation = await projectPlanningService.evaluate({ projectId });
+      const initialEvaluation = await projectPlanningService.evaluate({
+        projectId,
+        ...(result.state ? { state: result.state } : {}),
+      });
+      const { state, evaluation } = result.state
+        ? await persistEvaluatedNextQuestion(projectPlanningService, projectId, result.state, initialEvaluation)
+        : { state: result.state, evaluation: initialEvaluation };
       sessionLineageTracker.setOriginalTask(taskDescription.slice(0, 200));
       openProjectPlanningPanel();
 
       ctx.print(
-        `Project planning seeded: "${result.state?.goal ?? taskDescription}"\n` +
+        `Project planning seeded: "${state?.goal ?? taskDescription}"\n` +
         `Readiness: ${evaluation.readiness}\n` +
-        (evaluation.nextQuestion ? `Next question: ${evaluation.nextQuestion.prompt}` : 'No next question recorded.'),
+        formatNextQuestion(evaluation.nextQuestion),
       );
     },
   });

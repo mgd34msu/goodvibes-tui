@@ -205,12 +205,16 @@ export class ProjectPlanningCoordinator {
     const tasks = state.tasks
       .map((task) => `- ${task.id}: ${task.title}`)
       .join('\n') || '- none recorded yet';
+    const recentAnswers = state.answeredQuestions
+      .slice(-3)
+      .map((question) => `- ${question.prompt}\n  Answer: ${question.answer ?? '(no answer recorded)'}`)
+      .join('\n') || '- none recorded yet';
 
     return [
       'TUI-owned project planning loop is active for this turn.',
       'Do not execute code changes, spawn agents, or claim implementation is complete unless the user explicitly approves execution after the plan is structurally ready.',
       'Be relentless and thorough: challenge vague wording, inspect relevant context before proposing execution, and ask exactly one focused question when information is missing.',
-      'Prefer concrete examples and recommended answers so the user can answer quickly.',
+      'Do not ask broad questions like "what is in scope?" without examples. Break broad planning gaps into concrete choices, explain tradeoffs, and recommend a default the user can accept or correct.',
       '',
       `Project id: ${this.projectId}`,
       `Knowledge space: ${state.knowledgeSpaceId}`,
@@ -222,11 +226,14 @@ export class ProjectPlanningCoordinator {
       'Readiness gaps:',
       gaps,
       '',
+      'Recent answered planning questions:',
+      recentAnswers,
+      '',
       'Recorded tasks:',
       tasks,
       '',
       nextQuestion
-        ? `Ask this exact next planning question unless the user already answered it: ${nextQuestion.prompt}`
+        ? `Resolve this next planning gap. If this wording is broad, turn it into a smaller concrete multiple-choice question before asking: ${nextQuestion.prompt}`
         : 'If the plan is structurally ready, summarize the plan and ask for explicit execution approval. Do not start execution yourself.',
     ].join('\n');
   }

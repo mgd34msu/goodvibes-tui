@@ -553,7 +553,12 @@ export class PanelManager {
   private _activateByIdInPane(panelId: string, which: 'top' | 'bottom'): void {
     const p = this._getPane(which);
     const index = p.panels.findIndex(panel => panel.id === panelId);
-    if (index >= 0 && index !== p.activeIndex) {
+    if (index < 0) return;
+    if (index === p.activeIndex) {
+      p.panels[index]?.onActivate();
+      return;
+    }
+    if (index !== p.activeIndex) {
       const oldPanel = p.panels[p.activeIndex];
       if (oldPanel) oldPanel.onDeactivate();
       p.activeIndex = index;

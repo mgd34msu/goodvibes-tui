@@ -2,6 +2,7 @@ import type {
   ProjectPlanningDecision,
   ProjectPlanningEvaluation,
   ProjectPlanningLanguageArtifact,
+  ProjectPlanningQuestion,
   ProjectPlanningService,
   ProjectPlanningState,
   ProjectPlanningStatus,
@@ -13,6 +14,7 @@ import {
   buildEmptyState,
   buildKeyValueLine,
   buildPanelLine,
+  buildPanelListRow,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
   extendPalette,
@@ -39,21 +41,35 @@ export interface ProjectPlanningPanelOptions {
   readonly service: ProjectPlanningService;
   readonly projectId: string;
   readonly requestRender?: () => void;
+  readonly submitAnswer?: (answer: string) => void;
+}
+
+interface PlanningAnswerAction {
+  readonly id: string;
+  readonly label: string;
+  readonly detail: string;
+  readonly answer: string;
+  readonly kind?: 'answer' | 'approve';
+  readonly disabled?: boolean;
 }
 
 export class ProjectPlanningPanel extends BasePanel {
   private readonly service: ProjectPlanningService;
   private readonly projectId: string;
   private readonly requestRender: () => void;
+  private readonly submitAnswer: ((answer: string) => void) | undefined;
   private snapshot: ProjectPlanningPanelSnapshot | null = null;
   private loading = false;
   private scrollOffset = 0;
+  private selectedActionIndex = 0;
+  private draftAnswer = '';
 
   public constructor(options: ProjectPlanningPanelOptions) {
     super('project-planning', 'Planning', 'P', 'agent');
     this.service = options.service;
     this.projectId = options.projectId;
     this.requestRender = options.requestRender ?? (() => {});
+    this.submitAnswer = options.submitAnswer;
   }
 
   public override onActivate(): void {
@@ -62,6 +78,58 @@ export class ProjectPlanningPanel extends BasePanel {
   }
 
   public handleInput(key: string): boolean {
+    if (this.lastError !== null) this.clearError();
+    const question = this.getCurrentQuestion();
+    if (question) {
+      const actions = this.getAnswerActions(question);
+      this.selectedActionIndex = this.clampActionIndex(actions.length);
+      if (key === 'up') {
+        this.selectedActionIndex = Math.max(0, this.selectedActionIndex - 1);
+        this.markDirty();
+        return true;
+      }
+      if (key === 'down') {
+        this.selectedActionIndex = Math.min(Math.max(0, actions.length - 1), this.selectedActionIndex + 1);
+        this.markDirty();
+        return true;
+      }
+      if (key === 'enter' || key === 'return') {
+        this.submitSelectedAction(question, actions);
+        return true;
+      }
+      if (key === 'backspace') {
+        this.draftAnswer = this.draftAnswer.slice(0, -1);
+        this.markDirty();
+        return true;
+      }
+      if (key === 'delete') {
+        this.draftAnswer = '';
+        this.markDirty();
+        return true;
+      }
+      if (key === 'space') {
+        this.draftAnswer += ' ';
+        this.markDirty();
+        return true;
+      }
+      if (key === 'pageup') {
+        this.scrollOffset = Math.max(0, this.scrollOffset - 6);
+        this.markDirty();
+        return true;
+      }
+      if (key === 'pagedown') {
+        this.scrollOffset += 6;
+        this.markDirty();
+        return true;
+      }
+      if (this.isPrintableKey(key)) {
+        this.draftAnswer += key;
+        this.markDirty();
+        return true;
+      }
+      return false;
+    }
+
     if (key === 'r' || key === 'R') {
       this.refresh(true);
       return true;
@@ -121,6 +189,8 @@ export class ProjectPlanningPanel extends BasePanel {
         });
       } else {
         sections.push(this.buildStateSection(width, state, evaluation));
+        const question = this.getCurrentQuestion();
+        if (question) sections.push(this.buildQuestionSection(width, question));
         sections.push(this.buildGapsSection(width, evaluation));
         sections.push(this.buildTasksSection(width, state));
         sections.push(this.buildDecisionsSection(width, state, decisions));
@@ -161,6 +231,21 @@ export class ProjectPlanningPanel extends BasePanel {
   }
 
   private footerLines(width: number): Line[] {
+    const hasQuestion = this.getCurrentQuestion() !== null;
+    if (hasQuestion) {
+      return [
+        buildPanelLine(width, [
+          [' Up/Down', C.info],
+          [' choose answer  ', C.dim],
+          ['type', C.info],
+          [' draft  ', C.dim],
+          ['Backspace/Delete', C.info],
+          [' edit  ', C.dim],
+          ['Enter', C.info],
+          [' submit  Esc close panel focus', C.dim],
+        ]),
+      ];
+    }
     return [
       buildPanelLine(width, [
         [' Up/Down', C.info],
@@ -171,6 +256,41 @@ export class ProjectPlanningPanel extends BasePanel {
         [' approve execution-ready plan  Esc close panel focus', C.dim],
       ]),
     ];
+  }
+
+  private buildQuestionSection(width: number, question: ProjectPlanningQuestion): PanelWorkspaceSection {
+    const actions = this.getAnswerActions(question);
+    this.selectedActionIndex = this.clampActionIndex(actions.length);
+    const lines: Line[] = [
+      ...buildBodyText(width, question.prompt, C, C.planning),
+    ];
+    if (question.whyItMatters) {
+      lines.push(...buildBodyText(width, `Why this matters: ${question.whyItMatters}`, C, C.dim));
+    }
+    if (question.recommendedAnswer) {
+      lines.push(...buildBodyText(width, `Recommendation: ${question.recommendedAnswer}`, C, C.good));
+    }
+    lines.push(...buildBodyText(
+      width,
+      `Typed answer: ${this.draftAnswer || '(type here while this panel is focused)'}`,
+      C,
+      this.draftAnswer ? C.value : C.dim,
+    ));
+    lines.push(buildPanelLine(width, [[
+      ' Select an answer below or type your own. Enter sends it through the normal planning chat path.',
+      C.dim,
+    ]]));
+    actions.forEach((action, index) => {
+      const selected = index === this.selectedActionIndex;
+      lines.push(buildPanelListRow(width, [
+        { text: action.label, fg: action.disabled ? C.dim : C.value, bold: selected },
+        { text: `  ${action.detail}`, fg: C.dim },
+      ], C, {
+        selected,
+        marker: selected ? '▶' : ' ',
+      }));
+    });
+    return { title: 'Answer Current Question', lines };
   }
 
   private buildStateSection(
@@ -337,6 +457,124 @@ export class ProjectPlanningPanel extends BasePanel {
         this.requestRender();
       }
     })();
+  }
+
+  private getCurrentQuestion(): ProjectPlanningQuestion | null {
+    const state = this.snapshot?.state;
+    const open = state?.openQuestions.find((question) => (question.status ?? 'open') === 'open');
+    return open ?? this.snapshot?.evaluation?.nextQuestion ?? null;
+  }
+
+  private getAnswerActions(question: ProjectPlanningQuestion): PlanningAnswerAction[] {
+    const actions: PlanningAnswerAction[] = [];
+    const prompt = question.prompt.toLowerCase();
+    const isScopeQuestion = prompt.includes('scope') || prompt.includes('in or out');
+    const isApprovalQuestion = prompt.includes('approved') || prompt.includes('approve') || prompt.includes('execution');
+    if (isApprovalQuestion) {
+      actions.push({
+        id: 'approve-execution',
+        label: 'Approve execution',
+        detail: 'Mark this plan approved so execution may proceed.',
+        answer: 'Approve this planning state for execution.',
+        kind: 'approve',
+      });
+    }
+    if (question.recommendedAnswer?.trim()) {
+      actions.push({
+        id: 'recommended',
+        label: 'Use recommended answer',
+        detail: this.compact(question.recommendedAnswer),
+        answer: question.recommendedAnswer,
+      });
+    }
+    if (isScopeQuestion) {
+      actions.push({
+        id: 'scope-end-to-end',
+        label: 'End-to-end required scope',
+        detail: 'Let the plan include every component needed to make this work, but avoid unrelated cleanup.',
+        answer: 'Scope is everything required to make the requested outcome work end-to-end. Include TUI, daemon composition, configuration, docs, and tests if they are required. Do not include unrelated cleanup or broad refactors unless they are necessary for this task.',
+      });
+      actions.push({
+        id: 'scope-tui-first',
+        label: 'TUI-first scope',
+        detail: 'Fix TUI behavior here; report SDK blockers instead of patching around SDK-owned bugs.',
+        answer: 'Scope is TUI-owned behavior first. If a blocker is SDK-owned, report the exact SDK contract/runtime issue instead of patching around it in the TUI. Include daemon composition only where the TUI owns the wiring.',
+      });
+    }
+    actions.push({
+      id: 'ask-narrower',
+      label: 'I am not sure yet',
+      detail: 'Break this into smaller concrete choices with examples and a recommended default.',
+      answer: `I do not know enough to answer "${question.prompt}" as asked. Break it into smaller concrete questions with 2-4 specific choices, explain the tradeoffs, recommend a default, and ask me the first one.`,
+    });
+    actions.push({
+      id: 'custom',
+      label: 'Submit typed answer',
+      detail: this.draftAnswer ? this.compact(this.draftAnswer) : 'Type an answer first; this row becomes the custom answer.',
+      answer: this.draftAnswer.trim(),
+      disabled: !this.draftAnswer.trim(),
+    });
+    return actions;
+  }
+
+  private submitSelectedAction(question: ProjectPlanningQuestion, actions: readonly PlanningAnswerAction[]): void {
+    const action = actions[this.clampActionIndex(actions.length)];
+    if (!action || action.disabled || !action.answer.trim()) {
+      this.setError('Type an answer or choose a non-empty answer option.');
+      this.requestRender();
+      return;
+    }
+    if (action.kind === 'approve') {
+      this.approveExecution();
+      return;
+    }
+    if (!this.submitAnswer) {
+      this.setError('Planning answer submission is not wired in this runtime.');
+      this.requestRender();
+      return;
+    }
+    void (async () => {
+      try {
+        await this.persistQuestionIfNeeded(question);
+        this.draftAnswer = '';
+        this.submitAnswer?.(action.answer.trim());
+        this.refresh(true);
+        this.registerTimer(setTimeout(() => this.refresh(true), 250));
+      } catch (err) {
+        this.setError(err instanceof Error ? err.message : String(err));
+        this.requestRender();
+      }
+    })();
+  }
+
+  private async persistQuestionIfNeeded(question: ProjectPlanningQuestion): Promise<void> {
+    const state = this.snapshot?.state;
+    if (!state) return;
+    if (state.openQuestions.some((entry) => entry.id === question.id)) return;
+    await this.service.upsertState({
+      projectId: this.projectId,
+      state: {
+        ...state,
+        openQuestions: [
+          { ...question, status: question.status ?? 'open' },
+          ...state.openQuestions,
+        ],
+      },
+    });
+  }
+
+  private clampActionIndex(count: number): number {
+    if (count <= 0) return 0;
+    return Math.max(0, Math.min(count - 1, this.selectedActionIndex));
+  }
+
+  private isPrintableKey(key: string): boolean {
+    return key.length === 1 && key >= ' ';
+  }
+
+  private compact(text: string): string {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    return normalized.length > 86 ? `${normalized.slice(0, 83)}...` : normalized;
   }
 
   private approveExecution(): void {
