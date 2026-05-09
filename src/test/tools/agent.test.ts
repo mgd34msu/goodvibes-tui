@@ -121,10 +121,14 @@ describe('spawn mode', () => {
     expect(tools).toContain('analyze');
   });
 
-  test('spawn with reviewer template is rejected as an independent root', async () => {
-    const result = await runAgentMayFail({ mode: 'spawn', task: 'Review code', template: 'reviewer' });
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Root reviewer/tester/verifier agents are not valid independent roots');
+  test('spawn with reviewer template normalizes into a WRFC owner chain', async () => {
+    const result = await runAgent({ mode: 'spawn', task: 'Review code', template: 'reviewer' });
+    expect(result.template).toBe('engineer');
+    expect(result.reviewMode).toBe('wrfc');
+    expect(result.task).toBe('Review code');
+    expect(result.successCriteria).toEqual([
+      'Keep the work as one WRFC owner chain; review, test, verification, and fix phases must remain lifecycle children.',
+    ]);
   });
 
   test('spawn without template defaults to general', async () => {

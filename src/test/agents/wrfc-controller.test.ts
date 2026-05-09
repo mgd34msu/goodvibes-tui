@@ -514,14 +514,17 @@ describe('WrfcController', () => {
       expect(workflowCalls('WORKFLOW_CHAIN_FAILED')).toHaveLength(1);
     });
 
-    test('owner completion before terminal chain state is treated as controller failure', async () => {
+    test('owner completion before terminal chain state is ignored and recorded as owner decision', async () => {
       const controller = initTestWrfcController();
       const { owner, chain } = createStartedChain(controller);
 
       await emitAgentCompleted(runtimeBus, owner.id);
 
-      expect(chain.state).toBe('failed');
-      expect(chain.error).toContain('WRFC owner agent completed before the chain reached a terminal state');
+      expect(chain.state).toBe('engineering');
+      expect(owner.status).toBe('running');
+      expect(chain.error).toBeUndefined();
+      expect(chain.ownerDecisions.at(-1)?.action).toBe('owner_completion_ignored');
+      expect(chain.ownerDecisions.at(-1)?.reason).toContain('Ignored premature owner completion');
     });
 
     test('dispose stops event listener processing', async () => {
