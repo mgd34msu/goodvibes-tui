@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.92] — 2026-05-10
+
+### Changes
+- Updated `@pellux/goodvibes-sdk` to `0.33.24` for the companion-chat
+  tool-loop finalization fix used by Home Assistant Assist conversations.
+
 ## [0.19.91] — 2026-05-10
 
 ### Changes
