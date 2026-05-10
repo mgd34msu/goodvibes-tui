@@ -8,6 +8,16 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { normalizeWrfcAgentToolInvocation, wrapWrfcAgentTool } from '../../tools/wrfc-agent-guard.ts';
 
+const EXPECTED_AGENT_TEMPLATES = [
+  'orchestrator',
+  'engineer',
+  'reviewer',
+  'tester',
+  'researcher',
+  'integrator',
+  'general',
+] as const;
+
 // Drain queued microtasks so bus.emit() listeners (OBS-14 async dispatch) run before assertions.
 const flushMicrotasks = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 
@@ -729,21 +739,19 @@ describe('list mode', () => {
 // ---------------------------------------------------------------------------
 
 describe('templates mode', () => {
-  test('templates returns all 5 templates', async () => {
+  test('templates returns all built-in templates', async () => {
     const result = await runAgent({ mode: 'templates' });
     const templates = result.templates as Array<{ name: string }>;
-    expect(templates.length).toBe(5);
+    expect(templates.map((t) => t.name)).toEqual(EXPECTED_AGENT_TEMPLATES);
   });
 
-  test('templates includes engineer, reviewer, tester, researcher, general', async () => {
+  test('templates includes all role templates', async () => {
     const result = await runAgent({ mode: 'templates' });
     const templates = result.templates as Array<{ name: string }>;
     const names = templates.map((t) => t.name);
-    expect(names).toContain('engineer');
-    expect(names).toContain('reviewer');
-    expect(names).toContain('tester');
-    expect(names).toContain('researcher');
-    expect(names).toContain('general');
+    for (const name of EXPECTED_AGENT_TEMPLATES) {
+      expect(names).toContain(name);
+    }
   });
 
   test('each template has description and defaultTools', async () => {

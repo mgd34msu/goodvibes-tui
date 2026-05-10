@@ -6,6 +6,16 @@ import { ArchetypeLoader } from '@pellux/goodvibes-sdk/platform/agents';
 import type { AgentArchetype } from '@pellux/goodvibes-sdk/platform/agents';
 import { getTestArchetypeLoader, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
 
+const EXPECTED_BUILTIN_ARCHETYPES = [
+  'orchestrator',
+  'engineer',
+  'reviewer',
+  'tester',
+  'researcher',
+  'integrator',
+  'general',
+] as const;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -31,20 +41,18 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('built-in archetypes', () => {
-  test('listArchetypes returns 5 built-in archetypes when no agents dir', () => {
+  test('listArchetypes returns all built-in archetypes when no agents dir', () => {
     const loader = new ArchetypeLoader('/nonexistent/path');
     const archetypes = loader.listArchetypes();
-    expect(archetypes.length).toBe(5);
+    expect(archetypes.map((a) => a.name)).toEqual(EXPECTED_BUILTIN_ARCHETYPES);
   });
 
-  test('built-ins include engineer, reviewer, tester, researcher, general', () => {
+  test('built-ins include all role archetypes', () => {
     const loader = new ArchetypeLoader('/nonexistent/path');
     const names = loader.listArchetypes().map((a) => a.name);
-    expect(names).toContain('engineer');
-    expect(names).toContain('reviewer');
-    expect(names).toContain('tester');
-    expect(names).toContain('researcher');
-    expect(names).toContain('general');
+    for (const name of EXPECTED_BUILTIN_ARCHETYPES) {
+      expect(names).toContain(name);
+    }
   });
 
   test('built-in archetypes have non-empty tools array', () => {
@@ -331,7 +339,7 @@ describe('error resilience', () => {
     const loader = new ArchetypeLoader(dir);
     const archetypes = loader.listArchetypes();
     // Only built-ins
-    expect(archetypes.length).toBe(5);
+    expect(archetypes.map((a) => a.name)).toEqual(EXPECTED_BUILTIN_ARCHETYPES);
     expect(archetypes.every((a) => !a.isCustom)).toBe(true);
   });
 
