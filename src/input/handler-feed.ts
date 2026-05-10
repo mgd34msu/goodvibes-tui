@@ -237,6 +237,14 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     }
 
     if (token.type === 'key') {
+      if (
+        context.panelFocused
+        && (!context.panelManager.isVisible()
+          || context.panelManager.getAllOpen().length === 0
+          || context.panelManager.getActivePanel() === null)
+      ) {
+        context.panelFocused = false;
+      }
       const shortcutState = {
         panelFocused: context.panelFocused,
         prompt: context.prompt,
@@ -272,6 +280,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         context.prompt = shortcutState.prompt;
         context.cursorPos = shortcutState.cursorPos;
         context.commandMode = shortcutState.commandMode;
+        context.panelFocused = shortcutState.panelFocused;
         continue;
       }
     }
@@ -339,6 +348,8 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         modalStack: context.modalStack,
         commandRegistry: context.commandRegistry,
         commandContext: context.commandContext,
+        panelFocused: context.panelFocused,
+        panelManager: context.panelManager,
         conversationManager: context.conversationManager,
         requestRender: context.requestRender,
         handleEscape: context.handleEscape,
@@ -347,6 +358,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         context.commandMode = commandState.commandMode;
         context.prompt = commandState.prompt;
         context.cursorPos = commandState.cursorPos;
+        context.panelFocused = commandState.panelFocused;
         continue;
       }
 

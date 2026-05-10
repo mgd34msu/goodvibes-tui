@@ -107,6 +107,11 @@ export interface InputHistoryOptions {
   readonly persist?: boolean;
 }
 
+type StoredInputHistoryEntry = string | {
+  readonly text: string;
+  readonly recallText?: string;
+};
+
 function resolveHistoryPath(options?: InputHistoryOptions): string {
   if (options?.historyPath) {
     return options.historyPath;
@@ -119,7 +124,7 @@ function resolveHistoryPath(options?: InputHistoryOptions): string {
 }
 
 export class InputHistory {
-  private entries: string[] = [];
+  private entries: StoredInputHistoryEntry[] = [];
   private position = -1;  // -1 = not browsing
   private draft = '';     // Saves current input when entering history
   private maxEntries = 500;
@@ -140,17 +145,21 @@ export class InputHistory {
    * - Deduplicates consecutive identical entries.
    * - Resets browsing position.
    */
-  add(text: string): void {
+  add(text: string, options: { readonly recallText?: string } = {}): void {
     const trimmed = text.trim();
     if (!trimmed) return;
+    const recallText = options.recallText?.trim();
+    const entry: StoredInputHistoryEntry = recallText && recallText !== trimmed
+      ? { text: trimmed, recallText }
+      : trimmed;
 
     // Dedup: skip if same as most recent entry
-    if (this.entries.length > 0 && this.entries[0] === trimmed) {
+    if (this.entries.length > 0 && this.sameEntry(this.entries[0]!, entry)) {
       this.resetPosition();
       return;
     }
 
-    this.entries.unshift(trimmed);
+    this.entries.unshift(entry);
     if (this.entries.length > this.maxEntries) {
       this.entries.length = this.maxEntries;
     }
@@ -179,9 +188,10 @@ export class InputHistory {
     // Try to advance to an older single-line entry
     let next = this.position + 1;
     while (next < this.entries.length) {
-      if (!this.entries[next].includes('\n')) {
+      const entry = this.entries[next]!;
+      if (!this.getDisplayText(entry).includes('\n')) {
         this.position = next;
-        return this.entries[this.position];
+        return this.getRecallText(this.entries[this.position]!);
       }
       next++;
     }
@@ -201,9 +211,10 @@ export class InputHistory {
     // Try to find a newer single-line entry
     let prev = this.position - 1;
     while (prev >= 0) {
-      if (!this.entries[prev].includes('\n')) {
+      const entry = this.entries[prev]!;
+      if (!this.getDisplayText(entry).includes('\n')) {
         this.position = prev;
-        return this.entries[this.position];
+        return this.getRecallText(this.entries[this.position]!);
       }
       prev--;
     }
@@ -232,7 +243,7 @@ export class InputHistory {
    * Return entries as readonly for use by HistorySearch.
    */
   getEntries(): readonly string[] {
-    return this.entries;
+    return this.entries.map((entry) => this.getRecallText(entry));
   }
 
   /**
@@ -256,12 +267,41 @@ export class InputHistory {
         const raw = readFileSync(this.historyPath, 'utf-8');
         const parsed = JSON.parse(raw) as unknown;
         if (Array.isArray(parsed)) {
-          this.entries = (parsed as unknown[]).filter((e): e is string => typeof e === 'string').slice(0, this.maxEntries);
+          this.entries = (parsed as unknown[])
+            .map((entry) => this.normalizeStoredEntry(entry))
+            .filter((entry): entry is StoredInputHistoryEntry => entry !== null)
+            .slice(0, this.maxEntries);
         }
       }
     } catch (err) {
       logger.debug('InputHistory load failed (non-fatal, using empty history)', { error: summarizeError(err) });
       this.entries = [];
     }
+  }
+
+  private getDisplayText(entry: StoredInputHistoryEntry): string {
+    return typeof entry === 'string' ? entry : entry.text;
+  }
+
+  private getRecallText(entry: StoredInputHistoryEntry): string {
+    return typeof entry === 'string' ? entry : entry.recallText ?? entry.text;
+  }
+
+  private sameEntry(a: StoredInputHistoryEntry, b: StoredInputHistoryEntry): boolean {
+    return this.getDisplayText(a) === this.getDisplayText(b)
+      && this.getRecallText(a) === this.getRecallText(b);
+  }
+
+  private normalizeStoredEntry(entry: unknown): StoredInputHistoryEntry | null {
+    if (typeof entry === 'string') return entry;
+    if (!entry || typeof entry !== 'object') return null;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.text !== 'string') return null;
+    const text = record.text.trim();
+    if (!text) return null;
+    if (typeof record.recallText === 'string' && record.recallText.trim() && record.recallText.trim() !== text) {
+      return { text, recallText: record.recallText.trim() };
+    }
+    return text;
   }
 }

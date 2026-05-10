@@ -77,4 +77,34 @@ describe('handlePanelFocusToken', () => {
     expect(result.panelFocused).toBe(false);
     expect(state.requestRender).toHaveBeenCalled();
   });
+
+  test('panel close hotkey always returns focus to prompt even when another panel remains open', () => {
+    const closed: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'system-messages' }, { id: 'tasks' }],
+        getActive: () => null,
+        getActivePanel: () => ({ id: 'system-messages' }),
+        close: (id: string) => { closed.push(id); },
+      } as unknown as PanelFocusRouteState['panelManager'],
+      keybindingsManager: {
+        matches: (action: string) => action === 'panel-close',
+      } as unknown as PanelFocusRouteState['keybindingsManager'],
+    });
+    const result = handlePanelFocusToken(state, {
+      type: 'key',
+      name: '\x18',
+      logicalName: 'x',
+      ctrl: true,
+      shift: false,
+      meta: false,
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.panelFocused).toBe(false);
+    expect(closed).toEqual(['system-messages']);
+    expect(state.requestRender).toHaveBeenCalled();
+  });
 });

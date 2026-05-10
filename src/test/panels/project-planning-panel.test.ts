@@ -154,6 +154,70 @@ describe('ProjectPlanningPanel', () => {
     expect(submitted.at(-1)).toBe('Only the TUI planning loop');
   });
 
+  test('keeps the selected planning answer visible while navigating long question content', async () => {
+    const longPrompt = [
+      'What is in scope, and what should be left out for this pass?',
+      ...Array.from({ length: 24 }, (_, index) => `Context line ${index + 1}: detailed planning prompt content that would otherwise push actions off screen.`),
+    ].join('\n');
+    const service = makeService(makeState({
+      openQuestions: [{
+        id: 'scope',
+        prompt: longPrompt,
+        recommendedAnswer: 'TUI-only unless SDK wiring is required.',
+        status: 'open',
+      }],
+    }));
+    const panel = new ProjectPlanningPanel({ service, projectId: 'proj' });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    for (let i = 0; i < 6; i++) panel.handleInput('down');
+
+    const rendered = text(panel.render(120, 18));
+    expect(rendered).toContain('Close planning and continue without it');
+    expect(rendered).toContain('showing');
+  });
+
+  test('can pause planning from the panel without submitting another planning turn', async () => {
+    let dismissed = 0;
+    let saved: ProjectPlanningState | null = null;
+    const service = makeService(makeState({
+      openQuestions: [{
+        id: 'scope',
+        prompt: 'What is in or out of scope?',
+        status: 'open',
+      }],
+    }));
+    const originalUpsert = service.upsertState.bind(service);
+    service.upsertState = (async (input: { state: Partial<ProjectPlanningState> }) => {
+      const result = await originalUpsert(input);
+      saved = result.state;
+      return result;
+    }) as ProjectPlanningService['upsertState'];
+    const panel = new ProjectPlanningPanel({
+      service,
+      projectId: 'proj',
+      dismissPlanning: () => { dismissed++; },
+      submitAnswer: () => {
+        throw new Error('skip action must not submit through planning chat');
+      },
+    });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    for (let i = 0; i < 5; i++) panel.handleInput('down');
+    expect(text(panel.render(120, 30))).toContain('Close planning and continue without it');
+    expect(panel.handleInput('enter')).toBe(true);
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    expect(dismissed).toBe(1);
+    expect(saved?.metadata?.['active']).toBe(false);
+    expect(saved?.metadata?.['pausedFrom']).toBe('project-planning-panel');
+  });
+
   test('does not surface generic SDK placeholder recommendations as answer actions', async () => {
     const service = makeService(makeState({
       openQuestions: [{

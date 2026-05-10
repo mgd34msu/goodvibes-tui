@@ -41,6 +41,8 @@ const PLANNING_INTENT_PATTERNS: readonly RegExp[] = [
 const CANCEL_PATTERNS: readonly RegExp[] = [
   /\b(stop|cancel|pause|exit) (the )?planning\b/i,
   /\bplanning (is )?(done|cancelled|canceled|paused)\b/i,
+  /\b(skip|dismiss) (the )?planning\b/i,
+  /\bcontinue without (the )?planning\b/i,
 ];
 
 const APPROVAL_PATTERNS: readonly RegExp[] = [

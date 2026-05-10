@@ -5,6 +5,7 @@ function buildState(overrides: Partial<GlobalShortcutRouteState> = {}): GlobalSh
   return {
     panelFocused: false,
     panelManager: {
+      isVisible: () => true,
       getAllOpen: () => [],
       close: () => {},
       hide: () => {},
@@ -59,6 +60,34 @@ describe('handleGlobalShortcutToken', () => {
     expect(handled).toBe(true);
     expect(state.commandContext?.openPanelPicker).toHaveBeenCalled();
     expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('panel-close shortcut clears stale panel focus', () => {
+    const closed: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        getAllOpen: () => [{ id: 'system-messages' }, { id: 'tasks' }],
+        close: (id: string) => { closed.push(id); },
+        hide: () => {},
+        getActivePanel: () => ({ id: 'system-messages' }),
+        isVisible: () => true,
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-close',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x18', logicalName: 'x', ctrl: true, shift: false, meta: false },
+      24,
+    );
+
+    expect(handled).toBe(true);
+    expect(state.panelFocused).toBe(false);
+    expect(closed).toEqual(['system-messages']);
   });
 
   test('escape does not bypass panel focus handling', () => {

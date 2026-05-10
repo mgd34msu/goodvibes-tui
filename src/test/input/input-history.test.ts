@@ -140,6 +140,14 @@ describe('InputHistory.up', () => {
     expect(h.up('')).toBe('another single');
     expect(h.up('another single')).toBe('single line'); // skips multiline
   });
+
+  test('restores persisted paste marker history as the original multiline content', () => {
+    const h = makeHistory();
+    const pasted = 'line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9';
+    h.add('[TEXT: p1, 9 lines]', { recallText: pasted });
+
+    expect(h.up('')).toBe(pasted);
+  });
 });
 
 // ===========================================================================
@@ -260,6 +268,18 @@ describe('InputHistory persistence', () => {
     expect(h2.up('')).toBe('gamma');
     expect(h2.up('gamma')).toBe('beta');
     expect(h2.up('beta')).toBe('alpha');
+  });
+
+  test('round-trip: paste marker recall content survives save+load', () => {
+    const path = makeTmpPath();
+    const pasted = 'first pasted line\nsecond pasted line\nthird pasted line';
+    const h1 = new InputHistory({ historyPath: path, persist: true });
+    h1.add('[TEXT: p1, 3 lines]', { recallText: pasted });
+
+    const h2 = new InputHistory({ historyPath: path, persist: true });
+    expect(h2.up('')).toBe(pasted);
+    const raw = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+    expect(raw).toEqual([{ text: '[TEXT: p1, 3 lines]', recallText: pasted }]);
   });
 
   test('creates missing directory on save', () => {

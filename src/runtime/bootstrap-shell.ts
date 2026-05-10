@@ -120,6 +120,11 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
       }
       commandContextRef.submitInput(answer);
     },
+    dismissPlanning: () => {
+      services.panelManager.close('project-planning');
+      commandContextRef?.focusPrompt?.();
+      requestRender();
+    },
     forensicsRegistry,
     policyRuntimeState,
     approvalBroker: services.approvalBroker,

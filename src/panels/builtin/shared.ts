@@ -57,6 +57,8 @@ export interface BuiltinPanelDeps {
   requestRender?: () => void;
   /** Submit a Planning panel answer through the normal TUI chat/planning coordinator path. */
   submitPlanningAnswer?: (answer: string) => void;
+  /** Pause the TUI-owned planning loop and return focus to normal prompt input. */
+  dismissPlanning?: () => void;
   /** ForensicsRegistry for the Forensics panel. */
   forensicsRegistry?: import('@/runtime/index.ts').ForensicsRegistry;
   /** EvalRegistry for the Eval panel. */
