@@ -222,7 +222,9 @@ export async function initializeBootstrapCore(
     overflowHandler: services.overflowHandler,
     changeTracker: services.sessionChangeTracker,
   });
-  installWrfcAgentToolGuard(toolRegistry);
+  installWrfcAgentToolGuard(toolRegistry, {
+    getLastUserMessage: () => conversation.getLastUserMessage(),
+  });
   services.agentOrchestrator.setDependencies({
     surfaceRoot: 'tui',
     fileCache,

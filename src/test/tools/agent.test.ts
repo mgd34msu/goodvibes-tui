@@ -303,38 +303,41 @@ describe('spawn mode', () => {
     expect(harness.manager.list().filter((agent) => agent.parentAgentId == null)).toHaveLength(1);
   });
 
-  test('passes the original rate limiter WRFC batch through for SDK collapse', () => {
+  test('collapses narrowed rate limiter WRFC role batch to the authoritative user request', () => {
     const normalized = normalizeWrfcAgentToolInvocation({
       mode: 'batch-spawn',
       cohort: 'rate-limiter-wrfc',
       tasks: [
         {
-          task: 'Plan a minimal standalone JavaScript rate limiter for an empty repository. Return proposed file paths, public API, and implementation notes only. Do not write files.',
+          task: 'Independently design a minimal token bucket rate limiter API for an empty repository. Do not write files.',
           template: 'engineer',
-          reviewMode: 'wrfc',
           tools: ['find', 'inspect'],
           restrictTools: true,
+          dangerously_disable_wrfc: true,
         },
         {
-          task: 'Plan concise tests for a minimal JavaScript fixed-window rate limiter in an empty repository. Return edge cases and commands only. Do not write files.',
-          template: 'tester',
-          reviewMode: 'wrfc',
+          task: 'Review expected correctness properties for the rate limiter. Do not write files.',
+          template: 'reviewer',
           tools: ['find', 'inspect'],
           restrictTools: true,
+          dangerously_disable_wrfc: true,
         },
       ],
+    }, {
+      getLastUserMessage: () => 'make a token bucket rate limiter',
     });
 
-    expect(normalized.mode).toBe('batch-spawn');
+    expect(normalized.mode).toBe('spawn');
+    expect(normalized.task).toBe('make a token bucket rate limiter');
+    expect(normalized.template).toBe('engineer');
     expect(normalized.reviewMode).toBe('wrfc');
-    expect((normalized.tasks as unknown[])).toHaveLength(2);
-    const [owner, tester] = normalized.tasks as Array<Record<string, unknown>>;
-    expect(owner.template).toBe('engineer');
-    expect(owner.reviewMode).toBe('wrfc');
-    expect(owner.task).toContain('Plan a minimal standalone JavaScript rate limiter');
-    expect(tester.template).toBe('tester');
-    expect(tester.reviewMode).toBe('wrfc');
-    expect(tester.task).toContain('Plan concise tests');
+    expect(normalized.dangerously_disable_wrfc).toBe(false);
+    expect(normalized.tools).toBeUndefined();
+    expect(normalized.restrictTools).toBeUndefined();
+    const context = String(normalized.context);
+    expect(context).toContain('Authoritative user request');
+    expect(context).toContain('Proposed child tasks');
+    expect(context).toContain('Do not write files');
   });
 
   test('normalizes plain batch-spawn to disable WRFC on every root agent', () => {
