@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.91] — 2026-05-10
+
+### Changes
+- 8f70c74e fix: install release binaries from global launchers
+
 ## [0.19.90] — 2026-05-10
 
 ### Changes
