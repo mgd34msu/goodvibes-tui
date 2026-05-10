@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.90] — 2026-05-10
+
+### Changes
+- 1dae8a6e fix: make planning panel usable
+
 ## [0.19.89] — 2026-05-10
 
 ### Changes
