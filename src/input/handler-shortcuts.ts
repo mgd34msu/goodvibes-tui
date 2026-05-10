@@ -90,6 +90,7 @@ export function handleGlobalShortcutToken(
       const pm = state.panelManager;
       for (const p of pm.getAllOpen()) pm.close(p.id);
       pm.hide();
+      state.panelFocused = false;
       state.requestRender();
       return true;
     }
@@ -101,11 +102,13 @@ export function handleGlobalShortcutToken(
         pm.close(active.id);
         state.requestRender();
       }
+      state.panelFocused = false;
       return true;
     }
 
     case 'panel-picker':
       state.commandContext?.openPanelPicker?.();
+      state.panelFocused = state.panelManager.isVisible() && state.panelManager.getAllOpen().length > 0;
       state.requestRender();
       return true;
 

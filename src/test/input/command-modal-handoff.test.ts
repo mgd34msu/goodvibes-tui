@@ -83,6 +83,14 @@ function makeCommandContext(overrides: Partial<CommandContext> = {}): CommandCon
   } as CommandContext;
 }
 
+function makePanelManager(overrides: Record<string, unknown> = {}) {
+  return {
+    isVisible: () => true,
+    getAllOpen: () => [{ id: 'panel-list' }],
+    ...overrides,
+  } as never;
+}
+
 function key(logicalName: string) {
   return { type: 'key' as const, name: logicalName, logicalName, ctrl: false, shift: false, meta: false };
 }
@@ -192,6 +200,8 @@ describe('command modal handoff', () => {
           return true;
         },
       }),
+      panelFocused: false,
+      panelManager: makePanelManager(),
       conversationManager: { log: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
@@ -220,6 +230,8 @@ describe('command modal handoff', () => {
       commandContext: makeCommandContext({
         executeCommand: async () => true,
       }),
+      panelFocused: false,
+      panelManager: makePanelManager(),
       conversationManager: { log: () => {} } as never,
       requestRender: () => {},
       handleEscape: () => {},
@@ -233,6 +245,45 @@ describe('command modal handoff', () => {
     expect(modalStack).toEqual([]);
     expect(state.prompt).toBe('');
     expect(state.cursorPos).toBe(0);
+  });
+
+  test('slash panel commands can hand focus directly to the panel workspace', async () => {
+    const modalStack = ['command'];
+    const registry = new CommandRegistry();
+    let showPanelCalled = false;
+    registry.register({
+      name: 'panel',
+      description: 'Open panel',
+      handler: (_args, ctx) => {
+        ctx.showPanel?.('panel-list');
+      },
+    });
+    const state = {
+      commandMode: true,
+      prompt: '/panel',
+      cursorPos: '/panel'.length,
+      autocomplete: null,
+      modalStack,
+      commandRegistry: registry,
+      commandContext: makeCommandContext({
+        showPanel: () => {
+          showPanelCalled = true;
+        },
+      }),
+      panelFocused: false,
+      panelManager: makePanelManager(),
+      conversationManager: { log: () => {} } as never,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    const handled = handleCommandModeToken(state, key('enter'));
+    await Promise.resolve();
+
+    expect(handled).toBe(true);
+    expect(showPanelCalled).toBe(true);
+    expect(state.panelFocused).toBe(true);
+    expect(state.commandMode).toBe(false);
   });
 
   test('after escape closes slash mode, subsequent typing stays in normal prompt mode until / is typed again', async () => {

@@ -325,6 +325,12 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
+  commandContext.focusPrompt = () => {
+    input.panelFocused = false;
+    input.indicatorFocused = false;
+    render();
+  };
+
   commandContext.showPanel = (panelId, pane) => {
     panelManager.open(panelId, pane);
     panelManager.show();

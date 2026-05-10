@@ -102,6 +102,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       projectId: deps.projectPlanningProjectId,
       requestRender: deps.requestRender,
       submitAnswer: deps.submitPlanningAnswer,
+      dismissPlanning: deps.dismissPlanning,
     }),
   });
 

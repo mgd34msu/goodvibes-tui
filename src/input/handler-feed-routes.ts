@@ -90,10 +90,8 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       const active = pm.getActivePanel();
       if (active) {
         pm.close(active.id);
-        if (pm.getAllOpen().length === 0) {
-          panelFocused = false;
-        }
       }
+      panelFocused = false;
       state.requestRender();
       return { handled: true, panelFocused };
     }
@@ -336,10 +334,16 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
       return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
     }
     if (text) {
-      state.inputHistory?.add(text);
+      const expanded = state.expandPrompt(text);
+      const historyRecallText = typeof expanded === 'string'
+        ? expanded
+        : expanded
+            .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+            .map(p => p.text)
+            .join('');
+      state.inputHistory?.add(text, { recallText: historyRecallText });
       prompt = '';
       cursorPos = 0;
-      const expanded = state.expandPrompt(text);
       if (typeof expanded === 'string') {
         state.commandContext?.submitInput?.(expanded);
       } else {

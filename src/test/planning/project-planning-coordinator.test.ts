@@ -129,6 +129,34 @@ describe('project planning coordinator', () => {
     expect(fake.state?.openQuestions.length).toBeGreaterThan(0);
   });
 
+  test('continue without planning pauses active project planning and lets normal chat proceed', async () => {
+    let notices = 0;
+    const fake = makeService(makeState({
+      goal: 'plan a change',
+      openQuestions: [{
+        id: 'scope',
+        prompt: 'What is in scope?',
+        status: 'open',
+      }],
+      metadata: { active: true },
+    }));
+    const coordinator = new ProjectPlanningCoordinator({
+      service: fake.service,
+      projectId: 'proj',
+      workingDirectory: '/tmp/project',
+      notify: () => { notices++; },
+      now: () => 321,
+    });
+
+    const result = await coordinator.prepareTurn('continue without planning');
+
+    expect(result).toBeNull();
+    expect(notices).toBe(1);
+    expect(fake.state?.metadata?.['active']).toBe(false);
+    expect(fake.state?.metadata?.['pausedAt']).toBe(321);
+    expect(fake.state?.openQuestions.some((question) => question.id === 'scope')).toBe(true);
+  });
+
   test('accepting the default scope creates concrete scope instead of persisting SDK placeholder text', async () => {
     const fake = makeService(makeState({
       goal: 'make a simple rate limiter',

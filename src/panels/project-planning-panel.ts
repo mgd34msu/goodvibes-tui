@@ -42,6 +42,7 @@ export interface ProjectPlanningPanelOptions {
   readonly projectId: string;
   readonly requestRender?: () => void;
   readonly submitAnswer?: (answer: string) => void;
+  readonly dismissPlanning?: () => void;
 }
 
 interface PlanningAnswerAction {
@@ -49,8 +50,12 @@ interface PlanningAnswerAction {
   readonly label: string;
   readonly detail: string;
   readonly answer: string;
-  readonly kind?: 'answer' | 'approve';
+  readonly kind?: 'answer' | 'approve' | 'dismiss';
   readonly disabled?: boolean;
+}
+
+interface RenderedPlanningSection extends PanelWorkspaceSection {
+  readonly selectedLineIndex?: number;
 }
 
 export class ProjectPlanningPanel extends BasePanel {
@@ -58,6 +63,7 @@ export class ProjectPlanningPanel extends BasePanel {
   private readonly projectId: string;
   private readonly requestRender: () => void;
   private readonly submitAnswer: ((answer: string) => void) | undefined;
+  private readonly dismissPlanning: (() => void) | undefined;
   private snapshot: ProjectPlanningPanelSnapshot | null = null;
   private loading = false;
   private scrollOffset = 0;
@@ -70,6 +76,7 @@ export class ProjectPlanningPanel extends BasePanel {
     this.projectId = options.projectId;
     this.requestRender = options.requestRender ?? (() => {});
     this.submitAnswer = options.submitAnswer;
+    this.dismissPlanning = options.dismissPlanning;
   }
 
   public override onActivate(): void {
@@ -155,7 +162,7 @@ export class ProjectPlanningPanel extends BasePanel {
     return this.trackedRender(() => {
       if (!this.snapshot && !this.loading) this.refresh();
 
-      const sections: PanelWorkspaceSection[] = [];
+      const sections: RenderedPlanningSection[] = [];
       const status = this.snapshot?.status;
       const state = this.snapshot?.state;
       const evaluation = this.snapshot?.evaluation ?? null;
@@ -202,10 +209,7 @@ export class ProjectPlanningPanel extends BasePanel {
         if (line) sections.push({ title: 'Error', lines: [line] });
       }
 
-      const flattened = sections.flatMap((section) => [
-        ...(section.title ? [buildPanelLine(width, [[` ${section.title}`, C.label]])] : []),
-        ...section.lines,
-      ]);
+      const { lines: flattened, selectedIndex } = this.flattenSections(width, sections);
       const scroll = resolveScrollablePanelSection(width, height, {
         intro: 'Project planning state, readiness gaps, decisions, language, task graph, verification gates, and agent handoff metadata.',
         footerLines: this.footerLines(width),
@@ -213,8 +217,9 @@ export class ProjectPlanningPanel extends BasePanel {
         section: {
           title: 'Project Planning',
           scrollableLines: flattened,
-          selectedIndex: 0,
+          selectedIndex,
           scrollOffset: this.scrollOffset,
+          appendWindowSummary: {},
           minRows: 8,
         },
       });
@@ -242,7 +247,7 @@ export class ProjectPlanningPanel extends BasePanel {
           ['Backspace/Delete', C.info],
           [' edit  ', C.dim],
           ['Enter', C.info],
-          [' submit  Esc close panel focus', C.dim],
+          [' submit  Esc prompt focus  Ctrl+X close panel', C.dim],
         ]),
       ];
     }
@@ -253,12 +258,30 @@ export class ProjectPlanningPanel extends BasePanel {
         ['r', C.info],
         [' refresh  ', C.dim],
         ['a', C.info],
-        [' approve execution-ready plan  Esc close panel focus', C.dim],
+        [' approve execution-ready plan  Esc prompt focus  Ctrl+X close panel', C.dim],
       ]),
     ];
   }
 
-  private buildQuestionSection(width: number, question: ProjectPlanningQuestion): PanelWorkspaceSection {
+  private flattenSections(
+    width: number,
+    sections: readonly RenderedPlanningSection[],
+  ): { readonly lines: Line[]; readonly selectedIndex: number } {
+    const lines: Line[] = [];
+    let selectedIndex = 0;
+    for (const section of sections) {
+      const sectionStart = lines.length;
+      const titleOffset = section.title ? 1 : 0;
+      if (section.title) lines.push(buildPanelLine(width, [[` ${section.title}`, C.label]]));
+      lines.push(...section.lines);
+      if (section.selectedLineIndex !== undefined) {
+        selectedIndex = sectionStart + titleOffset + section.selectedLineIndex;
+      }
+    }
+    return { lines, selectedIndex };
+  }
+
+  private buildQuestionSection(width: number, question: ProjectPlanningQuestion): RenderedPlanningSection {
     const actions = this.getAnswerActions(question);
     this.selectedActionIndex = this.clampActionIndex(actions.length);
     const lines: Line[] = [
@@ -280,6 +303,7 @@ export class ProjectPlanningPanel extends BasePanel {
       ' Select an answer below or type your own. Enter sends it through the normal planning chat path.',
       C.dim,
     ]]));
+    const selectedLineIndex = lines.length + this.selectedActionIndex;
     actions.forEach((action, index) => {
       const selected = index === this.selectedActionIndex;
       lines.push(buildPanelListRow(width, [
@@ -290,7 +314,7 @@ export class ProjectPlanningPanel extends BasePanel {
         marker: selected ? '▶' : ' ',
       }));
     });
-    return { title: 'Answer Current Question', lines };
+    return { title: 'Answer Current Question', lines, selectedLineIndex };
   }
 
   private buildStateSection(
@@ -540,6 +564,13 @@ export class ProjectPlanningPanel extends BasePanel {
       answer: this.draftAnswer.trim(),
       disabled: !this.draftAnswer.trim(),
     });
+    actions.push({
+      id: 'dismiss-planning',
+      label: 'Close planning and continue without it',
+      detail: 'Pause project planning for this workspace. Normal chat continues; /plan can reopen it later.',
+      answer: 'Pause project planning for this workspace and continue without the planning panel.',
+      kind: 'dismiss',
+    });
     return actions;
   }
 
@@ -559,6 +590,10 @@ export class ProjectPlanningPanel extends BasePanel {
     }
     if (action.kind === 'approve') {
       this.approveExecution();
+      return;
+    }
+    if (action.kind === 'dismiss') {
+      this.pausePlanning(question);
       return;
     }
     if (!this.submitAnswer) {
@@ -594,6 +629,41 @@ export class ProjectPlanningPanel extends BasePanel {
         ],
       },
     });
+  }
+
+  private pausePlanning(question: ProjectPlanningQuestion): void {
+    const state = this.snapshot?.state;
+    if (!state) {
+      this.dismissPlanning?.();
+      this.requestRender();
+      return;
+    }
+    void (async () => {
+      try {
+        await this.service.upsertState({
+          projectId: this.projectId,
+          state: {
+            ...state,
+            openQuestions: state.openQuestions.map((entry) =>
+              entry.id === question.id
+                ? { ...entry, status: entry.status ?? 'open' }
+                : entry,
+            ),
+            metadata: {
+              ...(state.metadata ?? {}),
+              active: false,
+              pausedAt: Date.now(),
+              pausedFrom: 'project-planning-panel',
+            },
+          },
+        });
+        this.dismissPlanning?.();
+        this.refresh(true);
+      } catch (err) {
+        this.setError(err instanceof Error ? err.message : String(err));
+        this.requestRender();
+      }
+    })();
   }
 
   private clampActionIndex(count: number): number {

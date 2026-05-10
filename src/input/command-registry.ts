@@ -101,6 +101,7 @@ export interface CommandShellUiOpeners {
   openPanelPicker?: () => void;
   showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void;
   focusPanels?: () => void;
+  focusPrompt?: () => void;
   openOpsPanel?: () => void;
   openCockpitPanel?: () => void;
   openOrchestrationPanel?: () => void;

@@ -18,6 +18,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           else {
             pm.open('panel-list');
             pm.show();
+            ctx.focusPanels?.();
             ctx.renderRequest();
           }
         } catch {
@@ -30,6 +31,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           else {
             pm.open('panel-list');
             pm.show();
+            ctx.focusPanels?.();
             ctx.renderRequest();
           }
         } catch {
@@ -49,6 +51,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           else {
             pm.open(id, pane as 'top' | 'bottom' | undefined);
             pm.show();
+            ctx.focusPanels?.();
             ctx.renderRequest();
           }
           ctx.print(`Panel opened: ${id}${pane ? ` (${pane} pane)` : ''}`);
@@ -60,6 +63,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
         if (!id) { ctx.print('Usage: /panel close <panel-id>'); return; }
         try {
           pm.close(id);
+          ctx.focusPrompt?.();
           ctx.renderRequest();
           ctx.print(`Panel closed: ${id}`);
         } catch (e) {
@@ -130,6 +134,7 @@ export function registerOperatorPanelCommand(registry: CommandRegistry): void {
           else {
             pm.open(id);
             pm.show();
+            ctx.focusPanels?.();
             ctx.renderRequest();
           }
         } catch {
