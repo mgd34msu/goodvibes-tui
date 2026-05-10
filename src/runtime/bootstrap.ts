@@ -49,6 +49,19 @@ import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
 
 type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[4]>;
 
+const TUI_ORCHESTRATION_GUARDRAILS = [
+  '## GoodVibes TUI Orchestration Guardrails',
+  '- If the user asks to make, build, implement, create, add, fix, update, or patch something, preserve that implementation request. Do not restate it as design-only, planning-only, read-only, or no-write work unless the user explicitly requested that.',
+  '- Do not add "Do not write files", restrict tools to read/find/inspect, or remove write/exec capability for implementation work unless the user explicitly asked for read-only analysis.',
+  '- For one deliverable that needs WRFC, reviewed implementation, testing, verification, or review/fix cycles, use one `agent` spawn with `template: "engineer"` and `reviewMode: "wrfc"` whose `task` is the full user request. Do not batch-spawn sibling Engineer/Reviewer/Tester/Verifier roots for the same deliverable.',
+  '- Use `batch-spawn` only for genuinely independent sidecar tasks. Review, test, verify, and fix phases for one deliverable belong inside the WRFC owner chain.',
+  '- If an `agent` tool result reports `authoritativeWrfcChain: true`, `continueRootSpawning: false`, or `orchestrationStopSignal: "wrfc_owner_chain_started"`, stop spawning root agents for that deliverable and wait/report status instead.',
+].join('\n');
+
+function joinPromptParts(...parts: Array<string | null | undefined>): string {
+  return parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part)).join('\n\n');
+}
+
 // ── Bootstrap context type ──────────────────────────────────────────────────
 
 /**
@@ -196,7 +209,7 @@ export async function bootstrapRuntime(
       const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
       const tier = getTierForContextWindow(contextWindow);
       const supplement = getTierPromptSupplement(tier);
-      return supplement ? runtime.systemPrompt + '\n\n' + supplement : runtime.systemPrompt;
+      return joinPromptParts(runtime.systemPrompt, TUI_ORCHESTRATION_GUARDRAILS, supplement);
     },
     hookDispatcher,
     flagManager: services.featureFlags,
