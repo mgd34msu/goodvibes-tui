@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.88] — 2026-05-10
+
+### Changes
+- 3de00981 fix: preserve WRFC implementation scope
+
 ## [0.19.87] — 2026-05-09
 
 ### Changes
