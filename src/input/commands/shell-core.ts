@@ -92,6 +92,22 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
   });
 
   registry.register({
+    name: 'paste',
+    aliases: ['clip'],
+    description: 'Insert clipboard text or image into the prompt',
+    handler(_args, ctx) {
+      if (!ctx.pasteFromClipboard) {
+        ctx.print('Paste is not available in this context.');
+        return;
+      }
+      const result = ctx.pasteFromClipboard();
+      if (!result.pasted) {
+        ctx.print('Clipboard does not contain supported text or image data.');
+      }
+    },
+  });
+
+  registry.register({
     name: 'help',
     aliases: ['h', '?'],
     description: 'Show available commands and keyboard shortcuts',
@@ -135,6 +151,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
           { id: '/template save', label: '/template save <name>', detail: 'Save prompt as template', category: 'Templates' },
           { id: '/template use', label: '/template use <name>', detail: 'Execute template', category: 'Templates' },
           { id: '/tools', label: '/tools', detail: 'List available tools', category: 'Tools & System' },
+          { id: '/paste', label: '/paste', detail: 'Insert clipboard text or image into the prompt', category: 'Tools & System' },
           { id: '/shortcuts', label: '/shortcuts', detail: 'View keyboard shortcuts reference', category: 'Tools & System' },
           { id: '/commands', label: '/commands', detail: 'Browse all commands in a scrollable list', category: 'Tools & System' },
           { id: '/secrets', label: '/secrets set|link|get|test|list|delete', detail: 'Manage encrypted and provider-backed secrets', category: 'Tools & System' },
@@ -154,7 +171,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
         });
         return;
       }
-      ctx.print('Use /help to open the help modal. Commands: /model, /provider, /config, /template, /tools, /sessions, /bookmarks, /save, /load, /undo, /redo, /retry, /clear, /reset, /compact, /export, /title, /effort, /expand, /collapse, /debug, /quit, /wq');
+      ctx.print('Use /help to open the help modal. Commands: /model, /provider, /config, /template, /tools, /paste, /sessions, /bookmarks, /save, /load, /undo, /redo, /retry, /clear, /reset, /compact, /export, /title, /effort, /expand, /collapse, /debug, /quit, /wq');
     },
   });
 

@@ -1278,6 +1278,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/keybindings` | `/kb` | List current keyboard bindings and their config file path |
 | `/schedule [action]` | `/sched` | Manage scheduled agent tasks (cron): add, list, remove, enable, disable, run |
 | `/image <path>` | `/img` | Attach an image file to the next message |
+| `/paste` | `/clip` | Pull supported text or image data directly from the system clipboard into the prompt |
 | `/refresh-models` | — | Refresh model catalog, benchmarks, and token limits |
 | `/notify [action]` | `/ntf` | Manage webhook notifications (ntfy.sh): add, remove, list, clear, test |
 | `/voice [action]` | — | Review optional voice posture and export/inspect voice bundles |

@@ -354,12 +354,20 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         conversationManager: context.conversationManager,
         requestRender: context.requestRender,
         handleEscape: context.handleEscape,
+        pasteRegistry: context.pasteRegistry,
+        imageRegistry: context.imageRegistry,
+        nextPasteId: context.nextPasteId,
+        nextImageId: context.nextImageId,
+        saveUndoState: context.saveUndoState,
+        ensureInputCursorVisible: () => context.ensureInputCursorVisible(),
       };
       if (handleCommandModeToken(commandState, token)) {
         context.commandMode = commandState.commandMode;
         context.prompt = commandState.prompt;
         context.cursorPos = commandState.cursorPos;
         context.panelFocused = commandState.panelFocused;
+        context.nextPasteId = commandState.nextPasteId;
+        context.nextImageId = commandState.nextImageId;
         continue;
       }
 

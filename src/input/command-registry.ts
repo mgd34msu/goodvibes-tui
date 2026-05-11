@@ -61,6 +61,11 @@ export interface CommandUiActions {
   submitInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers').ContentPart[]) => void;
   submitSpokenInput?: (text: string, content?: import('@pellux/goodvibes-sdk/platform/providers').ContentPart[]) => void;
   stopSpokenOutput?: () => void;
+  pasteFromClipboard?: () => {
+    pasted: boolean;
+    kind: 'image' | 'text' | 'none';
+    marker?: string;
+  };
   executeCommand?: (name: string, args: string[]) => Promise<boolean>;
   cancelGeneration?: () => void;
   completeModelSelection?: (selection: {

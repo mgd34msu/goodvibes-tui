@@ -502,7 +502,7 @@ export class InputHandler {
    * handlePaste - Shared paste logic for Ctrl+V and middle-click.
    * Tries image clipboard first, falls back to text paste.
    */
-  public handlePaste(): void {
+  public handlePaste(): ReturnType<typeof handleClipboardPaste> {
     const result = handleClipboardPaste({
       prompt: this.prompt,
       cursorPos: this.cursorPos,
@@ -518,6 +518,11 @@ export class InputHandler {
     this.cursorPos = result.cursorPos;
     this.nextImageId = result.nextImageId;
     this.nextPasteId = result.nextPasteId;
+    if (!result.pasted) {
+      this.conversationManager?.log('[Paste: clipboard does not contain supported text or image data]', { fg: '240' });
+      this.requestRender();
+    }
+    return result;
   }
 
   /** Content width for wrapping — set by main.ts via setContentWidth(). */
