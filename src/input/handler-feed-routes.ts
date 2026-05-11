@@ -6,6 +6,11 @@ import type { CommandRegistry, CommandContext } from './command-registry.ts';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { SelectionManager } from './selection.ts';
 import type { WrappedPromptInfo } from './handler-prompt-buffer.ts';
+import {
+  ensureInputCursorVisible as computeInputScrollTop,
+  getWrappedPromptInfo as computeWrappedPromptInfo,
+  moveCursorVertical as computeCursorVerticalMove,
+} from './handler-prompt-buffer.ts';
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, registerPaste } from './handler-content-actions.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
@@ -243,8 +248,10 @@ export function handlePromptTextToken(state: TextRouteState, token: InputToken):
 export type KeyRouteState = {
   prompt: string;
   cursorPos: number;
+  inputScrollTop: number;
   commandMode: boolean;
   contentWidth: number;
+  maxInputRows: number;
   inputHistory: InputHistory | null;
   indicatorFocused: boolean;
   conversationManager: ConversationManager | null;
@@ -271,6 +278,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
   handled: boolean;
   prompt: string;
   cursorPos: number;
+  inputScrollTop: number;
   commandMode: boolean;
   indicatorFocused: boolean;
 } {
@@ -279,6 +287,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
       handled: false,
       prompt: state.prompt,
       cursorPos: state.cursorPos,
+      inputScrollTop: state.inputScrollTop,
       commandMode: state.commandMode,
       indicatorFocused: state.indicatorFocused,
     };
@@ -286,8 +295,12 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
 
   let prompt = state.prompt;
   let cursorPos = state.cursorPos;
+  let inputScrollTop = state.inputScrollTop;
   let commandMode = state.commandMode;
   let indicatorFocused = state.indicatorFocused;
+  const ensureLocalInputCursorVisible = () => {
+    inputScrollTop = computeInputScrollTop(prompt, cursorPos, inputScrollTop, state.contentWidth, state.maxInputRows);
+  };
   const runQuitShortcut = (commandName: 'quit' | 'wq') => {
     if (state.commandContext?.executeCommand) {
       void state.commandContext.executeCommand(commandName, []).catch((error) => {
@@ -304,15 +317,15 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
     if (!state.handlePathCompletion()) {
       state.handleBlockToggle();
     }
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'enter') {
     if (token.shift) {
       prompt = prompt.slice(0, cursorPos) + '\n' + prompt.slice(cursorPos);
       cursorPos++;
-      state.ensureInputCursorVisible();
-      return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+      ensureLocalInputCursorVisible();
+      return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
     }
 
     const text = prompt.trim();
@@ -323,7 +336,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
         state.modalOpened('blockActions');
         state.blockActionsMenu.open(nearest);
         state.requestRender();
-        return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+        return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
       }
     }
     if (text === ':q' || text === ':wq') {
@@ -331,7 +344,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
       cursorPos = 0;
       runQuitShortcut(text === ':wq' ? 'wq' : 'quit');
       state.requestRender();
-      return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+      return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
     }
     if (text) {
       const expanded = state.expandPrompt(text);
@@ -354,7 +367,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
         state.commandContext?.submitInput?.(textOnly, expanded);
       }
     }
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'backspace') {
@@ -376,9 +389,9 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
         prompt = prompt.slice(0, cursorPos - 1) + prompt.slice(cursorPos);
         cursorPos--;
       }
-      state.ensureInputCursorVisible(state.contentWidth);
+      ensureLocalInputCursorVisible();
     }
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'delete') {
@@ -392,52 +405,58 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
       } else {
         prompt = prompt.slice(0, cursorPos) + prompt.slice(cursorPos + 1);
       }
-      state.ensureInputCursorVisible(state.contentWidth);
+      ensureLocalInputCursorVisible();
     }
     state.requestRender();
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'left') {
     if (cursorPos > 0) {
       const marker = state.findMarkerAtPos(cursorPos);
       cursorPos = marker ? marker.start : cursorPos - 1;
-      state.ensureInputCursorVisible(state.contentWidth);
+      ensureLocalInputCursorVisible();
     }
     state.requestRender();
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'right') {
     if (cursorPos < prompt.length) {
       const marker = state.findMarkerAtPos(cursorPos + 1);
       cursorPos = marker ? marker.end : cursorPos + 1;
-      state.ensureInputCursorVisible(state.contentWidth);
+      ensureLocalInputCursorVisible();
     }
     state.requestRender();
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'home') {
     cursorPos = 0;
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    ensureLocalInputCursorVisible();
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'end') {
     cursorPos = prompt.length;
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    ensureLocalInputCursorVisible();
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'up') {
-    if (!state.moveCursorVertical(-1)) {
-      const info = state.getWrappedPromptInfo(state.contentWidth);
+    const move = computeCursorVerticalMove(prompt, cursorPos, inputScrollTop, state.contentWidth, state.maxInputRows, -1);
+    if (move.moved) {
+      cursorPos = move.cursorPos;
+      inputScrollTop = move.inputScrollTop;
+    } else {
+      const info = computeWrappedPromptInfo(prompt, cursorPos, inputScrollTop, state.contentWidth, state.maxInputRows);
       if (info.cursorWrappedLine === 0) {
         if (state.inputHistory) {
           const recalled = state.inputHistory.up(prompt);
           if (recalled !== null) {
             prompt = recalled;
             cursorPos = recalled.length;
-            state.ensureInputCursorVisible();
+            ensureLocalInputCursorVisible();
           } else {
             state.scroll(-3);
           }
@@ -446,22 +465,23 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
         }
       }
     }
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'down') {
-    if (!state.moveCursorVertical(1)) {
-      const info = state.getWrappedPromptInfo(state.contentWidth);
-      if (info.wrappedLines.length <= 1) {
-        if (state.inputHistory?.isBrowsing) {
-          const recalled = state.inputHistory.down();
-          if (recalled !== null) {
-            prompt = recalled;
-            cursorPos = recalled.length;
-            state.ensureInputCursorVisible();
-          } else {
-            indicatorFocused = true;
-          }
+    const move = computeCursorVerticalMove(prompt, cursorPos, inputScrollTop, state.contentWidth, state.maxInputRows, 1);
+    if (move.moved) {
+      cursorPos = move.cursorPos;
+      inputScrollTop = move.inputScrollTop;
+    } else {
+      const info = computeWrappedPromptInfo(prompt, cursorPos, inputScrollTop, state.contentWidth, state.maxInputRows);
+      const atBottom = info.cursorWrappedLine >= info.wrappedLines.length - 1;
+      if (atBottom && state.inputHistory?.isBrowsing) {
+        const recalled = state.inputHistory.down();
+        if (recalled !== null) {
+          prompt = recalled;
+          cursorPos = recalled.length;
+          ensureLocalInputCursorVisible();
         } else {
           indicatorFocused = true;
         }
@@ -469,17 +489,17 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
         indicatorFocused = true;
       }
     }
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'f2') {
     indicatorFocused = false;
     state.modalOpened('process');
     state.processModal.open();
-    return { handled: true, prompt, cursorPos, commandMode, indicatorFocused };
+    return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
-  return { handled: false, prompt, cursorPos, commandMode, indicatorFocused };
+  return { handled: false, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
 }
 
 export type MouseRouteState = {

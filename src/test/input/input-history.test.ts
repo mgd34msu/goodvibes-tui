@@ -132,13 +132,14 @@ describe('InputHistory.up', () => {
     expect(h.up('only')).toBeNull();
   });
 
-  test('skips multiline entries', () => {
+  test('recalls multiline entries', () => {
     const h = makeHistory();
     h.add('single line');
-    h.add('line1\nline2'); // multiline — should be skipped
+    h.add('line1\nline2');
     h.add('another single');
     expect(h.up('')).toBe('another single');
-    expect(h.up('another single')).toBe('single line'); // skips multiline
+    expect(h.up('another single')).toBe('line1\nline2');
+    expect(h.up('line1\nline2')).toBe('single line');
   });
 
   test('restores persisted paste marker history as the original multiline content', () => {
@@ -189,14 +190,16 @@ describe('InputHistory.down', () => {
     expect(h.down()).toBeNull();
   });
 
-  test('skips multiline entries when navigating down', () => {
+  test('recalls multiline entries when navigating down', () => {
     const h = makeHistory();
     h.add('single');
     h.add('multi\nline');
     h.add('top');
     h.up(''); // top
-    h.up('top'); // multiline skipped -> single
-    expect(h.down()).toBe('top'); // skips multiline going back up
+    h.up('top'); // multiline
+    h.up('multi\nline'); // single
+    expect(h.down()).toBe('multi\nline');
+    expect(h.down()).toBe('top');
   });
 });
 

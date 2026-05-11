@@ -56,6 +56,7 @@ import type { PanelMouseLayout } from './handler-feed-routes.ts';
 export interface FeedContextMutableInit {
   prompt: string;
   cursorPos: number;
+  inputScrollTop: number;
   commandMode: boolean;
   panelFocused: boolean;
   indicatorFocused: boolean;
@@ -230,6 +231,7 @@ export function syncFeedContextMutableFields(
 ): void {
   ctx.prompt = fields.prompt;
   ctx.cursorPos = fields.cursorPos;
+  ctx.inputScrollTop = fields.inputScrollTop;
   ctx.commandMode = fields.commandMode;
   ctx.panelFocused = fields.panelFocused;
   ctx.indicatorFocused = fields.indicatorFocused;
