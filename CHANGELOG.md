@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.95] — 2026-05-11
+
+### Changes
+- e04ad422 fix: preserve first typed key after recovery prompt
+
 ## [0.19.94] — 2026-05-11
 
 ### Changes
