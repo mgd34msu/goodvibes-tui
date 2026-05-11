@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.97] — 2026-05-11
+
+### Changes
+- 256454c2 fix: support explicit clipboard image paste
+
 ## [0.19.96] — 2026-05-11
 
 ### Changes
