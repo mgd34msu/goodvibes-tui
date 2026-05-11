@@ -100,6 +100,7 @@ export interface InputFeedContext {
   contentWidth: number;
   readonly pasteRegistry: Map<string, string>;
   readonly imageRegistry: Map<string, { data: string; mediaType: string }>;
+  readonly projectRoot: string;
   readonly selection: SelectionManager;
   readonly selectionModal: SelectionModal;
   selectionCallback: ((result: SelectionResult | null) => void) | null;
@@ -354,6 +355,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         conversationManager: context.conversationManager,
         requestRender: context.requestRender,
         handleEscape: context.handleEscape,
+        projectRoot: context.projectRoot,
         pasteRegistry: context.pasteRegistry,
         imageRegistry: context.imageRegistry,
         nextPasteId: context.nextPasteId,

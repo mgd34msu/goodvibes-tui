@@ -19,6 +19,7 @@ export type CommandModeRouteState = {
   conversationManager: ConversationManager | null;
   requestRender: () => void;
   handleEscape: () => void;
+  projectRoot: string;
   pasteRegistry: Map<string, string>;
   imageRegistry: Map<string, { data: string; mediaType: string }>;
   nextPasteId: number;
@@ -160,7 +161,7 @@ function withPanelFocusSync(context: CommandContext, state: CommandModeRouteStat
         saveUndoState: state.saveUndoState,
         ensureInputCursorVisible: state.ensureInputCursorVisible,
         requestRender: state.requestRender,
-      }, context.workspace.shellPaths?.workingDirectory ?? process.cwd(), state.clipboard);
+      }, context.workspace.shellPaths?.workingDirectory ?? state.projectRoot, state.clipboard);
       state.prompt = result.prompt;
       state.cursorPos = result.cursorPos;
       state.nextImageId = result.nextImageId;

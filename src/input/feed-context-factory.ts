@@ -98,6 +98,7 @@ export interface FeedContextStableRefs {
   selection: SelectionManager;
   pasteRegistry: Map<string, string>;
   imageRegistry: Map<string, { data: string; mediaType: string }>;
+  projectRoot: string;
   selectionModal: SelectionModal;
   bookmarkModal: BookmarkModal;
   settingsModal: SettingsModal;
