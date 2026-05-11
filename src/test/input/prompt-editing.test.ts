@@ -6,6 +6,7 @@ import { AutocompleteEngine } from '../../input/autocomplete.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import type { UndoState } from '../../input/handler-prompt-buffer.ts';
+import { InputHistory } from '../../input/input-history.ts';
 
 type InputHandlerTestAccess = {
   undoStack: UndoState[];
@@ -345,6 +346,62 @@ describe('command-mode arrow key navigation', () => {
     ih.feed('\x1b[A'); // up arrow
     ih.feed('\x1b[B'); // down arrow
     expect(ih.cursorPos).toBe(before);
+  });
+});
+
+// ── multiline prompt/history arrow navigation ───────────────────────────────
+
+describe('multiline prompt history navigation', () => {
+  test('up arrow moves within a multiline current prompt before recalling history', () => {
+    const ih = makeInput();
+    const history = new InputHistory({ historyPath: '/tmp/gv-unused-history.json', persist: false });
+    history.add('previous command');
+    ih.setHistory(history);
+    ih.prompt = 'one\ntwo\nthree';
+    ih.cursorPos = ih.prompt.length;
+
+    ih.feed('\x1b[A');
+    expect(ih.prompt).toBe('one\ntwo\nthree');
+    expect(ih.cursorPos).toBe(7);
+
+    ih.feed('\x1b[A');
+    expect(ih.prompt).toBe('one\ntwo\nthree');
+    expect(ih.cursorPos).toBe(4);
+
+    ih.feed('\x1b[A');
+    expect(ih.prompt).toBe('one\ntwo\nthree');
+    expect(ih.cursorPos).toBe(0);
+
+    ih.feed('\x1b[A');
+    expect(ih.prompt).toBe('previous command');
+    expect(ih.cursorPos).toBe('previous command'.length);
+  });
+
+  test('down arrow moves within a multiline recalled history item before navigating forward', () => {
+    const ih = makeInput();
+    const history = new InputHistory({ historyPath: '/tmp/gv-unused-history.json', persist: false });
+    history.add('older command');
+    history.add('line1\nline2\nline3');
+    history.add('newer command');
+    ih.setHistory(history);
+
+    ih.feed('\x1b[A');
+    expect(ih.prompt).toBe('newer command');
+    ih.feed('\x1b[A');
+    expect(ih.prompt).toBe('line1\nline2\nline3');
+    expect(ih.cursorPos).toBe(17);
+
+    ih.feed('\x1b[A');
+    ih.feed('\x1b[A');
+    expect(ih.cursorPos).toBe(6);
+
+    ih.feed('\x1b[B');
+    expect(ih.prompt).toBe('line1\nline2\nline3');
+    expect(ih.cursorPos).toBe(12);
+
+    ih.feed('\x1b[B');
+    expect(ih.prompt).toBe('newer command');
+    expect(ih.cursorPos).toBe('newer command'.length);
   });
 });
 

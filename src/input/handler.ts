@@ -258,7 +258,7 @@ export class InputHandler {
   public initFeedContext(): void {
     this.feedContext = buildInitialFeedContext(
       {
-        prompt: this.prompt, cursorPos: this.cursorPos, commandMode: this.commandMode,
+        prompt: this.prompt, cursorPos: this.cursorPos, inputScrollTop: this.inputScrollTop, commandMode: this.commandMode,
         panelFocused: this.panelFocused, indicatorFocused: this.indicatorFocused,
         helpOverlayActive: this.helpOverlayActive, helpScrollOffset: this.helpScrollOffset,
         shortcutsOverlayActive: this.shortcutsOverlayActive, shortcutsScrollOffset: this.shortcutsScrollOffset,
@@ -338,7 +338,7 @@ export class InputHandler {
   /** Sync mutable handler fields back into feedContext after in-feed mutations. */
   public syncFeedContextMutableFields(): void {
     const h = this;
-    syncFeedContextMutableFields({ prompt: h.prompt, cursorPos: h.cursorPos, commandMode: h.commandMode,
+    syncFeedContextMutableFields({ prompt: h.prompt, cursorPos: h.cursorPos, inputScrollTop: h.inputScrollTop, commandMode: h.commandMode,
       panelFocused: h.panelFocused, indicatorFocused: h.indicatorFocused, helpOverlayActive: h.helpOverlayActive,
       helpScrollOffset: h.helpScrollOffset, shortcutsOverlayActive: h.shortcutsOverlayActive,
       shortcutsScrollOffset: h.shortcutsScrollOffset, selectionCallback: h.selectionCallback,
@@ -445,6 +445,7 @@ export class InputHandler {
       // Sync mutable scalars from handler into the reused context.
       context.prompt = this.prompt;
       context.cursorPos = this.cursorPos;
+      context.inputScrollTop = this.inputScrollTop;
       context.commandMode = this.commandMode;
       context.panelFocused = this.panelFocused;
       context.indicatorFocused = this.indicatorFocused;
@@ -473,6 +474,7 @@ export class InputHandler {
       feedInputTokens(context, this.tokenizer.feed(data));
       this.prompt = context.prompt;
       this.cursorPos = context.cursorPos;
+      this.inputScrollTop = context.inputScrollTop;
       this.commandMode = context.commandMode;
       this.panelFocused = context.panelFocused;
       this.indicatorFocused = context.indicatorFocused;

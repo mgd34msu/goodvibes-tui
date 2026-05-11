@@ -85,6 +85,7 @@ import type { ModelPickerTarget } from './model-picker.ts';
 export interface InputFeedContext {
   prompt: string;
   cursorPos: number;
+  inputScrollTop: number;
   commandMode: boolean;
   panelFocused: boolean;
   indicatorFocused: boolean;
@@ -365,8 +366,10 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       const keyRoute = handlePromptKeyToken({
         prompt: context.prompt,
         cursorPos: context.cursorPos,
+        inputScrollTop: context.inputScrollTop,
         commandMode: context.commandMode,
         contentWidth: context.contentWidth,
+        maxInputRows: 8,
         inputHistory: context.inputHistory,
         indicatorFocused: context.indicatorFocused,
         conversationManager: context.conversationManager,
@@ -391,6 +394,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       if (keyRoute.handled) {
         context.prompt = keyRoute.prompt;
         context.cursorPos = keyRoute.cursorPos;
+        context.inputScrollTop = keyRoute.inputScrollTop;
         context.commandMode = keyRoute.commandMode;
         context.indicatorFocused = keyRoute.indicatorFocused;
         continue;

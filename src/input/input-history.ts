@@ -175,7 +175,6 @@ export class InputHistory {
    * Navigate up (older entry).
    * On first call, saves currentInput as draft.
    * Returns the entry to display, or null if at boundary.
-   * Only single-line entries are returned (multiline stored but skipped).
    */
   up(currentInput: string): string | null {
     if (this.entries.length === 0) return null;
@@ -185,15 +184,10 @@ export class InputHistory {
       this.draft = currentInput;
     }
 
-    // Try to advance to an older single-line entry
-    let next = this.position + 1;
-    while (next < this.entries.length) {
-      const entry = this.entries[next]!;
-      if (!this.getDisplayText(entry).includes('\n')) {
-        this.position = next;
-        return this.getRecallText(this.entries[this.position]!);
-      }
-      next++;
+    const next = this.position + 1;
+    if (next < this.entries.length) {
+      this.position = next;
+      return this.getRecallText(this.entries[this.position]!);
     }
 
     // At oldest boundary
@@ -208,15 +202,10 @@ export class InputHistory {
   down(): string | null {
     if (this.position === -1) return null;
 
-    // Try to find a newer single-line entry
-    let prev = this.position - 1;
-    while (prev >= 0) {
-      const entry = this.entries[prev]!;
-      if (!this.getDisplayText(entry).includes('\n')) {
-        this.position = prev;
-        return this.getRecallText(this.entries[this.position]!);
-      }
-      prev--;
+    const prev = this.position - 1;
+    if (prev >= 0) {
+      this.position = prev;
+      return this.getRecallText(this.entries[this.position]!);
     }
 
     // Back to draft
