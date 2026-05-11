@@ -271,6 +271,7 @@ export class InputHandler {
         selection: this.selection,
         pasteRegistry: this.pasteRegistry,
         imageRegistry: this.imageRegistry,
+        projectRoot: this.uiServices.environment.shellPaths.workingDirectory,
         selectionModal: this.selectionModal,
         bookmarkModal: this.bookmarkModal,
         settingsModal: this.settingsModal,
