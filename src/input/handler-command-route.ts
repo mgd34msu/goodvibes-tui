@@ -4,6 +4,7 @@ import type { AutocompleteEngine } from './autocomplete.ts';
 import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationManager } from '../core/conversation';
 import type { PanelManager } from '../panels/panel-manager.ts';
+import { handleClipboardPaste, type ClipboardPasteSource } from './handler-content-actions.ts';
 
 export type CommandModeRouteState = {
   commandMode: boolean;
@@ -18,6 +19,13 @@ export type CommandModeRouteState = {
   conversationManager: ConversationManager | null;
   requestRender: () => void;
   handleEscape: () => void;
+  pasteRegistry: Map<string, string>;
+  imageRegistry: Map<string, { data: string; mediaType: string }>;
+  nextPasteId: number;
+  nextImageId: number;
+  saveUndoState: () => void;
+  ensureInputCursorVisible: () => void;
+  clipboard?: ClipboardPasteSource;
 };
 
 export function handleCommandModeToken(state: CommandModeRouteState, token: InputToken): boolean {
@@ -141,6 +149,24 @@ function withPanelFocusSync(context: CommandContext, state: CommandModeRouteStat
           state.panelFocused = false;
         }
       : undefined,
+    pasteFromClipboard: () => {
+      const result = handleClipboardPaste({
+        prompt: state.prompt,
+        cursorPos: state.cursorPos,
+        pasteRegistry: state.pasteRegistry,
+        nextPasteId: state.nextPasteId,
+        imageRegistry: state.imageRegistry,
+        nextImageId: state.nextImageId,
+        saveUndoState: state.saveUndoState,
+        ensureInputCursorVisible: state.ensureInputCursorVisible,
+        requestRender: state.requestRender,
+      }, context.workspace.shellPaths?.workingDirectory ?? process.cwd(), state.clipboard);
+      state.prompt = result.prompt;
+      state.cursorPos = result.cursorPos;
+      state.nextImageId = result.nextImageId;
+      state.nextPasteId = result.nextPasteId;
+      return result;
+    },
     executeCommand: async (name, args) => {
       const wrapped = withPanelFocusSync(context, state);
       const handled = state.commandRegistry?.get(name)

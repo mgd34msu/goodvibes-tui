@@ -247,6 +247,59 @@ describe('command modal handoff', () => {
     expect(state.cursorPos).toBe(0);
   });
 
+  test('/paste inserts clipboard images into the command-cleared prompt buffer', async () => {
+    const modalStack = ['command'];
+    const registry = new CommandRegistry();
+    registry.register({
+      name: 'paste',
+      description: 'Paste',
+      handler: (_args, ctx) => {
+        ctx.pasteFromClipboard?.();
+      },
+    });
+    const state = {
+      commandMode: true,
+      prompt: '/paste',
+      cursorPos: '/paste'.length,
+      autocomplete: null,
+      modalStack,
+      commandRegistry: registry,
+      commandContext: makeCommandContext({
+        workspace: {
+          shellPaths: createShellPathService({
+            workingDirectory: process.cwd(),
+            homeDirectory: process.env.HOME ?? process.cwd(),
+          }),
+        },
+      }),
+      panelFocused: false,
+      panelManager: makePanelManager(),
+      conversationManager: { log: () => {} } as never,
+      requestRender: () => {},
+      handleEscape: () => {},
+      pasteRegistry: new Map<string, string>(),
+      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
+      nextPasteId: 1,
+      nextImageId: 1,
+      saveUndoState: () => {},
+      ensureInputCursorVisible: () => {},
+      clipboard: {
+        pasteImageFromClipboard: () => ({ mediaType: 'image/png', data: 'iVBORw0KGgo' + 'A'.repeat(200) }),
+        pasteFromClipboard: () => null,
+      },
+    };
+
+    const handled = handleCommandModeToken(state, key('enter'));
+    await Promise.resolve();
+
+    expect(handled).toBe(true);
+    expect(state.commandMode).toBe(false);
+    expect(state.prompt).toMatch(/^\[IMAGE: img1, clipboard, \d+KB\]$/);
+    expect(state.cursorPos).toBe(state.prompt.length);
+    expect(state.imageRegistry.get('img1')?.mediaType).toBe('image/png');
+    expect(state.nextImageId).toBe(2);
+  });
+
   test('slash panel commands can hand focus directly to the panel workspace', async () => {
     const modalStack = ['command'];
     const registry = new CommandRegistry();

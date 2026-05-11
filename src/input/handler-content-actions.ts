@@ -56,6 +56,23 @@ export type PasteRegistryState = {
   nextImageId: number;
 };
 
+export type ClipboardPasteKind = 'image' | 'text' | 'none';
+
+export interface ClipboardPasteResult {
+  prompt: string;
+  cursorPos: number;
+  nextImageId: number;
+  nextPasteId: number;
+  pasted: boolean;
+  kind: ClipboardPasteKind;
+  marker?: string;
+}
+
+export interface ClipboardPasteSource {
+  pasteImageFromClipboard: typeof pasteImageFromClipboard;
+  pasteFromClipboard: typeof pasteFromClipboard;
+}
+
 export function registerPaste(
   state: PasteRegistryState,
   content: string,
@@ -436,22 +453,34 @@ export function handleClipboardPaste(
     requestRender: () => void;
   },
   projectRoot: string,
-): { prompt: string; cursorPos: number; nextImageId: number; nextPasteId: number } {
-  state.saveUndoState();
-  const img = pasteImageFromClipboard();
+  clipboard: ClipboardPasteSource = { pasteImageFromClipboard, pasteFromClipboard },
+): ClipboardPasteResult {
+  const img = clipboard.pasteImageFromClipboard();
+  let pasted = false;
+  let kind: ClipboardPasteKind = 'none';
+  let insertedMarker: string | undefined;
+
   if (img) {
+    state.saveUndoState();
     const id = `img${state.nextImageId++}`;
     const sizeKB = Math.round(img.data.length * 3 / 4 / 1024);
     state.imageRegistry.set(id, img);
     const marker = `[IMAGE: ${id}, clipboard, ${sizeKB}KB]`;
     state.prompt = state.prompt.slice(0, state.cursorPos) + marker + state.prompt.slice(state.cursorPos);
     state.cursorPos += marker.length;
+    pasted = true;
+    kind = 'image';
+    insertedMarker = marker;
   } else {
-    const raw = pasteFromClipboard();
+    const raw = clipboard.pasteFromClipboard();
     if (raw) {
+      state.saveUndoState();
       const { marker } = registerPaste(state, raw, projectRoot);
       state.prompt = state.prompt.slice(0, state.cursorPos) + marker + state.prompt.slice(state.cursorPos);
       state.cursorPos += marker.length;
+      pasted = true;
+      kind = marker.startsWith('[IMAGE:') ? 'image' : 'text';
+      insertedMarker = marker;
     }
   }
   state.ensureInputCursorVisible();
@@ -461,5 +490,8 @@ export function handleClipboardPaste(
     cursorPos: state.cursorPos,
     nextImageId: state.nextImageId,
     nextPasteId: state.nextPasteId,
+    pasted,
+    kind,
+    marker: insertedMarker,
   };
 }

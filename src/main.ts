@@ -376,6 +376,7 @@ async function main() {
   commandContext.submitInput = submitInput;
   commandContext.submitSpokenInput = (text, content) => submitInput(text, content, { spokenOutput: true });
   commandContext.stopSpokenOutput = () => spokenTurns.stop();
+  commandContext.pasteFromClipboard = () => input.handlePaste();
   commandContext.executeCommand = (name, args) => commandRegistry.execute(name, args, commandContext);
   commandContext.cancelGeneration = cancelGeneration;
   commandContext.jumpToBookmark = jumpToBookmark;

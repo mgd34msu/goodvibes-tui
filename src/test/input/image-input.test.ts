@@ -12,6 +12,7 @@ import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { getTestProviderRegistry } from '../helpers/runtime-services.ts';
 import type { ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
+import { handleClipboardPaste } from '../../input/handler-content-actions.ts';
 
 type InputHandlerImageTestAccess = {
   pasteRegistry: Map<string, string>;
@@ -108,6 +109,88 @@ describe('registerPaste base64 image detection', () => {
     expect(m1).toContain('img1');
     expect(m2).toContain('img2');
     expect(ih.getImageAttachments().size).toBe(2);
+  });
+});
+
+describe('handleClipboardPaste', () => {
+  test('inserts an image marker from an explicit clipboard image source', () => {
+    let undoCount = 0;
+    let renderCount = 0;
+    const state = {
+      prompt: 'describe ',
+      cursorPos: 'describe '.length,
+      pasteRegistry: new Map<string, string>(),
+      nextPasteId: 1,
+      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
+      nextImageId: 1,
+      saveUndoState: () => { undoCount++; },
+      ensureInputCursorVisible: () => {},
+      requestRender: () => { renderCount++; },
+    };
+
+    const result = handleClipboardPaste(state, process.cwd(), {
+      pasteImageFromClipboard: () => ({ mediaType: 'image/png', data: 'iVBORw0KGgo' + 'A'.repeat(200) }),
+      pasteFromClipboard: () => null,
+    });
+
+    expect(result.pasted).toBe(true);
+    expect(result.kind).toBe('image');
+    expect(result.prompt).toMatch(/^describe \[IMAGE: img1, clipboard, \d+KB\]$/);
+    expect(result.nextImageId).toBe(2);
+    expect(state.imageRegistry.get('img1')?.mediaType).toBe('image/png');
+    expect(undoCount).toBe(1);
+    expect(renderCount).toBe(1);
+  });
+
+  test('falls back to text clipboard and stores long text markers', () => {
+    const longText = Array.from({ length: 10 }, (_, idx) => `line ${idx + 1}`).join('\n');
+    const state = {
+      prompt: '',
+      cursorPos: 0,
+      pasteRegistry: new Map<string, string>(),
+      nextPasteId: 1,
+      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
+      nextImageId: 1,
+      saveUndoState: () => {},
+      ensureInputCursorVisible: () => {},
+      requestRender: () => {},
+    };
+
+    const result = handleClipboardPaste(state, process.cwd(), {
+      pasteImageFromClipboard: () => null,
+      pasteFromClipboard: () => longText,
+    });
+
+    expect(result.pasted).toBe(true);
+    expect(result.kind).toBe('text');
+    expect(result.prompt).toBe('[TEXT: p1, 10 lines]');
+    expect(result.nextPasteId).toBe(2);
+    expect(state.pasteRegistry.get('p1')).toBe(longText);
+  });
+
+  test('does not save undo state when no supported clipboard content exists', () => {
+    let undoCount = 0;
+    const state = {
+      prompt: 'unchanged',
+      cursorPos: 3,
+      pasteRegistry: new Map<string, string>(),
+      nextPasteId: 1,
+      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
+      nextImageId: 1,
+      saveUndoState: () => { undoCount++; },
+      ensureInputCursorVisible: () => {},
+      requestRender: () => {},
+    };
+
+    const result = handleClipboardPaste(state, process.cwd(), {
+      pasteImageFromClipboard: () => null,
+      pasteFromClipboard: () => null,
+    });
+
+    expect(result.pasted).toBe(false);
+    expect(result.kind).toBe('none');
+    expect(result.prompt).toBe('unchanged');
+    expect(undoCount).toBe(0);
   });
 });
 
