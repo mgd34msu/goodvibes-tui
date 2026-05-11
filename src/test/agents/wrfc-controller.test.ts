@@ -457,7 +457,7 @@ describe('WrfcController', () => {
       expect(chain.ownerDecisions.at(-1)?.action).toBe('spawn_gate_fixer');
     });
 
-    test('auto-commit merges and cleans every owner-chain agent on pass', async () => {
+    test('auto-commit merges the accepted writer and cleans every owner-chain agent on pass', async () => {
       mockConfigState['wrfc.autoCommit'] = true;
       mockConfigGetCategoryState.autoCommit = true;
       mkdirSync(join(projectRoot, '.git'));
@@ -470,12 +470,42 @@ describe('WrfcController', () => {
       await emitAgentCompleted(runtimeBus, reviewer.id);
       await new Promise((r) => setTimeout(r, 100));
 
-      const lastAgentId = chain.allAgentIds[chain.allAgentIds.length - 1];
       expect(chain.state).toBe('passed');
-      expect(mockMerge).toHaveBeenCalledWith(lastAgentId);
+      expect(mockMerge).toHaveBeenCalledTimes(1);
+      expect(mockMerge).toHaveBeenCalledWith(engineer.id);
+      expect(mockMerge).not.toHaveBeenCalledWith(reviewer.id);
       for (const id of chain.allAgentIds) {
         expect(mockCleanup.mock.calls.map((call) => call[0])).toContain(id);
       }
+      expect(workflowCalls('WORKFLOW_AUTO_COMMITTED')).toHaveLength(1);
+    });
+
+    test('auto-commit prefers an accepted fixer over a superseded engineer', async () => {
+      mockConfigState['wrfc.autoCommit'] = true;
+      mockConfigGetCategoryState.autoCommit = true;
+      mkdirSync(join(projectRoot, '.git'));
+      const controller = initTestWrfcController();
+      const { chain, engineer } = createStartedChain(controller);
+
+      await emitAgentCompleted(runtimeBus, engineer.id);
+      const reviewerOne = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewerOne.fullOutput = makeReviewerOutput(5, false);
+      await emitAgentCompleted(runtimeBus, reviewerOne.id);
+
+      const fixer = agentStore.get(chain.fixerAgentId ?? '')!;
+      fixer.fullOutput = makeEngineerOutput({ summary: 'accepted fix complete' });
+      await emitAgentCompleted(runtimeBus, fixer.id);
+      const reviewerTwo = agentStore.get(chain.reviewerAgentId ?? '')!;
+      reviewerTwo.fullOutput = makeReviewerOutput(10, true);
+      await emitAgentCompleted(runtimeBus, reviewerTwo.id);
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(chain.state).toBe('passed');
+      expect(mockMerge).toHaveBeenCalledTimes(1);
+      expect(mockMerge).toHaveBeenCalledWith(fixer.id);
+      expect(mockMerge).not.toHaveBeenCalledWith(engineer.id);
+      expect(mockMerge).not.toHaveBeenCalledWith(reviewerOne.id);
+      expect(mockMerge).not.toHaveBeenCalledWith(reviewerTwo.id);
       expect(workflowCalls('WORKFLOW_AUTO_COMMITTED')).toHaveLength(1);
     });
 
