@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.96] — 2026-05-11
+
+### Changes
+- 77abb7be fix: navigate multiline prompt history
+
 ## [0.19.95] — 2026-05-11
 
 ### Changes
