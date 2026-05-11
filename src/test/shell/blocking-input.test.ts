@@ -95,14 +95,14 @@ describe('shell/blocking-input', () => {
     expect(rendered).toBe(1);
   });
 
-  test('restores recovery snapshot on r', () => {
+  test('restores recovery snapshot on ctrl-r', () => {
     const { conversation, restored } = makeConversation();
     const { router, messages } = makeRouter();
     let deleted = 0;
     let rendered = 0;
 
     const result = handleBlockingShellInput({
-      data: 'r',
+      data: '\x12',
       pendingPermission: null,
       recoveryPending: true,
       abortTurn: () => {},
@@ -119,6 +119,62 @@ describe('shell/blocking-input', () => {
     expect(result.recoveryPending).toBe(false);
     expect(restored).toEqual([[{ role: 'user', content: 'restored' }]]);
     expect(messages).toContain('[Recovery] Session restored.');
+    expect(deleted).toBe(1);
+    expect(rendered).toBe(1);
+  });
+
+  test('passes normal typing through while dismissing recovery', () => {
+    const { conversation, restored } = makeConversation();
+    const { router, messages } = makeRouter();
+    let deleted = 0;
+    let rendered = 0;
+
+    const result = handleBlockingShellInput({
+      data: 'h',
+      pendingPermission: null,
+      recoveryPending: true,
+      abortTurn: () => {},
+      conversation: conversation as never,
+      systemMessageRouter: router as never,
+      render: () => { rendered++; },
+      loadRecoveryConversation: () => ({
+        messages: [{ role: 'user', content: 'restored' }],
+      }),
+      deleteRecoveryFile: () => { deleted++; },
+    });
+
+    expect(result.handled).toBe(false);
+    expect(result.recoveryPending).toBe(false);
+    expect(restored).toEqual([]);
+    expect(messages).toContain('[Recovery] Ignored saved session; starting a new prompt.');
+    expect(deleted).toBe(1);
+    expect(rendered).toBe(1);
+  });
+
+  test('discards recovery on escape without passing escape to input', () => {
+    const { conversation, restored } = makeConversation();
+    const { router, messages } = makeRouter();
+    let deleted = 0;
+    let rendered = 0;
+
+    const result = handleBlockingShellInput({
+      data: '\x1b',
+      pendingPermission: null,
+      recoveryPending: true,
+      abortTurn: () => {},
+      conversation: conversation as never,
+      systemMessageRouter: router as never,
+      render: () => { rendered++; },
+      loadRecoveryConversation: () => ({
+        messages: [{ role: 'user', content: 'restored' }],
+      }),
+      deleteRecoveryFile: () => { deleted++; },
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.recoveryPending).toBe(false);
+    expect(restored).toEqual([]);
+    expect(messages).toContain('[Recovery] Discarded recovery data.');
     expect(deleted).toBe(1);
     expect(rendered).toBe(1);
   });

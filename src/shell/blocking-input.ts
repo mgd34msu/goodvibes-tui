@@ -68,8 +68,7 @@ export function handleBlockingShellInput(
   }
 
   if (recoveryPending) {
-    const key = data.toLowerCase();
-    if (key === 'r') {
+    if (data === '\x12') {
       const recovery = loadRecoveryConversation();
       if (recovery) {
         conversation.fromJSON({ messages: recovery.messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
@@ -77,12 +76,22 @@ export function handleBlockingShellInput(
       } else {
         systemMessageRouter.high('[Recovery] Failed to restore saved data.');
       }
-    } else {
-      systemMessageRouter.high('[Recovery] Discarded recovery data.');
+      deleteRecoveryFile();
+      render();
+      return { handled: true, pendingPermission: null, recoveryPending: false };
     }
+
+    if (data === '\x1b' || data === '\x03') {
+      systemMessageRouter.high('[Recovery] Discarded recovery data.');
+      deleteRecoveryFile();
+      render();
+      return { handled: true, pendingPermission: null, recoveryPending: false };
+    }
+
+    systemMessageRouter.high('[Recovery] Ignored saved session; starting a new prompt.');
     deleteRecoveryFile();
     render();
-    return { handled: true, pendingPermission: null, recoveryPending: false };
+    return { handled: false, pendingPermission: null, recoveryPending: false };
   }
 
   return { handled: false, pendingPermission, recoveryPending };

@@ -766,7 +766,7 @@ async function main() {
   // --- Crash recovery check ---
   const recoveryInfo = checkRecoveryFile({ workingDirectory: workingDir, homeDirectory });
   if (recoveryInfo) {
-    systemMessageRouter.high(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press R to restore, any other key to discard.`);
+    systemMessageRouter.high(`[Recovery] Found unsaved session from ${new Date(recoveryInfo.timestamp).toLocaleString()}. Title: "${recoveryInfo.title}". Press Ctrl+R to restore, Esc to discard, or start typing to ignore it.`);
     for (const line of formatReturnContextForDisplay(recoveryInfo.returnContext)) {
       systemMessageRouter.low(`[Recovery] ${line}`);
     }
