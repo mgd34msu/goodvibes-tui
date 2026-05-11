@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.98] — 2026-05-11
+
+### Changes
+- 6fa4c84b fix: pass owned project root to command paste
+
 ## [0.19.97] — 2026-05-11
 
 ### Changes
