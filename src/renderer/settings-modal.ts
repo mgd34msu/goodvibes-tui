@@ -6,31 +6,21 @@
  */
 
 import type { Line } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import type { SettingsModal, SettingEntry, FlagEntry, McpEntry, SubscriptionEntry, SettingsCategory } from '../input/settings-modal.ts';
 import { SETTINGS_CATEGORIES, SETTINGS_CATEGORY_GROUPS } from '../input/settings-modal.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { CATEGORY_LABELS, describeUiRouting, formatValue, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
-import { GLYPHS, UI_TONES } from './ui-primitives.ts';
-
-const PALETTE = {
-  border: '#64748b',
-  title: '#67e8f9',
-  subtitle: '#93c5fd',
-  text: '#e2e8f0',
-  muted: '#94a3b8',
-  dim: '#64748b',
-  selectedBg: '#223049',
-  categoryBg: '#141b25',
-  contextBg: '#121923',
-  controlsBg: '#0f141d',
-  footerBg: '#111827',
-  good: UI_TONES.state.good,
-  warn: UI_TONES.state.warn,
-  bad: UI_TONES.state.bad,
-  info: UI_TONES.state.info,
-};
+import { GLYPHS } from './ui-primitives.ts';
+import {
+  clamp,
+  getFullscreenWorkspaceMetrics,
+  padDisplay,
+  renderFullscreenWorkspace,
+  stableWindow,
+  WORKSPACE_PALETTE as PALETTE,
+  type WorkspaceRow,
+} from './fullscreen-workspace.ts';
 
 const CATEGORY_INFO: Record<SettingsCategory, string> = {
   display: 'Presentation settings for the terminal transcript: streaming, line numbers, thinking visibility, reasoning summaries, token speed, and tool previews.',
@@ -131,110 +121,11 @@ const ENUM_VALUE_DESCRIPTIONS: Record<string, Record<string, string>> = {
   },
 };
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function fillRange(line: Line, startX: number, endX: number, bg: string): void {
-  for (let x = Math.max(0, startX); x <= Math.min(line.length - 1, endX); x += 1) {
-    const cell = line[x] ?? createStyledCell(' ');
-    line[x] = createStyledCell(cell.char, {
-      fg: cell.fg,
-      bg,
-      bold: cell.bold,
-      dim: cell.dim,
-      underline: cell.underline,
-      italic: cell.italic,
-      strikethrough: cell.strikethrough,
-      link: cell.link,
-    });
-  }
-}
-
-function writeText(line: Line, startX: number, maxWidth: number, text: string, style: Partial<Omit<Line[number], 'char'>> = {}): void {
-  let x = startX;
-  let used = 0;
-  for (const ch of text) {
-    const width = getDisplayWidth(ch);
-    if (width <= 0) continue;
-    if (used + width > maxWidth || x >= line.length) break;
-    line[x] = createStyledCell(ch, style);
-    if (width > 1 && x + 1 < line.length) {
-      line[x + 1] = createStyledCell(' ', style);
-    }
-    x += width;
-    used += width;
-  }
-}
-
-function makeLine(width: number, bg = ''): Line {
-  const line = createEmptyLine(width);
-  if (bg) fillRange(line, 0, width - 1, bg);
-  return line;
-}
-
-function borderLine(width: number, left: string, fill: string, right: string): Line {
-  const line = makeLine(width);
-  if (width <= 0) return line;
-  line[0] = createStyledCell(left, { fg: PALETTE.border });
-  for (let x = 1; x < width - 1; x += 1) {
-    line[x] = createStyledCell(fill, { fg: PALETTE.border });
-  }
-  if (width > 1) line[width - 1] = createStyledCell(right, { fg: PALETTE.border });
-  return line;
-}
-
-function contentLine(width: number, bg: string): Line {
-  const line = makeLine(width, bg);
-  if (width > 0) line[0] = createStyledCell(GLYPHS.frame.vertical, { fg: PALETTE.border });
-  if (width > 1) line[width - 1] = createStyledCell(GLYPHS.frame.vertical, { fg: PALETTE.border });
-  return line;
-}
-
-function drawVertical(line: Line, x: number, bg = ''): void {
-  if (x <= 0 || x >= line.length - 1) return;
-  line[x] = createStyledCell(GLYPHS.frame.vertical, { fg: PALETTE.border, bg });
-}
-
-function drawHorizontalRange(line: Line, startX: number, endX: number, bg = ''): void {
-  for (let x = Math.max(1, startX); x <= Math.min(line.length - 2, endX); x += 1) {
-    line[x] = createStyledCell(GLYPHS.frame.horizontal, { fg: PALETTE.border, bg });
-  }
-}
-
 function paddedWrapped(text: string, width: number, prefix = ''): string[] {
   const safeWidth = Math.max(1, width - getDisplayWidth(prefix));
   const wrapped = wrapText(text, safeWidth);
   if (prefix.length === 0) return wrapped;
   return wrapped.map((line, index) => `${index === 0 ? prefix : ' '.repeat(getDisplayWidth(prefix))}${line}`);
-}
-
-function clipDisplay(text: string, width: number): string {
-  if (width <= 0) return '';
-  let used = 0;
-  let output = '';
-  for (const ch of text) {
-    const chWidth = getDisplayWidth(ch);
-    if (chWidth <= 0) continue;
-    if (used + chWidth > width) break;
-    output += ch;
-    used += chWidth;
-  }
-  return output;
-}
-
-function padDisplay(text: string, width: number): string {
-  const clipped = clipDisplay(text, width);
-  return `${clipped}${' '.repeat(Math.max(0, width - getDisplayWidth(clipped)))}`;
-}
-
-function stableWindow(total: number, selectedIndex: number, visibleCount: number): { start: number; end: number } {
-  if (total <= 0 || visibleCount <= 0) return { start: 0, end: 0 };
-  if (total <= visibleCount) return { start: 0, end: total };
-  const selected = clamp(selectedIndex, 0, total - 1);
-  const half = Math.floor(visibleCount / 2);
-  const start = clamp(selected - half, 0, total - visibleCount);
-  return { start, end: start + visibleCount };
 }
 
 function formatDefaultValue(value: unknown): string {
@@ -596,99 +487,51 @@ export function renderSettingsModal(
   width: number,
   viewportHeight = 24,
 ): Line[] {
-  const safeWidth = Math.max(1, width);
-  const safeHeight = Math.max(12, viewportHeight);
-  const lines: Line[] = [];
-  const leftWidth = safeWidth < 80
-    ? clamp(Math.round(safeWidth * 0.32), 14, Math.max(14, safeWidth - 24))
-    : clamp(Math.round(safeWidth * 0.22), 24, 34);
-  const centerWidth = Math.max(20, safeWidth - leftWidth - 3);
-  const leftStart = 1;
-  const dividerX = leftWidth + 1;
-  const centerStart = dividerX + 1;
-  const centerEnd = safeWidth - 2;
-  const bodyTop = 3;
-  const footerY = safeHeight - 2;
-  const bodyRows = Math.max(4, footerY - bodyTop);
-  const contextWidth = Math.max(10, centerWidth - 2);
-  const contextLines = buildContextLines(modal, contextWidth);
-  const maxContextRows = Math.max(3, bodyRows - 4);
-  const contextRows = clamp(Math.round(bodyRows * 0.4), Math.min(10, maxContextRows), maxContextRows);
-  const controlsRows = Math.max(3, bodyRows - contextRows - 1);
-  const separatorY = bodyTop + contextRows;
-
-  const top = borderLine(safeWidth, GLYPHS.frame.topLeft, GLYPHS.frame.horizontal, GLYPHS.frame.topRight);
-  writeText(top, 2, safeWidth - 4, ` Configuration Workspace / Settings `, { fg: PALETTE.title, bold: true });
-  lines.push(top);
-
-  const header = contentLine(safeWidth, PALETTE.footerBg);
-  drawVertical(header, dividerX, PALETTE.footerBg);
-  writeText(header, leftStart + 1, leftWidth - 2, 'Categories', { fg: PALETTE.subtitle, bold: true, bg: PALETTE.footerBg });
   const notices = [
     ...(modal.lastSaveTriggeredRestart ? [`Restarting ${modal.lastSaveTriggeredRestart}`] : []),
     ...(modal.lastSettingEffectMessage ? [modal.lastSettingEffectMessage] : []),
   ];
-  const headerText = `${CATEGORY_LABELS[modal.currentCategory]} (${categoryItemCount(modal, modal.currentCategory)})${notices.length > 0 ? ` · ${notices.join(' · ')}` : ''}`;
-  writeText(header, centerStart + 1, centerWidth - 2, headerText, { fg: PALETTE.subtitle, bold: true, bg: PALETTE.footerBg });
-  lines.push(header);
+  const metrics = getFullscreenWorkspaceMetrics({ width, height: viewportHeight });
+  const categoryRows = renderCategories(modal, metrics.leftWidth - 2, metrics.bodyRows);
+  const contextRows = buildContextLines(modal, metrics.contextWidth).map((text, row): WorkspaceRow => {
+    const selectedSetting = modal.getSelected();
+    const isTitle = row === 0 || (selectedSetting !== null && text === getSettingLabel(selectedSetting));
+    return {
+      text,
+      fg: row === 0 ? PALETTE.title : text.endsWith(':') ? PALETTE.subtitle : PALETTE.text,
+      bold: isTitle,
+      dim: text.length === 0,
+    };
+  });
+  const controlRows = renderControlRows(modal, metrics.contextWidth, metrics.controlRows).map((text): WorkspaceRow => {
+    const selected = text.startsWith(GLYPHS.navigation.selected);
+    return {
+      text,
+      selected,
+      fg: selected
+        ? PALETTE.text
+        : text.startsWith('value:') || text.trimStart().startsWith('value:')
+          ? PALETTE.info
+          : rowColorForSetting(modal, text),
+      bold: selected,
+      dim: text.length === 0,
+    };
+  });
 
-  const headerSep = contentLine(safeWidth, '');
-  drawVertical(headerSep, dividerX);
-  drawHorizontalRange(headerSep, 1, safeWidth - 2);
-  lines.push(headerSep);
-
-  const categoryRows = renderCategories(modal, leftWidth - 2, bodyRows);
-  const controlRows = renderControlRows(modal, contextWidth, controlsRows);
-
-  for (let row = 0; row < bodyRows; row += 1) {
-    const y = bodyTop + row;
-    const inContext = y < separatorY;
-    const inSeparator = y === separatorY;
-    const bg = inSeparator ? '' : inContext ? PALETTE.contextBg : PALETTE.controlsBg;
-    const line = contentLine(safeWidth, bg);
-    fillRange(line, 1, dividerX - 1, PALETTE.categoryBg);
-    drawVertical(line, dividerX, bg);
-
-    const categoryRow = categoryRows[row] ?? { text: '', type: 'empty' as const, selected: false };
-    if (categoryRow.selected) fillRange(line, leftStart, dividerX - 1, PALETTE.selectedBg);
-    writeText(line, leftStart + 1, leftWidth - 3, categoryRow.text, {
-      fg: categoryRow.selected ? PALETTE.text : categoryRow.type === 'group' ? PALETTE.subtitle : PALETTE.muted,
-      bg: categoryRow.selected ? PALETTE.selectedBg : PALETTE.categoryBg,
-      bold: categoryRow.selected || categoryRow.type === 'group',
-    });
-
-    if (inSeparator) {
-      drawHorizontalRange(line, centerStart, centerEnd);
-    } else if (inContext) {
-      const contextText = contextLines[row] ?? '';
-      const selectedSetting = modal.getSelected();
-      const isTitle = row === 0 || (selectedSetting !== null && contextText === getSettingLabel(selectedSetting));
-      writeText(line, centerStart + 1, contextWidth, contextText, {
-        fg: row === 0 ? PALETTE.title : contextText.endsWith(':') ? PALETTE.subtitle : PALETTE.text,
-        bg,
-        bold: isTitle,
-        dim: contextText.length === 0,
-      });
-    } else {
-      const controlText = controlRows[row - contextRows - 1] ?? '';
-      const selected = controlText.startsWith(GLYPHS.navigation.selected);
-      if (selected) fillRange(line, centerStart, centerEnd, PALETTE.selectedBg);
-      writeText(line, centerStart + 1, contextWidth, controlText, {
-        fg: selected ? PALETTE.text : controlText.startsWith('value:') || controlText.trimStart().startsWith('value:') ? PALETTE.info : rowColorForSetting(modal, controlText),
-        bg: selected ? PALETTE.selectedBg : bg,
-        bold: selected,
-        dim: controlText.length === 0,
-      });
-    }
-    lines.push(line);
-  }
-
-  const footer = contentLine(safeWidth, PALETTE.footerBg);
-  writeText(footer, 2, safeWidth - 4, footerText(modal), { fg: PALETTE.muted, bg: PALETTE.footerBg });
-  lines.push(footer);
-  const bottom = borderLine(safeWidth, GLYPHS.frame.bottomLeft, GLYPHS.frame.horizontal, GLYPHS.frame.bottomRight);
-  lines.push(bottom);
-
-  while (lines.length < safeHeight) lines.unshift(makeLine(safeWidth));
-  return lines.slice(-safeHeight);
+  return renderFullscreenWorkspace({
+    width,
+    height: viewportHeight,
+    title: 'Configuration Workspace / Settings',
+    leftHeader: 'Categories',
+    mainHeader: `${CATEGORY_LABELS[modal.currentCategory]} (${categoryItemCount(modal, modal.currentCategory)})${notices.length > 0 ? ` · ${notices.join(' · ')}` : ''}`,
+    leftRows: categoryRows.map((row): WorkspaceRow => ({
+      text: row.text,
+      selected: row.selected,
+      kind: row.type === 'group' ? 'group' : row.type === 'more' ? 'more' : row.type === 'empty' ? 'empty' : 'item',
+      bold: row.selected || row.type === 'group',
+    })),
+    contextRows,
+    controlRows,
+    footer: footerText(modal),
+  });
 }

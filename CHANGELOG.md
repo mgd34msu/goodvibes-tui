@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.20.1] — 2026-05-12
+
+### Changes
+- Added shared fullscreen rendering primitives for frame drawing, text writing, clipping, fills, rules, stable windows, and the workspace palette.
+- Refactored `/config` and `/mcp` to use the same reusable fullscreen workspace base instead of maintaining separate one-off renderers.
+- Updated onboarding to consume the shared primitive layer while preserving its wizard-specific layout and behavior.
+
 ## [0.20.0] — 2026-05-11
 
 ### Changes

@@ -1,7 +1,7 @@
-import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { createStyledCell, type Line } from '../types/grid.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
 import { GLYPHS, UI_TONES } from './ui-primitives.ts';
+import { fillWidth, makeLine, writeText } from './fullscreen-primitives.ts';
 
 export interface OverlayBoxPalette {
   readonly borderFg: string;
@@ -60,29 +60,12 @@ export function putOverlayText(
   text: string,
   style: OverlayTextStyle,
 ): void {
-  let x = startX;
-  let used = 0;
-  for (const ch of text) {
-    const cellWidth = getDisplayWidth(ch);
-    if (cellWidth <= 0) continue;
-    if (used + cellWidth > maxWidth || x >= line.length) break;
-    line[x] = createStyledCell(ch, {
-      fg: style.fg,
-      bg: style.bg ?? '',
-      bold: style.bold ?? false,
-      dim: style.dim ?? false,
-    });
-    if (cellWidth > 1 && x + 1 < line.length) {
-      line[x + 1] = createStyledCell(' ', {
-        fg: style.fg,
-        bg: style.bg ?? '',
-        bold: style.bold ?? false,
-        dim: style.dim ?? false,
-      });
-    }
-    x += cellWidth;
-    used += cellWidth;
-  }
+  writeText(line, startX, maxWidth, text, {
+    fg: style.fg,
+    bg: style.bg ?? '',
+    bold: style.bold ?? false,
+    dim: style.dim ?? false,
+  });
 }
 
 export function createOverlayBorderLine(
@@ -93,7 +76,7 @@ export function createOverlayBorderLine(
   right: string,
   fg: string = DEFAULT_OVERLAY_PALETTE.borderFg,
 ): Line {
-  const line = createEmptyLine(terminalWidth);
+  const line = makeLine(terminalWidth);
   const leftX = layout.margin;
   const rightX = layout.margin + layout.width - 1;
   line[leftX] = createStyledCell(left, { fg });
@@ -110,13 +93,11 @@ export function createOverlayContentLine(
   borderFg: string = DEFAULT_OVERLAY_PALETTE.borderFg,
   bg = '',
 ): Line {
-  const line = createEmptyLine(terminalWidth);
+  const line = makeLine(terminalWidth);
   const leftX = layout.margin;
   const rightX = layout.margin + layout.width - 1;
   line[leftX] = createStyledCell('│', { fg: borderFg });
-  for (let x = leftX + 1; x < rightX; x++) {
-    line[x] = createStyledCell(' ', { bg });
-  }
+  fillWidth(line, leftX + 1, rightX - leftX - 1, bg);
   line[rightX] = createStyledCell('│', { fg: borderFg });
   return line;
 }
@@ -130,7 +111,7 @@ export function createOverlayFilledBorderLine(
   fg: string = DEFAULT_OVERLAY_PALETTE.borderFg,
   bg = '',
 ): Line {
-  const line = createEmptyLine(terminalWidth);
+  const line = makeLine(terminalWidth);
   const leftX = layout.margin;
   const rightX = layout.margin + layout.width - 1;
   line[leftX] = createStyledCell(left, { fg, bg });

@@ -1,5 +1,4 @@
 import type { Line } from '../../types/grid.ts';
-import { createStyledCell } from '../../types/grid.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText } from '../../utils/terminal-width.ts';
 import {
   createOverlayBoxLayout,
@@ -9,6 +8,7 @@ import {
   OVERLAY_GLYPHS,
   putOverlayText,
 } from '../overlay-box.ts';
+import { clamp, drawVerticalRule, fillWidth } from '../fullscreen-primitives.ts';
 import { UI_TONES } from '../ui-primitives.ts';
 import {
   getOnboardingWizardBodyRows,
@@ -27,32 +27,6 @@ type RenderedFieldRow =
       readonly field: OnboardingWizardFieldDefinition;
       readonly absoluteIndex: number;
     };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function fillRange(line: Line, startX: number, width: number, bg: string): void {
-  for (let x = startX; x < Math.min(line.length, startX + width); x += 1) {
-    const cell = line[x];
-    if (!cell) continue;
-    line[x] = createStyledCell(cell.char, {
-      fg: cell.fg,
-      bg,
-      bold: cell.bold,
-      dim: cell.dim,
-      underline: cell.underline,
-      italic: cell.italic,
-      strikethrough: cell.strikethrough,
-      link: cell.link,
-    });
-  }
-}
-
-function drawVerticalRule(line: Line, x: number, fg: string, bg = ''): void {
-  if (x < 0 || x >= line.length) return;
-  line[x] = createStyledCell('│', { fg, bg });
-}
 
 function modeLabel(mode: OnboardingWizardController['mode']): string {
   if (mode === 'edit') return 'Edit existing';
@@ -250,7 +224,7 @@ function renderFieldRow(
   const selected = fieldRow.absoluteIndex === wizard.getSelectedFieldIndex();
   const field = fieldRow.field;
   const fieldBg = selected ? DEFAULT_OVERLAY_PALETTE.selectedBg : UI_TONES.bg.base;
-  fillRange(line, startX, width, fieldBg);
+  fillWidth(line, startX, width, fieldBg);
 
   const badge = truncateDisplay(`[${wizard.getFieldValueLabel(field)}]`, Math.max(8, Math.floor(width * 0.34)));
   const badgeWidth = getDisplayWidth(badge);
@@ -354,9 +328,9 @@ function renderWideLayout(
   lines.push(topLine);
 
   const headerLine = createOverlayContentLine(width, layout, borderFg, headerBg);
-  fillRange(headerLine, leftStart, leftWidth, railBg);
-  fillRange(headerLine, centerStart, centerWidth, headerBg);
-  fillRange(headerLine, rightStart, rightWidth, summaryBg);
+  fillWidth(headerLine, leftStart, leftWidth, railBg);
+  fillWidth(headerLine, centerStart, centerWidth, headerBg);
+  fillWidth(headerLine, rightStart, rightWidth, summaryBg);
   drawVerticalRule(headerLine, leftSeparatorX, borderFg, headerBg);
   drawVerticalRule(headerLine, rightSeparatorX, borderFg, headerBg);
   putOverlayText(headerLine, leftStart + 1, leftWidth - 2, 'Steps', {
@@ -388,9 +362,9 @@ function renderWideLayout(
 
   for (let row = 0; row < bodyRows; row += 1) {
     const line = createOverlayContentLine(width, layout, borderFg, bodyBg);
-    fillRange(line, leftStart, leftWidth, railBg);
-    fillRange(line, centerStart, centerWidth, bodyBg);
-    fillRange(line, rightStart, rightWidth, summaryBg);
+    fillWidth(line, leftStart, leftWidth, railBg);
+    fillWidth(line, centerStart, centerWidth, bodyBg);
+    fillWidth(line, rightStart, rightWidth, summaryBg);
     drawVerticalRule(line, leftSeparatorX, borderFg);
     drawVerticalRule(line, rightSeparatorX, borderFg);
 
@@ -411,20 +385,20 @@ function renderWideLayout(
         bg: bodyBg,
       });
     } else if (row === 3) {
-      fillRange(line, centerStart, centerWidth, railBg);
+      fillWidth(line, centerStart, centerWidth, railBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(controlsText(wizard), centerWidth - 2), {
         fg: UI_TONES.state.info,
         bg: railBg,
       });
     } else if (row === 4) {
-      fillRange(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
+      fillWidth(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(`Focus: ${selectedText.title.replace(/^Selected: /, '')}`, centerWidth - 2), {
         fg: UI_TONES.fg.primary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
         bold: true,
       });
     } else if (row === 5) {
-      fillRange(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
+      fillWidth(line, centerStart, centerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, centerStart + 1, centerWidth - 2, truncateDisplay(selectedText.hint, centerWidth - 2), {
         fg: UI_TONES.fg.secondary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
@@ -534,7 +508,7 @@ function renderCollapsedLayout(
   lines.push(topLine);
 
   const headerLine = createOverlayContentLine(width, layout, borderFg, headerBg);
-  fillRange(headerLine, innerStart, innerWidth, headerBg);
+  fillWidth(headerLine, innerStart, innerWidth, headerBg);
   putOverlayText(headerLine, innerStart + 1, innerWidth - 2, fitDisplay(`${modeLabel(wizard.mode)} • ${currentStep.shortLabel}`, innerWidth - 2), {
     fg: UI_TONES.state.active,
     bg: headerBg,
@@ -554,7 +528,7 @@ function renderCollapsedLayout(
 
   for (let row = 0; row < bodyRows; row += 1) {
     const line = createOverlayContentLine(width, layout, borderFg, bodyBg);
-    fillRange(line, innerStart, innerWidth, bodyBg);
+    fillWidth(line, innerStart, innerWidth, bodyBg);
 
     if (row === 0) {
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(currentStep.title, innerWidth - 2), {
@@ -573,20 +547,20 @@ function renderCollapsedLayout(
         bg: bodyBg,
       });
     } else if (row === 3) {
-      fillRange(line, innerStart, innerWidth, UI_TONES.bg.section);
+      fillWidth(line, innerStart, innerWidth, UI_TONES.bg.section);
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(controlsText(wizard), innerWidth - 2), {
         fg: UI_TONES.state.info,
         bg: UI_TONES.bg.section,
       });
     } else if (row === 4) {
-      fillRange(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
+      fillWidth(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(`Focus: ${selectedText.title.replace(/^Selected: /, '')}`, innerWidth - 2), {
         fg: UI_TONES.fg.primary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
         bold: true,
       });
     } else if (row === 5) {
-      fillRange(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
+      fillWidth(line, innerStart, innerWidth, DEFAULT_OVERLAY_PALETTE.selectedBg);
       putOverlayText(line, innerStart + 1, innerWidth - 2, truncateDisplay(selectedText.hint, innerWidth - 2), {
         fg: UI_TONES.fg.secondary,
         bg: DEFAULT_OVERLAY_PALETTE.selectedBg,
