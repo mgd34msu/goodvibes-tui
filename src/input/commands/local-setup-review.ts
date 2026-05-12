@@ -155,10 +155,13 @@ export function renderSetupSandboxReview(ctx: CommandContext, snapshot: SetupRev
   ];
   if (backend === 'local') {
     lines.push('    /sandbox qemu bootstrap .goodvibes/tui/sandbox 20');
+    lines.push('    .goodvibes/tui/sandbox/create-image.sh .goodvibes/tui/sandbox/goodvibes-sandbox.qcow2 20G');
+    lines.push('    GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh .goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < .goodvibes/tui/sandbox/guest-bootstrap.sh');
     lines.push('    /sandbox doctor');
   } else if (!image || !wrapper) {
     lines.push('    /sandbox qemu setup .goodvibes/tui/sandbox');
-    lines.push('    /sandbox qemu create-image .goodvibes/tui/sandbox/images/goodvibes-sandbox.qcow2 20');
+    lines.push('    .goodvibes/tui/sandbox/create-image.sh .goodvibes/tui/sandbox/goodvibes-sandbox.qcow2 20G');
+    lines.push('    GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh .goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < .goodvibes/tui/sandbox/guest-bootstrap.sh');
     lines.push('    /sandbox doctor');
   } else {
     lines.push('    /sandbox guest-test eval-js');

@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core';
+import { estimateConversationTokens, getAutoCompactDecision } from '@pellux/goodvibes-sdk/platform/core';
 import { createModelCatalog, type ModelCatalog, type CatalogModelEntry } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers';
 import { createTestProviderRegistry } from '../helpers/test-managers.ts';
@@ -137,6 +137,21 @@ function simulatePreflightCheck(
 }
 
 describe('context window pre-flight decision logic', () => {
+  it('auto-compact decision honors configured percentage below the hard context limit', () => {
+    const decision = getAutoCompactDecision({
+      currentTokens: 125_400,
+      contextWindow: 128_000,
+      isCompacting: false,
+      thresholdPercent: 80,
+    });
+    expect(decision.shouldCompact).toBe(true);
+    expect(decision.thresholdTokens).toBe(102_400);
+    expect(decision.currentTokens).toBe(125_400);
+    expect(decision.contextWindow).toBe(128_000);
+    expect(decision.remainingTokens).toBe(2_600);
+    expect(decision.reason).not.toBeNull();
+  });
+
   describe('request within context window', () => {
     it('returns ok when tokens < context window', () => {
       const { result, compactTriggered } = simulatePreflightCheck(

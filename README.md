@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.19.99-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.20.0-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -626,13 +626,16 @@ The QEMU path includes:
 
 - setup bundle generation
 - first-run bootstrap scaffolding
-- `qemu-img` image creation helpers
+- Debian cloud-image download, mutable qcow2 clone, resize, and NoCloud ISO creation through the generated `create-image.sh`
 - host-side wrapper generation
+- guest cloud-init seed generation for the `goodvibes` sudo user, SSH key auth, `/workspace`, and `ens3` DHCP
 - guest-test and wrapper-test validation
 - session-backed command execution
 - guest bundle export / inspect flows
 - setup manifest export / apply flows
 - `attach` and `launch-per-command` execution modes
+- REPL/MCP-friendly guest bootstrap packages for Python, JavaScript, TypeScript, SQL, GraphQL, Bun, Deno, DuckDB, Go, Rust, Ruby, and common CLI build/search tools
+- guest JavaScript-family REPL execution through `sandbox.replJavaScriptCommand`, defaulting the generated QEMU setup to `/home/goodvibes/.bun/bin/bun`
 
 Key commands:
 
@@ -643,7 +646,6 @@ Key commands:
 - `/sandbox probe`
 - `/sandbox qemu setup <dir>`
 - `/sandbox qemu bootstrap <dir> [size-gb]`
-- `/sandbox qemu create-image <path> [size-gb]`
 - `/sandbox qemu inspect-setup <manifest>`
 - `/sandbox qemu apply-setup <manifest>`
 - `/sandbox session ...`
@@ -654,9 +656,13 @@ Typical first-run path:
 
 ```sh
 /sandbox qemu bootstrap .goodvibes/tui/sandbox 20
+.goodvibes/tui/sandbox/create-image.sh .goodvibes/tui/sandbox/goodvibes-sandbox.qcow2 20G
+GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh .goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < .goodvibes/tui/sandbox/guest-bootstrap.sh
 /sandbox doctor
-/sandbox guest-test eval-js
+/sandbox guest-test eval-py
 ```
+
+See [QEMU sandbox bootstrapping](docs/qemu-sandbox.md) for host prerequisites, generated files, first-boot behavior, guest runtime packages, and troubleshooting logs.
 
 ---
 

@@ -176,6 +176,14 @@ describe('classifyIntent', () => {
       expect(result.confidence).toBeGreaterThan(0.65);
     });
 
+    test('retrospective setup guide requests stay task and do not trigger project mode', () => {
+      const result = classifyIntent(
+        "list all of the things you did, from start to finish, to get qemu working. we will need to make a workflow to follow for other installations of goodvibes. additionally you should list the things that should be installed in the qemu image that weren't already there, like the other repls for example. I want to make an easy to follow instruction guide that can be fed to llms so setup can be easier.",
+      );
+      expect(result.intent).toBe('task');
+      expect(result.signals).toContain('documentation_request');
+    });
+
     test('confidence is between 0 and 1', () => {
       const message =
         'Build a complete auth system with JWT, roles, and sessions. ' +
