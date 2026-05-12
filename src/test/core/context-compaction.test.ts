@@ -119,12 +119,12 @@ describe('shouldAutoCompact', () => {
     })).toBe(false);
   });
 
-  it('returns false when remaining tokens > 15k buffer', () => {
+  it('returns false when below the usage threshold and remaining tokens > 15k buffer', () => {
     expect(shouldAutoCompact({
-      currentTokens: 80_000,
+      currentTokens: 79_000,
       contextWindow: 100_000,
       isCompacting: false,
-    })).toBe(false); // 20k remaining > 15k
+    })).toBe(false); // below default 80% threshold and 21k remaining > 15k
   });
 
   it('returns true when remaining tokens equal 15k buffer exactly', () => {
