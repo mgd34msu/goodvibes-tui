@@ -199,7 +199,6 @@ describe('operator surfaces gate', () => {
     expect(ids).toContain('remote');
     expect(ids).toContain('incident');
     expect(ids).toContain('orchestration');
-    expect(ids).toContain('mcp');
     expect(ids).toContain('forensics');
     expect(ids).toContain('providers');
     expect(ids).toContain('sessions');
@@ -471,15 +470,15 @@ describe('operator surfaces gate', () => {
     expect(printed.join('\n')).toContain('Cancelled 2 agents in graph cohort:alpha.');
   });
 
-  test('mcp command opens the mcp panel when no subcommand is supplied', async () => {
+  test('mcp command opens the fullscreen mcp workspace when no subcommand is supplied', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);
     const mcp = registry.get('mcp');
     expect(mcp).toBeDefined();
 
     let opened = false;
-    await mcp!.handler([], makeCommandContext('sess-mcp-panel', {
-      openMcpPanel: () => {
+    await mcp!.handler([], makeCommandContext('sess-mcp-workspace', {
+      openMcpWorkspace: () => {
         opened = true;
       },
     }));

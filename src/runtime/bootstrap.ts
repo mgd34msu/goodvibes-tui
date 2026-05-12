@@ -33,7 +33,7 @@ import {
   loadLastConversation,
   writeLastSessionPointer,
 } from '@/runtime/index.ts';
-import { startBackgroundProviderRegistration } from '@/runtime/index.ts';
+import { scheduleBackgroundMcpDiscovery, startBackgroundProviderRegistration } from '@/runtime/index.ts';
 import { restoreSavedModel } from '@/runtime/index.ts';
 import { startExternalServices, type ExternalServicesHandle, type HostServiceStatus } from '@/runtime/index.ts';
 import { getOrCreateCompanionToken, pruneStaleOperatorTokens } from '@pellux/goodvibes-sdk/platform/pairing';
@@ -46,6 +46,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { DaemonServer } from '@pellux/goodvibes-sdk/platform/daemon';
 import { HttpListener } from '@pellux/goodvibes-sdk/platform/daemon';
 import { createSafeHostServeFactory } from '../daemon/safe-serve.ts';
+import { startMcpConfigAutoReload } from '../mcp/runtime-reload.ts';
 
 type ExternalServiceFactories = NonNullable<Parameters<typeof startExternalServices>[4]>;
 
@@ -136,7 +137,7 @@ export type BootstrapContext = RuntimeContext & {
  *   4. Runtime bus subscriptions (WRFC, subagent, hook bridge)
  *   5. Providers, webhooks, PermissionManager, HookDispatcher
  *   6. Orchestrator + AcpManager
- *   7. MCP auto-connect + panel manager
+ *   7. MCP auto-connect + workspace/panel manager
  *   8. Command registry + plugin init + CommandContext
  *   9. Input handler wiring
  *  10. Input history, splash options
@@ -513,6 +514,29 @@ export async function bootstrapRuntime(
     shellPaths: services.shellPaths,
     surfaceRoot: 'tui',
   });
+  const mcpDiscovery = scheduleBackgroundMcpDiscovery({
+    mcpRegistry: services.mcpRegistry,
+    systemMessageRouter,
+    requestRender,
+    shellPaths: services.shellPaths,
+    surfaceRoot: 'tui',
+  });
+  bootstrapUnsubs.push(() => mcpDiscovery.stop());
+  const mcpAutoReload = startMcpConfigAutoReload({
+    roots: services.shellPaths,
+    registry: services.mcpRegistry,
+    onReload: ({ connected, total }) => {
+      systemMessageRouter.low(`[MCP] Reloaded config: ${connected}/${total} server(s) connected.`);
+      requestRender();
+    },
+    onError: (error) => {
+      const message = summarizeError(error);
+      logger.warn('MCP config auto-reload failed', { error: message });
+      systemMessageRouter.high(`[MCP] Config reload failed: ${message}`);
+      requestRender();
+    },
+  });
+  bootstrapUnsubs.push(() => mcpAutoReload.stop());
   if (configManager.get('automation.enabled')) {
     deferredStartup.schedule({
       label: 'automation',

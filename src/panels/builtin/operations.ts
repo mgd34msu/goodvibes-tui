@@ -13,7 +13,6 @@ import { LocalAuthPanel } from '../local-auth-panel.ts';
 import { ProviderAccountsPanel } from '../provider-accounts-panel.ts';
 import { SettingsSyncPanel } from '../settings-sync-panel.ts';
 import { WorktreePanel } from '../worktree-panel.ts';
-import { McpPanel } from '../mcp-panel.ts';
 import { HooksPanel } from '../hooks-panel.ts';
 import { SecurityPanel } from '../security-panel.ts';
 import { MarketplacePanel } from '../marketplace-panel.ts';
@@ -37,7 +36,7 @@ import {
 } from '../../runtime/ui-service-queries.ts';
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
-import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requireMcpRegistry, requirePluginManager, requireUiServices } from './shared.ts';
+import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requirePluginManager, requireUiServices } from './shared.ts';
 
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
@@ -183,15 +182,6 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     category: 'monitoring',
     description: 'Orchestrator-owned git worktree lifecycle, attachments, and cleanup state',
     factory: () => new WorktreePanel(deps.worktreeRegistry),
-  });
-
-  manager.registerType({
-    id: 'mcp',
-    name: 'MCP',
-    icon: 'Z',
-    category: 'monitoring',
-    description: 'MCP trust, role, path scope, host scope, and connection status',
-    factory: () => new McpPanel(requireMcpRegistry(deps)),
   });
 
   manager.registerType({

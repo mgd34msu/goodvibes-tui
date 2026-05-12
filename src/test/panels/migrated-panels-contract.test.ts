@@ -30,7 +30,6 @@ import { HooksPanel } from '../../panels/hooks-panel.ts';
 import { TasksPanel } from '../../panels/tasks-panel.ts';
 import { ServicesPanel } from '../../panels/services-panel.ts';
 import { SecurityPanel } from '../../panels/security-panel.ts';
-import { McpPanel } from '../../panels/mcp-panel.ts';
 import { SettingsSyncPanel } from '../../panels/settings-sync-panel.ts';
 import { SubscriptionPanel } from '../../panels/subscription-panel.ts';
 import { PluginsPanel } from '../../panels/plugins-panel.ts';
@@ -94,12 +93,6 @@ const EMPTY_SECURITY_SNAPSHOT = {
   plugins: [],
   quarantinedPlugins: [],
   untrustedPlugins: [],
-};
-
-const EMPTY_MCP_REGISTRY = {
-  listServerSecurity: () => [],
-  listServerSandboxBindings: () => [],
-  listRecentSecurityDecisions: (_hours: number) => [],
 };
 
 const EMPTY_CONFIG_MANAGER = {
@@ -328,11 +321,6 @@ const PANELS: PanelEntry[] = [
   {
     label: 'SecurityPanel',
     factory: () => new SecurityPanel(makeReadModelMock(EMPTY_SECURITY_SNAPSHOT) as never),
-    hasSelectionGutter: true, // I5: non-color selection affordance
-  },
-  {
-    label: 'McpPanel',
-    factory: () => new McpPanel(EMPTY_MCP_REGISTRY as never),
     hasSelectionGutter: true, // I5: non-color selection affordance
   },
   {

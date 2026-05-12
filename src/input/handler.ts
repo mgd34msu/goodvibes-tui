@@ -25,6 +25,7 @@ import { AgentDetailModal } from '../renderer/agent-detail-modal.ts';
 import { ContextInspectorModal } from '../renderer/context-inspector.ts';
 import { BookmarkModal } from './bookmark-modal.ts';
 import { SettingsModal } from './settings-modal.ts';
+import { McpWorkspace } from './mcp-workspace.ts';
 import { SessionPickerModal } from './session-picker-modal.ts';
 import { ProfilePickerModal } from './profile-picker-modal.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
@@ -157,6 +158,7 @@ export class InputHandler {
   public bookmarkModal: BookmarkModal;
   public blockActionsMenu = new BlockActionsMenu();
   public settingsModal = new SettingsModal();
+  public mcpWorkspace = new McpWorkspace();
   public onboardingWizard = new OnboardingWizardController();
   public onboardingModelPickerCancelSnapshot: OnboardingWizardSnapshot | null = null;
   public onboardingHydrationSerial = 0;
@@ -275,6 +277,7 @@ export class InputHandler {
         selectionModal: this.selectionModal,
         bookmarkModal: this.bookmarkModal,
         settingsModal: this.settingsModal,
+        mcpWorkspace: this.mcpWorkspace,
         sessionPickerModal: this.sessionPickerModal,
         profilePickerModal: this.profilePickerModal,
         historySearch: this.historySearch,
@@ -411,6 +414,13 @@ export class InputHandler {
   public restoreOnboardingModelPickerCancelState(): void { restoreOnboardingModelPickerCancelStateForHandler(this); }
   public openModelPickerWithTarget(target: ModelPickerTarget, source: 'settings' | 'onboarding' = 'settings'): boolean { return openModelPickerWithTargetForHandler(this, target, source); }
   public openProviderModelPickerWithTarget(target: ModelPickerTarget, source: 'settings' | 'onboarding' = 'settings'): boolean { return openProviderModelPickerWithTargetForHandler(this, target, source); }
+  public openMcpWorkspace(context: CommandContext): void {
+    this.panelFocused = false;
+    this.indicatorFocused = false;
+    this.modalOpened('mcpWorkspace');
+    this.mcpWorkspace.open(context);
+    this.requestRender();
+  }
   public handleModelPickerCommit(): boolean { return handleModelPickerCommitForHandler(this); }
   public async handleOnboardingAction(action: OnboardingWizardAction): Promise<void> { await handleOnboardingActionForHandler(this, action); }
   public async refreshOnboardingHydration(options: { readonly preserveValues?: boolean; readonly targetStepId?: string } = {}): Promise<void> { await refreshOnboardingHydrationForHandler(this, options); }

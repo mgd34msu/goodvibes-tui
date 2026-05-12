@@ -29,6 +29,7 @@ import type { AgentDetailModal } from '../renderer/agent-detail-modal.ts';
 import type { ContextInspectorModal } from '../renderer/context-inspector.ts';
 import type { BookmarkModal } from './bookmark-modal.ts';
 import type { SettingsModal } from './settings-modal.ts';
+import type { McpWorkspace } from './mcp-workspace.ts';
 import type { SessionPickerModal } from './session-picker-modal.ts';
 import type { ProfilePickerModal } from './profile-picker-modal.ts';
 import type { OnboardingWizardController } from './onboarding/onboarding-wizard.ts';
@@ -102,6 +103,7 @@ export interface FeedContextStableRefs {
   selectionModal: SelectionModal;
   bookmarkModal: BookmarkModal;
   settingsModal: SettingsModal;
+  mcpWorkspace: McpWorkspace;
   sessionPickerModal: SessionPickerModal;
   profilePickerModal: ProfilePickerModal;
   historySearch: HistorySearch;

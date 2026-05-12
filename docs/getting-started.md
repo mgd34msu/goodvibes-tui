@@ -87,6 +87,7 @@ bun run build
 - `/knowledge status` to inspect the knowledge runtime
 - `/plugin browse` and `/marketplace` to inspect the plugin ecosystem
 - `/remote` if you are using remote peers or node-host runners
+- `/mcp` to add, edit, remove, reload, and inspect MCP servers while the TUI is running
 - `/sandbox review` if you plan to use bounded eval or isolated MCP/repl execution
 
 ## Local server discovery
