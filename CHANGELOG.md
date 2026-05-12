@@ -4,6 +4,11 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.19.99] — 2026-05-12
+
+### Changes
+- 5ab6689a feat: add fullscreen MCP workspace
+
 ## [0.19.98] — 2026-05-11
 
 ### Changes
