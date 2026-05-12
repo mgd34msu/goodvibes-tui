@@ -1285,7 +1285,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/tts <prompt>` | — | Submit a normal prompt and play the assistant response through live TTS |
 | `/cloudflare [action]` | `/cf` | Configure optional Cloudflare Workers/Queues batch and remote control-plane provisioning |
 | `/diff [target]` | `/d` | Show unified diff: session, head, working, staged, or a git ref |
-| `/mcp [tools]` | — | List connected MCP servers and their tools |
+| `/mcp [add\|remove\|reload\|tools]` | — | Manage MCP servers at runtime and list connected tools |
 | `/help [command]` | `/h`, `/?` | Show available commands and keyboard shortcuts |
 | `/quit` | `/q`, `/:q` | Exit the application |
 
@@ -1481,7 +1481,21 @@ Hook properties: `match`, `type`, `command`/`prompt`/`url`/`path`, `async`, `onc
 
 ## MCP Integration
 
-Connect to any MCP-compatible server by adding it to `.goodvibes/mcp.json`:
+Connect to any MCP-compatible server from inside the running TUI:
+
+```text
+/mcp add filesystem npx -y @modelcontextprotocol/server-filesystem . --scope project --role filesystem --trust constrained
+/mcp tools
+```
+
+Run `/mcp` without arguments for the fullscreen MCP workspace. The TUI writes
+project-scoped servers to `.goodvibes/mcp.json` or global servers to
+`~/.config/mcp/mcp.json`, reloads the live MCP registry, and makes new tools
+available without restarting. Use `/mcp remove <server> [--scope project|global]`
+to remove a writable config entry and `/mcp reload` if you edited MCP config
+outside the TUI.
+
+You can also edit `.goodvibes/mcp.json` directly:
 
 ```json
 {
@@ -1517,6 +1531,11 @@ Current MCP product loops also include:
 Useful commands:
 
 - `/mcp`
+- `/mcp add <name> <command> [args...] [--scope project|global] [--role <role>] [--trust <mode>] [--env KEY=VALUE] [--path <path>] [--host <host>]`
+- `/mcp remove <server> [--scope project|global]`
+- `/mcp reload`
+- `/mcp config`
+- `/mcp tools [server]`
 - `/mcp review`
 - `/mcp auth-review`
 - `/mcp repair`

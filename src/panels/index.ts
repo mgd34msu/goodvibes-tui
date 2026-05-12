@@ -35,7 +35,6 @@ export { CockpitPanel } from './cockpit-panel.ts';
 export { RemotePanel } from './remote-panel.ts';
 export { ServicesPanel } from './services-panel.ts';
 export { SubscriptionPanel } from './subscription-panel.ts';
-export { McpPanel } from './mcp-panel.ts';
 export { HooksPanel } from './hooks-panel.ts';
 export { SecurityPanel } from './security-panel.ts';
 export { MarketplacePanel } from './marketplace-panel.ts';

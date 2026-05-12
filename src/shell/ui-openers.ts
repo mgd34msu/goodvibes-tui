@@ -279,6 +279,11 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
     render();
   };
 
+  commandContext.openMcpWorkspace = () => {
+    input.openMcpWorkspace(commandContext);
+    render();
+  };
+
   commandContext.openSessionPicker = () => {
     input.modalOpened('sessionPicker');
     input.sessionPickerModal.open();

@@ -112,7 +112,7 @@ export interface BuiltinPanelDeps {
   hookWorkbench?: HookWorkbench;
   /** Shared hook activity tracker for the hooks control-room panel. */
   hookActivityTracker?: Pick<HookActivityTracker, 'listRecent'>;
-  /** Shared MCP registry for MCP/security control-room panels. */
+  /** Shared MCP registry for security panels and MCP workspace commands. */
   mcpRegistry?: McpRegistry;
 }
 
@@ -268,7 +268,7 @@ export function requireHookPanelDeps(deps: BuiltinPanelDeps): {
 
 export function requireMcpRegistry(deps: BuiltinPanelDeps): McpRegistry {
   if (!deps.mcpRegistry) {
-    throw new Error('MCP registry must be wired at bootstrap for MCP and security panels.');
+    throw new Error('MCP registry must be wired at bootstrap for security panels and MCP workspace commands.');
   }
   return deps.mcpRegistry;
 }

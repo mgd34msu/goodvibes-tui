@@ -250,12 +250,15 @@ describe('McpRegistry — with stub server', () => {
     expect(registry.serverNames.filter((n) => n === 'dup-srv')).toHaveLength(1);
   });
 
-  test('disconnectAll() removes all clients', async () => {
+  test('disconnectAll() disconnects all clients while preserving configured servers', async () => {
     registry = createRegistry();
     await registry.connectServer(stubServerConfig('x'));
     await registry.connectServer(stubServerConfig('y'));
     await registry.disconnectAll();
-    expect(registry.serverNames).toHaveLength(0);
+    expect(registry.listServers()).toEqual([
+      { name: 'x', connected: false },
+      { name: 'y', connected: false },
+    ]);
     registry = createRegistry(); // avoid double-disconnect in afterEach
   });
 });

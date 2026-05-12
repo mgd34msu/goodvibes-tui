@@ -238,6 +238,7 @@ export function handleEscapeForHandler(handler: InputHandler): void {
       agentDetailModal: handler.agentDetailModal,
       liveTailModal: handler.liveTailModal,
       settingsModal: handler.settingsModal,
+      mcpWorkspace: handler.mcpWorkspace,
       sessionPickerModal: handler.sessionPickerModal,
       profilePickerModal: handler.profilePickerModal,
       contextInspectorModal: handler.contextInspectorModal,

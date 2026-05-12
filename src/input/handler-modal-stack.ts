@@ -45,6 +45,7 @@ export type EscapeState = ModalStackState & {
     editingMode: boolean;
     cancelEdit: () => void;
   };
+  mcpWorkspace?: ModalStackState['mcpWorkspace'];
   selectionModal: ModalStackState['selectionModal'];
   autocompleteReset: () => void;
   autocompleteUpdate?: (query: string) => void;
@@ -122,6 +123,7 @@ export function handleEscape(state: EscapeState): {
       closeAgentDetail: () => state.agentDetailModal.close(),
       closeLiveTail: () => state.liveTailModal.close(),
       closeSettings: () => state.settingsModal.close(),
+      closeMcpWorkspace: () => state.mcpWorkspace?.close(),
       closeSessionPicker: () => state.sessionPickerModal.close(),
       closeProfilePicker: () => state.profilePickerModal.close(),
       closeContextInspector: () => state.contextInspectorModal.close(),
@@ -161,6 +163,7 @@ export function handleEscape(state: EscapeState): {
       openBookmark: () => state.bookmarkModal.open(),
       openProcess: () => state.processModal.open(),
       openContextInspector: () => state.contextInspectorModal.open(),
+      openMcpWorkspace: () => state.mcpWorkspace?.reopen(),
       openOnboarding: () => state.onboardingWizard?.reopen(),
       openCommandMode: () => {
         commandMode = true;
