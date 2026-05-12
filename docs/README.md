@@ -34,6 +34,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Tools and commands](tools-and-commands.md)
   Built-in tool families, slash-command families, and the operator/workflow surfaces that tie them together.
 
+- [QEMU sandbox bootstrapping](qemu-sandbox.md)
+  Host prerequisites, generated QEMU setup bundle files, Debian cloud-image bootstrapping, guest runtime installs, validation, and troubleshooting.
+
 - [Release and publishing](release-and-publishing.md)
   Release validation, GitHub CD, compiled binary releases, npm distribution, and the GitHub Packages mirror.
 

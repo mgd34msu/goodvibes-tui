@@ -61,6 +61,7 @@ function applySandboxPreset(
   configManager.setDynamic('sandbox.qemuGuestUser' as never, preset.config.qemuGuestUser);
   configManager.setDynamic('sandbox.qemuWorkspacePath' as never, preset.config.qemuWorkspacePath);
   configManager.setDynamic('sandbox.qemuSessionMode' as never, preset.config.qemuSessionMode);
+  configManager.setDynamic('sandbox.replJavaScriptCommand' as never, preset.config.replJavaScriptCommand);
   return true;
 }
 
@@ -83,6 +84,7 @@ function renderSandboxPresetDetail(presetId: string): string | null {
     `  qemu guest user: ${preset.config.qemuGuestUser || '(not configured)'}`,
     `  qemu workspace: ${preset.config.qemuWorkspacePath || '(not configured)'}`,
     `  qemu session mode: ${preset.config.qemuSessionMode}`,
+    `  repl JavaScript command: ${preset.config.replJavaScriptCommand || 'bun'}`,
     ...preset.notes.map((note) => `  note: ${note}`),
   ].join('\n');
 }
@@ -91,7 +93,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
   registry.register({
     name: 'sandbox',
     description: 'Review and configure VM isolation policy for MCP and evaluation runtimes',
-    usage: '[open|review|recommend|profiles|presets|preset <id>|apply-preset <id>|probe|doctor|wrapper-test <profile>|guest-test <profile>|init-qemu <dir>|qemu <setup|bootstrap|create-image|recover|inspect-setup|apply-setup> ...|session ...|bundle ...|guest-bundle <export|inspect> <path>|scaffold-qemu-wrapper <path>|set-mcp <mode>|set-repl <mode>|set-windows <mode>|set-backend <mode>|set-qemu-binary <path>|set-qemu-image <path>|set-qemu-wrapper <path>|set-qemu-guest-host <host>|set-qemu-guest-port <port>|set-qemu-guest-user <user>|set-qemu-workspace <path>|set-qemu-session-mode <attach|launch-per-command>]',
+    usage: '[open|review|recommend|profiles|presets|preset <id>|apply-preset <id>|probe|doctor|wrapper-test <profile>|guest-test <profile>|init-qemu <dir>|qemu <setup|bootstrap|recover|inspect-setup|apply-setup> ...|session ...|bundle ...|guest-bundle <export|inspect> <path>|scaffold-qemu-wrapper <path>|set-mcp <mode>|set-repl <mode>|set-windows <mode>|set-backend <mode>|set-qemu-binary <path>|set-qemu-image <path>|set-qemu-wrapper <path>|set-qemu-guest-host <host>|set-qemu-guest-port <port>|set-qemu-guest-user <user>|set-qemu-workspace <path>|set-qemu-session-mode <attach|launch-per-command>]',
     async handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
       const sub = args[0] ?? 'open';
@@ -400,7 +402,7 @@ export function registerPlatformSandboxRuntimeCommands(registry: CommandRegistry
         ctx.print([`Scaffolded QEMU wrapper to ${targetPath}`, '  bridge test mode: GV_SANDBOX_WRAPPER_MODE=host-exec', '  next: /sandbox set-qemu-wrapper ' + targetPath].join('\n'));
         return;
       }
-      ctx.print('Usage: /sandbox [open|review|recommend|profiles|presets|preset <id>|apply-preset <id>|probe|doctor|wrapper-test <profile>|guest-test <profile>|init-qemu <dir>|qemu <setup|bootstrap|create-image|recover|inspect-setup|apply-setup> ...|session ...|bundle export <path>|bundle inspect <path>|guest-bundle <export|inspect> <path>|scaffold-qemu-wrapper <path>|set-mcp <mode>|set-repl <mode>|set-windows <mode>|set-backend <mode>|set-qemu-binary <path>|set-qemu-image <path>|set-qemu-wrapper <path>|set-qemu-guest-host <host>|set-qemu-guest-port <port>|set-qemu-guest-user <user>|set-qemu-workspace <path>|set-qemu-session-mode <attach|launch-per-command>]');
+      ctx.print('Usage: /sandbox [open|review|recommend|profiles|presets|preset <id>|apply-preset <id>|probe|doctor|wrapper-test <profile>|guest-test <profile>|init-qemu <dir>|qemu <setup|bootstrap|recover|inspect-setup|apply-setup> ...|session ...|bundle export <path>|bundle inspect <path>|guest-bundle <export|inspect> <path>|scaffold-qemu-wrapper <path>|set-mcp <mode>|set-repl <mode>|set-windows <mode>|set-backend <mode>|set-qemu-binary <path>|set-qemu-image <path>|set-qemu-wrapper <path>|set-qemu-guest-host <host>|set-qemu-guest-port <port>|set-qemu-guest-user <user>|set-qemu-workspace <path>|set-qemu-session-mode <attach|launch-per-command>]');
     },
   });
 }

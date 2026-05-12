@@ -469,6 +469,18 @@ describe('exec tool — working directory', () => {
     expect(cmds[0].stdout).toContain('from_a');
     expect(cmds[1].stdout).toContain('from_b');
   });
+
+  test('single command accepts command-level working_dir without global working_dir', async () => {
+    const dir = makeTmpDir();
+    writeFileSync(join(dir, 'marker.txt'), 'command_level_root');
+
+    const result = await execTool.execute({
+      commands: [{ cmd: 'cat marker.txt', working_dir: dir }],
+    });
+    expect(result.success).toBe(true);
+    const out = parseOutput(result.output);
+    expect(out.stdout).toContain('command_level_root');
+  });
 });
 
 // ---------------------------------------------------------------------------

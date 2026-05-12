@@ -121,6 +121,7 @@ export const SETTING_LABELS: Partial<Record<string, string>> = {
   'sandbox.qemuBinary': 'QEMU Binary',
   'sandbox.qemuImagePath': 'QEMU Image',
   'sandbox.qemuExecWrapper': 'QEMU Wrapper',
+  'sandbox.replJavaScriptCommand': 'REPL JS Command',
   'tools.llmProvider': 'Tool LLM Provider',
   'tools.llmModel': 'Tool LLM Model',
   'tools.autoHeal': 'Auto-Heal',

@@ -79,6 +79,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       expect(typeof mgr.get('sandbox.qemuGuestUser')).toBe('string');
       expect(typeof mgr.get('sandbox.qemuWorkspacePath')).toBe('string');
       expect(typeof mgr.get('sandbox.qemuSessionMode')).toBe('string');
+      expect(typeof mgr.get('sandbox.replJavaScriptCommand')).toBe('string');
       expect(typeof mgr.get('release.channel')).toBe('string');
     });
 
@@ -111,6 +112,7 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       expect(DEFAULT_CONFIG.sandbox.qemuGuestUser).toBe('goodvibes');
       expect(DEFAULT_CONFIG.sandbox.qemuWorkspacePath).toBe('/workspace');
       expect(DEFAULT_CONFIG.sandbox.qemuSessionMode).toBe('attach');
+      expect(DEFAULT_CONFIG.sandbox.replJavaScriptCommand).toBe('bun');
       expect(DEFAULT_CONFIG.release.channel).toBe('stable');
     });
 
@@ -282,6 +284,12 @@ describe('Config schema extensions: orchestration, storage, sandbox, danger, and
       const mgr = createConfigManager(tmpDir);
       mgr.set('sandbox.qemuSessionMode', 'launch-per-command');
       expect(mgr.get('sandbox.qemuSessionMode')).toBe('launch-per-command');
+    });
+
+    test('set and get sandbox.replJavaScriptCommand', () => {
+      const mgr = createConfigManager(tmpDir);
+      mgr.set('sandbox.replJavaScriptCommand', '/home/goodvibes/.bun/bin/bun');
+      expect(mgr.get('sandbox.replJavaScriptCommand')).toBe('/home/goodvibes/.bun/bin/bun');
     });
 
     test('set and get release.channel', () => {

@@ -64,7 +64,6 @@ describe('product breadth commands', () => {
   const originalCwd = process.cwd();
   const originalHome = process.env.HOME;
   const originalPath = process.env.PATH;
-  const originalQemuImgBin = process.env.QEMU_IMG_BIN;
   const originalFetch = globalThis.fetch;
   let root = '';
 
@@ -113,11 +112,6 @@ describe('product breadth commands', () => {
       delete process.env.PATH;
     } else {
       process.env.PATH = originalPath;
-    }
-    if (originalQemuImgBin === undefined) {
-      delete process.env.QEMU_IMG_BIN;
-    } else {
-      process.env.QEMU_IMG_BIN = originalQemuImgBin;
     }
   });
 
@@ -1904,14 +1898,6 @@ describe('product breadth commands', () => {
     expect(existsSync(join(initDir, 'qemu-wrapper.sh'))).toBe(true);
     expect(existsSync(join(initDir, 'guest-bundle.json'))).toBe(true);
     expect(existsSync(join(initDir, 'README.txt'))).toBe(true);
-
-    const binDir = join(root, 'bin');
-    mkdirSync(binDir, { recursive: true });
-    const qemuImgPath = join(binDir, 'qemu-img');
-    writeFileSync(qemuImgPath, '#!/usr/bin/env bash\nset -euo pipefail\n: "${4:?missing image path}"\nmkdir -p "$(dirname "$4")"\n: > "$4"\n', 'utf-8');
-    chmodSync(qemuImgPath, 0o755);
-    process.env.PATH = `${binDir}:${process.env.PATH ?? ''}`;
-    process.env.QEMU_IMG_BIN = qemuImgPath;
 
     out.length = 0;
     await sandbox!.handler(['qemu', 'bootstrap', join(root, 'artifacts', 'qemu-bootstrap'), '1'], ctx);

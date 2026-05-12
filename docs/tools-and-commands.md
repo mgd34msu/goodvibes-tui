@@ -159,6 +159,8 @@ Some command families are especially important when you are running GoodVibes as
 - `/remote` for dispatching and recovering distributed work
 - `/sandbox` for isolation review and QEMU/bootstrap flows
 
+For QEMU guest bootstrapping details, including the generated image script and guest runtime package list, see [QEMU sandbox bootstrapping](qemu-sandbox.md).
+
 ## Related docs
 
 - [Getting started](getting-started.md)

@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.20.0] — 2026-05-11
+
+### Changes
+- Updated `@pellux/goodvibes-sdk` to `0.33.30` for guest-side QEMU REPL execution and exec working-directory fixes.
+- Added generated QEMU sandbox setup docs, runtime bootstrap scripts, cloud-init seed files, and guest runtime provisioning guidance.
+- Wired `sandbox.replJavaScriptCommand` through generated QEMU setup manifests so JavaScript-family REPL snippets use the guest Bun runtime.
+- Removed the obsolete `/sandbox qemu create-image` command in favor of the generated `create-image.sh` bootstrap workflow.
+- Added focused coverage for QEMU setup scaffolding, command-level exec working directories, context auto-compaction thresholds, and retrospective setup-guide intent classification.
+
 ## [0.19.99] — 2026-05-12
 
 ### Changes
