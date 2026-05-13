@@ -51,6 +51,7 @@ describe('sandbox provisioning', () => {
       expect(readFileSync(bundle.wrapperPath, 'utf8')).toContain('GV_SANDBOX_WRAPPER_MODE');
       expect(readFileSync(bundle.wrapperPath, 'utf8')).toContain('launch-qemu-ssh');
       expect(readFileSync(bundle.wrapperPath, 'utf8')).toContain('-netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$port-:22"');
+      expect(readFileSync(bundle.wrapperPath, 'utf8')).toContain('QEMU process exited before SSH became available.');
       expect(readFileSync(bundle.wrapperPath, 'utf8')).toContain('export PATH=\\$HOME/.bun/bin:\\$HOME/.deno/bin:\\$HOME/.local/bin:\\$PATH');
       expect(readFileSync(join(bundle.seedDirectory, 'network-config'), 'utf8')).toContain('name: "ens3"');
       expect(readFileSync(join(bundle.seedDirectory, 'user-data'), 'utf8')).toContain('systemd-networkd-wait-online.service');

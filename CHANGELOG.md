@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.20.3] — 2026-05-13
+
+### Fixes
+- Changed `/sandbox qemu bootstrap` to run image build and guest provisioning asynchronously so the TUI can clear the prompt, render progress, and remain responsive while long QEMU setup steps run.
+- Updated generated QEMU wrappers to fail fast when the QEMU process exits before SSH is available, including a tail of the QEMU log for port conflicts and startup failures.
+
 ## [0.20.2] — 2026-05-12
 
 ### Changes

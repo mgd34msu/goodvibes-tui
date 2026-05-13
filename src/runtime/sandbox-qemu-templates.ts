@@ -49,6 +49,18 @@ wait_for_ssh() {
   local start now
   start="$(date +%s)"
   while true; do
+    if [[ -n "\${GV_SANDBOX_ACTIVE_QEMU_PIDFILE:-}" && -f "\${GV_SANDBOX_ACTIVE_QEMU_PIDFILE:-}" ]]; then
+      local qemu_pid
+      qemu_pid="$(<"\${GV_SANDBOX_ACTIVE_QEMU_PIDFILE:-}")"
+      if [[ -n "$qemu_pid" ]] && ! kill -0 "$qemu_pid" 2>/dev/null; then
+        echo "QEMU process exited before SSH became available." >&2
+        if [[ -n "\${GV_SANDBOX_ACTIVE_QEMU_LOG:-}" && -f "\${GV_SANDBOX_ACTIVE_QEMU_LOG:-}" ]]; then
+          echo "QEMU log tail:" >&2
+          tail -80 "\${GV_SANDBOX_ACTIVE_QEMU_LOG:-}" >&2 || true
+        fi
+        return 1
+      fi
+    fi
     if ssh "\${ssh_opts[@]}" "$user@$host" "true" >/dev/null 2>&1; then
       return 0
     fi
@@ -85,6 +97,9 @@ start_qemu() {
   local serial_log="$logs_dir/serial-$port.log"
   local qemu_log="$logs_dir/qemu-$port.log"
   local monitor_sock="$run_dir/monitor-$port.sock"
+  GV_SANDBOX_ACTIVE_QEMU_PIDFILE="$pidfile"
+  GV_SANDBOX_ACTIVE_QEMU_LOG="$qemu_log"
+  export GV_SANDBOX_ACTIVE_QEMU_PIDFILE GV_SANDBOX_ACTIVE_QEMU_LOG
   rm -f "$monitor_sock"
   if [[ -f "$pidfile" ]]; then
     local old_pid
