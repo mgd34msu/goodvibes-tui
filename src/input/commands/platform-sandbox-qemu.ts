@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import type { CommandContext } from '../command-registry.ts';
 import {
   applySandboxQemuSetupManifest,
@@ -72,7 +72,17 @@ function tailText(value: string, maxLines = 40): string {
   return lines.slice(Math.max(0, lines.length - maxLines)).join('\n');
 }
 
-function runQemuBootstrapStep(
+function appendBounded(current: string, chunk: Buffer | string, maxLength = 40_000): string {
+  const next = current + chunk.toString();
+  return next.length > maxLength ? next.slice(next.length - maxLength) : next;
+}
+
+function printProgress(ctx: CommandContext, message: string): void {
+  ctx.print(message);
+  ctx.renderRequest();
+}
+
+async function runQemuBootstrapStep(
   label: string,
   command: string,
   args: readonly string[],
@@ -82,23 +92,57 @@ function runQemuBootstrapStep(
     readonly input?: string;
     readonly timeoutMs: number;
   },
-): void {
-  const result = spawnSync(command, [...args], {
+): Promise<void> {
+  let stdout = '';
+  let stderr = '';
+  let timedOut = false;
+  const child = spawn(command, [...args], {
     cwd: options.cwd,
     env: { ...process.env, ...options.env },
-    input: options.input,
-    timeout: options.timeoutMs,
-    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
+
+  child.stdout?.on('data', (chunk) => {
+    stdout = appendBounded(stdout, chunk);
+  });
+  child.stderr?.on('data', (chunk) => {
+    stderr = appendBounded(stderr, chunk);
+  });
+
+  if (options.input !== undefined) {
+    child.stdin?.end(options.input);
+  } else {
+    child.stdin?.end();
+  }
+
+  let killTimer: NodeJS.Timeout | undefined;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    child.kill('SIGTERM');
+    killTimer = setTimeout(() => child.kill('SIGKILL'), 5_000);
+  }, options.timeoutMs);
+
+  const result = await new Promise<{ status: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', (status, signal) => resolve({ status, signal }));
+  }).finally(() => {
+    clearTimeout(timeout);
+    if (killTimer) clearTimeout(killTimer);
+  });
+
   if (result.status === 0) return;
-  const stderr = tailText(result.stderr || '');
-  const stdout = tailText(result.stdout || '');
-  const reason = result.error instanceof Error ? result.error.message : `exit ${result.status ?? 'unknown'}`;
+  const stderrTail = tailText(stderr);
+  const stdoutTail = tailText(stdout);
+  const reason = timedOut
+    ? `timed out after ${Math.round(options.timeoutMs / 1000)}s`
+    : result.signal
+      ? `signal ${result.signal}`
+      : `exit ${result.status ?? 'unknown'}`;
   throw new Error([
     `${label} failed (${reason}).`,
-    stderr ? `stderr:\n${stderr}` : '',
-    stdout ? `stdout:\n${stdout}` : '',
+    stderrTail ? `stderr:\n${stderrTail}` : '',
+    stdoutTail ? `stdout:\n${stdoutTail}` : '',
   ].filter(Boolean).join('\n'));
 }
 
@@ -158,8 +202,8 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
         '  applied: backend=qemu, qemu binary, wrapper path, image path, launch-per-command guest settings, shared VM isolation',
       ];
       if (parsed.buildImage) {
-        ctx.print(`Building QEMU image at ${bundle.imagePath} (${parsed.sizeGb}G). This can download the Debian cloud image on first run.`);
-        runQemuBootstrapStep('QEMU image build', bundle.imageCreateScriptPath, [bundle.imagePath, `${parsed.sizeGb}G`], {
+        printProgress(ctx, `Building QEMU image at ${bundle.imagePath} (${parsed.sizeGb}G). This can download the Debian cloud image on first run.`);
+        await runQemuBootstrapStep('QEMU image build', bundle.imageCreateScriptPath, [bundle.imagePath, `${parsed.sizeGb}G`], {
           cwd: bundle.directory,
           timeoutMs: 30 * 60 * 1000,
         });
@@ -173,8 +217,8 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
           lines.push('  guest provisioning: skipped because image does not exist');
           lines.push(`  next: ${bundle.imageCreateScriptPath} ${bundle.imagePath} ${parsed.sizeGb}G`);
         } else {
-          ctx.print(`Provisioning guest runtimes through ${bundle.wrapperPath}. First boot can take several minutes.`);
-          runQemuBootstrapStep('QEMU guest runtime provisioning', bundle.wrapperPath, ['bash', '-s'], {
+          printProgress(ctx, `Provisioning guest runtimes through ${bundle.wrapperPath}. First boot can take several minutes.`);
+          await runQemuBootstrapStep('QEMU guest runtime provisioning', bundle.wrapperPath, ['bash', '-s'], {
             cwd: bundle.directory,
             env: {
               GV_SANDBOX_SYNC_WORKSPACE: '0',
