@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import type { CommandContext } from '../command-registry.ts';
 import {
   applySandboxQemuSetupManifest,
@@ -11,6 +11,97 @@ import {
 import { requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
+const DEFAULT_QEMU_SIZE_GB = 20;
+
+interface ParsedQemuSetupArgs {
+  readonly directory: string;
+}
+
+interface ParsedQemuBootstrapArgs extends ParsedQemuSetupArgs {
+  readonly sizeGb: number;
+  readonly buildImage: boolean;
+  readonly provisionGuest: boolean;
+}
+
+function defaultQemuSandboxDirectory(shellPaths: ReturnType<typeof requireShellPaths>): string {
+  return shellPaths.resolveUserPath('tui', 'sandbox');
+}
+
+function parseSetupArgs(args: string[], shellPaths: ReturnType<typeof requireShellPaths>): ParsedQemuSetupArgs {
+  const directory = args[2] ?? defaultQemuSandboxDirectory(shellPaths);
+  return {
+    directory,
+  };
+}
+
+function parseBootstrapArgs(args: string[], shellPaths: ReturnType<typeof requireShellPaths>): ParsedQemuBootstrapArgs {
+  let directory = defaultQemuSandboxDirectory(shellPaths);
+  let sizeGb = DEFAULT_QEMU_SIZE_GB;
+  let buildImage = true;
+  let provisionGuest = true;
+  for (const arg of args.slice(2)) {
+    if (arg === '--scaffold-only') {
+      buildImage = false;
+      provisionGuest = false;
+      continue;
+    }
+    if (arg === '--no-build') {
+      buildImage = false;
+      continue;
+    }
+    if (arg === '--no-provision') {
+      provisionGuest = false;
+      continue;
+    }
+    if (/^\d+$/.test(arg)) {
+      sizeGb = Number.parseInt(arg, 10);
+      continue;
+    }
+    directory = arg;
+  }
+  return {
+    directory,
+    sizeGb,
+    buildImage,
+    provisionGuest,
+  };
+}
+
+function tailText(value: string, maxLines = 40): string {
+  const lines = value.trim().split(/\r?\n/).filter(Boolean);
+  return lines.slice(Math.max(0, lines.length - maxLines)).join('\n');
+}
+
+function runQemuBootstrapStep(
+  label: string,
+  command: string,
+  args: readonly string[],
+  options: {
+    readonly cwd: string;
+    readonly env?: NodeJS.ProcessEnv;
+    readonly input?: string;
+    readonly timeoutMs: number;
+  },
+): void {
+  const result = spawnSync(command, [...args], {
+    cwd: options.cwd,
+    env: { ...process.env, ...options.env },
+    input: options.input,
+    timeout: options.timeoutMs,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  if (result.status === 0) return;
+  const stderr = tailText(result.stderr || '');
+  const stdout = tailText(result.stdout || '');
+  const reason = result.error instanceof Error ? result.error.message : `exit ${result.status ?? 'unknown'}`;
+  throw new Error([
+    `${label} failed (${reason}).`,
+    stderr ? `stderr:\n${stderr}` : '',
+    stdout ? `stdout:\n${stdout}` : '',
+  ].filter(Boolean).join('\n'));
+}
+
 export async function handleSandboxQemuCommand(args: string[], ctx: CommandContext): Promise<boolean> {
   const shellPaths = requireShellPaths(ctx);
   const sub = (args[1] ?? '').toLowerCase();
@@ -20,12 +111,8 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
     return true;
   }
   if (sub === 'setup') {
-    const dirArg = args[2];
-    if (!dirArg) {
-      ctx.print('Usage: /sandbox qemu setup <directory>');
-      return true;
-    }
-    const bundle = scaffoldSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg, { surfaceRoot: 'tui' });
+    const parsed = parseSetupArgs(args, shellPaths);
+    const bundle = scaffoldSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, parsed.directory, { surfaceRoot: 'tui' });
     const manifest = loadSandboxQemuSetupManifest(shellPaths.workingDirectory, bundle.manifestPath);
     applySandboxQemuSetupManifest(ctx.platform.configManager, manifest);
     ctx.platform.configManager.setDynamic('sandbox.replIsolation', 'shared-vm');
@@ -45,19 +132,21 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
       '  applied: backend=qemu, qemu binary, wrapper path, image path, launch-per-command guest settings, shared VM isolation',
       `  next: ${bundle.imageCreateScriptPath} ${bundle.imagePath} 20G`,
       `  then provision runtimes: GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh ${bundle.wrapperPath} bash -s < ${bundle.guestBootstrapScriptPath}`,
+      '',
+      `Default setup location: ${defaultQemuSandboxDirectory(shellPaths)}`,
+      'Pass an explicit directory only when you intentionally want a non-default bundle location.',
     ].join('\n'));
     return true;
   }
   if (sub === 'bootstrap') {
-    const dirArg = args[2];
-    const sizeGb = Number.parseInt(args[3] ?? '20', 10);
-    if (!dirArg || !Number.isInteger(sizeGb) || sizeGb < 1) {
-      ctx.print('Usage: /sandbox qemu bootstrap <directory> [size-gb]');
+    const parsed = parseBootstrapArgs(args, shellPaths);
+    if (!Number.isInteger(parsed.sizeGb) || parsed.sizeGb < 1) {
+      ctx.print('Usage: /sandbox qemu bootstrap [directory] [size-gb] [--scaffold-only|--no-build|--no-provision]');
       return true;
     }
     try {
-      const bundle = bootstrapSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, dirArg, sizeGb, { surfaceRoot: 'tui' });
-      ctx.print([
+      const bundle = bootstrapSandboxQemuSetupBundle(ctx.platform.configManager, shellPaths.workingDirectory, parsed.directory, parsed.sizeGb, { surfaceRoot: 'tui' });
+      const lines = [
         `Bootstrapped QEMU sandbox in ${bundle.directory}`,
         `  wrapper: ${bundle.wrapperPath}`,
         `  image path: ${bundle.imagePath}`,
@@ -67,10 +156,45 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
         `  projection policy: ${bundle.projectionPolicyPath}`,
         `  manifest: ${bundle.manifestPath}`,
         '  applied: backend=qemu, qemu binary, wrapper path, image path, launch-per-command guest settings, shared VM isolation',
-        `  next: ${bundle.imageCreateScriptPath} ${bundle.imagePath} ${sizeGb}G`,
-        `  then provision runtimes: GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh ${bundle.wrapperPath} bash -s < ${bundle.guestBootstrapScriptPath}`,
-        '  then: /sandbox guest-test eval-py',
-      ].join('\n'));
+      ];
+      if (parsed.buildImage) {
+        ctx.print(`Building QEMU image at ${bundle.imagePath} (${parsed.sizeGb}G). This can download the Debian cloud image on first run.`);
+        runQemuBootstrapStep('QEMU image build', bundle.imageCreateScriptPath, [bundle.imagePath, `${parsed.sizeGb}G`], {
+          cwd: bundle.directory,
+          timeoutMs: 30 * 60 * 1000,
+        });
+        lines.push('  image build: complete');
+      } else {
+        lines.push(`  image build: skipped`);
+        lines.push(`  next: ${bundle.imageCreateScriptPath} ${bundle.imagePath} ${parsed.sizeGb}G`);
+      }
+      if (parsed.provisionGuest) {
+        if (!existsSync(bundle.imagePath)) {
+          lines.push('  guest provisioning: skipped because image does not exist');
+          lines.push(`  next: ${bundle.imageCreateScriptPath} ${bundle.imagePath} ${parsed.sizeGb}G`);
+        } else {
+          ctx.print(`Provisioning guest runtimes through ${bundle.wrapperPath}. First boot can take several minutes.`);
+          runQemuBootstrapStep('QEMU guest runtime provisioning', bundle.wrapperPath, ['bash', '-s'], {
+            cwd: bundle.directory,
+            env: {
+              GV_SANDBOX_SYNC_WORKSPACE: '0',
+              GV_SANDBOX_WRAPPER_MODE: 'launch-qemu-ssh',
+            },
+            input: readFileSync(bundle.guestBootstrapScriptPath, 'utf8'),
+            timeoutMs: 45 * 60 * 1000,
+          });
+          lines.push('  guest provisioning: complete');
+        }
+      } else {
+        lines.push(`  guest provisioning: skipped`);
+        lines.push(`  next: GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh ${bundle.wrapperPath} bash -s < ${bundle.guestBootstrapScriptPath}`);
+      }
+      lines.push('  verify: /sandbox doctor');
+      lines.push('  verify: /sandbox guest-test eval-py');
+      lines.push('');
+      lines.push(`Default setup location: ${defaultQemuSandboxDirectory(shellPaths)}`);
+      lines.push('Pass an explicit directory only when you intentionally want a non-default bundle location.');
+      ctx.print(lines.join('\n'));
     } catch (error) {
       ctx.print(summarizeError(error));
     }
@@ -114,6 +238,6 @@ export async function handleSandboxQemuCommand(args: string[], ctx: CommandConte
     ctx.print(`Applied QEMU sandbox setup from ${shellPaths.resolveWorkspacePath(pathArg)}.`);
     return true;
   }
-  ctx.print('Usage: /sandbox qemu <setup <directory>|bootstrap <directory> [size-gb]|recover <session-id>|inspect-setup <setup-manifest.json>|apply-setup <setup-manifest.json>>');
+  ctx.print('Usage: /sandbox qemu <setup [directory]|bootstrap [directory] [size-gb] [--scaffold-only|--no-build|--no-provision]|recover <session-id>|inspect-setup <setup-manifest.json>|apply-setup <setup-manifest.json>>');
   return true;
 }

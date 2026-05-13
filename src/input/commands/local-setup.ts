@@ -73,7 +73,7 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
           ...(`${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'qemu' && !String(ctx.platform.configManager.get('sandbox.qemuImagePath')).trim()
             ? ['  [WARN] sandbox: qemu backend selected without qemuImagePath'] : []),
           ...(`${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'qemu' && !String(ctx.platform.configManager.get('sandbox.qemuExecWrapper')).trim()
-            ? ['  [WARN] sandbox: qemu backend selected without qemuExecWrapper', '    next: /sandbox scaffold-qemu-wrapper .goodvibes/tui/qemu-wrapper.sh'] : []),
+            ? ['  [WARN] sandbox: qemu backend selected without qemuExecWrapper', '    next: /sandbox qemu setup'] : []),
           ...(`${ctx.platform.configManager.get('sandbox.vmBackend')}` === 'qemu' && String(ctx.platform.configManager.get('sandbox.qemuExecWrapper')).trim()
             ? ['  [INFO] sandbox: wrapper bridge can be validated with GV_SANDBOX_WRAPPER_MODE=host-exec before wiring a real guest transport'] : []),
           ...(snapshot.serviceIssues.length > 0

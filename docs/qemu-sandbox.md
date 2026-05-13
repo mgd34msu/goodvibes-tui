@@ -1,6 +1,6 @@
 # QEMU Sandbox Bootstrapping
 
-GoodVibes can run REPL and MCP isolation through a local QEMU guest. The TUI owns the setup bundle that turns a project-local `.goodvibes/tui/sandbox` directory into a repeatable Debian cloud-image sandbox.
+GoodVibes can run REPL and MCP isolation through a local QEMU guest. The TUI owns the setup bundle that turns the user-level `~/.goodvibes/tui/sandbox` directory into a repeatable Debian cloud-image sandbox.
 
 ## When To Use It
 
@@ -11,8 +11,8 @@ The intended settings are:
 ```text
 sandbox.vmBackend = qemu
 sandbox.qemuBinary = qemu-system-x86_64
-sandbox.qemuImagePath = <workspace>/.goodvibes/tui/sandbox/goodvibes-sandbox.qcow2
-sandbox.qemuExecWrapper = <workspace>/.goodvibes/tui/sandbox/qemu-wrapper.sh
+sandbox.qemuImagePath = ~/.goodvibes/tui/sandbox/goodvibes-sandbox.qcow2
+sandbox.qemuExecWrapper = ~/.goodvibes/tui/sandbox/qemu-wrapper.sh
 sandbox.qemuGuestHost = 127.0.0.1
 sandbox.qemuGuestPort = 2222
 sandbox.qemuGuestUser = goodvibes
@@ -44,49 +44,53 @@ KVM is optional but strongly recommended. On Linux, `/dev/kvm` should exist and 
 From inside a project:
 
 ```text
-/sandbox qemu bootstrap .goodvibes/tui/sandbox 20
+/sandbox qemu bootstrap
 ```
 
-That command generates the setup bundle and applies the QEMU settings. It does not download or build the qcow2 image itself. Run the generated image script next:
+That command generates the setup bundle in `~/.goodvibes/tui/sandbox`, applies the QEMU settings, builds the qcow2 image, launches the guest, and provisions the REPL/MCP runtime set listed below. First boot can take several minutes because cloud-init and package installation run inside the guest.
+
+If you only want to generate/review the bundle without building the image or provisioning the guest:
+
+```text
+/sandbox qemu setup
+/sandbox qemu bootstrap --scaffold-only
+```
+
+If you intentionally want to run the generated steps by hand:
 
 ```sh
-.goodvibes/tui/sandbox/create-image.sh .goodvibes/tui/sandbox/goodvibes-sandbox.qcow2 20G
+~/.goodvibes/tui/sandbox/create-image.sh ~/.goodvibes/tui/sandbox/goodvibes-sandbox.qcow2 20G
+GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh ~/.goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < ~/.goodvibes/tui/sandbox/guest-bootstrap.sh
 ```
 
 Then validate:
-
-```sh
-GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh .goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < .goodvibes/tui/sandbox/guest-bootstrap.sh
-```
-
-That provisioning step installs the REPL/MCP runtime set listed below. Then validate:
 
 ```text
 /sandbox doctor
 /sandbox guest-test eval-py
 ```
 
-Use `/sandbox qemu setup <dir>` when you want to scaffold and inspect the bundle before applying it. Use `/sandbox qemu inspect-setup <manifest>` and `/sandbox qemu apply-setup <manifest>` to review or reapply a generated manifest.
+Use `/sandbox qemu setup [dir]` when you want to scaffold and inspect the bundle before applying it. Use `/sandbox qemu inspect-setup <manifest>` and `/sandbox qemu apply-setup <manifest>` to review or reapply a generated manifest.
 
 ## Generated Files
 
 The setup bundle creates:
 
 ```text
-.goodvibes/tui/sandbox/qemu-wrapper.sh
-.goodvibes/tui/sandbox/create-image.sh
-.goodvibes/tui/sandbox/guest-bootstrap.sh
-.goodvibes/tui/sandbox/goodvibes-sandbox.qcow2
-.goodvibes/tui/sandbox/images/debian-12-genericcloud-amd64.qcow2
-.goodvibes/tui/sandbox/keys/goodvibes_qemu_ed25519
-.goodvibes/tui/sandbox/keys/goodvibes_qemu_ed25519.pub
-.goodvibes/tui/sandbox/seed/user-data
-.goodvibes/tui/sandbox/seed/meta-data
-.goodvibes/tui/sandbox/seed/network-config
-.goodvibes/tui/sandbox/seed/nocloud.iso
-.goodvibes/tui/sandbox/logs/
-.goodvibes/tui/sandbox/run/
-.goodvibes/tui/sandbox/setup-manifest.json
+~/.goodvibes/tui/sandbox/qemu-wrapper.sh
+~/.goodvibes/tui/sandbox/create-image.sh
+~/.goodvibes/tui/sandbox/guest-bootstrap.sh
+~/.goodvibes/tui/sandbox/goodvibes-sandbox.qcow2
+~/.goodvibes/tui/sandbox/images/debian-12-genericcloud-amd64.qcow2
+~/.goodvibes/tui/sandbox/keys/goodvibes_qemu_ed25519
+~/.goodvibes/tui/sandbox/keys/goodvibes_qemu_ed25519.pub
+~/.goodvibes/tui/sandbox/seed/user-data
+~/.goodvibes/tui/sandbox/seed/meta-data
+~/.goodvibes/tui/sandbox/seed/network-config
+~/.goodvibes/tui/sandbox/seed/nocloud.iso
+~/.goodvibes/tui/sandbox/logs/
+~/.goodvibes/tui/sandbox/run/
+~/.goodvibes/tui/sandbox/setup-manifest.json
 ```
 
 `create-image.sh` downloads the Debian 12 generic cloud image, clones it into the mutable GoodVibes qcow2 image, resizes it, and builds the NoCloud seed ISO.
@@ -190,7 +194,7 @@ GOODVIBES_QEMU_INSTALL_DUCKDB=0
 Run guest provisioning through the wrapper after the image is created and before relying on JavaScript, TypeScript, SQL, GraphQL, Bun, Deno, DuckDB, or MCP server runtimes:
 
 ```sh
-GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh .goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < .goodvibes/tui/sandbox/guest-bootstrap.sh
+GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh ~/.goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < ~/.goodvibes/tui/sandbox/guest-bootstrap.sh
 ```
 
 ## Troubleshooting
@@ -198,10 +202,10 @@ GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh .goodvibes/t
 Useful files:
 
 ```text
-.goodvibes/tui/sandbox/logs/serial-2222.log
-.goodvibes/tui/sandbox/logs/qemu-2222.log
-.goodvibes/tui/sandbox/run/qemu-2222.pid
-.goodvibes/tui/sandbox/run/monitor-2222.sock
+~/.goodvibes/tui/sandbox/logs/serial-2222.log
+~/.goodvibes/tui/sandbox/logs/qemu-2222.log
+~/.goodvibes/tui/sandbox/run/qemu-2222.pid
+~/.goodvibes/tui/sandbox/run/monitor-2222.sock
 ```
 
 If SSH never comes up, inspect the serial log first. The usual causes are cloud-init not seeing the NoCloud ISO, the NIC name not matching `ens3`, or first-boot package/network work exceeding the SSH timeout.

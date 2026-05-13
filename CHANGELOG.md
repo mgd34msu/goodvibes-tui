@@ -4,6 +4,13 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.20.2] — 2026-05-12
+
+### Changes
+- Changed QEMU sandbox setup/bootstrap defaults to use `~/.goodvibes/tui/sandbox` instead of writing setup bundles into the current project.
+- Made `/sandbox qemu bootstrap` perform the image build and guest runtime provisioning by default, with `--scaffold-only`, `--no-build`, and `--no-provision` escape hatches for manual workflows.
+- Updated sandbox review guidance and QEMU documentation so first-run setup no longer points users at project-local sandbox paths.
+
 ## [0.20.1] — 2026-05-12
 
 ### Changes
