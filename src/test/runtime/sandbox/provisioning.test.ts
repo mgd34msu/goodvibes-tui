@@ -78,4 +78,21 @@ describe('sandbox provisioning', () => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  test('scaffolded setup bundle can target an absolute user GoodVibes directory', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'gv-sandbox-provision-workspace-'));
+    const home = mkdtempSync(join(tmpdir(), 'gv-sandbox-provision-home-'));
+    try {
+      const manager = makeManager();
+      const targetDir = join(home, '.goodvibes', 'tui', 'sandbox');
+      const bundle = scaffoldSandboxQemuSetupBundle(manager as never, cwd, targetDir, { surfaceRoot: 'tui' });
+      expect(bundle.directory).toBe(targetDir);
+      expect(bundle.wrapperPath).toBe(join(targetDir, 'qemu-wrapper.sh'));
+      expect(bundle.imagePath).toBe(join(targetDir, 'goodvibes-sandbox.qcow2'));
+      expect(existsSync(bundle.wrapperPath)).toBe(true);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });

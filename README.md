@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.20.1-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.20.2-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -624,7 +624,7 @@ Isolation controls:
 
 The QEMU path includes:
 
-- setup bundle generation
+- setup bundle generation under the user GoodVibes data directory by default
 - first-run bootstrap scaffolding
 - Debian cloud-image download, mutable qcow2 clone, resize, and NoCloud ISO creation through the generated `create-image.sh`
 - host-side wrapper generation
@@ -644,8 +644,8 @@ Key commands:
 - `/sandbox recommend`
 - `/sandbox doctor`
 - `/sandbox probe`
-- `/sandbox qemu setup <dir>`
-- `/sandbox qemu bootstrap <dir> [size-gb]`
+- `/sandbox qemu setup [dir]`
+- `/sandbox qemu bootstrap [dir] [size-gb] [--scaffold-only|--no-build|--no-provision]`
 - `/sandbox qemu inspect-setup <manifest>`
 - `/sandbox qemu apply-setup <manifest>`
 - `/sandbox session ...`
@@ -655,12 +655,12 @@ Key commands:
 Typical first-run path:
 
 ```sh
-/sandbox qemu bootstrap .goodvibes/tui/sandbox 20
-.goodvibes/tui/sandbox/create-image.sh .goodvibes/tui/sandbox/goodvibes-sandbox.qcow2 20G
-GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh .goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < .goodvibes/tui/sandbox/guest-bootstrap.sh
+/sandbox qemu bootstrap
 /sandbox doctor
 /sandbox guest-test eval-py
 ```
+
+By default, QEMU setup files, the mutable qcow2 image, SSH keys, logs, and runtime state live in `~/.goodvibes/tui/sandbox`, not in the current project. Pass an explicit directory only when you intentionally want a non-default bundle location. Use `/sandbox qemu setup` or `/sandbox qemu bootstrap --scaffold-only` if you want to generate/review the bundle without building the image or provisioning guest runtimes.
 
 See [QEMU sandbox bootstrapping](docs/qemu-sandbox.md) for host prerequisites, generated files, first-boot behavior, guest runtime packages, and troubleshooting logs.
 

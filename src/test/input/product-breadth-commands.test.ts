@@ -655,7 +655,7 @@ describe('product breadth commands', () => {
     out.length = 0;
     await setup!.handler(['sandbox'], ctx);
     expect(out.join('\n')).toContain('Setup Sandbox Review');
-    expect(out.join('\n')).toContain('/sandbox qemu bootstrap .goodvibes/tui/sandbox 20');
+    expect(out.join('\n')).toContain('/sandbox qemu bootstrap');
 
     const exportPath = join(root, 'artifacts', 'startup-review.json');
     out.length = 0;
@@ -1900,9 +1900,15 @@ describe('product breadth commands', () => {
     expect(existsSync(join(initDir, 'README.txt'))).toBe(true);
 
     out.length = 0;
-    await sandbox!.handler(['qemu', 'bootstrap', join(root, 'artifacts', 'qemu-bootstrap'), '1'], ctx);
+    await sandbox!.handler(['qemu', 'bootstrap', join(root, 'artifacts', 'qemu-bootstrap'), '1', '--scaffold-only'], ctx);
     expect(out.join('\n')).toContain('Bootstrapped QEMU sandbox');
     expect(out.join('\n')).toContain('applied: backend=qemu');
+    expect(out.join('\n')).toContain('image build: skipped');
+
+    out.length = 0;
+    await sandbox!.handler(['qemu', 'setup'], ctx);
+    expect(out.join('\n')).toContain(join(root, '.goodvibes', 'tui', 'sandbox'));
+    expect(existsSync(join(root, '.goodvibes', 'tui', 'sandbox', 'qemu-wrapper.sh'))).toBe(true);
 
     out.length = 0;
     await sandbox!.handler(['set-qemu-guest-host', '127.0.0.1'], ctx);
