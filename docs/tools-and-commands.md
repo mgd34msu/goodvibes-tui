@@ -66,6 +66,7 @@ Representative slash-command families include:
 - `/incident`
 - `/replay`
 - `/eval`
+- `/workplan`
 
 `/model` opens the fullscreen provider/model workspace. The left rail chooses the target route (`Main Chat`, `Helper Model`, `Tool LLM`, or `TTS LLM`), and the main table filters large model catalogs by search, price tier, capability, availability, benchmark sort, and grouping. `/provider` opens the same workspace in provider-first mode so users can choose a provider and then a model for the active target.
 
@@ -88,6 +89,7 @@ Many commands also have matching panels and control rooms. High-signal examples:
 - tasks, orchestration, worktrees, and agents
 - WRFC chain state and constraint satisfaction
 - project planning readiness, decisions, project language, task graph, verification gates, and agent handoff metadata
+- persistent work-plan task tracking for ongoing local implementation work
 
 ## Project planning
 
@@ -96,6 +98,8 @@ Project planning is TUI-owned. When a normal chat turn clearly asks for an imple
 Planning artifacts are stored in a project knowledge space named `project:<projectId>`, where the project id is derived from the workspace path. The SDK supplies passive daemon routes and operator methods, but daemon/non-TUI surfaces do not enter planning loops.
 
 See [Project planning](project-planning.md) for the panel layout, `/plan` behavior, and route/method list.
+
+`/workplan` is the separate persistent checklist surface. Use it when the work already has concrete tasks and you want durable status tracking rather than another planning interview.
 
 ## Knowledge Ask
 

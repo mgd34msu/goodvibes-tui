@@ -99,6 +99,12 @@ Inbound TLS can run in `off`, `proxy`, or `direct` mode. Direct mode defaults to
 - [Knowledge, artifacts, and multimodal](docs/knowledge-artifacts-and-multimodal.md)
 - [Channels, remote runtime, and API](docs/channels-remote-and-api.md)
 - [Tools and commands](docs/tools-and-commands.md)
+- [Voice and live TTS](docs/voice-and-live-tts.md)
+- [Cloudflare batch and control plane](docs/cloudflare-batch.md)
+- [Home Assistant surface](docs/homeassistant-surface.md)
+- [Project planning](docs/project-planning.md)
+- [QEMU sandbox bootstrapping](docs/qemu-sandbox.md)
+- [Local verification](docs/verification/local-verification.md)
 - [Release and publishing](docs/release-and-publishing.md)
 - [Foundation artifacts](docs/foundation-artifacts/README.md)
 
@@ -540,6 +546,15 @@ Related storage paths:
 | `ui.systemMessages` | `panel` | Route general system messages to `panel`, `conversation`, or `both` |
 | `ui.operationalMessages` | `panel` | Route operational runtime notices to `panel`, `conversation`, or `both` |
 | `ui.wrfcMessages` | `both` | Route WRFC/orchestration updates to `panel`, `conversation`, or `both` |
+| `service.enabled` | `false` | Enable OS-backed background service mode |
+| `service.autostart` | `false` | Install/enable or disable/remove the OS autostart service |
+| `service.restartOnFailure` | `true` | Restart managed daemon services after failure |
+| `controlPlane.hostMode` | `local` | Control-plane bind mode: `local`, `network`, or `custom` |
+| `controlPlane.port` | `3421` | Control-plane daemon/API port |
+| `httpListener.port` | `3422` | Webhook/event listener port |
+| `web.enabled` | `false` | Enable browser operator surface |
+| `web.hostMode` | `local` | Web surface bind mode: `local`, `network`, or `custom` |
+| `web.port` | `3423` | Web/browser surface port |
 | `danger.agentRecursion` | `false` | Allow agents to spawn subagents |
 | `danger.maxGlobalAgents` | `8` | Max simultaneous agents |
 | `danger.daemon` | `false` | Enable daemon mode (POST /task) |
@@ -560,6 +575,8 @@ Related storage paths:
 - **`custom`** — per-tool overrides using `permissions.tools.<name>` keys
 
 Per-tool values: `allow`, `prompt`, `deny`.
+
+Changing `service.autostart` or `service.enabled` from `/config` reconciles the OS service where supported. On Linux this installs/enables, disables, or rewrites the user `systemd` service so the daemon state matches the setting instead of only changing JSON.
 
 ---
 
@@ -626,7 +643,7 @@ The QEMU path includes:
 
 - setup bundle generation under the user GoodVibes data directory by default
 - first-run bootstrap scaffolding
-- Debian cloud-image download, mutable qcow2 clone, resize, and NoCloud ISO creation through the generated `create-image.sh`
+- Debian cloud-image download, mutable qcow2 clone, resize, and NoCloud ISO creation handled by the bootstrap workflow
 - host-side wrapper generation
 - guest cloud-init seed generation for the `goodvibes` sudo user, SSH key auth, `/workspace`, and `ens3` DHCP
 - guest-test and wrapper-test validation
@@ -659,6 +676,8 @@ Typical first-run path:
 /sandbox doctor
 /sandbox guest-test eval-py
 ```
+
+Bootstrap runs as a background TUI process: the prompt clears, progress is visible in the background-process surface, and the TUI stays responsive. If QEMU exits before SSH is reachable, the wrapper fails fast and includes a tail of the QEMU log so port conflicts or startup failures are visible.
 
 By default, QEMU setup files, the mutable qcow2 image, SSH keys, logs, and runtime state live in `~/.goodvibes/tui/sandbox`, not in the current project. Pass an explicit directory only when you intentionally want a non-default bundle location. Use `/sandbox qemu setup` or `/sandbox qemu bootstrap --scaffold-only` if you want to generate/review the bundle without building the image or provisioning guest runtimes.
 
@@ -829,6 +848,7 @@ GoodVibes includes an automation layer with:
 - cron-like scheduled agent tasks with timezone-aware schedules, missed-run tracking, run history, and manual trigger support
 - TUI-owned project planning with readiness gaps, one-question-at-a-time clarification, project language, decision records, task/dependency/verification metadata, and explicit execution approval
 - planning commands with project-planning inspection, active-plan review, and mode/explain/override/status controls
+- persistent work-plan tracking for concrete task checklists via `/workplan`
 
 Key commands:
 
@@ -1261,6 +1281,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/git [action]` | `/g` | Git commands: status, log, diff. Opens git panel if no action given |
 | `/scan` | — | Scan for local LLM servers |
 | `/plan [goal]` | — | Inspect or seed TUI-owned project planning state; `panel`, `approve`, `list`, and `show <id>` are supported |
+| `/workplan [action]` | `/wp`, `/todo` | Open or update the persistent workspace work-plan checklist |
 | `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split, width, height |
 | `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
 | `/marketplace [action]` | — | Browse curated plugin, skill, hook-pack, and policy-pack surfaces |

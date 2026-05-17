@@ -33,6 +33,7 @@ In this mode you still get the full TUI, tools, providers, knowledge system, art
 The TUI runtime can host the daemon and HTTP listener in-process when these settings are enabled:
 
 - `danger.daemon`
+- `controlPlane.enabled`
 - `danger.httpListener`
 
 The compiled binary built by `bun run build` includes this path because it compiles `src/main.ts`, and the main runtime bootstraps external services through the deferred startup path.
@@ -60,12 +61,61 @@ This runs the dedicated daemon CLI entrypoint from `src/daemon/cli.ts`. It start
 
 This path is useful for service-style deployments, automation entrypoints, and local integrations that do not need the interactive terminal UI.
 
+The installed package also exposes a `goodvibes-daemon` launcher. Global installs should put both `goodvibes` and `goodvibes-daemon` on `PATH`.
+
+## Background service and autostart
+
+The fullscreen `/config` workspace exposes service settings under `Service`:
+
+- `service.enabled`
+- `service.autostart`
+- `service.restartOnFailure`
+- `service.platform`
+- `service.name`
+- `service.logPath`
+
+Changing `service.autostart` from the TUI is intended to reconcile the OS service, not just update JSON. On Linux this means writing/enabling/disabling the user `systemd` service. When service mode is enabled for the first time, the TUI installs the service definition, reloads user units, and starts/enables the daemon service if autostart is on. Disabling service mode or autostart removes/disables the OS-level autostart path.
+
+Use these commands to inspect the live state:
+
+```sh
+goodvibes service status
+goodvibes status --output json
+```
+
+The daemon uses the daemon home under `~/.goodvibes/daemon` for daemon-owned runtime state. A TUI-owned in-process daemon may still use the active TUI/project configuration to derive its runtime settings.
+
+## Web/browser surface
+
+The browser operator surface is controlled separately from the daemon control plane:
+
+- `web.enabled`
+- `web.hostMode = local | network | custom`
+- `web.host`
+- `web.port` (default `3423`)
+- `web.publicBaseUrl`
+- `web.staticAssetsDir`
+
+The daemon/control-plane backend defaults to port `3421`, the webhook/event listener defaults to `3422`, and the browser surface defaults to `3423`.
+
+Host modes resolve as:
+
+- `local`: bind loopback (`127.0.0.1`)
+- `network`: bind all interfaces (`0.0.0.0`)
+- `custom`: bind the configured host
+
+When the WebUI is launched by external tooling rather than by the TUI, it should read the same TUI settings file or be launched with matching env overrides. The canonical setting file is `~/.goodvibes/tui/settings.json` unless `GOODVIBES_TUI_SETTINGS_PATH` points elsewhere.
+
 ## Inbound TLS
 
 GoodVibes now treats inbound TLS as an explicit server concern.
 
 For the control-plane daemon:
 
+- `controlPlane.hostMode = local | network | custom`
+- `controlPlane.host`
+- `controlPlane.port`
+- `controlPlane.enabled`
 - `controlPlane.tls.mode = off | proxy | direct`
 - `controlPlane.trustProxy = true | false`
 - `controlPlane.tls.certFile`

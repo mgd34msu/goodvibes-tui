@@ -55,18 +55,27 @@ Release workflow behavior:
 - GitHub Packages publish targets `@mgd34msu/goodvibes-tui`
 - the GitHub Release is created from `docs/releases/<version>.md` when present, otherwise it falls back to the matching `CHANGELOG.md` section
 - the GitHub Release is created before the registry publish jobs so the package install script can fetch version-matched release assets immediately
-- npm publishing is optional and stays disabled unless explicitly enabled in repo configuration
+- npm publishing runs when repository variable `PUBLISH_NPM=true` is set; the GitHub Release is still created for release tags so compiled assets are available before registry install smoke runs
 
 ## npm Distribution
 
 The npm package is intended to be directly installable:
 
+- `bun add -g @pellux/goodvibes-tui`
 - `npm install -g @pellux/goodvibes-tui`
 - `pnpm add -g @pellux/goodvibes-tui`
-- `bun add -g @pellux/goodvibes-tui`
 
 Install behavior:
 
+- Bun is the recommended global installer because GoodVibes is a Bun program and the package is hosted on the npm registry.
+- Bun global installs require lifecycle-script trust after the first install:
+
+  ```sh
+  bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-sdk core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
+  ```
+
+- `bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
+- npm and pnpm installs require `bun` to already be on `PATH`; the preinstall check fails clearly if it is missing.
 - on Linux and macOS, the published package downloads the matching TUI and daemon binaries from the version-matched GitHub Release during `postinstall`
 - on Windows, native execution is not supported; users should use WSL so the Linux binary path applies
 - if Bun is already available and the platform binary is missing, the launchers can still fall back to Bun + source

@@ -49,18 +49,13 @@ From inside a project:
 
 That command generates the setup bundle in `~/.goodvibes/tui/sandbox`, applies the QEMU settings, builds the qcow2 image, launches the guest, and provisions the REPL/MCP runtime set listed below. First boot can take several minutes because cloud-init and package installation run inside the guest.
 
+The bootstrap runs as a background TUI process. The prompt should clear immediately, progress should be visible in the background process surface, and the TUI should remain usable while the image build and guest provisioning continue. If QEMU exits before SSH becomes available, the generated wrapper fails fast and includes the tail of the QEMU log so port conflicts and startup failures are visible instead of hanging until the SSH timeout.
+
 If you only want to generate/review the bundle without building the image or provisioning the guest:
 
 ```text
 /sandbox qemu setup
 /sandbox qemu bootstrap --scaffold-only
-```
-
-If you intentionally want to run the generated steps by hand:
-
-```sh
-~/.goodvibes/tui/sandbox/create-image.sh ~/.goodvibes/tui/sandbox/goodvibes-sandbox.qcow2 20G
-GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh ~/.goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < ~/.goodvibes/tui/sandbox/guest-bootstrap.sh
 ```
 
 Then validate:
@@ -93,7 +88,7 @@ The setup bundle creates:
 ~/.goodvibes/tui/sandbox/setup-manifest.json
 ```
 
-`create-image.sh` downloads the Debian 12 generic cloud image, clones it into the mutable GoodVibes qcow2 image, resizes it, and builds the NoCloud seed ISO.
+`create-image.sh` is generated as a bootstrap implementation detail. Normal setup should use `/sandbox qemu bootstrap` so image creation, settings application, guest launch, and runtime provisioning stay in one recoverable TUI-managed flow.
 
 ## Guest Boot Details
 
@@ -191,11 +186,7 @@ GOODVIBES_QEMU_INSTALL_UV=0
 GOODVIBES_QEMU_INSTALL_DUCKDB=0
 ```
 
-Run guest provisioning through the wrapper after the image is created and before relying on JavaScript, TypeScript, SQL, GraphQL, Bun, Deno, DuckDB, or MCP server runtimes:
-
-```sh
-GV_SANDBOX_SYNC_WORKSPACE=0 GV_SANDBOX_WRAPPER_MODE=launch-qemu-ssh ~/.goodvibes/tui/sandbox/qemu-wrapper.sh bash -s < ~/.goodvibes/tui/sandbox/guest-bootstrap.sh
-```
+The bootstrap runs guest provisioning automatically before the sandbox is considered ready. If a runtime is missing, rerun `/sandbox qemu bootstrap` and inspect the background-process output plus `~/.goodvibes/tui/sandbox/logs/`.
 
 ## Troubleshooting
 
@@ -209,6 +200,14 @@ Useful files:
 ```
 
 If SSH never comes up, inspect the serial log first. The usual causes are cloud-init not seeing the NoCloud ISO, the NIC name not matching `ens3`, or first-boot package/network work exceeding the SSH timeout.
+
+If QEMU exits immediately, inspect `qemu-2222.log` and confirm the configured SSH forward port is free:
+
+```sh
+ss -ltnp | grep ':2222'
+```
+
+Stale QEMU processes can leave the port occupied after an interrupted bootstrap. Stop the old process before retrying, or change `sandbox.qemuGuestPort` if another service legitimately owns that port.
 
 If REPL execution fails before QEMU starts, that is usually a tool invocation/context issue rather than a VM boot issue. Validate the wrapper path directly with:
 
