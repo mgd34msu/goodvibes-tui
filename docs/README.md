@@ -40,11 +40,14 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Release and publishing](release-and-publishing.md)
   Release validation, GitHub CD, compiled binary releases, npm distribution, and the GitHub Packages mirror.
 
+- [Local verification](verification/local-verification.md)
+  Inventory coverage, GoodVibes home audits, compiled CLI probes, authenticated daemon probes, and release-oriented local gates.
+
 - [Panel authoring](panel-authoring.md)
   Class hierarchy, canonical example, palette convention, rendering utilities, input handling, performance instrumentation, and contract test registration for contributors building new TUI panels.
 
-- [Release notes](releases/0.19.35.md)
-  Version-specific release notes for shipped TUI releases.
+- [Changelog](../CHANGELOG.md)
+  Current release history. Older per-version release-note files remain under `docs/releases/` for historical releases, but `CHANGELOG.md` is the canonical current stream.
 
 - [Foundation artifacts](foundation-artifacts/README.md)
   Checked-in operator and peer contract manifests plus canonical knowledge GraphQL and SQL artifacts for release-gate and SDK extraction work.

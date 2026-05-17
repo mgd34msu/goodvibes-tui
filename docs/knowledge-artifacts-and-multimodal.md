@@ -54,6 +54,8 @@ The knowledge runtime supports:
 
 The system is designed as a reviewed, self-improving knowledge substrate for future task context.
 
+Regular Knowledge/Wiki and Home Assistant Home Graph are separate runtime instances. Regular knowledge routes use the default Knowledge/Wiki store. Home Graph data is accessed through `/api/homeassistant/home-graph/*` and lives in the Home Graph store. Do not use `includeAllSpaces` as a way to browse Home Graph from the regular Knowledge/Wiki surface; Home Graph has its own browse, map, pages, ask, refinement, and review routes.
+
 ## Semantic Ask
 
 The SDK owns semantic question answering through:

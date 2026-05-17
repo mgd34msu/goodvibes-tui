@@ -57,7 +57,10 @@ Panel keys:
 
 - `r` refreshes SDK-backed planning artifacts.
 - `a` marks the current structurally ready plan as approved for execution.
-- Up/Down scrolls panel content.
+- Up/Down chooses available answer actions when a question is active, or scrolls panel content when there is no active answer list.
+- Type while the panel is focused to draft a custom answer.
+- `Enter` submits the selected or drafted answer through the normal planning chat path.
+- The answer list includes a dismiss action that pauses planning for the workspace and returns focus to normal chat.
 
 ## `/plan`
 
@@ -69,6 +72,23 @@ Panel keys:
 - `/plan <goal>` seeds project planning state.
 - `/plan list` and `/plan show <id>` still inspect older execution-plan records.
 - `/plan mode|explain|override|status|clear` still route to the adaptive runtime controls.
+
+Use natural language such as "stop planning" or the panel dismiss action when the TUI has entered planning but the current work should continue as normal chat.
+
+## Work Plan
+
+GoodVibes also has a lightweight persistent work-plan tracker for concrete implementation tasks. It is separate from the planning interview state and is intended for visible, durable checklists while work is in progress.
+
+Commands:
+
+- `/workplan` or `/workplan panel`
+- `/workplan add <title> [--owner name] [--source label] [--notes text]`
+- `/workplan list`
+- `/workplan done|start|block|fail|cancel|pending <id>`
+- `/workplan remove <id>`
+- `/workplan clear-done`
+
+The TUI stores work-plan state under `~/.goodvibes/tui/work-plans/` and renders it in the `Work Plan` panel.
 
 ## SDK Routes And Operator Methods
 

@@ -2,21 +2,40 @@
 
 ## Prerequisites
 
-- For npm install: Node.js 20+ and npm
-- For source/dev workflows: [Bun](https://bun.sh) v1.3.10 or later
+- For the recommended global install: [Bun](https://bun.sh) v1.3.10 or later
+- For npm install: Node.js 20+ and npm, plus `bun` on `PATH`
+- For source/dev workflows: Bun v1.3.10 or later
 - Optional: [Go](https://go.dev) for Go language-server support
 - Optional: `rust-analyzer` for Rust work; GoodVibes can download it automatically on first use
 
 ## Install
 
-Install from npm on Linux, macOS, or WSL:
+Install from the npm registry with Bun on Linux, macOS, or WSL:
+
+```sh
+bun add -g @pellux/goodvibes-tui
+bun pm trust -g @pellux/goodvibes-tui @pellux/goodvibes-sdk core-js tree-sitter-css tree-sitter-javascript tree-sitter-json tree-sitter-python tree-sitter-typescript
+goodvibes
+```
+
+Bun blocks lifecycle scripts for untrusted global packages. The trust command is required so the GoodVibes postinstall binary installer and native dependency install scripts can run. Verify the install with:
+
+```sh
+bun pm -g untrusted
+goodvibes --version
+goodvibes-daemon --version
+```
+
+`bun pm -g untrusted` should report `Found 0 untrusted dependencies with scripts`.
+
+`npm install -g` is also supported when Bun is already installed and on `PATH`:
 
 ```sh
 npm install -g @pellux/goodvibes-tui
 goodvibes
 ```
 
-The npm package downloads the matching prebuilt TUI and daemon binaries for the current Linux or macOS platform during `postinstall`.
+The package downloads the matching prebuilt TUI and daemon binaries for the current Linux or macOS platform during `postinstall`. If `bun` is missing, the preinstall check fails with a clear message instead of installing a broken launcher.
 
 Native Windows is not supported. Use WSL on Windows.
 
@@ -76,6 +95,8 @@ bun run build
 - secure secrets: `~/.goodvibes/tui/secrets.enc` or `.goodvibes/tui/secrets.enc`
 - compatibility secrets: `~/.goodvibes/goodvibes.secrets.json`
 - service registry: `.goodvibes/tui/services.json`
+- daemon home: `~/.goodvibes/daemon`
+- QEMU sandbox bundle: `~/.goodvibes/tui/sandbox`
 - custom providers: `~/.goodvibes/tui/providers/*.json`
 - schedules: `.goodvibes/tui/schedules.json`
 - REPL history: `.goodvibes/tui/repl-history.json`

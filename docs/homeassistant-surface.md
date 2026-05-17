@@ -70,7 +70,9 @@ Home Assistant ingress is handled as isolated remote-chat work by the SDK daemon
 
 SDK 0.26.0 adds daemon-owned Home Assistant Home Graph state. Home Assistant clients should send snapshots, URLs, notes, artifacts, links, and review actions to the daemon rather than duplicating graph storage, source inventory, wiki/export/import behavior, or fact review queues.
 
-The default knowledge space is isolated per Home Assistant installation:
+Home Graph uses Home Assistant-specific routes and storage. Regular `/api/knowledge/*` and `/knowledge` surfaces are for the default Knowledge/Wiki instance and should not show Home Graph records by default.
+
+The Home Graph namespace is isolated per Home Assistant installation:
 
 ```text
 homeassistant:<installationId>
@@ -146,6 +148,8 @@ SDK 0.28.2 fixes the published dist guardrail path for Home Graph refinement bud
 SDK 0.28.3 preserves Home Graph `linkedObjects` from repair-source metadata and coalesces overlapping semantic repair runs. Concurrent or repeated Refine/Reindex/Ask repair work should therefore return bounded skipped/truncated results instead of stacking duplicate repair execution on the daemon.
 
 The TUI daemon composes the SDK Home Graph service with the SDK web-backed semantic gap repairer. Refinement tasks can therefore search for candidate repair sources, ingest accepted sources into knowledge, and continue the SDK refinement state machine. A task blocked with `No semantic gap repairer is configured` indicates a stale daemon or a host composition bug rather than a Home Assistant client issue.
+
+SDK 0.33.17 split regular Knowledge/Wiki and Home Assistant Home Graph into separate runtime stores. Regular knowledge uses `knowledge-wiki.sqlite`; Home Graph uses `knowledge-home-graph.sqlite`. The old shared `knowledge.sqlite` pollution path is intentionally not read by either runtime store. Use `/api/homeassistant/home-graph/*` for Home Graph data, and use `/api/knowledge/*` for regular Knowledge/Wiki data.
 
 ## Secrets
 
