@@ -68,9 +68,19 @@ Home Assistant ingress is handled as isolated remote-chat work by the SDK daemon
 
 ## Home Graph
 
-SDK 0.26.0 adds daemon-owned Home Assistant Home Graph state. Home Assistant clients should send snapshots, URLs, notes, artifacts, links, and review actions to the daemon rather than duplicating graph storage, source inventory, wiki/export/import behavior, or fact review queues.
+Home Graph is the Home Assistant-specific knowledge layer for devices, entities, areas, integrations, manuals, generated pages, facts, issues, and refinement tasks. Home Assistant clients should send snapshots, URLs, notes, artifacts, links, and review actions to the daemon rather than duplicating graph storage, source inventory, wiki/export/import behavior, or fact review queues.
 
-Home Graph uses Home Assistant-specific routes and storage. Regular `/api/knowledge/*` and `/knowledge` surfaces are for the default Knowledge/Wiki instance and should not show Home Graph records by default.
+Home Graph uses Home Assistant-specific routes and storage. Regular `/api/knowledge/*` and `/knowledge` surfaces are for the default Knowledge/Wiki instance and must not show Home Graph records by default.
+
+Runtime stores are intentionally separate:
+
+```text
+regular Knowledge/Wiki: knowledge-wiki.sqlite
+Home Assistant Home Graph: knowledge-home-graph.sqlite
+legacy shared store: knowledge.sqlite is not read by either runtime store
+```
+
+Use `/api/homeassistant/home-graph/*` for Home Graph data. Use `/api/knowledge/*` for regular Knowledge/Wiki data. Do not use `includeAllSpaces` as a substitute for Home Graph browse/ask/map routes.
 
 The Home Graph namespace is isolated per Home Assistant installation:
 
@@ -114,6 +124,33 @@ POST /api/homeassistant/home-graph/refinement/tasks/{id}/cancel
 
 Read routes accept `installationId` or `knowledgeSpaceId`. List and browse routes also accept `limit`; issue listing also accepts `status`, `severity`, and `code`. `GET /api/homeassistant/home-graph/status` includes Home Graph readiness and refinement counts so clients can show whether the graph is ready, needs source work, has active repair tasks, or has review-needed tasks.
 
+### Client Rendering Rules
+
+TUI and companion clients should render the SDK-returned fields directly:
+
+- Ask responses: `answer.text`, `answer.synthesized`, `answer.sources`, `answer.facts`, `answer.gaps`, `answer.linkedObjects`, `answer.refinementTaskIds`, and `answer.refinement`.
+- Map responses: SDK-provided nodes, edges, facets, filters, source/target ids, and source/target titles.
+- Pages responses: generated page metadata and markdown returned by the SDK.
+- Refinement task responses: task ids, status, reason, `nextRepairAttemptAt`, traces, linked source/object metadata, and budget/coalescing fields.
+
+Do not locally infer Home Assistant facet names, object identity, source quality, fact quality, or refinement state. Build controls from returned facets and task records, then pass selected filters back to the SDK.
+
+Home Graph answers are designed to be responsive. If evidence is weak, Ask should return the current best answer plus gaps/refinement task ids instead of blocking indefinitely. Repair and enrichment continue through durable refinement tasks.
+
+### Refinement And Reindex
+
+The TUI daemon composes the SDK Home Graph service with the SDK web-backed semantic gap repairer. Refinement tasks can search for candidate repair sources, ingest accepted sources, promote subject-linked facts, refresh generated pages, and continue the SDK refinement state machine.
+
+Operational expectations:
+
+- Reindex reparses stored sources and regenerates graph/page projections without requiring upload again.
+- Ask-created gaps can queue bounded repair work and return refinement task ids.
+- Concurrent repair/reindex work should coalesce rather than stacking duplicate repair loops.
+- Broad refinement runs should report budget/truncation fields instead of pinning the daemon.
+- A task blocked with `No semantic gap repairer is configured` indicates a stale daemon or host composition bug, not a Home Assistant client issue.
+
+### Artifact Ingest
+
 Home Graph artifact ingest accepts the same large-upload bodies as the generic artifact and knowledge routes:
 
 - Use `multipart/form-data` with field name `file` for browser, panel, and integration file pickers.
@@ -121,35 +158,7 @@ Home Graph artifact ingest accepts the same large-upload bodies as the generic a
 - Additional text fields can include `installationId`, `knowledgeSpaceId`, `title`, `tags`, `target`, and `metadata`.
 - Browser-facing Home Assistant bridges must proxy multipart/raw bodies to `/api/homeassistant/home-graph/ingest/artifact` without exposing the daemon token and without converting file bytes into JSON.
 
-SDK 0.26.7 adds capped searchable extraction text for manuals and documents and uses bounded lightweight Home Graph search for ask responses. Manuals or documents ingested before SDK 0.26.7 should be reingested or reindexed if deep manual details need to be searchable.
-
-SDK 0.26.8 makes Home Graph review decisions durable across refreshes, preserves resolved state for generated issues, applies stricter Home Assistant quality rules, and discovers Home Assistant integration documentation as pending source candidates.
-
-SDK 0.27.2 makes knowledge map filtering and facets SDK-owned. TUI or companion map screens should build filter controls from the `facets` returned by `/api/knowledge/map` or `/api/homeassistant/home-graph/map`, then pass selected values back as map filters. Do not hardcode Home Assistant facet names beyond displaying the SDK-provided `facets.homeAssistant` groups. Home Graph map accepts JSON `POST` and trailing slash requests, and Home Graph ask treats binary/raw-PDF-like extraction text as repair-needed rather than usable answer material.
-
-SDK 0.27.3 improves Home Graph PDF repair and generated-page maintenance. Reindex reparses existing PDF sources with the shared extractor, rejects binary PDF garbage, handles compressed streams, auto-links manuals to matching Home Assistant objects by identity/model, regenerates source-backed pages, and exposes generated pages through `GET /api/homeassistant/home-graph/pages`. Run `POST /api/homeassistant/home-graph/reindex` after updating before retesting older uploaded PDF manuals.
-
-SDK 0.27.4 adds the shared semantic knowledge/wiki layer. Home Graph ask can now return `answer.facts`, `answer.gaps`, and `answer.synthesized` alongside `answer.text`, `answer.sources`, and `answer.linkedObjects`. Home Graph reindex runs semantic enrichment and generated pages include semantic facts. Render those returned answer fields directly rather than building local snippets from `results`.
-
-SDK 0.27.5 keeps semantic behavior SDK-owned while bounding provider-backed LLM work. Home Graph ask passes strict candidate filters into semantic answering, deterministic answer fallback filters facts by query intent, and broad reindex only attempts a capped number of provider-backed semantic enrichments before continuing deterministically.
-
-SDK 0.27.6 tightens semantic evidence ranking for Home Graph answers, separates subject terms from generic feature/spec/support terms, prevents generated semantic pages and facts from becoming Home Graph object anchors, allows deterministic records to upgrade to provider-backed LLM enrichment, hides stale deterministic facts, and suppresses manual boilerplate in feature/spec answers.
-
-SDK 0.27.7 further suppresses low-value semantic answer noise. Home Graph answer linked objects exclude semantic extraction artifacts, feature/spec answers filter weak accessory/setup/safety/manual text, generated Home Graph pages apply the same fact-quality filter, and answer synthesis no longer waits behind synchronous semantic enrichment.
-
-SDK 0.27.8 tightens the shared semantic feature/spec filters again. It removes truncated deterministic fragments, filters more remote-control/button-map, accessory/setup, new-feature/spec-change, maintenance, service/repair, and customer-service boilerplate, and applies the low-value filter to answer synthesis fact prompts as well as source text windows.
-
-SDK 0.28.0 adds durable Home Graph refinement tasks and exposes them through `/api/homeassistant/home-graph/refinement/*`. Home Graph map and pages should continue to render SDK-returned facets, filters, generated pages, readiness, refinement task ids, and answer fields directly. Companion clients should not locally infer map filter names or refinement state; build controls from the returned `facets` and task records.
-
-SDK 0.28.1 keeps Home Graph repair asynchronous for interactive flows. Ask should return quickly with the current evidence plus `answer.refinementTaskIds` when repair is queued. Reindex queues repair work instead of blocking on all repair attempts. Broad refinement runs cap effective work per invocation and report truncation or budget exhaustion. Stale `searching` or `evaluating` tasks older than the SDK recovery window are recovered to retriable blocked state on the next run.
-
-SDK 0.28.2 fixes the published dist guardrail path for Home Graph refinement budgets. Runtime dist now defaults to 12 refinement gaps per run and caps the effective limit at 24. It also reopens historical `No semantic gap repairer is configured` tasks when the TUI daemon has the SDK web-backed repairer wired, so those old blocked tasks should be retried as normal repair candidates rather than treated as evidence of a current host wiring failure.
-
-SDK 0.28.3 preserves Home Graph `linkedObjects` from repair-source metadata and coalesces overlapping semantic repair runs. Concurrent or repeated Refine/Reindex/Ask repair work should therefore return bounded skipped/truncated results instead of stacking duplicate repair execution on the daemon.
-
-The TUI daemon composes the SDK Home Graph service with the SDK web-backed semantic gap repairer. Refinement tasks can therefore search for candidate repair sources, ingest accepted sources into knowledge, and continue the SDK refinement state machine. A task blocked with `No semantic gap repairer is configured` indicates a stale daemon or a host composition bug rather than a Home Assistant client issue.
-
-SDK 0.33.17 split regular Knowledge/Wiki and Home Assistant Home Graph into separate runtime stores. Regular knowledge uses `knowledge-wiki.sqlite`; Home Graph uses `knowledge-home-graph.sqlite`. The old shared `knowledge.sqlite` pollution path is intentionally not read by either runtime store. Use `/api/homeassistant/home-graph/*` for Home Graph data, and use `/api/knowledge/*` for regular Knowledge/Wiki data.
+PDF/manual extraction, source scoring, fact promotion, boilerplate filtering, generated-page refresh, and source-backed answer synthesis are SDK-owned. Clients should reindex existing uploads after extractor or semantic-repair upgrades rather than reuploading unless the source content itself changed.
 
 ## Secrets
 
