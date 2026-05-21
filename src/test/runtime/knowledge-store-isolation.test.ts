@@ -45,11 +45,12 @@ afterEach(() => {
 });
 
 describe('runtime knowledge store isolation', () => {
-  test('regular Knowledge/Wiki and Home Graph use separate sqlite stores', async () => {
+  test('regular Knowledge/Wiki, Agent knowledge, and Home Graph use separate sqlite stores', async () => {
     const { configManager, services } = makeRuntime();
     const controlPlaneDir = configManager.getControlPlaneConfigDir();
 
     await services.knowledgeService.getStatus({ includeAllSpaces: true });
+    const agentStatus = await services.agentKnowledgeService.getStatus({ includeAllSpaces: true });
     const sync = await services.homeGraphService.syncSnapshot({
       installationId: 'isolation',
       title: 'Isolation Home',
@@ -73,12 +74,17 @@ describe('runtime knowledge store isolation', () => {
     expect(sync.ok).toBe(true);
     expect(ask.ok).toBe(true);
     expect(homeGraphStatus.nodeCount).toBeGreaterThan(0);
+    expect(agentStatus.sourceCount).toBe(0);
+    expect(agentStatus.nodeCount).toBe(0);
     expect(existsSync(join(controlPlaneDir, 'knowledge-wiki.sqlite'))).toBe(true);
+    expect(existsSync(join(controlPlaneDir, 'knowledge-agent.sqlite'))).toBe(true);
     expect(existsSync(join(controlPlaneDir, 'knowledge-home-graph.sqlite'))).toBe(true);
 
     const regularNodes = services.knowledgeService.queryNodes({ includeAllSpaces: true, limit: 100 }).items;
+    const agentNodes = services.agentKnowledgeService.queryNodes({ includeAllSpaces: true, limit: 100 }).items;
     const regularMap = await services.knowledgeService.map({ includeAllSpaces: true, limit: 100 });
     expect(regularNodes.some((node) => node.title.includes('Isolation Light') || node.id.includes('isolation'))).toBe(false);
+    expect(agentNodes.some((node) => node.title.includes('Isolation Light') || node.id.includes('isolation'))).toBe(false);
     expect(regularMap.nodes.some((node) => String(node.title ?? '').includes('Isolation Light') || node.id.includes('isolation'))).toBe(false);
   });
 });
