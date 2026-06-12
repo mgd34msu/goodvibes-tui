@@ -466,8 +466,13 @@ export class SyntaxHighlighter {
    * If the highlight cache has a result for this code+language, returns it.
    * Otherwise, schedules an async parse in background and returns null.
    * Callers should fall back to regex-based tokenization when null is returned.
+   *
+   * @param isStreaming - When true, suppresses background parse scheduling.
+   *   The regex tokenizer serves during streaming; tree-sitter is scheduled only
+   *   when the block is finalized (isStreaming=false or omitted) to avoid ~50
+   *   wasted async parses per streamed block that thrash the FIFO cache.
    */
-  highlight(code: string, fenceTag: string): HighlightedLine[] | null {
+  highlight(code: string, fenceTag: string, isStreaming = false): HighlightedLine[] | null {
     const langId = this.fenceToLangId(fenceTag);
     if (!langId) return null; // unsupported language
 
@@ -475,8 +480,10 @@ export class SyntaxHighlighter {
     const cached = this.cache.get(key);
     if (cached) return cached;
 
-    // Schedule background parse if not already pending
-    if (!this.pending.has(key)) {
+    // Do not schedule background parse while the block is still being streamed.
+    // The regex tokenizer serves during streaming (as designed). Schedule parse
+    // only when isStreaming=false, i.e., the block has been finalized.
+    if (!isStreaming && !this.pending.has(key)) {
       this.scheduleParse(code, langId, key);
     }
 

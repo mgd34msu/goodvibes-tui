@@ -3,9 +3,15 @@ import { UIFactory } from './ui-factory.ts';
 import { renderCodeBlock } from './code-block.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
+import { DARK_THEME } from './theme.ts';
+
+/** Module-level resolved token set (dark default; replace with resolveTheme(mode) when mode detection lands). */
+const T = DARK_THEME;
 
 export interface MarkdownRenderOptions {
   codeBlockLineNumbers?: boolean;
+  /** When true, suppresses tree-sitter parse scheduling for streaming code blocks. */
+  isStreaming?: boolean;
 }
 
 /** Module-level set of inline markdown special characters (hoisted out of hot loop). */
@@ -63,24 +69,31 @@ export function renderMarkdownTracked(
   let inCodeBlock = false;
   let codeBlockLang = '';
   let codeBlockLines: string[] = [];
+  let fenceChar = '`';
+  let fenceIndent = 0;
   const indent = LAYOUT.LEFT_MARGIN;
   const contentWidth = LAYOUT.contentWidth(width);
 
   for (let i = 0; i < rawLines.length; i++) {
     const raw = rawLines[i];
 
-    const fenceMatch = raw.match(/^```(\w*)/);
+    const fenceMatch = raw.match(/^(\s*)(```|~~~)\s*([\w-]*)/);
     if (fenceMatch && !inCodeBlock) {
       inCodeBlock = true;
-      codeBlockLang = fenceMatch[1] || '';
+      fenceIndent = fenceMatch[1].length;
+      fenceChar = fenceMatch[2][0]; // '`' or '~'
+      codeBlockLang = fenceMatch[3] || '';
       codeBlockLines = [];
       continue;
     }
     if (inCodeBlock) {
-      if (raw.trimStart().startsWith('```')) {
+      // Close fence: same char, same or less indentation, at least 3 of that char
+      const closeFenceRe = new RegExp(`^\\s{0,${fenceIndent}}${fenceChar === '`' ? '```' : '~~~'}`);
+      if (closeFenceRe.test(raw)) {
         const blockStart = lines.length;
         const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width, {
           showLineNumbers: options.codeBlockLineNumbers ?? true,
+          isStreaming: options.isStreaming ?? false,
         });
         codeBlocks.push({
           startOffset: blockStart,
@@ -91,6 +104,8 @@ export function renderMarkdownTracked(
         inCodeBlock = false;
         codeBlockLang = '';
         codeBlockLines = [];
+        fenceChar = '`';
+        fenceIndent = 0;
       } else {
         codeBlockLines.push(raw);
       }
@@ -106,17 +121,17 @@ export function renderMarkdownTracked(
     const h2 = raw.match(/^## (.+)/);
     const h1 = raw.match(/^# (.+)/);
     if (h1) {
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h1[1].toUpperCase(), width, { fg: '#00ffff', bold: true }));
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h1[1].toUpperCase(), width, { fg: T.heading1, bold: true }));
       lines.push(UIFactory.stringToLine(' '.repeat(indent) + '━'.repeat(Math.min(getDisplayWidth(h1[1]), contentWidth)), width, { fg: '244' }));
       continue;
     }
     if (h2) {
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h2[1], width, { fg: '#00ffff', bold: true }));
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h2[1], width, { fg: T.heading2, bold: true }));
       lines.push(UIFactory.stringToLine(' '.repeat(indent) + '─'.repeat(Math.min(getDisplayWidth(h2[1]), contentWidth)), width, { fg: '240' }));
       continue;
     }
     if (h3) {
-      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h3[1], width, { fg: '111', bold: true }));
+      lines.push(UIFactory.stringToLine(' '.repeat(indent) + h3[1], width, { fg: T.heading3, bold: true }));
       continue;
     }
 
@@ -130,7 +145,7 @@ export function renderMarkdownTracked(
       const rendered = renderInlineMarkdown(taskMatch[3]);
       const prefix = ' '.repeat(bulletX) + checkbox;
       const style = checked ? { fg: '244', strikethrough: true } : {};
-      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: checked ? '#22c55e' : '252', ...style }, textStartX));
+      lines.push(...compositeInlineLine(prefix, rendered, width, { fg: checked ? T.checkboxChecked : '252', ...style }, textStartX));
       continue;
     }
 
@@ -190,6 +205,7 @@ export function renderMarkdownTracked(
     const blockStart = lines.length;
     const rendered = renderCodeBlock(codeBlockLines, codeBlockLang, width, {
       showLineNumbers: options.codeBlockLineNumbers ?? true,
+      isStreaming: options.isStreaming ?? false,
     });
     codeBlocks.push({
       startOffset: blockStart,
@@ -300,14 +316,14 @@ function renderTable(rows: string[], width: number, indent: number): Line[] {
         }
         let style: Partial<Cell> = {};
         if (token.type === 'code') {
-          style = { fg: '#ffcc00', bg: '#1a1a1a' };
+          style = { fg: T.inlineCodeFg, bold: true };
         } else if (token.type === 'link') {
-          style = { fg: '#00aaff', underline: true };
+          style = { fg: T.link, underline: true };
         } else {
           style = { ...token.style };
         }
         if (isHdr) {
-          style.fg = style.fg || '#00ffff';
+          style.fg = style.fg || T.heading1;
           style.bold = true;
         } else {
           style.fg = style.fg || '252';
@@ -320,7 +336,7 @@ function renderTable(rows: string[], width: number, indent: number): Line[] {
 
     // Pad remaining space
     while (w < maxW) {
-      cells.push(createStyledCell(' ', isHdr ? { fg: '#00ffff' } : { fg: '252' }));
+      cells.push(createStyledCell(' ', isHdr ? { fg: T.heading1 } : { fg: '252' }));
       w++;
     }
     return cells;
@@ -528,14 +544,14 @@ function compositeInlineLine(
     if (token.type === 'text') {
       for (const ch of token.text) chars.push({ char: ch, style: token.style });
     } else if (token.type === 'code') {
-      for (const ch of token.text) chars.push({ char: ch, style: { fg: '#ffcc00', bg: '#1a1a1a' } });
+      for (const ch of token.text) chars.push({ char: ch, style: { fg: T.inlineCodeFg, bold: true } });
     } else if (token.type === 'link') {
       // Resolve URL: if url is empty or relative, treat as text; if it's a file path, use file:// protocol
       let resolvedUrl = token.url;
       if (resolvedUrl && !resolvedUrl.startsWith('http') && !resolvedUrl.startsWith('file://') && resolvedUrl.startsWith('/')) {
         resolvedUrl = `file://${resolvedUrl}`;
       }
-      for (const ch of token.text) chars.push({ char: ch, style: { fg: '#00aaff', underline: true, link: resolvedUrl || undefined } });
+      for (const ch of token.text) chars.push({ char: ch, style: { fg: T.link, underline: true, link: resolvedUrl || undefined } });
     }
   }
 

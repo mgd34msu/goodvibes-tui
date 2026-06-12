@@ -269,6 +269,14 @@ function tokenizePlain(line: string): SyntaxToken[] {
 // ─── Main Renderer ───────────────────────────────────────────────────────────
 
 /**
+ * Module-level SyntaxHighlighter singleton.
+ * Shared across all renderCodeBlock calls so the parse cache and pending-dedup
+ * set persist between renders. Creating a new instance per call was throwing away
+ * cached results and defeating the FIFO-200 cache.
+ */
+const _sharedHighlighter = new SyntaxHighlighter();
+
+/**
  * renderCodeBlock - Render lines of code with syntax highlighting and line numbers.
  * Returns Line[] for the cell-based pipeline.
  */
@@ -276,7 +284,7 @@ export function renderCodeBlock(
   codeLines: string[],
   lang: string,
   width: number,
-  opts: { showLineNumbers?: boolean } = {},
+  opts: { showLineNumbers?: boolean; isStreaming?: boolean } = {},
 ): Line[] {
   const lines: Line[] = [];
   const language = detectLanguage(lang);
@@ -291,7 +299,7 @@ export function renderCodeBlock(
   // Try tree-sitter highlight cache first (populated asynchronously).
   // Falls back to regex tokenizer when parser not yet ready or language unsupported.
   const fullCode = codeLines.join('\n');
-  const hlLines = lang ? new SyntaxHighlighter().highlight(fullCode, lang) : null;
+  const hlLines = lang ? _sharedHighlighter.highlight(fullCode, lang, opts.isStreaming ?? false) : null;
 
   // Regex tokenizer fallback (used when tree-sitter not ready)
   const regexTokenize = (line: string): SyntaxToken[] => {

@@ -164,6 +164,82 @@ describe('renderMarkdown', () => {
     expect(text).toContain('┼');
   });
 
+describe('fence syntax variants', () => {
+  test('tilde fences (~~~) open and close a code block', () => {
+    const md = '~~~js\nconsole.log(1);\n~~~';
+    const result = renderMarkdown(md, 80);
+    const text = textLines(result).join('\n');
+    // Should render the content (not emit the fence markers as text)
+    expect(text).toContain('console');
+    expect(text).not.toContain('~~~');
+  });
+
+  test('info string after fence marker is parsed (not included in content)', () => {
+    const md = '```typescript title=example.ts\nconst x: number = 1;\n```';
+    const result = renderMarkdown(md, 80);
+    const text = textLines(result).join('\n');
+    expect(text).toContain('x');
+    // The info string should not appear as content
+    expect(text).not.toContain('title=example.ts');
+  });
+
+  test('hyphenated language tag in info string is accepted', () => {
+    const md = '```shell-session\n$ echo hi\n```';
+    const result = renderMarkdown(md, 80);
+    const text = textLines(result).join('\n');
+    expect(text).toContain('echo');
+  });
+
+  test('tilde fence with info string', () => {
+    const md = '~~~python\nprint("hello")\n~~~';
+    const result = renderMarkdown(md, 80);
+    const text = textLines(result).join('\n');
+    expect(text).toContain('print');
+    expect(text).not.toContain('~~~');
+  });
+
+  test('asymmetric close: backtick fence closed with tilde is treated as content, not close', () => {
+    // A ~~~ close should NOT close a ``` fence — the ~~~ line becomes content
+    const md = '```\ncode line\n~~~\nmore content\n```';
+    const result = renderMarkdown(md, 80);
+    const text = textLines(result).join('\n');
+    // The ~~~ line should be inside the code block, not close it early
+    // All four content lines should be rendered
+    expect(text).toContain('code line');
+    expect(text).toContain('more content');
+  });
+
+  test('unclosed tilde fence renders gracefully', () => {
+    const md = '~~~\nsome code';
+    const result = renderMarkdown(md, 80);
+    expect(Array.isArray(result)).toBe(true);
+    const text = textLines(result).join('\n');
+    expect(text).toContain('some code');
+  });
+
+  test('indented fence inside list item renders as code block and closes at matching indent', () => {
+    // A 3-space indented fence is valid inside a list item; parser must track
+    // fenceIndent and close at the matching indentation level.
+    const md = [
+      '- item one',
+      '   ```ts',
+      '   const x = 1;',
+      '   ```',
+      '- item two',
+    ].join('\n');
+    const result = renderMarkdown(md, 80);
+    expect(Array.isArray(result)).toBe(true);
+    const text = textLines(result).join('\n');
+    // Code content inside the indented fence must appear
+    expect(text).toContain('x');
+    // The list items surrounding the fence must also appear
+    expect(text).toContain('item one');
+    expect(text).toContain('item two');
+    // The fence markers themselves must NOT appear as raw text
+    expect(text).not.toContain('```');
+  });
+});
+
 describe('renderInlineMarkdown', () => {
   test('returns text token for plain text', () => {
     const tokens = renderInlineMarkdown('hello');

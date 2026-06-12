@@ -24,6 +24,14 @@ export class DiffEngine {
   private lastStrikethrough = false;
   private lastLink = '';
   private caps: TermColorCaps;
+  /**
+   * Run-coalescing state: tracks the last cell position emitted.
+   * When the next cell is at (lastEmitX+1, lastEmitY) and SGR is unchanged,
+   * we skip cursor re-addressing and append the char directly.
+   * Reset per diff() call to avoid stale state across frames.
+   */
+  private lastEmitX = -1;
+  private lastEmitY = -1;
 
   constructor(caps: TermColorCaps = { capability: 'truecolor', syncedOutput: true }) {
     this.caps = caps;
@@ -42,6 +50,9 @@ export class DiffEngine {
 
   public diff(oldBuffer: TerminalBuffer | null, newBuffer: TerminalBuffer): string {
     let output = '';
+    // Reset run-coalescing state per frame: last emitted cursor position.
+    this.lastEmitX = -1;
+    this.lastEmitY = -1;
 
     for (let y = 0; y < newBuffer.height; y++) {
       // Skip rows that were not written in either the old or new buffer.
@@ -58,9 +69,20 @@ export class DiffEngine {
         if (!newCell || newCell.char === '') continue;
 
         if (this.isCellDifferent(oldCell, newCell)) {
-          output += `\x1b[${y + 1};${x + 1}H`;
-          output += this.applyStyles(newCell);
-          output += newCell.char;
+          const sgrOutput = this.applyStyles(newCell);
+          // Run-coalescing: when the previous emitted cell was (x-1, y) and
+          // the SGR state did not change, skip cursor re-addressing.
+          // Emit a cursor move only on run breaks (new row, gap, or style change).
+          if (sgrOutput === '' && this.lastEmitY === y && this.lastEmitX === x - 1) {
+            // Contiguous run on same row, same SGR — just append the char.
+            output += newCell.char;
+          } else {
+            output += `\x1b[${y + 1};${x + 1}H`;
+            output += sgrOutput;
+            output += newCell.char;
+          }
+          this.lastEmitX = x;
+          this.lastEmitY = y;
         }
       }
     }
