@@ -1189,6 +1189,118 @@ describe('InputHandler onboarding integration', () => {
     expect(prints).toEqual([]);
   });
 
+  test('apply-and-continue blocks and shows error when required text field is empty', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    const input = makeInput(uiServices);
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: () => {},
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    // Hydrate with bootstrap credential present so password is required on the Access step
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({
+        auth: {
+          snapshot: {
+            userStorePath: '/tmp/auth-users.json',
+            bootstrapCredentialPath: '/tmp/auth-bootstrap.txt',
+            persisted: true,
+            bootstrapCredentialPresent: true,
+            userCount: 0,
+            sessionCount: 0,
+            users: [],
+            sessions: [],
+          },
+        },
+      }),
+    }, { resetValues: true });
+    // Enable server-backed capability so Access step appears
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+    // Navigate to the Access step (step index 2 after capabilities + network)
+    const accessStepIndex = input.onboardingWizard.steps.findIndex((s) => s.id === 'access');
+    expect(accessStepIndex).toBeGreaterThan(0);
+    input.onboardingWizard.setStep(accessStepIndex);
+    // Leave password empty — it is required when bootstrap credential is present
+    input.onboardingWizard.setFieldValue('accounts.admin-password', '');
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply-and-continue'): Promise<void> }).handleOnboardingAction('apply-and-continue');
+
+    // Must NOT navigate away from Access step
+    expect(input.onboardingWizard.currentStep.id).toBe('access');
+    // Must set error feedback
+    expect(input.onboardingWizard.applyFeedback?.severity).toBe('error');
+    expect(input.onboardingWizard.applyFeedback?.title).toBe('Required fields missing');
+    expect(input.onboardingWizard.applyFeedback?.messages.length).toBeGreaterThan(0);
+    // Must focus the first offending field
+    const selectedIndex = input.onboardingWizard.selectedFieldIndices[accessStepIndex];
+    const selectedField = input.onboardingWizard.currentStep.fields[selectedIndex ?? 0];
+    expect(selectedField?.id).toBeTruthy();
+  });
+
+  test('apply-and-continue advances when all required fields on the step are satisfied', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    const input = makeInput(uiServices);
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: () => {},
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    // Hydrate with bootstrap credential present so password is required
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({
+        auth: {
+          snapshot: {
+            userStorePath: '/tmp/auth-users.json',
+            bootstrapCredentialPath: '/tmp/auth-bootstrap.txt',
+            persisted: true,
+            bootstrapCredentialPresent: true,
+            userCount: 0,
+            sessionCount: 0,
+            users: [],
+            sessions: [],
+          },
+        },
+      }),
+    }, { resetValues: true });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+    const accessStepIndex = input.onboardingWizard.steps.findIndex((s) => s.id === 'access');
+    expect(accessStepIndex).toBeGreaterThan(0);
+    input.onboardingWizard.setStep(accessStepIndex);
+    // Provide required username and password
+    input.onboardingWizard.setFieldValue('accounts.admin-username', 'admin');
+    input.onboardingWizard.setFieldValue('accounts.admin-password', 'password123');
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply-and-continue'): Promise<void> }).handleOnboardingAction('apply-and-continue');
+
+    // Must advance past Access step
+    expect(input.onboardingWizard.currentStep.id).not.toBe('access');
+    expect(input.onboardingWizard.applyFeedback).toBeNull();
+  });
+
+  test('apply-and-continue does not crash on a step with no required fields', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    const input = makeInput(uiServices);
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: () => {},
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot(),
+    }, { resetValues: true });
+    // Capabilities step (index 0) has no required text/masked fields
+    expect(input.onboardingWizard.currentStep.id).toBe('capabilities');
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply-and-continue'): Promise<void> }).handleOnboardingAction('apply-and-continue');
+
+    // No crash, no error feedback, advanced past capabilities
+    expect(input.onboardingWizard.applyFeedback).toBeNull();
+    expect(input.onboardingWizard.currentStep.id).not.toBe('capabilities');
+  });
+
   test('does not write the global onboarding check marker when the wizard is opened', async () => {
     resetTestRuntimeServices();
     const uiServices = createDefaultUiRuntimeServices();
