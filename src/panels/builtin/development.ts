@@ -65,7 +65,10 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
       description: 'Estimated costs per session, agent, and plan with budget alerts',
       factory: () => {
         const ui = requireUiServices(deps);
-        return new CostTrackerPanel(ui.events.turns, ui.events.agents, getOrchestratorUsage, { budgetThreshold });
+        return new CostTrackerPanel(ui.events.turns, ui.events.agents, getOrchestratorUsage, {
+          budgetThreshold,
+          getAgentStatus: (id) => ui.agents.agentManager.getStatus(id),
+        });
       },
     });
   }

@@ -7,6 +7,7 @@ import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import type { AgentEvent, TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import {
   buildEmptyState,
   buildPanelLine,
@@ -117,14 +118,19 @@ export class CostTrackerPanel extends BasePanel {
   // Getter for live orchestrator usage
   private readonly getOrchestratorUsage: () => UsageSnapshot & { model?: string };
 
+  // Optional resolver for agent usage on completion — enables real cost attribution.
+  // When omitted, completed agents show $0 (honest: data unavailable).
+  private readonly getAgentStatus: ((agentId: string) => AgentRecord | null) | undefined;
+
   constructor(
     turnEvents: UiEventFeed<TurnEvent>,
     agentEvents: UiEventFeed<AgentEvent>,
     getOrchestratorUsage: () => UsageSnapshot & { model?: string },
-    opts: { budgetThreshold?: number } = {},
+    opts: { budgetThreshold?: number; getAgentStatus?: (agentId: string) => AgentRecord | null } = {},
   ) {
     super('cost', 'Cost', '$', 'monitoring');
     this.getOrchestratorUsage = getOrchestratorUsage;
+    this.getAgentStatus = opts.getAgentStatus;
     this.budgetThreshold = opts.budgetThreshold ?? 0;
     this.attachEvents(turnEvents, agentEvents);
   }
@@ -155,12 +161,22 @@ export class CostTrackerPanel extends BasePanel {
       }),
     );
 
-    // Agent completed — capture token data from result if available
+    // Agent completed — capture real token usage via AgentRecord when available
     this.unsubs.push(
       agentEvents.on('AGENT_COMPLETED', (payload) => {
         const entry = this.agents.get(payload.agentId);
         if (entry) {
           entry.status = 'done';
+          if (this.getAgentStatus) {
+            const rec = this.getAgentStatus(payload.agentId);
+            if (rec?.usage) {
+              entry.inputTokens = rec.usage.inputTokens + (rec.usage.cacheReadTokens ?? 0) + (rec.usage.cacheWriteTokens ?? 0);
+              entry.outputTokens = rec.usage.outputTokens;
+              const pricing = getPricing(rec.model ?? 'unknown');
+              entry.cost = (entry.inputTokens * pricing.input + entry.outputTokens * pricing.output) / 1_000_000;
+              if (rec.model && rec.model !== 'unknown') entry.model = rec.model;
+            }
+          }
           this.markDirty();
         }
       }),

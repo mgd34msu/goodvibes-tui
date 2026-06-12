@@ -11,7 +11,6 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOKENS_PER_TOOL_CALL = 400;
 const MAX_LOG_ENTRIES = 10;
 const AGENT_ID_DISPLAY_LENGTH = 16;
 
@@ -100,13 +99,6 @@ export class AgentDetailModal {
   }
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Rough token estimate: toolCallCount * avg tokens per tool exchange. */
-function estimateTokens(toolCallCount: number): number {
-  return toolCallCount * TOKENS_PER_TOOL_CALL;
-}
-
 // ─── renderAgentDetailModal ───────────────────────────────────────────────────
 
 /**
@@ -150,7 +142,6 @@ export function renderAgentDetailModal(
 
   const now = Date.now();
   const elapsedMs = (rec.completedAt ?? now) - rec.startedAt;
-  const tokenEst = estimateTokens(rec.toolCallCount);
 
   // ── Build sections ────────────────────────────────────────────────────────
 
@@ -176,7 +167,17 @@ export function renderAgentDetailModal(
 
   // Metrics
   sections.push({ type: 'text', content: `Tool calls : ${rec.toolCallCount}` });
-  sections.push({ type: 'text', content: `Est tokens : ~${tokenEst.toLocaleString()}` });
+  if (rec.usage) {
+    const totalIn = rec.usage.inputTokens + (rec.usage.cacheReadTokens ?? 0) + (rec.usage.cacheWriteTokens ?? 0);
+    sections.push({ type: 'text', content: `Tokens in  : ${totalIn.toLocaleString()}` });
+    sections.push({ type: 'text', content: `Tokens out : ${rec.usage.outputTokens.toLocaleString()}` });
+  } else {
+    sections.push({
+      type: 'text',
+      content: 'Tokens     : n/a (agent running)',
+      style: { dim: true },
+    });
+  }
 
   // SDK 0.23.0: systemPromptAddendum indicator — confirms WRFC constraint addendum was injected
   if (rec.systemPromptAddendum) {

@@ -1,6 +1,10 @@
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { getCostFromPricingCatalog } from '@pellux/goodvibes-sdk/platform/providers';
 import type { PricingCatalog } from '@pellux/goodvibes-sdk/platform/providers';
+import { RuntimeEventBus, createEventEnvelope } from '@/runtime/index.ts';
+import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
+import { CostTrackerPanel } from '../../panels/cost-tracker-panel.ts';
+import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -186,5 +190,129 @@ describe('getCostFromPricingCatalog with explicit catalog shapes', () => {
     const result = getCostFromPricingCatalog('unknown-model', { models: [] });
     expect(result.input).toBe(0);
     expect(result.output).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CostTrackerPanel agent cost population (TASK-042 / TASK-044)
+// ---------------------------------------------------------------------------
+
+function makeAgentRecord(overrides: Partial<AgentRecord> = {}): AgentRecord {
+  return {
+    id: 'test-agent-id',
+    task: 'test task',
+    template: 'general',
+    tools: [],
+    status: 'completed',
+    startedAt: Date.now() - 5000,
+    completedAt: Date.now(),
+    toolCallCount: 5,
+    orchestrationDepth: 0,
+    executionProtocol: 'direct',
+    reviewMode: 'none',
+    communicationLane: 'parent-only',
+    ...overrides,
+  };
+}
+
+const TEST_ENV_CTX = { sessionId: 'test-session', traceId: 'test-trace', source: 'cost-tracker-test' };
+
+describe('CostTrackerPanel — agent cost attribution on AGENT_COMPLETED', () => {
+  let runtimeBus: RuntimeEventBus;
+  const flushMicrotasks = async (): Promise<void> => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+
+  beforeEach(() => {
+    runtimeBus = new RuntimeEventBus();
+  });
+
+  test('agent entry cost remains 0 when getAgentStatus is not provided', async () => {
+    const events = createUiRuntimeEvents(runtimeBus);
+    const panel = new CostTrackerPanel(
+      events.turns,
+      events.agents,
+      () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }),
+      // no getAgentStatus
+    );
+    // Spawn then complete an agent
+    runtimeBus.emit('agents', createEventEnvelope('AGENT_SPAWNING', { agentId: 'agt-1', task: 'do work', type: 'AGENT_SPAWNING' }, TEST_ENV_CTX));
+    runtimeBus.emit('agents', createEventEnvelope('AGENT_COMPLETED', { agentId: 'agt-1', durationMs: 1000, type: 'AGENT_COMPLETED' }, TEST_ENV_CTX));
+    await flushMicrotasks();
+    // Panel renders without fabricating a cost
+    const lines = panel.render(80, 20);
+    const text = lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
+    // Agent entry is present but shows $0.00 (no real data available — honest)
+    expect(text).toContain('agt-1');
+    expect(text).toContain('$0.00');
+  });
+
+  test('agent entry populates real tokens and cost when getAgentStatus returns usage', async () => {
+    const agentRec = makeAgentRecord({
+      id: 'agt-2',
+      model: 'claude-sonnet-4-6',
+      usage: {
+        inputTokens: 10_000,
+        outputTokens: 2_000,
+        cacheReadTokens: 1_000,
+        cacheWriteTokens: 500,
+        llmCallCount: 3,
+        turnCount: 2,
+      },
+    });
+    const events = createUiRuntimeEvents(runtimeBus);
+    const panel = new CostTrackerPanel(
+      events.turns,
+      events.agents,
+      () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }),
+      {
+        getAgentStatus: (id) => (id === 'agt-2' ? agentRec : null),
+      },
+    );
+    runtimeBus.emit('agents', createEventEnvelope('AGENT_SPAWNING', { agentId: 'agt-2', task: 'real work', type: 'AGENT_SPAWNING' }, TEST_ENV_CTX));
+    runtimeBus.emit('agents', createEventEnvelope('AGENT_COMPLETED', { agentId: 'agt-2', durationMs: 5000, type: 'AGENT_COMPLETED' }, TEST_ENV_CTX));
+    await flushMicrotasks();
+    const lines = panel.render(80, 20);
+    const text = lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
+    // claude-sonnet-4-6: input $3/1M, output $15/1M
+    // billableInput = 10000 + 1000 + 500 = 11500 tokens
+    // cost = (11500*3 + 2000*15) / 1_000_000 = (34500 + 30000) / 1_000_000 = $0.0645
+    expect(text).toContain('agt-2');
+    // Cost: (11500×3 + 2000×15)/1_000_000 = $0.0645 → formatCost renders as '$0.065'
+    expect(text).toContain('$0.065');
+  });
+
+  test('agent entry model is updated from AgentRecord on AGENT_COMPLETED', async () => {
+    const agentRec = makeAgentRecord({
+      id: 'agt-3',
+      model: 'claude-haiku-4-5',
+      usage: {
+        inputTokens: 5_000,
+        outputTokens: 1_000,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        llmCallCount: 1,
+        turnCount: 1,
+      },
+    });
+    const events = createUiRuntimeEvents(runtimeBus);
+    const panel = new CostTrackerPanel(
+      events.turns,
+      events.agents,
+      () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }),
+      { getAgentStatus: (id) => (id === 'agt-3' ? agentRec : null) },
+    );
+    runtimeBus.emit('agents', createEventEnvelope('AGENT_SPAWNING', { agentId: 'agt-3', task: 'haiku task', type: 'AGENT_SPAWNING' }, TEST_ENV_CTX));
+    runtimeBus.emit('agents', createEventEnvelope('AGENT_COMPLETED', { agentId: 'agt-3', durationMs: 2000, type: 'AGENT_COMPLETED' }, TEST_ENV_CTX));
+    await flushMicrotasks();
+    const lines = panel.render(80, 20);
+    const text = lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
+    // Haiku pricing: input $0.80/1M, output $4/1M
+    // cost = (5000 * 0.80 + 1000 * 4) / 1_000_000 = (4000 + 4000) / 1_000_000 = $0.000008 -> shows as <$0.0001
+    expect(text).toContain('agt-3');
+    // Haiku cost: (5000×0.80 + 1000×4)/1_000_000 = 8000/1_000_000 = $0.008 → formatCost renders as '$0.0080'
+    expect(text).toContain('$0.0080');
   });
 });

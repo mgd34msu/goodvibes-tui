@@ -144,18 +144,50 @@ describe('renderAgentDetailModal', () => {
     expect(text).toContain('5');
   });
 
-  test('renders estimated token usage', () => {
-    const id = seedAgent('Token task');
+  test('shows unavailable state when agent has no usage data (running)', () => {
+    const id = seedAgent('Token task running');
     const am = getTestAgentManager();
     const rec = am.getStatus(id);
     if (!rec) throw new Error('expected agent record');
-    rec.toolCallCount = 3;
+    // usage is undefined while agent is running
+    rec.usage = undefined;
     const modal = createAgentDetailModal();
     modal.open(id);
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
-    expect(text).toContain('Est tokens');
-    expect(text).toContain('1,200'); // 3 * 400
+    // Must NOT show a fabricated estimate
+    expect(text).not.toContain('Est tokens');
+    expect(text).not.toContain('1,200');
+    // Must show explicit unavailable state
+    expect(text).toContain('n/a');
+  });
+
+  test('renders real token counts when agent usage is populated', () => {
+    const id = seedAgent('Token task complete');
+    const am = getTestAgentManager();
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
+    rec.usage = {
+      inputTokens: 1000,
+      outputTokens: 500,
+      cacheReadTokens: 200,
+      cacheWriteTokens: 100,
+      llmCallCount: 3,
+      turnCount: 2,
+    };
+    const modal = createAgentDetailModal();
+    modal.open(id);
+    const lines = renderAgentDetailModal(modal, W);
+    const text = linesToText(lines).join('\n');
+    // Must NOT show the old estimate label
+    expect(text).not.toContain('Est tokens');
+    // Must show real token sections
+    expect(text).toContain('Tokens in');
+    expect(text).toContain('Tokens out');
+    // input = 1000 + 200 + 100 = 1300
+    expect(text).toContain('1,300');
+    // output = 500
+    expect(text).toContain('500');
   });
 
   test('renders progress text when present', () => {
