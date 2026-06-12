@@ -248,6 +248,16 @@ function addCloudflareOperations(
     setConfig('cloudflare.maxQueueOpsPerDay', controller.getNumberFieldValue('cloudflare.max-queue-ops-per-day', config?.maxQueueOpsPerDay ?? 10000, 1));
     setConfig('batch.mode', batchMode);
     setConfig('batch.queueBackend', batchMode !== 'off' && components.queues ? 'cloudflare' : 'local');
+    // Zero Trust Tunnel auto-enables trustProxy on both services so the
+    // login-rate-limiter keys on the real CF-Connecting-IP rather than the tunnel
+    // egress address. RESIDUAL RISK: until the SDK validates CF-Connecting-IP
+    // against Cloudflare's published IP ranges (SDK handoff Item 5), a client
+    // that reaches the listener directly can spoof the header to bypass the
+    // per-IP limiter. The wizard surfaces this in the cloudflare step notice.
+    if (components.zeroTrustTunnel) {
+      setConfig('controlPlane.trustProxy', true);
+      setConfig('httpListener.trustProxy', true);
+    }
   }
 
 export function addNetworkOperations(

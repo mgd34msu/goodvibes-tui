@@ -1765,3 +1765,122 @@ describe('InputHandler onboarding integration', () => {
     expect(prints.join('\n')).toContain('is still occupied');
   });
 });
+
+describe('daemon/auth security wizard hardening (TASK-035, TASK-036, TASK-037)', () => {
+  // TASK-035: Zero Trust Tunnel trustProxy
+  test('selecting Zero Trust Tunnel writes trustProxy for control plane and HTTP listener', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+    wizard.setFieldValue('cloudflare.component.zeroTrustTunnel', true);
+
+    const configValues = new Map<string, unknown>();
+    for (const op of wizard.buildApplyRequest().operations) {
+      if (op.kind === 'set-config') configValues.set(op.key, op.value);
+    }
+
+    expect(configValues.get('controlPlane.trustProxy')).toBe(true);
+    expect(configValues.get('httpListener.trustProxy')).toBe(true);
+  });
+
+  test('not selecting Zero Trust Tunnel does NOT write trustProxy', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+
+    const configValues = new Map<string, unknown>();
+    for (const op of wizard.buildApplyRequest().operations) {
+      if (op.kind === 'set-config') configValues.set(op.key, op.value);
+    }
+
+    expect(configValues.has('controlPlane.trustProxy')).toBe(false);
+    expect(configValues.has('httpListener.trustProxy')).toBe(false);
+  });
+
+  test('cloudflare step shows trust-proxy-notice field when Tunnel is selected', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+    wizard.setFieldValue('cloudflare.component.zeroTrustTunnel', true);
+
+    const cloudflareStep = wizard.steps.find((s) => s.id === 'cloudflare');
+    const noticeField = cloudflareStep?.fields.find((f) => f.id === 'cloudflare.trust-proxy-notice');
+    expect(noticeField).toBeDefined();
+  });
+
+  test('cloudflare step does NOT show trust-proxy-notice when Tunnel is not selected', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+    wizard.setFieldValue('cloudflare.component.zeroTrustTunnel', false);
+
+    const cloudflareStep = wizard.steps.find((s) => s.id === 'cloudflare');
+    const noticeField = cloudflareStep?.fields.find((f) => f.id === 'cloudflare.trust-proxy-notice');
+    expect(noticeField).toBeUndefined();
+  });
+
+  test('cloudflare summaryLines includes trustProxy note when Tunnel is selected', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+    wizard.setFieldValue('cloudflare.component.zeroTrustTunnel', true);
+
+    const cloudflareStep = wizard.steps.find((s) => s.id === 'cloudflare');
+    expect(cloudflareStep?.summaryLines.some((l) => l.includes('trustProxy'))).toBe(true);
+  });
+
+  // TASK-036: TLS hard-warn in network step
+  test('network step shows tls-warn when network-facing service has tls.mode off', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.network-access', true);
+
+    const networkStep = wizard.steps.find((s) => s.id === 'network');
+    const tlsWarnField = networkStep?.fields.find((f) => f.id === 'network.tls-warn');
+    expect(tlsWarnField).toBeDefined();
+    expect(tlsWarnField?.defaultValue).toBe('Warning');
+  });
+
+  test('network step does NOT show tls-warn when local-tui-only (no network-facing services)', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.local-tui-only', true);
+
+    const networkStep = wizard.steps.find((s) => s.id === 'network');
+    expect(networkStep).toBeUndefined();
+  });
+
+  // TASK-037: CORS notice in network step
+  test('network step shows cors-note when HTTP listener is enabled', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.webhook-events', true);
+
+    const networkStep = wizard.steps.find((s) => s.id === 'network');
+    const corsNoteField = networkStep?.fields.find((f) => f.id === 'network.cors-note');
+    expect(corsNoteField).toBeDefined();
+    expect(corsNoteField?.defaultValue).toBe('Info');
+  });
+
+  test('cors-note hint references settings.json not goodvibes.json', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.webhook-events', true);
+
+    const networkStep = wizard.steps.find((s) => s.id === 'network');
+    const corsNoteField = networkStep?.fields.find((f) => f.id === 'network.cors-note');
+    expect(corsNoteField?.hint).toContain('settings.json');
+    expect(corsNoteField?.hint).not.toContain('goodvibes.json');
+  });
+
+  test('trust-proxy-notice hint contains RESIDUAL RISK language', () => {
+    const wizard = new OnboardingWizardController();
+    wizard.open('new');
+    wizard.setFieldValue('capabilities.cloudflare-batch', true);
+    wizard.setFieldValue('cloudflare.component.zeroTrustTunnel', true);
+
+    const cloudflareStep = wizard.steps.find((s) => s.id === 'cloudflare');
+    const noticeField = cloudflareStep?.fields.find((f) => f.id === 'cloudflare.trust-proxy-notice');
+    expect(noticeField?.hint).toContain('RESIDUAL RISK');
+  });
+});
