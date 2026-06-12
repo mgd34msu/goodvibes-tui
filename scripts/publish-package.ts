@@ -72,11 +72,40 @@ try {
       ? ['pack', '--json']
       : ['publish', '--access', 'public', '--registry', registry];
 
-    execFileSync('npm', args, {
-      cwd: stageDir,
-      stdio: 'inherit',
-      env: process.env,
-    });
+    // Run npm with output piped so we can surface it on failure.
+    // For interactive dry-run (pack --json) we still need the JSON on stdout, so
+    // use pipe for both stdout and stderr in all cases.
+    let npmStdout = '';
+    let npmStderr = '';
+    try {
+      const result = execFileSync('npm', args, {
+        cwd: stageDir,
+        stdio: ['inherit', 'pipe', 'pipe'],
+        env: process.env,
+        encoding: 'utf8',
+      });
+      npmStdout = result;
+      if (npmStdout) process.stdout.write(npmStdout);
+    } catch (err: unknown) {
+      // execFileSync throws a ChildProcessError when the child exits non-zero.
+      // Recover captured output from the error object before re-throwing.
+      if (
+        err !== null &&
+        typeof err === 'object' &&
+        'stdout' in err &&
+        'stderr' in err
+      ) {
+        const captured = err as { stdout: string | Buffer | null; stderr: string | Buffer | null; status?: number | null; message?: string };
+        npmStdout = typeof captured.stdout === 'string' ? captured.stdout : (captured.stdout?.toString() ?? '');
+        npmStderr = typeof captured.stderr === 'string' ? captured.stderr : (captured.stderr?.toString() ?? '');
+      }
+      process.stderr.write('\n--- npm output (stdout) ---\n');
+      process.stderr.write(npmStdout || '(empty)\n');
+      process.stderr.write('\n--- npm output (stderr) ---\n');
+      process.stderr.write(npmStderr || '(empty)\n');
+      process.stderr.write('\n--- end npm output ---\n');
+      throw err;
+    }
   });
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });

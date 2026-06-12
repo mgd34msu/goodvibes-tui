@@ -51,6 +51,8 @@ jobs:
         run: bun run build
       - name: Publish package check
         run: bun run publish:check
+        env:
+          GOODVIBES_SKIP_NPM_AUTH_CHECK: "1"
 
   build:
     name: Build ${{ matrix.target }}
@@ -260,6 +262,8 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - name: Publish package check
         run: bun run publish:check
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Publish to npm
         run: bun run publish:package
         env:
@@ -290,6 +294,8 @@ jobs:
           registry-url: "https://npm.pkg.github.com"
       - name: Publish package check
         run: bun run publish:check
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish to GitHub Packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
