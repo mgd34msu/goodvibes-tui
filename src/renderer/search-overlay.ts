@@ -5,16 +5,19 @@ import { createBottomBarLine, writeBottomBarText } from './bottom-bar.ts';
 
 /**
  * Render the search bar as a single Line[] overlay at the bottom of the viewport.
- * Format: [ Find: <query>   3/17 up/down  [n] next [N] prev [Esc] close ]
+ * Format: [ Find: <query>   3/17  [n/N] next/prev  [Esc] close ]
  * The match count is dim grey; the rest of the bar is teal.
+ *
+ * Case-insensitive search (query lowercased before matching rendered cell text).
  */
 export function renderSearchOverlay(
   manager: SearchManager,
   width: number
 ): Line[] {
-  // Match count text — displayed in dim grey, right of query, left of hints
-  const matchCount = manager.matches?.length > 0
-    ? `${manager.currentMatch + 1}/${manager.matches.length} up/down`
+  // Match count / status text — displayed in dim grey, right of query
+  const hasMatches = manager.matches.length > 0;
+  const matchCount = hasMatches
+    ? `${manager.currentMatch + 1}/${manager.matches.length}${manager.wrapAround ? ' (wrap)' : ''}`
     : manager.query.length > 0
       ? 'No matches'
       : '';
@@ -23,7 +26,7 @@ export function renderSearchOverlay(
   const cursor = locked ? '' : '█';
   const queryDisplay = manager.query + cursor;
   const hints = locked
-    ? '  [Up/Down] or [jk] navigate  [Bksp] edit  [Esc] close'
+    ? '  [n/N] next/prev  [jk] navigate  [Bksp] edit  [Esc] close'
     : '  [Enter/Tab] lock  [Esc] close';
   const label = ' Find: ';
   const matchStr = matchCount ? ` ${matchCount}` : '';

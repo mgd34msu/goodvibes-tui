@@ -218,4 +218,75 @@ describe('SearchManager', () => {
     sm.open();
     expect(sm.getMatchesOnLine(0)).toHaveLength(0);
   });
+
+  // --- wrapAround ---
+
+  test('wrapAround is false initially', () => {
+    sm.open();
+    expect(sm.wrapAround).toBe(false);
+  });
+
+  test('wrapAround cleared by search()', () => {
+    const buf = bufferFromLines(['abc abc']);
+    sm.open();
+    sm.search('abc', buf);
+    sm.nextMatch();
+    sm.nextMatch(); // wraps
+    expect(sm.wrapAround).toBe(true);
+    sm.search('abc', buf); // re-search clears it
+    expect(sm.wrapAround).toBe(false);
+  });
+
+  test('wrapAround set when nextMatch() wraps past last match', () => {
+    const buf = bufferFromLines(['abc abc']);
+    sm.open();
+    sm.search('abc', buf);
+    expect(sm.matches).toHaveLength(2);
+    sm.nextMatch(); // 0 -> 1, no wrap
+    expect(sm.wrapAround).toBe(false);
+    sm.nextMatch(); // 1 -> 0, wraps
+    expect(sm.wrapAround).toBe(true);
+    expect(sm.currentMatch).toBe(0);
+  });
+
+  test('wrapAround set when prevMatch() wraps before first match', () => {
+    const buf = bufferFromLines(['abc abc']);
+    sm.open();
+    sm.search('abc', buf);
+    expect(sm.currentMatch).toBe(0);
+    sm.prevMatch(); // 0 -> 1, wraps
+    expect(sm.wrapAround).toBe(true);
+    expect(sm.currentMatch).toBe(1);
+  });
+
+  test('wrapAround cleared after non-wrapping navigation', () => {
+    const buf = bufferFromLines(['abc abc abc']);
+    sm.open();
+    sm.search('abc', buf);
+    sm.nextMatch(); // 0 -> 1
+    sm.nextMatch(); // 1 -> 2
+    sm.nextMatch(); // 2 -> 0, wraps
+    expect(sm.wrapAround).toBe(true);
+    sm.nextMatch(); // 0 -> 1, no wrap
+    expect(sm.wrapAround).toBe(false);
+  });
+
+  test('wrapAround false when no matches', () => {
+    sm.open();
+    sm.nextMatch();
+    expect(sm.wrapAround).toBe(false);
+    sm.prevMatch();
+    expect(sm.wrapAround).toBe(false);
+  });
+
+  test('open() resets wrapAround', () => {
+    const buf = bufferFromLines(['abc abc']);
+    sm.open();
+    sm.search('abc', buf);
+    sm.nextMatch();
+    sm.nextMatch(); // wraps
+    expect(sm.wrapAround).toBe(true);
+    sm.open();
+    expect(sm.wrapAround).toBe(false);
+  });
 });
