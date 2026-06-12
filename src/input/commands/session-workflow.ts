@@ -6,7 +6,8 @@ import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationTitleSource } from '../../core/conversation';
 import type { SessionReturnContextSummary } from '@/runtime/index.ts';
 import { formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
-import { requirePanelManager, requireProviderApi, requireSessionManager } from './runtime-services.ts';
+import { requirePanelManager, requireProviderApi, requireSessionManager, requireShellPaths } from './runtime-services.ts';
+import { replayJournalForSession } from '../../core/session-recovery.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function parseTranscriptKind(raw: string | undefined): TranscriptEventKind | 'all' {
@@ -240,6 +241,26 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       ctx.session.conversationManager.fromJSON({ messages: messages as never[], title: meta.title, titleSource: meta.titleSource });
       ctx.session.conversationManager.rebuildHistory();
       ctx.session.runtime.sessionId = found.name;
+
+      // Journal replay: recover turns that post-date the loaded snapshot.
+      const shellPaths = requireShellPaths(ctx);
+      const journalReplay = replayJournalForSession({
+        homeDirectory: shellPaths.homeDirectory,
+        snapshotTimestamp: meta.timestamp,
+        conversation: ctx.session.conversationManager,
+        sessionId: found.name,
+        persistSnapshot: (replayedMessages) => {
+          sm.save(found.name, replayedMessages as never[], {
+            title: ctx.session.conversationManager.title || meta.title,
+            model: meta.model,
+            provider: meta.provider,
+            timestamp: Date.now(),
+            titleSource: meta.titleSource,
+            returnContext: meta.returnContext,
+          });
+        },
+      });
+
       if (meta.model) {
         try {
           const selected = await providerApi.selectModel(meta.model);
@@ -252,7 +273,16 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
       }
       if (meta.provider) ctx.session.runtime.provider = meta.provider;
       ctx.renderRequest();
-      ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${messages.length}\n  Model: ${meta.model || ctx.session.runtime.model}`);
+      const resumedMsgCount = ctx.session.conversationManager.getMessageCount();
+      ctx.print(`Resumed session: ${found.name}\n  Name: ${meta.title || '(untitled)'}\n  Messages: ${resumedMsgCount}\n  Model: ${meta.model || ctx.session.runtime.model}`);
+      if (journalReplay.replayed > 0) {
+        ctx.print(`  [Recovery] Replayed ${journalReplay.replayed} journal record(s) — restored turns since last snapshot.`);
+      }
+      if (journalReplay.hadCorruptTail && journalReplay.replayed === 0) {
+        ctx.print('  [Recovery] Journal tail was corrupt or unrecognised (quarantined). Proceeding with snapshot only.');
+      } else if (journalReplay.hadCorruptTail) {
+        ctx.print('  [Recovery] Journal tail was partially corrupt (quarantined). Replay stopped at last good record.');
+      }
       const reopenedPanels = reopenPanelsFromReturnContext(ctx, meta.returnContext);
       const returnContextMode = getReturnContextMode(ctx.platform.configManager);
       if (returnContextMode !== 'off' && meta.returnContext) {

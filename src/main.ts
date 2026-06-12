@@ -40,6 +40,7 @@ import {
   writeRecoveryFile,
 } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
+import { createPersistRecoverySnapshot, createReopenRecoveryPanels, handleErrorAffordanceKey } from './shell/recovery-input-helpers.ts';
 import { wireShellUiOpeners } from './shell/ui-openers.ts';
 import { deriveComposerState } from './core/composer-state.ts';
 import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnContextMode, maybeAssistReturnContextSummary } from '@/runtime/index.ts';
@@ -699,26 +700,37 @@ async function main() {
     gitStatusProvider,
     lastGitInfoRef,
     buildSessionContinuityHints,
-    render,
+    render, webhookNotifier: ctx.services.webhookNotifier,
   });
   unsubs.push(...turnUnsubs);
 
   // Stable turn context for failover retry — set in submitInput, read by retryTurn.
   let retryCtx: { count: number; text: string; content?: ContentPart[]; opts?: Parameters<typeof orchestrator.handleUserInput>[2] } | null = null;
+  // One-key retry affordance: active immediately after a user-visible TURN_ERROR.
+  // While active, 'r' re-submits on the current provider, 'm' opens the model
+  // picker. Any other character clears the affordance and routes normally.
+  let errorAffordanceActive = false;
+  const retryTurn = (): void => {
+    if (!retryCtx) return;
+    const { count, text, content: rContent, opts: rOpts } = retryCtx;
+    // Roll back to pre-submission count, then re-submit. SDK gap — no retry-in-place (see handoff).
+    conversation.removeMessagesAfter(count);
+    orchestrator.handleUserInput(text, rContent, rOpts).catch((e: unknown) => logger.debug('retryTurn', { error: summarizeError(e) }));
+  };
   const streamResult: WireStreamEventMetricsResult = wireStreamEventMetrics({
     events: uiServices.events, orchestrator, providerRegistry,
     systemMessageRouter, render, metrics: streamMetrics,
-    providerOptimizer: ctx.services.providerOptimizer, costLookup: providerRegistry,
-    retryTurn: () => {
-      if (!retryCtx) return;
-      const { count, text, content: rContent, opts: rOpts } = retryCtx;
-      // Roll back to pre-submission count (strips error system messages), then
-      // re-submit. SDK gap — no retry-in-place; see HANDOFF item (Issue 2).
-      conversation.removeMessagesAfter(count);
-      orchestrator.handleUserInput(text, rContent, rOpts).catch((e: unknown) => logger.debug('retryTurn', { error: summarizeError(e) }));
-    },
+    providerOptimizer: ctx.services.providerOptimizer, costLookup: providerRegistry, retryTurn,
   });
   unsubs.push(...streamResult.unsubs);
+  // Activate one-key retry affordance when a user-visible error surfaces.
+  streamResult.onErrorSurfaced((exhausted) => {
+    if (retryCtx) {
+      errorAffordanceActive = true;
+      systemMessageRouter.low(exhausted ? '[Retry] r retry same provider · m switch model' : '[Retry] r retry · m switch model');
+      render();
+    }
+  });
 
   // --- Terminal setup ---
   stdin.setRawMode(true);
@@ -726,40 +738,28 @@ async function main() {
   stdin.setEncoding('utf8');
   allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE));
 
-  applyInitialTuiCliState({
-    cli,
-    input,
-    commandRegistry,
-    commandContext,
-    shellPaths: ctx.services.shellPaths,
-    render,
-  });
+  applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, render });
 
   stdin.on('data', (data: string) => {
     const blocking = handleBlockingShellInput({
-      data,
-      pendingPermission,
-      recoveryPending,
+      data, pendingPermission, recoveryPending, conversation, systemMessageRouter, render,
       abortTurn: () => orchestrator.abort(),
-      conversation,
-      systemMessageRouter,
-      render,
       loadRecoveryConversation: () => loadRecoveryConversation({ homeDirectory }),
       deleteRecoveryFile: () => deleteRecoveryFile({ homeDirectory }),
-      reopenPanels: (snapshot) => {
-        const panels = snapshot.returnContext?.openPanels;
-        if (!panels || panels.length === 0) return;
-        for (const panelId of panels.slice(0, 4)) {
-          try { panelManager.open(panelId); } catch { /* unknown panel id — skip */ }
-        }
-        panelManager.show();
-        render();
-      },
+      homeDirectory, sessionId: runtime.sessionId,
+      persistSnapshot: createPersistRecoverySnapshot({ sessionManager: ctx.services.sessionManager, runtime, conversation }),
+      reopenPanels: createReopenRecoveryPanels({ panelManager, render }),
     });
     pendingPermission = blocking.pendingPermission;
     recoveryPending = blocking.recoveryPending;
     if (blocking.handled) {
       return;
+    }
+
+    // One-key retry affordance: armed after a user-visible TURN_ERROR; any key other than r/m dismisses it and routes normally.
+    if (errorAffordanceActive) {
+      errorAffordanceActive = false;
+      if (handleErrorAffordanceKey(data, { retryArmed: retryCtx !== null, retry: retryTurn, openModelPicker: () => commandContext.openModelPicker?.(), render })) return;
     }
 
     input.feed(data);

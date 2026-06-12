@@ -2,6 +2,8 @@ import type { ConversationManager } from '../core/conversation';
 import type { PermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
 import type { SessionSnapshot } from '@/runtime/index.ts';
 import type { SystemMessageRouter } from '../core/system-message-router.ts';
+import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
+import { replayJournalForSession } from '../core/session-recovery.ts';
 
 export type PendingPermissionState = PermissionRequest & {
   resolve: (approved: boolean, remember?: boolean) => void;
@@ -17,6 +19,22 @@ export type BlockingInputHandlerOptions = {
   render: () => void;
   loadRecoveryConversation: () => SessionSnapshot | null;
   deleteRecoveryFile: () => void;
+  /**
+   * Absolute home directory used to locate the transcript journal for this
+   * recovery session. Required for journal replay on Ctrl+R restore.
+   */
+  homeDirectory: string;
+  /**
+   * The session ID that the recovery file belongs to. Required for journal
+   * replay so the correct journal path can be resolved.
+   */
+  sessionId: string;
+  /**
+   * Persist the post-replay snapshot so the WAL gap is durably closed.
+   * Called with the replayed message list. Best-effort — failures are swallowed
+   * inside replayJournalForSession.
+   */
+  persistSnapshot: (messages: ConversationMessageSnapshot[]) => void;
   /**
    * Optional callback invoked after Ctrl+R restore to reopen panels captured in
    * the recovery snapshot's returnContext. When provided (as wired in main.ts),
@@ -47,6 +65,9 @@ export function handleBlockingShellInput(
     render,
     loadRecoveryConversation,
     deleteRecoveryFile,
+    homeDirectory,
+    sessionId,
+    persistSnapshot,
     reopenPanels,
   } = options;
 
@@ -85,6 +106,17 @@ export function handleBlockingShellInput(
           messages: recovery.messages as Parameters<typeof conversation.fromJSON>[0]['messages'],
           title: recovery.title,
           titleSource: recovery.titleSource,
+        });
+        // Replay journal records that post-date the recovery snapshot so turns
+        // written after the last recovery-file write (but before SIGKILL) are
+        // not silently dropped. snapshotTimestamp=0 when timestamp is absent so
+        // all journal records are replayed — safer than dropping.
+        replayJournalForSession({
+          homeDirectory,
+          sessionId,
+          snapshotTimestamp: recovery.timestamp ?? 0,
+          conversation,
+          persistSnapshot,
         });
         reopenPanels?.(recovery);
         systemMessageRouter.high('[Recovery] Session restored.');
