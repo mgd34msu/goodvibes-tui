@@ -1,9 +1,54 @@
 /**
+ * Strip ANSI SGR/CSI escape sequences and OSC-8 hyperlink sequences
+ * from a string so that only visible characters remain for width measurement.
+ *
+ * Covers:
+ *   - CSI sequences: ESC [ ... <final byte 0x40-0x7E>  (includes SGR \x1b[...m)
+ *   - OSC sequences: ESC ] ... ST  where ST is ESC\\ or BEL (0x07)
+ *   - Simple ESC followed by a single non-bracket/non-] character (e.g. ESC c)
+ */
+function stripAnsi(text: string): string {
+  let result = '';
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === '\x1b') {
+      const next = text[i + 1];
+      if (next === '[') {
+        // CSI: skip until final byte (0x40-0x7E)
+        i += 2;
+        while (i < text.length) {
+          const c = text.charCodeAt(i);
+          i++;
+          if (c >= 0x40 && c <= 0x7e) break;
+        }
+      } else if (next === ']') {
+        // OSC: skip until ST (ESC\\ or BEL)
+        i += 2;
+        while (i < text.length) {
+          if (text[i] === '\x07') { i++; break; }
+          if (text[i] === '\x1b' && text[i + 1] === '\\') { i += 2; break; }
+          i++;
+        }
+      } else {
+        // Simple two-byte escape (ESC + one char)
+        i += next !== undefined ? 2 : 1;
+      }
+    } else {
+      result += text[i];
+      i++;
+    }
+  }
+  return result;
+}
+
+/**
  * Calculates the visual width of a string in the terminal.
  * Handles CJK characters, emoji (including ZWJ sequences), and
  * variation selectors correctly as double-width.
+ * ANSI escape sequences (SGR/CSI/OSC-8) are stripped before measurement.
  */
 export function getDisplayWidth(text: string): number {
+  text = stripAnsi(text);
   let width = 0;
   let i = 0;
   while (i < text.length) {

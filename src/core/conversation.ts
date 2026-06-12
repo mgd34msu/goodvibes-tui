@@ -91,6 +91,12 @@ export class ConversationManager extends SdkConversationManager {
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
   /**
+   * Timestamp of the last renderMarkdown call during streaming.
+   * Used to throttle full re-parses to the 16ms render coalescer cadence.
+   * Reset to 0 on startStreamingBlock and finalizeStreamingBlock.
+   */
+  private _lastStreamRenderMs = 0;
+  /**
    * Message index at the time of the last clearDisplay() call.
    * rebuildHistory() renders only messages at or after this index, so the
    * display stays blank for messages added before the clear while LLM history
@@ -224,9 +230,11 @@ export class ConversationManager extends SdkConversationManager {
   public override startStreamingBlock(): void {
     super.startStreamingBlock();
     this.markDirty();
-    // Record the line where the streaming block starts so updates can be incremental
+    // Record the line where the streaming block starts so updates can be incremental.
+    // Reset the render throttle so the first delta always renders immediately.
     this.flushHistory();
     this.streamingStartLine = this.history.getLineCount();
+    this._lastStreamRenderMs = 0;
   }
 
   /**
@@ -236,12 +244,18 @@ export class ConversationManager extends SdkConversationManager {
    */
   public override updateStreamingBlock(content: string): void {
     super.updateStreamingBlock(content);
-    // Incrementally update the history buffer instead of full rebuild
+    // Incrementally update the history buffer instead of full rebuild.
+    // Throttle renderMarkdown to the 16ms render-coalescer cadence to avoid
+    // O(n) parse overhead on every delta token during streaming.
     if (this.streamingStartLine >= 0) {
-      const width = this._getWidth();
-      this.history.truncateToLine(this.streamingStartLine);
-      const rendered = renderMarkdown(content, width);
-      this.history.addLines(rendered);
+      const now = Date.now();
+      if (now - this._lastStreamRenderMs >= 16) {
+        this._lastStreamRenderMs = now;
+        const width = this._getWidth();
+        this.history.truncateToLine(this.streamingStartLine);
+        const rendered = renderMarkdown(content, width, { isStreaming: true });
+        this.history.addLines(rendered);
+      }
     }
   }
 
@@ -252,6 +266,7 @@ export class ConversationManager extends SdkConversationManager {
   public override finalizeStreamingBlock(): void {
     super.finalizeStreamingBlock();
     this.streamingStartLine = -1;
+    this._lastStreamRenderMs = 0;
     this.markDirty();
   }
 
