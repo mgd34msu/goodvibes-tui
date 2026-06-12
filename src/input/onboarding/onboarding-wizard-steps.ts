@@ -621,6 +621,12 @@ export function buildNetworkStep(controller: OnboardingWizardControllerLike): On
       }
     }
 
+    if (controlPlaneRemote || listenerEnabled || browserEnabled) { // TLS warn + CORS notice.
+      const cpOff = controlPlaneRemote && String(controller.runtimeSnapshot?.config.controlPlane?.tls?.mode ?? 'off') === 'off';
+      const hlOff = listenerEnabled && String(controller.runtimeSnapshot?.config.httpListener?.tls?.mode ?? 'off') === 'off';
+      if (cpOff || hlOff) { const a = [cpOff ? 'control plane' : '', hlOff ? 'HTTP listener' : ''].filter(Boolean).join(' and '); fields.push({ kind: 'status', id: 'network.tls-warn', label: `TLS off — ${a} transmits plaintext`, defaultValue: 'Warning', hint: `The ${a} is network-reachable but TLS is off. Traffic travels in plaintext. Enable TLS or use a terminating reverse proxy.` }); }
+      if (listenerEnabled) { fields.push({ kind: 'status', id: 'network.cors-note', label: 'CORS must be configured manually', defaultValue: 'Info', hint: 'httpListener.enforceCors and httpListener.allowedOrigins are not in ConfigKey union (SDK handoff Item 5). Edit ~/.goodvibes/tui/settings.json to set them, then restart the daemon.' }); }
+    }
     return {
       id: 'network',
       title: 'Network setup',

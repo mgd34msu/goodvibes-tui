@@ -257,6 +257,19 @@ export function buildCloudflareStep(controller: OnboardingWizardControllerLike):
       );
     }
 
+    // Trust-proxy notice — shown when Tunnel is selected so the
+    // operator sees the security implication before applying.
+    const tunnelSelected = enabled && components.zeroTrustTunnel;
+    if (tunnelSelected) {
+      fields.push({
+        kind: 'status',
+        id: 'cloudflare.trust-proxy-notice',
+        label: 'trustProxy will be enabled for control plane and HTTP listener',
+        defaultValue: 'Notice',
+        hint: 'Selecting Zero Trust Tunnel auto-writes controlPlane.trustProxy=true and httpListener.trustProxy=true so the login rate-limiter keys on the real client IP (CF-Connecting-IP) rather than the tunnel egress address. RESIDUAL RISK: until the SDK validates CF-Connecting-IP against Cloudflare published IP ranges (handoff Item 5), a client that reaches the listener directly can spoof this header to bypass the per-IP rate-limiter. See docs/deployment-and-services.md for the full risk posture.',
+      });
+    }
+
     if (components.zeroTrustAccess) {
       fields.push(
         {
@@ -463,6 +476,7 @@ export function buildCloudflareStep(controller: OnboardingWizardControllerLike):
       `Components: ${enabled ? componentCount : 0} selected`,
       `Token setup: ${enabled ? setupSource : 'not used'}`,
       `Provision on final apply: ${enabled ? controller.getStringFieldValue('cloudflare.provision-on-apply', 'no') : 'no'}`,
+      ...(enabled && components.zeroTrustTunnel ? ['trustProxy: enabled for control plane and HTTP listener (see security notice)'] : []),
     ],
     fields,
   };
