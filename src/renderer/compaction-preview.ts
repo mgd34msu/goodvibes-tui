@@ -115,13 +115,13 @@ function fmtN(n: number): string {
 }
 
 /**
- * Build the /pin command usage text (shown when no args are provided).
+ * Build the /keep command usage text (shown when no args are provided).
  *
  * Exported for testability — the shell-core handler renders this string directly.
  */
 export function buildPinUsageText(): string {
   return (
-    '[Pin] Usage: /pin <text>\n' +
+    '[Pin] Usage: /keep <text>\n' +
     'Pinned entries are stored as session memories and included in the compaction handoff as pinned memories.\n' +
     'What pinning guarantees: the text survives the next compaction.\n' +
     'What pinning does NOT guarantee: recovery after process restart (session memories are in-memory only).'
@@ -129,7 +129,7 @@ export function buildPinUsageText(): string {
 }
 
 /**
- * Build the /pin command success text.
+ * Build the /keep command success text.
  *
  * @param id - The assigned memory ID (e.g. "mem-1")
  * @param text - The pinned text

@@ -237,7 +237,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
   });
 
   registry.register({
-    name: 'pin',
+    name: 'keep',
     aliases: [],
     description: 'Pin text to session memory (survives compaction)',
     usage: '<text>',
