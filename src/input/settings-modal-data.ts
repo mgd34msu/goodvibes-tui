@@ -122,6 +122,14 @@ export function buildSettingGroups(
     ttsEntries.push(buildTtsSpeedSyntheticEntry(configManager));
   }
 
+  // Inject the synthetic behavior.notifyAfterSeconds entry into the behavior
+  // category. This key is TUI-local (not in the SDK ConfigKey union) and
+  // controls the long-task push notification threshold.
+  const behaviorEntries = groups.get('behavior');
+  if (behaviorEntries && !behaviorEntries.some((e) => e.setting.key === ('behavior.notifyAfterSeconds' as ConfigKey))) {
+    behaviorEntries.push(buildNotifyAfterSecondsSyntheticEntry(configManager));
+  }
+
   return groups;
 }
 
@@ -168,6 +176,51 @@ export function buildTtsSpeedSyntheticEntry(configManager: Pick<ConfigManager, '
     setting: TTS_SPEED_SYNTHETIC_SETTING,
     currentValue,
     isDefault: deepEqual(currentValue, TTS_SPEED_DEFAULT),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// behavior.notifyAfterSeconds synthetic setting
+// ---------------------------------------------------------------------------
+
+/** Default threshold in seconds for the synthetic notifyAfterSeconds setting. */
+export const NOTIFY_AFTER_SECONDS_DEFAULT_SETTING = 60;
+
+/**
+ * The synthetic ConfigSetting descriptor for behavior.notifyAfterSeconds.
+ *
+ * This key is TUI-local and is not yet in the SDK ConfigKey union. The
+ * descriptor is injected into the behavior settings group so users can
+ * configure the long-task push notification threshold from /config behavior.
+ *
+ * 0 = off (no notifications). Any positive integer = threshold in seconds.
+ * Default 60s matches the default in long-task-notifier.ts.
+ *
+ * The key is cast to ConfigKey because ConfigSetting requires it. The cast
+ * is safe: configManager.get returns undefined for unknown keys rather than
+ * throwing.
+ */
+export const NOTIFY_AFTER_SECONDS_SYNTHETIC_SETTING: ConfigSetting = {
+  key: 'behavior.notifyAfterSeconds' as ConfigKey,
+  type: 'number',
+  default: NOTIFY_AFTER_SECONDS_DEFAULT_SETTING,
+  description: 'Seconds a turn must run before a push notification fires (0 = off). Delivers to desktop (notify-send/osascript) and configured ntfy/webhook URLs.',
+};
+
+/**
+ * Build the synthetic SettingEntry for behavior.notifyAfterSeconds.
+ *
+ * Reads the raw value from configManager using a cast key. Falls back to
+ * NOTIFY_AFTER_SECONDS_DEFAULT_SETTING when absent or invalid.
+ */
+export function buildNotifyAfterSecondsSyntheticEntry(configManager: Pick<ConfigManager, 'get'>): SettingEntry {
+  const raw = configManager.get('behavior.notifyAfterSeconds' as ConfigKey);
+  const parsed = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+  const currentValue: number = Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : NOTIFY_AFTER_SECONDS_DEFAULT_SETTING;
+  return {
+    setting: NOTIFY_AFTER_SECONDS_SYNTHETIC_SETTING,
+    currentValue,
+    isDefault: currentValue === NOTIFY_AFTER_SECONDS_DEFAULT_SETTING,
   };
 }
 
