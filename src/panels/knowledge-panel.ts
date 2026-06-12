@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import type { KeyName } from './types.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import type { MemoryClass, MemoryRecord, MemoryRegistry, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state';
 import {
@@ -102,7 +103,7 @@ export class KnowledgePanel extends ScrollableListPanel<MemoryRecord> {
   // Input
   // ---------------------------------------------------------------------------
 
-  public handleInput(key: string): boolean {
+  public handleInput(key: KeyName): boolean {
     // I1: y/n confirm for stale/contradict
     if (this.confirm) {
       const result = handleConfirmInput(this.confirm, key);
@@ -149,7 +150,7 @@ export class KnowledgePanel extends ScrollableListPanel<MemoryRecord> {
 
     const selected = this.records[this.selectedIndex];
 
-    if (key === 'Enter' || key === 'return' || key === 'r') {
+    if (key === 'enter' || key === 'return' || key === 'r') {
       if (!selected) return false;
       this.registry.review(selected.id, {
         state: 'reviewed',
@@ -186,9 +187,6 @@ export class KnowledgePanel extends ScrollableListPanel<MemoryRecord> {
       return true;
     }
 
-    // Normalize arrow keys to base class format
-    if (key === 'ArrowUp') return super.handleInput('up');
-    if (key === 'ArrowDown') return super.handleInput('down');
     return super.handleInput(key);
   }
 

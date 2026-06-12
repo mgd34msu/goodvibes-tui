@@ -70,7 +70,7 @@ describe('KnowledgePanel', () => {
     expect(reviewed?.reviewState).toBe('reviewed');
     expect(reviewed?.confidence).toBeGreaterThanOrEqual(85);
 
-    expect(panel.handleInput('ArrowDown')).toBe(true);
+    expect(panel.handleInput('down')).toBe(true);
     // 's' now opens a confirm dialog (I1); must press 'y' to commit
     expect(panel.handleInput('s')).toBe(true);
     // still 'reviewed' — confirm is pending
