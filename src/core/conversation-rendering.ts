@@ -11,10 +11,13 @@ import { LAYOUT } from '../renderer/layout.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { renderConversationCollapsedFragment, renderConversationEventLine } from '../renderer/conversation-surface.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
-import type { BlockMeta, ConversationMessageSnapshot } from './conversation';
+import type { BlockMeta } from './conversation-types.ts';
+import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
 import { parseDiffForApply } from '@pellux/goodvibes-sdk/platform/core';
 import { extractUserDisplayText } from '@pellux/goodvibes-sdk/platform/core';
-import type { SystemMessageKind } from './system-message-router.ts';
+// SystemMessageKind imported from runtime directly to avoid cycle:
+//   conversation-rendering.ts → system-message-router.ts → conversation.ts → conversation-rendering.ts
+import type { SystemMessageKind } from '@/runtime/index.ts';
 
 const T = DARK_THEME;
 

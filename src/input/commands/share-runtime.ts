@@ -17,7 +17,7 @@ import {
   resolveGithubToken,
 } from '../../export/gist-uploader.ts';
 import { copyToClipboard } from '../../utils/clipboard.ts';
-import { openBrowser } from '../../cli/management.ts';
+import { openBrowser } from '../../utils/browser.ts';
 
 export function registerShareRuntimeCommands(registry: CommandRegistry): void {
   registry.register({

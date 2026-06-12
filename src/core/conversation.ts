@@ -5,11 +5,14 @@ import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types'
 import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
-import type { SystemMessageKind } from './system-message-router.ts';
+// SystemMessageKind imported from runtime directly to avoid cycle:
+//   conversation.ts → system-message-router.ts → conversation.ts
+import type { SystemMessageKind } from '@/runtime/index.ts';
 import {
   ConversationManager as SdkConversationManager,
   type BlockMeta as SdkBlockMeta,
 } from '@pellux/goodvibes-sdk/platform/core';
+import type { BlockMeta } from './conversation-types.ts';
 import {
   addConversationSplashScreen,
   appendConversationMessages,
@@ -38,17 +41,9 @@ export type {
 
 export type { SdkBlockMeta };
 
-/** TUI extends the SDK BlockMeta with rendering position fields. */
-export interface BlockMeta extends SdkBlockMeta {
-  /** Index of this block (increments per renderable block). */
-  blockIndex: number;
-  /** First rendered line index in the history buffer. */
-  startLine: number;
-  /** Number of rendered lines (when not collapsed). */
-  lineCount: number;
-  /** Stable key for collapse state persistence across rebuilds (e.g. msg_N). */
-  collapseKey: string;
-}
+// BlockMeta is defined in ./conversation-types.ts to avoid a circular dep
+// with conversation-rendering.ts; re-exported here for backward compatibility.
+export type { BlockMeta };
 
 // Import internal types needed for rendering helpers
 import type { ConversationMessageSnapshot } from '@pellux/goodvibes-sdk/platform/core';
