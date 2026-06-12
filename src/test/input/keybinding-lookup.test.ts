@@ -1,5 +1,5 @@
 /**
- * α2: O(1) keybinding lookup via KeybindingsManager.lookup().
+ * O(1) keybinding lookup via KeybindingsManager.lookup().
  *
  * Verifies that lookup() returns the correct KeyAction for all default bindings
  * and returns null for tokens that match no binding.
@@ -18,7 +18,7 @@ function makeKm(): KeybindingsManager {
   return new KeybindingsManager({ configPath: '/nonexistent/keybindings.json' });
 }
 
-describe('KeybindingsManager.lookup() (α2)', () => {
+describe('KeybindingsManager.lookup()', () => {
   it('returns the correct action for every default combo', () => {
     const km = makeKm();
     for (const [action, combos] of Object.entries(DEFAULT_KEYBINDINGS) as [KeyAction, typeof DEFAULT_KEYBINDINGS[KeyAction]][]) {

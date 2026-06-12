@@ -38,6 +38,7 @@ import type { Panel } from '../panels/types.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
+import type { KillRing } from './kill-ring.ts';
 import type { PanelMouseLayout } from './handler-feed-routes.ts';
 
 /**
@@ -124,6 +125,7 @@ export interface FeedContextStableRefs {
   conversationManager: ConversationManager | null;
   panelManager: PanelManager;
   keybindingsManager: KeybindingsManager;
+  killRing: KillRing;
   getHistory: () => InfiniteBuffer;
   getViewportHeight: () => number;
   getScrollTop: () => number;
@@ -145,6 +147,10 @@ export interface FeedContextClosures {
   handleRedo: () => void;
   handlePaste: () => void;
   saveUndoState: () => void;
+  /** Save undo state with text-insertion coalescing (burst typing merges into one group). */
+  saveUndoStateForText: () => void;
+  /** Break the current coalescing group (call on cursor moves). */
+  breakUndoCoalesce: () => void;
   ensureInputCursorVisible: (contentWidth?: number) => void;
   registerPaste: (content: string) => string;
   executeBlockAction: (id: string) => void;

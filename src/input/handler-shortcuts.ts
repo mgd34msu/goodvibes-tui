@@ -6,6 +6,8 @@ import type { ConversationManager } from '../core/conversation';
 import type { AutocompleteEngine } from './autocomplete.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
+import type { KillRing } from './kill-ring.ts';
+import { wordBoundaryBack, wordBoundaryForward } from './kill-ring.ts';
 
 type WrappedPromptInfo = {
   wrappedLines: string[];
@@ -43,6 +45,7 @@ export type GlobalShortcutRouteState = {
   handlePaste: () => void;
   handleEscape: () => void;
   cyclePanelTab: (direction: 'next' | 'prev') => void;
+  killRing: KillRing;
 };
 
 export function handleGlobalShortcutToken(
@@ -148,6 +151,8 @@ export function handleGlobalShortcutToken(
       let pos = state.cursorPos;
       while (pos > 0 && state.prompt[pos - 1] === ' ') pos--;
       while (pos > 0 && state.prompt[pos - 1] !== ' ') pos--;
+      const killedWord = state.prompt.slice(pos, state.cursorPos);
+      if (killedWord) { state.killRing.push(killedWord); state.killRing.clearYankState(); }
       state.prompt = state.prompt.slice(0, pos) + state.prompt.slice(state.cursorPos);
       state.cursorPos = pos;
       state.ensureInputCursorVisible();
@@ -179,13 +184,18 @@ export function handleGlobalShortcutToken(
       return true;
     }
 
-    case 'kill-line':
+    case 'kill-line': {
+      const killed = state.prompt.slice(state.cursorPos);
       state.saveUndoState();
+      state.killRing.push(killed);
+      state.killRing.clearYankState();
       state.prompt = state.prompt.slice(0, state.cursorPos);
       state.ensureInputCursorVisible();
       return true;
+    }
 
-    case 'clear-prompt':
+    case 'clear-prompt': {
+      // Legacy full-clear: keep as alias but do NOT call this when kill-to-start is bound.
       state.saveUndoState();
       state.prompt = '';
       state.cursorPos = 0;
@@ -194,6 +204,82 @@ export function handleGlobalShortcutToken(
         state.autocomplete?.reset();
       }
       return true;
+    }
+
+    case 'kill-to-start': {
+      // Kill from start of buffer to cursor, push to ring.
+      const killed = state.prompt.slice(0, state.cursorPos);
+      state.saveUndoState();
+      state.killRing.push(killed);
+      state.killRing.clearYankState();
+      state.prompt = state.prompt.slice(state.cursorPos);
+      state.cursorPos = 0;
+      state.ensureInputCursorVisible();
+      return true;
+    }
+
+    case 'kill-word-forward': {
+      // Kill from cursor to end of next word, push to ring.
+      const end = wordBoundaryForward(state.prompt, state.cursorPos);
+      const killed = state.prompt.slice(state.cursorPos, end);
+      if (killed) {
+        state.saveUndoState();
+        state.killRing.push(killed);
+        state.killRing.clearYankState();
+        state.prompt = state.prompt.slice(0, state.cursorPos) + state.prompt.slice(end);
+        state.ensureInputCursorVisible();
+      }
+      return true;
+    }
+
+    case 'word-back': {
+      const newPos = wordBoundaryBack(state.prompt, state.cursorPos);
+      if (newPos !== state.cursorPos) {
+        state.killRing.clearYankState();
+        state.cursorPos = newPos;
+        state.ensureInputCursorVisible();
+      }
+      return true;
+    }
+
+    case 'word-forward': {
+      const newPos = wordBoundaryForward(state.prompt, state.cursorPos);
+      if (newPos !== state.cursorPos) {
+        state.killRing.clearYankState();
+        state.cursorPos = newPos;
+        state.ensureInputCursorVisible();
+      }
+      return true;
+    }
+
+    case 'yank': {
+      const text = state.killRing.yank();
+      if (text) {
+        state.saveUndoState();
+        state.prompt = state.prompt.slice(0, state.cursorPos) + text + state.prompt.slice(state.cursorPos);
+        state.cursorPos += text.length;
+        state.ensureInputCursorVisible();
+      }
+      return true;
+    }
+
+    case 'yank-pop': {
+      // Only valid immediately after a yank or yank-pop.
+      if (!state.killRing.lastActionWasYank) return false;
+      // Undo the previous yank by restoring: we store the pre-yank snapshot on
+      // the undo stack so a single undo covers the whole yank sequence.
+      // For yank-pop: replace the last yanked text with the next ring entry.
+      // We rely on the undo stack having the pre-yank state at the top.
+      state.handleUndo();
+      const text = state.killRing.yankPop();
+      if (text) {
+        state.saveUndoState();
+        state.prompt = state.prompt.slice(0, state.cursorPos) + text + state.prompt.slice(state.cursorPos);
+        state.cursorPos += text.length;
+        state.ensureInputCursorVisible();
+      }
+      return true;
+    }
 
     case 'undo':
       state.handleUndo();

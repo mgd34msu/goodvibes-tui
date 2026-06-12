@@ -246,6 +246,7 @@ export class UIFactory {
     lines.push(bottomLine);
     lines.push(createBaseLine());
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
+    if (promptLines.length > 1) composerTokens.push({ text: ` ${promptLines.length}L `, fg: '244', dim: true });
     if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: '#38bdf8', bold: true });
     if (composerPendingRisk && composerPendingRisk !== 'none') {
       const riskColor = composerPendingRisk === 'approval-wait'

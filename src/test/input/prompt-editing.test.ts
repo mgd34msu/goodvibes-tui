@@ -79,9 +79,9 @@ describe('saveUndoState', () => {
     expect(getRedoStack(ih).length).toBe(0);
   });
 
-  test('undo stack bounded at MAX_UNDO (50)', () => {
+  test('undo stack bounded at MAX_UNDO (100)', () => {
     const ih = makeInput();
-    const MAX = 50;
+    const MAX = 100;
     for (let i = 0; i <= MAX; i++) {
       ih.prompt = `state${i}`;
       ih.cursorPos = i;
@@ -157,7 +157,7 @@ describe('handleUndo', () => {
 
   test('redo stack bounded at MAX_UNDO after many undos', () => {
     const ih = makeInput();
-    const MAX = 50;
+    const MAX = 100;
     // Build a large undo stack
     for (let i = 0; i <= MAX + 5; i++) {
       ih.prompt = `s${i}`;

@@ -44,6 +44,7 @@ import { SelectionManager } from './selection.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
+import type { KillRing } from './kill-ring.ts';
 
 /**
  * InputFeedContext — The single long-lived context object passed to feedInputTokens
@@ -129,6 +130,7 @@ export interface InputFeedContext {
   readonly modalStack: string[];
   inputHistory: InputHistory | null;
   conversationManager: ConversationManager | null;
+  readonly killRing: KillRing;
   readonly getHistory: () => InfiniteBuffer;
   readonly getViewportHeight: () => number;
   readonly getScrollTop: () => number;
@@ -146,6 +148,10 @@ export interface InputFeedContext {
   readonly handleRedo: () => void;
   readonly handlePaste: () => void;
   readonly saveUndoState: () => void;
+  /** Coalescing variant: consecutive text insertions within UNDO_COALESCE_MS merge into one group. */
+  readonly saveUndoStateForText: () => void;
+  /** Break the current coalescing group (cursor moves call this). */
+  readonly breakUndoCoalesce: () => void;
   readonly ensureInputCursorVisible: (contentWidth?: number) => void;
   readonly registerPaste: (content: string) => string;
   readonly executeBlockAction: (id: string) => void;
@@ -283,6 +289,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         cyclePanelTab: context.cyclePanelTab,
         panelManager: context.panelManager,
         keybindingsManager: context.keybindingsManager,
+        killRing: context.killRing,
       };
       if (handleGlobalShortcutToken(shortcutState, token, viewportHeight)) {
         context.prompt = shortcutState.prompt;
@@ -336,9 +343,11 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       filePicker: context.filePicker,
       modalOpened: context.modalOpened,
       saveUndoState: context.saveUndoState,
+      saveUndoStateForText: context.saveUndoStateForText,
       ensureInputCursorVisible: () => context.ensureInputCursorVisible(),
       registerPaste: context.registerPaste,
       requestRender: context.requestRender,
+      killRing: context.killRing,
     }, token);
     if (textRoute.handled) {
       context.prompt = textRoute.prompt;
@@ -395,6 +404,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         processModal: context.processModal,
         modalOpened: context.modalOpened,
         saveUndoState: context.saveUndoState,
+        breakUndoCoalesce: context.breakUndoCoalesce,
         ensureInputCursorVisible: context.ensureInputCursorVisible,
         getWrappedPromptInfo: context.getWrappedPromptInfo,
         moveCursorVertical: context.moveCursorVertical,
@@ -406,6 +416,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         scroll: context.scroll,
         exitApp: context.exitApp,
         requestRender: context.requestRender,
+        killRing: context.killRing,
       }, token);
       if (keyRoute.handled) {
         context.prompt = keyRoute.prompt;
