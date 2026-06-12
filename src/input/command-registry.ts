@@ -233,8 +233,28 @@ export class CommandRegistry {
   private commands = new Map<string, SlashCommand>();
   private aliasIndex = new Map<string, SlashCommand>();
 
-  /** Register a command. Also indexes all aliases for O(1) lookup. */
+  /**
+   * Register a command. Also indexes all aliases for O(1) lookup.
+   * Throws if the primary name or any alias collides with an existing
+   * registration — silent last-write-wins previously shadowed whole
+   * commands, so collisions must fail fast at startup (and are caught
+   * statically by the alias lint test).
+   */
   register(command: SlashCommand): void {
+    const existingByName = this.commands.get(command.name) ?? this.aliasIndex.get(command.name);
+    if (existingByName) {
+      throw new Error(
+        `Command registration collision: "${command.name}" is already registered by /${existingByName.name}.`,
+      );
+    }
+    for (const alias of command.aliases ?? []) {
+      const holder = this.commands.get(alias) ?? this.aliasIndex.get(alias);
+      if (holder) {
+        throw new Error(
+          `Command alias collision: "${alias}" on /${command.name} is already registered by /${holder.name}.`,
+        );
+      }
+    }
     this.commands.set(command.name, command);
     for (const alias of command.aliases ?? []) {
       this.aliasIndex.set(alias, command);

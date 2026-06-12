@@ -5,7 +5,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 export function registerOperatorPanelCommand(registry: CommandRegistry): void {
   registry.register({
     name: 'panel',
-    aliases: ['panels', 'p'],
+    aliases: ['panels'],
     description: 'Open, place, resize, or list panels. Usage: /panel [open <id> [top|bottom]|close <id>|list|toggle|move|focus|split|width|height]',
     usage: '[open <id> [top|bottom]|close <id>|list|toggle|move <top|bottom|other> [id]|focus <top|bottom|toggle>|split [show|hide|toggle]|width <left|right|reset>|height <up|down|reset>]',
     argsHint: '<open|close|list|toggle|move|focus|split|width|height> [id]',
