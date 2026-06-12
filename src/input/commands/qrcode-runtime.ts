@@ -12,7 +12,6 @@ export function registerQrcodeRuntimeCommands(registry: CommandRegistry): void {
     name: 'qrcode',
     aliases: ['qr', 'pair'],
     description: 'Open the QR code panel for companion app pairing',
-    usage: '',
     handler(_args, ctx) {
       openCommandPanel(ctx, 'qr-code');
     },

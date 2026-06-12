@@ -162,7 +162,7 @@ async function handleGate(args: string[], context: CommandContext): Promise<void
 
 export const evalCommand: SlashCommand = {
   name: 'eval',
-  description: 'Evaluation harness: run benchmark suites, compare baselines, and gate regressions.',
+  description: 'Evaluation harness: run benchmark suites, compare baselines, and gate regressions',
   usage: '<subcommand> [args]',
   argsHint: 'list|run <suite>|compare <baseline>|gate <suite>',
   handler: async (args: string[], context: CommandContext): Promise<void> => {

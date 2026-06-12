@@ -803,7 +803,7 @@ Key commands:
 - `/update`
 - `/trust`
 - `/bridge`
-- `/profilesync`
+- `/profile-sync`
 
 The setup surface is also broader than a single readiness screen:
 
@@ -848,7 +848,7 @@ GoodVibes includes an automation layer with:
 - cron-like scheduled agent tasks with timezone-aware schedules, missed-run tracking, run history, and manual trigger support
 - TUI-owned project planning with readiness gaps, one-question-at-a-time clarification, project language, decision records, task/dependency/verification metadata, and explicit execution approval
 - planning commands with project-planning inspection, active-plan review, and mode/explain/override/status controls
-- persistent work-plan tracking for concrete task checklists via `/workplan`
+- persistent work-plan tracking for concrete task checklists via `/work-plan`
 
 Key commands:
 
@@ -874,7 +874,7 @@ Key commands:
 
 - `/services inspect|test|resolve|auth|auth-review|doctor|export|import`
 - `/profiles`
-- `/profilesync`
+- `/profile-sync`
 - `/setup transfer export|inspect|import`
 
 Service entries can use existing `tokenKey` fields, a SecretRef in the key field, or explicit `tokenRef` / `passwordRef` / `webhookUrlRef` / `signingSecretRef` / `publicKeyRef` / `appTokenRef` fields:
@@ -1281,7 +1281,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/git [action]` | `/g` | Git commands: status, log, diff. Opens git panel if no action given |
 | `/scan` | — | Scan for local LLM servers |
 | `/plan [goal]` | — | Inspect or seed TUI-owned project planning state; `panel`, `approve`, `list`, and `show <id>` are supported |
-| `/workplan [action]` | `/wp`, `/todo` | Open or update the persistent workspace work-plan checklist |
+| `/work-plan [action]` | `/wp`, `/todo` | Open or update the persistent workspace work-plan checklist |
 | `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split, width, height |
 | `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
 | `/marketplace [action]` | — | Browse curated plugin, skill, hook-pack, and policy-pack surfaces |

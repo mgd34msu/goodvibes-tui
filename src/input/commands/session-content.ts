@@ -162,7 +162,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
   registry.register({
     name: 'undo',
     aliases: [],
-    description: 'Undo last action. /undo file — revert last file write/edit. /undo — remove last conversation turn.',
+    description: 'Undo last action. /undo file — revert last file write/edit. /undo — remove last conversation turn',
     usage: '[file]',
     argsHint: '[file]',
     handler(args, ctx) {
@@ -191,7 +191,7 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
 
   registry.register({
     name: 'redo',
-    description: 'Redo last undone action. /redo file — re-apply last reverted file. /redo — restore conversation turn.',
+    description: 'Redo last undone action. /redo file — re-apply last reverted file. /redo — restore conversation turn',
     usage: '[file]',
     argsHint: '[file]',
     handler(args, ctx) {

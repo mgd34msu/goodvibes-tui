@@ -10,7 +10,6 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     name: 'cockpit',
     aliases: [],
     description: 'Open the unified operator cockpit',
-    usage: '',
     handler(_args, ctx) {
       if (ctx.openCockpitPanel) {
         ctx.openCockpitPanel();
@@ -103,7 +102,6 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     name: 'communication',
     aliases: ['comms'],
     description: 'Inspect structured agent communication routes and recent activity',
-    usage: '',
     handler(_args, ctx) {
       if (ctx.openCommunicationPanel) {
         ctx.openCommunicationPanel();

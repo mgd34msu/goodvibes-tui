@@ -16,7 +16,8 @@ function inspectProfileSyncBundle(bundle: ProfileSyncBundle): string {
 
 export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
-    name: 'profilesync',
+    name: 'profile-sync',
+    aliases: ['profilesync'],
     description: 'Export, import, and inspect profile sync bundles',
     usage: '[list|export <path>|inspect <path>|import <path> [prefix]]',
     handler(args, ctx) {
@@ -36,7 +37,7 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
 
       const pathArg = args[1];
       if (!pathArg) {
-        ctx.print(`Usage: /profilesync ${sub} <path>${sub === 'import' ? ' [prefix]' : ''}`);
+        ctx.print(`Usage: /profile-sync ${sub} <path>${sub === 'import' ? ' [prefix]' : ''}`);
         return;
       }
       const targetPath = shellPaths.resolveWorkspacePath(pathArg);
@@ -93,7 +94,7 @@ export function registerProfileSyncRuntimeCommands(registry: CommandRegistry): v
       }
 
       recordSettingsSyncFailure('profiles', `unsupported subcommand: ${sub}`, controlPlaneConfigDir);
-      ctx.print('Usage: /profilesync [list|export <path>|inspect <path>|import <path> [prefix]]');
+      ctx.print('Usage: /profile-sync [list|export <path>|inspect <path>|import <path> [prefix]]');
     },
   });
 }

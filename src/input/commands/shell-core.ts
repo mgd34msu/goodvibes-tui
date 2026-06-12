@@ -15,7 +15,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: ['m'],
     description: 'Select or display the current LLM model',
     usage: '[model-id]',
-    argsHint: '[name]',
+    argsHint: '[model-id]',
     async handler(args, ctx) {
       const providerApi = requireProviderApi(ctx);
       if (args.length === 0) {
@@ -294,7 +294,7 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: ['e'],
     description: 'Show or set reasoning effort level',
     usage: '[level]',
-    argsHint: '<instant|low|medium|high>',
+    argsHint: '[instant|low|medium|high]',
     async handler(args, ctx) {
       const currentModel = await requireProviderApi(ctx).getCurrentModel();
       const validLevels = currentModel.reasoningEffort ?? [];

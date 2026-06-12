@@ -236,7 +236,7 @@ describe('TasksPanel', () => {
 
     const settingsText = linesText(new SettingsSyncPanel(createConfigManager()).render(120, 20));
     expect(settingsText).toContain('Settings posture');
-    expect(settingsText).toContain('/settingssync conflicts');
+    expect(settingsText).toContain('/settings-sync conflicts');
     expect(settingsText).toContain('/managed review');
   });
 });

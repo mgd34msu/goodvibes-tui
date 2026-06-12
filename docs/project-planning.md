@@ -81,12 +81,12 @@ GoodVibes also has a lightweight persistent work-plan tracker for concrete imple
 
 Commands:
 
-- `/workplan` or `/workplan panel`
-- `/workplan add <title> [--owner name] [--source label] [--notes text]`
-- `/workplan list`
-- `/workplan done|start|block|fail|cancel|pending <id>`
-- `/workplan remove <id>`
-- `/workplan clear-done`
+- `/work-plan` or `/work-plan panel`
+- `/work-plan add <title> [--owner name] [--source label] [--notes text]`
+- `/work-plan list`
+- `/work-plan done|start|block|fail|cancel|pending <id>`
+- `/work-plan remove <id>`
+- `/work-plan clear-done`
 
 The TUI stores work-plan state under `~/.goodvibes/tui/work-plans/` and renders it in the `Work Plan` panel.
 
