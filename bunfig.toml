@@ -1,0 +1,12 @@
+[test]
+# Coverage is OFF unless the --coverage CLI flag is passed. Do NOT add
+# "coverage = false" here: in bun 1.3.10 that bunfig key OVERRIDES the CLI
+# --coverage flag, which silently breaks scripts/coverage-gate.ts (the child
+# run emits no coverage table and the gate fails unconditionally).
+# Per-file runs (bun run test) never pass --coverage, so they stay coverage-free.
+# Aggregate coverage is measured and ENFORCED by bun run test:coverage
+# (scripts/coverage-gate.ts), which runs the whole suite in one process and
+# gates the All-files row against ratchet floors (functions >= 71%,
+# lines >= 75%; measured baseline 2026-06-11: 73.14/76.80).
+coverageReporter = ["text"]
+coverageDir = "coverage"

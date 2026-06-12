@@ -42,6 +42,7 @@
     "build:windows": "bun build src/main.ts --compile --target=bun-windows-x64 --outfile dist/goodvibes-windows.exe",
     "build:all-shell": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:macos-x64 && bun run build:macos-arm64 && bun run build:windows",
     "test": "bun run scripts/run-tests.ts",
+    "test:coverage": "bun run scripts/coverage-gate.ts",
     "version": "bun run scripts/prebuild.ts",
     "preinstall": "sh scripts/check-bun.sh",
     "postinstall": "bun scripts/postinstall.js",
