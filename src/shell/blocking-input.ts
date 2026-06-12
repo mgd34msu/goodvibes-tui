@@ -17,6 +17,15 @@ export type BlockingInputHandlerOptions = {
   render: () => void;
   loadRecoveryConversation: () => SessionSnapshot | null;
   deleteRecoveryFile: () => void;
+  /**
+   * Optional callback invoked after Ctrl+R restore to reopen panels captured in
+   * the recovery snapshot's returnContext. When provided (as wired in main.ts),
+   * the callback iterates snapshot.returnContext.openPanels and calls
+   * panelManager.open() for each entry, then panelManager.show() + render() to
+   * restore the panel posture from the recovered session. When omitted, panel
+   * posture is not restored.
+   */
+  reopenPanels?: (snapshot: SessionSnapshot) => void;
 };
 
 export type BlockingInputHandlerResult = {
@@ -38,6 +47,7 @@ export function handleBlockingShellInput(
     render,
     loadRecoveryConversation,
     deleteRecoveryFile,
+    reopenPanels,
   } = options;
 
   if (pendingPermission) {
@@ -71,12 +81,17 @@ export function handleBlockingShellInput(
     if (data === '\x12') {
       const recovery = loadRecoveryConversation();
       if (recovery) {
-        conversation.fromJSON({ messages: recovery.messages as Parameters<typeof conversation.fromJSON>[0]['messages'] });
+        conversation.fromJSON({
+          messages: recovery.messages as Parameters<typeof conversation.fromJSON>[0]['messages'],
+          title: recovery.title,
+          titleSource: recovery.titleSource,
+        });
+        reopenPanels?.(recovery);
         systemMessageRouter.high('[Recovery] Session restored.');
+        deleteRecoveryFile();
       } else {
         systemMessageRouter.high('[Recovery] Failed to restore saved data.');
       }
-      deleteRecoveryFile();
       render();
       return { handled: true, pendingPermission: null, recoveryPending: false };
     }
@@ -88,10 +103,10 @@ export function handleBlockingShellInput(
       return { handled: true, pendingPermission: null, recoveryPending: false };
     }
 
-    systemMessageRouter.high('[Recovery] Ignored saved session; starting a new prompt.');
-    deleteRecoveryFile();
+    // Stray key: leave the recovery prompt active so the user can still Ctrl+R or Esc.
+    systemMessageRouter.high('[Recovery] Ctrl+R to restore · Esc to discard');
     render();
-    return { handled: false, pendingPermission: null, recoveryPending: false };
+    return { handled: false, pendingPermission, recoveryPending: true };
   }
 
   return { handled: false, pendingPermission, recoveryPending };
