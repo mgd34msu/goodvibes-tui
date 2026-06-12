@@ -15,7 +15,7 @@ import {
 } from '@/runtime/index.ts';
 import { requireEcosystemCatalogPaths, requirePluginPathOptions } from './runtime-services.ts';
 
-export function registerIntegrationRuntimeCommands(registry: CommandRegistry): void {
+export function registerPluginRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'plugin',
     aliases: [],

@@ -13,7 +13,7 @@ import { registerPlanningRuntimeCommands } from './commands/planning-runtime.ts'
 import { registerScheduleRuntimeCommands } from './commands/schedule-runtime.ts';
 import { registerBranchRuntimeCommands } from './commands/branch-runtime.ts';
 import { registerOperatorRuntimeCommands } from './commands/operator-runtime.ts';
-import { registerIntegrationRuntimeCommands } from './commands/integration-runtime.ts';
+import { registerPluginRuntimeCommands } from './commands/plugin-runtime.ts';
 import { registerDiffRuntimeCommands } from './commands/diff-runtime.ts';
 import { registerGitRuntimeCommands } from './commands/git-runtime.ts';
 import { registerNotifyRuntimeCommands } from './commands/notify-runtime.ts';
@@ -65,7 +65,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerShellCoreCommands(registry);
   registerConfigCommand(registry);
   registerOperatorRuntimeCommands(registry);
-  registerIntegrationRuntimeCommands(registry);
+  registerPluginRuntimeCommands(registry);
   registerDiffRuntimeCommands(registry);
   registerGitRuntimeCommands(registry);
   registerNotifyRuntimeCommands(registry);
