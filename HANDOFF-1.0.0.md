@@ -5,7 +5,11 @@
 
 ---
 
-## 0. FIRST ACTION ON RESUME — finish the 0.24.0 release (if not already done)
+## 0. RELEASE STATUS — RESOLVED: 0.24.0 IS LIVE ON NPM
+
+**Update (2026-06-12, post-wall):** v0.24.0 published successfully — npm confirms 0.24.0, release run fully green including the macOS smoke job (second attempt). The first attempt FAILED on the macOS smoke gate's maiden run, which caught a real product defect: darwin artifacts had never bundled the sqlite-vec addon (cross-compiled on Linux, where npm only installs the Linux addon). Fixed in `e7a1b1f5` — build.ts now fetches the target platform's addon from the registry, hard-failing if it cannot. The v0.24.0 tag was moved to the fixed commit (the failed run published nothing). Nothing remains to do for 0.24.0; the section below is kept for the procedural record only.
+
+## 0-archive. (resolved) finish the 0.24.0 release (if not already done)
 
 A background sequence was relaunched at the wall to finish this; verify whether it completed:
 
