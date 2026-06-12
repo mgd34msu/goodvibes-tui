@@ -4,6 +4,29 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.22.0] — 2026-06-12
+
+Second best-in-class program release: the backlog tail, the providers/failover track opened, and the release pipeline made fully honest. Every change passed independent review at 10/10 before commit.
+
+### Features
+- Added a Cockpit control room: live agent roster (status, stalled flag, real cost/tokens), inspect and confirm-gated cancel action keys on the shared orphan-free cancel path.
+- Added /session as the single front-door for session work: lifecycle subcommands (list, rename, resume, fork, save, info, export, search, delete, events, groups, hotspots) and orchestration (link-task with cycle detection, handoff, graph, cancel with task/subtree/session scopes); alias /sess.
+- Added a merged memory panel (records + review queue via Tab) with the knowledge-graph view on its own panel; /project-memory routes to records; session scratch surface renamed to notes.
+- Added settings reset-category and reset-all (Shift+R / Ctrl+Shift+R, confirm-gated, runtime-synced), schema-derived unknown-key warnings at load, restart hints from a typed key table, and width-honest footers proven at 80 and 120 columns.
+- Added wizard required-field gating: apply blocks with per-field messages and a focus jump to the first offender.
+- Added the provider optimizer enable switch: /provider optimizer on|off drives the live instance and persists; /provider route auto says honestly when the optimizer is off.
+- Added wizard security hardening: Cloudflare tunnel apply sets trustProxy with the residual risk named until SDK header validation ships; TLS plaintext hard-warn in the wizard and a startup banner; CORS guidance.
+- Added context truth: auto-compact runs only when behavior.autoCompact is enabled (threshold from config, percent converted correctly), with a passive suggest-compact status hint and honest transcript notices.
+- Added tts.speed to settings, bridged end-to-end today (modal to synthesis call); explicit tts.* defaults with truthful modified markers.
+
+### Fixes
+- Fixed CLI flag truth end-to-end: a drift-proof parity test extracts flags from parser source and asserts equality across help, completions, and docs; ghost completion flags removed; --output-format deprecated with a stderr warning; session lifecycle flags are mutually exclusive with a clear error.
+- Fixed onboarding marker timing residue and wizard copy; sessions, recovery, and WRFC chains read through version-gated, quarantining loaders everywhere.
+
+### Internal
+- Performance gate is real: fail-closed in CI without a baseline, headless startup and frame benches sharing one methodology and one CI-safe budget source (p95 16ms, p99 110ms with runner headroom), committed ratchet baseline.
+- Per-agent stall watchdog constants shared; agent cost/token surfaces fabricated-number-free; concurrency-safe test temp dirs; eval gate fail-closed with a committed baseline; 540 test files green.
+
 ## [0.21.0] — 2026-06-12
 
 First release of the best-in-class program: a full UX-first review of the codebase followed by WRFC-gated remediation (every change passed independent review at 10/10 before commit).
