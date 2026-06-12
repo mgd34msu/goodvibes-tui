@@ -373,16 +373,16 @@ describe('WrfcPanel cancel flow', () => {
     expect(cancelFn).not.toHaveBeenCalled();
   });
 
-  test('other keys absorbed while confirm is active (confirm cleared)', () => {
+  test('other keys absorbed while confirm is active (confirm retained)', () => {
     const chain = makeChain({ state: 'engineering' });
     const { panel } = makePanel([chain]);
 
     panel.handleInput('c');
-    // Pressing 'up' while confirm is active is absorbed (returns true) and clears confirm
+    // Pressing 'up' while confirm is active is absorbed (returns true) and confirm stays pending
     const result = panel.handleInput('up');
-    expect(result).toBe(true); // absorbed, confirm cleared
+    expect(result).toBe(true); // absorbed, key swallowed
     const text = linesText(panel.render(120, 24));
-    expect(text).not.toContain('Cancel chain'); // confirm cleared
+    expect(text).toContain('Cancel chain'); // confirm RETAINED (not cleared)
   });
 });
 

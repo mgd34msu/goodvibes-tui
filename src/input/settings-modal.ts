@@ -8,13 +8,16 @@
  *   - Feature flags tab with runtime toggle support
  *
  * Saves changes via configManager.set(key, value) or featureFlagManager methods.
+ *
+ * Data assembly delegates to settings-modal-data.ts (buildSettingGroups, etc.).
+ * Mutation logic delegates to settings-modal-mutations.ts (applySettingValue, etc.).
  */
 
-import { CONFIG_SCHEMA, type ConfigKey, type PersistedFlagState } from '@pellux/goodvibes-sdk/platform/config';
+import { type ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
+import { handleConfirmInput } from '../panels/confirm-state.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
-import { getResolvedSettingLookup } from '@/runtime/index.ts';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import { buildGoodVibesSecretKey, isSecretConfigKey } from '../config/secret-config.ts';
 import {
@@ -26,12 +29,10 @@ import {
   setSecretBackedSettingValue,
   type SettingsSecretsManager,
 } from './settings-modal-secrets.ts';
-import { buildSubscriptionEntries } from './settings-modal-subscriptions.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
-import type { FeatureFlag, FlagState } from '@/runtime/index.ts';
+import type { FlagState } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
-import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   SETTINGS_CATEGORIES,
   SETTINGS_CATEGORY_GROUPS,
@@ -42,6 +43,21 @@ import {
   type SettingsFocusPane,
   type SubscriptionEntry,
 } from './settings-modal-types.ts';
+import {
+  buildSettingGroups,
+  buildFlagEntries,
+  buildMcpEntries,
+  buildSubscriptionEntries,
+  buildNetworkFilteredItems,
+  refreshEntryValues,
+  updateEntryForKey,
+} from './settings-modal-data.ts';
+import {
+  applySettingValue,
+  applyFlagState,
+  persistFlagState,
+  type SettingAppliedCallback,
+} from './settings-modal-mutations.ts';
 
 export interface SettingsModalChange {
   readonly key: ConfigKey;
@@ -154,10 +170,10 @@ export class SettingsModal {
     this.serviceRegistry = serviceRegistry;
     this.mcpRegistry = mcpRegistry ?? null;
     this.onSettingApplied = options?.onSettingApplied ?? null;
-    this._loadGroups(configManager);
-    this._loadFlagEntries();
-    this._loadMcpEntries();
-    this._loadSubscriptionEntries();
+    this.groups = buildSettingGroups(configManager);
+    this.flagEntries = buildFlagEntries(featureFlagManager);
+    this.mcpEntries = buildMcpEntries(this.mcpRegistry);
+    this.subscriptionEntries = buildSubscriptionEntries(subscriptionManager, serviceRegistry);
     this.categoryIndex = 0;
     this.selectedIndex = 0;
     this.focusPane = 'categories';
@@ -196,13 +212,7 @@ export class SettingsModal {
     this.categoryIndex = (this.categoryIndex + 1) % SETTINGS_CATEGORIES.length;
     this.selectedIndex = 0;
     this.subscriptionLogoutConfirmationTarget = null;
-    if (this.currentCategory === 'flags') {
-      this._loadFlagEntries();
-    } else if (this.currentCategory === 'mcp') {
-      this._loadMcpEntries();
-    } else if (this.currentCategory === 'subscriptions') {
-      this._loadSubscriptionEntries();
-    }
+    this._reloadTabEntries();
   }
 
   /** Cycle to the previous category (Shift+Tab). */
@@ -211,13 +221,7 @@ export class SettingsModal {
     this.categoryIndex = (this.categoryIndex - 1 + SETTINGS_CATEGORIES.length) % SETTINGS_CATEGORIES.length;
     this.selectedIndex = 0;
     this.subscriptionLogoutConfirmationTarget = null;
-    if (this.currentCategory === 'flags') {
-      this._loadFlagEntries();
-    } else if (this.currentCategory === 'mcp') {
-      this._loadMcpEntries();
-    } else if (this.currentCategory === 'subscriptions') {
-      this._loadSubscriptionEntries();
-    }
+    this._reloadTabEntries();
   }
 
   focusCategories(): void {
@@ -356,13 +360,9 @@ export class SettingsModal {
       const entry = this.getSelectedSubscription();
       if (!entry) return;
       if (entry.state === 'active' || entry.state === 'pending') {
-        if (this.subscriptionLogoutConfirmationTarget !== entry.provider) {
-          this.subscriptionLogoutConfirmationTarget = entry.provider;
-          return;
-        }
-        this.subscriptionManager?.logout(entry.provider);
-        this._loadSubscriptionEntries();
-        this.subscriptionLogoutConfirmationTarget = null;
+        // First press: arm the confirm gate. Subsequent key handling routes
+        // through handleSubscriptionLogoutKey() before normal dispatch.
+        this.subscriptionLogoutConfirmationTarget = entry.provider;
       }
       return;
     }
@@ -394,16 +394,41 @@ export class SettingsModal {
 
     if (setting.type === 'boolean') {
       const newVal = !entry.currentValue;
-      this._setValue(setting.key, newVal);
+      this._setValue(setting.key as ConfigKey, newVal);
     } else if (setting.type === 'enum' && setting.enumValues) {
       const idx = setting.enumValues.indexOf(entry.currentValue as string);
       const nextIdx = (idx + 1) % setting.enumValues.length;
-      this._setValue(setting.key, setting.enumValues[nextIdx]);
+      this._setValue(setting.key as ConfigKey, setting.enumValues[nextIdx]);
     } else if (setting.type === 'string' || setting.type === 'number') {
       // Enter inline edit mode
       this.editingMode = true;
       this.editBuffer = String(entry.currentValue ?? '');
     }
+  }
+
+  /**
+   * Handle a keystroke while a subscription logout confirm is pending.
+   *
+   * Follows the project-standard confirm contract (confirm-state.ts):
+   *   - CONFIRM:  Enter, Return, or y  → executes logout, clears target
+   *   - CANCEL:   Esc or n             → clears target, no logout
+   *   - ABSORBED: any other key        → keeps confirm pending, swallows key
+   *   - INACTIVE: no confirm pending   → returns 'inactive' (caller continues)
+   */
+  handleSubscriptionLogoutKey(key: string): 'confirmed' | 'cancelled' | 'absorbed' | 'inactive' {
+    const target = this.subscriptionLogoutConfirmationTarget;
+    if (!target) return 'inactive';
+    const confirmState = { subject: target, label: target };
+    const result = handleConfirmInput(confirmState, key);
+    if (result === 'confirmed') {
+      this.subscriptionManager?.logout(target);
+      this.subscriptionEntries = buildSubscriptionEntries(this.subscriptionManager, this.serviceRegistry);
+      this.subscriptionLogoutConfirmationTarget = null;
+    } else if (result === 'cancelled') {
+      this.subscriptionLogoutConfirmationTarget = null;
+    }
+    // 'absorbed': confirm remains pending
+    return result;
   }
 
   adjustSelected(direction: 'left' | 'right', step = 1): void {
@@ -413,7 +438,7 @@ export class SettingsModal {
       const flagEntry = this.getSelectedFlag();
       if (!flagEntry || flagEntry.state === 'killed' || !this.featureFlagManager || !this.configManager) return;
       const targetState: FlagState = direction === 'right' ? 'enabled' : 'disabled';
-      if (flagEntry.state !== targetState) this._setSelectedFlagState(flagEntry, targetState);
+      if (flagEntry.state !== targetState) applyFlagState(flagEntry, targetState, this.featureFlagManager, this.configManager);
       return;
     }
 
@@ -426,7 +451,7 @@ export class SettingsModal {
         ? (currentIndex + 1) % modes.length
         : (currentIndex - 1 + modes.length) % modes.length;
       this.mcpRegistry.setServerTrustMode(entry.name, modes[nextIndex]!);
-      this._loadMcpEntries();
+      this.mcpEntries = buildMcpEntries(this.mcpRegistry);
       this.mcpAllowAllConfirmationTarget = null;
       return;
     }
@@ -436,7 +461,7 @@ export class SettingsModal {
     const { setting } = entry;
 
     if (setting.type === 'boolean') {
-      this._setValue(setting.key, direction === 'right');
+      this._setValue(setting.key as ConfigKey, direction === 'right');
       return;
     }
 
@@ -445,7 +470,7 @@ export class SettingsModal {
       const nextIndex = direction === 'right'
         ? (currentIndex + 1) % setting.enumValues.length
         : (currentIndex - 1 + setting.enumValues.length) % setting.enumValues.length;
-      this._setValue(setting.key, setting.enumValues[nextIndex]!);
+      this._setValue(setting.key as ConfigKey, setting.enumValues[nextIndex]!);
       return;
     }
 
@@ -460,7 +485,7 @@ export class SettingsModal {
         Math.max(adjustment.min ?? rounded, rounded),
       );
       if (setting.validate && !setting.validate(nextValue)) return;
-      this._setValue(setting.key, nextValue);
+      this._setValue(setting.key as ConfigKey, nextValue);
     }
   }
 
@@ -474,38 +499,13 @@ export class SettingsModal {
     const flagEntry = this.getSelectedFlag();
     if (!flagEntry || !this.featureFlagManager || !this.configManager) return;
 
-    const { flag, state } = flagEntry;
+    const { state } = flagEntry;
 
     // Killed flags are blocked
     if (state === 'killed') return;
 
     const newState: FlagState = state === 'enabled' ? 'disabled' : 'enabled';
-
-    this._setSelectedFlagState(flagEntry, newState);
-  }
-
-  private _setSelectedFlagState(flagEntry: FlagEntry, newState: FlagState): void {
-    if (!this.featureFlagManager || !this.configManager) return;
-    const { flag } = flagEntry;
-
-    if (!flag.runtimeToggleable) {
-      // Persist to config only — takes effect on restart
-      this._persistFlagState(flag.id, newState, flag.defaultState as FlagState);
-      flagEntry.state = newState;
-    } else {
-      // Toggle immediately in manager
-      try {
-        if (newState === 'enabled') {
-          this.featureFlagManager.enable(flag.id);
-        } else {
-          this.featureFlagManager.disable(flag.id);
-        }
-        this._persistFlagState(flag.id, newState, flag.defaultState as FlagState);
-        flagEntry.state = newState;
-      } catch (e) {
-        logger.error('SettingsModal: failed to toggle feature flag', { flag: flag.id, error: summarizeError(e) });
-      }
-    }
+    applyFlagState(flagEntry, newState, this.featureFlagManager, this.configManager);
   }
 
   /**
@@ -524,7 +524,7 @@ export class SettingsModal {
           return false;
         }
         this.mcpRegistry.setServerTrustMode(entry.name, 'allow-all');
-        this._loadMcpEntries();
+        this.mcpEntries = buildMcpEntries(this.mcpRegistry);
         this.editingMode = false;
         this.editBuffer = '';
         this.mcpAllowAllConfirmationTarget = null;
@@ -545,7 +545,7 @@ export class SettingsModal {
         return false;
       }
       this.mcpRegistry.setServerTrustMode(entry.name, nextMode);
-      this._loadMcpEntries();
+      this.mcpEntries = buildMcpEntries(this.mcpRegistry);
       this.editingMode = false;
       this.editBuffer = '';
       this.mcpAllowAllConfirmationTarget = null;
@@ -582,7 +582,7 @@ export class SettingsModal {
         setConfigValue: (key, value) => this._setValue(key, value),
       });
     } else {
-      this._setValue(setting.key, parsed);
+      this._setValue(setting.key as ConfigKey, parsed);
     }
     this.editingMode = false;
     this.editBuffer = '';
@@ -621,173 +621,58 @@ export class SettingsModal {
     this.editBuffer = this.editBuffer.slice(0, -1);
   }
 
-  // ── Private helpers ────────────────────────────────────────────
+  // ── Private helpers ────────────────────────────────────────────────────────────────
 
-  private _loadGroups(configManager: ConfigManager): void {
-    this.groups.clear();
-    for (const cat of SETTINGS_CATEGORIES) {
-      if (cat === 'flags') continue; // flags tab handled separately
-      this.groups.set(cat, []);
-    }
-
-    for (const setting of CONFIG_SCHEMA) {
-      const rawCat = setting.key.split('.')[0] as string;
-      const cat = rawCat as SettingsCategory;
-      const currentValue = configManager.get(setting.key as ConfigKey);
-      const resolved = getResolvedSettingLookup(configManager, setting.key as ConfigKey)?.entry;
-      const entry: SettingEntry = {
-        setting,
-        currentValue,
-        isDefault: currentValue === setting.default,
-        effectiveSource: resolved?.effectiveSource,
-        locked: resolved?.locked,
-        conflict: resolved?.conflict,
-        sourceLabel: resolved?.sourceLabel,
-        lockReason: resolved?.lockReason,
-      };
-      if (this.groups.has(cat)) this.groups.get(cat)!.push(entry);
-      if ((rawCat === 'controlPlane' || rawCat === 'httpListener' || rawCat === 'web') && this.groups.has('network')) {
-        this.groups.get('network')!.push(entry);
-      }
-    }
-
-    const uiEntries = this.groups.get('ui');
-    if (uiEntries) {
-      const uiPriority: Record<string, number> = {
-        'ui.systemMessages': 0,
-        'ui.operationalMessages': 1,
-        'ui.wrfcMessages': 2,
-        'ui.voiceEnabled': 3,
-      };
-      uiEntries.sort((a, b) => (uiPriority[a.setting.key] ?? 99) - (uiPriority[b.setting.key] ?? 99));
+  /** Reload flag/mcp/subscription entries when the active tab changes. */
+  private _reloadTabEntries(): void {
+    if (this.currentCategory === 'flags') {
+      this.flagEntries = buildFlagEntries(this.featureFlagManager);
+    } else if (this.currentCategory === 'mcp') {
+      this.mcpEntries = buildMcpEntries(this.mcpRegistry);
+    } else if (this.currentCategory === 'subscriptions') {
+      this.subscriptionEntries = buildSubscriptionEntries(this.subscriptionManager, this.serviceRegistry);
     }
   }
 
-  /** Load or refresh the flags tab entries from the feature flag manager. */
-  private _loadFlagEntries(): void {
-    if (!this.featureFlagManager) {
-      this.flagEntries = [];
-      return;
-    }
-    this.flagEntries = Array.from(this.featureFlagManager.getAll().values()).map(({ flag, state }) => ({
-      flag,
-      state,
-    }));
-  }
-
-  private _loadMcpEntries(): void {
-    if (!this.mcpRegistry) {
-      this.mcpEntries = [];
-      return;
-    }
-    this.mcpEntries = this.mcpRegistry.listServerSecurity().map((entry) => ({
-      name: entry.name,
-      connected: entry.connected,
-      role: entry.role,
-      trustMode: entry.trustMode,
-      allowedPaths: [...entry.allowedPaths],
-      allowedHosts: [...entry.allowedHosts],
-    }));
-  }
-
-  private _loadSubscriptionEntries(): void {
-    this.subscriptionEntries = buildSubscriptionEntries(this.subscriptionManager, this.serviceRegistry);
-  }
-
-  /**
-   * Persist a flag state override to config.
-   * Deletes the entry when reverting to defaultState. Skips killed state.
-   */
-  private _persistFlagState(flagId: string, newState: FlagState, defaultState: FlagState): void {
-    if (!this.configManager) return;
-    if (newState === 'killed') return; // never persist killed state
-
-    try {
-      const current = (this.configManager.getCategory('featureFlags') as Record<string, PersistedFlagState>) ?? {};
-      if (newState === defaultState) {
-        // Revert to default — remove override
-        delete current[flagId];
-      } else {
-        current[flagId] = newState;
-      }
-      this.configManager.mergeCategory('featureFlags', current);
-    } catch (e) {
-      logger.error('SettingsModal: failed to persist flag state', { flagId, error: summarizeError(e) });
-    }
-  }
-
-  /** Returns [] for the flags category (flags use flagEntries instead). */
+  /** Returns [] for the flags/mcp/subscriptions categories. */
   private _currentItems(): SettingEntry[] {
-    if (this.currentCategory === 'flags' || this.currentCategory === 'mcp' || this.currentCategory === 'subscriptions') return [];
+    if (
+      this.currentCategory === 'flags'
+      || this.currentCategory === 'mcp'
+      || this.currentCategory === 'subscriptions'
+    ) return [];
     const items = this.groups.get(this.currentCategory) ?? [];
     if (this.currentCategory === 'network') {
-      return items.filter(entry => {
-        if (entry.setting.key === 'controlPlane.host') {
-          const hostMode = this.configManager?.get('controlPlane.hostMode');
-          return hostMode === 'custom';
-        }
-        if (entry.setting.key === 'httpListener.host') {
-          const hostMode = this.configManager?.get('httpListener.hostMode');
-          return hostMode === 'custom';
-        }
-        if (entry.setting.key === 'web.host') {
-          const hostMode = this.configManager?.get('web.hostMode');
-          return hostMode === 'custom';
-        }
-        return true;
-      });
+      return buildNetworkFilteredItems(items, this.configManager);
     }
     return items;
   }
 
-  private _refreshAllEntries(): void {
-    if (!this.configManager) return;
-    for (const entries of this.groups.values()) {
-      for (const entry of entries) {
-        entry.currentValue = this.configManager.get(entry.setting.key as ConfigKey);
-        entry.isDefault = entry.currentValue === entry.setting.default;
-      }
-    }
-  }
-
   private _setValue(key: ConfigKey, value: unknown): void {
     if (!this.configManager) return;
-    // Diff previous value before writing — avoids false restart notices on no-op saves
-    const previousValue = this.configManager.get(key);
-    const isRestartKey = ['host', 'port', 'hostMode', 'enabled'].includes(key.split('.')[1] ?? '');
-    try {
-      this.configManager.setDynamic(key, value);
-      const rawCat = key.split('.')[0] as string;
-      if (rawCat === 'controlPlane') {
-        if (isRestartKey && previousValue !== value) {
-          this.lastSaveTriggeredRestart = 'control-plane';
-        }
-      } else if (rawCat === 'httpListener') {
-        if (isRestartKey && previousValue !== value) {
-          this.lastSaveTriggeredRestart = 'http-listener';
-        }
-      } else if (rawCat === 'web') {
-        if (isRestartKey && previousValue !== value) {
-          this.lastSaveTriggeredRestart = 'web';
-        }
-      }
 
-      for (const entries of this.groups.values()) {
-        const entry = entries.find((candidate) => candidate.setting.key === key);
-        if (entry) {
-          entry.currentValue = this.configManager!.get(key);
-          entry.isDefault = entry.currentValue === entry.setting.default;
-        }
-      }
-      if (previousValue !== value && this.onSettingApplied) {
-        const result = this.onSettingApplied({ key, previousValue, value });
-        this.lastSettingEffectMessage = result?.message ?? null;
-        this._refreshAllEntries();
-      }
-    } catch (e) {
-      logger.error('SettingsModal: failed to set config value', { key, error: summarizeError(e) });
-      this.lastSettingEffectMessage = `Save failed: ${summarizeError(e)}`;
+    const callback: SettingAppliedCallback | null = this.onSettingApplied
+      ? (change) => this.onSettingApplied!(change)
+      : null;
+
+    const result = applySettingValue({
+      key,
+      value,
+      configManager: this.configManager,
+      groups: this.groups,
+      onSettingApplied: callback,
+      refreshGroups: () => {
+        if (this.configManager) refreshEntryValues(this.groups, this.configManager);
+      },
+    });
+
+    if (result.restartDomain !== null) {
+      this.lastSaveTriggeredRestart = result.restartDomain;
     }
+    if (result.effectMessage !== null) {
+      this.lastSettingEffectMessage = result.effectMessage;
+    }
+    // No-op (result.changed === false, effectMessage === null): leave lastSettingEffectMessage untouched.
   }
 
 }

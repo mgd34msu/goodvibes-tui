@@ -2,6 +2,7 @@ import type { InputToken } from '@pellux/goodvibes-sdk/platform/core';
 import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { CommandContext } from './command-registry.ts';
 import { openTtsProviderPicker, openTtsVoicePicker } from './tts-settings-actions.ts';
+import { isTextBackspace } from './delete-key-policy.ts';
 
 type SelectionRouteState = {
   selectionModal: {
@@ -136,10 +137,13 @@ export function handleSelectionModalToken(state: SelectionRouteState, token: Inp
           getAdjustmentStep(selected, token.shift),
         );
       }
-    } else if (token.logicalName === 'backspace') {
+    } else if (isTextBackspace(token.logicalName ?? '')) {
       if (state.selectionModal.allowSearch && state.selectionModal.searchFocused && state.selectionModal.query.length > 0) {
         state.selectionModal.setQuery(state.selectionModal.query.slice(0, -1));
       }
+      // 'delete' is intentionally absent here: modal search filters are
+      // end-anchored with no cursor, so forward-delete is a no-op per the
+      // delete-key policy (src/input/delete-key-policy.ts).
     } else if (state.selectionModal.allowSearch && !state.selectionModal.searchFocused && token.logicalName === '/') {
       state.selectionModal.focusSearch();
     } else if (!state.selectionModal.searchFocused && token.logicalName && token.logicalName.length === 1) {
@@ -215,6 +219,7 @@ type SettingsRouteState = {
     commitEdit: () => void;
     toggleSelectedFlag: () => void;
     activateSelected: () => void;
+    handleSubscriptionLogoutKey?: (key: string) => 'confirmed' | 'cancelled' | 'absorbed' | 'inactive';
     adjustSelected: (direction: 'left' | 'right', step?: number) => void;
     moveFocusedUp?: () => void;
     moveFocusedDown?: () => void;
@@ -278,6 +283,21 @@ function consumeSettingsPickerRequest(state: SettingsRouteState): void {
 
 export function handleSettingsModalToken(state: SettingsRouteState, token: InputToken): boolean {
   if (!state.settingsModal.active) return false;
+
+  // Subscription logout confirm gate: routes all keys through the unified
+  // confirm contract before normal dispatch when a confirm is pending.
+  if (state.settingsModal.handleSubscriptionLogoutKey) {
+    const key = token.type === 'key'
+      ? (token.logicalName ?? '')
+      : token.type === 'text'
+        ? token.value
+        : '';
+    const logoutResult = state.settingsModal.handleSubscriptionLogoutKey(key);
+    if (logoutResult !== 'inactive') {
+      state.requestRender();
+      return true;
+    }
+  }
 
   if (token.type === 'key') {
     const focusPane = state.settingsModal.focusPane ?? 'settings';
