@@ -16,68 +16,9 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { getPricing } from '../export/cost-utils.ts';
 
-// ---------------------------------------------------------------------------
-// Pricing table  (USD per 1M tokens)
-// ---------------------------------------------------------------------------
-
-interface ModelPricing {
-  input: number;
-  output: number;
-}
-
-const MODEL_PRICING: Record<string, ModelPricing> = {
-  // Free tier
-  'openrouter/free': { input: 0, output: 0 },
-
-  // InceptionLabs
-  'mercury-2':    { input: 0.50, output: 1.50 },
-  'mercury-edit': { input: 0.50, output: 1.50 },
-
-  // OpenAI
-  'gpt-5.4':              { input: 5,    output: 15 },
-  'gpt-5.3-chat-latest':  { input: 3,    output: 10 },
-  'gpt-5-mini':           { input: 0.15, output: 0.60 },
-  'gpt-5-nano':           { input: 0.05, output: 0.20 },
-  'gpt-oss-120b':         { input: 0,    output: 0 },
-
-  // Anthropic (correct registry IDs)
-  'claude-opus-4-6':   { input: 15,   output: 75 },
-  'claude-sonnet-4-6': { input: 3,    output: 15 },
-  'claude-haiku-4-5':  { input: 0.80, output: 4 },
-
-  // Google
-  'gemini-3.1-pro':        { input: 1.25,  output: 5 },
-  'gemini-3-flash':        { input: 0.075, output: 0.30 },
-  'gemini-3.1-flash-lite': { input: 0.02,  output: 0.10 },
-  'gemini-2.5-pro':        { input: 1.25,  output: 5 },
-};
-
-/**
- * Look up pricing from the model catalog.
- * Returns { input: 0, output: 0 } for free models and unknown models.
- */
-function getCostFromCatalogForPanel(modelId: string): ModelPricing {
-  if (modelId.endsWith(':free')) return { input: 0, output: 0 };
-  return { input: 0, output: 0 };
-}
-
-function getPricing(modelId: string): ModelPricing {
-  // 2. Hardcoded table — exact match
-  if (MODEL_PRICING[modelId]) return MODEL_PRICING[modelId]!;
-  // 1. OpenRouter :free suffix — treat as free
-  if (modelId.endsWith(':free')) return { input: 0, output: 0 };
-  // 2. Prefix match (e.g. "openrouter/free:..." or "claude-sonnet-4-6-20..")
-  for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
-    if (modelId.startsWith(key) || modelId.includes(key)) return pricing;
-  }
-  // 3. Unknown model — default to free-ish safe fallback
-  return getCostFromCatalogForPanel(modelId);
-}
-
-function calcCost(inputTokens: number, outputTokens: number, pricing: ModelPricing): number {
-  return (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
-}
+// Pricing lookups are provided by ../export/cost-utils.ts (single source of truth).
 
 function formatCost(usd: number): string {
   if (usd === 0) return '$0.00';
@@ -248,9 +189,9 @@ export class CostTrackerPanel extends BasePanel {
     if (usage.model) this.sessionModel = usage.model;
 
     // Record cost delta for sparkline
-    const sessionProvider = this.sessionModel.includes('/') ? this.sessionModel.split('/')[0]! : '';
     const pricing = getPricing(this.sessionModel);
-    const totalCost = calcCost(usage.input + usage.cacheRead + usage.cacheWrite, usage.output, pricing);
+    const billableInput = usage.input + usage.cacheRead + usage.cacheWrite;
+    const totalCost = (billableInput * pricing.input + usage.output * pricing.output) / 1_000_000;
     const delta = Math.max(0, totalCost - this.lastSessionCost);
     this.lastSessionCost = totalCost;
     this.costHistory.push(delta);
@@ -310,10 +251,9 @@ export class CostTrackerPanel extends BasePanel {
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
 
-    const sessionProvider = this.sessionModel.includes('/') ? this.sessionModel.split('/')[0]! : '';
     const pricing = getPricing(this.sessionModel);
     const totalInputTokens = this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite;
-    const sessionCost = calcCost(this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite, this.sessionUsage.output, pricing);
+    const sessionCost = (totalInputTokens * pricing.input + this.sessionUsage.output * pricing.output) / 1_000_000;
     const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;
     const sparkline = buildSparkline(this.costHistory);
     const costStr = formatCost(sessionCost);
