@@ -22,7 +22,7 @@ function makeDeps(overrides: Partial<AutoCompactDeps> = {}): AutoCompactDeps & {
   const compactFn = mock(async () => {});
   return {
     configManager: makeConfigManager(80),
-    conversation: { compact: compactFn } as AutoCompactDeps['conversation'],
+    conversation: { compact: compactFn, getMessagesForLLM: () => [], getSessionMemoryStore: () => null } as unknown as AutoCompactDeps['conversation'],
     providerRegistry: {} as AutoCompactDeps['providerRegistry'],
     systemMessageRouter: {
       routeSystemMessage: (msg: string) => { routeCalls.push(msg); },
@@ -76,7 +76,7 @@ describe('maybeAutoCompact', () => {
   test('posts error notice and does not throw when compact fails', async () => {
     const compactFn = mock(async () => { throw new Error('compact-error'); });
     const deps = makeDeps({
-      conversation: { compact: compactFn } as AutoCompactDeps['conversation'],
+      conversation: { compact: compactFn, getMessagesForLLM: () => [], getSessionMemoryStore: () => null } as unknown as AutoCompactDeps['conversation'],
     });
     await expect(maybeAutoCompact(deps)).resolves.toBeUndefined();
     expect(deps.routeCalls.some((m) => m.includes('failed'))).toBe(true);

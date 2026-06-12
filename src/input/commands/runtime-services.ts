@@ -7,6 +7,8 @@ import type {
   CommandSessionServices,
   CommandWorkspaceServices,
 } from '../command-registry.ts';
+import { getLastCompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
+import type { CompactionContext, CompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
 import type { UiReadModels } from '../../runtime/ui-read-models.ts';
 import type { ShellPathService } from '@/runtime/index.ts';
 import type { EcosystemCatalogPathOptions } from '@/runtime/index.ts';
@@ -236,13 +238,40 @@ export function requireProviderApi(context: CommandContext): ProviderApi {
   return requireContextValue(context.clients?.providerApi, 'clients.providerApi');
 }
 
-export async function compactConversation(context: CommandContext): Promise<void> {
+/**
+ * Compact the conversation and return the CompactionEvent recorded by the SDK,
+ * or null if no event was recorded (e.g. compaction was skipped or produced no
+ * change).
+ */
+export async function compactConversation(context: CommandContext): Promise<CompactionEvent | null> {
+  const eventBefore = getLastCompactionEvent();
+  const sessionMemories = context.session.sessionMemoryStore?.list() ?? [];
+  const compactionCtx: CompactionContext = {
+    messages: context.session.conversationManager.getMessagesForLLM(),
+    sessionMemories,
+    agents: [],
+    wrfcChains: [],
+    activePlan: null,
+    lineageEntries: [],
+    compactionCount: 0,
+    contextWindow: 0,
+    trigger: 'manual',
+    extractionModelId: context.session.runtime.model,
+    extractionProvider: context.session.runtime.provider,
+  };
   await context.session.conversationManager.compact(
     context.provider.providerRegistry,
     context.session.runtime.model,
     'manual',
     context.session.runtime.provider,
+    compactionCtx,
   );
+  const eventAfter = getLastCompactionEvent();
+  // Return the new event only if it differs from the one recorded before the call.
+  if (eventAfter !== null && eventAfter !== eventBefore) {
+    return eventAfter;
+  }
+  return null;
 }
 
 export function requireKnowledgeApi(context: CommandContext): KnowledgeApi {

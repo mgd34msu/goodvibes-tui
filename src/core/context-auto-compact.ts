@@ -15,6 +15,9 @@ import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers'
 import type { SystemMessageRouter } from './system-message-router';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { getLastCompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
+import type { CompactionContext } from '@pellux/goodvibes-sdk/platform/core';
+import { buildCompactionPreview, buildCompactionAfterNotice } from '../renderer/compaction-preview.ts';
 
 export interface AutoCompactDeps {
   readonly configManager: Pick<ConfigManager, 'get'>;
@@ -51,22 +54,52 @@ export async function maybeAutoCompact(deps: AutoCompactDeps): Promise<void> {
 
   try {
     logger.debug('auto-compact triggered', { usagePct, thresholdPct });
-    // Honest transcript notice — the user should always know when compaction
-    // runs automatically so they can understand any summary discontinuity.
-    deps.systemMessageRouter.routeSystemMessage(
-      `[Context] Auto-compacting conversation — usage reached ${usagePct}% (threshold ${thresholdPct}%). A summary will replace older turns to recover headroom.`,
-      'high',
-    );
+    // Pre-compact preview — uses buildCompactionPreview for an honest estimate.
+    const messages = deps.conversation.getMessagesForLLM();
+    const sessionMemoryStore = deps.conversation.getSessionMemoryStore();
+    const sessionMemories = sessionMemoryStore?.list() ?? [];
+    const pinnedMemoryCount = sessionMemories.length;
+    const preview = buildCompactionPreview({
+      messages,
+      contextWindow: deps.contextWindow,
+      pinnedMemoryCount,
+      trigger: 'auto',
+    });
+    deps.systemMessageRouter.routeSystemMessage(preview, 'high');
+    const eventBefore = getLastCompactionEvent();
+    const compactionCtx: CompactionContext = {
+      messages,
+      sessionMemories,
+      agents: [],
+      wrfcChains: [],
+      activePlan: null,
+      lineageEntries: [],
+      compactionCount: 0,
+      contextWindow: deps.contextWindow,
+      trigger: 'auto',
+      extractionModelId: deps.model,
+      extractionProvider: deps.provider,
+    };
     await deps.conversation.compact(
       deps.providerRegistry,
       deps.model,
       'auto',
       deps.provider,
+      compactionCtx,
     );
-    deps.systemMessageRouter.routeSystemMessage(
-      `[Context] Auto-compact complete — older turns summarised. Use /compact to compact again manually.`,
-      'low',
-    );
+    // Post-compact notice using real CompactionEvent figures.
+    const eventAfter = getLastCompactionEvent();
+    if (eventAfter !== null && eventAfter !== eventBefore) {
+      deps.systemMessageRouter.routeSystemMessage(
+        buildCompactionAfterNotice({ event: eventAfter, pinnedMemoryCount }),
+        'low',
+      );
+    } else {
+      deps.systemMessageRouter.routeSystemMessage(
+        '[Context] Auto-compact complete — older turns summarised. Use /compact to compact again manually.',
+        'low',
+      );
+    }
   } catch (err) {
     logger.error('auto-compact failed', { error: summarizeError(err) });
     deps.systemMessageRouter.routeSystemMessage(
