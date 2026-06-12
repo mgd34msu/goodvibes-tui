@@ -4,6 +4,7 @@ import type { ComponentResourceContract, ComponentHealthState } from '../runtime
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { SPINNER_FRAMES } from '../renderer/progress.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
 
 export abstract class BasePanel implements Panel {
   public needsRender = true;
@@ -143,7 +144,7 @@ export abstract class BasePanel implements Panel {
     if (this.loadingState !== 'loading') return null;
     const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? SPINNER_FRAMES[0]!;
     const text = ` ${spinner} ${this._loadingLabel}`;
-    return UIFactory.stringToLine(text.padEnd(width).slice(0, width), width, { fg: '135', bold: true });
+    return UIFactory.stringToLine(fitDisplay(text, width), width, { fg: '135', bold: true });
   }
 
   /**

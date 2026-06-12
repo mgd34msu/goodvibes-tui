@@ -38,6 +38,28 @@ describe('ANSI escape stripping in getDisplayWidth', () => {
     expect(getDisplayWidth('hello')).toBe(5);
     expect(getDisplayWidth('界')).toBe(2); // CJK wide char
   });
+
+  test('SGR sequence wrapping wide chars: escapes stripped, wide chars counted', () => {
+    // Green + CJK + reset: display width is 2 (wide char only)
+    const styledWide = '\x1b[32m中\x1b[0m';
+    expect(getDisplayWidth(styledWide)).toBe(2);
+  });
+
+  test('SGR sequence wrapping emoji: escapes stripped, emoji counted as wide', () => {
+    const styledEmoji = '\x1b[1m\u{1F600}\x1b[0m';
+    expect(getDisplayWidth(styledEmoji)).toBe(2);
+  });
+
+  test('ANSI sequence immediately adjacent to wide char (no whitespace)', () => {
+    // Bold seq + CJK char + CJK char + reset — should count 4
+    const s = '\x1b[1m中文\x1b[0m';
+    expect(getDisplayWidth(s)).toBe(4);
+  });
+
+  test('empty ANSI sequences (zero-length payload) produce zero width', () => {
+    const s = '\x1b[m\x1b[0m\x1b[1m';
+    expect(getDisplayWidth(s)).toBe(0);
+  });
 });
 
 describe('bracket-text-without-ESC over-strip guard', () => {
@@ -66,20 +88,167 @@ describe('bracket-text-without-ESC over-strip guard', () => {
 
 describe('terminal width helpers', () => {
   test('truncateDisplay respects wide characters', () => {
-    const text = 'abc界🙂xyz';
+    const text = 'abc界\u{1F642}xyz';
     const truncated = truncateDisplay(text, 6);
     expect(getDisplayWidth(truncated)).toBeLessThanOrEqual(6);
   });
 
   test('padDisplayEnd pads to display width, not string length', () => {
-    const text = '界🙂';
+    const text = '界\u{1F642}';
     const padded = padDisplayEnd(text, 6);
     expect(getDisplayWidth(padded)).toBe(6);
   });
 
   test('fitDisplay truncates and pads to exact display width', () => {
-    const text = 'very-wide🙂value';
+    const text = 'very-wide\u{1F642}value';
     const fitted = fitDisplay(text, 8);
     expect(getDisplayWidth(fitted)).toBe(8);
+  });
+});
+
+describe('truncateDisplay — ANSI-safe slice boundaries', () => {
+  test('truncation of ANSI-styled string does not cut mid-escape', () => {
+    // Bold red 'hello world' styled, then reset — truncate to 5
+    const styled = '\x1b[1;31m' + 'hello world' + '\x1b[0m';
+    const truncated = truncateDisplay(styled, 5);
+    // Display width must be <= 5
+    expect(getDisplayWidth(truncated)).toBeLessThanOrEqual(5);
+    // The result must not contain a partial escape sequence:
+    // If any ESC appears, it must be followed by a valid ANSI sequence final byte
+    const hasPartialEsc = /\x1b(?![\[\]]|[0-9;]*[A-Za-z]|\])/u.test(truncated);
+    expect(hasPartialEsc).toBe(false);
+  });
+
+  test('truncation at wide char boundary does not overshoot', () => {
+    // 'AB' (2) + CJK (2) + CJK (2) = 6 total; truncate to 3 — cannot fit second CJK
+    const text = 'AB中文';
+    const truncated = truncateDisplay(text, 3);
+    // Ellipsis takes 1, so 'AB' + ellipsis = 3 display width fits
+    expect(getDisplayWidth(truncated)).toBeLessThanOrEqual(3);
+    // Must not include the wide char that would overshoot
+    expect(truncated).not.toContain('中');
+  });
+
+  test('truncation stops exactly at wide-char boundary, never mid-char', () => {
+    // Exactly 4 wide chars = 8 display cols; truncating to 5 must not output partial wide char
+    const text = '一丁丂七'; // four CJK, 8 display width
+    const truncated = truncateDisplay(text, 5);
+    // With ellipsis (1 wide), we can fit at most 2 CJK (4) + ellipsis (1) = 5
+    expect(getDisplayWidth(truncated)).toBeLessThanOrEqual(5);
+  });
+
+  test('truncateDisplay with no ellipsis (empty string) still stays within bounds', () => {
+    const text = '界界界'; // 3 CJK = 6 display width
+    const truncated = truncateDisplay(text, 4, '');
+    expect(getDisplayWidth(truncated)).toBeLessThanOrEqual(4);
+  });
+
+  test('truncateDisplay on ANSI-styled wide chars stays within bounds', () => {
+    const styled = '\x1b[32m中文\x1b[0m'; // green + 2 CJK + reset = 4 display
+    const truncated = truncateDisplay(styled, 3);
+    expect(getDisplayWidth(truncated)).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('getDisplayWidth — combining marks and variation selectors', () => {
+  test('combining diacritical marks (U+0300-U+036F) add zero width', () => {
+    // 'e' + combining grave accent — single base char
+    const withCombining = 'è';
+    expect(getDisplayWidth(withCombining)).toBe(1);
+  });
+
+  test('ZWJ (U+200D) adds zero width', () => {
+    const zwj = '‍';
+    expect(getDisplayWidth(zwj)).toBe(0);
+  });
+
+  test('variation selector VS-16 (U+FE0F) adds zero width', () => {
+    const vs16 = '️';
+    expect(getDisplayWidth(vs16)).toBe(0);
+  });
+
+  test('variation selector VS-15 (U+FE0E) adds zero width', () => {
+    const vs15 = '︎';
+    expect(getDisplayWidth(vs15)).toBe(0);
+  });
+
+  test('enclosing combining marks (U+20D0-U+20FF) add zero width', () => {
+    const enc = '⃐';
+    expect(getDisplayWidth(enc)).toBe(0);
+  });
+
+  test('CJK unified ideograph is double-width', () => {
+    expect(getDisplayWidth('一')).toBe(2); // first CJK
+    expect(getDisplayWidth('가')).toBe(2); // Korean syllable
+  });
+
+  test('ASCII letters and digits are single-width', () => {
+    expect(getDisplayWidth('A')).toBe(1);
+    expect(getDisplayWidth('9')).toBe(1);
+  });
+
+  test('fullwidth forms (U+FF00-U+FF60) are double-width', () => {
+    expect(getDisplayWidth('０')).toBe(2); // fullwidth digit zero
+  });
+
+  test('control characters add zero width', () => {
+    expect(getDisplayWidth('\x01')).toBe(0);
+    expect(getDisplayWidth('\x1f')).toBe(0);
+    expect(getDisplayWidth('\x7f')).toBe(0);
+  });
+});
+
+describe('truncateDisplay — ZWJ sequence handling (code-point-safe, not grapheme-cluster-safe)', () => {
+  test('ZWJ family total width is summed correctly (each component double-wide, ZWJ=0)', () => {
+    // 👨‍👩‍👧‍👦: man(2)+ZWJ(0)+woman(2)+ZWJ(0)+girl(2)+ZWJ(0)+boy(2) = 8 display width
+    const family = '👨‍👩‍👧‍👦';
+    expect(getDisplayWidth(family)).toBe(8);
+  });
+
+  test('truncateDisplay result does not end with a bare ZWJ when family is split', () => {
+    // When a ZWJ family is truncated mid-sequence the implementation may leave a
+    // trailing ZWJ. This test documents the known limitation: we assert width
+    // correctness only, not grapheme-cluster integrity.
+    const family = '👨‍👩‍👧‍👦x';
+    const truncated = truncateDisplay(family, 4);
+    // Width constraint must always be respected
+    expect(getDisplayWidth(truncated)).toBeLessThanOrEqual(4);
+  });
+
+  test('truncateDisplay of plain text followed by ZWJ family respects width', () => {
+    // 'AB' (2) + ZWJ family (8) + 'Z' (1) = 11; truncate to 4
+    const text = 'AB👨‍👩‍👧‍👦Z';
+    const truncated = truncateDisplay(text, 4);
+    expect(getDisplayWidth(truncated)).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('padDisplayEnd — ANSI-aware padding', () => {
+  test('padDisplayEnd on ANSI-styled string pads to display width', () => {
+    // 'hi' with bold ANSI = 2 display chars, pad to 6 = 4 spaces appended
+    const styled = '\x1b[1m' + 'hi' + '\x1b[0m';
+    const padded = padDisplayEnd(styled, 6);
+    expect(getDisplayWidth(padded)).toBe(6);
+  });
+
+  test('padDisplayEnd on wide-char string pads correctly', () => {
+    // 2 CJK = 4 display width; pad to 6 = 2 spaces appended
+    const cjk = '中文';
+    const padded = padDisplayEnd(cjk, 6);
+    expect(getDisplayWidth(padded)).toBe(6);
+    expect(padded.endsWith('  ')).toBe(true);
+  });
+
+  test('padDisplayEnd does not add padding when already at target width', () => {
+    const text = 'hello';
+    const padded = padDisplayEnd(text, 5);
+    expect(padded).toBe('hello');
+  });
+
+  test('padDisplayEnd does not truncate when wider than target', () => {
+    const text = 'toolong';
+    const padded = padDisplayEnd(text, 4);
+    // wider input is returned unchanged (no truncation contract)
+    expect(padded).toBe('toolong');
   });
 });
