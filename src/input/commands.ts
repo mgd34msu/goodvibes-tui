@@ -7,7 +7,6 @@ import { recallCommand } from './commands/memory.ts';
 import { knowledgeCommand } from './commands/knowledge.ts';
 import { registerShellCoreCommands } from './commands/shell-core.ts';
 import { registerConfigCommand } from './commands/config.ts';
-import { registerSessionWorkflowCommands } from './commands/session-workflow.ts';
 import { registerDiscoveryRuntimeCommands } from './commands/discovery-runtime.ts';
 import { registerPlanningRuntimeCommands } from './commands/planning-runtime.ts';
 import { registerScheduleRuntimeCommands } from './commands/schedule-runtime.ts';
@@ -107,7 +106,6 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerCloudflareRuntimeCommands(registry);
   registerWorkPlanRuntimeCommands(registry);
   registerLocalRuntimeCommands(registry);
-  registerSessionWorkflowCommands(registry);
   registerDiscoveryRuntimeCommands(registry);
   registerPlanningRuntimeCommands(registry);
   registerScheduleRuntimeCommands(registry);

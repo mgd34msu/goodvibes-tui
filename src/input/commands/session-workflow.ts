@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import type { CommandContext, CommandRegistry } from '../command-registry.ts';
+import type { CommandContext } from '../command-registry.ts';
 import { type SessionMeta } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
 import type { ConversationTitleSource } from '../../core/conversation';
@@ -441,21 +441,13 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
   return false;
 }
 
-export function registerSessionWorkflowCommands(registry: CommandRegistry): void {
-  registry.register({
-    name: 'session-mgmt',
-    aliases: ['smgmt'],
-    description: 'Manage sessions, resume posture, and transcript structure',
-    usage: '[list | rename <name> | resume <id|name> | fork | save | info <id> | events [kind] | groups [kind] | hotspots | export <id> [format] | search <query> | delete <id>]',
-    argsHint: '<list|rename|resume|fork|save|info|events|groups|hotspots|export|search|delete>',
-    async handler(args, ctx) {
-      const handled = await handleSessionWorkflowCommand(args, ctx);
-      if (!handled) {
-        ctx.print('Unknown subcommand: ' + (args[0] ?? '') + '\nUsage: /session-mgmt [list | rename <name> | resume <id> | fork [name] | save [name] | info [id] | events [kind] | groups [kind] | hotspots | export <id> [format] | search <query> | delete <id>]');
-      }
-    },
-  });
-}
+// session-mgmt / smgmt was removed in TASK-032.
+// All session lifecycle operations are now first-class subcommands of /session.
+// Use /session list, /session resume, /session save, etc.
+//
+// CommandRegistry.register() throws on duplicate names/aliases, so this
+// registration was intentionally deleted rather than left as dead code.
+
 interface SessionExportData {
   readonly messages: object[];
   readonly timestamp?: number;
