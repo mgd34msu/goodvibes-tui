@@ -13,6 +13,7 @@ import {
   formatOnboardingApplyCompletionMessage,
   isLoopbackHostValue,
 } from './onboarding/onboarding-verification-helpers.ts';
+import { focusFirstOffendingField, getStepValidationErrors } from './onboarding/onboarding-wizard-validation.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import { captureOnboardingWizardSnapshot, restoreOnboardingWizardSnapshot } from './handler-ui-state.ts';
 import type { InputHandlerLike as InputHandler, OnboardingRuntimePosture } from './handler-types.ts';
@@ -82,6 +83,23 @@ function showOnboardingApplyFeedbackForHandler(handler: InputHandler, feedback: 
 
 function continueOnboardingSection(handler: InputHandler): void {
     handler.onboardingWizard.commitEdit();
+
+    const step = handler.onboardingWizard.currentStep;
+    const { errors, firstOffendingFieldId } = getStepValidationErrors(handler.onboardingWizard, step);
+    if (errors.length > 0) {
+      handler.onboardingWizard.setApplyFeedback({
+        severity: 'error',
+        title: 'Required fields missing',
+        summary: 'Fill in the required fields below before continuing.',
+        messages: errors,
+      });
+      if (firstOffendingFieldId !== null) {
+        focusFirstOffendingField(handler.onboardingWizard, firstOffendingFieldId);
+      }
+      handler.requestRender();
+      return;
+    }
+
     handler.onboardingWizard.clearApplyFeedback();
     handler.onboardingWizard.nextStep();
     handler.requestRender();
