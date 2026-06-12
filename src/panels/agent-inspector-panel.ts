@@ -21,6 +21,10 @@ import {
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
+import {
+  type ConfirmState,
+  handleConfirmInput,
+} from './confirm-state.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
@@ -32,6 +36,8 @@ import {
   formatAgentDuration as formatMs,
   formatAgentTime as shortTime,
   jsonlToTimeline,
+  AGENT_TERMINAL_STATUSES,
+  AGENT_STALL_THRESHOLD_MS,
 } from './agent-inspector-shared.ts';
 
 // ---------------------------------------------------------------------------
@@ -77,10 +83,14 @@ const COLOR = {
 // AgentInspectorPanel
 // ---------------------------------------------------------------------------
 
+// AGENT_TERMINAL_STATUSES and AGENT_STALL_THRESHOLD_MS imported from agent-inspector-shared.ts
+
 export interface AgentInspectorPanelDeps {
-  readonly agentManager: Pick<AgentManager, 'list' | 'getStatus'>;
+  readonly agentManager: Pick<AgentManager, 'list' | 'getStatus' | 'cancel'>;
   readonly agentMessageBus: Pick<AgentMessageBus, 'getMessages'>;
   readonly workingDirectory: string;
+  /** Cancel the agent by id. Uses the same orphan-free path as WRFC. Returns true if cancelled. */
+  readonly cancelAgent: (agentId: string) => boolean;
 }
 
 export class AgentInspectorPanel extends BasePanel {
@@ -101,6 +111,9 @@ export class AgentInspectorPanel extends BasePanel {
 
   // Row cache — cleared on markDirty(), computed once per render cycle
   private _cachedRows: DisplayRow[] | null = null;
+
+  /** Pending cancel confirmation — subject is the agent id to cancel. */
+  private confirmCancel: ConfirmState<string> | null = null;
 
   constructor(private readonly deps: AgentInspectorPanelDeps) {
     super('inspector', 'Inspector', 'I', 'agent');
@@ -157,13 +170,36 @@ export class AgentInspectorPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   handleInput(key: string): boolean {
+    // Confirm-cancel flow takes priority — same contract as WRFC panel.
+    if (this.confirmCancel) {
+      const result = handleConfirmInput(this.confirmCancel, key);
+      if (result === 'confirmed') {
+        const rec = this.selectedAgentId
+          ? this.deps.agentManager.getStatus(this.selectedAgentId)
+          : null;
+        if (rec && !AGENT_TERMINAL_STATUSES.has(rec.status)) {
+          this.deps.cancelAgent(rec.id);
+        }
+        this.confirmCancel = null;
+        this.markDirty();
+        return true;
+      }
+      if (result === 'cancelled') {
+        this.confirmCancel = null;
+        this.markDirty();
+      }
+      // absorbed: confirm stays pending
+      return true;
+    }
+
     switch (key) {
-      case 'up':       this._moveCursor(-1); return true;
-      case 'down':     this._moveCursor(1);  return true;
-      case 'pageup':   this._scroll(-10);    return true;
-      case 'pagedown': this._scroll(10);     return true;
-      case 'return':   this._toggleExpand(); return true;
-      case 'tab':      this._nextAgent();    return true;
+      case 'up':       this._moveCursor(-1);         return true;
+      case 'down':     this._moveCursor(1);           return true;
+      case 'pageup':   this._scroll(-10);             return true;
+      case 'pagedown': this._scroll(10);              return true;
+      case 'return':   this._toggleExpand();          return true;
+      case 'tab':      this._nextAgent();             return true;
+      case 'c':        this._beginCancelConfirm();    return true;
       default:         return false;
     }
   }
@@ -217,6 +253,11 @@ export class AgentInspectorPanel extends BasePanel {
     }
 
     summaryLines.push(this._renderAgentInfoSummary(width, rec));
+    const now = Date.now();
+    const isStalled = this._isAgentStalled(rec, now);
+    if (isStalled) {
+      summaryLines.push(buildPanelLine(width, [['  STALLED', '#f59e0b'], [' — no activity for 5+ minutes', DEFAULT_PANEL_PALETTE.dim]]));
+    }
     const allRows = this._getCachedRows();
     if (allRows.length === 0) {
       return buildPanelWorkspace(width, height, {
@@ -243,13 +284,42 @@ export class AgentInspectorPanel extends BasePanel {
     }
 
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, allRows.length - 1));
+    const selectedRec = this.selectedAgentId
+      ? this.deps.agentManager.getStatus(this.selectedAgentId)
+      : null;
+    const cancellable = selectedRec && !AGENT_TERMINAL_STATUSES.has(selectedRec.status);
     const summarySection = { title: 'Summary', lines: summaryLines } as const;
     const agentsSection = { title: 'Agents', lines: [selectorLine] } as const;
+
+    // Confirm-cancel overlay section.
+    const confirmSection = this.confirmCancel ? {
+      title: 'Confirm Cancel',
+      lines: [
+        buildPanelLine(width, [
+          [' Cancel agent "', DEFAULT_PANEL_PALETTE.warn],
+          [this.confirmCancel.label, DEFAULT_PANEL_PALETTE.value],
+          ['"?', DEFAULT_PANEL_PALETTE.warn],
+        ]),
+        buildPanelLine(width, [
+          [' y', DEFAULT_PANEL_PALETTE.info], ['  confirm', DEFAULT_PANEL_PALETTE.dim],
+          ['   Enter', DEFAULT_PANEL_PALETTE.info], ['  confirm', DEFAULT_PANEL_PALETTE.dim],
+          ['   n / Esc', DEFAULT_PANEL_PALETTE.info], ['  cancel', DEFAULT_PANEL_PALETTE.dim],
+        ]),
+      ],
+    } : null;
+
+    const cancelHintFg = cancellable ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim;
+    const footerLine = buildPanelLine(width, [
+      [` L${this.cursorIndex + 1}/${allRows.length}`, DEFAULT_PANEL_PALETTE.dim],
+      ['   Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim],
+      ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim],
+      ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim],
+      ['   c', cancelHintFg], [cancellable ? ' cancel' : ' cancel (n/a)', DEFAULT_PANEL_PALETTE.dim],
+    ]);
+
     const timelineSection = resolveScrollablePanelSection(width, height, {
       intro: 'Inspect a selected agent timeline, tool activity, expanded details, and live/historical message flow.',
-      footerLines: [
-        buildPanelLine(width, [[` L${this.cursorIndex + 1}/${allRows.length}`, DEFAULT_PANEL_PALETTE.dim], ['   Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim], ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
+      footerLines: [footerLine],
       palette: DEFAULT_PANEL_PALETTE,
       beforeSections: [summarySection, agentsSection],
       section: {
@@ -259,20 +329,22 @@ export class AgentInspectorPanel extends BasePanel {
         scrollOffset: this.scrollOffset,
         minRows: 8,
       },
+      afterSections: confirmSection ? [confirmSection] : undefined,
     });
     this.scrollOffset = timelineSection.scrollOffset;
+
+    const sections = [
+      summarySection,
+      agentsSection,
+      timelineSection.section,
+      ...(confirmSection ? [confirmSection] : []),
+    ];
 
     return buildPanelWorkspace(width, height, {
       title: ` Inspector [${agents.length} agent${agents.length !== 1 ? 's' : ''}]`,
       intro: 'Inspect a selected agent timeline, tool activity, expanded details, and live/historical message flow.',
-      sections: [
-        summarySection,
-        agentsSection,
-        timelineSection.section,
-      ],
-      footerLines: [
-        buildPanelLine(width, [[` L${this.cursorIndex + 1}/${allRows.length}`, DEFAULT_PANEL_PALETTE.dim], ['   Tab', DEFAULT_PANEL_PALETTE.info], [' cycle agents', DEFAULT_PANEL_PALETTE.dim], ['   Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
+      sections,
+      footerLines: [footerLine],
       palette: DEFAULT_PANEL_PALETTE,
     });
   }
@@ -516,5 +588,35 @@ export class AgentInspectorPanel extends BasePanel {
     if (next) {
       this.inspectAgent(next.id);
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Private — cancel + stall
+  // -------------------------------------------------------------------------
+
+  /** Initiate cancel-confirm flow for the selected agent (noop if terminal or none selected). */
+  private _beginCancelConfirm(): void {
+    if (!this.selectedAgentId) return;
+    const rec = this.deps.agentManager.getStatus(this.selectedAgentId);
+    if (!rec || AGENT_TERMINAL_STATUSES.has(rec.status)) return;
+    const label = rec.task.split('\n')[0]?.slice(0, 40) ?? rec.id.slice(-8);
+    this.confirmCancel = { subject: rec.id, label };
+    this.markDirty();
+  }
+
+  /** Returns whether an agent is considered stalled (non-terminal, running past threshold). */
+  private _isAgentStalled(rec: AgentRecord, now: number): boolean {
+    if (AGENT_TERMINAL_STATUSES.has(rec.status)) return false;
+    return (now - rec.startedAt) >= AGENT_STALL_THRESHOLD_MS;
+  }
+
+  /**
+   * Count of all tracked agents that are stalled (non-terminal, no activity
+   * for AGENT_STALL_THRESHOLD_MS). Exposed so callers can aggregate a
+   * stalledAgentCount for cockpit / roster read-models.
+   */
+  getStalledAgentCount(): number {
+    const now = Date.now();
+    return this.deps.agentManager.list().filter(rec => this._isAgentStalled(rec, now)).length;
   }
 }
