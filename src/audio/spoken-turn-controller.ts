@@ -25,6 +25,7 @@ export class SpokenTurnController {
   private readonly abortControllers = new Set<AbortController>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private errorReportedForTurn = false;
+  private noPlayerNoticed = false;
   private readonly voiceService: Pick<VoiceService, 'synthesizeStream'>;
   private readonly configManager: Pick<ConfigManager, 'get'>;
   private readonly player: StreamingAudioPlayer;
@@ -48,9 +49,14 @@ export class SpokenTurnController {
     if (!normalized) return false;
     this.stop();
     if (!this.player.available) {
-      this.notify?.('[TTS] Text response will continue, but live audio is unavailable. Install mpv or ffplay.');
+      if (!this.noPlayerNoticed) {
+        this.noPlayerNoticed = true;
+        this.notify?.('[TTS] Text response will continue, but live audio is unavailable. Install mpv or ffplay.');
+      }
       return false;
     }
+    // Reset the no-player notice if player becomes available again.
+    this.noPlayerNoticed = false;
     this.pendingPrompt = normalized;
     return true;
   }
@@ -169,10 +175,15 @@ export class SpokenTurnController {
   }
 
   private synthesize(text: string, turnId: string, sequence: number, signal: AbortSignal): Promise<VoiceSynthesisStreamResult> {
+    // tts.speed: VoiceSynthesisRequest accepts speed (number | undefined).
+    // No ConfigKey for tts.speed exists in the current SDK schema — pending
+    // SDK schema addition. Speed is not threaded from config until that key
+    // is added. See docs/voice-and-live-tts.md § Speed.
     return this.voiceService.synthesizeStream(readOptionalConfigString(this.configManager, 'tts.provider'), {
       text,
       voiceId: readOptionalConfigString(this.configManager, 'tts.voice'),
       format: 'mp3',
+      speed: readOptionalConfigNumber(this.configManager, 'tts.speed'),
       signal,
       metadata: {
         source: 'goodvibes-tui',
@@ -200,4 +211,23 @@ export class SpokenTurnController {
 function readOptionalConfigString(configManager: Pick<ConfigManager, 'get'>, key: ConfigKey): string | undefined {
   const value = String(configManager.get(key) ?? '').trim();
   return value || undefined;
+}
+
+/**
+ * readOptionalConfigNumber — reads a numeric config value by key.
+ *
+ * `tts.speed` is not yet a ConfigKey in the SDK schema. This helper accepts
+ * a string key and casts it, returning undefined when the value is absent,
+ * zero, or not a finite positive number. Once `tts.speed` is added to the
+ * SDK schema the cast can be removed and the key typed statically.
+ *
+ * SDK handoff note: add { key: 'tts.speed', type: 'number', default: 1,
+ * description: '...' } to schema-domain-core.js and `tts: { ..., speed: 1 }`
+ * to DEFAULT_CONFIG.tts to complete this feature.
+ */
+function readOptionalConfigNumber(configManager: Pick<ConfigManager, 'get'>, key: string): number | undefined {
+  // Cast required: key is not yet a valid ConfigKey in the SDK schema.
+  const raw = configManager.get(key as ConfigKey);
+  const value = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+  return isFinite(value) && value > 0 ? value : undefined;
 }

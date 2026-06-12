@@ -12,6 +12,8 @@ The `/tts` command does not replace text output. The normal assistant response s
 ```text
 /tts <prompt>
 /tts stop
+/tts on
+/tts off
 /config tts
 /config tts.provider
 /config tts.voice
@@ -23,10 +25,25 @@ The `/tts` command does not replace text output. The normal assistant response s
 
 `/tts stop` cancels pending TTS requests, kills active playback, and clears the queued audio chunks.
 
-`/config tts` opens the fullscreen configuration workspace at the TTS category. From there users can choose the streaming TTS provider, choose a voice from that provider, open the fullscreen provider/model workspace for the TTS response model override, clear text fields, or reset selected settings.
+`/tts on` enables always-speak mode. Every turn submitted to the conversation — including turns not prefixed with `/tts` — is automatically marked for live spoken output. The setting is persisted via `ui.voiceEnabled` in the TUI config. The player availability check still gates gracefully: if no player is found the turn text continues normally with a status message.
+
+`/tts off` disables always-speak mode. After running `/tts off`, only prompts submitted with `/tts <prompt>` are spoken.
+
+### Always-speak mode
+
+Always-speak mode is controlled by the `ui.voiceEnabled` config key (boolean, default `false`). It is visible in both the `ui` and `tts` settings categories. The setting is labeled **Always Speak** in the UI.
+
+```text
+/config tts
+```
+
+The **Always Speak** row appears at the top of the TTS settings tab. Toggle it there or use `/tts on` / `/tts off` or `/voice enable` / `/voice disable` — all four are the same switch writing the same `ui.voiceEnabled` key.
+
+`/config tts` opens the fullscreen configuration workspace at the TTS category. From there users can toggle always-speak mode, choose the streaming TTS provider, choose a voice from that provider, open the fullscreen provider/model workspace for the TTS response model override, clear text fields, or reset selected settings.
 
 The modal and direct commands write the SDK TTS config keys:
 
+- `ui.voiceEnabled` — always-speak toggle (boolean)
 - `tts.provider`
 - `tts.voice`
 - `tts.llmProvider`
@@ -35,6 +52,24 @@ The modal and direct commands write the SDK TTS config keys:
 By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model. Selecting either TTS LLM row opens the same fullscreen provider/model workspace used by the main model/provider commands, with the target route set to `TTS LLM`.
 
 Spoken turns stay active until the logical turn reaches `TURN_COMPLETED`, `TURN_ERROR`, `TURN_CANCEL`, or `PREFLIGHT_FAIL`. SDK `STREAM_END` is provider-stream scoped and non-terminal, so tool-using or multi-step `/tts` turns must not stop audio collection just because one provider stream iteration ended.
+
+## Speed
+
+The SDK synthesis API (`VoiceSynthesisRequest`) accepts a `speed` field (positive number; 1.0 is normal speed). The TUI reads this from config and passes it through to the synthesis call.
+
+**Status: pending SDK schema addition.** The `tts.speed` ConfigKey does not yet exist in the SDK config schema (`TtsConfig`). Until it is added:
+
+- The TUI synthesis call correctly passes `speed: undefined` (provider default).
+- No `tts.speed` row is visible in `/config tts`.
+
+**SDK handoff:** add the following to `schema-domain-core.js` to complete this feature:
+
+```js
+{ key: 'tts.speed', type: 'number', default: 1,
+  description: 'Playback speed multiplier for TTS synthesis (1.0 = normal). Passed directly to the provider; supported range varies by provider.' }
+```
+
+And add `speed: 1` to `DEFAULT_CONFIG.tts` and `TtsConfig`. Once the key lands the TUI `readOptionalConfigNumber` helper in `spoken-turn-controller.ts` will automatically thread the persisted value through without further changes.
 
 ## Playback Requirements
 
