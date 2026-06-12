@@ -4,6 +4,28 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.23.0] — 2026-06-12
+
+Third best-in-class program release: provider failover on the turn path, the context/compaction surface completed, the E20 export track closed, and the renderer pinned by golden frames. Every change passed independent review before commit.
+
+### Features
+- Added turn-path provider failover with bounded same-turn retries: the fallback chain is walked with a per-turn visited set, duplicate user messages are prevented by a message-count snapshot and rollback, synthetic models are never failed into, and retries preserve the original content and options.
+- Added /compact preview and after-notice: a clearly labelled estimate before compaction and the real before/after message and token figures from the compaction event when it completes.
+- Added /compact-history: lists past compaction events; restore is list-only until the SDK exposes a snapshot/restore API, and the output says so plainly.
+- Added /keep: pin text into session memory; pinned entries flow into the compaction handoff on both manual and auto-compact paths, with honest session-only wording (named /keep because /pin belongs to model favorites).
+- Added /channel: routes, delivery, status, and policy snapshots for the omnichannel substrate, with --json on every subcommand.
+- Added inbound event narration: GitHub, Slack, ntfy, and webhook events emit a transcript line naming the surface and event before agent dispatch, with self-narration guarded for companion and internal sources.
+
+### Fixes
+- Fixed a command registration collision between the new session-memory pin and the model-favorites /pin by naming the new command /keep.
+- Deflaked the websocket reconnect test with a deadline poll in place of a fixed sleep.
+
+### Internal
+- Architecture gate now detects import cycles (Tarjan SCC over the import graph, proven against an injected scratch cycle) and enforces 8 directional layer rules; the conversation and system-message-router cycle is genuinely broken via the runtime barrel.
+- Auth listener behavior pinned by 18 live tests: default login rate limit (five 401s then 429), proxy-spoofing posture, and empty-password handling.
+- Golden-frame harness pins four renderer surfaces with committed snapshots: regeneration is byte-for-byte stable, a missing golden fails instead of regenerating, and GOODVIBES_UPDATE_GOLDENS=1 is the only write path.
+- CLI management helpers deduplicated into management-utils with openBrowser extracted to a shared utility.
+
 ## [0.22.0] — 2026-06-12
 
 Second best-in-class program release: the backlog tail, the providers/failover track opened, and the release pipeline made fully honest. Every change passed independent review at 10/10 before commit.
