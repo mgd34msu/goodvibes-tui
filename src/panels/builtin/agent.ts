@@ -76,7 +76,10 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     preload: true,
     factory: () => {
       const ui = requireUiServices(deps);
-      return new WrfcPanel(ui.events.workflows, { controller: ui.agents.wrfcController });
+      return new WrfcPanel(ui.events.workflows, {
+        controller: ui.agents.wrfcController,
+        cancelChain: (agentId: string) => ui.agents.agentManager.cancel(agentId),
+      });
     },
   });
 

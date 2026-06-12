@@ -16,6 +16,23 @@ import {
   buildEmptyState,
 } from './polish.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
+import {
+  type ConfirmState,
+  handleConfirmInput,
+} from './confirm-state.ts';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/** Chains in non-terminal state with no event for this long are shown as STALLED. */
+const STALL_THRESHOLD_MS = 5 * 60 * 1000;
+
+/** Terminal states — chains in these states cannot be resumed or cancelled. */
+const TERMINAL_STATES: readonly WrfcState[] = ['passed', 'failed'];
+
+/** States from which resume is permitted (pending = chain is awaiting retry). */
+const RESUMABLE_STATES: readonly WrfcState[] = ['pending'];
 
 // ---------------------------------------------------------------------------
 // Colour palette
@@ -53,6 +70,7 @@ const C = {
   constraintSat:  '#22c55e', // green — satisfied
   constraintUnsat:'#ef4444', // red — unsatisfied
   constraintUnv:  '#4b5563', // grey — unverified (no finding yet)
+  stalled:        '#f59e0b', // amber — stalled / no recent event
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -157,7 +175,9 @@ export function constraintStatusMarker(
 // Panel
 // ---------------------------------------------------------------------------
 export interface WrfcPanelDeps {
-  readonly controller: Pick<WrfcController, 'listChains'>;
+  readonly controller: Pick<WrfcController, 'listChains' | 'resumeChain'>;
+  /** Cancel the active agent for a chain by its ownerAgentId. Returns true if cancelled. */
+  readonly cancelChain: (agentId: string) => boolean;
 }
 
 export class WrfcPanel extends BasePanel {
@@ -166,6 +186,12 @@ export class WrfcPanel extends BasePanel {
   private scrollOffset = 0;
   private expandedChainIds = new Set<string>();
   private unsubscribers: Array<() => void> = [];
+  /** Last event timestamp per chain id, for stall detection. */
+  private lastEventAt = new Map<string, number>();
+  /** Pending cancel confirmation: subject is the chain id to cancel. */
+  private confirmCancel: ConfirmState<string> | null = null;
+  /** Controller error seen after initialization (distinct from pre-init silence). */
+  private controllerError: string | null = null;
 
   constructor(
     private readonly workflowEvents: UiEventFeed<WorkflowEvent>,
@@ -193,11 +219,34 @@ export class WrfcPanel extends BasePanel {
   // Input
   // -------------------------------------------------------------------------
   handleInput(key: string): boolean {
+    // Confirm-cancel flow takes priority over all other keys.
+    // Enter and y both confirm; n, escape both cancel; any other key is absorbed.
+    if (this.confirmCancel) {
+      const isEnter = key === 'enter' || key === 'return';
+      const confirmResult = isEnter ? 'confirmed' : handleConfirmInput(this.confirmCancel, key);
+      if (confirmResult === 'confirmed') {
+        const chain = this.chains.find(c => c.id === this.confirmCancel!.subject);
+        if (chain && !TERMINAL_STATES.includes(chain.state)) {
+          this.deps.cancelChain(chain.ownerAgentId);
+        }
+        this.confirmCancel = null;
+        this.markDirty();
+        return true;
+      }
+      // cancelled or absorbed — clear and swallow
+      this.confirmCancel = null;
+      this.markDirty();
+      return true;
+    }
+
+    // Normal key dispatch.
     switch (key) {
       case 'up':    this.moveSelection(-1); return true;
       case 'down':  this.moveSelection(1);  return true;
       case 'return':
       case 'enter': this.toggleExpanded();  return true;
+      case 'c':     this.beginCancelConfirm(); return true;
+      case 'r':     this.doResume();           return true;
       default:      return false;
     }
   }
@@ -207,25 +256,37 @@ export class WrfcPanel extends BasePanel {
   // -------------------------------------------------------------------------
   render(width: number, height: number): Line[] {
     return this.trackedRender(() => {
-    const activeCount  = this.chains.filter(c => !['passed', 'failed'].includes(c.state)).length;
+    const now = Date.now();
+    const activeCount  = this.chains.filter(c => !TERMINAL_STATES.includes(c.state)).length;
     const passedCount  = this.chains.filter(c => c.state === 'passed').length;
     const failedCount  = this.chains.filter(c => c.state === 'failed').length;
 
     if (this.chains.length === 0) {
+      const emptySections: PanelWorkspaceSection[] = [
+        {
+          lines: buildEmptyState(
+            width,
+            ' No WRFC chains yet',
+            'WRFC chains appear here as review/fix cycles execute. Expanded rows show scores, gates, issues, and failure detail.',
+            [],
+            DEFAULT_PANEL_PALETTE,
+          ),
+        },
+      ];
+      if (this.controllerError) {
+        emptySections.push({
+          lines: [
+            buildPanelLine(width, [
+              [' controller: ', DEFAULT_PANEL_PALETTE.dim],
+              [truncate(this.controllerError, width - 16), DEFAULT_PANEL_PALETTE.warn],
+            ]),
+          ],
+        });
+      }
       return buildPanelWorkspace(width, height, {
         title: ' WRFC Chain Monitor',
         intro: 'Track WRFC engineering, review, fixing, gating, and final chain outcomes.',
-        sections: [
-          {
-            lines: buildEmptyState(
-              width,
-              ' No WRFC chains yet',
-              'WRFC chains appear here as review/fix cycles execute. Expanded rows show scores, gates, issues, and failure detail.',
-              [],
-              DEFAULT_PANEL_PALETTE,
-            ),
-          },
-        ],
+        sections: emptySections,
         palette: DEFAULT_PANEL_PALETTE,
       });
     }
@@ -238,9 +299,10 @@ export class WrfcPanel extends BasePanel {
       const isExpanded = this.expandedChainIds.has(chain.id);
       const rowBg      = isSelected ? C.selected : '';
       const rowFg      = isSelected ? C.selectedFg : '';
+      const stalled    = this.isStalled(chain, now);
 
       if (isSelected) selectedLineIndex = chainLines.length;
-      chainLines.push(...this.renderChainRow(chain, width, isSelected, isExpanded, rowBg, rowFg));
+      chainLines.push(...this.renderChainRow(chain, width, isSelected, isExpanded, rowBg, rowFg, stalled));
 
       if (isExpanded) {
         chainLines.push(...this.renderChainDetail(chain, width, 12));
@@ -298,11 +360,39 @@ export class WrfcPanel extends BasePanel {
       title: 'Selected',
       lines: selectedLines,
     };
+    // Confirm-cancel overlay section.
+    const confirmSection: PanelWorkspaceSection | null = this.confirmCancel ? {
+      title: 'Confirm Cancel',
+      lines: [
+        buildPanelLine(width, [
+          [' Cancel chain "', DEFAULT_PANEL_PALETTE.warn],
+          [truncate(this.confirmCancel.label, Math.max(8, width - 32)), DEFAULT_PANEL_PALETTE.value],
+          ['"?', DEFAULT_PANEL_PALETTE.warn],
+        ]),
+        buildPanelLine(width, [
+          [' y', DEFAULT_PANEL_PALETTE.info], ['  confirm', DEFAULT_PANEL_PALETTE.dim],
+          ['   Enter', DEFAULT_PANEL_PALETTE.info], ['  confirm', DEFAULT_PANEL_PALETTE.dim],
+          ['   n / Esc', DEFAULT_PANEL_PALETTE.info], ['  cancel', DEFAULT_PANEL_PALETTE.dim],
+        ]),
+      ],
+    } : null;
+
+    // Footer: show resume-disabled reason for the selected chain.
+    const selectedForFooter = this.chains[this.selectedIndex];
+    const resumeReason = selectedForFooter ? this.resumeDisabledReason(selectedForFooter) : null;
+    const footerLines: Line[] = [
+      buildPanelLine(width, [
+        [' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim],
+        ['   Enter', DEFAULT_PANEL_PALETTE.info],  [' expand',   DEFAULT_PANEL_PALETTE.dim],
+        ['   c', DEFAULT_PANEL_PALETTE.info],      [' cancel',   DEFAULT_PANEL_PALETTE.dim],
+        ['   r', resumeReason ? DEFAULT_PANEL_PALETTE.dim : DEFAULT_PANEL_PALETTE.info],
+        [resumeReason ? ` resume (${resumeReason})` : ' resume', DEFAULT_PANEL_PALETTE.dim],
+      ]),
+    ];
+
     const chainsSection = resolveScrollablePanelSection(width, height, {
       intro: 'Track WRFC engineering, review, fixing, gating, and final chain outcomes.',
-      footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
       beforeSections: [summarySection],
       section: {
@@ -312,22 +402,40 @@ export class WrfcPanel extends BasePanel {
         scrollOffset: this.scrollOffset,
         minRows: 8,
       },
-      afterSections: [selectedSection],
+      afterSections: confirmSection
+        ? [selectedSection, confirmSection]
+        : [selectedSection],
     });
     this.scrollOffset = chainsSection.scrollOffset;
-    const sections: PanelWorkspaceSection[] = [summarySection, chainsSection.section, selectedSection];
+    const sections: PanelWorkspaceSection[] = [
+      summarySection,
+      chainsSection.section,
+      selectedSection,
+      ...(confirmSection ? [confirmSection] : []),
+    ];
+
+    // Controller error section (post-init only).
+    if (this.controllerError) {
+      sections.push({
+        lines: [
+          buildPanelLine(width, [
+            [' controller: ', DEFAULT_PANEL_PALETTE.dim],
+            [truncate(this.controllerError, width - 16), DEFAULT_PANEL_PALETTE.warn],
+          ]),
+        ],
+      });
+    }
 
     return buildPanelWorkspace(width, height, {
       title: ' WRFC Chain Monitor',
       intro: 'Track WRFC engineering, review, fixing, gating, and final chain outcomes.',
       sections,
-      footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
     });
     });
   }
+
 
   // -------------------------------------------------------------------------
   // Rendering helpers
@@ -339,9 +447,12 @@ export class WrfcPanel extends BasePanel {
     isExpanded: boolean,
     bg: string,
     fg: string,
+    stalled = false,
   ): Line[] {
-    const stateCol   = stateColor(chain.state);
-    const stateTag   = ` ${stateLabel(chain.state).padEnd(6)}`;
+    const stateCol   = stalled ? C.stalled : stateColor(chain.state);
+    const stateTag   = stalled
+      ? ` STALLED`
+      : ` ${stateLabel(chain.state).padEnd(6)}`;
     const arrow      = isExpanded ? '▾' : '▸';
     const chainIdShort = chain.id.slice(-6);
     const prefix     = ` ${arrow} [${chainIdShort}] `;
@@ -350,6 +461,7 @@ export class WrfcPanel extends BasePanel {
     const latestScore = chain.reviewScores.length > 0
       ? ` ${chain.reviewScores[chain.reviewScores.length - 1].toFixed(1)}/10`
       : '';
+    const stalledBadge = stalled ? ' [STALLED]' : '';
     // Constraint badge: c:sat/total — only when constraints exist
     let constraintBadge = '';
     if (chain.constraints.length > 0) {
@@ -358,7 +470,7 @@ export class WrfcPanel extends BasePanel {
       const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
       constraintBadge = ` c:${satisfied}/${total}`;
     }
-    const rightInfo  = `${latestScore}${fixes}${cycles}${constraintBadge} `;
+    const rightInfo  = `${stalledBadge}${latestScore}${fixes}${cycles}${constraintBadge} `;
 
     // Compute how much space the task text can use, then check if rightInfo fits.
     // If the terminal is narrow and rightInfo would overflow, omit it entirely
@@ -572,28 +684,49 @@ export class WrfcPanel extends BasePanel {
   // Event subscriptions
   // -------------------------------------------------------------------------
   private subscribeToEvents(): void {
-    const refresh = () => { this.syncFromController(); this.markDirty(); };
+    const refreshWithTimestamp = (chainId?: string) => {
+      if (chainId) this.lastEventAt.set(chainId, Date.now());
+      this.syncFromController();
+      this.markDirty();
+    };
+
+    // Each workflow event carries the chainId in its payload — record it for
+    // stall tracking.  The handler signature is (event) => void; we extract
+    // chainId where present using a narrow type guard so we never guess.
+    const timestamped = (e: WorkflowEvent) => {
+      const chainId = 'chainId' in e && typeof e.chainId === 'string' ? e.chainId : undefined;
+      refreshWithTimestamp(chainId);
+    };
 
     this.unsubscribers.push(
-      this.workflowEvents.on('WORKFLOW_CHAIN_CREATED', refresh),
-      this.workflowEvents.on('WORKFLOW_STATE_CHANGED', refresh),
-      this.workflowEvents.on('WORKFLOW_REVIEW_COMPLETED', refresh),
-      this.workflowEvents.on('WORKFLOW_FIX_ATTEMPTED', refresh),
-      this.workflowEvents.on('WORKFLOW_GATE_RESULT', refresh),
-      this.workflowEvents.on('WORKFLOW_CHAIN_PASSED', refresh),
-      this.workflowEvents.on('WORKFLOW_CHAIN_FAILED', refresh),
-      this.workflowEvents.on('WORKFLOW_AUTO_COMMITTED', refresh),
-      this.workflowEvents.on('WORKFLOW_CASCADE_ABORTED', refresh),
-      this.workflowEvents.on('WORKFLOW_CONSTRAINTS_ENUMERATED', refresh),
+      this.workflowEvents.on('WORKFLOW_CHAIN_CREATED',         timestamped),
+      this.workflowEvents.on('WORKFLOW_STATE_CHANGED',         timestamped),
+      this.workflowEvents.on('WORKFLOW_REVIEW_COMPLETED',      timestamped),
+      this.workflowEvents.on('WORKFLOW_FIX_ATTEMPTED',         timestamped),
+      this.workflowEvents.on('WORKFLOW_GATE_RESULT',           timestamped),
+      this.workflowEvents.on('WORKFLOW_CHAIN_PASSED',          timestamped),
+      this.workflowEvents.on('WORKFLOW_CHAIN_FAILED',          timestamped),
+      this.workflowEvents.on('WORKFLOW_AUTO_COMMITTED',        timestamped),
+      this.workflowEvents.on('WORKFLOW_CASCADE_ABORTED',       timestamped),
+      this.workflowEvents.on('WORKFLOW_CONSTRAINTS_ENUMERATED', timestamped),
     );
   }
 
   private syncFromController(): void {
+    // Distinguish two failure modes:
+    //   1. Controller not yet initialized — chains is empty Map, listChains
+    //      returns [] with no error.  This is the normal pre-ready path.
+    //   2. Controller throws after initialization — an actual error we surface.
+    // We detect (2) by checking whether we previously had chains: if chains
+    // were present and listChains now throws, that is a post-init error.
+    const hadChains = this.chains.length > 0;
     try {
-      // Sort: active first (by createdAt desc), then completed
       const all = this.deps.controller.listChains();
-      const active   = all.filter(c => !['passed', 'failed'].includes(c.state));
-      const done     = all.filter(c =>  ['passed', 'failed'].includes(c.state));
+      this.controllerError = null;
+
+      // Sort: active first (by createdAt desc), then completed
+      const active = all.filter(c => !TERMINAL_STATES.includes(c.state));
+      const done   = all.filter(c =>  TERMINAL_STATES.includes(c.state));
       active.sort((a, b) => b.createdAt - a.createdAt);
       done.sort(  (a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
       this.chains = [...active, ...done];
@@ -602,8 +735,57 @@ export class WrfcPanel extends BasePanel {
       if (this.chains.length > 0) {
         this.selectedIndex = Math.min(this.selectedIndex, this.chains.length - 1);
       }
-    } catch {
-      // WrfcController not yet initialized — leave chain list empty
+    } catch (err) {
+      if (hadChains) {
+        // Post-init error: the controller was working and now throws.  Surface
+        // a faint diagnostic rather than silently preserving stale state.
+        const msg = err instanceof Error ? err.message : String(err);
+        this.controllerError = msg;
+        console.debug('[WrfcPanel] controller.listChains() error post-init:', msg);
+      }
+      // Pre-init: controller not ready yet, leave chain list empty (no error).
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Cancel / resume actions
+  // -------------------------------------------------------------------------
+
+  /** Initiate cancel-confirm flow for the selected chain (noop if terminal). */
+  private beginCancelConfirm(): void {
+    const chain = this.chains[this.selectedIndex];
+    if (!chain || TERMINAL_STATES.includes(chain.state)) return;
+    this.confirmCancel = {
+      subject: chain.id,
+      label: truncate(chain.task, 40),
+    };
+    this.markDirty();
+  }
+
+  /**
+   * Resume the selected chain via the controller.
+   * Only permitted when the chain state is in RESUMABLE_STATES.
+   * Emits a visible noop reason when the chain is not resumable.
+   */
+  private doResume(): void {
+    const chain = this.chains[this.selectedIndex];
+    if (!chain) return;
+    if (!RESUMABLE_STATES.includes(chain.state)) return;
+    this.deps.controller.resumeChain(chain.id);
+    this.markDirty();
+  }
+
+  /** Returns a human-readable reason why resume is disabled for a chain, or null if it is allowed. */
+  private resumeDisabledReason(chain: WrfcChain): string | null {
+    if (TERMINAL_STATES.includes(chain.state)) return 'chain is complete';
+    if (!RESUMABLE_STATES.includes(chain.state)) return `active (${stateLabel(chain.state)})`;
+    return null;
+  }
+
+  /** Returns whether a chain is considered stalled (non-terminal, no recent event). */
+  private isStalled(chain: WrfcChain, now: number): boolean {
+    if (TERMINAL_STATES.includes(chain.state)) return false;
+    const last = this.lastEventAt.get(chain.id) ?? chain.createdAt;
+    return (now - last) >= STALL_THRESHOLD_MS;
   }
 }
