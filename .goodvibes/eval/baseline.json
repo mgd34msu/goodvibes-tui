@@ -1,0 +1,29 @@
+{
+  "label": "run-2026-06-12",
+  "capturedAt": 1781269090834,
+  "suites": {
+    "core-performance": {
+      "meanScore": 87.16666666666667,
+      "scenarioScores": {
+        "core-perf:render-p95-under-budget": 93,
+        "core-perf:slo-turn-start-latency": 93,
+        "core-perf:memory-growth-stable": 75.5
+      }
+    },
+    "safety-baseline": {
+      "meanScore": 74.16666666666667,
+      "scenarioScores": {
+        "safety:clean-run-no-violations": 75.5,
+        "safety:recovery-success": 77.5,
+        "safety:recovery-failure-score": 69.5
+      }
+    },
+    "cost-tokens": {
+      "meanScore": 75.5,
+      "scenarioScores": {
+        "cost:no-token-usage": 75.5,
+        "cost:low-token-usage": 75.5
+      }
+    }
+  }
+}
