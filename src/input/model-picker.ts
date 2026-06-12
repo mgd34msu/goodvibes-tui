@@ -1,15 +1,53 @@
 import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
-import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers';
-import { getQualityTier, getQualityTierFromScore, compositeScore, A_TIER_THRESHOLD } from '@pellux/goodvibes-sdk/platform/providers';
 import type { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { detectFamily, POPULAR_PROVIDERS, tierToCategoryFilter } from './model-picker-types.ts';
-import type { BenchmarkSort, CapabilityFilter, CategoryFilter, FilteredModelsCache, FilteredProvidersCache, GroupByMode, ModelItemsCache, ModelPickerFocusPane, ModelPickerTarget, ModelPickerTargetInfo, PickerItem, PickerMode, ProviderItemsCache } from './model-picker-types.ts';
+import type {
+  BenchmarkSort,
+  CapabilityFilter,
+  CategoryFilter,
+  FilteredModelsCache,
+  FilteredProvidersCache,
+  GroupByMode,
+  ModelItemsCache,
+  ModelPickerFocusPane,
+  ModelPickerTarget,
+  ModelPickerTargetInfo,
+  PickerItem,
+  PickerMode,
+  ProviderItemsCache,
+} from './model-picker-types.ts';
 import { filterProviders, groupProviders } from './model-picker-provider-filter.ts';
+import {
+  buildFilteredModels,
+  buildFilteredProviders,
+  getSyntheticSubgroup,
+  setKey,
+  orderedListKey,
+  mapKey,
+} from './model-picker-filter.ts';
+import {
+  buildModelItems,
+  buildProviderItems,
+  buildEffortItems,
+  getModelGroupKey,
+  toModelItem,
+} from './model-picker-items.ts';
 
 export { detectFamily, POPULAR_PROVIDERS, tierToCategoryFilter } from './model-picker-types.ts';
-export type { BenchmarkSort, CapabilityFilter, CategoryFilter, GroupByMode, ModelFamily, ModelPickerFocusPane, ModelPickerTarget, ModelPickerTargetInfo, PickerItem, PickerMode } from './model-picker-types.ts';
+export type {
+  BenchmarkSort,
+  CapabilityFilter,
+  CategoryFilter,
+  GroupByMode,
+  ModelFamily,
+  ModelPickerFocusPane,
+  ModelPickerTarget,
+  ModelPickerTargetInfo,
+  PickerItem,
+  PickerMode,
+} from './model-picker-types.ts';
 
 /**
  * ModelPickerModal - Multi-step interactive picker for model, provider, and effort.
@@ -55,7 +93,7 @@ export class ModelPickerModal {
   /** Current input string in contextCap mode. */
   public contextCapQuery = '';
 
-  // ── Search / filter ──────────────────────────────────────────────────────────
+  // ── Search / filter ─────────────────────────────────────────────────────────────────────────────
   /** Current search query string (empty = no filter). */
   public query = '';
   /** Active pricing tier filter. */
@@ -134,7 +172,7 @@ export class ModelPickerModal {
     }
   }
 
-  // ── Category filter cycling ───────────────────────────────────────────────
+  // ── Category filter cycling ───────────────────────────────────────────────────
   private static readonly CATEGORY_CYCLE: CategoryFilter[] = ['all', 'free', 'paid', 'subscription'];
   /** Cycle to next pricing tier filter. */
   cycleCategory(): void {
@@ -144,7 +182,7 @@ export class ModelPickerModal {
     this._clampSelection();
   }
 
-  // ── Group-by cycling ──────────────────────────────────────────────────────
+  // ── Group-by cycling ────────────────────────────────────────────────────────────────
   private static readonly GROUP_BY_CYCLE: GroupByMode[] = ['provider', 'family', 'pricingTier', 'qualityTier'];
   /** Cycle to next group-by mode. */
   cycleGroupBy(): void {
@@ -154,7 +192,7 @@ export class ModelPickerModal {
     this._clampSelection();
   }
 
-  // ── Benchmark sort cycling ────────────────────────────────────────────────
+  // ── Benchmark sort cycling ───────────────────────────────────────────────────────────────
   private static readonly BENCHMARK_SORT_CYCLE: BenchmarkSort[] = ['none', 'composite', 'swe', 'gpqa'];
   /** Cycle to next benchmark sort order. */
   cycleBenchmarkSort(): void {
@@ -281,7 +319,7 @@ export class ModelPickerModal {
     this.clearCaches();
   }
 
-  // ── Search helpers ─────────────────────────────────────────────────────────
+  // ── Search helpers ─────────────────────────────────────────────────────────────────────
 
   /** Append a character to the search query and clamp selectedIndex. */
   appendChar(ch: string): void {
@@ -351,175 +389,35 @@ export class ModelPickerModal {
 
   /** Return providers matching the current query (case-insensitive substring), in grouped order. */
   getFilteredProviders(): string[] {
-    const cached = this.filteredProvidersCache;
-    if (
-      cached !== null
-      && cached.providersRef === this.providers
-      && cached.query === this.query
-    ) {
-      return cached.result;
-    }
-
-    const result = filterProviders(this.providers, this.query);
-    this.filteredProvidersCache = {
-      providersRef: this.providers,
-      query: this.query,
-      result,
-    };
+    const { result, cache } = buildFilteredProviders(
+      this.providers,
+      this.query,
+      this.filteredProvidersCache,
+    );
+    this.filteredProvidersCache = cache;
     return result;
   }
 
   /** Return models matching all current filters, sorted per benchmarkSort. */
   getFilteredModels(): ModelDefinition[] {
-    const configuredProvidersKey = setKey(this.configuredProviders);
-    const pinnedIdsKey = setKey(this.pinnedIds);
-    const recentIdsKey = orderedListKey(this.recentIds);
-    const cached = this.filteredModelsCache;
-    if (
-      cached !== null
-      && cached.modelsRef === this.models
-      && cached.configuredProvidersKey === configuredProvidersKey
-      && cached.pinnedIdsKey === pinnedIdsKey
-      && cached.recentIdsKey === recentIdsKey
-      && cached.query === this.query
-      && cached.categoryFilter === this.categoryFilter
-      && cached.capabilityFilter === this.capabilityFilter
-      && cached.availableOnly === this.availableOnly
-      && cached.benchmarkSort === this.benchmarkSort
-      && cached.groupBy === this.groupBy
-    ) {
-      return cached.result;
-    }
-
-    let result = this.models;
-
-    // Available-only filter
-    if (this.availableOnly && this.configuredProviders.size > 0) {
-      result = result.filter(m => this.configuredProviders.has(m.provider));
-    }
-
-    // Pricing tier / category filter
-    if (this.categoryFilter === 'free') {
-      result = result.filter(m => m.tier === 'free');
-    } else if (this.categoryFilter === 'paid') {
-      result = result.filter(m => m.tier === 'standard' || m.tier === 'premium' || m.tier == null);
-    } else if (this.categoryFilter === 'subscription') {
-      result = result.filter(m => tierToCategoryFilter(m.tier) === 'subscription');
-    }
-
-    // Capability filter
-    if (this.capabilityFilter === 'reasoning') {
-      result = result.filter(m => m.capabilities?.reasoning === true);
-    } else if (this.capabilityFilter === 'toolUse') {
-      result = result.filter(m => m.capabilities?.toolCalling === true);
-    } else if (this.capabilityFilter === 'multimodal') {
-      result = result.filter(m => m.capabilities?.multimodal === true);
-    }
-
-    // Query filter — fuzzy: every space-separated word must appear somewhere
-    if (this.query.trim().length > 0) {
-      const words = this.query.toLowerCase().split(/\s+/).filter(Boolean);
-      result = result.filter(m => {
-        const haystack = `${m.id} ${m.displayName} ${m.provider}`.toLowerCase();
-        return words.every(w => haystack.includes(w));
-      });
-    }
-
-    // Benchmark sort
-    if (this.benchmarkSort !== 'none') {
-      result = [...result].sort((a, b) => {
-        let scoreA: number | null = null;
-        let scoreB: number | null = null;
-
-        // For synthetic models, use pre-computed bestCompositeScore from backend lookup
-        // (synthetic canonical slugs don't exist in ZeroEval benchmark data)
-        if (this.benchmarkSort === 'composite') {
-          if (a.provider === 'synthetic') {
-            scoreA = this.providerRegistry.getSyntheticModelInfoFromCatalog(a.id)?.bestCompositeScore ?? null;
-          } else {
-            const bA = this.benchmarkStore.getBenchmarks(a.id) ?? this.benchmarkStore.getBenchmarks(a.displayName);
-            scoreA = bA ? compositeScore(bA.benchmarks) : null;
-          }
-          if (b.provider === 'synthetic') {
-            scoreB = this.providerRegistry.getSyntheticModelInfoFromCatalog(b.id)?.bestCompositeScore ?? null;
-          } else {
-            const bB = this.benchmarkStore.getBenchmarks(b.id) ?? this.benchmarkStore.getBenchmarks(b.displayName);
-            scoreB = bB ? compositeScore(bB.benchmarks) : null;
-          }
-        } else {
-          // swe/gpqa sort — individual benchmark scores not available for synthetic models — only composite is cached
-          const bA = a.provider === 'synthetic' ? null : (this.benchmarkStore.getBenchmarks(a.id) ?? this.benchmarkStore.getBenchmarks(a.displayName));
-          const bB = b.provider === 'synthetic' ? null : (this.benchmarkStore.getBenchmarks(b.id) ?? this.benchmarkStore.getBenchmarks(b.displayName));
-          if (this.benchmarkSort === 'swe') {
-            scoreA = bA?.benchmarks.swe ?? null;
-            scoreB = bB?.benchmarks.swe ?? null;
-          } else if (this.benchmarkSort === 'gpqa') {
-            scoreA = bA?.benchmarks.gpqa ?? null;
-            scoreB = bB?.benchmarks.gpqa ?? null;
-          }
-        }
-        // Models with no score sink to the end
-        if (scoreA == null && scoreB == null) return 0;
-        if (scoreA == null) return 1;
-        if (scoreB == null) return -1;
-        return scoreB - scoreA; // descending
-      });
-    }
-
-    // Synthetic sub-grouping: when groupBy is 'provider', order synthetic models so that
-    // "Top Models" (score ≥ 0.65) appear before "All Synthetic", each sub-group internally
-    // sorted: top by composite score desc, all alphabetically by id.
-    if (this.groupBy === 'provider' && this.benchmarkSort === 'none') {
-      const nonSynthetic = result.filter(m => m.provider !== 'synthetic');
-      const synthetic = result.filter(m => m.provider === 'synthetic');
-
-      if (synthetic.length > 0) {
-        const topModels = synthetic.filter(m => this._getSyntheticSubgroup(m) === 'top');
-        const allModels = synthetic.filter(m => this._getSyntheticSubgroup(m) === 'all');
-
-        // Sort top models by composite score descending
-        topModels.sort((a, b) => {
-          const sA = this.providerRegistry.getSyntheticModelInfoFromCatalog(a.id)?.bestCompositeScore ?? null;
-          const sB = this.providerRegistry.getSyntheticModelInfoFromCatalog(b.id)?.bestCompositeScore ?? null;
-          if (sA == null && sB == null) return 0;
-          if (sA == null) return 1;
-          if (sB == null) return -1;
-          return sB - sA;
-        });
-
-        // Sort remaining alphabetically by id
-        allModels.sort((a, b) => a.id.localeCompare(b.id));
-
-        result = [...nonSynthetic, ...topModels, ...allModels];
-      }
-    }
-
-    // Boost recent (non-pinned) models to the front of the list,
-    // preserving relative order within the recent group and within the rest.
-    if (this.recentIds.length > 0) {
-      const recentSet = new Set(this.recentIds);
-      const recent = this.recentIds
-        .filter(id => result.some(m => m.id === id && !this.pinnedIds.has(id)))
-        .map(id => result.find(m => m.id === id)!)
-        .filter(Boolean);
-      const rest = result.filter(m => !recentSet.has(m.id) || this.pinnedIds.has(m.id));
-      result = [...recent, ...rest];
-    }
-
-    this.filteredModelsCache = {
-      modelsRef: this.models,
-      configuredProvidersKey,
-      pinnedIdsKey,
-      recentIdsKey,
-      query: this.query,
-      categoryFilter: this.categoryFilter,
-      capabilityFilter: this.capabilityFilter,
-      availableOnly: this.availableOnly,
-      benchmarkSort: this.benchmarkSort,
-      groupBy: this.groupBy,
-      result,
-    };
-    this.modelItemsCache = null;
+    const { result, cache } = buildFilteredModels(
+      {
+        models: this.models,
+        configuredProviders: this.configuredProviders,
+        pinnedIds: this.pinnedIds,
+        recentIds: this.recentIds,
+        query: this.query,
+        categoryFilter: this.categoryFilter,
+        capabilityFilter: this.capabilityFilter,
+        availableOnly: this.availableOnly,
+        benchmarkSort: this.benchmarkSort,
+        groupBy: this.groupBy,
+        benchmarkStore: this.benchmarkStore,
+        providerRegistry: this.providerRegistry,
+      },
+      this.filteredModelsCache,
+    );
+    this.filteredModelsCache = cache;
     return result;
   }
 
@@ -541,151 +439,37 @@ export class ModelPickerModal {
    * - 'All Synthetic' — remaining synthetic models
    */
   getModelGroupKey(model: ModelDefinition): string {
-    switch (this.groupBy) {
-      case 'provider':
-        if (model.provider === 'synthetic') {
-          return this._getSyntheticSubgroup(model) === 'top' ? 'Top Models' : 'All Synthetic';
-        }
-        return model.provider;
-      case 'family':      return detectFamily(model);
-      case 'pricingTier': return tierToCategoryFilter(model.tier);
-      case 'qualityTier': {
-        if (model.provider === 'synthetic') {
-          const info = this.providerRegistry.getSyntheticModelInfoFromCatalog(model.id);
-          return info?.bestCompositeScore != null ? getQualityTierFromScore(info.bestCompositeScore) : 'C';
-        }
-        const b = this.benchmarkStore.getBenchmarks(model.id) ?? this.benchmarkStore.getBenchmarks(model.displayName);
-        return b ? getQualityTier(b.benchmarks) : 'C';
-      }
-    }
-  }
-
-  /**
-   * Classify a synthetic model as 'top' or 'all' based on benchmark composite score.
-   * 'top': has benchmark data and score ≥ 0.65 (A-tier or S-tier)
-   * 'all': no benchmark data or score < 0.65
-   */
-  private _getSyntheticSubgroup(model: ModelDefinition): 'top' | 'all' {
-    const info = this.providerRegistry.getSyntheticModelInfoFromCatalog(model.id);
-    const score = info?.bestCompositeScore ?? null;
-    return score !== null && score >= A_TIER_THRESHOLD ? 'top' : 'all';
+    return getModelGroupKey(model, this.groupBy, this.providerRegistry, this.benchmarkStore);
   }
 
   /** Get the items for the current mode as a unified list. */
   getItems(): PickerItem[] {
     if (this.mode === 'model') {
       const filtered = this.getFilteredModels();
-      const pinnedIdsKey = setKey(this.pinnedIds);
-      const cached = this.modelItemsCache;
-      if (
-        cached !== null
-        && cached.filteredModelsRef === filtered
-        && cached.pinnedIdsKey === pinnedIdsKey
-        && cached.groupBy === this.groupBy
-      ) {
-        return cached.result;
-      }
-
-      // Separate pinned and unpinned
-      const pinned = filtered.filter(m => this.pinnedIds.has(m.id));
-      const unpinned = filtered.filter(m => !this.pinnedIds.has(m.id));
-
-      const items: PickerItem[] = [];
-
-      // Pinned section header (only if pinned models are in the filtered list)
-      if (pinned.length > 0) {
-        items.push({ id: '__header__pinned', label: 'Favorites', isGroupHeader: true });
-        for (const m of pinned) {
-          items.push(this._modelToItem(m, true));
-        }
-      }
-
-      // Grouped unpinned models
-      let lastGroupKey = '';
-      for (const m of unpinned) {
-        const groupKey = this.getModelGroupKey(m);
-        if (groupKey !== lastGroupKey) {
-          items.push({ id: `__header__${groupKey}`, label: groupKey, isGroupHeader: true });
-          lastGroupKey = groupKey;
-        }
-        items.push(this._modelToItem(m, false));
-      }
-
-      this.modelItemsCache = {
-        filteredModelsRef: filtered,
-        pinnedIdsKey,
-        groupBy: this.groupBy,
-        result: items,
-      };
-      return items;
+      const { result, cache } = buildModelItems(
+        filtered,
+        this.pinnedIds,
+        this.groupBy,
+        this.providerRegistry,
+        this.benchmarkStore,
+        this.modelItemsCache,
+      );
+      this.modelItemsCache = cache;
+      return result;
     }
     if (this.mode === 'provider') {
       const filteredProviders = this.getFilteredProviders();
-      const configuredProvidersKey = setKey(this.configuredProviders);
-      const configuredViaKey = mapKey(this.configuredViaMap);
-      const cached = this.providerItemsCache;
-      if (
-        cached !== null
-        && cached.filteredProvidersRef === filteredProviders
-        && cached.configuredProvidersKey === configuredProvidersKey
-        && cached.configuredViaKey === configuredViaKey
-      ) {
-        return cached.result;
-      }
-
-      const providerItems: PickerItem[] = [];
-      let currentGroup: 'Popular' | 'All Providers' | null = null;
-      for (const p of filteredProviders) {
-        const group: 'Popular' | 'All Providers' = POPULAR_PROVIDERS.has(p.toLowerCase()) ? 'Popular' : 'All Providers';
-        if (group !== currentGroup) {
-          providerItems.push({ id: `__header__${group}`, label: group, isGroupHeader: true });
-          currentGroup = group;
-        }
-        providerItems.push({ id: p, label: p, isConfigured: this.configuredProviders.has(p), configuredVia: this.configuredViaMap.get(p) });
-      }
-
-      this.providerItemsCache = {
-        filteredProvidersRef: filteredProviders,
-        configuredProvidersKey,
-        configuredViaKey,
-        result: providerItems,
-      };
-      return providerItems;
+      const { result, cache } = buildProviderItems(
+        filteredProviders,
+        this.configuredProviders,
+        this.configuredViaMap,
+        this.providerItemsCache,
+      );
+      this.providerItemsCache = cache;
+      return result;
     }
     // effort mode
-    return this.effortLevels.map(e => ({ id: e, label: e, detail: EFFORT_DESCRIPTIONS[e] ?? '' }));
-  }
-
-  /** Build a PickerItem for a model, including quality tier and pin status. */
-  private _modelToItem(model: ModelDefinition, isPinned: boolean): PickerItem {
-    // For synthetic models, derive quality tier from cached bestCompositeScore
-    // (synthetic canonical slugs don't exist in ZeroEval benchmark data)
-    let qualityTier: string | undefined;
-    let detail: string;
-    if (model.provider === 'synthetic') {
-      const synthInfo = this.providerRegistry.getSyntheticModelInfoFromCatalog(model.id);
-      if (synthInfo?.bestCompositeScore != null) {
-        qualityTier = getQualityTierFromScore(synthInfo.bestCompositeScore);
-      }
-      // Reuse synthInfo for provider count detail
-      detail = synthInfo !== null
-        ? `${model.provider} [${synthInfo.keyedBackendCount} provider${synthInfo.keyedBackendCount !== 1 ? 's' : ''}]`
-        : model.provider;
-    } else {
-      detail = model.provider;
-      const b = this.benchmarkStore.getBenchmarks(model.id) ?? this.benchmarkStore.getBenchmarks(model.displayName);
-      qualityTier = b ? getQualityTier(b.benchmarks) : undefined;
-    }
-    const isFree = tierToCategoryFilter(model.tier) === 'free';
-
-    return {
-      id: model.id,
-      label: model.displayName,
-      detail,
-      qualityTier,
-      isPinned,
-      isFree,
-    };
+    return buildEffortItems(this.effortLevels);
   }
 
   /** Get count of selectable (non-header) items in current mode. */
@@ -730,7 +514,7 @@ export class ModelPickerModal {
     return filtered[this.selectedIndex] ?? null;
   }
 
-  // ── Private helpers ────────────────────────────────────────────────────────
+  // ── Private helpers ─────────────────────────────────────────────────────────────────────
 
   private _clampSelection(): void {
     const count = this.getItemCount();
@@ -777,21 +561,4 @@ export class ModelPickerModal {
   private clearCaches(): void {
     this.clearFilteredCaches();
   }
-}
-
-function setKey(values: ReadonlySet<string>): string {
-  if (values.size === 0) return '';
-  return [...values].sort().join('\u001f');
-}
-
-function orderedListKey(values: readonly string[]): string {
-  return values.length === 0 ? '' : values.join('\u001f');
-}
-
-function mapKey(values: ReadonlyMap<string, string | undefined>): string {
-  if (values.size === 0) return '';
-  return [...values.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}\u001e${value ?? ''}`)
-    .join('\u001f');
 }
