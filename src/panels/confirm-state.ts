@@ -1,12 +1,22 @@
 // ---------------------------------------------------------------------------
-// useConfirmState<T> — reusable inline y/n confirmation helper
+// useConfirmState<T> — reusable inline confirm/cancel helper
 //
-// Pattern (chosen over ConfirmableListPanel base class):
-//   - Composable: any panel holds a ConfirmState field, not a new base class
-//   - Identical y/n UX everywhere: y confirms, n/Esc cancels, any other key
-//     is absorbed (does nothing) while confirm is active
-//   - Render: caller calls renderConfirmLines(width, state) to get the two
-//     lines that replace the normal content area when confirming
+// ── Project-standard confirm contract (all panels must match) ──────────────
+//
+// CONFIRM:  Enter, Return, or y
+// CANCEL:   Esc or n
+// ABSORBED: any other key while confirm is active (keeps confirm pending)
+//
+// Implementation:
+//   - Composable: any panel holds a ConfirmState<T> field; no new base class
+//   - Call handleConfirmInput(confirm, key) BEFORE normal key dispatch.
+//     It handles all four outcomes and returns one of the four result tokens.
+//   - Call renderConfirmLines(width, state) to render the two-line overlay
+//     that replaces normal content while a confirm is pending.
+//
+// ── This file is the canonical contract for all confirm flows ─────────────
+// Any new panel confirm flow must use ConfirmState<T> and handleConfirmInput;
+// do not implement a bespoke two-press or Enter-only variant.
 // ---------------------------------------------------------------------------
 
 import type { Line } from '../types/grid.ts';
@@ -23,9 +33,14 @@ export interface ConfirmState<T = string> {
 /**
  * Call this from a panel's handleInput() BEFORE any other key handling.
  *
+ * Project-standard confirm contract:
+ *   - CONFIRM:  Enter, Return, or y
+ *   - CANCEL:   Esc or n
+ *   - ABSORBED: any other key while confirm is active (keeps confirm pending)
+ *
  * Returns:
- *   - `'confirmed'` — user pressed y; caller must execute the action and
- *     clear state (set confirm to null)
+ *   - `'confirmed'` — user pressed Enter, Return, or y; caller must execute
+ *     the action and clear state (set confirm to null)
  *   - `'cancelled'` — user pressed n or Esc; caller must clear state
  *   - `'absorbed'`  — any other key while confirm is active; caller returns true
  *   - `'inactive'`  — no confirm pending; caller continues normal dispatch
@@ -35,7 +50,7 @@ export function handleConfirmInput<T = string>(
   key: string,
 ): 'confirmed' | 'cancelled' | 'absorbed' | 'inactive' {
   if (!confirm) return 'inactive';
-  if (key === 'y') return 'confirmed';
+  if (key === 'y' || key === 'enter' || key === 'return') return 'confirmed';
   if (key === 'n' || key === 'escape') return 'cancelled';
   return 'absorbed';
 }
@@ -52,8 +67,8 @@ export function renderConfirmLines<T = string>(width: number, state: ConfirmStat
       palette.warn,
     ]]),
     buildPanelLine(width, [
-      [' y', palette.info],
-      ['  confirm delete', palette.dim],
+      [' Enter / y', palette.info],
+      ['  confirm', palette.dim],
       ['   n / Esc', palette.info],
       ['  cancel', palette.dim],
     ]),

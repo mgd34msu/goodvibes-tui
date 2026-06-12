@@ -9,6 +9,8 @@ import type {
 } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import { handleConfirmInput, renderConfirmLines, type ConfirmState } from './confirm-state.ts';
+import { isTextBackspace, isTextForwardDelete } from '../input/delete-key-policy.ts';
 import {
   buildBodyText,
   buildEmptyState,
@@ -69,6 +71,8 @@ export class ProjectPlanningPanel extends BasePanel {
   private scrollOffset = 0;
   private selectedActionIndex = 0;
   private draftAnswer = '';
+  // Pending confirmation for Delete (clear draft). Null when inactive.
+  private clearDraftConfirm: ConfirmState<'clear-draft'> | null = null;
 
   public constructor(options: ProjectPlanningPanelOptions) {
     super('project-planning', 'Planning', 'P', 'agent');
@@ -86,6 +90,26 @@ export class ProjectPlanningPanel extends BasePanel {
 
   public handleInput(key: string): boolean {
     if (this.lastError !== null) this.clearError();
+
+    // ConfirmState gate: Delete (clear draft) requires y/n confirmation.
+    // handleConfirmInput absorbs all keys while a confirmation is pending.
+    const confirmResult = handleConfirmInput(this.clearDraftConfirm, key);
+    if (confirmResult === 'confirmed') {
+      this.draftAnswer = '';
+      this.clearDraftConfirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.clearDraftConfirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') {
+      return true;
+    }
+    // confirmResult === 'inactive': proceed with normal dispatch.
+
     const question = this.getCurrentQuestion();
     if (question) {
       const actions = this.getAnswerActions(question);
@@ -104,13 +128,15 @@ export class ProjectPlanningPanel extends BasePanel {
         this.submitSelectedAction(question, actions);
         return true;
       }
-      if (key === 'backspace') {
+      if (isTextBackspace(key)) {
         this.draftAnswer = this.draftAnswer.slice(0, -1);
         this.markDirty();
         return true;
       }
-      if (key === 'delete') {
-        this.draftAnswer = '';
+      // 'delete' opens the clear-draft confirmation gate (per delete-key policy).
+      // The draft is not wiped until the user confirms with y/Enter.
+      if (isTextForwardDelete(key)) {
+        this.clearDraftConfirm = { subject: 'clear-draft', label: 'draft answer' };
         this.markDirty();
         return true;
       }
@@ -244,8 +270,10 @@ export class ProjectPlanningPanel extends BasePanel {
           [' choose answer  ', C.dim],
           ['type', C.info],
           [' draft  ', C.dim],
-          ['Backspace/Delete', C.info],
+          ['Backspace', C.info],
           [' edit  ', C.dim],
+          ['Del', C.info],
+          [' clear draft  ', C.dim],
           ['Enter', C.info],
           [' submit  Esc prompt focus  Ctrl+X close panel', C.dim],
         ]),
@@ -284,6 +312,16 @@ export class ProjectPlanningPanel extends BasePanel {
   private buildQuestionSection(width: number, question: ProjectPlanningQuestion): RenderedPlanningSection {
     const actions = this.getAnswerActions(question);
     this.selectedActionIndex = this.clampActionIndex(actions.length);
+    // When a clear-draft confirmation is pending, show the confirm prompt
+    // inline above the draft line instead of the normal content.
+    if (this.clearDraftConfirm) {
+      const confirmLines = renderConfirmLines(width, this.clearDraftConfirm);
+      const lines: Line[] = [
+        ...buildBodyText(width, question.prompt, C, C.planning),
+        ...confirmLines,
+      ];
+      return { title: 'Answer Current Question', lines, selectedLineIndex: undefined };
+    }
     const lines: Line[] = [
       ...buildBodyText(width, question.prompt, C, C.planning),
     ];

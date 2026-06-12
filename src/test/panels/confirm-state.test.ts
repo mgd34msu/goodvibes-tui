@@ -32,6 +32,14 @@ describe('handleConfirmInput', () => {
     expect(handleConfirmInput(confirmString, 'y')).toBe('confirmed');
   });
 
+  test('returns confirmed when key is enter (project-standard: Enter confirms)', () => {
+    expect(handleConfirmInput(confirmString, 'enter')).toBe('confirmed');
+  });
+
+  test('returns confirmed when key is return', () => {
+    expect(handleConfirmInput(confirmString, 'return')).toBe('confirmed');
+  });
+
   test('returns cancelled when key is n', () => {
     expect(handleConfirmInput(confirmString, 'n')).toBe('cancelled');
   });
@@ -41,13 +49,14 @@ describe('handleConfirmInput', () => {
   });
 
   test('returns absorbed for any other key', () => {
-    for (const key of ['enter', 'x', 'd', 'ArrowUp', ' ', 'backspace']) {
+    for (const key of ['x', 'd', 'ArrowUp', ' ', 'backspace']) {
       expect(handleConfirmInput(confirmString, key)).toBe('absorbed');
     }
   });
 
   test('works with generic subject type (ConfirmState<{id, action}>)', () => {
     expect(handleConfirmInput(confirmGeneric, 'y')).toBe('confirmed');
+    expect(handleConfirmInput(confirmGeneric, 'enter')).toBe('confirmed');
     expect(handleConfirmInput(confirmGeneric, 'n')).toBe('cancelled');
     expect(handleConfirmInput(confirmGeneric, 'other')).toBe('absorbed');
   });
@@ -71,9 +80,10 @@ describe('renderConfirmLines', () => {
     expect(lineText(lines[0]!)).toContain('?');
   });
 
-  test('second line contains y and n/Esc hints', () => {
+  test('second line contains Enter/y and n/Esc hints', () => {
     const lines = renderConfirmLines(80, state);
     const hint = lineText(lines[1]!);
+    expect(hint).toContain('Enter');
     expect(hint).toContain('y');
     expect(hint).toContain('n');
     expect(hint).toContain('Esc');

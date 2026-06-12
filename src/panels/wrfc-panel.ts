@@ -222,8 +222,7 @@ export class WrfcPanel extends BasePanel {
     // Confirm-cancel flow takes priority over all other keys.
     // Enter and y both confirm; n, escape both cancel; any other key is absorbed.
     if (this.confirmCancel) {
-      const isEnter = key === 'enter' || key === 'return';
-      const confirmResult = isEnter ? 'confirmed' : handleConfirmInput(this.confirmCancel, key);
+      const confirmResult = handleConfirmInput(this.confirmCancel, key);
       if (confirmResult === 'confirmed') {
         const chain = this.chains.find(c => c.id === this.confirmCancel!.subject);
         if (chain && !TERMINAL_STATES.includes(chain.state)) {
@@ -233,9 +232,11 @@ export class WrfcPanel extends BasePanel {
         this.markDirty();
         return true;
       }
-      // cancelled or absorbed — clear and swallow
-      this.confirmCancel = null;
-      this.markDirty();
+      if (confirmResult === 'cancelled') {
+        this.confirmCancel = null;
+        this.markDirty();
+      }
+      // absorbed: confirm stays pending, key swallowed
       return true;
     }
 

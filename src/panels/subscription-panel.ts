@@ -4,6 +4,7 @@ import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { KeyName } from './types.ts';
 import type { ProviderSubscription, PendingSubscriptionLogin } from '@pellux/goodvibes-sdk/platform/config';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
+import { type ConfirmState, handleConfirmInput } from './confirm-state.ts';
 import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
@@ -58,7 +59,8 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
   private readonly serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
   private readonly subscriptionManager: SubscriptionAccessQuery;
   private rows: SubscriptionRow[] = [];
-  private logoutConfirmationTarget: string | null = null;
+  /** Pending logout confirmation — uses project-standard ConfirmState contract. */
+  private confirm: ConfirmState<string> | null = null;
 
   public constructor(
     serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>,
@@ -100,41 +102,46 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
   }
 
   public handleInput(key: KeyName): boolean {
+    // Project-standard confirm contract: Enter/y confirm; n/Esc cancel; other absorbed.
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      const provider = this.confirm!.subject;
+      this.confirm = null;
+      this.subscriptionManager.logout(provider);
+      this.refresh();
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
     if (this.rows.length === 0) return false;
     const selected = this.rows[this.selectedIndex] ?? null;
     if (key === 'up' || key === 'k') {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-      this.logoutConfirmationTarget = null;
+      this.confirm = null;
       this.markDirty();
       return true;
     }
     if (key === 'down' || key === 'j') {
       this.selectedIndex = Math.min(this.rows.length - 1, this.selectedIndex + 1);
-      this.logoutConfirmationTarget = null;
+      this.confirm = null;
       this.markDirty();
       return true;
     }
-    if (key === 'enter' || key === 'x') {
+    if (key === 'enter' || key === 'return') {
       if (!selected?.subscription) return false;
-      if (this.logoutConfirmationTarget === null || this.logoutConfirmationTarget !== selected.provider) {
-        this.logoutConfirmationTarget = selected.provider;
-        this.markDirty();
-        return true;
-      }
-      this.subscriptionManager.logout(selected.provider);
-      this.logoutConfirmationTarget = null;
-      this.refresh();
-      this.markDirty();
-      return true;
-    }
-    if ((key === 'n' || key === 'escape') && this.logoutConfirmationTarget) {
-      this.logoutConfirmationTarget = null;
+      this.confirm = { subject: selected.provider, label: selected.provider };
       this.markDirty();
       return true;
     }
     if (key === 'r') {
       this.refresh();
-      this.logoutConfirmationTarget = null;
+      this.confirm = null;
       this.markDirty();
       return true;
     }
@@ -207,7 +214,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
         sections: [{ lines: [...summaryLines, ...emptyLines] }],
         footerLines: [
           buildGuidanceLine(width, '/subscription login <provider> start', 'start browser-based provider login from the packaged subscription surface', C),
-          buildPanelLine(width, [['  Up/Down move  Enter/X sign out selected provider  r refresh', C.dim]]),
+          buildPanelLine(width, [['  Up/Down move  Enter sign out selected provider  y/Esc confirm/cancel  r refresh', C.dim]]),
         ],
         palette: C,
       });
@@ -237,8 +244,8 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
             : 'Stored for subscription-backed flows. Ambient API-key resolution remains unchanged.'}`,
           C.dim,
         ]]));
-        if (this.logoutConfirmationTarget === selectedRow.provider) {
-          detailRows.push(buildPanelLine(width, [[` Press Enter or X again to sign out ${selectedRow.provider}.`, C.warn]]));
+        if (this.confirm?.subject === selectedRow.provider) {
+          detailRows.push(buildPanelLine(width, [[` Sign out ${selectedRow.provider}? Press y or Enter to confirm, n or Esc to cancel.`, C.warn]]));
         }
       } else if (selectedRow.pending) {
         detailRows.push(buildPanelLine(width, [[' Login is pending. Finish with /subscription login <provider> finish <code>.', C.warn]]));
@@ -257,7 +264,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
       footer: [
         ...detailRows,
         buildGuidanceLine(width, '/subscription login <provider> start', 'start browser-based provider login from the packaged subscription surface', C),
-        buildPanelLine(width, [['  Up/Down move  Enter/X sign out selected provider  r refresh', C.dim]]),
+        buildPanelLine(width, [['  Up/Down move  Enter sign out selected provider  y/Esc confirm/cancel  r refresh', C.dim]]),
       ],
     });
   }

@@ -238,3 +238,90 @@ describe('ProjectPlanningPanel', () => {
     expect(rendered).not.toContain('Define the first-pass scope');
   });
 });
+
+describe('clear-draft confirm contract', () => {
+  const GATE_PROMPT = 'Delete "draft answer"?';
+
+  async function makeDraftPanel(): Promise<ProjectPlanningPanel> {
+    const service = makeService(makeState({
+      openQuestions: [{
+        id: 'scope',
+        prompt: 'What is in or out of scope?',
+        status: 'open',
+      }],
+    }));
+    const panel = new ProjectPlanningPanel({ service, projectId: 'proj' });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+    for (const ch of 'keepme') panel.handleInput(ch);
+    return panel;
+  }
+
+  test('delete opens the gate without touching the draft', async () => {
+    const panel = await makeDraftPanel();
+    expect(panel.handleInput('delete')).toBe(true);
+    const rendered = text(panel.render(120, 32));
+    expect(rendered).toContain(GATE_PROMPT);
+    expect(rendered).toContain('Enter / y');
+    // The gate replaces the question section while pending; prove the draft
+    // survived opening the gate by cancelling and rendering again.
+    panel.handleInput('escape');
+    expect(text(panel.render(120, 32))).toContain('Typed answer: keepme');
+  });
+
+  test('enter confirms: draft cleared, gate closed', async () => {
+    const panel = await makeDraftPanel();
+    panel.handleInput('delete');
+    expect(panel.handleInput('enter')).toBe(true);
+    const rendered = text(panel.render(120, 32));
+    expect(rendered).not.toContain(GATE_PROMPT);
+    expect(rendered).toContain('(type here while this panel is focused)');
+  });
+
+  test('y confirms: draft cleared, gate closed', async () => {
+    const panel = await makeDraftPanel();
+    panel.handleInput('delete');
+    expect(panel.handleInput('y')).toBe(true);
+    const rendered = text(panel.render(120, 32));
+    expect(rendered).not.toContain(GATE_PROMPT);
+    expect(rendered).toContain('(type here while this panel is focused)');
+  });
+
+  test('return confirms: draft cleared, gate closed', async () => {
+    const panel = await makeDraftPanel();
+    panel.handleInput('delete');
+    expect(panel.handleInput('return')).toBe(true);
+    const rendered = text(panel.render(120, 32));
+    expect(rendered).not.toContain(GATE_PROMPT);
+    expect(rendered).toContain('(type here while this panel is focused)');
+  });
+
+  test('escape cancels: draft retained, gate closed', async () => {
+    const panel = await makeDraftPanel();
+    panel.handleInput('delete');
+    expect(panel.handleInput('escape')).toBe(true);
+    const rendered = text(panel.render(120, 32));
+    expect(rendered).not.toContain(GATE_PROMPT);
+    expect(rendered).toContain('Typed answer: keepme');
+  });
+
+  test('n cancels: draft retained, gate closed', async () => {
+    const panel = await makeDraftPanel();
+    panel.handleInput('delete');
+    expect(panel.handleInput('n')).toBe(true);
+    const rendered = text(panel.render(120, 32));
+    expect(rendered).not.toContain(GATE_PROMPT);
+    expect(rendered).toContain('Typed answer: keepme');
+  });
+
+  test('other keys are absorbed: gate stays pending, draft retained', async () => {
+    const panel = await makeDraftPanel();
+    panel.handleInput('delete');
+    expect(panel.handleInput('x')).toBe(true);
+    expect(panel.handleInput('down')).toBe(true);
+    expect(text(panel.render(120, 32))).toContain(GATE_PROMPT);
+    panel.handleInput('escape');
+    expect(text(panel.render(120, 32))).toContain('Typed answer: keepme');
+  });
+});
