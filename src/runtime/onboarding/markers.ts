@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { atomicWriteFileSync } from '@/config/atomic-write.ts';
+import { readVersioned } from '@/config/read-versioned.ts';
 
 import type { ShellPathService } from '@/runtime/index.ts';
 import type {
@@ -26,50 +27,34 @@ function resolveMarkerPath(
     : shellPaths.resolveUserPath('tui', ONBOARDING_CHECK_MARKER_FILE);
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isOnboardingMode(value: unknown): value is OnboardingCheckMarkerPayload['mode'] {
-  return value === 'new' || value === 'edit' || value === 'reopen';
-}
-
 function isCheckMarkerPayload(value: unknown): value is OnboardingCheckMarkerPayload {
-  return isObject(value)
-    && value.version === 1
-    && typeof value.checkedAt === 'number'
-    && Number.isFinite(value.checkedAt)
-    && typeof value.updatedAt === 'number'
-    && Number.isFinite(value.updatedAt)
-    && typeof value.source === 'string'
-    && (value.mode === undefined || isOnboardingMode(value.mode))
-    && (value.workspaceRoot === undefined || typeof value.workspaceRoot === 'string');
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    v['version'] === 1
+    && typeof v['checkedAt'] === 'number'
+    && Number.isFinite(v['checkedAt'] as number)
+    && typeof v['updatedAt'] === 'number'
+    && Number.isFinite(v['updatedAt'] as number)
+    && typeof v['source'] === 'string'
+    && (v['mode'] === undefined || v['mode'] === 'new' || v['mode'] === 'edit' || v['mode'] === 'reopen')
+    && (v['workspaceRoot'] === undefined || typeof v['workspaceRoot'] === 'string')
+  );
 }
 
 function buildMissingMarkerState(
   scope: OnboardingStateScope,
   path: string,
 ): OnboardingCheckMarkerState {
-  return {
-    scope,
-    path,
-    exists: false,
-    payload: null,
-  };
+  return { scope, path, exists: false, payload: null };
 }
 
-function buildParseErrorState(
+function buildErrorMarkerState(
   scope: OnboardingStateScope,
   path: string,
   parseError: string,
 ): OnboardingCheckMarkerState {
-  return {
-    scope,
-    path,
-    exists: true,
-    payload: null,
-    parseError,
-  };
+  return { scope, path, exists: true, payload: null, parseError };
 }
 
 function pickEffectiveMarker(
@@ -92,24 +77,32 @@ export function readOnboardingCheckMarker(
   scope: OnboardingStateScope = 'user',
 ): OnboardingCheckMarkerState {
   const path = resolveMarkerPath(shellPaths, scope);
-  if (!existsSync(path)) return buildMissingMarkerState(scope, path);
 
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
-    if (!isCheckMarkerPayload(parsed)) {
-      return buildParseErrorState(scope, path, 'Invalid onboarding check marker payload.');
-    }
+  const parsed = readVersioned<OnboardingCheckMarkerPayload & { version: number }>(
+    path,
+    { currentVersion: 1, onUnknown: 'quarantine' },
+  );
 
-    return {
+  if (parsed === null) {
+    // readVersioned returns null for: missing, corrupt JSON, or unrecognised
+    // version (renamed to <path>.unrecognized).
+    const nowExists = existsSync(path);
+    const quarantined = existsSync(`${path}.unrecognized`);
+    if (!nowExists && !quarantined) return buildMissingMarkerState(scope, path);
+    return buildErrorMarkerState(
       scope,
       path,
-      exists: true,
-      payload: parsed,
-    };
-  } catch (error) {
-    const parseError = error instanceof Error ? error.message : String(error);
-    return buildParseErrorState(scope, path, parseError);
+      quarantined
+        ? 'Unrecognised or corrupt marker file; quarantined.'
+        : 'Invalid onboarding check marker payload.',
+    );
   }
+
+  if (!isCheckMarkerPayload(parsed)) {
+    return buildErrorMarkerState(scope, path, 'Invalid onboarding check marker payload.');
+  }
+
+  return { scope, path, exists: true, payload: parsed };
 }
 
 export function readOnboardingCheckMarkers(
