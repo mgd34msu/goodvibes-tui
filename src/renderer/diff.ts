@@ -1,8 +1,18 @@
 import { TerminalBuffer } from './buffer.ts';
 import { type Cell } from '../types/grid.ts';
+import {
+  type TermColorCaps,
+  downsampleColor,
+  wrapSynced,
+} from './term-caps.ts';
 
 /**
  * DiffEngine - Generates minimal ANSI updates between two buffers.
+ *
+ * Accepts a TermColorCaps probe result so that color sequences are
+ * downsampled to the terminal's actual capability level (truecolor /
+ * ansi256 / basic16 / none), and frames are wrapped in DEC 2026
+ * synchronized-output markers when supported.
  */
 export class DiffEngine {
   private lastFg = '';
@@ -13,6 +23,11 @@ export class DiffEngine {
   private lastItalic = false;
   private lastStrikethrough = false;
   private lastLink = '';
+  private caps: TermColorCaps;
+
+  constructor(caps: TermColorCaps = { capability: 'truecolor', syncedOutput: true }) {
+    this.caps = caps;
+  }
 
   public reset(): void {
     this.lastFg = '';
@@ -27,7 +42,7 @@ export class DiffEngine {
 
   public diff(oldBuffer: TerminalBuffer | null, newBuffer: TerminalBuffer): string {
     let output = '';
-    
+
     for (let y = 0; y < newBuffer.height; y++) {
       // Skip rows that were not written in either the old or new buffer.
       // If neither side touched the row, both must match the prior frame:
@@ -56,7 +71,7 @@ export class DiffEngine {
       this.lastLink = '';
     }
 
-    return output;
+    return wrapSynced(output, this.caps);
   }
 
   private isCellDifferent(a: Cell | undefined, b: Cell): boolean {
@@ -66,6 +81,13 @@ export class DiffEngine {
       (a.link ?? '') !== (b.link ?? '');
   }
 
+  /**
+   * Convert a raw color string (hex or r;g;b) to the "r;g;b" form expected
+   * by applyStyles.  For non-RGB palette indices the value is returned as-is.
+   * This mirrors the original sanitizeColor contract but is now capability-aware
+   * only in the sense of normalizing hex → "r;g;b" — downsampling happens in
+   * applyStyles via downsampleColor.
+   */
   private sanitizeColor(color: string): string {
     if (color.startsWith('#')) {
       const r = parseInt(color.slice(1, 3), 16);
@@ -77,7 +99,7 @@ export class DiffEngine {
   }
 
   private applyStyles(cell: Cell): string {
-    let style = '';
+    // Normalize hex → r;g;b (for change-detection against lastFg/lastBg)
     const fg = this.sanitizeColor(cell.fg);
     const bg = this.sanitizeColor(cell.bg);
     const link = cell.link ?? '';
@@ -87,21 +109,45 @@ export class DiffEngine {
       cell.underline !== this.lastUnderline || cell.italic !== this.lastItalic ||
       cell.strikethrough !== this.lastStrikethrough;
 
-    if (changed) {
-      style += '\x1b[0m'; // Reset all attributes
-      if (cell.bold) style += '\x1b[1m';
-      if (cell.dim) style += '\x1b[2m';
-      if (cell.italic) style += '\x1b[3m';
-      if (cell.underline) style += '\x1b[4m';
-      if (cell.strikethrough) style += '\x1b[9m';
+    let style = '';
 
-      if (fg) {
-        const isRgb = fg.includes(';');
-        style += isRgb ? `\x1b[38;2;${fg}m` : `\x1b[38;5;${fg}m`;
+    if (changed) {
+      // Reset all attributes first
+      if (this.caps.capability !== 'none') {
+        style += '\x1b[0m';
       }
-      if (bg) {
-        const isRgb = bg.includes(';');
-        style += isRgb ? `\x1b[48;2;${bg}m` : `\x1b[48;5;${bg}m`;
+
+      // Text attributes are always emitted when capability > none
+      if (this.caps.capability !== 'none') {
+        if (cell.bold) style += '\x1b[1m';
+        if (cell.dim) style += '\x1b[2m';
+        if (cell.italic) style += '\x1b[3m';
+        if (cell.underline) style += '\x1b[4m';
+        if (cell.strikethrough) style += '\x1b[9m';
+      }
+
+      // Foreground color — capability-downsampled
+      const fgOut = downsampleColor(fg, this.caps, 'fg');
+      if (fgOut !== null) {
+        if (this.caps.capability === 'basic16') {
+          // fgOut is already the numeric SGR code (e.g. "31", "92")
+          style += `\x1b[${fgOut}m`;
+        } else {
+          const isRgb = fgOut.includes(';');
+          style += isRgb ? `\x1b[38;2;${fgOut}m` : `\x1b[38;5;${fgOut}m`;
+        }
+      }
+
+      // Background color — capability-downsampled
+      const bgOut = downsampleColor(bg, this.caps, 'bg');
+      if (bgOut !== null) {
+        if (this.caps.capability === 'basic16') {
+          // bgOut is already the numeric SGR code (e.g. "41", "102")
+          style += `\x1b[${bgOut}m`;
+        } else {
+          const isRgb = bgOut.includes(';');
+          style += isRgb ? `\x1b[48;2;${bgOut}m` : `\x1b[48;5;${bgOut}m`;
+        }
       }
 
       this.lastFg = fg;
@@ -114,14 +160,19 @@ export class DiffEngine {
     }
 
     // OSC 8 hyperlink: emit open/close/change sequences only when link changes
-    if (link !== this.lastLink) {
+    // Hyperlinks are suppressed in no-color mode (dumb/no-color terminals
+    // cannot render them and the OSC sequence is just noise).
+    if (link !== this.lastLink && this.caps.capability !== 'none') {
       if (link) {
         // Open new hyperlink (close previous if any was open)
         style += `\x1b]8;;${link}\x1b\\`;
       } else {
         // Close hyperlink
-        style += `\x1b]8;;\x1b\\`;
+        style += '\x1b]8;;\x1b\\';
       }
+      this.lastLink = link;
+    } else if (link !== this.lastLink) {
+      // capability === 'none': track state but emit nothing
       this.lastLink = link;
     }
 

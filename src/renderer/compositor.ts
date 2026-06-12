@@ -4,6 +4,7 @@ import { type Line, createEmptyCell, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { SearchManager } from '../input/search.ts';
 import { allowTerminalWrite } from '../runtime/terminal-output-guard.ts';
+import { probeTermCaps, type TermColorCaps } from './term-caps.ts';
 
 export interface SelectionInfo {
   isCellSelected: (col: number, absoluteRow: number) => boolean;
@@ -58,9 +59,19 @@ export class Compositor {
   /** Double-buffer reuse: back is written, front is the last-rendered reference. */
   private frontBuffer: TerminalBuffer | null = null;
   private backBuffer: TerminalBuffer | null = null;
-  private diffEngine = new DiffEngine();
+  private readonly caps: TermColorCaps;
+  private diffEngine: DiffEngine;
 
-  constructor(private stdout: NodeJS.WriteStream) {}
+  constructor(private stdout: NodeJS.WriteStream) {
+    // Probe terminal capabilities once at construction time.
+    this.caps = probeTermCaps(stdout);
+    this.diffEngine = new DiffEngine(this.caps);
+  }
+
+  /** Exposed for unit tests — returns the detected color capability. */
+  public get termCapsForTest(): TermColorCaps {
+    return this.caps;
+  }
 
   /** Exposed for unit tests — returns the last composited buffer. */
   public get lastBufferForTest(): TerminalBuffer | null {
