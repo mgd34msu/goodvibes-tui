@@ -47,6 +47,19 @@ if (suiteArg && !BUILTIN_SUITES[suiteArg]) {
   process.exit(2);
 }
 
+// ── CI fail-closed baseline guard ────────────────────────────────────────────
+//
+// In CI (env CI=true), a missing or corrupt baseline is a hard failure.
+// A missing baseline means no prior run set a reference — gating against
+// nothing is fail-open and meaningless. Generate a baseline locally with:
+//   bun run eval:baseline
+// then commit .goodvibes/eval/baseline.json before running in CI.
+//
+// Outside CI, a missing baseline triggers auto-capture-and-continue so
+// local first-runs are convenient.
+
+const isCI = process.env['CI'] === 'true';
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 console.log('='.repeat(72));
@@ -56,6 +69,22 @@ console.log('='.repeat(72));
 
 const runner = new EvalRunner({ regressionThreshold: 5 });
 const baseline = await loadBaseline(baselineFile, projectRoot);
+
+if (!baseline && isCI) {
+  console.error(`
+Eval Gate: FAILED — baseline not found at ${baselineFile}.
+
+Running without a baseline in CI is fail-open: the gate cannot detect
+regressions if there is no prior reference to compare against.
+
+To generate a baseline:
+  bun run eval:baseline          # runs suites, saves .goodvibes/eval/baseline.json
+
+Commit that file and re-run CI.
+`);
+  process.exit(1);
+}
+
 const freshResults = [];
 let anyGateFailed = false;
 
