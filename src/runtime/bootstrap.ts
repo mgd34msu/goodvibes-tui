@@ -180,6 +180,7 @@ export async function bootstrapRuntime(
     requestRender,
     setRenderRequest,
     runtimeSessionIdRef,
+    wrfcPersistence,
   } = await initializeBootstrapCore(stdout, options, (limit) => controlPlaneRecentEventsRef.value(limit));
   const providerRegistry = services.providerRegistry;
   const {
@@ -285,6 +286,7 @@ export async function bootstrapRuntime(
   });
   const systemMessageRouter = shell.systemMessageRouter;
   systemMessageRouterRef.value = systemMessageRouter;
+  wrfcPersistence.rehydrate();
   const commandRegistry = shell.commandRegistry;
   const commandContext = shell.commandContext;
   const gitStatusProvider = shell.gitStatusProvider;

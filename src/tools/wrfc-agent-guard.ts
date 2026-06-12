@@ -40,8 +40,30 @@ type AgentTaskArgs = {
   readonly [key: string]: unknown;
 };
 
+// ---------------------------------------------------------------------------
+// Guard trace
+// ---------------------------------------------------------------------------
+
+/**
+ * Emitted whenever the guard changes the effective routing decision:
+ *   - 'spawn-forced-wrfc'      — implementation-like spawn promoted to WRFC
+ *   - 'spawn-suppressed-wrfc'  — spawn judged read-only; WRFC suppressed
+ *   - 'batch-collapsed-to-wrfc'— batch-spawn collapsed into a single WRFC owner chain
+ */
+export type WrfcGuardTraceKind =
+  | 'spawn-forced-wrfc'
+  | 'spawn-suppressed-wrfc'
+  | 'batch-collapsed-to-wrfc';
+
+export type WrfcGuardTrace = {
+  readonly kind: WrfcGuardTraceKind;
+  readonly reason: string;
+  readonly task: string;
+};
+
 type WrfcAgentToolGuardOptions = {
   readonly getLastUserMessage?: () => string | null;
+  readonly onTrace?: (trace: WrfcGuardTrace) => void;
 };
 
 export function installWrfcAgentToolGuard(registry: ToolRegistry, options: WrfcAgentToolGuardOptions = {}): void {
@@ -68,8 +90,15 @@ export function validateWrfcAgentToolInvocation(args: AgentToolArgs): string | n
 
 export function normalizeWrfcAgentToolInvocation(args: AgentToolArgs, options: WrfcAgentToolGuardOptions = {}): AgentToolArgs {
   const lastUserMessage = cleanText(options.getLastUserMessage?.() ?? null);
+  const trace = options.onTrace;
   if (args.mode === 'spawn') {
     if (shouldRouteSpawnToWrfc(args)) {
+      const reason = resolveSpawnWrfcReason(args);
+      trace?.({
+        kind: 'spawn-forced-wrfc',
+        reason,
+        task: cleanText(args.task) || '(no task)',
+      });
       const normalized: AgentToolArgs = {
         ...args,
         task: selectAuthoritativeTask(args.task, lastUserMessage),
@@ -78,12 +107,22 @@ export function normalizeWrfcAgentToolInvocation(args: AgentToolArgs, options: W
       };
       return cleanText(args.template) ? normalized : { ...normalized, template: 'engineer' };
     }
+    trace?.({
+      kind: 'spawn-suppressed-wrfc',
+      reason: isReadOnlyTask(cleanText(args.task)) ? 'task judged read-only' : 'no implementation signal detected',
+      task: cleanText(args.task) || '(no task)',
+    });
     return { ...args, reviewMode: 'none', dangerously_disable_wrfc: true };
   }
 
   if (args.mode !== 'batch-spawn') return args;
   const tasks = Array.isArray(args.tasks) ? args.tasks.filter(isRecord) : [];
   if (shouldCollapseBatchToAuthoritativeWrfc(args, tasks) && lastUserMessage) {
+    trace?.({
+      kind: 'batch-collapsed-to-wrfc',
+      reason: `WRFC: collapsed ${tasks.length}-agent batch into one reviewed chain`,
+      task: lastUserMessage,
+    });
     return buildAuthoritativeWrfcSpawn(args, tasks, lastUserMessage);
   }
   const wrfcTasks = tasks.filter((task) => isExplicitWrfcTask(task, args));
@@ -190,17 +229,39 @@ function isRootReviewRoleTask(task: AgentTaskArgs): boolean {
     || /\b(?:test|tests|testing|review|reviews|reviewing|verify|verifies|verifying|verification|validate|validates|validating|validation|qa)\s+(?:the|this|that|implementation|solution|feature|deliverable|code|changes|work|output|result|patch|diff)\b/i.test(text);
 }
 
+function resolveSpawnWrfcReason(args: AgentTaskArgs): string {
+  if (containsWrfcSignal(args.task)) return 'task contains explicit WRFC signal';
+  if (args.reviewMode === 'wrfc') return 'reviewMode explicitly set to wrfc';
+  if (isRootReviewRoleTask(args)) return 'task identified as root review-role (reviewer/tester/verifier)';
+  return 'task judged implementation-like';
+}
+
 function isImplementationLikeTask(task: AgentTaskArgs): boolean {
   const text = cleanText(task.task);
   if (!text) return false;
-  return /\b(?:build|implement|create|add|write|fix|repair|update|refactor|change|modify|deliver|make|patch)\b/i.test(text)
+  // Broad verb set: explicit action words + short imperative phrasings like
+  // "make the button blue", "wire up X", "connect X", "rename X", "move X"
+  return /\b(?:build|implement|create|add|write|fix|repair|update|refactor|change|modify|deliver|make|patch|wire|connect|rename|move|delete|remove|migrate|configure|set\s+up|set\s+the|turn\s+on|turn\s+off|enable|disable|initialize|init|register|replace|swap|convert|transform|extend|integrate|embed|inject|port|rewrite|restructure)\b/i.test(text)
     && !isReadOnlyTask(text);
 }
 
 function isReadOnlyTask(text: string): boolean {
+  // Branch A: explicit do-not-write guards
   if (/\bdo\s+not\s+(?:write|edit|modify|change|create)\b|\bread[-\s]*only\b|\bwithout\s+(?:writing|editing|modifying|changing|creating)\b/i.test(text)) return true;
-  return /^\s*(?:inspect|research|read|find|list|summarize|analy[sz]e|explain)\b/i.test(text)
-    && !/\b(?:build|implement|create|add|write|fix|repair|update|refactor|change|modify|deliver|make|patch)\b/i.test(text);
+  // Branch B: task leads with an analysis/reporting verb — treat it as read-only regardless
+  // of any action verbs that appear later in the sentence. A task that LEADS with
+  // "report", "investigate", "describe", "audit", etc. is describing or evaluating an
+  // action, not performing it. Examples that must NOT reach WRFC:
+  //   "report on how to migrate the auth module"
+  //   "investigate what to remove"
+  //   "document how we would convert X to Y"
+  //   "describe the steps to disable telemetry"
+  //   "audit which modules to delete"
+  //   "evaluate whether to migrate"
+  // The negative-lookahead is intentionally absent: the leading verb is authoritative.
+  // Note: 'review' is intentionally excluded — tasks leading with 'review' are caught
+  // by isRootReviewRoleTask() and routed to a WRFC chain as a reviewer role.
+  return /^\s*(?:inspect|research|read|find|list|summarize|analy[sz]e|explain|report|investigate|document|describe|audit|evaluate|assess|check|compare|tell|show)\b/i.test(text);
 }
 
 function selectAuthoritativeTask(candidate: unknown, lastUserMessage: string): string {

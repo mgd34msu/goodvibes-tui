@@ -29,7 +29,59 @@ import { registerBootstrapHookBridge } from '@/runtime/index.ts';
 import { registerBootstrapRuntimeEvents } from '@/runtime/index.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
+import { join } from 'node:path';
 import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
+import { createWrfcPersistence, type WrfcPersistence } from './wrfc-persistence.ts';
+import type { SystemMessagePriority } from '../panels/system-messages-panel.ts';
+
+// ---------------------------------------------------------------------------
+// Pre-router buffer
+// ---------------------------------------------------------------------------
+
+const PRE_ROUTER_BUFFER_MAX = 100;
+
+type BufferedWrfcMessage = {
+  readonly message: string;
+  readonly priority: SystemMessagePriority;
+};
+
+/**
+ * Small bounded queue that accumulates WRFC system messages emitted before
+ * the SystemMessageRouter is attached. On attach the queue flushes in order.
+ * If the queue overflows (> PRE_ROUTER_BUFFER_MAX), the oldest entries are
+ * dropped and a summary message is prepended to the first flushed message.
+ */
+export class WrfcPreRouterBuffer {
+  private readonly queue: BufferedWrfcMessage[] = [];
+  private overflowCount = 0;
+
+  push(message: string, priority: SystemMessagePriority): void {
+    if (this.queue.length >= PRE_ROUTER_BUFFER_MAX) {
+      this.queue.shift();
+      this.overflowCount++;
+    }
+    this.queue.push({ message, priority });
+  }
+
+  flush(router: import('../core/system-message-router.ts').SystemMessageRouter): void {
+    const dropped = this.overflowCount;
+    const pending = this.queue.splice(0);
+    this.overflowCount = 0;
+    if (dropped > 0) {
+      router.wrfc(
+        `[WRFC] Pre-router buffer overflowed: ${dropped} earliest message${dropped !== 1 ? 's' : ''} were dropped`,
+        'low',
+      );
+    }
+    for (const item of pending) {
+      router.wrfc(item.message, item.priority);
+    }
+  }
+
+  get size(): number {
+    return this.queue.length;
+  }
+}
 
 export interface BootstrapCoreState {
   readonly userSessionId: string;
@@ -62,6 +114,11 @@ export interface BootstrapCoreState {
   readonly requestRender: () => void;
   readonly setRenderRequest: (fn: () => void) => void;
   readonly runtimeSessionIdRef: { value: string };
+  /**
+   * WRFC chain persistence — call `rehydrate()` once after the SystemMessageRouter
+   * is wired so interrupted chains from a previous process are surfaced to the operator.
+   */
+  readonly wrfcPersistence: WrfcPersistence;
 }
 
 export type CompanionMessagePayload = Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>;
@@ -222,9 +279,9 @@ export async function initializeBootstrapCore(
     overflowHandler: services.overflowHandler,
     changeTracker: services.sessionChangeTracker,
   });
-  installWrfcAgentToolGuard(toolRegistry, {
-    getLastUserMessage: () => conversation.getLastUserMessage(),
-  });
+  // Note: installWrfcAgentToolGuard is called after routeOrBuffer is defined
+  // (further below) so the onTrace callback can route guard decisions through
+  // the pre-router buffer.
   services.agentOrchestrator.setDependencies({
     surfaceRoot: 'tui',
     fileCache,
@@ -305,7 +362,26 @@ export async function initializeBootstrapCore(
   void approvalBroker.start();
   void sharedSessionBroker.start();
   const runtimeSessionIdRef = { value: userSessionId };
-  const systemMessageRouterRef: { value: SystemMessageRouter | null } = { value: null };
+  const wrfcBuffer = new WrfcPreRouterBuffer();
+  // Smart ref: setting .value auto-flushes the pre-router buffer so events
+  // buffered before the SystemMessageRouter attaches are not permanently lost.
+  const systemMessageRouterRef = ((): { value: SystemMessageRouter | null } => {
+    let _value: SystemMessageRouter | null = null;
+    const ref = {} as { value: SystemMessageRouter | null };
+    Object.defineProperty(ref, 'value', {
+      get(): SystemMessageRouter | null { return _value; },
+      set(router: SystemMessageRouter | null): void {
+        _value = router;
+        if (router && wrfcBuffer.size > 0) {
+          wrfcBuffer.flush(router);
+          requestRender();
+        }
+      },
+      enumerable: true,
+      configurable: true,
+    });
+    return ref;
+  })();
   const conversationFollowUpRef: { value: ((item: ConversationFollowUpItem) => void) | null } = { value: null };
   const { unsubs: runtimeUnsubs, agentStatusIntervalRef } = registerBootstrapRuntimeEvents({
     runtimeBus,
@@ -318,21 +394,45 @@ export async function initializeBootstrapCore(
     wrfcController: services.wrfcController,
   });
 
+  // ── WRFC chain persistence ──────────────────────────────────────────────────────────
+  const wrfcPersistence = createWrfcPersistence({
+    snapshotPath: join(workingDir, '.goodvibes', 'tui', 'wrfc-chains.json'),
+    getSystemMessageRouter: () => systemMessageRouterRef.value,
+    controller: services.wrfcController,
+  });
+  runtimeUnsubs.push(...wrfcPersistence.attach(runtimeBus));
+  // Flush any debounced snapshot on clean shutdown so final chain state is
+  // never silently dropped during a SIGINT/teardown (250ms debounce window).
+  bootstrapUnsubs.push(() => wrfcPersistence.flush());
+
   // ── TUI-specific WRFC constraint-propagation event subscriptions (SDK 0.23.0) ──
   // These supplement the SDK's registerBootstrapRuntimeEvents which handles the
   // core WORKFLOW_REVIEW_COMPLETED / WORKFLOW_CHAIN_CREATED messages.
   // The SDK does not surface constraint-specific system messages; the TUI layer
   // adds them here so operators can observe constraint enumeration and violations
   // in the SystemMessagesPanel and main conversation.
+  //
+  // Pre-router buffering: events that arrive before the SystemMessageRouter is
+  // attached are held in wrfcBuffer (bounded, 100 entries). When the router is
+  // set on systemMessageRouterRef, the smart setter flushes the buffer in order.
+  // If the buffer overflows, the oldest entries are dropped and a summary message
+  // is prepended to the first flushed batch.
+  const routeOrBuffer = (message: string, priority: SystemMessagePriority): void => {
+    const router = systemMessageRouterRef.value;
+    if (router) {
+      router.wrfc(message, priority);
+    } else {
+      wrfcBuffer.push(message, priority);
+    }
+  };
+
   runtimeUnsubs.push(
     runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_CONSTRAINTS_ENUMERATED' }>>(
       'WORKFLOW_CONSTRAINTS_ENUMERATED',
       ({ payload }) => {
-        const router = systemMessageRouterRef.value;
-        if (!router) return;
         const count = payload.constraints.length;
         if (count > 0) {
-          router.wrfc(
+          routeOrBuffer(
             `[WRFC] Engineer enumerated ${count} constraint${count !== 1 ? 's' : ''} for chain ${payload.chainId.slice(0, 12)}`,
             'low',
           );
@@ -345,11 +445,9 @@ export async function initializeBootstrapCore(
     runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_FIX_ATTEMPTED' }>>(
       'WORKFLOW_FIX_ATTEMPTED',
       ({ payload }) => {
-        const router = systemMessageRouterRef.value;
-        if (!router) return;
         const targetIds = payload.targetConstraintIds;
         if (targetIds && targetIds.length > 0) {
-          router.wrfc(
+          routeOrBuffer(
             `[WRFC] Fix #${payload.attempt} targeting ${targetIds.length} constraint${targetIds.length !== 1 ? 's' : ''} on chain ${payload.chainId.slice(0, 12)}`,
             'low',
           );
@@ -362,11 +460,9 @@ export async function initializeBootstrapCore(
     runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_REVIEW_COMPLETED' }>>(
       'WORKFLOW_REVIEW_COMPLETED',
       ({ payload }) => {
-        const router = systemMessageRouterRef.value;
-        if (!router) return;
         const unsatisfied = payload.unsatisfiedConstraintIds;
         if (!payload.passed && unsatisfied && unsatisfied.length > 0) {
-          router.wrfc(
+          routeOrBuffer(
             `[WRFC] ✗ Chain ${payload.chainId.slice(0, 12)}: ${unsatisfied.length} constraint violation${unsatisfied.length !== 1 ? 's' : ''} forced failure`,
             'high',
           );
@@ -375,6 +471,17 @@ export async function initializeBootstrapCore(
       },
     ),
   );
+
+  // Wire the WRFC agent-guard with the onTrace callback so routing decisions are
+  // observable via the same routeOrBuffer path as WORKFLOW_* events.
+  // Placed here (after routeOrBuffer is defined) so the closure is fully wired.
+  installWrfcAgentToolGuard(toolRegistry, {
+    getLastUserMessage: () => conversation.getLastUserMessage(),
+    onTrace: ({ kind, reason, task }) => {
+      const shortTask = task.length > 80 ? `${task.slice(0, 77)}...` : task;
+      routeOrBuffer(`[WRFC] Guard: ${reason} — task: "${shortTask}" (${kind})`, 'low');
+    },
+  });
 
   // Subscribe to companion main-chat messages received from the daemon's HTTP layer.
   // The daemon emits COMPANION_MESSAGE_RECEIVED on the runtime bus when a companion
@@ -535,5 +642,6 @@ export async function initializeBootstrapCore(
       renderRequestRef.value = fn;
     },
     runtimeSessionIdRef,
+    wrfcPersistence,
   };
 }
