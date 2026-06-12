@@ -33,12 +33,10 @@ import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
 import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
-import type { HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks';
 import {
   checkRecoveryFile,
   deleteRecoveryFile,
   loadRecoveryConversation,
-  persistConversation,
   writeRecoveryFile,
 } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
@@ -57,7 +55,7 @@ import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, type StreamMetrics } from './core/stream-event-wiring.ts';
-import { maybeAutoCompact } from './core/context-auto-compact.ts';
+import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
 import { evaluateSessionMaintenance } from './panels/session-maintenance.ts';
 
@@ -691,44 +689,25 @@ async function main() {
     render,
   });
 
-  // --- Streaming speed + tool preview wiring ---
-  const refreshGit = () => gitStatusProvider.refresh().then((info) => { lastGitInfoRef.value = info; render(); }).catch(() => { /* non-fatal */ });
-  // Refresh git status after each turn completes or after tool results arrive
-  unsubs.push(uiServices.events.turns.on('TURN_COMPLETED', () => {
-    // Auto-save after every LLM turn so kills don't lose the session
-    try {
-      const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
-      const persisted = buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints());
-      persistConversation(
-        runtime.sessionId,
-        { ...snapshot, ...persisted },
-        runtime.model,
-        runtime.provider,
-        conversation.title || '',
-        { workingDirectory: workingDir, homeDirectory, sessionManager: ctx.services.sessionManager },
-      );
-      hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: summarizeError(err) }));
-    } catch (e) { logger.debug('auto-save on turn:complete failed', { error: summarizeError(e) }); }
-    // Auto-compact: check context usage and compact if threshold exceeded
-    const currentModelForCompact = providerRegistry.getCurrentModel();
-    maybeAutoCompact({
-      configManager,
-      conversation,
-      providerRegistry,
-      systemMessageRouter,
-      model: runtime.model,
-      provider: runtime.provider,
-      lastInputTokens: orchestrator.lastInputTokens,
-      contextWindow: currentModelForCompact.contextWindow,
-    }).catch((err: unknown) => logger.debug('maybeAutoCompact error', { error: summarizeError(err) }));
-    refreshGit();
-  }));
-  unsubs.push(uiServices.events.tools.on('TOOL_SUCCEEDED', () => {
-    refreshGit();
-  }));
-  unsubs.push(uiServices.events.tools.on('TOOL_FAILED', () => {
-    refreshGit();
-  }));
+  // --- Turn-completed / git-refresh event wiring ---
+  const { refreshGit, unsubs: turnUnsubs } = wireTurnEventHandlers({
+    events: uiServices.events,
+    conversation,
+    runtime,
+    orchestrator,
+    configManager,
+    providerRegistry,
+    systemMessageRouter,
+    hookDispatcher,
+    workingDir,
+    homeDirectory,
+    sessionManager: ctx.services.sessionManager,
+    gitStatusProvider,
+    lastGitInfoRef,
+    buildSessionContinuityHints,
+    render,
+  });
+  unsubs.push(...turnUnsubs);
 
   // --- Stream metrics + tool-timer event wiring ---
   const streamUnsubs = wireStreamEventMetrics({
