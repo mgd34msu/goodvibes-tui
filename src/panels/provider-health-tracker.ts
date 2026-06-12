@@ -1,4 +1,7 @@
-export type ProviderStatus = 'online' | 'rate-limited' | 'error' | 'unknown';
+// ProviderStatus is the shared SDK type — imported from the runtime barrel
+// to eliminate the duplicate local definition that diverged from the SDK shape.
+import type { ProviderStatus } from '@/runtime/index.ts';
+export type { ProviderStatus };
 
 export interface ProviderHealth {
   name: string;
@@ -81,7 +84,7 @@ export class ProviderHealthTracker {
 
   private recordSuccess(name: string, latencyMs?: number): void {
     const record = this.ensureRecord(name);
-    record.status = 'online';
+    record.status = 'healthy';
     record.lastSuccessAt = Date.now();
     record.lastErrorMessage = undefined;
     if (latencyMs !== undefined) {
@@ -97,11 +100,11 @@ export class ProviderHealthTracker {
     record.lastErrorAt = Date.now();
     record.lastErrorMessage = message.slice(0, 120);
     if (isRateLimit) {
-      record.status = 'rate-limited';
+      record.status = 'rate_limited';
       record.rateLimitExpiresAt = Date.now() + ProviderHealthTracker.DEFAULT_COOLDOWN_MS;
       return;
     }
-    record.status = 'error';
+    record.status = 'degraded';
   }
 
   private isRateLimitMessage(message: string): boolean {

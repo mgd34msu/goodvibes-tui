@@ -708,7 +708,7 @@ async function main() {
   const streamResult: WireStreamEventMetricsResult = wireStreamEventMetrics({
     events: uiServices.events, orchestrator, providerRegistry,
     systemMessageRouter, render, metrics: streamMetrics,
-    providerOptimizer: ctx.services.providerOptimizer,
+    providerOptimizer: ctx.services.providerOptimizer, costLookup: providerRegistry,
     retryTurn: () => {
       if (!retryCtx) return;
       const { count, text, content: rContent, opts: rOpts } = retryCtx;

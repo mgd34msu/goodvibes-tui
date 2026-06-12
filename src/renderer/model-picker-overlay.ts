@@ -234,17 +234,29 @@ export function renderModelPickerOverlay(
       putRowText(providerLine, layout.margin + 2, contentW, fitDisplay(`Provider: ${selected.provider}`, contentW), '244');
       lines.push(providerLine);
 
-      const caps = selected.capabilities ?? { reasoning: false, multimodal: false, toolCalling: false, codeEditing: false };
-      const ctxStr = `Context: ${fmtContext(selected.contextWindow)}`;
-      const capParts: string[] = [ctxStr];
-      if (caps.reasoning)  capParts.push('Reasoning: \u2713');
-      if (caps.multimodal) capParts.push('Vision: \u2713');
-      if (caps.toolCalling) capParts.push('Tools: \u2713');
-      if (caps.codeEditing) capParts.push('Code: \u2713');
-      const capText = capParts.join('  ');
-      const capLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
-      putRowText(capLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(capText, contentW), contentW), '244');
-      lines.push(capLine);
+      // Synthetic models show fallback ladder rungs instead of capabilities.
+      const syntheticChain = selected.provider === 'synthetic' ? picker.getSyntheticChain(selected.id) : null;
+      if (syntheticChain !== null && syntheticChain.length > 0) {
+        const rung0 = syntheticChain[0];
+        const rest = syntheticChain.length - 1;
+        const rung0Base = `  0. ${rung0.provider}/${rung0.model}`;
+        const rung0Label = rest > 0 ? `${rung0Base}  (+${rest} more)` : rung0Base;
+        const chainLine0 = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
+        putRowText(chainLine0, layout.margin + 2, contentW, fitDisplay(truncateDisplay(rung0Label, contentW), contentW), '244');
+        lines.push(chainLine0);
+      } else {
+        const caps = selected.capabilities ?? { reasoning: false, multimodal: false, toolCalling: false, codeEditing: false };
+        const ctxStr = `Context: ${fmtContext(selected.contextWindow)}`;
+        const capParts: string[] = [ctxStr];
+        if (caps.reasoning)  capParts.push('Reasoning: \u2713');
+        if (caps.multimodal) capParts.push('Vision: \u2713');
+        if (caps.toolCalling) capParts.push('Tools: \u2713');
+        if (caps.codeEditing) capParts.push('Code: \u2713');
+        const capText = capParts.join('  ');
+        const capLine = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
+        putRowText(capLine, layout.margin + 2, contentW, fitDisplay(truncateDisplay(capText, contentW), contentW), '244');
+        lines.push(capLine);
+      }
     } else {
       lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));
       lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));

@@ -127,8 +127,8 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
           `  recent failures: ${settings.recentFailureCount}`,
           `  staged bundle: ${settings.hasStagedManagedBundle ? 'present' : 'none'}`,
           ...(issues.length > 0 ? issues.map((issue) => `  issue: ${issue}`) : ['  no active settings-control issues detected']),
-          '  next: /settingssync panel',
-          '  next: /settingssync show <key>',
+          '  next: /settings-sync panel',
+          '  next: /settings-sync show <key>',
           '  next: /managed staged',
         ].join('\n'));
         return;
@@ -290,7 +290,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
           lines.push('  domain: settings');
           lines.push(...(
             settings.conflicts.length > 0
-              ? ['  /settingssync panel', '  /settingssync show <key>', '  /managed staged']
+              ? ['  /settings-sync panel', '  /settings-sync show <key>', '  /managed staged']
               : ['  no active settings repair actions suggested']
           ));
           lines.push('  verify: /health settings');

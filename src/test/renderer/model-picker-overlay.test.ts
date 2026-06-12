@@ -542,3 +542,98 @@ describe('renderModelPickerOverlay — Stage 5 features', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Synthetic chain rendering
+// ---------------------------------------------------------------------------
+
+describe('renderModelPickerOverlay — synthetic model chain detail', () => {
+  test('selecting a synthetic model with a known chain renders first rung in detail area', () => {
+    // Arrange: minimal synthetic registry stub injected via getSyntheticChain override.
+    const picker = makePicker();
+    // Patch getSyntheticChain to return a two-rung chain for the selected model.
+    const syntheticModel = makeModel({
+      id: 'best-balanced',
+      provider: 'synthetic',
+      displayName: 'Best Balanced',
+    });
+    picker.models = [syntheticModel];
+    picker.selectedIndex = 0;
+
+    // Patch getSyntheticChain on the instance (structural typing — valid for test isolation).
+    (picker as { getSyntheticChain(id: string): unknown }).getSyntheticChain = (id: string) => {
+      if (id === 'best-balanced') {
+        return [
+          { position: 0, provider: 'anthropic', model: 'claude-3-5-sonnet', registryKey: 'anthropic:claude-3-5-sonnet' },
+          { position: 1, provider: 'openai', model: 'gpt-4o', registryKey: 'openai:gpt-4o' },
+        ];
+      }
+      return null;
+    };
+
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+
+    // The first rung must appear in the detail area.
+    expect(texts).toContain('anthropic');
+    expect(texts).toContain('claude-3-5-sonnet');
+    // Position prefix must be present.
+    expect(texts).toContain('0.');
+    // A two-rung chain has one hidden fallback; it must be disclosed, not omitted.
+    expect(texts).toContain('(+1 more)');
+  });
+
+  test('chain with more than one extra rung shows "+N more" suffix', () => {
+    const picker = makePicker();
+    const syntheticModel = makeModel({
+      id: 'best-balanced',
+      provider: 'synthetic',
+      displayName: 'Best Balanced',
+    });
+    picker.models = [syntheticModel];
+    picker.selectedIndex = 0;
+
+    (picker as { getSyntheticChain(id: string): unknown }).getSyntheticChain = (_id: string) => [
+      { position: 0, provider: 'anthropic', model: 'claude-3-5-sonnet', registryKey: 'anthropic:claude-3-5-sonnet' },
+      { position: 1, provider: 'openai', model: 'gpt-4o', registryKey: 'openai:gpt-4o' },
+      { position: 2, provider: 'gemini', model: 'gemini-2.0', registryKey: 'gemini:gemini-2.0' },
+    ];
+
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+
+    // Two extra rungs → "+2 more"
+    expect(texts).toContain('+2 more');
+  });
+
+  test('non-synthetic model still shows capabilities in detail area', () => {
+    const picker = makePicker();
+    // MODEL_B has all caps: reasoning + multimodal
+    picker.models = [MODEL_B];
+    picker.selectedIndex = 0;
+
+    const texts = linesToText(renderModelPickerOverlay(picker, W)).join('\n');
+
+    // Capability details present (not chain).
+    expect(texts).toContain('Context');
+    expect(texts).not.toContain('0.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSyntheticChain on ModelPickerModal
+// ---------------------------------------------------------------------------
+
+describe('ModelPickerModal.getSyntheticChain', () => {
+  test('returns null for an unknown model id', () => {
+    const picker = makePicker();
+    const result = picker.getSyntheticChain('nonexistent-model-id');
+    // Registry has no synthetics seeded — must return null.
+    expect(result).toBeNull();
+  });
+
+  test('returns null for a non-synthetic model', () => {
+    const picker = makePicker();
+    // MODEL_A is provider=anthropic, not synthetic.
+    const result = picker.getSyntheticChain(MODEL_A.id);
+    expect(result).toBeNull();
+  });
+});

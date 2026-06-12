@@ -73,7 +73,7 @@ export function buildProviderHealthDomainSummaries(
       : settingIssueCount > 0
         ? `${settings.conflictCount} conflicts / ${settings.recentFailureCount} failures${settings.hasStagedManagedBundle ? ' / staged bundle' : ''}`
         : 'settings control plane clean',
-    next: settingIssueCount > 0 ? '/settingssync panel' : '/settingssync show <key>',
+    next: settingIssueCount > 0 ? '/settings-sync panel' : '/settings-sync show <key>',
     details: [
       settings.conflictCount > 0 ? `${settings.conflictCount} unresolved import conflict(s)` : '',
       settings.recentFailureCount > 0 ? `${settings.recentFailureCount} recent sync or managed failure(s)` : '',
@@ -81,8 +81,8 @@ export function buildProviderHealthDomainSummaries(
       settings.managedLockCount > 0 ? `${settings.managedLockCount} managed lock(s) enforced` : '',
     ].filter(Boolean),
     nextSteps: settingIssueCount > 0
-      ? ['/settingssync panel', '/settingssync show <key>', '/managed staged']
-      : ['/settingssync show <key>'],
+      ? ['/settings-sync panel', '/settings-sync show <key>', '/managed staged']
+      : ['/settings-sync show <key>'],
   });
 
   summaries.push({

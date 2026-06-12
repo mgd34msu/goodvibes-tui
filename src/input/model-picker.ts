@@ -67,7 +67,7 @@ export class ModelPickerModal {
   constructor(
     private readonly favoritesStore: Pick<FavoritesStore, 'getRecentModels'>,
     private readonly benchmarkStore: Pick<BenchmarkStore, 'getBenchmarks'>,
-    private readonly providerRegistry: Pick<ProviderRegistry, 'getSyntheticModelInfoFromCatalog'>,
+    private readonly providerRegistry: Pick<ProviderRegistry, 'getSyntheticModelInfoFromCatalog' | 'getSyntheticCanonicalModels'>,
   ) {}
 
   public active = false;
@@ -545,6 +545,23 @@ export class ModelPickerModal {
 
   getSyntheticModelInfo(modelId: string) {
     return this.providerRegistry.getSyntheticModelInfoFromCatalog(modelId);
+  }
+
+  /**
+   * Returns the ordered backend ladder for a synthetic model.
+   * Each entry describes a real provider/model that the synthetic model routes to.
+   * Returns null when the model ID is not found in the synthetic catalog.
+   */
+  getSyntheticChain(modelId: string): Array<{ position: number; provider: string; model: string; registryKey: string }> | null {
+    const canonical = this.providerRegistry.getSyntheticCanonicalModels();
+    const entry = canonical.find((m) => m.id === modelId);
+    if (!entry) return null;
+    return entry.backends.map((b, idx) => ({
+      position: idx,
+      provider: b.providerName,
+      model: b.modelId,
+      registryKey: b.registryKey ?? `${b.providerName}:${b.modelId}`,
+    }));
   }
 
   getBenchmarkEntry(model: ModelDefinition) {
