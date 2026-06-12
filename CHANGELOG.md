@@ -4,6 +4,31 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.24.0] — 2026-06-12
+
+Fourth best-in-class program release: the engineering-task backlog closed, crash durability made real, and the composer brought to readline parity. Every change passed independent review before commit.
+
+### Features
+- Added composer editing at readline parity: coalesced undo/redo (Ctrl+Z / Ctrl+Shift+Z with cursor restoration), a 32-entry kill ring (Ctrl+K/U, Alt+D, Ctrl+Shift+Y yank, Alt+Y yank-pop with emacs invalidation semantics), Unicode word navigation (Alt+B/F), and a line-count indicator rendered inside the prompt border so footer height never jumps.
+- Added transcript search navigation: n/N next/previous in locked search mode, an honest (wrap) marker on the match count, and the bindings documented in both help overlays.
+- Added a SIGKILL-proof transcript journal: fsync-per-record append-only log between snapshots, with replay wired into every resume seam — command resume, Ctrl+R crash recovery, and panel resume — proven by real-seam tests.
+- Added push notifications for long-running turns (behavior.notifyAfterSeconds): desktop and webhook delivery with metadata only — conversation text can never leak, pinned by literal and compile-time assertions.
+- Added one-key retry from turn errors: r re-submits through the shared failover snapshot path (never a duplicate user message), m opens the model picker; the exhausted-chain notice says plainly that r reuses the same provider.
+- Added /health term: real terminal-capability posture in the doctor surface.
+- Added command grammar conventions enforced by a live-registry lint; settingssync/profilesync/workplan renamed to kebab-case primaries with the old names kept as aliases.
+
+### Fixes
+- Fixed wide-character padding in diff headers, progress rows, and panel spinners (ANSI-aware width everywhere); width-utility docs state the per-code-point contract honestly.
+- Fixed the /pin collision by naming the session-memory command /keep; model favorites keep /pin.
+- Deflaked the websocket reconnect test with a deadline poll.
+
+### Internal
+- Architecture gate detects import cycles (Tarjan SCC, proven against an injected scratch cycle) and enforces 8 directional layer rules; the conversation/system-message-router cycle is genuinely broken.
+- Golden-frame harness pins four renderer surfaces with regen-stable committed snapshots; CI fails on a missing golden.
+- Release pipeline: live verifier runs warn-only in validation, a release-blocking macOS smoke job covers the darwin-arm64 binaries, and release.ts runs all six gates pre-tag.
+- Auth listener behavior pinned by 18 live tests; whole-suite single-process run verified clean (8978 tests); settings-modal split into activation/adjustment modules; CLI management helpers deduplicated.
+- Inline terminal images (Kitty/iTerm2/sixel) explicitly canned by owner decision — images stay as [image N] slugs for identical behavior in every terminal.
+
 ## [0.23.0] — 2026-06-12
 
 Third best-in-class program release: provider failover on the turn path, the context/compaction surface completed, the E20 export track closed, and the renderer pinned by golden frames. Every change passed independent review before commit.
