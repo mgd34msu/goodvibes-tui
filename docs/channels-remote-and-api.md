@@ -188,6 +188,44 @@ Other channel surfaces use a generic format. ntfy includes the topic when availa
 
 This narration is purely informational; it does not affect routing or delivery.
 
+## Push notifications on long-task completion
+
+When a turn or agent task runs longer than the configured threshold, GoodVibes fires a push notification.
+
+### Configuration
+
+Set `behavior.notifyAfterSeconds` in `/config behavior` (or `settings.json`):
+
+```json
+{
+  "behavior": {
+    "notifyAfterSeconds": 60
+  }
+}
+```
+
+- **Default**: 60 seconds
+- **Off**: set to `0` to disable all push notifications
+
+### Delivery targets
+
+Notifications are delivered in this order:
+
+1. **Desktop notification** — `notify-send` on Linux, `osascript` on macOS. The SDK handles platform detection; the call is a silent no-op when neither is available.
+2. **Outbound webhook / ntfy topic** — if you have webhook URLs configured (via `/notify add <url>`), the notification is also sent as a plain-text POST to all configured endpoints. This works with ntfy.sh topics and any service accepting a plain POST body.
+
+### Notification content
+
+Notification text contains only structural metadata: task kind, elapsed time, ok/fail status, and the first 8 characters of the session ID. Conversation content (user messages, assistant replies, tool outputs) is **never included**.
+
+### Focus state
+
+Terminal focus tracking is not implemented. Notifications fire regardless of whether the TUI window is currently focused.
+
+### Wiring
+
+The threshold is read inside `wireTurnEventHandlers` on every `TURN_COMPLETED` event. The `behavior.notifyAfterSeconds` key is a TUI-local synthetic setting (same pattern as `tts.speed`); it is not yet in the SDK ConfigKey union.
+
 ## Related docs
 
 - [Deployment and services](deployment-and-services.md)
