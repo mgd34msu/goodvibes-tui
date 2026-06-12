@@ -1,5 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, statSync, unlinkSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { atomicWriteFileSync } from '@/config/atomic-write.ts';
+import { readVersioned } from '@/config/read-versioned.ts';
 
 import type {
   OnboardingAcknowledgementRuntimeState,
@@ -10,6 +12,24 @@ import type {
 } from './types.ts';
 
 const ONBOARDING_RUNTIME_STATE_FILE = 'onboarding-state.json';
+
+/**
+ * Lockfile serialisation for writeOnboardingAcknowledgementState.
+ *
+ * Mechanism: O_EXCL advisory lockfile in the same directory as the state file.
+ * This is the simplest correct approach for two same-host processes (daemon
+ * + TUI) that both run this read-modify-write path:
+ *
+ *   - Acquire: open(<statefile>.lock, O_CREAT|O_EXCL|O_WRONLY) — atomic on POSIX.
+ *   - Stale detection: if the lockfile mtime is >= LOCK_STALE_MS old, force-remove.
+ *   - Retry: up to LOCK_MAX_RETRIES rapid non-blocking attempts (no sleep — main-thread safe).
+ *   - Release: unlink the lockfile (best-effort on failure).
+ *
+ * O_EXCL was chosen over flock(2) because it works on all POSIX targets
+ * without requiring an open fd on the guarded file, and is Bun-compatible.
+ */
+const LOCK_MAX_RETRIES = 10;
+const LOCK_STALE_MS = 5_000;
 
 export interface OnboardingRuntimeStateRecord {
   readonly scope: OnboardingStateScope;
@@ -38,29 +58,66 @@ function resolveStatePath(
     : shellPaths.resolveUserPath('tui', ONBOARDING_RUNTIME_STATE_FILE);
 }
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isOnboardingMode(value: unknown): value is OnboardingAcknowledgementRuntimeState['mode'] {
-  return value === 'new' || value === 'edit' || value === 'reopen';
-}
-
 function isAcknowledgementTarget(value: string): value is OnboardingAcknowledgementTarget {
   return value === 'providers' || value === 'subscriptions' || value === 'auth';
 }
 
 function isRuntimeStatePayload(value: unknown): value is OnboardingAcknowledgementRuntimeState {
-  if (!isObject(value)) return false;
-  if (value.version !== 1) return false;
-  if (typeof value.updatedAt !== 'number' || !Number.isFinite(value.updatedAt)) return false;
-  if (typeof value.source !== 'string') return false;
-  if (value.mode !== undefined && !isOnboardingMode(value.mode)) return false;
-  if (value.workspaceRoot !== undefined && typeof value.workspaceRoot !== 'string') return false;
-  if (!isObject(value.acknowledgements)) return false;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  if (v['version'] !== 1) return false;
+  if (typeof v['updatedAt'] !== 'number' || !Number.isFinite(v['updatedAt'] as number)) return false;
+  if (typeof v['source'] !== 'string') return false;
+  const mode = v['mode'];
+  if (mode !== undefined && mode !== 'new' && mode !== 'edit' && mode !== 'reopen') return false;
+  if (v['workspaceRoot'] !== undefined && typeof v['workspaceRoot'] !== 'string') return false;
+  if (typeof v['acknowledgements'] !== 'object' || v['acknowledgements'] === null) return false;
 
-  return Object.entries(value.acknowledgements).every(([key, entry]) => isAcknowledgementTarget(key) && typeof entry === 'boolean');
+  return Object.entries(v['acknowledgements'] as Record<string, unknown>).every(
+    ([key, entry]) => isAcknowledgementTarget(key) && typeof entry === 'boolean',
+  );
 }
+
+// ─── Lock helpers ──────────────────────────────────────────────────────────────────
+
+function stateLockPath(statePath: string): string {
+  return `${statePath}.lock`;
+}
+
+/**
+ * Attempt to acquire an O_EXCL advisory lock. Returns true if acquired.
+ * Stale locks (older than LOCK_STALE_MS) are forcibly removed before retry.
+ *
+ * Retries are non-blocking (no sleep between attempts) so this function is
+ * safe to call on the main thread. Each O_EXCL open is a single syscall;
+ * 10 rapid retries add negligible latency and are safe for a one-shot path.
+ */
+function acquireLock(lp: string): boolean {
+  for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
+    // Stale-lock takeover: if the lockfile is old enough, forcibly remove it.
+    try {
+      const st = statSync(lp);
+      if (Date.now() - st.mtimeMs >= LOCK_STALE_MS) {
+        try { unlinkSync(lp); } catch { /* another process may have beaten us */ }
+      }
+    } catch { /* lockfile does not exist — expected happy path */ }
+
+    try {
+      // 'wx' ≡ O_CREAT | O_EXCL | O_WRONLY — fails atomically if file exists.
+      const fd = openSync(lp, 'wx');
+      closeSync(fd);
+      return true;
+    } catch { /* file exists, held by another process */ }
+  }
+  return false;
+}
+
+/** Release the advisory lockfile (best-effort). */
+function releaseLock(lp: string): void {
+  try { unlinkSync(lp); } catch { /* best-effort */ }
+}
+
+// ─── Public API ────────────────────────────────────────────────────────────────────
 
 export function getOnboardingRuntimeStatePath(
   shellPaths: OnboardingShellPaths,
@@ -74,42 +131,39 @@ export function readOnboardingRuntimeState(
   scope: OnboardingStateScope = 'project',
 ): OnboardingRuntimeStateRecord {
   const path = resolveStatePath(shellPaths, scope);
-  if (!existsSync(path)) {
+
+  const parsed = readVersioned<OnboardingAcknowledgementRuntimeState & { version: number }>(
+    path,
+    { currentVersion: 1, onUnknown: 'quarantine' },
+  );
+
+  if (parsed === null) {
+    // readVersioned returns null for: missing file, corrupt JSON, or
+    // unrecognised version (in which case it renames to <path>.unrecognized).
+    const nowExists = existsSync(path);
+    const quarantined = existsSync(`${path}.unrecognized`);
     return {
       scope,
       path,
-      exists: false,
+      exists: nowExists || quarantined,
       payload: null,
+      ...(quarantined
+        ? { parseError: 'Unrecognised or corrupt onboarding state file; quarantined.' }
+        : {}),
     };
   }
 
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
-    if (!isRuntimeStatePayload(parsed)) {
-      return {
-        scope,
-        path,
-        exists: true,
-        payload: null,
-        parseError: 'Invalid onboarding runtime state payload.',
-      };
-    }
-
-    return {
-      scope,
-      path,
-      exists: true,
-      payload: parsed,
-    };
-  } catch (error) {
+  if (!isRuntimeStatePayload(parsed)) {
     return {
       scope,
       path,
       exists: true,
       payload: null,
-      parseError: error instanceof Error ? error.message : String(error),
+      parseError: 'Invalid onboarding runtime state payload.',
     };
   }
+
+  return { scope, path, exists: true, payload: parsed };
 }
 
 export function writeOnboardingAcknowledgementState(
@@ -118,23 +172,47 @@ export function writeOnboardingAcknowledgementState(
 ): OnboardingRuntimeStateRecord {
   const scope = options.scope ?? 'project';
   const path = resolveStatePath(shellPaths, scope);
-  const existing = readOnboardingRuntimeState(shellPaths, scope);
-  const updatedAt = options.updatedAt ?? Date.now();
-  const payload: OnboardingAcknowledgementRuntimeState = {
-    version: 1,
-    updatedAt,
-    source: options.source,
-    ...(options.mode ? { mode: options.mode } : {}),
-    ...(options.workspaceRoot ?? shellPaths.workingDirectory
-      ? { workspaceRoot: options.workspaceRoot ?? shellPaths.workingDirectory }
-      : {}),
-    acknowledgements: {
-      ...(existing.payload?.acknowledgements ?? {}),
-      [options.target]: options.acknowledged,
-    },
-  };
+  const lp = stateLockPath(path);
 
-  atomicWriteFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, { mkdirp: true });
+  // Ensure the parent directory exists before we try to create the lockfile.
+  mkdirSync(dirname(path), { recursive: true });
+
+  const acquired = acquireLock(lp);
+  if (!acquired) {
+    // Lock exhaustion: another process has held the lock for all LOCK_MAX_RETRIES
+    // attempts. Proceeding without the lock — the atomic write (rename) prevents
+    // torn files, but under true concurrent contention a concurrent read-modify-write
+    // may result in a lost-update (last writer wins). Surfaced here so it is
+    // detectable in logs rather than silently discarded.
+    console.warn(
+      '[goodvibes] onboarding-state: lock exhausted, proceeding without lock.',
+      { path, target: options.target, source: options.source },
+    );
+  }
+
+  try {
+    // Re-read (inside the lock when acquired; best-effort when degraded) to get
+    // the freshest acknowledgements state, eliminating the read-modify-write
+    // race between daemon and TUI under normal conditions.
+    const existing = readOnboardingRuntimeState(shellPaths, scope);
+    const updatedAt = options.updatedAt ?? Date.now();
+    const ws = options.workspaceRoot ?? shellPaths.workingDirectory;
+    const payload: OnboardingAcknowledgementRuntimeState = {
+      version: 1,
+      updatedAt,
+      source: options.source,
+      ...(options.mode ? { mode: options.mode } : {}),
+      ...(ws ? { workspaceRoot: ws } : {}),
+      acknowledgements: {
+        ...(existing.payload?.acknowledgements ?? {}),
+        [options.target]: options.acknowledged,
+      },
+    };
+
+    atomicWriteFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, { mkdirp: true });
+  } finally {
+    if (acquired) releaseLock(lp);
+  }
 
   return readOnboardingRuntimeState(shellPaths, scope);
 }
