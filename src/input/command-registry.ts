@@ -120,6 +120,16 @@ export interface CommandShellUiOpeners {
   openKnowledgePanel?: () => void;
   openRemotePanel?: () => void;
   openSubscriptionPanel?: () => void;
+  /**
+   * Open the LocalAuthPanel in masked-password-entry mode for the given
+   * operation and username. The panel captures keystrokes into a private
+   * buffer; no plaintext password is ever stored in input history, transcript,
+   * logs, or recovery files.
+   */
+  openLocalAuthMaskedEntry?: (
+    kind: 'add-user' | 'rotate-password',
+    username: string,
+  ) => void;
 }
 
 export interface CommandSessionServices {

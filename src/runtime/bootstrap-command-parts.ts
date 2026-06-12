@@ -42,6 +42,7 @@ import type { PeerClient } from '@/runtime/index.ts';
 import type { DirectTransport } from '@/runtime/index.ts';
 import type { VoiceProviderRegistry, VoiceService } from '@pellux/goodvibes-sdk/platform/voice';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { LocalAuthPanel } from '../panels/local-auth-panel.ts';
 
 export type BootstrapCommandSessionSection = CommandContext['session'];
 export type BootstrapCommandProviderSection = CommandContext['provider'];
@@ -62,6 +63,7 @@ export interface BootstrapCommandActionOptions {
   readonly activatePlan: (planId: string, task: string) => void;
   readonly requestPermission: PermissionRequestHandler;
   readonly completeModelSelectionSideEffect?: () => void;
+  readonly localUserAuthManager?: import('@pellux/goodvibes-sdk/platform/security').UserAuthManager;
 }
 
 export interface BootstrapCommandSectionOptions {
@@ -160,6 +162,7 @@ export function createBootstrapCommandActions(
   | 'openKnowledgePanel'
   | 'openRemotePanel'
   | 'openSubscriptionPanel'
+  | 'openLocalAuthMaskedEntry'
 > {
   const {
     providerRegistry,
@@ -172,6 +175,7 @@ export function createBootstrapCommandActions(
     activatePlan,
     requestPermission,
     completeModelSelectionSideEffect,
+    localUserAuthManager,
   } = options;
 
   const showPanel = (panelId: string, pane?: 'top' | 'bottom') => {
@@ -274,6 +278,16 @@ export function createBootstrapCommandActions(
     },
     openSubscriptionPanel: () => {
       showPanel('subscription');
+    },
+    openLocalAuthMaskedEntry: (kind, username) => {
+      showPanel('local-auth');
+      const panel = panelManager.getPanel('local-auth');
+      if (panel instanceof LocalAuthPanel && localUserAuthManager) {
+        panel.openMaskedEntry(kind, username, localUserAuthManager);
+      } else {
+        conversation.log('Masked entry unavailable: local auth is not configured in this session.', { fg: '#ef4444' });
+        requestRender();
+      }
     },
   };
 }

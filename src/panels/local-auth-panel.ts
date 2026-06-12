@@ -11,8 +11,11 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
-import type { LocalAuthSnapshot } from '@pellux/goodvibes-sdk/platform/security';
+import type { LocalAuthSnapshot, UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import type { LocalAuthInspectionQuery } from '../runtime/ui-service-queries.ts';
+import type { KeyName } from './types.ts';
+import { isTextBackspace } from '../input/delete-key-policy.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -28,13 +31,99 @@ function formatRoles(roles: readonly string[]): string {
 
 type LocalAuthUser = LocalAuthSnapshot['users'][number];
 
+/** Action kind for the masked password entry mode. */
+export type MaskedEntryKind = 'add-user' | 'rotate-password';
+
+interface MaskedEntryState {
+  readonly kind: MaskedEntryKind;
+  readonly username: string;
+  readonly auth: UserAuthManager;
+  buffer: string;
+}
+
 export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   private readonly authManager: LocalAuthInspectionQuery;
+  private maskedState: MaskedEntryState | null = null;
 
   public constructor(authManager: LocalAuthInspectionQuery) {
     super('local-auth', 'Local Auth', 'U', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.authManager = authManager;
+  }
+
+  /**
+   * Activate masked password-entry mode for the given operation.
+   * The panel's handleInput will capture keystrokes into a private buffer;
+   * no plaintext is ever recorded in input history, transcript, or logs.
+   */
+  public openMaskedEntry(kind: MaskedEntryKind, username: string, auth: UserAuthManager): void {
+    this.maskedState = { kind, username, auth, buffer: '' };
+    this.invalidate();
+  }
+
+  /** Returns true when the panel is in masked-entry mode. */
+  public get isMaskedEntryActive(): boolean {
+    return this.maskedState !== null;
+  }
+
+  public override handleInput(key: KeyName): boolean {
+    if (this.maskedState === null) {
+      // Delegate scroll/selection to ScrollableListPanel when not in masked mode.
+      return super.handleInput?.(key) ?? false;
+    }
+
+    // Masked entry is active — capture all keystrokes.
+    const state = this.maskedState;
+
+    if (key === 'escape') {
+      // Cancel: discard buffer, exit masked mode without persisting.
+      this.maskedState = null;
+      this.invalidate();
+      return true;
+    }
+
+    if (key === 'enter' || key === 'return') {
+      // Submit: call the auth API if a non-empty password was entered.
+      if (state.buffer.length === 0) {
+        return true; // no-op — require at least one character
+      }
+      const password = state.buffer;
+      const { kind, username, auth } = state;
+      // Clear the mutable state *before* the auth call so the secret
+      // never lingers in the buffer after an exception.
+      this.maskedState = null;
+      try {
+        if (kind === 'add-user') {
+          auth.addUser(username, password, ['admin']);
+        } else {
+          auth.rotatePassword(username, password);
+        }
+      } catch (_error) {
+        // Surface errors via the panel's error facility rather than logging.
+        this.setError(summarizeError(_error));
+      }
+      this.invalidate();
+      return true;
+    }
+
+    if (isTextBackspace(key)) {
+      // Remove last character (Ink 6.8.0: raw-stdin raw 'backspace' only).
+      if (state.buffer.length > 0) {
+        state.buffer = state.buffer.slice(0, -1);
+        this.invalidate();
+      }
+      return true;
+    }
+
+    // Single printable character: append to buffer.
+    if (key.length === 1) {
+      state.buffer += key;
+      this.invalidate();
+      return true;
+    }
+
+    // All other named keys are consumed (ignored) while masked mode is active.
+    return true;
   }
 
   protected override getPalette(): PanelPalette {
@@ -57,6 +146,12 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   }
 
   public render(width: number, height: number): Line[] {
+    // When masked entry is active, render a dedicated prompt instead of the
+    // normal panel content. No plaintext password appears anywhere in output.
+    if (this.maskedState !== null) {
+      return this.renderMaskedPrompt(width, height);
+    }
+
     const intro = 'Manage local daemon and HTTP-listener auth users, bootstrap state, and active sessions.';
     const snapshot = this.authManager.inspect();
     const users = this.getItems();
@@ -81,7 +176,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
         ...(issueMessages.length > 0
           ? issueMessages.map((issue) => buildPanelLine(width, [[` issue: ${issue}`.slice(0, Math.max(0, width)), C.warn]]))
           : [buildPanelLine(width, [[' local auth posture looks healthy.', C.good]])]),
-        buildGuidanceLine(width, '/auth local rotate-password <user> <password>', 'rotate bootstrap/default credentials and revoke older sessions as needed', C),
+        buildGuidanceLine(width, '/auth local rotate-password <user>', 'open masked password entry for the selected user (no plaintext in history)', C),
       ], C),
     ];
 
@@ -104,7 +199,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
       footerLines.push(
         ...buildDetailBlock(width, 'Selected user', [
           buildPanelLine(width, [[' username ', C.label], [selected.username, C.value], ['  roles ', C.label], [formatRoles(selected.roles).slice(0, Math.max(0, width - 23)), C.info]]),
-          buildPanelLine(width, [[` next: /auth local rotate-password ${selected.username} <password>`.slice(0, Math.max(0, width)), C.dim]]),
+          buildPanelLine(width, [[` next: /auth local rotate-password ${selected.username}`.slice(0, Math.max(0, width)), C.dim]]),
           buildPanelLine(width, [[` next: /auth local delete-user ${selected.username}`.slice(0, Math.max(0, width)), C.dim]]),
         ], C),
       );
@@ -119,12 +214,37 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
         ])),
       );
     }
-    footerLines.push(buildPanelLine(width, [[' /auth local review  /auth local add-user  /auth local rotate-password  /auth local revoke-session ', C.dim]]));
+    footerLines.push(buildPanelLine(width, [[' /auth local review  /auth local add-user <user>  /auth local rotate-password <user>  (omit password for masked entry) ', C.dim]]));
 
     return this.renderList(width, height, {
       title: 'Local Auth Control Room',
       header: headerLines,
       footer: footerLines,
     });
+  }
+
+  private renderMaskedPrompt(width: number, height: number): Line[] {
+    const state = this.maskedState!;
+    const actionLabel = state.kind === 'add-user' ? 'Add user' : 'Rotate password';
+    const dots = '•'.repeat(Math.min(32, state.buffer.length));
+    const cursor = '█'; // block cursor
+    const maskedDisplay = state.buffer.length > 0 ? `${dots}${cursor}` : cursor;
+
+    const promptLines: Line[] = [
+      buildPanelLine(width, [[` ${actionLabel}: ${state.username}`, C.value]]),
+      buildPanelLine(width, [['', C.label]]),
+      buildPanelLine(width, [[' Password  ', C.label], [maskedDisplay.slice(0, Math.max(0, width - 12)), C.info]]),
+      buildPanelLine(width, [['', C.label]]),
+      buildPanelLine(width, [[' [Enter] Confirm   [Esc] Cancel   [Backspace] Delete char', C.dim]]),
+    ];
+
+    const workspace = buildPanelWorkspace(width, height, {
+      title: 'Local Auth — Password Entry',
+      intro: `Type a password for ${state.username}. The value is never echoed in plaintext or stored in history.`,
+      sections: [{ lines: promptLines }],
+      palette: C,
+    });
+    while (workspace.length < height) workspace.push(createEmptyLine(width));
+    return workspace;
   }
 }

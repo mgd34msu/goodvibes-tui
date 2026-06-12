@@ -341,3 +341,202 @@ describe('InputHistory persistence', () => {
     expect(content).toEqual(['should not load']);
   });
 });
+
+// ===========================================================================
+// Redaction — built-in rules for local-auth password commands
+// ===========================================================================
+
+describe('InputHistory redaction', () => {
+  test('redacts password in /auth local add-user before storing', () => {
+    const h = makeHistory();
+    h.add('/auth local add-user alice s3cr3t');
+    expect(h.up('')).toBe('/auth local add-user alice <redacted>');
+  });
+
+  test('redacted add-user entry does not appear on disk with cleartext password', () => {
+    const path = makeTmpPath();
+    const h = new InputHistory({ historyPath: path, persist: true });
+    h.add('/auth local add-user alice s3cr3t');
+    const raw = JSON.parse(readFileSync(path, 'utf-8')) as unknown[];
+    expect(JSON.stringify(raw)).not.toContain('s3cr3t');
+    expect(JSON.stringify(raw)).toContain('<redacted>');
+  });
+
+  test('redacts password in /auth local rotate-password before storing', () => {
+    const h = makeHistory();
+    h.add('/auth local rotate-password bob newpass123');
+    expect(h.up('')).toBe('/auth local rotate-password bob <redacted>');
+  });
+
+  test('redacted rotate-password entry does not appear on disk with cleartext password', () => {
+    const path = makeTmpPath();
+    const h = new InputHistory({ historyPath: path, persist: true });
+    h.add('/auth local rotate-password bob newpass123');
+    const raw = JSON.parse(readFileSync(path, 'utf-8')) as unknown[];
+    expect(JSON.stringify(raw)).not.toContain('newpass123');
+    expect(JSON.stringify(raw)).toContain('<redacted>');
+  });
+
+  test('redacts password in recallText option as well', () => {
+    const h = makeHistory();
+    h.add('[TEXT: p1, 1 lines]', { recallText: '/auth local add-user alice s3cr3t' });
+    expect(h.up('')).toBe('/auth local add-user alice <redacted>');
+  });
+
+  test('non-sensitive commands are stored unchanged', () => {
+    const h = makeHistory();
+    h.add('/model list');
+    expect(h.up('')).toBe('/model list');
+  });
+
+  test('add-user without password is stored unchanged (no false positive)', () => {
+    const h = makeHistory();
+    h.add('/auth local add-user alice');
+    expect(h.up('')).toBe('/auth local add-user alice');
+  });
+
+  test('custom redaction rule applied in addition to built-in rules', () => {
+    const h = new InputHistory({
+      historyPath: makeTmpPath(),
+      persist: false,
+      redactionRules: [
+        { pattern: /SECRET_TOKEN=(\S+)/i, replacement: 'SECRET_TOKEN=<redacted>' },
+      ],
+    });
+    h.add('/run SECRET_TOKEN=mytoken123');
+    expect(h.up('')).toBe('/run SECRET_TOKEN=<redacted>');
+  });
+
+  test('redacts cleartext password in entry loaded from disk (pre-fix persistence)', () => {
+    // Simulate a history file written before redaction was deployed — cleartext password on disk.
+    const path = makeTmpPath();
+    writeFileSync(
+      path,
+      JSON.stringify(['/auth local add-user alice s3cr3t', '/auth local rotate-password bob oldpass']),
+      'utf-8',
+    );
+    const h = new InputHistory({ historyPath: path, persist: true });
+    // Both entries must be scrubbed in memory after load().
+    // Entries load in array order: index 0 (add-user) is most recent, index 1 (rotate-password) is older.
+    expect(h.up('')).toBe('/auth local add-user alice <redacted>');
+    expect(h.up('/auth local add-user alice <redacted>')).toBe('/auth local rotate-password bob <redacted>');
+    // Saving must not re-persist the cleartext passwords.
+    h.save();
+    const raw = JSON.parse(readFileSync(path, 'utf-8')) as unknown[];
+    expect(JSON.stringify(raw)).not.toContain('s3cr3t');
+    expect(JSON.stringify(raw)).not.toContain('oldpass');
+    expect(JSON.stringify(raw)).toContain('<redacted>');
+  });
+});
+
+// ===========================================================================
+// handleLocalAuthCommand — warning and panel routing
+// ===========================================================================
+
+import { handleLocalAuthCommand } from '../../input/commands/local-auth-runtime.ts';
+import type { CommandContext } from '../../input/command-registry.ts';
+
+function makeAuthContext(overrides: Partial<{
+  addUser: (username: string, password: string, roles: string[]) => { username: string; roles: string[] };
+  rotatePassword: (username: string, password: string) => void;
+  showPanel: (panelId: string) => void;
+  openLocalAuthMaskedEntry: (kind: 'add-user' | 'rotate-password', username: string) => void;
+}>): { ctx: CommandContext; printed: string[] } {
+  const printed: string[] = [];
+  const ctx = {
+    print: (text: string) => { printed.push(text); },
+    renderRequest: () => {},
+    exit: () => {},
+    showPanel: overrides.showPanel ?? (() => {}),
+    session: {} as CommandContext['session'],
+    provider: {} as CommandContext['provider'],
+    workspace: {} as CommandContext['workspace'],
+    platform: {
+      config: {} as CommandContext['platform']['config'],
+      configManager: {} as CommandContext['platform']['configManager'],
+      localUserAuthManager: {
+        addUser: overrides.addUser ?? (() => ({ username: 'alice', roles: ['admin'] })),
+        rotatePassword: overrides.rotatePassword ?? (() => {}),
+        deleteUser: () => true,
+        revokeSession: () => true,
+        clearBootstrapCredentialFile: () => true,
+        inspect: () => ({ users: [], sessions: [], userCount: 0, sessionCount: 0, bootstrapCredentialPresent: false, userStorePath: '', bootstrapCredentialPath: '' }),
+      },
+    } as unknown as CommandContext['platform'],
+    ops: {} as CommandContext['ops'],
+    extensions: {} as CommandContext['extensions'],
+    openLocalAuthMaskedEntry: overrides.openLocalAuthMaskedEntry,
+  } as unknown as CommandContext;
+  return { ctx, printed };
+}
+
+describe('handleLocalAuthCommand — add-user password safety', () => {
+  test('emits warning when password supplied as argv', () => {
+    const { ctx, printed } = makeAuthContext({});
+    handleLocalAuthCommand(['add-user', 'alice', 's3cr3t'], ctx);
+    expect(printed.some((line) => line.toLowerCase().includes('warning'))).toBe(true);
+  });
+
+  test('still executes add-user when password supplied as argv', () => {
+    let calledWith: { username: string; password: string } | null = null;
+    const { ctx } = makeAuthContext({
+      addUser: (username, password) => {
+        calledWith = { username, password };
+        return { username, roles: ['admin'] };
+      },
+    });
+    handleLocalAuthCommand(['add-user', 'alice', 's3cr3t'], ctx);
+    expect(calledWith).toEqual({ username: 'alice', password: 's3cr3t' });
+  });
+
+  test('calls openLocalAuthMaskedEntry when no password supplied to add-user', () => {
+    let maskedEntryArgs: { kind: string; username: string } | null = null;
+    const { ctx } = makeAuthContext({
+      openLocalAuthMaskedEntry: (kind, username) => { maskedEntryArgs = { kind, username }; },
+    });
+    handleLocalAuthCommand(['add-user', 'alice'], ctx);
+    expect(maskedEntryArgs).toEqual({ kind: 'add-user', username: 'alice' });
+  });
+
+  test('prints fallback guidance when no password supplied and masked entry unavailable', () => {
+    // No openLocalAuthMaskedEntry wired — fallback print path.
+    const { ctx, printed } = makeAuthContext({});
+    handleLocalAuthCommand(['add-user', 'alice'], ctx);
+    expect(printed.length).toBeGreaterThan(0);
+    expect(printed[0]).toContain('Masked entry unavailable');
+  });
+});
+
+describe('handleLocalAuthCommand — rotate-password safety', () => {
+  test('emits warning when password supplied as argv', () => {
+    const { ctx, printed } = makeAuthContext({});
+    handleLocalAuthCommand(['rotate-password', 'alice', 'newpass'], ctx);
+    expect(printed.some((line) => line.toLowerCase().includes('warning'))).toBe(true);
+  });
+
+  test('still executes rotate-password when password supplied as argv', () => {
+    let calledWith: { username: string; password: string } | null = null;
+    const { ctx } = makeAuthContext({
+      rotatePassword: (username, password) => { calledWith = { username, password }; },
+    });
+    handleLocalAuthCommand(['rotate-password', 'alice', 'newpass'], ctx);
+    expect(calledWith).toEqual({ username: 'alice', password: 'newpass' });
+  });
+
+  test('calls openLocalAuthMaskedEntry when no password supplied to rotate-password', () => {
+    let maskedEntryArgs: { kind: string; username: string } | null = null;
+    const { ctx } = makeAuthContext({
+      openLocalAuthMaskedEntry: (kind, username) => { maskedEntryArgs = { kind, username }; },
+    });
+    handleLocalAuthCommand(['rotate-password', 'alice'], ctx);
+    expect(maskedEntryArgs).toEqual({ kind: 'rotate-password', username: 'alice' });
+  });
+
+  test('prints fallback guidance when no password supplied to rotate-password and masked entry unavailable', () => {
+    // No openLocalAuthMaskedEntry wired — fallback print path.
+    const { ctx, printed } = makeAuthContext({});
+    handleLocalAuthCommand(['rotate-password', 'alice'], ctx);
+    expect(printed.length).toBeGreaterThan(0);
+    expect(printed[0]).toContain('Masked entry unavailable');
+  });
+});

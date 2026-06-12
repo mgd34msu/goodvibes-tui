@@ -17,11 +17,22 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
   if (sub === 'add-user') {
     const username = args[1];
     const password = args[2];
-    const roles = args[3]?.split(',').map((value) => value.trim()).filter(Boolean) ?? ['admin'];
-    if (!username || !password) {
-      ctx.print('Usage: /auth local add-user <username> <password> [roles]');
+    if (!username) {
+      ctx.print('Usage: /auth local add-user <username> <password> [roles]\nTip: invoke without a password to use the masked panel: /auth local add-user <username>');
       return;
     }
+    if (!password) {
+      // No password supplied — open masked-entry mode on the LocalAuthPanel.
+      if (ctx.openLocalAuthMaskedEntry) {
+        ctx.openLocalAuthMaskedEntry('add-user', username);
+      } else {
+        ctx.print('Masked entry unavailable in this context. Use: /auth local add-user <username> <password>');
+      }
+      return;
+    }
+    // Password supplied as argv: warn that the history entry has been scrubbed.
+    ctx.print('Warning: passwords passed as command arguments are scrubbed from history, but may appear in shell scrollback. The masked entry is preferred: /auth local add-user <username>');
+    const roles = args[3]?.split(',').map((value) => value.trim()).filter(Boolean) ?? ['admin'];
     try {
       const added = auth.addUser(username, password, roles);
       ctx.print(`Added local auth user ${added.username} (${formatRoles(added.roles)}).`);
@@ -49,10 +60,21 @@ export function handleLocalAuthCommand(args: string[], ctx: CommandContext): voi
   if (sub === 'rotate-password') {
     const username = args[1];
     const password = args[2];
-    if (!username || !password) {
-      ctx.print('Usage: /auth local rotate-password <username> <password>');
+    if (!username) {
+      ctx.print('Usage: /auth local rotate-password <username> <password>\nTip: invoke without a password to use the masked panel: /auth local rotate-password <username>');
       return;
     }
+    if (!password) {
+      // No password supplied — open masked-entry mode on the LocalAuthPanel.
+      if (ctx.openLocalAuthMaskedEntry) {
+        ctx.openLocalAuthMaskedEntry('rotate-password', username);
+      } else {
+        ctx.print('Masked entry unavailable in this context. Use: /auth local rotate-password <username> <password>');
+      }
+      return;
+    }
+    // Password supplied as argv: warn that the history entry has been scrubbed.
+    ctx.print('Warning: passwords passed as command arguments are scrubbed from history, but may appear in shell scrollback. The masked entry is preferred: /auth local rotate-password <username>');
     try {
       auth.rotatePassword(username, password);
       ctx.print(`Rotated password for ${username}. Existing sessions were revoked.`);
