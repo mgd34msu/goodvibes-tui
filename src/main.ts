@@ -54,22 +54,16 @@ import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/ter
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
-import { wireStreamEventMetrics, type StreamMetrics } from './core/stream-event-wiring.ts';
+import { wireStreamEventMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
 import { evaluateSessionMaintenance } from './panels/session-maintenance.ts';
 
-const ALT_SCREEN_ENTER = '\x1b[?1049h';
-const ALT_SCREEN_EXIT  = '\x1b[?1049l';
-const MOUSE_ENABLE     = '\x1b[?1000h\x1b[?1002h\x1b[?1006h';
-const MOUSE_DISABLE    = '\x1b[?1006l\x1b[?1002l\x1b[?1000l';
-const CURSOR_HIDE      = '\x1b[?25l';
-const CURSOR_SHOW      = '\x1b[?25h';
-const CLEAR_SCREEN     = '\x1b[2J\x1b[3J\x1b[H';
-const KEYBOARD_EXT_ENABLE  = '\x1b[>4;2m' + '\x1b[?1u';
-const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
-const PASTE_ENABLE     = '\x1b[?2004h';
-const PASTE_DISABLE    = '\x1b[?2004l';
+const ALT_SCREEN_ENTER = '\x1b[?1049h'; const ALT_SCREEN_EXIT  = '\x1b[?1049l';
+const MOUSE_ENABLE     = '\x1b[?1000h\x1b[?1002h\x1b[?1006h'; const MOUSE_DISABLE    = '\x1b[?1006l\x1b[?1002l\x1b[?1000l';
+const CURSOR_HIDE      = '\x1b[?25l'; const CURSOR_SHOW = '\x1b[?25h'; const CLEAR_SCREEN = '\x1b[2J\x1b[3J\x1b[H';
+const KEYBOARD_EXT_ENABLE  = '\x1b[>4;2m' + '\x1b[?1u'; const KEYBOARD_EXT_DISABLE = '\x1b[>4;0m' + '\x1b[?1l';
+const PASTE_ENABLE = '\x1b[?2004h'; const PASTE_DISABLE = '\x1b[?2004l';
 
 async function main() {
   const stdout = process.stdout;
@@ -315,10 +309,11 @@ async function main() {
     }
     if (processedText || content) {
       void (async () => {
-        let inputOptions = options.spokenOutput ? createSpokenTurnInputOptions() : undefined;
-        if (options.spokenOutput && processedText) {
-          spokenTurns.submitNextTurn(processedText);
-        }
+        const inputOptions = options.spokenOutput ? createSpokenTurnInputOptions() : undefined;
+        if (options.spokenOutput && processedText) { spokenTurns.submitNextTurn(processedText); }
+        // Snapshot pre-submission state for failover retryTurn; also clears visited set.
+        retryCtx = { count: conversation.getMessageCount(), text: processedText, content, opts: inputOptions };
+        streamResult.clearFailoverVisited();
         orchestrator.handleUserInput(processedText, content, inputOptions).catch((err: unknown) => {
           logger.debug('handleUserInput safety catch (already handled by runTurn)', { error: summarizeError(err) });
         });
@@ -689,7 +684,6 @@ async function main() {
     render,
   });
 
-  // --- Turn-completed / git-refresh event wiring ---
   const { refreshGit, unsubs: turnUnsubs } = wireTurnEventHandlers({
     events: uiServices.events,
     conversation,
@@ -709,16 +703,22 @@ async function main() {
   });
   unsubs.push(...turnUnsubs);
 
-  // --- Stream metrics + tool-timer event wiring ---
-  const streamUnsubs = wireStreamEventMetrics({
-    events: uiServices.events,
-    orchestrator,
-    providerRegistry,
-    systemMessageRouter,
-    render,
-    metrics: streamMetrics,
+  // Stable turn context for failover retry — set in submitInput, read by retryTurn.
+  let retryCtx: { count: number; text: string; content?: ContentPart[]; opts?: Parameters<typeof orchestrator.handleUserInput>[2] } | null = null;
+  const streamResult: WireStreamEventMetricsResult = wireStreamEventMetrics({
+    events: uiServices.events, orchestrator, providerRegistry,
+    systemMessageRouter, render, metrics: streamMetrics,
+    providerOptimizer: ctx.services.providerOptimizer,
+    retryTurn: () => {
+      if (!retryCtx) return;
+      const { count, text, content: rContent, opts: rOpts } = retryCtx;
+      // Roll back to pre-submission count (strips error system messages), then
+      // re-submit. SDK gap — no retry-in-place; see HANDOFF item (Issue 2).
+      conversation.removeMessagesAfter(count);
+      orchestrator.handleUserInput(text, rContent, rOpts).catch((e: unknown) => logger.debug('retryTurn', { error: summarizeError(e) }));
+    },
   });
-  unsubs.push(...streamUnsubs);
+  unsubs.push(...streamResult.unsubs);
 
   // --- Terminal setup ---
   stdin.setRawMode(true);

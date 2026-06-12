@@ -1,6 +1,7 @@
 import type { UiRuntimeEvents } from '@/runtime/index.ts';
 import { createStreamStallWatchdog } from './stream-stall-watchdog.ts';
 import { formatUserFacingErrorLine } from './format-user-error.ts';
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 /**
  * Live stream and tool-execution metrics maintained by wireStreamEventMetrics.
@@ -29,9 +30,28 @@ interface StreamOrchestrator {
   readonly streamingOutputTokens: number;
 }
 
-/** Minimal provider surface required for the stream stall watchdog. */
+/** Minimal provider surface required for the stream stall watchdog and failover switching. */
 interface StreamProviderRegistry {
-  getCurrentModel(): { readonly provider: string };
+  getCurrentModel(): { readonly provider: string; readonly registryKey?: string };
+  setCurrentModel(registryKey: string): void;
+}
+
+/**
+ * Minimal fallback-chain node shape returned by ProviderOptimizer.testFallback().
+ * Only the fields consumed by the failover path are declared here.
+ */
+interface FailoverChainNode {
+  readonly position: number;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly capable: boolean;
+}
+
+/** Minimal ProviderOptimizer surface required by the failover path. */
+interface FailoverOptimizer {
+  readonly enabled: boolean;
+  testFallback(profile?: Record<string, unknown>): { readonly chain: readonly FailoverChainNode[] };
+  recordFallbackTransition(from: string, to: string, reason: string): void;
 }
 
 /** Minimal system-message surface required for user-visible notifications. */
@@ -56,6 +76,32 @@ export interface WireStreamEventMetricsOptions {
    * so the render closure can read it without a forward-reference issue.
    */
   readonly metrics: StreamMetrics;
+  /**
+   * When provided and enabled, the optimizer is consulted on TURN_ERROR to
+   * attempt the next viable provider before surfacing the error to the user.
+   * When absent or optimizer.enabled is false, behaviour is identical to the
+   * pre-failover baseline: error surfaces immediately via systemMessageRouter.
+   */
+  readonly providerOptimizer?: FailoverOptimizer;
+  /**
+   * Callback the caller provides to re-submit the last user turn on a
+   * different provider after a successful failover switch.  Called only when
+   * the optimizer is enabled and a viable next provider exists in the chain.
+   */
+  readonly retryTurn?: () => void;
+}
+
+/** Result of wireStreamEventMetrics. */
+export interface WireStreamEventMetricsResult {
+  /** Unsubscribe functions; push into the parent unsubs array for cleanup on exit. */
+  readonly unsubs: ReadonlyArray<() => void>;
+  /**
+   * Clear the per-turn failover visited-provider set.
+   * Call this on every new user submission so the visited set does not bleed
+   * across independent turns (the set is also cleared automatically on
+   * TURN_COMPLETED, but a new submission may arrive before TURN_COMPLETED fires).
+   */
+  readonly clearFailoverVisited: () => void;
 }
 
 /**
@@ -64,8 +110,7 @@ export interface WireStreamEventMetricsOptions {
  * and declares it before render() so both the render closure and the returned
  * event handlers share the same reference.
  *
- * Returns an array of unsubscribe functions; push them into the parent unsubs
- * array so they are cleaned up on exit.
+ * Returns an object with unsubscribe functions and a clearFailoverVisited helper.
  *
  * Responsibilities:
  *   - Track stream start time, delta count, token speed, and TTFT
@@ -75,8 +120,11 @@ export interface WireStreamEventMetricsOptions {
  */
 export function wireStreamEventMetrics(
   options: WireStreamEventMetricsOptions,
-): ReadonlyArray<() => void> {
-  const { events, metrics, orchestrator, providerRegistry, systemMessageRouter, render } = options;
+): WireStreamEventMetricsResult {
+  const {
+    events, metrics, orchestrator, providerRegistry,
+    systemMessageRouter, render, providerOptimizer, retryTurn,
+  } = options;
 
   const unsubs: Array<() => void> = [];
 
@@ -103,8 +151,78 @@ export function wireStreamEventMetrics(
     metrics.tokenSpeed = elapsed > 0 ? tokenCount / elapsed : 0;
   }));
 
+  // Per-turn visited-provider set: tracks providers already attempted this turn
+  // so failover cannot ping-pong between two mutually-failing providers.
+  // True invariant: at most one retry per provider per turn; exhaustion fires
+  // after the chain is consumed.
+  // Cleared on TURN_COMPLETED (see handler below) and on new user submission
+  // (caller clears via clearFailoverVisited(), wired in main.ts).
+  const failoverVisited = new Set<string>();
+
+  unsubs.push(events.turns.on('TURN_COMPLETED', () => {
+    failoverVisited.clear();
+  }));
+
   unsubs.push(events.turns.on('TURN_ERROR', (event) => {
     const errVal: string = event.error;
+
+    // --- Optimizer-gated failover path ---
+    // When the optimizer is present and enabled, attempt to advance to the next
+    // viable provider in the fallback chain before surfacing the error.  When
+    // the optimizer is absent or disabled, behaviour is identical to baseline:
+    // error surfaces immediately.
+    if (providerOptimizer?.enabled && retryTurn) {
+      const fromProvider = providerRegistry.getCurrentModel().provider;
+      // Mark the failing provider as visited so it will never be selected again
+      // in this turn, even if a second TURN_ERROR arrives (e.g. ping-pong).
+      failoverVisited.add(fromProvider);
+      const result = providerOptimizer.testFallback({});
+      // Find the first capable node that is NOT already visited this turn and
+      // is NOT synthetic. Synthetic nodes are skipped permanently by design:
+      // a synthetic model is itself a fallback ladder over real backends, so
+      // failing over INTO one after a real backend already failed is unsound
+      // double-indirection (it can route straight back to the failed provider).
+      const next = result.chain.find(
+        (node) =>
+          node.capable &&
+          !failoverVisited.has(node.providerId) &&
+          node.providerId !== 'synthetic',
+      );
+
+      if (next) {
+        const toRegistryKey = `${next.providerId}:${next.modelId}`;
+        const errorClass = formatUserFacingErrorLine(errVal);
+        try {
+          providerRegistry.setCurrentModel(toRegistryKey);
+        } catch (switchErr) {
+          // Switch failed — fall through to honest error display.
+          logger.debug('failover setCurrentModel failed', { toRegistryKey, error: String(switchErr) });
+          systemMessageRouter.high(`[Error] ${errorClass}`);
+          render();
+          return;
+        }
+        // Record the selected provider as visited before the retry fires so
+        // a subsequent TURN_ERROR from that provider also skips it.
+        failoverVisited.add(next.providerId);
+        providerOptimizer.recordFallbackTransition(fromProvider, next.providerId, errorClass);
+        systemMessageRouter.high(
+          `[Failover] ${fromProvider} -> ${next.providerId} (${errorClass})`,
+        );
+        render();
+        // Re-submit the last user turn on the new provider.
+        retryTurn();
+        return;
+      }
+
+      // Chain exhausted — all capable candidates have been visited or none exist.
+      systemMessageRouter.high(
+        `[Failover] Chain exhausted — no alternative provider available. Original error: ${formatUserFacingErrorLine(errVal)}`,
+      );
+      render();
+      return;
+    }
+
+    // Baseline: optimizer disabled or not wired — surface error immediately.
     const formatted = formatUserFacingErrorLine(errVal);
     systemMessageRouter.high(`[Error] ${formatted}`);
     render();
@@ -140,5 +258,5 @@ export function wireStreamEventMetrics(
     metrics.activeToolName = undefined;
   }));
 
-  return unsubs;
+  return { unsubs, clearFailoverVisited: () => failoverVisited.clear() };
 }
