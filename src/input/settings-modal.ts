@@ -14,23 +14,16 @@
  */
 
 import { type ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
-import { handleConfirmInput } from '../panels/confirm-state.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
 import {
-  getNumericAdjustmentMeta,
-  modelPickerLaunchForKey,
-  roundToPrecision,
-} from './settings-modal-behavior.ts';
-import {
   setSecretBackedSettingValue,
   type SettingsSecretsManager,
 } from './settings-modal-secrets.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
-import type { FlagState } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
 
 import {
@@ -50,16 +43,21 @@ import {
   buildSubscriptionEntries,
   buildNetworkFilteredItems,
   refreshEntryValues,
-  updateEntryForKey,
   searchSettingEntries,
 } from './settings-modal-data.ts';
 import { getSettingLabel } from '../renderer/settings-modal-helpers.ts';
 import {
   applySettingValue,
-  applyFlagState,
-  persistFlagState,
   type SettingAppliedCallback,
 } from './settings-modal-mutations.ts';
+import {
+  activateSelected as _activateSelected,
+  handleSubscriptionLogoutKey as _handleSubscriptionLogoutKey,
+} from './settings-modal-activation.ts';
+import {
+  adjustSelected as _adjustSelected,
+  toggleSelectedFlag as _toggleSelectedFlag,
+} from './settings-modal-adjustment.ts';
 import {
   resetSelected as _resetSelected,
   initiateResetCategory as _initiateResetCategory,
@@ -436,63 +434,21 @@ export class SettingsModal {
    * Toggle boolean or begin cycling enum values, or enter edit mode for string/number.
    */
   activateSelected(): void {
-    if (this.currentCategory === 'mcp') {
-      const entry = this.getSelectedMcp();
-      if (!entry) return;
-      this.editingMode = true;
-      this.editBuffer = entry.trustMode;
-      this.mcpAllowAllConfirmationTarget = null;
-      return;
-    }
-
-    if (this.currentCategory === 'subscriptions') {
-      const entry = this.getSelectedSubscription();
-      if (!entry) return;
-      if (entry.state === 'active' || entry.state === 'pending') {
-        // First press: arm the confirm gate. Subsequent key handling routes
-        // through handleSubscriptionLogoutKey() before normal dispatch.
-        this.subscriptionLogoutConfirmationTarget = entry.provider;
-      }
-      return;
-    }
-
-    const entry = this.getSelected();
-    if (!entry || !this.configManager) return;
-
-    const { setting } = entry;
-
-    // Delegate provider/model picker settings to the model picker UI
-    if (setting.key === 'tts.provider') {
-      this.pendingSettingsPickerAction = 'tts-provider';
-      return;
-    }
-    if (setting.key === 'tts.voice') {
-      this.pendingSettingsPickerAction = 'tts-voice';
-      return;
-    }
-
-    const pickerLaunch = modelPickerLaunchForKey(setting.key);
-    if (pickerLaunch !== null) {
-      if (pickerLaunch.flow === 'providerModel') {
-        this.pendingProviderModelPickerTarget = pickerLaunch.target;
-      } else {
-        this.pendingModelPickerTarget = pickerLaunch.target;
-      }
-      return;
-    }
-
-    if (setting.type === 'boolean') {
-      const newVal = !entry.currentValue;
-      this._setValue(setting.key as ConfigKey, newVal);
-    } else if (setting.type === 'enum' && setting.enumValues) {
-      const idx = setting.enumValues.indexOf(entry.currentValue as string);
-      const nextIdx = (idx + 1) % setting.enumValues.length;
-      this._setValue(setting.key as ConfigKey, setting.enumValues[nextIdx]);
-    } else if (setting.type === 'string' || setting.type === 'number') {
-      // Enter inline edit mode
-      this.editingMode = true;
-      this.editBuffer = String(entry.currentValue ?? '');
-    }
+    _activateSelected({
+      currentCategory: this.currentCategory,
+      configManager: this.configManager,
+      getSelectedMcp: () => this.getSelectedMcp(),
+      getSelectedSubscription: () => this.getSelectedSubscription(),
+      getSelected: () => this.getSelected(),
+      setValue: (key, value) => this._setValue(key, value),
+      setEditingMode: (v) => { this.editingMode = v; },
+      setEditBuffer: (v) => { this.editBuffer = v; },
+      setMcpAllowAllConfirmationTarget: (v) => { this.mcpAllowAllConfirmationTarget = v; },
+      setSubscriptionLogoutConfirmationTarget: (v) => { this.subscriptionLogoutConfirmationTarget = v; },
+      setPendingSettingsPickerAction: (v) => { this.pendingSettingsPickerAction = v; },
+      setPendingModelPickerTarget: (v) => { this.pendingModelPickerTarget = v; },
+      setPendingProviderModelPickerTarget: (v) => { this.pendingProviderModelPickerTarget = v; },
+    });
   }
 
   /**
@@ -505,77 +461,29 @@ export class SettingsModal {
    *   - INACTIVE: no confirm pending   → returns 'inactive' (caller continues)
    */
   handleSubscriptionLogoutKey(key: string): 'confirmed' | 'cancelled' | 'absorbed' | 'inactive' {
-    const target = this.subscriptionLogoutConfirmationTarget;
-    if (!target) return 'inactive';
-    const confirmState = { subject: target, label: target };
-    const result = handleConfirmInput(confirmState, key);
-    if (result === 'confirmed') {
-      this.subscriptionManager?.logout(target);
-      this.subscriptionEntries = buildSubscriptionEntries(this.subscriptionManager, this.serviceRegistry);
-      this.subscriptionLogoutConfirmationTarget = null;
-    } else if (result === 'cancelled') {
-      this.subscriptionLogoutConfirmationTarget = null;
-    }
-    // 'absorbed': confirm remains pending
-    return result;
+    return _handleSubscriptionLogoutKey({
+      subscriptionLogoutConfirmationTarget: this.subscriptionLogoutConfirmationTarget,
+      subscriptionManager: this.subscriptionManager,
+      serviceRegistry: this.serviceRegistry,
+      setSubscriptionEntries: (entries) => { this.subscriptionEntries = entries; },
+      setSubscriptionLogoutConfirmationTarget: (v) => { this.subscriptionLogoutConfirmationTarget = v; },
+    }, key);
   }
 
   adjustSelected(direction: 'left' | 'right', step = 1): void {
-    if (this.editingMode) return;
-
-    if (this.currentCategory === 'flags') {
-      const flagEntry = this.getSelectedFlag();
-      if (!flagEntry || flagEntry.state === 'killed' || !this.featureFlagManager || !this.configManager) return;
-      const targetState: FlagState = direction === 'right' ? 'enabled' : 'disabled';
-      if (flagEntry.state !== targetState) applyFlagState(flagEntry, targetState, this.featureFlagManager, this.configManager);
-      return;
-    }
-
-    if (this.currentCategory === 'mcp') {
-      const entry = this.getSelectedMcp();
-      if (!entry || !this.mcpRegistry) return;
-      const modes: McpEntry['trustMode'][] = ['constrained', 'ask-on-risk', 'allow-all', 'blocked'];
-      const currentIndex = Math.max(0, modes.indexOf(entry.trustMode));
-      const nextIndex = direction === 'right'
-        ? (currentIndex + 1) % modes.length
-        : (currentIndex - 1 + modes.length) % modes.length;
-      this.mcpRegistry.setServerTrustMode(entry.name, modes[nextIndex]!);
-      this.mcpEntries = buildMcpEntries(this.mcpRegistry);
-      this.mcpAllowAllConfirmationTarget = null;
-      return;
-    }
-
-    const entry = this.getSelected();
-    if (!entry || !this.configManager) return;
-    const { setting } = entry;
-
-    if (setting.type === 'boolean') {
-      this._setValue(setting.key as ConfigKey, direction === 'right');
-      return;
-    }
-
-    if (setting.type === 'enum' && setting.enumValues && setting.enumValues.length > 0) {
-      const currentIndex = Math.max(0, setting.enumValues.indexOf(String(entry.currentValue)));
-      const nextIndex = direction === 'right'
-        ? (currentIndex + 1) % setting.enumValues.length
-        : (currentIndex - 1 + setting.enumValues.length) % setting.enumValues.length;
-      this._setValue(setting.key as ConfigKey, setting.enumValues[nextIndex]!);
-      return;
-    }
-
-    if (setting.type === 'number') {
-      const currentNumber = Number(entry.currentValue ?? 0);
-      if (!Number.isFinite(currentNumber)) return;
-      const adjustment = getNumericAdjustmentMeta(setting);
-      const delta = adjustment.step * step;
-      const rounded = roundToPrecision(currentNumber + (direction === 'right' ? delta : -delta), adjustment.precision);
-      const nextValue = Math.min(
-        adjustment.max ?? rounded,
-        Math.max(adjustment.min ?? rounded, rounded),
-      );
-      if (setting.validate && !setting.validate(nextValue)) return;
-      this._setValue(setting.key as ConfigKey, nextValue);
-    }
+    _adjustSelected({
+      editingMode: this.editingMode,
+      currentCategory: this.currentCategory,
+      configManager: this.configManager,
+      featureFlagManager: this.featureFlagManager,
+      mcpRegistry: this.mcpRegistry,
+      getSelectedFlag: () => this.getSelectedFlag(),
+      getSelectedMcp: () => this.getSelectedMcp(),
+      getSelected: () => this.getSelected(),
+      setValue: (key, value) => this._setValue(key, value),
+      setMcpEntries: (entries) => { this.mcpEntries = entries; },
+      setMcpAllowAllConfirmationTarget: (v) => { this.mcpAllowAllConfirmationTarget = v; },
+    }, direction, step);
   }
 
   /**
@@ -585,16 +493,11 @@ export class SettingsModal {
    * only (require restart). runtimeToggleable flags toggle immediately.
    */
   toggleSelectedFlag(): void {
-    const flagEntry = this.getSelectedFlag();
-    if (!flagEntry || !this.featureFlagManager || !this.configManager) return;
-
-    const { state } = flagEntry;
-
-    // Killed flags are blocked
-    if (state === 'killed') return;
-
-    const newState: FlagState = state === 'enabled' ? 'disabled' : 'enabled';
-    applyFlagState(flagEntry, newState, this.featureFlagManager, this.configManager);
+    _toggleSelectedFlag({
+      featureFlagManager: this.featureFlagManager,
+      configManager: this.configManager,
+      getSelectedFlag: () => this.getSelectedFlag(),
+    });
   }
 
   /**
