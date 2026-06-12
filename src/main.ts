@@ -53,9 +53,10 @@ import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
-import { ProjectPlanningCoordinator } from './planning/project-planning-coordinator.ts';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
+import { formatUserFacingErrorLine } from './core/format-user-error.ts';
+import { createStreamStallWatchdog } from './core/stream-stall-watchdog.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -232,7 +233,8 @@ async function main() {
         `[Critical] Multiple errors detected (${_unhandledRejectionCount} in 10s). If the issue persists, please restart. Latest: ${msg}`
       );
     } else {
-      systemMessageRouter.high(`[Error] ${msg}`);
+      const formatted = formatUserFacingErrorLine(reason);
+      systemMessageRouter.high(`[Error] ${formatted}`);
       logger.error('unhandledRejection', { error: String(reason) });
     }
     render();
@@ -279,18 +281,6 @@ async function main() {
     configManager,
     notify: (message) => { systemMessageRouter.high(message); render(); },
   }));
-  const projectPlanningCoordinator = new ProjectPlanningCoordinator({
-    service: ctx.services.projectPlanningService,
-    projectId: ctx.services.projectPlanningProjectId,
-    workingDirectory: workingDir,
-    notify: (message) => { systemMessageRouter.high(message); render(); },
-    openPanel: () => {
-      panelManager.open('project-planning');
-      panelManager.show();
-      render();
-    },
-  });
-
   const submitInput = (text: string, content?: ContentPart[], options: { readonly spokenOutput?: boolean } = {}) => {
     input.clearModalStack();
     scrollLocked = true; // Re-lock on any user input
@@ -326,32 +316,6 @@ async function main() {
     if (processedText || content) {
       void (async () => {
         let inputOptions = options.spokenOutput ? createSpokenTurnInputOptions() : undefined;
-        if (!options.spokenOutput && processedText) {
-          try {
-            const planning = await projectPlanningCoordinator.prepareTurn(processedText);
-            if (planning) {
-              if (planning.handledLocally) {
-                systemMessageRouter.high(planning.statusMessage);
-                render();
-                return;
-              }
-              conversation.addSystemMessage(planning.systemMessage);
-              inputOptions = {
-                origin: {
-                  source: 'project-planning',
-                  surface: 'tui',
-                  metadata: {
-                    projectId: ctx.services.projectPlanningProjectId,
-                    knowledgeSpaceId: planning.state.knowledgeSpaceId,
-                    readiness: planning.evaluation.readiness,
-                  },
-                },
-              };
-            }
-          } catch (err) {
-            systemMessageRouter.high(`[Planning] ${summarizeError(err)}`);
-          }
-        }
         if (options.spokenOutput && processedText) {
           spokenTurns.submitNextTurn(processedText);
         }
@@ -758,6 +722,25 @@ async function main() {
       : streamDeltaCount;
     streamTokenSpeed = elapsed > 0 ? tokenCount / elapsed : 0;
   }));
+  unsubs.push(uiServices.events.turns.on('TURN_ERROR', (event) => {
+    const errVal: string = event.error;
+    const formatted = formatUserFacingErrorLine(errVal);
+    systemMessageRouter.high(`[Error] ${formatted}`);
+    render();
+  }));
+
+  // --- Stream stall watchdog: emit one low hint if STREAM_START has no delta within 30s ---
+  const stallWatchdog = createStreamStallWatchdog({
+    events: uiServices.events.turns,
+    onStall: (providerName) => {
+      systemMessageRouter.low(`Still waiting on ${providerName}… Ctrl+C to cancel`);
+      render();
+    },
+    getProviderName: () => providerRegistry.getCurrentModel().provider,
+    // thresholdMs uses the default 30 000
+  });
+  unsubs.push(() => stallWatchdog.dispose());
+
   unsubs.push(uiServices.events.tools.on('TOOL_EXECUTING', (ev) => {
     activeToolStartedAtMs = ev.startedAt;
     activeToolName = ev.tool;
