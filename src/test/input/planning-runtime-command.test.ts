@@ -6,6 +6,7 @@ import {
   type ProjectPlanningState,
 } from '@pellux/goodvibes-sdk/platform/knowledge';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
+import { KillRing } from '../../input/kill-ring.ts';
 import { registerPlanningRuntimeCommands } from '../../input/commands/planning-runtime.ts';
 import { handlePromptTextToken, handlePromptKeyToken, type KeyRouteState } from '../../input/handler-feed-routes.ts';
 
@@ -123,6 +124,7 @@ describe('submitInput plan-keyword regression (coordinator removed)', () => {
       prompt: '',
       cursorPos: 0,
       commandMode: false,
+      killRing: new KillRing(),
       nextPasteId: 1,
       nextImageId: 1,
       pasteRegistry: new Map<string, string>(),
@@ -134,6 +136,7 @@ describe('submitInput plan-keyword regression (coordinator removed)', () => {
       filePicker: { open: () => {} },
       modalOpened: () => {},
       saveUndoState: () => {},
+      saveUndoStateForText: () => {},
       ensureInputCursorVisible: () => {},
       registerPaste: (content: string) => content,
       requestRender: () => {},
@@ -146,6 +149,7 @@ describe('submitInput plan-keyword regression (coordinator removed)', () => {
     const keyState = {
       prompt: afterText.prompt,
       cursorPos: afterText.cursorPos,
+      killRing: new KillRing(),
       inputScrollTop: 0,
       commandMode: afterText.commandMode,
       contentWidth: 80,
@@ -159,6 +163,7 @@ describe('submitInput plan-keyword regression (coordinator removed)', () => {
       processModal: { open: () => {} },
       modalOpened: () => {},
       saveUndoState: () => {},
+      saveUndoStateForText: () => {},
       ensureInputCursorVisible: () => {},
       getWrappedPromptInfo: () => ({
         wrappedLines: [afterText.prompt],

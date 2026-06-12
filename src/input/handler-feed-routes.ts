@@ -14,6 +14,7 @@ import {
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, registerPaste } from './handler-content-actions.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { KeybindingsManager } from './keybindings.ts';
+import type { KillRing } from './kill-ring.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export type PanelFocusRouteState = {
@@ -184,9 +185,12 @@ export type TextRouteState = {
   filePicker: { open: (insertPos: number, injectMode?: boolean) => void };
   modalOpened: (name: string) => void;
   saveUndoState: () => void;
+  /** Coalescing undo snapshot for plain text insertions. */
+  saveUndoStateForText: () => void;
   ensureInputCursorVisible: () => void;
   registerPaste: (content: string) => string;
   requestRender: () => void;
+  killRing: KillRing;
 };
 
 export function handlePromptTextToken(state: TextRouteState, token: InputToken): {
@@ -210,7 +214,8 @@ export function handlePromptTextToken(state: TextRouteState, token: InputToken):
   if (state.inputHistory?.isBrowsing) {
     state.inputHistory.resetPosition();
   }
-  state.saveUndoState();
+  state.killRing.clearYankState();
+  state.saveUndoStateForText();
   const text = state.registerPaste(token.value);
   let prompt = state.prompt.slice(0, state.cursorPos) + text + state.prompt.slice(state.cursorPos);
   let cursorPos = state.cursorPos + text.length;
@@ -261,6 +266,8 @@ export type KeyRouteState = {
   processModal: { open: () => void };
   modalOpened: (name: string) => void;
   saveUndoState: () => void;
+  /** Break the undo coalescing group (call on cursor moves). */
+  breakUndoCoalesce: () => void;
   ensureInputCursorVisible: (contentWidth?: number) => void;
   getWrappedPromptInfo: (contentWidth: number) => WrappedPromptInfo;
   moveCursorVertical: (direction: -1 | 1) => boolean;
@@ -272,6 +279,7 @@ export type KeyRouteState = {
   scroll: (delta: number) => void;
   exitApp: () => void;
   requestRender: () => void;
+  killRing: KillRing;
 };
 
 export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
@@ -372,6 +380,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
 
   if (token.logicalName === 'backspace') {
     if (cursorPos > 0) {
+      state.killRing.clearYankState();
       state.saveUndoState();
       let marker = state.findMarkerAtPos(cursorPos);
       if (!marker) {
@@ -396,6 +405,7 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
 
   if (token.logicalName === 'delete') {
     if (cursorPos < prompt.length) {
+      state.killRing.clearYankState();
       state.saveUndoState();
       const marker = state.findMarkerAtPos(cursorPos + 1);
       if (marker) {
@@ -417,6 +427,8 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
       cursorPos = marker ? marker.start : cursorPos - 1;
       ensureLocalInputCursorVisible();
     }
+    state.killRing.clearYankState();
+    state.breakUndoCoalesce();
     state.requestRender();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
@@ -427,18 +439,24 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
       cursorPos = marker ? marker.end : cursorPos + 1;
       ensureLocalInputCursorVisible();
     }
+    state.killRing.clearYankState();
+    state.breakUndoCoalesce();
     state.requestRender();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'home') {
     cursorPos = 0;
+    state.killRing.clearYankState();
+    state.breakUndoCoalesce();
     ensureLocalInputCursorVisible();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }
 
   if (token.logicalName === 'end') {
     cursorPos = prompt.length;
+    state.killRing.clearYankState();
+    state.breakUndoCoalesce();
     ensureLocalInputCursorVisible();
     return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
   }

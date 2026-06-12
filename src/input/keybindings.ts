@@ -51,7 +51,13 @@ export type KeyAction =
   | 'undo'
   | 'redo'
   | 'paste'
-  | 'replay-panel';
+  | 'replay-panel'
+  | 'word-back'
+  | 'word-forward'
+  | 'kill-to-start'
+  | 'kill-word-forward'
+  | 'yank'
+  | 'yank-pop';
 
 /** Human-readable description for each action (used in /keybindings display). */
 export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
@@ -72,11 +78,17 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'apply-diff-line-start': 'Apply nearest diff / move to line start',
   'next-error-line-end':   'Navigate to next error / move to line end',
   'kill-line':             'Kill to end of line',
-  'clear-prompt':          'Clear the prompt',
+  'clear-prompt':          'Clear the entire prompt (Alt+U; kill-to-start owns Ctrl+U)',
   'undo':                  'Undo last prompt edit',
   'redo':                  'Redo last undone edit',
   'paste':                 'Paste from clipboard (image priority)',
   'replay-panel':          'Open / close the Replay panel',
+  'word-back':             'Move cursor to start of previous word (Alt+B)',
+  'word-forward':          'Move cursor to end of next word (Alt+F)',
+  'kill-to-start':         'Kill from cursor to start of line into kill ring (Ctrl+U)',
+  'kill-word-forward':     'Kill word forward into kill ring (Alt+D)',
+  'yank':                  'Yank (paste) from kill ring (Ctrl+Shift+Y)',
+  'yank-pop':              'Rotate kill ring and yank next entry (Alt+Y)',
 };
 
 /** Default key bindings for all actions. */
@@ -98,11 +110,29 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'apply-diff-line-start': [{ key: 'a', ctrl: true }],
   'next-error-line-end':   [{ key: 'e', ctrl: true }],
   'kill-line':             [{ key: 'k', ctrl: true }],
-  'clear-prompt':          [{ key: 'u', ctrl: true }],
+  // Alt+U: clear entire prompt. Ctrl+U is owned by kill-to-start (readline
+  // convention). Alt+U is unused by any other default and is representable by
+  // the tokenizer's { key, alt } combo form.
+  'clear-prompt':          [{ key: 'u', alt: true }],
   'undo':                  [{ key: 'z', ctrl: true }],
   'redo':                  [{ key: 'z', ctrl: true, shift: true }],
   'paste':                 [{ key: 'v', ctrl: true }],
   'replay-panel':          [{ key: 'r', ctrl: true, shift: true }],
+  // Word navigation (Alt+B / Alt+F — emacs readline standard)
+  'word-back':             [{ key: 'b', alt: true }],
+  'word-forward':          [{ key: 'f', alt: true }],
+  // Kill-ring operations.
+  // Note: 'kill-line' (Ctrl+K) kills to end; 'kill-to-start' (Ctrl+U) kills to start.
+  // 'clear-prompt' (Alt+U) clears the entire buffer regardless of cursor position.
+  // kill-to-start owns Ctrl+U (readline convention); clear-prompt uses Alt+U.
+  'kill-to-start':         [{ key: 'u', ctrl: true }],
+  // Alt+D: kill word forward (no prior conflict)
+  'kill-word-forward':     [{ key: 'd', alt: true }],
+  // Ctrl+Shift+Y: yank from kill ring.
+  // CONFLICT RESOLVED: Ctrl+Y was 'block-copy'; yank moved to Ctrl+Shift+Y.
+  'yank':                  [{ key: 'y', ctrl: true, shift: true }],
+  // Alt+Y: yank-pop (rotate ring after yank)
+  'yank-pop':              [{ key: 'y', alt: true }],
 };
 
 /** Resolved overrides type: each key can be a single combo or array. */

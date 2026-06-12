@@ -12,6 +12,34 @@ export type WrappedPromptInfo = {
 
 export type UndoState = { prompt: string; cursorPos: number };
 
+// ---------------------------------------------------------------------------
+// Undo coalescing support
+// ---------------------------------------------------------------------------
+
+/** Milliseconds within which consecutive text insertions are merged into one
+ *  undo group. Cursor moves or kill/yank operations always break the group. */
+export const UNDO_COALESCE_MS = 500;
+
+export type EditKind = 'text' | 'kill' | 'yank' | 'other';
+
+/**
+ * shouldCoalesceUndo — returns true when the new edit should be merged into
+ * the most recent undo group rather than creating a new snapshot.
+ *
+ * Coalesces only when:
+ *   - Both the last edit and the incoming edit are plain text insertions
+ *   - The time delta is within UNDO_COALESCE_MS
+ */
+export function shouldCoalesceUndo(
+  lastEditKind: EditKind,
+  incomingKind: EditKind,
+  lastEditMs: number,
+  nowMs: number,
+): boolean {
+  if (lastEditKind !== 'text' || incomingKind !== 'text') return false;
+  return (nowMs - lastEditMs) < UNDO_COALESCE_MS;
+}
+
 export function wordWrapLine(line: string, maxW: number): string[] {
   if (maxW <= 0) return [line];
   if (line.length === 0) return [''];

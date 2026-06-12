@@ -234,3 +234,34 @@ describe('getComboLabel()', () => {
 });
 
 // Singleton accessors removed; tests now exercise explicit manager instances only.
+
+// ---------------------------------------------------------------------------
+// Defaults-collision lint: no two actions share a default chord
+// ---------------------------------------------------------------------------
+
+describe('defaults collision lint', () => {
+  it('no two actions share the same default key chord', () => {
+    // Build the inverted map: chord -> [actions]
+    const chordToActions = new Map<string, string[]>();
+    for (const [action, combos] of Object.entries(DEFAULT_KEYBINDINGS) as [KeyAction, KeyCombo[]][]) {
+      for (const combo of combos) {
+        const key = `${combo.key}:${combo.ctrl ? 1 : 0}:${combo.shift ? 1 : 0}:${combo.alt ? 1 : 0}`;
+        const existing = chordToActions.get(key);
+        if (existing) {
+          existing.push(action);
+        } else {
+          chordToActions.set(key, [action]);
+        }
+      }
+    }
+
+    // Collect all conflicts for a useful failure message
+    const conflicts: string[] = [];
+    for (const [chord, actions] of chordToActions) {
+      if (actions.length > 1) {
+        conflicts.push(`Chord ${chord} is bound to multiple actions: ${actions.join(', ')}`);
+      }
+    }
+    expect(conflicts).toEqual([]);
+  });
+});

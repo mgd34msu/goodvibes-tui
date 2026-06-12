@@ -76,10 +76,12 @@ import {
   moveCursorVertical,
   redoPromptState,
   saveUndoState,
+  shouldCoalesceUndo,
   undoPromptState,
   wordWrapLine,
   type WrappedPromptInfo,
 } from './handler-prompt-buffer.ts';
+import { KillRing } from './kill-ring.ts';
 import { clearModalStack, handleEscape, modalOpened } from './handler-modal-stack.ts';
 import { handleModalTokenRoutes } from './handler-modal-token-routes.ts';
 import {
@@ -198,7 +200,15 @@ export class InputHandler implements InputHandlerLike {
   // ── Undo / Redo ────────────────────────────────────────────────────────────
   public undoStack: Array<{ prompt: string; cursorPos: number }> = [];
   public redoStack: Array<{ prompt: string; cursorPos: number }> = [];
-  public static readonly MAX_UNDO = 50;
+  /** Maximum undo groups retained. Oldest are evicted when the limit is hit. */
+  public static readonly MAX_UNDO = 100;
+  /** Timestamp (Date.now()) of the last saveUndoState call, used for coalescing. */
+  public lastUndoMs = 0;
+  /** Edit kind of the last saveUndoState call, used for coalescing. */
+  public lastUndoKind: import('./handler-prompt-buffer.ts').EditKind = 'other';
+
+  // ── Kill ring ───────────────────────────────────────────────────────────────
+  public killRing = new KillRing();
 
   // ── Path completion (Tab on path-like token) ───────────────────────────────
   /** Current list of path completions cycling on repeated Tab presses. */
@@ -301,6 +311,7 @@ export class InputHandler implements InputHandlerLike {
         conversationManager: this.conversationManager,
         panelManager: this.uiServices.shell.panelManager,
         keybindingsManager: this.uiServices.shell.keybindingsManager,
+        killRing: this.killRing,
         getHistory: this.getHistory,
         getViewportHeight: this.getViewportHeight,
         getScrollTop: this.getScrollTop,
@@ -320,6 +331,8 @@ export class InputHandler implements InputHandlerLike {
         handleRedo: () => { this.handleRedo(); this.syncFeedContextMutableFields(); },
         handlePaste: () => { this.handlePaste(); this.syncFeedContextMutableFields(); },
         saveUndoState: () => this.saveUndoState(),
+        saveUndoStateForText: () => this.saveUndoStateForText(),
+        breakUndoCoalesce: () => { this.lastUndoKind = 'other'; },
         ensureInputCursorVisible: (contentWidth?: number) => this.ensureInputCursorVisible(contentWidth),
         registerPaste: (content: string) => this.registerPaste(content),
         executeBlockAction: (id: string) => this.executeBlockAction(id),
@@ -612,11 +625,34 @@ export class InputHandler implements InputHandlerLike {
   // ── Undo / Redo methods ─────────────────────────────────────────────────
 
   /**
-   * saveUndoState - Snapshot current prompt + cursor onto the undo stack.
-   * Clears the redo stack because a new edit invalidates future states.
+   * saveUndoState - Unconditionally snapshot current prompt + cursor onto the
+   * undo stack (kill, yank, delete, or other non-text edits). Clears redo stack.
    */
   public saveUndoState(): void {
     saveUndoState(this.undoStack, this.redoStack, this.prompt, this.cursorPos, InputHandler.MAX_UNDO);
+    this.lastUndoMs = Date.now();
+    this.lastUndoKind = 'other';
+  }
+
+  /**
+   * saveUndoStateForText - Snapshot with coalescing for plain text insertions.
+   * Consecutive text edits within UNDO_COALESCE_MS are merged into one group
+   * (the snapshot is skipped; the group absorbs the characters typed in the
+   * burst). Cursor moves, kill, and yank operations break the group.
+   *
+   * Call this instead of saveUndoState() from the text-insertion path only.
+   */
+  public saveUndoStateForText(): void {
+    const now = Date.now();
+    if (shouldCoalesceUndo(this.lastUndoKind, 'text', this.lastUndoMs, now)) {
+      // Coalesce: skip the snapshot but update the timestamp so the window
+      // keeps sliding until the burst ends.
+      this.lastUndoMs = now;
+      return;
+    }
+    saveUndoState(this.undoStack, this.redoStack, this.prompt, this.cursorPos, InputHandler.MAX_UNDO);
+    this.lastUndoMs = now;
+    this.lastUndoKind = 'text';
   }
 
   /**

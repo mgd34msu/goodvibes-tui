@@ -3,6 +3,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CommandRegistry } from '../../input/command-registry.ts';
+import { KillRing } from '../../input/kill-ring.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { handleCommandModeToken } from '../../input/handler-command-route.ts';
@@ -114,6 +115,7 @@ describe('command modal handoff', () => {
       shortcutsScrollOffset: 0,
       requestRender: () => {},
       saveUndoState: () => {},
+      saveUndoStateForText: () => {},
       cancelGeneration: undefined,
       selectionCallback: null,
       bookmarkModal: { active: false, close: () => {} } as never,
@@ -158,6 +160,7 @@ describe('command modal handoff', () => {
       shortcutsScrollOffset: 0,
       requestRender: () => {},
       saveUndoState: () => {},
+      saveUndoStateForText: () => {},
       cancelGeneration: undefined,
       selectionCallback: null,
       bookmarkModal: { active: false, close: () => {} } as never,
@@ -282,6 +285,7 @@ describe('command modal handoff', () => {
       nextPasteId: 1,
       nextImageId: 1,
       saveUndoState: () => {},
+      saveUndoStateForText: () => {},
       ensureInputCursorVisible: () => {},
       clipboard: {
         pasteImageFromClipboard: () => ({ mediaType: 'image/png', data: 'iVBORw0KGgo' + 'A'.repeat(200) }),
@@ -357,6 +361,7 @@ describe('command modal handoff', () => {
       shortcutsScrollOffset: 0,
       requestRender: () => {},
       saveUndoState: () => {},
+      saveUndoStateForText: () => {},
       cancelGeneration: undefined,
       selectionCallback: null,
       bookmarkModal: { active: false, close: () => {} } as never,
@@ -380,6 +385,7 @@ describe('command modal handoff', () => {
       prompt: escaped.prompt,
       cursorPos: escaped.cursorPos,
       commandMode: escaped.commandMode,
+      killRing: new KillRing(),
       nextPasteId: 1,
       nextImageId: 1,
       pasteRegistry: new Map(),
@@ -391,6 +397,7 @@ describe('command modal handoff', () => {
       filePicker: { open: () => {} },
       modalOpened: () => { throw new Error('slash menu should not reopen while typing normal text'); },
       saveUndoState: () => {},
+      saveUndoStateForText: () => {},
       ensureInputCursorVisible: () => {},
       registerPaste: (content: string) => content,
       requestRender: () => {},
