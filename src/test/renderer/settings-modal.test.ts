@@ -265,4 +265,48 @@ describe('renderSettingsModal', () => {
       expect(line.length).toBe(narrowW);
     }
   });
+
+  test('footer shows both reset affordances at W=120 in compact form', () => {
+    // Navigate to settings category (has Setting entries, not flags/mcp/subscriptions)
+    while (modal.currentCategory !== 'display') modal.nextCategory();
+    modal.focusPane = 'settings';
+    // W=120 must render both reset affordances in compact form.
+    const lines = renderSettingsModal(modal, W);
+    const footer = lineToString(lines[lines.length - 2]);
+    expect(footer).toContain('⇧R reset cat');
+    expect(footer).toContain('^⇧R reset all');
+  });
+
+  test('footer degrades gracefully at W=80 with at least R reset', () => {
+    while (modal.currentCategory !== 'display') modal.nextCategory();
+    modal.focusPane = 'settings';
+    const lines = renderSettingsModal(modal, 80);
+    const footer = lineToString(lines[lines.length - 2]);
+    expect(footer).toContain('R reset');
+  });
+
+  test('footer shows confirm prompt when resetCategoryConfirm is armed', () => {
+    while (modal.currentCategory !== 'display') modal.nextCategory();
+    modal.initiateResetCategory();
+    expect(modal.resetCategoryConfirm).not.toBeNull();
+    // Armed footer is short; W=120 is sufficient.
+    const lines = renderSettingsModal(modal, W);
+    const footer = lineToString(lines[lines.length - 2]);
+    expect(footer).toContain('Enter/y confirm');
+    expect(footer).toContain('Esc/n cancel');
+    // Cleanup
+    modal.resetCategoryConfirm = null;
+  });
+
+  test('footer shows confirm prompt when resetAllConfirm is armed', () => {
+    modal.initiateResetAll();
+    expect(modal.resetAllConfirm).not.toBeNull();
+    // Armed footer is short; W=120 is sufficient.
+    const lines = renderSettingsModal(modal, W);
+    const footer = lineToString(lines[lines.length - 2]);
+    expect(footer).toContain('Enter/y confirm');
+    expect(footer).toContain('Esc/n cancel');
+    // Cleanup
+    modal.resetAllConfirm = null;
+  });
 });

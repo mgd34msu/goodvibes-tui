@@ -19,7 +19,7 @@ import type { ModelPickerTarget } from './model-picker.ts';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
-import { buildGoodVibesSecretKey, isSecretConfigKey } from '../config/secret-config.ts';
+import { isSecretConfigKey } from '../config/secret-config.ts';
 import {
   getNumericAdjustmentMeta,
   modelPickerLaunchForKey,
@@ -32,7 +32,7 @@ import {
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { FlagState } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
-import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+
 import {
   SETTINGS_CATEGORIES,
   SETTINGS_CATEGORY_GROUPS,
@@ -60,6 +60,13 @@ import {
   persistFlagState,
   type SettingAppliedCallback,
 } from './settings-modal-mutations.ts';
+import {
+  resetSelected as _resetSelected,
+  initiateResetCategory as _initiateResetCategory,
+  initiateResetAll as _initiateResetAll,
+  handleResetConfirmKey as _handleResetConfirmKey,
+  type ResetConfirmKeyResult,
+} from './settings-modal-reset.ts';
 
 export interface SettingsModalChange {
   readonly key: ConfigKey;
@@ -679,69 +686,47 @@ export class SettingsModal {
   }
 
   resetSelected(): { key: ConfigKey; value: unknown } | null {
-    if (this.editingMode || !this.configManager) return null;
-    const entry = this.getSelected();
-    if (!entry) return null;
-    const key = entry.setting.key as ConfigKey;
-    this._setValue(key, entry.setting.default);
-    if (isSecretConfigKey(key) && this.secretsManager) {
-      void this.secretsManager.delete(buildGoodVibesSecretKey(key), { scope: 'user' }).catch((error) => {
-        logger.error('SettingsModal: failed to clear secret while resetting setting', { key, error: summarizeError(error) });
-      });
-    }
-    return { key, value: entry.setting.default };
+    return _resetSelected({
+      editingMode: this.editingMode,
+      hasConfigManager: this.configManager !== null,
+      selected: this.getSelected(),
+      secretsManager: this.secretsManager,
+      setValue: (key, value) => this._setValue(key, value),
+    });
   }
 
   /** Arm a category-reset confirmation gate for the current category. */
   initiateResetCategory(): void {
-    if (!this.configManager) return;
-    this.resetCategoryConfirm = { subject: this.currentCategory };
-    this.resetAllConfirm = null;
+    _initiateResetCategory({
+      hasConfigManager: this.configManager !== null,
+      currentCategory: this.currentCategory,
+      setResetCategoryConfirm: (v) => { this.resetCategoryConfirm = v; },
+      setResetAllConfirm: (v) => { this.resetAllConfirm = v; },
+    });
   }
 
   /** Arm a reset-all confirmation gate. */
   initiateResetAll(): void {
-    if (!this.configManager) return;
-    this.resetAllConfirm = { subject: 'all' };
-    this.resetCategoryConfirm = null;
+    _initiateResetAll({
+      hasConfigManager: this.configManager !== null,
+      setResetCategoryConfirm: (v) => { this.resetCategoryConfirm = v; },
+      setResetAllConfirm: (v) => { this.resetAllConfirm = v; },
+    });
   }
 
-  /**
-   * Route a key through the active reset confirm gate.
-   * Returns 'confirmed', 'cancelled', 'absorbed', or 'inactive'.
-   */
-  handleResetConfirmKey(key: string): 'confirmed' | 'cancelled' | 'absorbed' | 'inactive' {
-    const gate = this.resetCategoryConfirm ?? this.resetAllConfirm;
-    if (!gate || !this.configManager) return 'inactive';
-
-    if (key === 'enter' || key === 'y') {
-      if (this.resetCategoryConfirm) {
-        // Reset all settings in the current category to defaults.
-        const items = this._currentItems();
-        for (const item of items) {
-          this._setValue(item.setting.key as ConfigKey, item.setting.default);
-        }
-        this.resetCategoryConfirm = null;
-      } else {
-        // Reset ALL settings across all categories to defaults.
-        for (const [, items] of this.groups) {
-          for (const item of items) {
-            this._setValue(item.setting.key as ConfigKey, item.setting.default);
-          }
-        }
-        this.resetAllConfirm = null;
-      }
-      return 'confirmed';
-    }
-
-    if (key === 'escape' || key === 'n') {
-      this.resetCategoryConfirm = null;
-      this.resetAllConfirm = null;
-      return 'cancelled';
-    }
-
-    // All other keys are absorbed while the gate is active.
-    return 'absorbed';
+  /** Route a key through the active reset confirm gate. See ResetConfirmKeyResult for the return contract. */
+  handleResetConfirmKey(key: string): ResetConfirmKeyResult {
+    return _handleResetConfirmKey({
+      key,
+      resetCategoryConfirm: this.resetCategoryConfirm,
+      resetAllConfirm: this.resetAllConfirm,
+      hasConfigManager: this.configManager !== null,
+      currentItems: () => this._currentItems(),
+      groups: this.groups,
+      setValue: (k, value) => this._setValue(k, value),
+      setResetCategoryConfirm: (v) => { this.resetCategoryConfirm = v; },
+      setResetAllConfirm: (v) => { this.resetAllConfirm = v; },
+    });
   }
 
   /** Handle a keystroke in edit mode: regular chars appended, Backspace removes last char. */

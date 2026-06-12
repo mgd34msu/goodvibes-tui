@@ -539,14 +539,25 @@ function rowColorForSetting(modal: SettingsModal, rowText: string): string {
   return valueColor(selected);
 }
 
-function footerText(modal: SettingsModal): string {
+function footerText(modal: SettingsModal, width: number): string {
+  // Armed reset gate takes priority over all other footer states.
+  if (modal.resetCategoryConfirm !== null || modal.resetAllConfirm !== null)
+    return 'Reset armed · Enter/y confirm · Esc/n cancel';
   if (modal.searchFocused) return 'Search · type to filter · Up/Down navigate results · Enter select · Esc exit search';
   if (modal.editingMode) return 'Enter Confirm edit · Esc Cancel edit · text keys edit the selected field';
   if (modal.focusPane === 'categories') return 'Focus categories · Up/Down choose · Right/Enter settings · Tab pane · / search · Esc close';
   if (modal.currentCategory === 'subscriptions') return 'Focus settings · Up/Down provider · Left categories · Tab pane · / search · Enter review/sign out · Esc close';
   if (modal.currentCategory === 'mcp') return 'Focus settings · Up/Down server · Left categories · Tab pane · / search · Enter edit trust · Esc close';
   if (modal.currentCategory === 'flags') return 'Focus feature flags · Up/Down flag · Left categories · Tab pane · / search · Enter/Space toggle · Esc close';
-  return 'Focus settings · Up/Down setting · Left categories · Tab pane · / search · Enter/Space edit/toggle · R reset · Esc close';
+  // Default settings pane: tier the reset affordances by available width.
+  // W<80:  minimal — only the most critical action survives.
+  // W<160: compact but still shows both reset affordances.
+  // W≥160: standard with all navigation tokens.
+  if (width < 80)
+    return 'R reset · Esc';
+  if (width < 160)
+    return 'Up/Down · Enter/Space edit · ⇧R reset cat · ^⇧R reset all · Esc';
+  return 'Focus settings · Up/Down setting · Left · Enter/Space edit/toggle · ⇧R reset cat · ^⇧R reset all · Esc close';
 }
 
 export function renderSettingsModal(
@@ -601,6 +612,6 @@ export function renderSettingsModal(
     })),
     contextRows,
     controlRows,
-    footer: footerText(modal),
+    footer: footerText(modal, width),
   });
 }

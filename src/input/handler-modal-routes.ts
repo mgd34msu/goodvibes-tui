@@ -252,7 +252,13 @@ type SettingsRouteState = {
     resetSelected?: () => { key: string; value: unknown } | null;
     initiateResetCategory?: () => void;
     initiateResetAll?: () => void;
-    handleResetConfirmKey?: (key: string) => 'confirmed' | 'cancelled' | 'absorbed' | 'inactive';
+    handleResetConfirmKey?: (
+      key: string,
+    ) =>
+      | { result: 'confirmed'; entries: ReadonlyArray<{ key: string; value: unknown }> }
+      | 'cancelled'
+      | 'absorbed'
+      | 'inactive';
   };
   commandContext?: CommandContext;
   /** Called when the settings modal requests the model picker for a non-main target. */
@@ -326,6 +332,13 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
         : '';
     const resetResult = state.settingsModal.handleResetConfirmKey(key);
     if (resetResult !== 'inactive') {
+      if (typeof resetResult === 'object' && resetResult.result === 'confirmed') {
+        // Sync runtime for every reset entry so provider.model / reasoningEffort
+        // stay consistent with the live session without requiring a restart.
+        for (const entry of resetResult.entries) {
+          syncRuntimeAfterSettingReset(state.commandContext, entry.key, entry.value);
+        }
+      }
       state.requestRender();
       return true;
     }
