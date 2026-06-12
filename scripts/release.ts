@@ -14,17 +14,25 @@ import { execSync } from 'child_process';
  *   bun run scripts/release.ts --dry-run    # preview without writing
  *
  * What it does:
- *   1. Pre-release validation (typecheck + build)
+ *   1. Pre-release validation (typecheck + build + full gate suite)
  *   2. Bump patch version in package.json
  *   3. Update package.json on disk
  *   4. Update src/version.ts fallback via prebuild script
  *   5. Prepend new section to CHANGELOG.md
  *   6. Stage changes, commit, create annotated git tag
+ *
+ * Flags:
+ *   --dry-run        Preview without writing
+ *   --skip-validation  Skip typecheck + build (legacy compat)
+ *   --skip-gates     Skip full gate suite (loud warning printed; escape hatch only)
+ *   --minor          Minor version bump
+ *   --major          Major version bump
  */
 
 const args = process.argv.slice(2);
 const DRY_RUN = args.includes('--dry-run');
 const SKIP_VALIDATION = args.includes('--skip-validation');
+const SKIP_GATES = args.includes('--skip-gates');
 const bumpMode = args.includes('--major')
   ? 'major'
   : args.includes('--minor')
@@ -108,19 +116,54 @@ if (DRY_RUN) console.log('(dry-run mode — no files will be written)\n');
 // --- Pre-release validation ---
 
 if (!SKIP_VALIDATION) {
-  console.log('\n[1/6] Running typecheck...');
+  console.log('\n[1/10] Running typecheck...');
   run('bunx tsc --noEmit');
 
-  console.log('\n[2/6] Running build...');
+  console.log('\n[2/10] Running build...');
   run('bun run build');
 } else {
-  console.log('\n[1/6] Skipping validation (--skip-validation)');
-  console.log('[2/6] Skipping build (--skip-validation)');
+  console.log('\n[1/10] Skipping validation (--skip-validation)');
+  console.log('[2/10] Skipping build (--skip-validation)');
+}
+
+// --- Full gate suite (mirrors what CI demands before merging) ---
+//
+// A tag must never be cuttable from a tree that has not passed every gate
+// CI requires. --skip-gates is an escape hatch for emergencies only.
+
+if (!SKIP_GATES) {
+  console.log('\n[3/10] Running tests...');
+  run('bun run test');
+
+  console.log('\n[4/10] Running architecture check...');
+  run('bun run architecture:check');
+
+  console.log('\n[5/10] Running performance check...');
+  run('bun run perf:check');
+
+  console.log('\n[6/10] Running eval gate...');
+  run('bun run eval:gate');
+} else {
+  console.warn(
+    '\n' +
+    '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n' +
+    '!! WARNING: --skip-gates is active.                             !!\n' +
+    '!! The full gate suite (tests, architecture, perf, eval) was    !!\n' +
+    '!! NOT run. You are tagging a release that has NOT been         !!\n' +
+    '!! validated to the same standard CI requires. This tag may     !!\n' +
+    '!! produce a broken release. Only proceed if you are certain    !!\n' +
+    '!! CI has already validated this exact commit.                  !!\n' +
+    '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
+  );
+  console.log('[3/10] Skipping tests (--skip-gates)');
+  console.log('[4/10] Skipping architecture check (--skip-gates)');
+  console.log('[5/10] Skipping performance check (--skip-gates)');
+  console.log('[6/10] Skipping eval gate (--skip-gates)');
 }
 
 // --- Bump package.json ---
 
-console.log(`\n[3/6] Updating package.json: ${current} → ${next}`);
+console.log(`\n[7/10] Updating package.json: ${current} → ${next}`);
 if (!DRY_RUN) {
   pkg.version = next;
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
@@ -128,12 +171,12 @@ if (!DRY_RUN) {
 
 // --- Update src/version.ts via prebuild script ---
 
-console.log('\n[4/6] Syncing src/version.ts via prebuild...');
+console.log('\n[8/10] Syncing src/version.ts via prebuild...');
 run('bun run scripts/prebuild.ts');
 
 // --- Update CHANGELOG.md ---
 
-console.log('\n[5/6] Updating CHANGELOG.md...');
+console.log('\n[9/10] Updating CHANGELOG.md...');
 
 const changelogPath = join(root, 'CHANGELOG.md');
 const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -180,7 +223,7 @@ if (!DRY_RUN) {
 
 // --- Git commit + tag ---
 
-console.log(`\n[6/6] Creating git commit and tag v${next}...`);
+console.log(`\n[10/10] Creating git commit and tag v${next}...`);
 
 const tag = `v${next}`;
 const commitMsg = `chore: release ${tag}`;
