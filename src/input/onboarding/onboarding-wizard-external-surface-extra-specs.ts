@@ -1,4 +1,4 @@
-import type { ExternalSurfaceSpec } from './onboarding-wizard-external-surfaces.ts';
+import type { ExternalSurfaceSpec } from './onboarding-wizard-types.ts';
 
 export const WEBHOOK_SURFACE_SPEC: ExternalSurfaceSpec = {
   id: 'webhook',

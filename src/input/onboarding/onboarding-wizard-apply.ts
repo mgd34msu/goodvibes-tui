@@ -16,9 +16,9 @@ import {
   isExternalSurfaceSelectedByDefault,
 } from './onboarding-wizard-external-surfaces.ts';
 import { buildGoodVibesSecretKey, buildGoodVibesSecretRef, isLoopbackAddress, isSecretReferenceValue } from './onboarding-wizard-helpers.ts';
-import type { OnboardingWizardController } from './onboarding-wizard.ts';
+import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 
-export function buildOnboardingApplyRequest(controller: OnboardingWizardController): OnboardingApplyRequest {
+export function buildOnboardingApplyRequest(controller: OnboardingWizardControllerLike): OnboardingApplyRequest {
     const operations: OnboardingApplyOperation[] = [];
     const hasServers = controller.hasServerCapabilitiesSelected();
     const browserAccess = controller.shouldEnableBrowserSurface();
@@ -178,7 +178,7 @@ export function buildOnboardingApplyRequest(controller: OnboardingWizardControll
   }
 
 function addCloudflareOperations(
-  controller: OnboardingWizardController,
+  controller: OnboardingWizardControllerLike,
   operations: OnboardingApplyOperation[],
   setSecret: (key: string, value: string) => void,
 ): void {
@@ -251,7 +251,7 @@ function addCloudflareOperations(
   }
 
 export function addNetworkOperations(
-  controller: OnboardingWizardController,
+  controller: OnboardingWizardControllerLike,
     operations: OnboardingApplyOperation[],
     customNetwork: boolean,
     enabled: {

@@ -8,36 +8,9 @@ import { DEFAULT_CONFIG, type ConfigKey } from '../../config/index.ts';
 import type { OnboardingSnapshotState } from '../../runtime/onboarding/index.ts';
 import { TELEGRAM_MODE_OPTIONS, WHATSAPP_PROVIDER_OPTIONS } from './onboarding-wizard-constants.ts';
 import { HOME_ASSISTANT_SURFACE_SPEC, WEBHOOK_SURFACE_SPEC } from './onboarding-wizard-external-surface-extra-specs.ts';
-import type { OnboardingWizardRadioOption } from './onboarding-wizard-types.ts';
+import type { ExternalSurfaceSetupFieldSpec, ExternalSurfaceSpec, OnboardingWizardRadioOption } from './onboarding-wizard-types.ts';
 
-export interface ExternalSurfaceSetupFieldSpec {
-  readonly id: string;
-  readonly configKey: ConfigKey;
-  readonly kind: 'text' | 'masked' | 'radio';
-  readonly valueType?: 'string' | 'number';
-  readonly label: string;
-  readonly hint: string;
-  readonly placeholder: string;
-  readonly options?: readonly OnboardingWizardRadioOption[];
-  readonly defaultNumber?: number;
-  readonly min?: number;
-  readonly max?: number;
-  readonly defaultValue: (snapshot: OnboardingSnapshotState | null) => string;
-}
-
-export interface ExternalSurfaceSpec {
-  readonly id: string;
-  readonly enabledFieldId: string;
-  readonly enabledConfigKey: ConfigKey;
-  readonly label: string;
-  readonly hint: string;
-  /**
-   * Existing SDK config key. In onboarding this maps to the per-surface
-   * auto-start choice, not to whether setup fields are shown.
-   */
-  readonly defaultEnabled: (snapshot: OnboardingSnapshotState | null) => boolean;
-  readonly fields: readonly ExternalSurfaceSetupFieldSpec[];
-}
+export type { ExternalSurfaceSetupFieldSpec, ExternalSurfaceSpec };
 
 function normalizeConfigValue(value: unknown): string {
   if (value === null || value === undefined) return '';

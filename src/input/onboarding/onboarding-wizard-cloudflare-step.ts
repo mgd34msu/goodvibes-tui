@@ -1,6 +1,6 @@
 import { CLOUDFLARE_COMPONENT_IDS, DEFAULT_CLOUDFLARE_COMPONENT_SELECTION } from '../../runtime/cloudflare-control-plane.ts';
 import { normalizeText } from './onboarding-wizard-helpers.ts';
-import type { OnboardingWizardController } from './onboarding-wizard.ts';
+import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 import type { OnboardingWizardFieldDefinition, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
 import {
   CLOUDFLARE_BATCH_MODE_OPTIONS,
@@ -14,7 +14,7 @@ import {
   getCloudflareSetupSource,
 } from './onboarding-wizard-cloudflare.ts';
 
-export function buildCloudflareStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildCloudflareStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
   const config = controller.runtimeSnapshot?.config.cloudflare;
   const batch = controller.runtimeSnapshot?.config.batch;
   const enabledDefault = controller.isCapabilitySelected('cloudflare-batch') || config?.enabled === true;

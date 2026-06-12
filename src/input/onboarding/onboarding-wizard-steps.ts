@@ -9,10 +9,10 @@ import {
   type ExternalSurfaceSpec,
 } from './onboarding-wizard-external-surfaces.ts';
 import { countSelected, modelSelectionLabel, normalizeText } from './onboarding-wizard-helpers.ts';
-import type { OnboardingWizardController } from './onboarding-wizard.ts';
+import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 import type { OnboardingWizardAcknowledgementFieldDefinition, OnboardingWizardActionFieldDefinition, OnboardingWizardChecklistFieldDefinition, OnboardingWizardExternalSurfaceStepId, OnboardingWizardFieldDefinition, OnboardingWizardModelPickerFieldDefinition, OnboardingWizardRadioFieldDefinition, OnboardingWizardRadioOption, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
 
-export function buildOnboardingWizardSteps(controller: OnboardingWizardController): readonly OnboardingWizardStepDefinition[] {
+export function buildOnboardingWizardSteps(controller: OnboardingWizardControllerLike): readonly OnboardingWizardStepDefinition[] {
   if (controller.hydrationPending || controller.hydrationError !== null) return [buildLoadingStep(controller)];
 
   const capabilities = controller.getCapabilitySelectionState();
@@ -66,7 +66,7 @@ function addApplyAndContinueAction(step: OnboardingWizardStepDefinition): Onboar
     };
   }
 
-export function buildLoadingStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildLoadingStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const failed = controller.hydrationError !== null;
     return {
       id: 'loading',
@@ -98,7 +98,7 @@ export function buildLoadingStep(controller: OnboardingWizardController): Onboar
     };
   }
 
-export function buildCapabilitiesStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildCapabilitiesStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const capabilities = controller.getCapabilitySelectionState();
     const selectedCount = countSelected(capabilities);
     const fields: OnboardingWizardFieldDefinition[] = [
@@ -145,7 +145,7 @@ export function buildCapabilitiesStep(controller: OnboardingWizardController): O
     };
   }
 
-export function buildProvidersStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildProvidersStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const providerAck = controller.runtimeDerived.reopenEditAcknowledgements.providers;
     const activeSubscriptions = controller.runtimeSnapshot?.subscriptions.active ?? [];
     const pendingSubscriptions = controller.runtimeSnapshot?.subscriptions.pending ?? [];
@@ -250,11 +250,11 @@ export function buildProvidersStep(controller: OnboardingWizardController): Onbo
     };
   }
 
-export function buildProviderAccessStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildProviderAccessStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     return buildProvidersStep(controller);
   }
 
-export function buildDefaultModelStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildDefaultModelStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const routing = controller.runtimeSnapshot?.providerRouting;
     const primarySelectionField: OnboardingWizardModelPickerFieldDefinition = {
       kind: 'modelPicker',
@@ -294,7 +294,7 @@ export function buildDefaultModelStep(controller: OnboardingWizardController): O
     };
   }
 
-export function buildExternalServicesStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildExternalServicesStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const selectedCount = EXTERNAL_SURFACE_SPECS
       .filter((surface) => controller.getBooleanFieldValue(
         surface.enabledFieldId,
@@ -355,7 +355,7 @@ export function buildExternalServicesStep(controller: OnboardingWizardController
     };
   }
 
-function getSelectedExternalSurfaceSpecs(controller: OnboardingWizardController): readonly ExternalSurfaceSpec[] {
+function getSelectedExternalSurfaceSpecs(controller: OnboardingWizardControllerLike): readonly ExternalSurfaceSpec[] {
     return EXTERNAL_SURFACE_SPECS.filter((surface) => (
       controller.getBooleanFieldValue(
         surface.enabledFieldId,
@@ -378,7 +378,7 @@ const SURFACE_AUTO_START_OPTIONS: readonly OnboardingWizardRadioOption[] = [
 ];
 
 function buildExternalSurfaceStep(
-  controller: OnboardingWizardController,
+  controller: OnboardingWizardControllerLike,
   surface: ExternalSurfaceSpec,
 ): OnboardingWizardStepDefinition {
     let setupCount = 0;
@@ -461,7 +461,7 @@ function buildExternalSurfaceStep(
     };
   }
 
-export function buildAccessStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildAccessStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const step = buildAccountsStep(controller);
     return {
       ...step,
@@ -471,7 +471,7 @@ export function buildAccessStep(controller: OnboardingWizardController): Onboard
     };
   }
 
-export function buildExperienceStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildExperienceStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     return {
       id: 'experience',
       title: 'Shell experience',
@@ -512,7 +512,7 @@ export function buildExperienceStep(controller: OnboardingWizardController): Onb
     };
   }
 
-export function buildNetworkStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildNetworkStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const bindSettings = controller.runtimeSnapshot?.bindSettings;
     const browserEnabled = controller.shouldEnableBrowserSurface();
     const listenerEnabled = controller.shouldExposeHttpListenerNetworkFields();
@@ -636,7 +636,7 @@ export function buildNetworkStep(controller: OnboardingWizardController): Onboar
     };
   }
 
-export function buildAccountsStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildAccountsStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const subscriptionsAck = controller.runtimeDerived.reopenEditAcknowledgements.subscriptions;
     const authAck = controller.runtimeDerived.reopenEditAcknowledgements.auth;
     const auth = controller.runtimeSnapshot?.auth.snapshot;
@@ -740,7 +740,7 @@ export function buildAccountsStep(controller: OnboardingWizardController): Onboa
     };
   }
 
-export function buildReviewStep(controller: OnboardingWizardController): OnboardingWizardStepDefinition {
+export function buildReviewStep(controller: OnboardingWizardControllerLike): OnboardingWizardStepDefinition {
     const feedback = controller.applyFeedback;
     const feedbackFields: OnboardingWizardFieldDefinition[] = feedback
       ? [
