@@ -118,6 +118,11 @@ export type BootstrapContext = RuntimeContext & {
    * stay out of the main conversation and go to the SystemMessagesPanel instead.
    */
   systemMessageRouter: SystemMessageRouter;
+  /**
+   * Wire the agent detail modal opener after InputHandler is constructed in main.ts.
+   * Call with `(id) => input.agentDetailModal.open(id)` once the InputHandler is ready.
+   */
+  setOpenAgentDetail: (fn: (agentId: string) => void) => void;
 };
 
 // ── Bootstrap function ────────────────────────────────────────────────────
@@ -292,6 +297,7 @@ export async function bootstrapRuntime(
   const gitStatusProvider = shell.gitStatusProvider;
   const inputHistory = shell.inputHistory;
   const lastGitInfoRef = shell.lastGitInfoRef;
+  const setOpenAgentDetail = shell.setOpenAgentDetail;
   const pluginCommandRegistry = {
     register(command: {
       readonly name: string;
@@ -622,6 +628,7 @@ export async function bootstrapRuntime(
     _getConfiguredProviderIds: () => services.providerRegistry.getConfiguredProviderIds(),
     commandRegistry,
     systemMessageRouter,
+    setOpenAgentDetail,
     shutdown: async (sessionData) => {
       // Clear bootstrap-owned subscriptions
       bootstrapUnsubs.forEach(fn => fn());

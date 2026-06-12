@@ -40,6 +40,11 @@ export interface BootstrapShellState {
   readonly lastGitInfoRef: { value: GitHeaderInfo | undefined };
   readonly inputHistory: InputHistory;
   readonly systemMessageRouter: SystemMessageRouter;
+  /**
+   * Wire the agent detail modal opener after InputHandler is constructed.
+   * Call with `(id) => input.agentDetailModal.open(id)` from main.ts.
+   */
+  readonly setOpenAgentDetail: (fn: (agentId: string) => void) => void;
 }
 
 export interface BootstrapShellOptions {
@@ -103,6 +108,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     providerRegistry: services.providerRegistry,
   });
 
+  const openAgentDetailRef: { fn: (agentId: string) => void } = { fn: (_agentId: string) => {} };
+
   let commandContextRef: CommandContext | null = null;
   registerBuiltinPanels(services.panelManager, {
     configManager,
@@ -143,6 +150,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     hookActivityTracker: services.hookActivityTracker,
     hookWorkbench: services.hookWorkbench,
     mcpRegistry: services.mcpRegistry,
+    openAgentDetail: (agentId: string) => openAgentDetailRef.fn(agentId),
     daemonHomeDir: join(services.homeDirectory, '.goodvibes', 'daemon'),
   });
   services.panelManager.prewarmRegistered();
@@ -278,5 +286,8 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     lastGitInfoRef,
     inputHistory,
     systemMessageRouter,
+    setOpenAgentDetail: (fn: (agentId: string) => void) => {
+      openAgentDetailRef.fn = fn;
+    },
   };
 }

@@ -114,6 +114,13 @@ export interface BuiltinPanelDeps {
   hookActivityTracker?: Pick<HookActivityTracker, 'listRecent'>;
   /** Shared MCP registry for security panels and MCP workspace commands. */
   mcpRegistry?: McpRegistry;
+  /**
+   * Open the agent detail modal for the given agent id.  Wired from
+   * InputHandler.agentDetailModal.open() at bootstrap — passed to the
+   * CockpitPanel factory so the agents workspace inspect key (i) works
+   * without the panel depending on the modal directly.
+   */
+  openAgentDetail?: (agentId: string) => void;
 }
 
 export type ResolvedBuiltinPanelDeps = Omit<
