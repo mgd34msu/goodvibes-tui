@@ -5,9 +5,16 @@
  * restores correct state — panels reopen, overlays remain in their
  * pre-suspend visibility state, and session metadata is reconciled.
  *
+ * Also covers the blocking-input recovery prompt contract:
+ * - Stray keys must not delete the recovery file
+ * - Explicit discard (Esc/Ctrl+C) deletes the file
+ * - Ctrl+R restores messages, title, titleSource and reopens panels
+ * - File is deleted only after a successful restore
+ *
  * All tests use pure state manipulation — no real I/O, no event bus.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
+import { handleBlockingShellInput } from '../../shell/blocking-input.ts';
 import { createInitialRuntimeState } from '../../runtime/store/state.ts';
 import type { RuntimeState } from '../../runtime/store/state.ts';
 import {
@@ -257,5 +264,141 @@ describe('ux:resume-recovery — restore session with active panels and overlays
       expect(selectSession(current).isResumed).toBe(true);
       expect(selectSession(current).status).toBe('active');
     });
+  });
+});
+
+// ── Blocking-input recovery prompt contract ────────────────────────────────────
+
+/** Minimal stubs for handleBlockingShellInput in the context of recovery. */
+function makeRecoveryHarness() {
+  const fromJSONCalls: Array<{ messages: object[]; title?: string; titleSource?: string }> = [];
+  const routerMessages: string[] = [];
+  const reopenedWith: object[] = [];
+  let deleteCount = 0;
+  let renderCount = 0;
+
+  const conversation = {
+    fromJSON: (data: { messages: object[]; title?: string; titleSource?: string }) => {
+      fromJSONCalls.push(data);
+    },
+  };
+  const systemMessageRouter = { high: (m: string) => routerMessages.push(m) };
+  const render = () => { renderCount++; };
+  const deleteRecoveryFile = () => { deleteCount++; };
+  const reopenPanels = (s: object) => { reopenedWith.push(s); };
+
+  return { fromJSONCalls, routerMessages, reopenedWith, conversation, systemMessageRouter, render, deleteRecoveryFile, reopenPanels, get deleteCount() { return deleteCount; }, get renderCount() { return renderCount; } };
+}
+
+describe('ux:recovery-prompt — blocking-input handler contract', () => {
+  test('stray key leaves recovery file intact and prompt active', () => {
+    const h = makeRecoveryHarness();
+    const snapshot = { messages: [{ role: 'user', content: 'hello' }] };
+
+    const result = handleBlockingShellInput({
+      data: 'x',
+      pendingPermission: null,
+      recoveryPending: true,
+      abortTurn: () => {},
+      conversation: h.conversation as never,
+      systemMessageRouter: h.systemMessageRouter as never,
+      render: h.render,
+      loadRecoveryConversation: () => snapshot,
+      deleteRecoveryFile: h.deleteRecoveryFile,
+      reopenPanels: h.reopenPanels,
+    });
+
+    expect(result.recoveryPending).toBe(true);
+    expect(result.handled).toBe(false);
+    expect(h.deleteCount).toBe(0);
+    expect(h.fromJSONCalls).toHaveLength(0);
+    expect(h.reopenedWith).toHaveLength(0);
+    expect(h.routerMessages).toContain('[Recovery] Ctrl+R to restore · Esc to discard');
+  });
+
+  test('Esc discards recovery: file deleted, prompt cleared, key absorbed', () => {
+    const h = makeRecoveryHarness();
+
+    const result = handleBlockingShellInput({
+      data: '\x1b',
+      pendingPermission: null,
+      recoveryPending: true,
+      abortTurn: () => {},
+      conversation: h.conversation as never,
+      systemMessageRouter: h.systemMessageRouter as never,
+      render: h.render,
+      loadRecoveryConversation: () => ({ messages: [] }),
+      deleteRecoveryFile: h.deleteRecoveryFile,
+    });
+
+    expect(result.recoveryPending).toBe(false);
+    expect(result.handled).toBe(true);
+    expect(h.deleteCount).toBe(1);
+    expect(h.fromJSONCalls).toHaveLength(0);
+    expect(h.routerMessages).toContain('[Recovery] Discarded recovery data.');
+  });
+
+  test('Ctrl+C discards recovery same as Esc', () => {
+    const h = makeRecoveryHarness();
+
+    const result = handleBlockingShellInput({
+      data: '\x03',
+      pendingPermission: null,
+      recoveryPending: true,
+      abortTurn: () => {},
+      conversation: h.conversation as never,
+      systemMessageRouter: h.systemMessageRouter as never,
+      render: h.render,
+      loadRecoveryConversation: () => ({ messages: [] }),
+      deleteRecoveryFile: h.deleteRecoveryFile,
+    });
+
+    expect(result.recoveryPending).toBe(false);
+    expect(result.handled).toBe(true);
+    expect(h.deleteCount).toBe(1);
+  });
+
+  test('Ctrl+R restores messages, title, titleSource and reopens panels; file deleted after success', () => {
+    const h = makeRecoveryHarness();
+    const snapshot = {
+      messages: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }],
+      title: 'Recovered Work',
+      titleSource: 'user' as const,
+      returnContext: { openPanels: ['remote', 'approval'] },
+    };
+
+    const result = handleBlockingShellInput({
+      data: '\x12',
+      pendingPermission: null,
+      recoveryPending: true,
+      abortTurn: () => {},
+      conversation: h.conversation as never,
+      systemMessageRouter: h.systemMessageRouter as never,
+      render: h.render,
+      loadRecoveryConversation: () => snapshot,
+      deleteRecoveryFile: h.deleteRecoveryFile,
+      reopenPanels: h.reopenPanels,
+    });
+
+    // Result state
+    expect(result.handled).toBe(true);
+    expect(result.recoveryPending).toBe(false);
+
+    // Messages restored
+    expect(h.fromJSONCalls).toHaveLength(1);
+    expect(h.fromJSONCalls[0]!.messages).toHaveLength(2);
+
+    // Title and titleSource hydrated
+    expect(h.fromJSONCalls[0]!.title).toBe('Recovered Work');
+    expect(h.fromJSONCalls[0]!.titleSource).toBe('user');
+
+    // Panels reopened via callback with the full snapshot
+    expect(h.reopenedWith).toHaveLength(1);
+    expect(h.reopenedWith[0]).toBe(snapshot);
+
+    // File deleted exactly once, after restore
+    expect(h.deleteCount).toBe(1);
+
+    expect(h.routerMessages).toContain('[Recovery] Session restored.');
   });
 });
