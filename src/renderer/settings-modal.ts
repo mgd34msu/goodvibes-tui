@@ -248,8 +248,8 @@ function buildSubscriptionContext(modal: SettingsModal, entry: SubscriptionEntry
   const routeReason = inferSubscriptionRouteReason(entry);
   const logout = entry.state === 'active' || entry.state === 'pending'
     ? modal.subscriptionLogoutConfirmationTarget === entry.provider
-      ? `Press Enter again to sign out ${entry.provider}. Move selection or close config to cancel.`
-      : 'Press Enter to review sign-out for this provider session.'
+      ? `Sign out ${entry.provider}? Enter/y to confirm, n/Esc to cancel.`
+      : 'Press Enter to begin sign-out for this provider session.'
     : `Use /subscription login ${entry.provider} start to begin OAuth sign-in for this provider.`;
   return [
     entry.provider,
@@ -268,6 +268,28 @@ function buildSubscriptionContext(modal: SettingsModal, entry: SubscriptionEntry
 
 function buildContextLines(modal: SettingsModal, width: number): string[] {
   const category = modal.currentCategory;
+
+  // Search mode: show context for the selected search result, or a help blurb
+  if (modal.searchFocused) {
+    const selected = modal.getSelected();
+    const lines: string[] = ['Search Results'];
+    if (selected) {
+      lines.push(...buildSettingContext(modal, selected));
+    } else {
+      lines.push(
+        modal.searchQuery.trim().length === 0
+          ? 'Type a query to search across all settings categories.'
+          : 'No settings matched the search query.',
+      );
+    }
+    const wrapped: string[] = [];
+    for (const line of lines) {
+      if (line === '') { wrapped.push(''); continue; }
+      wrapped.push(...paddedWrapped(line, width));
+    }
+    return wrapped;
+  }
+
   const lines: string[] = [
     `${CATEGORY_LABELS[category]} configuration`,
   ];
@@ -458,7 +480,51 @@ function renderSubscriptionRows(modal: SettingsModal, width: number, height: num
   return rows.slice(0, height);
 }
 
+function renderSearchRows(modal: SettingsModal, width: number, height: number): string[] {
+  const rows: string[] = [];
+  const query = modal.searchQuery;
+  // Search-prompt row shows the current query
+  const promptRow = `/ ${query}${GLYPHS.surface.cursor}`;
+  rows.push(promptRow);
+
+  const results = modal.searchResults;
+  if (query.trim().length === 0 || results.length === 0) {
+    rows.push(query.trim().length === 0 ? 'Type to search across all categories.' : 'No results.');
+    return rows.slice(0, height);
+  }
+
+  const selectedIndex = clamp(modal.selectedIndex, 0, results.length - 1);
+  const typeWidth = 9;
+  const sourceWidth = 12;
+  const categoryWidth = 14;
+  const available = Math.max(24, width - typeWidth - sourceWidth - categoryWidth - 16);
+  const keyWidth = clamp(Math.floor(available * 0.56), 18, 52);
+  const valueWidth = Math.max(10, available - keyWidth);
+  rows.push(`  ${padDisplay('Setting', keyWidth)}  ${padDisplay('Value', valueWidth)}  ${padDisplay('Type', typeWidth)}  ${padDisplay('Category', categoryWidth)}  ${padDisplay('Source', sourceWidth)}`);
+
+  const visibleCount = Math.max(1, height - 3);
+  const window = stableWindow(results.length, selectedIndex, visibleCount);
+  if (window.start > 0) rows.push(`${GLYPHS.navigation.moreAbove} ${window.start} more result(s) above`);
+
+  for (let index = window.start; index < window.end; index += 1) {
+    const entry = results[index]!;
+    const selected = index === selectedIndex;
+    const marker = selected ? GLYPHS.navigation.selected : entry.isDefault ? ' ' : '◇';
+    const value = currentSettingValue(modal, entry, selected);
+    const source = `${entry.effectiveSource ?? 'default'}${entry.locked ? ' locked' : ''}${entry.conflict ? ' conflict' : ''}`;
+    const label = getSettingLabel(entry);
+    // Derive category label from setting key prefix
+    const keyPrefix = entry.setting.key.split('.')[0] ?? '';
+    const categoryLabel = CATEGORY_LABELS[keyPrefix as SettingsCategory] ?? keyPrefix;
+    rows.push(`${marker} ${padDisplay(label, keyWidth)}  ${padDisplay(value, valueWidth)}  ${padDisplay(entry.setting.type, typeWidth)}  ${padDisplay(categoryLabel, categoryWidth)}  ${padDisplay(source, sourceWidth)}`);
+  }
+
+  if (window.end < results.length) rows.push(`${GLYPHS.navigation.moreBelow} ${results.length - window.end} more result(s) below`);
+  return rows.slice(0, height);
+}
+
 function renderControlRows(modal: SettingsModal, width: number, height: number): string[] {
+  if (modal.searchFocused) return renderSearchRows(modal, width, height);
   if (modal.currentCategory === 'flags') return renderFlagRows(modal, width, height);
   if (modal.currentCategory === 'mcp') return renderMcpRows(modal, width, height);
   if (modal.currentCategory === 'subscriptions') return renderSubscriptionRows(modal, width, height);
@@ -474,12 +540,13 @@ function rowColorForSetting(modal: SettingsModal, rowText: string): string {
 }
 
 function footerText(modal: SettingsModal): string {
+  if (modal.searchFocused) return 'Search · type to filter · Up/Down navigate results · Enter select · Esc exit search';
   if (modal.editingMode) return 'Enter Confirm edit · Esc Cancel edit · text keys edit the selected field';
-  if (modal.focusPane === 'categories') return 'Focus categories · Up/Down choose · Right/Enter settings · Tab pane · Esc close';
-  if (modal.currentCategory === 'subscriptions') return 'Focus settings · Up/Down provider · Left categories · Tab pane · Enter review/sign out · Esc close';
-  if (modal.currentCategory === 'mcp') return 'Focus settings · Up/Down server · Left categories · Tab pane · Enter edit trust · Esc close';
-  if (modal.currentCategory === 'flags') return 'Focus feature flags · Up/Down flag · Left categories · Tab pane · Enter/Space toggle · Esc close';
-  return 'Focus settings · Up/Down setting · Left categories · Tab pane · Enter/Space edit/toggle · R reset · Esc close';
+  if (modal.focusPane === 'categories') return 'Focus categories · Up/Down choose · Right/Enter settings · Tab pane · / search · Esc close';
+  if (modal.currentCategory === 'subscriptions') return 'Focus settings · Up/Down provider · Left categories · Tab pane · / search · Enter review/sign out · Esc close';
+  if (modal.currentCategory === 'mcp') return 'Focus settings · Up/Down server · Left categories · Tab pane · / search · Enter edit trust · Esc close';
+  if (modal.currentCategory === 'flags') return 'Focus feature flags · Up/Down flag · Left categories · Tab pane · / search · Enter/Space toggle · Esc close';
+  return 'Focus settings · Up/Down setting · Left categories · Tab pane · / search · Enter/Space edit/toggle · R reset · Esc close';
 }
 
 export function renderSettingsModal(
@@ -523,7 +590,9 @@ export function renderSettingsModal(
     height: viewportHeight,
     title: 'Configuration Workspace / Settings',
     leftHeader: 'Categories',
-    mainHeader: `${CATEGORY_LABELS[modal.currentCategory]} (${categoryItemCount(modal, modal.currentCategory)})${notices.length > 0 ? ` · ${notices.join(' · ')}` : ''}`,
+    mainHeader: modal.searchFocused
+       ? `Search: ${modal.searchQuery || '…'} (${modal.searchResults.length} result${modal.searchResults.length === 1 ? '' : 's'})${notices.length > 0 ? ` · ${notices.join(' · ')}` : ''}`
+       : `${CATEGORY_LABELS[modal.currentCategory]} (${categoryItemCount(modal, modal.currentCategory)})${notices.length > 0 ? ` · ${notices.join(' · ')}` : ''}`,
     leftRows: categoryRows.map((row): WorkspaceRow => ({
       text: row.text,
       selected: row.selected,
