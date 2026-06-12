@@ -13,6 +13,7 @@ import type { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { replayJournalForSession } from '../core/session-recovery.ts';
 
 export interface ResumeSessionOptions {
   readonly runtimeBus: RuntimeEventBus;
@@ -27,6 +28,7 @@ export interface ResumeSessionOptions {
   readonly panelManager: PanelManager;
   readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;
   readonly providerRegistry: Pick<ProviderRegistry, 'get' | 'getCurrentModel' | 'getForModel' | 'require'>;
+  readonly homeDirectory: string;
 }
 
 export function createResumeSessionHandler(options: ResumeSessionOptions): (sessionId: string) => void {
@@ -47,6 +49,22 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
         titleSource: meta.titleSource,
       });
       options.runtime.sessionId = sessionId;
+      replayJournalForSession({
+        homeDirectory: options.homeDirectory,
+        sessionId,
+        snapshotTimestamp: meta.timestamp ?? 0,
+        conversation: options.conversation,
+        persistSnapshot: (replayedMessages) => {
+          options.sessionManager.save(sessionId, replayedMessages as never[], {
+            title: options.conversation.title || meta.title,
+            model: meta.model,
+            provider: meta.provider,
+            timestamp: Date.now(),
+            titleSource: meta.titleSource,
+            returnContext: meta.returnContext,
+          });
+        },
+      });
       options.onSessionIdChanged?.(sessionId);
       if (meta?.model) options.runtime.model = meta.model;
       if (meta?.provider) options.runtime.provider = meta.provider;

@@ -106,6 +106,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     panelManager: services.panelManager,
     configManager,
     providerRegistry: services.providerRegistry,
+    homeDirectory: services.homeDirectory,
   });
 
   const openAgentDetailRef: { fn: (agentId: string) => void } = { fn: (_agentId: string) => {} };

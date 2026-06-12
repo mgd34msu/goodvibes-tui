@@ -286,8 +286,12 @@ function makeRecoveryHarness() {
   const render = () => { renderCount++; };
   const deleteRecoveryFile = () => { deleteCount++; };
   const reopenPanels = (s: object) => { reopenedWith.push(s); };
+  // Journal-replay stubs: /tmp path ensures no real journal exists, so replay is a no-op.
+  const homeDirectory = '/tmp/test-home-recovery';
+  const sessionId = 'test-recovery-session';
+  const persistSnapshot = () => {};
 
-  return { fromJSONCalls, routerMessages, reopenedWith, conversation, systemMessageRouter, render, deleteRecoveryFile, reopenPanels, get deleteCount() { return deleteCount; }, get renderCount() { return renderCount; } };
+  return { fromJSONCalls, routerMessages, reopenedWith, conversation, systemMessageRouter, render, deleteRecoveryFile, reopenPanels, homeDirectory, sessionId, persistSnapshot, get deleteCount() { return deleteCount; }, get renderCount() { return renderCount; } };
 }
 
 describe('ux:recovery-prompt — blocking-input handler contract', () => {
@@ -306,6 +310,9 @@ describe('ux:recovery-prompt — blocking-input handler contract', () => {
       loadRecoveryConversation: () => snapshot,
       deleteRecoveryFile: h.deleteRecoveryFile,
       reopenPanels: h.reopenPanels,
+      homeDirectory: h.homeDirectory,
+      sessionId: h.sessionId,
+      persistSnapshot: h.persistSnapshot,
     });
 
     expect(result.recoveryPending).toBe(true);
@@ -329,6 +336,9 @@ describe('ux:recovery-prompt — blocking-input handler contract', () => {
       render: h.render,
       loadRecoveryConversation: () => ({ messages: [] }),
       deleteRecoveryFile: h.deleteRecoveryFile,
+      homeDirectory: h.homeDirectory,
+      sessionId: h.sessionId,
+      persistSnapshot: h.persistSnapshot,
     });
 
     expect(result.recoveryPending).toBe(false);
@@ -351,6 +361,9 @@ describe('ux:recovery-prompt — blocking-input handler contract', () => {
       render: h.render,
       loadRecoveryConversation: () => ({ messages: [] }),
       deleteRecoveryFile: h.deleteRecoveryFile,
+      homeDirectory: h.homeDirectory,
+      sessionId: h.sessionId,
+      persistSnapshot: h.persistSnapshot,
     });
 
     expect(result.recoveryPending).toBe(false);
@@ -378,6 +391,9 @@ describe('ux:recovery-prompt — blocking-input handler contract', () => {
       loadRecoveryConversation: () => snapshot,
       deleteRecoveryFile: h.deleteRecoveryFile,
       reopenPanels: h.reopenPanels,
+      homeDirectory: h.homeDirectory,
+      sessionId: h.sessionId,
+      persistSnapshot: h.persistSnapshot,
     });
 
     // Result state
