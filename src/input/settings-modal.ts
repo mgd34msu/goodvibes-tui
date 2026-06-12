@@ -124,6 +124,11 @@ export class SettingsModal {
   /** Provider awaiting explicit logout confirmation, if any. */
   public subscriptionLogoutConfirmationTarget: string | null = null;
 
+  /** Pending category-reset confirmation gate, or null when inactive. */
+  public resetCategoryConfirm: { readonly subject: string } | null = null;
+  /** Pending reset-all confirmation gate, or null when inactive. */
+  public resetAllConfirm: { readonly subject: 'all' } | null = null;
+
   /** Settings grouped by category. */
   public groups: Map<SettingsCategory, SettingEntry[]> = new Map();
 
@@ -685,6 +690,58 @@ export class SettingsModal {
       });
     }
     return { key, value: entry.setting.default };
+  }
+
+  /** Arm a category-reset confirmation gate for the current category. */
+  initiateResetCategory(): void {
+    if (!this.configManager) return;
+    this.resetCategoryConfirm = { subject: this.currentCategory };
+    this.resetAllConfirm = null;
+  }
+
+  /** Arm a reset-all confirmation gate. */
+  initiateResetAll(): void {
+    if (!this.configManager) return;
+    this.resetAllConfirm = { subject: 'all' };
+    this.resetCategoryConfirm = null;
+  }
+
+  /**
+   * Route a key through the active reset confirm gate.
+   * Returns 'confirmed', 'cancelled', 'absorbed', or 'inactive'.
+   */
+  handleResetConfirmKey(key: string): 'confirmed' | 'cancelled' | 'absorbed' | 'inactive' {
+    const gate = this.resetCategoryConfirm ?? this.resetAllConfirm;
+    if (!gate || !this.configManager) return 'inactive';
+
+    if (key === 'enter' || key === 'y') {
+      if (this.resetCategoryConfirm) {
+        // Reset all settings in the current category to defaults.
+        const items = this._currentItems();
+        for (const item of items) {
+          this._setValue(item.setting.key as ConfigKey, item.setting.default);
+        }
+        this.resetCategoryConfirm = null;
+      } else {
+        // Reset ALL settings across all categories to defaults.
+        for (const [, items] of this.groups) {
+          for (const item of items) {
+            this._setValue(item.setting.key as ConfigKey, item.setting.default);
+          }
+        }
+        this.resetAllConfirm = null;
+      }
+      return 'confirmed';
+    }
+
+    if (key === 'escape' || key === 'n') {
+      this.resetCategoryConfirm = null;
+      this.resetAllConfirm = null;
+      return 'cancelled';
+    }
+
+    // All other keys are absorbed while the gate is active.
+    return 'absorbed';
   }
 
   /** Handle a keystroke in edit mode: regular chars appended, Backspace removes last char. */

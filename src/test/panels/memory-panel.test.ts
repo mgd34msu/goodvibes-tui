@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { MemoryRegistry, MemoryStore } from '@pellux/goodvibes-sdk/platform/state';
+import type { MemoryRecord } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryEmbeddingProviderRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import { MemoryPanel } from '../../panels/memory-panel.ts';
 import type { Line } from '../../types/grid.ts';
@@ -177,6 +178,96 @@ describe('MemoryPanel (merged)', () => {
 
     expect(panel.handleInput('f')).toBe(true);
     expect(registry.get(record.id)?.reviewState).toBe('fresh');
+
+    panel.onDeactivate();
+    panel.onDestroy();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Review mode: getItems() identity and navigation invariant
+  // ---------------------------------------------------------------------------
+
+  test('review mode: getItems() returns reviewRecords, not full set', async () => {
+    // Add 3 records with mixed states so reviewQueue orders differently from search()
+    await registry.add({ cls: 'fact',     summary: 'Alpha record.', review: { state: 'stale', confidence: 20 } });
+    await registry.add({ cls: 'risk',     summary: 'Beta record.',  review: { state: 'fresh', confidence: 30 } });
+    await registry.add({ cls: 'decision', summary: 'Gamma record.', review: { state: 'fresh', confidence: 40 } });
+
+    const panel = new MemoryPanel(registry);
+    panel.onActivate();
+    panel.handleInput('tab'); // enter review mode
+
+    const reviewRecords = (panel as unknown as { reviewRecords: MemoryRecord[] }).reviewRecords;
+    const items = (panel as unknown as { getItems(): readonly MemoryRecord[] }).getItems();
+
+    // getItems() in review mode must be identical to reviewRecords
+    expect(items.length).toBe(reviewRecords.length);
+    expect(items.length).toBe(3);
+
+    // Every item returned by getItems() must exist in reviewRecords (by id)
+    const reviewIds = new Set(reviewRecords.map((r) => r.id));
+    for (const item of items) {
+      expect(reviewIds.has(item.id)).toBe(true);
+    }
+
+    // Switching back to all mode: getItems() returns from getAllItems() (full set)
+    panel.handleInput('tab');
+    const allModeItems = (panel as unknown as { getItems(): readonly MemoryRecord[] }).getItems();
+    expect(allModeItems.length).toBe(3);
+
+    panel.onDeactivate();
+    panel.onDestroy();
+  });
+
+  test('review mode: action key mutates the correct reviewRecords entry, not fullSet entry at same index', async () => {
+    // Add 3 records with mixed states. The reviewQueue ordering is implementation-defined
+    // (typically stale-first, then by confidence). The full set (registry.search) uses
+    // insertion order. We do not assert a specific queue order — instead, we read the
+    // actual queue at runtime and verify that the action mutates reviewRecords[selectedIndex],
+    // and that exactly one record was mutated (proving the fix).
+    const alpha = await registry.add({ cls: 'fact',     summary: 'Record alpha.', review: { state: 'fresh', confidence: 50 } });
+    const beta  = await registry.add({ cls: 'risk',     summary: 'Record beta.',  review: { state: 'stale', confidence: 30 } });
+    const gamma = await registry.add({ cls: 'decision', summary: 'Record gamma.', review: { state: 'fresh', confidence: 45 } });
+
+    const panel = new MemoryPanel(registry);
+    panel.onActivate();
+    panel.handleInput('tab'); // enter review mode
+
+    // Navigate down once with 'j' — in review mode this must navigate, not append to search query
+    expect(panel.handleInput('j')).toBe(true);
+
+    // 'j' must be treated as navigation, not search input
+    const searchQuery = (panel as unknown as { searchQuery: string }).searchQuery;
+    expect(searchQuery).toBe('');
+
+    // selectedIndex must be 1
+    const selectedIndex = (panel as unknown as { selectedIndex: number }).selectedIndex;
+    expect(selectedIndex).toBe(1);
+
+    // Read the actual reviewRecords queue at runtime — do not assume ordering
+    const reviewRecords = (panel as unknown as { reviewRecords: MemoryRecord[] }).reviewRecords;
+    expect(reviewRecords.length).toBe(3);
+    const targetRecord = reviewRecords[1]!;
+
+    // Press 'r' to mark the selected record (reviewRecords[1]) as reviewed
+    expect(panel.handleInput('r')).toBe(true);
+
+    // targetRecord must now be marked reviewed with confidence ≥ 85
+    const updatedTarget = registry.get(targetRecord.id);
+    expect(updatedTarget?.reviewState).toBe('reviewed');
+    expect(updatedTarget?.confidence).toBeGreaterThanOrEqual(85);
+
+    // Exactly one record must have been reviewed — the one at reviewRecords[1]
+    // This is the core invariant: navigation index maps to reviewRecords, not fullSet
+    let reviewedCount = 0;
+    for (const rec of [alpha, beta, gamma]) {
+      const current = registry.get(rec.id);
+      if (current?.reviewState === 'reviewed') {
+        reviewedCount++;
+        expect(current.id).toBe(targetRecord.id);
+      }
+    }
+    expect(reviewedCount).toBe(1);
 
     panel.onDeactivate();
     panel.onDestroy();
