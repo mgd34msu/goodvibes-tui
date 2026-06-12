@@ -1,6 +1,6 @@
 import type { CommandContext, CommandRegistry } from '../input/command-registry.ts';
 import type { InputHandler } from '../input/handler.ts';
-import { readOnboardingCheckMarker } from '../runtime/onboarding/index.ts';
+import { hasResumableWizardProgress, readOnboardingCheckMarker, readWizardProgress } from '../runtime/onboarding/index.ts';
 import { readLastSessionPointer } from '@/runtime/index.ts';
 import type { GoodVibesCliParseResult } from './types.ts';
 
@@ -71,5 +71,24 @@ export function applyInitialTuiCliState(options: {
     }
   } else if (!globalOnboardingMarker.exists) {
     input.openOnboardingWizard({ mode: 'new', reset: true });
+  } else {
+    // User has completed onboarding before but left a wizard session in progress.
+    // Reopen the wizard at the last saved step so they can continue or dismiss.
+    const progressState = readWizardProgress(shellPaths);
+    if (hasResumableWizardProgress(shellPaths, { state: progressState })) {
+      const { payload } = progressState;
+      if (payload !== null) {
+        input.openOnboardingWizard({
+          mode: payload.mode,
+          reset: true,
+          preload: (wizard) => {
+            wizard.setStep(payload.stepIndex);
+            for (const [fieldId, value] of payload.toggleState) wizard.toggleState.set(fieldId, value);
+            for (const [fieldId, value] of payload.radioState) wizard.radioState.set(fieldId, value);
+            for (const [fieldId, value] of payload.textState) wizard.textState.set(fieldId, value);
+          },
+        });
+      }
+    }
   }
 }

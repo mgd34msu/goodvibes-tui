@@ -162,6 +162,8 @@ export interface InputFeedContext {
   readonly openProviderModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
   readonly onModelPickerCommit: () => boolean;
   readonly onOnboardingAction: (action: OnboardingWizardAction) => void;
+  /** Called after any wizard step navigation so the handler can persist progress. */
+  readonly onStepChange?: () => void;
   readonly exitApp: () => void;
 }
 
@@ -228,6 +230,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       openProviderModelPickerWithTarget: context.openProviderModelPickerWithTarget,
       onModelPickerCommit: context.onModelPickerCommit,
       onOnboardingAction: context.onOnboardingAction,
+      onStepChange: context.onStepChange,
     }, token);
     context.selectionCallback = modalRoute.selectionCallback;
     context.helpOverlayActive = modalRoute.helpOverlayActive;
