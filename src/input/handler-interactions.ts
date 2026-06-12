@@ -4,7 +4,7 @@ import { collectOnboardingSnapshot, readOnboardingCheckMarker, writeOnboardingCh
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, handleBlockCopy, handleBlockRerun, handleBlockSave, handleBlockToggle, handleBookmark, handleClipboardPaste, handleCopy, handleCtrlC, handleDiffApply, registerPaste } from './handler-content-actions.ts';
 import { clearModalStack, handleEscape, modalOpened } from './handler-modal-stack.ts';
 import { openOnboardingWizardState, type OpenOnboardingWizardOptions } from './handler-ui-state.ts';
-import type { InputHandler } from './handler.ts';
+import type { InputHandlerLike as InputHandler } from './handler-types.ts';
 
 export function openOnboardingWizardForHandler(
   handler: InputHandler,
