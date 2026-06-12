@@ -8,18 +8,25 @@ import { formatDuration } from './modal-utils.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { handleConfirmInput, type ConfirmState } from '../panels/confirm-state.ts';
+import { AGENT_TERMINAL_STATUSES as MODAL_TERMINAL_STATUSES, AGENT_STALL_THRESHOLD_MS as MODAL_STALL_THRESHOLD_MS } from '../panels/agent-inspector-shared.ts';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MAX_LOG_ENTRIES = 10;
 const AGENT_ID_DISPLAY_LENGTH = 16;
 
+// MODAL_TERMINAL_STATUSES and MODAL_STALL_THRESHOLD_MS are re-exported aliases
+// from agent-inspector-shared.ts (imported above alongside ConfirmState).
+
 export interface AgentDetailModalDeps {
-  readonly agentManager: Pick<AgentManager, 'getStatus'>;
+  readonly agentManager: Pick<AgentManager, 'getStatus' | 'list'>;
   readonly agentMessageBus: Pick<AgentMessageBus, 'getMessages'>;
   readonly sessionLogPathResolver: (agentId: string) => string;
   /** Optional — when supplied, constraint data from the agent's WRFC chain is shown (SDK 0.23.0). */
   readonly wrfcController?: Pick<WrfcController, 'getChain'>;
+  /** Cancel the agent by id using the same orphan-free path as WRFC. Returns true if cancelled. */
+  readonly cancelAgent: (agentId: string) => boolean;
 }
 
 // ─── AgentDetailModal ─────────────────────────────────────────────────────────
@@ -38,6 +45,9 @@ export class AgentDetailModal {
   /** Cached JSONL log entries, loaded on open(). */
   public logEntries: Record<string, unknown>[] = [];
   public logTotal = 0;
+
+  /** Pending cancel confirmation. Subject is the agent id to cancel. */
+  public confirmCancel: ConfirmState<string> | null = null;
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private onRefresh: (() => void) | null = null;
@@ -67,10 +77,86 @@ export class AgentDetailModal {
     this.agentId = null;
     this.logEntries = [];
     this.logTotal = 0;
+    this.confirmCancel = null;
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+  }
+
+  /**
+   * Handle a key press while the modal is active.
+   * Must be called BEFORE the Esc handler closes the modal.
+   *
+   * Routes:
+   *   - 'c' initiates cancel confirm (if agent is non-terminal)
+   *   - confirm keys (Enter/y/n/Esc) are forwarded to handleConfirmInput
+   *
+   * Returns true when the key was consumed (caller should NOT propagate).
+   */
+  handleKey(key: string): boolean {
+    if (!this.active) return false;
+
+    if (this.confirmCancel) {
+      const result = handleConfirmInput(this.confirmCancel, key);
+      if (result === 'confirmed') {
+        if (this.agentId) {
+          const rec = this.deps.agentManager.getStatus(this.agentId);
+          if (rec && !MODAL_TERMINAL_STATUSES.has(rec.status)) {
+            this.deps.cancelAgent(rec.id);
+          }
+        }
+        this.confirmCancel = null;
+        this.onRefresh?.();
+        return true;
+      }
+      if (result === 'cancelled') {
+        this.confirmCancel = null;
+        this.onRefresh?.();
+        return true;
+      }
+      // absorbed — key swallowed while confirm is pending
+      return true;
+    }
+
+    if (key === 'c') {
+      if (this.agentId) {
+        const rec = this.deps.agentManager.getStatus(this.agentId);
+        if (rec && !MODAL_TERMINAL_STATUSES.has(rec.status)) {
+          const label = rec.task.split('\n')[0]?.slice(0, 40) ?? rec.id.slice(-8);
+          this.confirmCancel = { subject: rec.id, label };
+          this.onRefresh?.();
+          return true;
+        }
+      }
+      // Non-cancellable — absorb key silently
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Returns whether the current agent is considered stalled.
+   * Non-terminal agent with elapsed time exceeding MODAL_STALL_THRESHOLD_MS.
+   */
+  isCurrentAgentStalled(): boolean {
+    if (!this.agentId) return false;
+    const rec = this.deps.agentManager.getStatus(this.agentId);
+    if (!rec || MODAL_TERMINAL_STATUSES.has(rec.status)) return false;
+    return (Date.now() - rec.startedAt) >= MODAL_STALL_THRESHOLD_MS;
+  }
+
+  /**
+   * Count of all stalled agents across the agentManager list.
+   * Non-terminal agents with elapsed time >= MODAL_STALL_THRESHOLD_MS.
+   */
+  getStalledAgentCount(): number {
+    const now = Date.now();
+    return this.deps.agentManager.list().filter(rec => {
+      if (MODAL_TERMINAL_STATUSES.has(rec.status)) return false;
+      return (now - rec.startedAt) >= MODAL_STALL_THRESHOLD_MS;
+    }).length;
   }
 
   async loadLog(): Promise<void> {
@@ -161,7 +247,8 @@ export function renderAgentDetailModal(
   const modelStr = rec.model ? `${rec.provider ?? ''}/${rec.model}` : (rec.provider ?? '(default)');
   sections.push({ type: 'text', content: `Template : ${rec.template}` });
   sections.push({ type: 'text', content: `Model    : ${modelStr}` });
-  sections.push({ type: 'text', content: `Status   : ${rec.status}` });
+  const isStalled = !MODAL_TERMINAL_STATUSES.has(rec.status) && (now - rec.startedAt) >= MODAL_STALL_THRESHOLD_MS;
+  sections.push({ type: 'text', content: `Status   : ${rec.status}${isStalled ? '  [STALLED — 5+ min no activity]' : ''}` });
   sections.push({ type: 'text', content: `Duration : ${formatDuration(elapsedMs)}` });
   sections.push({ type: 'separator' });
 
@@ -321,12 +408,29 @@ export function renderAgentDetailModal(
     }
   }
 
+  // Cancel confirm overlay (when pending)
+  const cancellable = !MODAL_TERMINAL_STATUSES.has(rec.status);
+  if (modal.confirmCancel) {
+    sections.push({ type: 'separator' });
+    sections.push({
+      type: 'text',
+      content: `Cancel agent "${modal.confirmCancel.label}"?`,
+      style: { fg: '#f59e0b' },
+    });
+    sections.push({
+      type: 'text',
+      content: 'y / Enter  confirm     n / Esc  cancel',
+      style: { dim: true },
+    });
+  }
+
+  const cancelHint = cancellable ? '[c] Cancel  ' : '';
   return ModalFactory.createModal({
     title: `Agent: ${rec.id.slice(0, AGENT_ID_DISPLAY_LENGTH)}`,
     width: metrics.boxWidth,
     margin: metrics.margin,
     targetContentRows,
     sections,
-    hints: ['[Esc] Close'],
+    hints: [cancelHint + '[Esc] Close'],
   }, width);
 }

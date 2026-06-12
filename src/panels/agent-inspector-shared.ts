@@ -1,5 +1,16 @@
 export type AgentInspectorEntryKind = 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'session' | 'error';
 
+// ---------------------------------------------------------------------------
+// Shared agent status / stall constants
+// Used by AgentInspectorPanel, AgentDetailModal, and cockpit read-model consumers.
+// ---------------------------------------------------------------------------
+
+/** Terminal statuses — cancel not offered; stall check skipped. */
+export const AGENT_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+
+/** Agents in a non-terminal state for longer than this are considered STALLED. */
+export const AGENT_STALL_THRESHOLD_MS = 5 * 60 * 1000;
+
 export interface AgentTimelineEntry {
   kind: AgentInspectorEntryKind;
   timestamp: number;

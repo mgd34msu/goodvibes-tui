@@ -248,6 +248,7 @@ export class InputHandler implements InputHandlerLike {
       sessionLogPathResolver: (agentId) => uiServices.environment.shellPaths.resolveProjectPath('tui', 'sessions', `${agentId}.jsonl`),
       // SDK 0.23.0: supply wrfcController so the modal can show constraint data
       wrfcController: uiServices.agents.wrfcController,
+      cancelAgent: (agentId: string) => uiServices.agents.agentManager.cancel(agentId),
     });
     this.bookmarkModal = new BookmarkModal(uiServices.shell.bookmarkManager);
     this.sessionPickerModal = new SessionPickerModal(uiServices.sessions.sessionManager);

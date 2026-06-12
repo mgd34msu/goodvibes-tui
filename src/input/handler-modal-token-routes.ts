@@ -232,11 +232,25 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
     return withState(state, true);
   }
 
-  if (handleEscapeOnlyModalToken({
-    active: state.agentDetailModal.active,
-    requestRender: state.requestRender,
-    handleEscape: state.handleEscape,
-  }, token)) {
+  // Agent detail modal: route c + confirm keys before escape-close.
+  // handleKey() consumes confirm-flow keys (y, Enter, n, Esc) and the 'c'
+  // initiator; unhandled keys (including Esc when no confirm is pending)
+  // fall through to escape-close below.
+  if (state.agentDetailModal.active) {
+    const keyStr: string =
+      token.type === 'key' ? (token.logicalName ?? '') :
+      token.type === 'text' ? token.value : '';
+    if (keyStr && state.agentDetailModal.handleKey(keyStr)) {
+      state.requestRender();
+      return withState(state, true);
+    }
+    // 'c' was not consumed (non-cancellable), or any other key.
+    // Esc closes the modal; all other keys are absorbed by the active modal.
+    if (token.type === 'key' && token.logicalName === 'escape') {
+      state.handleEscape();
+      return withState(state, true);
+    }
+    state.requestRender();
     return withState(state, true);
   }
 

@@ -51,6 +51,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
         agentManager: ui.agents.agentManager,
         agentMessageBus: ui.agents.agentMessageBus,
         workingDirectory: ui.environment.workingDirectory,
+        cancelAgent: (agentId: string) => ui.agents.agentManager.cancel(agentId),
       });
     },
   });
