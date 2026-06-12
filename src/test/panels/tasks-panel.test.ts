@@ -229,7 +229,10 @@ describe('TasksPanel', () => {
       bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
     })).render(120, 18));
     expect(authText).toContain('Local auth posture');
-    expect(authText).toContain('/auth local rotate-password <user> <password>');
+    expect(authText).toContain('/auth local rotate-password <user>');
+    // Masked-entry guidance replaced the argv-password form; the old string must never return.
+    expect(authText).not.toContain('<user> <password>');
+    expect(authText).toContain('omit password for masked entry');
 
     const settingsText = linesText(new SettingsSyncPanel(createConfigManager()).render(120, 20));
     expect(settingsText).toContain('Settings posture');
