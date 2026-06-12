@@ -6,25 +6,25 @@ export function getPanelSearchFocusTransition(
 ): PanelSearchFocusTransition {
   const focusKeys = options.focusKeys ?? ['/'];
   if (focusKeys.includes(key)) return 'focus-search';
-  if ((key === 'up' || key === 'ArrowUp') && options.selectedIndex <= 0) {
+  if (key === 'up' && options.selectedIndex <= 0) {
     return 'focus-search';
   }
-  if ((key === 'down' || key === 'ArrowDown') && options.itemCount > 0) {
+  if (key === 'down' && options.itemCount > 0) {
     return 'focus-list';
   }
   return null;
 }
 
 export function isPanelSearchBackspace(key: string): boolean {
-  return key === 'backspace' || key === 'delete' || key === 'Backspace' || key === 'Delete';
+  return key === 'backspace' || key === 'delete';
 }
 
 export function isPanelSearchCancel(key: string): boolean {
-  return key === 'escape' || key === 'Escape';
+  return key === 'escape';
 }
 
 export function isPanelSearchCommit(key: string): boolean {
-  return key === 'return' || key === 'enter' || key === 'Enter';
+  return key === 'return' || key === 'enter';
 }
 
 export function isPanelSearchPrintable(key: string): boolean {

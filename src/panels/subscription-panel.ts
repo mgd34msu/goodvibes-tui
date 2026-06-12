@@ -1,6 +1,7 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import type { KeyName } from './types.ts';
 import type { ProviderSubscription, PendingSubscriptionLogin } from '@pellux/goodvibes-sdk/platform/config';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime/ui-service-queries.ts';
@@ -98,16 +99,16 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
     ], C, { selected, selectedBg: C.selectedBg });
   }
 
-  public handleInput(key: string): boolean {
+  public handleInput(key: KeyName): boolean {
     if (this.rows.length === 0) return false;
     const selected = this.rows[this.selectedIndex] ?? null;
-    if (key === 'ArrowUp' || key === 'k') {
+    if (key === 'up' || key === 'k') {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
       this.logoutConfirmationTarget = null;
       this.markDirty();
       return true;
     }
-    if (key === 'ArrowDown' || key === 'j') {
+    if (key === 'down' || key === 'j') {
       this.selectedIndex = Math.min(this.rows.length - 1, this.selectedIndex + 1);
       this.logoutConfirmationTarget = null;
       this.markDirty();

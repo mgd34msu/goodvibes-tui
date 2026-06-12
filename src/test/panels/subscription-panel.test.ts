@@ -66,7 +66,7 @@ describe('SubscriptionPanel', () => {
 
       const panel = new SubscriptionPanel(serviceRegistry, subscriptionManager);
       panel.onActivate();
-      panel.handleInput('ArrowDown');
+      panel.handleInput('down');
       const text = linesText(panel.render(110, 14));
       expect(text).toContain('Provider Subscriptions');
       expect(text).toContain('Subscription posture');

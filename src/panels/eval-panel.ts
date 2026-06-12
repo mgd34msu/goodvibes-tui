@@ -7,6 +7,7 @@
 
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
+import type { KeyName } from './types.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import {
   buildEmptyState,
@@ -136,21 +137,21 @@ export class EvalPanel extends BasePanel {
     this._unsub = null;
   }
 
-  public handleInput(key: string): boolean {
+  public handleInput(key: KeyName): boolean {
     const suites = this._registry.getSuiteResults();
 
     if (this._mode === 'list') {
-      if (key === 'ArrowUp' || key === 'k') {
+      if (key === 'up' || key === 'k') {
         this._selectedSuiteIdx = Math.max(0, this._selectedSuiteIdx - 1);
         this.markDirty();
         return true;
       }
-      if (key === 'ArrowDown' || key === 'j') {
+      if (key === 'down' || key === 'j') {
         this._selectedSuiteIdx = Math.min(suites.length - 1, this._selectedSuiteIdx + 1);
         this.markDirty();
         return true;
       }
-      if ((key === 'Enter' || key === 'Return' || key === 'l') && suites.length > 0) {
+      if ((key === 'enter' || key === 'return' || key === 'l') && suites.length > 0) {
         this._mode = 'detail';
         this._selectedScenarioIdx = 0;
         this._scrollOffset = 0;
@@ -161,12 +162,12 @@ export class EvalPanel extends BasePanel {
     }
 
     // detail mode
-    if (key === 'Escape' || key === 'q' || key === 'h') {
+    if (key === 'escape' || key === 'q' || key === 'h') {
       this._mode = 'list';
       this.markDirty();
       return true;
     }
-    if (key === 'ArrowUp' || key === 'k') {
+    if (key === 'up' || key === 'k') {
       const suite = suites[this._selectedSuiteIdx];
       if (suite) {
         this._selectedScenarioIdx = Math.max(0, this._selectedScenarioIdx - 1);
@@ -175,7 +176,7 @@ export class EvalPanel extends BasePanel {
       }
       return true;
     }
-    if (key === 'ArrowDown' || key === 'j') {
+    if (key === 'down' || key === 'j') {
       const suite = suites[this._selectedSuiteIdx];
       if (suite) {
         this._selectedScenarioIdx = Math.min(
@@ -187,12 +188,12 @@ export class EvalPanel extends BasePanel {
       }
       return true;
     }
-    if (key === 'PageUp') {
+    if (key === 'pageup') {
       this._scrollOffset = Math.max(0, this._scrollOffset - 5);
       this.markDirty();
       return true;
     }
-    if (key === 'PageDown') {
+    if (key === 'pagedown') {
       this._scrollOffset += 5;
       this.markDirty();
       return true;
