@@ -2,16 +2,16 @@ import type { ModelPickerTarget } from '../model-picker.ts';
 import type { OnboardingStep1CapabilityItem } from '../../runtime/onboarding/index.ts';
 import { DEFAULT_CAPABILITIES, NETWORK_HOST_FIELD_IDS } from './onboarding-wizard-constants.ts';
 import { areSelectionsEqual, clamp, cloneSelection, getExternalSurfaceSetupFieldSpec, isMalformedGoodVibesSecretReferenceValue, isValidHostValue, normalizeText } from './onboarding-wizard-helpers.ts';
-import type { OnboardingWizardController } from './onboarding-wizard.ts';
+import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 import type { OnboardingWizardFieldDefinition, OnboardingWizardModelSelection, OnboardingWizardStepDefinition } from './onboarding-wizard-types.ts';
 
-export function getToggleFieldCount(controller: OnboardingWizardController, stepIndex: number): number {
+export function getToggleFieldCount(controller: OnboardingWizardControllerLike, stepIndex: number): number {
     const step = controller.steps[stepIndex];
     if (!step) return 0;
     return step.fields.filter((field) => field.kind === 'checklist' || field.kind === 'acknowledgement').length;
   }
 
-export function getCompletedToggleCount(controller: OnboardingWizardController, stepIndex: number): number {
+export function getCompletedToggleCount(controller: OnboardingWizardControllerLike, stepIndex: number): number {
     const step = controller.steps[stepIndex];
     if (!step) return 0;
 
@@ -21,27 +21,27 @@ export function getCompletedToggleCount(controller: OnboardingWizardController, 
     )).length;
   }
 
-export function getStepFieldCount(controller: OnboardingWizardController, stepIndex: number): number {
+export function getStepFieldCount(controller: OnboardingWizardControllerLike, stepIndex: number): number {
     return controller.steps[stepIndex]?.fields.length ?? 0;
   }
 
-export function getCompletedFieldCount(controller: OnboardingWizardController, stepIndex: number): number {
+export function getCompletedFieldCount(controller: OnboardingWizardControllerLike, stepIndex: number): number {
     const step = controller.steps[stepIndex];
     if (!step) return 0;
     return step.fields.filter((field) => controller.isFieldSatisfied(field)).length;
   }
 
-export function isStepDirty(controller: OnboardingWizardController, stepIndex: number): boolean {
+export function isStepDirty(controller: OnboardingWizardControllerLike, stepIndex: number): boolean {
     const stepId = controller.steps[stepIndex]?.id;
     return stepId ? controller.dirtyStepIds.has(stepId) : false;
   }
 
-export function isFieldDirty(controller: OnboardingWizardController, fieldId: string): boolean {
+export function isFieldDirty(controller: OnboardingWizardControllerLike, fieldId: string): boolean {
     const field = controller.getFieldById(fieldId);
     return field ? controller.isFieldDirtyByDefinition(field) : false;
   }
 
-export function getBlockingFieldLabels(controller: OnboardingWizardController): readonly string[] {
+export function getBlockingFieldLabels(controller: OnboardingWizardControllerLike): readonly string[] {
     const labels: string[] = [];
     if (controller.hydrationPending) {
       labels.push('Loading: Current runtime settings are still being collected.');
@@ -65,7 +65,7 @@ export function getBlockingFieldLabels(controller: OnboardingWizardController): 
   }
 
 export function getFieldValidationError(
-  controller: OnboardingWizardController,
+  controller: OnboardingWizardControllerLike,
     step: OnboardingWizardStepDefinition,
     field: OnboardingWizardFieldDefinition,
   ): string | null {
@@ -127,7 +127,7 @@ export function getFieldValidationError(
     return null;
   }
 
-export function getFieldById(controller: OnboardingWizardController, fieldId: string): OnboardingWizardFieldDefinition | null {
+export function getFieldById(controller: OnboardingWizardControllerLike, fieldId: string): OnboardingWizardFieldDefinition | null {
     for (const step of controller.steps) {
       const field = step.fields.find((entry) => entry.id === fieldId);
       if (field) return field;
@@ -135,7 +135,7 @@ export function getFieldById(controller: OnboardingWizardController, fieldId: st
     return null;
   }
 
-export function ensureSelectionVisible(controller: OnboardingWizardController, visibleFields: number): void {
+export function ensureSelectionVisible(controller: OnboardingWizardControllerLike, visibleFields: number): void {
     const total = controller.currentStep.fields.length;
     if (total === 0) {
       controller.scrollOffsets[controller.stepIndex] = 0;
@@ -154,7 +154,7 @@ export function ensureSelectionVisible(controller: OnboardingWizardController, v
     controller.scrollOffsets[controller.stepIndex] = clamp(nextOffset, 0, maxStart);
   }
 
-export function reconcileStepCursor(controller: OnboardingWizardController, stepIndex: number): void {
+export function reconcileStepCursor(controller: OnboardingWizardControllerLike, stepIndex: number): void {
     const total = controller.steps[stepIndex]?.fields.length ?? 0;
     if (total === 0) {
       controller.scrollOffsets[stepIndex] = 0;
@@ -166,7 +166,7 @@ export function reconcileStepCursor(controller: OnboardingWizardController, step
     controller.scrollOffsets[stepIndex] = clamp(controller.scrollOffsets[stepIndex] ?? 0, 0, total - 1);
   }
 
-export function resetValuesFromCurrentDefinitions(controller: OnboardingWizardController): void {
+export function resetValuesFromCurrentDefinitions(controller: OnboardingWizardControllerLike): void {
     controller.toggleState.clear();
     controller.baselineToggleState.clear();
     controller.radioState.clear();
@@ -213,7 +213,7 @@ export function resetValuesFromCurrentDefinitions(controller: OnboardingWizardCo
     }
   }
 
-export function reconcileStateWithCurrentDefinitions(controller: OnboardingWizardController): void {
+export function reconcileStateWithCurrentDefinitions(controller: OnboardingWizardControllerLike): void {
     const nextToggleKeys = new Set<string>();
     const nextRadioKeys = new Set<string>();
     const nextTextKeys = new Set<string>();
@@ -282,7 +282,7 @@ export function reconcileStateWithCurrentDefinitions(controller: OnboardingWizar
     }
   }
 
-export function recalculateDirtyState(controller: OnboardingWizardController): void {
+export function recalculateDirtyState(controller: OnboardingWizardControllerLike): void {
     controller.reconcileStateWithCurrentDefinitions();
     controller.dirtyStepIds.clear();
 
@@ -293,7 +293,7 @@ export function recalculateDirtyState(controller: OnboardingWizardController): v
     }
   }
 
-export function isFieldDirtyByDefinition(controller: OnboardingWizardController, field: OnboardingWizardFieldDefinition): boolean {
+export function isFieldDirtyByDefinition(controller: OnboardingWizardControllerLike, field: OnboardingWizardFieldDefinition): boolean {
     if (field.kind === 'checklist' || field.kind === 'acknowledgement') {
       return (controller.toggleState.get(field.id) ?? field.defaultValue)
         !== (controller.baselineToggleState.get(field.id) ?? field.defaultValue);
@@ -317,7 +317,7 @@ export function isFieldDirtyByDefinition(controller: OnboardingWizardController,
     );
   }
 
-export function isFieldSatisfied(controller: OnboardingWizardController, field: OnboardingWizardFieldDefinition): boolean {
+export function isFieldSatisfied(controller: OnboardingWizardControllerLike, field: OnboardingWizardFieldDefinition): boolean {
     if (field.kind === 'checklist') {
       return true;
     }
@@ -341,20 +341,20 @@ export function isFieldSatisfied(controller: OnboardingWizardController, field: 
     return selection.providerId.length > 0 || selection.modelId.length > 0;
   }
 
-export function getCurrentCapabilities(controller: OnboardingWizardController): readonly OnboardingStep1CapabilityItem[] {
+export function getCurrentCapabilities(controller: OnboardingWizardControllerLike): readonly OnboardingStep1CapabilityItem[] {
     return controller.runtimeDerived.step1Capabilities.length > 0
       ? controller.runtimeDerived.step1Capabilities
       : DEFAULT_CAPABILITIES;
   }
 
-export function getCapabilitySelectionState(controller: OnboardingWizardController): readonly OnboardingStep1CapabilityItem[] {
+export function getCapabilitySelectionState(controller: OnboardingWizardControllerLike): readonly OnboardingStep1CapabilityItem[] {
     return controller.getCurrentCapabilities().map((capability) => ({
       ...capability,
       selected: controller.toggleState.get(`capabilities.${capability.id}`) ?? capability.selected,
     }));
   }
 
-export function hasExistingAccessState(controller: OnboardingWizardController): boolean {
+export function hasExistingAccessState(controller: OnboardingWizardControllerLike): boolean {
     const auth = controller.runtimeSnapshot?.auth.snapshot;
     return controller.mode !== 'new'
       || (controller.runtimeSnapshot?.subscriptions.active.length ?? 0) > 0

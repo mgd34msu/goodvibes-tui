@@ -8,7 +8,7 @@ import {
   type CloudflareProvisionRequest,
 } from '../../runtime/cloudflare-control-plane.ts';
 import { buildGoodVibesSecretRef, normalizeText } from './onboarding-wizard-helpers.ts';
-import type { OnboardingWizardController } from './onboarding-wizard.ts';
+import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 import type { OnboardingWizardRadioOption } from './onboarding-wizard-types.ts';
 
 export const CLOUDFLARE_SETUP_SOURCE_OPTIONS: readonly OnboardingWizardRadioOption[] = [
@@ -90,7 +90,7 @@ export function cloudflareComponentLabel(component: CloudflareComponent): string
   return CLOUDFLARE_COMPONENT_LABELS[component];
 }
 
-export function isCloudflareConfigured(controller: OnboardingWizardController): boolean {
+export function isCloudflareConfigured(controller: OnboardingWizardControllerLike): boolean {
   const config = controller.runtimeSnapshot?.config.cloudflare;
   if (!config) return false;
   return config.enabled
@@ -100,11 +100,11 @@ export function isCloudflareConfigured(controller: OnboardingWizardController): 
     || normalizeText(config.workerName).length > 0;
 }
 
-export function shouldShowCloudflareStep(controller: OnboardingWizardController): boolean {
+export function shouldShowCloudflareStep(controller: OnboardingWizardControllerLike): boolean {
   return controller.isCapabilitySelected('cloudflare-batch') || isCloudflareConfigured(controller);
 }
 
-export function getCloudflareSetupSource(controller: OnboardingWizardController): CloudflareSetupSource {
+export function getCloudflareSetupSource(controller: OnboardingWizardControllerLike): CloudflareSetupSource {
   const configuredTokenRef = controller.runtimeSnapshot?.config.cloudflare.apiTokenRef ?? '';
   const defaultValue = configuredTokenRef.startsWith('goodvibes://secrets/env/') ? 'operational-env' : 'save-only';
   const value = controller.getStringFieldValue('cloudflare.setup-source', defaultValue);
@@ -120,7 +120,7 @@ export function getCloudflareSetupSource(controller: OnboardingWizardController)
   return 'save-only';
 }
 
-export function getCloudflareComponentSelection(controller: OnboardingWizardController): Record<CloudflareComponent, boolean> {
+export function getCloudflareComponentSelection(controller: OnboardingWizardControllerLike): Record<CloudflareComponent, boolean> {
   const selected: Record<CloudflareComponent, boolean> = { ...DEFAULT_CLOUDFLARE_COMPONENT_SELECTION };
   const configured = controller.runtimeSnapshot?.config.cloudflare;
   for (const component of CLOUDFLARE_COMPONENT_IDS) {
@@ -132,11 +132,11 @@ export function getCloudflareComponentSelection(controller: OnboardingWizardCont
   return selected;
 }
 
-export function getSelectedCloudflareComponents(controller: OnboardingWizardController): CloudflareComponentSelection {
+export function getSelectedCloudflareComponents(controller: OnboardingWizardControllerLike): CloudflareComponentSelection {
   return getCloudflareComponentSelection(controller);
 }
 
-export function getCloudflareBatchMode(controller: OnboardingWizardController): CloudflareBatchMode {
+export function getCloudflareBatchMode(controller: OnboardingWizardControllerLike): CloudflareBatchMode {
   const value = controller.getStringFieldValue('cloudflare.batch-mode', controller.runtimeSnapshot?.config.batch.mode ?? 'off');
   return value === 'explicit' || value === 'eligible-by-default' ? value : 'off';
 }
@@ -146,7 +146,7 @@ export function buildCloudflareApiTokenRef(envName: string): string {
   return `goodvibes://secrets/env/${encodeURIComponent(normalized)}`;
 }
 
-export function buildCloudflareProvisionRequest(controller: OnboardingWizardController, options: {
+export function buildCloudflareProvisionRequest(controller: OnboardingWizardControllerLike, options: {
   readonly includeTransientSecrets?: boolean;
 } = {}): CloudflareProvisionRequest {
   const components = getCloudflareComponentSelection(controller);

@@ -7,10 +7,10 @@ import {
   isExternalSurfaceSelectedByDefault,
 } from './onboarding-wizard-external-surfaces.ts';
 import { getExternalSurfaceSpecByFieldId, normalizeText, uniqueNonEmpty } from './onboarding-wizard-helpers.ts';
-import type { OnboardingWizardController } from './onboarding-wizard.ts';
+import type { OnboardingWizardControllerLike } from './onboarding-wizard-types.ts';
 
 export function getSharedIpDefault(
-  controller: OnboardingWizardController,
+  controller: OnboardingWizardControllerLike,
     enabled: { readonly controlPlane: boolean; readonly httpListener: boolean; readonly web: boolean },
   ): boolean {
     if (!controller.runtimeSnapshot) return true;
@@ -23,7 +23,7 @@ export function getSharedIpDefault(
   }
 
 export function getSharedIpHostDefault(
-  controller: OnboardingWizardController,
+  controller: OnboardingWizardControllerLike,
     enabled: { readonly controlPlane: boolean; readonly httpListener: boolean; readonly web: boolean },
   ): string {
     if (!controller.runtimeSnapshot) return '0.0.0.0';
@@ -35,7 +35,7 @@ export function getSharedIpHostDefault(
     return hosts[0] ?? '0.0.0.0';
   }
 
-export function toggleCapability(controller: OnboardingWizardController, capabilityId: OnboardingStep1CapabilityId): void {
+export function toggleCapability(controller: OnboardingWizardControllerLike, capabilityId: OnboardingStep1CapabilityId): void {
     if (capabilityId === 'local-tui-only') {
       for (const capability of controller.getCurrentCapabilities()) {
         controller.toggleState.set(`capabilities.${capability.id}`, capability.id === 'local-tui-only');
@@ -58,31 +58,31 @@ export function toggleCapability(controller: OnboardingWizardController, capabil
     if (!anyServerCapability) controller.toggleState.set('capabilities.local-tui-only', true);
   }
 
-export function selectAllServerCapabilities(controller: OnboardingWizardController): void {
+export function selectAllServerCapabilities(controller: OnboardingWizardControllerLike): void {
     for (const capability of controller.getCurrentCapabilities()) {
       controller.toggleState.set(`capabilities.${capability.id}`, capability.id !== 'local-tui-only');
     }
   }
 
-export function selectLocalTuiOnly(controller: OnboardingWizardController): void {
+export function selectLocalTuiOnly(controller: OnboardingWizardControllerLike): void {
     for (const capability of controller.getCurrentCapabilities()) {
       controller.toggleState.set(`capabilities.${capability.id}`, capability.id === 'local-tui-only');
     }
   }
 
-export function selectAllExternalSurfaces(controller: OnboardingWizardController): void {
+export function selectAllExternalSurfaces(controller: OnboardingWizardControllerLike): void {
     for (const surface of EXTERNAL_SURFACE_SPECS) {
       controller.toggleState.set(surface.enabledFieldId, true);
     }
   }
 
-export function clearExternalSurfaces(controller: OnboardingWizardController): void {
+export function clearExternalSurfaces(controller: OnboardingWizardControllerLike): void {
     for (const surface of EXTERNAL_SURFACE_SPECS) {
       controller.toggleState.set(surface.enabledFieldId, false);
     }
   }
 
-export function setCapabilityValue(controller: OnboardingWizardController, capabilityId: OnboardingStep1CapabilityId, selected: boolean): void {
+export function setCapabilityValue(controller: OnboardingWizardControllerLike, capabilityId: OnboardingStep1CapabilityId, selected: boolean): void {
     if (capabilityId === 'local-tui-only') {
       if (selected) {
         for (const capability of controller.getCurrentCapabilities()) {
@@ -112,20 +112,20 @@ export function setCapabilityValue(controller: OnboardingWizardController, capab
     if (!anyServerCapability) controller.toggleState.set('capabilities.local-tui-only', true);
   }
 
-export function isCapabilitySelected(controller: OnboardingWizardController, capabilityId: OnboardingStep1CapabilityId): boolean {
+export function isCapabilitySelected(controller: OnboardingWizardControllerLike, capabilityId: OnboardingStep1CapabilityId): boolean {
     return controller.getCapabilitySelectionState().some((capability) => capability.id === capabilityId && capability.selected);
   }
 
-export function hasServerCapabilitiesSelected(controller: OnboardingWizardController): boolean {
+export function hasServerCapabilitiesSelected(controller: OnboardingWizardControllerLike): boolean {
     return controller.getCapabilitySelectionState().some((capability) => capability.id !== 'local-tui-only' && capability.selected);
   }
 
-export function shouldEnableBrowserSurface(controller: OnboardingWizardController): boolean {
+export function shouldEnableBrowserSurface(controller: OnboardingWizardControllerLike): boolean {
     return controller.hasServerCapabilitiesSelected()
       && (controller.isCapabilitySelected('browser-access') || controller.isCapabilitySelected('network-access'));
   }
 
-export function hasSelectedInboundExternalSurface(controller: OnboardingWizardController): boolean {
+export function hasSelectedInboundExternalSurface(controller: OnboardingWizardControllerLike): boolean {
     if (!controller.isCapabilitySelected('external-integrations')) return false;
     return EXTERNAL_SURFACE_SPECS.some((surface) => (
       INBOUND_EXTERNAL_SURFACE_IDS.has(surface.id)
@@ -140,7 +140,7 @@ export function hasSelectedInboundExternalSurface(controller: OnboardingWizardCo
     ));
   }
 
-export function isRequiredExternalSetupField(controller: OnboardingWizardController, fieldId: string): boolean {
+export function isRequiredExternalSetupField(controller: OnboardingWizardControllerLike, fieldId: string): boolean {
     if (!REQUIRED_EXTERNAL_SETUP_FIELD_IDS.has(fieldId)) return false;
     const surface = getExternalSurfaceSpecByFieldId(fieldId);
     if (!surface) return false;
@@ -163,7 +163,7 @@ export function isRequiredExternalSetupField(controller: OnboardingWizardControl
     return true;
   }
 
-export function getSelectedSecretMedium(controller: OnboardingWizardController): 'secure' | 'plaintext' {
+export function getSelectedSecretMedium(controller: OnboardingWizardControllerLike): 'secure' | 'plaintext' {
     const policy = controller.getStringFieldValue(
       'external-services.secret-policy',
       controller.runtimeSnapshot?.runtimeDefaults.secretStoragePolicy ?? 'preferred_secure',
@@ -174,12 +174,12 @@ export function getSelectedSecretMedium(controller: OnboardingWizardController):
     return 'plaintext';
   }
 
-export function shouldEnableHttpListener(controller: OnboardingWizardController): boolean {
+export function shouldEnableHttpListener(controller: OnboardingWizardControllerLike): boolean {
     return controller.hasServerCapabilitiesSelected()
       && (controller.isCapabilitySelected('webhook-events') || controller.hasSelectedInboundExternalSurface());
   }
 
-export function shouldExposeHttpListenerNetworkFields(controller: OnboardingWizardController): boolean {
+export function shouldExposeHttpListenerNetworkFields(controller: OnboardingWizardControllerLike): boolean {
     return controller.hasServerCapabilitiesSelected()
       && (
         controller.isCapabilitySelected('webhook-events')
@@ -188,31 +188,31 @@ export function shouldExposeHttpListenerNetworkFields(controller: OnboardingWiza
       );
   }
 
-export function shouldExposeControlPlaneNetwork(controller: OnboardingWizardController): boolean {
+export function shouldExposeControlPlaneNetwork(controller: OnboardingWizardControllerLike): boolean {
     return controller.hasServerCapabilitiesSelected()
       && (controller.isCapabilitySelected('browser-access') || controller.isCapabilitySelected('network-access'));
   }
 
-export function requiresAuthBootstrap(controller: OnboardingWizardController): boolean {
+export function requiresAuthBootstrap(controller: OnboardingWizardControllerLike): boolean {
     return controller.hasServerCapabilitiesSelected()
       && (!controller.hasLocalAuthUser() || controller.hasBootstrapCredentialPresent());
   }
 
-export function hasAdminAuthUser(controller: OnboardingWizardController): boolean {
+export function hasAdminAuthUser(controller: OnboardingWizardControllerLike): boolean {
     return (controller.runtimeSnapshot?.auth.snapshot.users ?? [])
       .some((user) => user.roles.includes('admin'));
   }
 
-export function hasLocalAuthUser(controller: OnboardingWizardController): boolean {
+export function hasLocalAuthUser(controller: OnboardingWizardControllerLike): boolean {
     return (controller.runtimeSnapshot?.auth.snapshot.userCount ?? 0) > 0
       || (controller.runtimeSnapshot?.auth.snapshot.users ?? []).length > 0;
   }
 
-export function hasBootstrapCredentialPresent(controller: OnboardingWizardController): boolean {
+export function hasBootstrapCredentialPresent(controller: OnboardingWizardControllerLike): boolean {
     return controller.runtimeSnapshot?.auth.snapshot.bootstrapCredentialPresent === true;
   }
 
-export function getDefaultAdminUsername(controller: OnboardingWizardController): string {
+export function getDefaultAdminUsername(controller: OnboardingWizardControllerLike): string {
     const users = controller.runtimeSnapshot?.auth.snapshot.users ?? [];
     if (controller.hasBootstrapCredentialPresent()) {
       const existingAdmin = users.find((user) => user.roles.includes('admin'));
@@ -225,29 +225,29 @@ export function getDefaultAdminUsername(controller: OnboardingWizardController):
     return candidate ?? `goodvibes-admin-${users.length + 1}`;
   }
 
-export function getBooleanFieldValue(controller: OnboardingWizardController, fieldId: string, fallback: boolean): boolean {
+export function getBooleanFieldValue(controller: OnboardingWizardControllerLike, fieldId: string, fallback: boolean): boolean {
     return controller.toggleState.get(fieldId) ?? fallback;
   }
 
-export function getStringFieldValue(controller: OnboardingWizardController, fieldId: string, fallback: string): string {
+export function getStringFieldValue(controller: OnboardingWizardControllerLike, fieldId: string, fallback: string): string {
     const value = controller.textState.get(fieldId) ?? controller.radioState.get(fieldId);
     return normalizeText(value ?? fallback);
   }
 
-export function parseIntegerFieldValue(controller: OnboardingWizardController, fieldId: string, fallback: number): number | null {
+export function parseIntegerFieldValue(controller: OnboardingWizardControllerLike, fieldId: string, fallback: number): number | null {
     const raw = controller.getStringFieldValue(fieldId, String(fallback));
     if (!/^-?\d+$/.test(raw)) return null;
     const parsed = Number.parseInt(raw, 10);
     return Number.isInteger(parsed) ? parsed : null;
   }
 
-export function getPortFieldValue(controller: OnboardingWizardController, fieldId: string, fallback: number): number {
+export function getPortFieldValue(controller: OnboardingWizardControllerLike, fieldId: string, fallback: number): number {
     const parsed = controller.parseIntegerFieldValue(fieldId, fallback);
     if (parsed === null || parsed < 1 || parsed > 65535) return fallback;
     return parsed;
   }
 
-export function getNumberFieldValue(controller: OnboardingWizardController, fieldId: string, fallback: number, min?: number, max?: number): number {
+export function getNumberFieldValue(controller: OnboardingWizardControllerLike, fieldId: string, fallback: number, min?: number, max?: number): number {
     const parsed = controller.parseIntegerFieldValue(fieldId, fallback);
     if (parsed === null) return fallback;
     if (min !== undefined && parsed < min) return fallback;
