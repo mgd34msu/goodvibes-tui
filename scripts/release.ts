@@ -116,14 +116,14 @@ if (DRY_RUN) console.log('(dry-run mode — no files will be written)\n');
 // --- Pre-release validation ---
 
 if (!SKIP_VALIDATION) {
-  console.log('\n[1/10] Running typecheck...');
+  console.log('\n[1/12] Running typecheck...');
   run('bunx tsc --noEmit');
 
-  console.log('\n[2/10] Running build...');
+  console.log('\n[2/12] Running build...');
   run('bun run build');
 } else {
-  console.log('\n[1/10] Skipping validation (--skip-validation)');
-  console.log('[2/10] Skipping build (--skip-validation)');
+  console.log('\n[1/12] Skipping validation (--skip-validation)');
+  console.log('[2/12] Skipping build (--skip-validation)');
 }
 
 // --- Full gate suite (mirrors what CI demands before merging) ---
@@ -132,38 +132,46 @@ if (!SKIP_VALIDATION) {
 // CI requires. --skip-gates is an escape hatch for emergencies only.
 
 if (!SKIP_GATES) {
-  console.log('\n[3/10] Running tests...');
+  console.log('\n[3/12] Running tests...');
   run('bun run test');
 
-  console.log('\n[4/10] Running architecture check...');
+  console.log('\n[4/12] Running coverage gate...');
+  run('bun run test:coverage');
+
+  console.log('\n[5/12] Running architecture check...');
   run('bun run architecture:check');
 
-  console.log('\n[5/10] Running performance check...');
+  console.log('\n[6/12] Running performance check...');
   run('bun run perf:check');
 
-  console.log('\n[6/10] Running eval gate...');
+  console.log('\n[7/12] Running eval gate...');
   run('bun run eval:gate');
+
+  console.log('\n[8/12] Regenerating foundation artifacts...');
+  run('bun run foundation:artifacts');
 } else {
   console.warn(
     '\n' +
-    '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n' +
-    '!! WARNING: --skip-gates is active.                             !!\n' +
-    '!! The full gate suite (tests, architecture, perf, eval) was    !!\n' +
-    '!! NOT run. You are tagging a release that has NOT been         !!\n' +
-    '!! validated to the same standard CI requires. This tag may     !!\n' +
-    '!! produce a broken release. Only proceed if you are certain    !!\n' +
-    '!! CI has already validated this exact commit.                  !!\n' +
-    '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
+    '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n' +
+    '!! WARNING: --skip-gates is active.                                  !!\n' +
+    '!! The full gate suite (tests, coverage, architecture, perf, eval,   !!\n' +
+    '!! foundation artifacts) was NOT run. You are tagging a release that !!\n' +
+    '!! has NOT been validated to the same standard CI requires. This tag !!\n' +
+    '!! may produce a broken release. Only proceed if you are certain     !!\n' +
+    '!! CI has already validated this exact commit.                       !!\n' +
+    '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n'
   );
-  console.log('[3/10] Skipping tests (--skip-gates)');
-  console.log('[4/10] Skipping architecture check (--skip-gates)');
-  console.log('[5/10] Skipping performance check (--skip-gates)');
-  console.log('[6/10] Skipping eval gate (--skip-gates)');
+  console.log('[3/12] Skipping tests (--skip-gates)');
+  console.log('[4/12] Skipping coverage gate (--skip-gates)');
+  console.log('[5/12] Skipping architecture check (--skip-gates)');
+  console.log('[6/12] Skipping performance check (--skip-gates)');
+  console.log('[7/12] Skipping eval gate (--skip-gates)');
+  console.log('[8/12] Skipping foundation artifacts (--skip-gates)');
 }
 
 // --- Bump package.json ---
 
-console.log(`\n[7/10] Updating package.json: ${current} → ${next}`);
+console.log(`\n[9/12] Updating package.json: ${current} → ${next}`);
 if (!DRY_RUN) {
   pkg.version = next;
   writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
@@ -171,12 +179,12 @@ if (!DRY_RUN) {
 
 // --- Update src/version.ts via prebuild script ---
 
-console.log('\n[8/10] Syncing src/version.ts via prebuild...');
+console.log('\n[10/12] Syncing src/version.ts via prebuild...');
 run('bun run scripts/prebuild.ts');
 
 // --- Update CHANGELOG.md ---
 
-console.log('\n[9/10] Updating CHANGELOG.md...');
+console.log('\n[11/12] Updating CHANGELOG.md...');
 
 const changelogPath = join(root, 'CHANGELOG.md');
 const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -223,7 +231,7 @@ if (!DRY_RUN) {
 
 // --- Git commit + tag ---
 
-console.log(`\n[10/10] Creating git commit and tag v${next}...`);
+console.log(`\n[12/12] Creating git commit and tag v${next}...`);
 
 const tag = `v${next}`;
 const commitMsg = `chore: release ${tag}`;
