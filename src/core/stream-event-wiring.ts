@@ -118,6 +118,16 @@ export interface WireStreamEventMetricsResult {
    * TURN_COMPLETED, but a new submission may arrive before TURN_COMPLETED fires).
    */
   readonly clearFailoverVisited: () => void;
+  /**
+   * Register a callback that fires whenever a TURN_ERROR is surfaced to the
+   * user — either immediately (no optimizer) or after chain exhaustion.
+   * Does NOT fire when the optimizer performs a successful automatic failover
+   * (in that case the user sees a [Failover] notice, not an error).
+   * Used by main.ts to activate the one-key retry affordance. The callback
+   * receives exhausted=true when the failover chain was exhausted first, so
+   * the notice can say honestly that a retry reuses the same failed provider.
+   */
+  readonly onErrorSurfaced: (cb: (exhausted: boolean) => void) => void;
 }
 
 /**
@@ -274,6 +284,7 @@ export function wireStreamEventMetrics(
       systemMessageRouter.high(
         `[Failover] Chain exhausted — no alternative provider available. Original error: ${formatUserFacingErrorLine(errVal)}`,
       );
+      notifyErrorSurfaced(true);
       render();
       return;
     }
@@ -281,6 +292,7 @@ export function wireStreamEventMetrics(
     // Baseline: optimizer disabled or not wired — surface error immediately.
     const formatted = formatUserFacingErrorLine(errVal);
     systemMessageRouter.high(`[Error] ${formatted}`);
+    notifyErrorSurfaced(false);
     render();
   }));
 
@@ -314,5 +326,11 @@ export function wireStreamEventMetrics(
     metrics.activeToolName = undefined;
   }));
 
-  return { unsubs, clearFailoverVisited: () => failoverVisited.clear() };
+  let _errorSurfacedCb: ((exhausted: boolean) => void) | undefined;
+  function notifyErrorSurfaced(exhausted: boolean) { _errorSurfacedCb?.(exhausted); }
+  return {
+    unsubs,
+    clearFailoverVisited: () => failoverVisited.clear(),
+    onErrorSurfaced: (cb: (exhausted: boolean) => void) => { _errorSurfacedCb = cb; },
+  };
 }

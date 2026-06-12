@@ -1,5 +1,6 @@
 import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { probeTermCaps } from '../../renderer/term-caps.ts';
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines } from '@/runtime/index.ts';
 import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core';
 import type { CommandRegistry } from '../command-registry.ts';
@@ -39,7 +40,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
     name: 'health',
     aliases: ['doctor'],
     description: 'Health workspace for startup posture, service readiness, sandbox posture, and provider health',
-    usage: '[open|review|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|continuity|worktrees|maintenance|repair [domain]]',
+    usage: '[open|review|setup|services|sandbox|provider|accounts|auth|settings|intelligence|remote|mcp|continuity|worktrees|maintenance|term|repair [domain]]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'review').toLowerCase();
       const readModels = requireReadModels(ctx);
@@ -282,6 +283,23 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         return;
       }
 
+      if (sub === 'term') {
+        const caps = probeTermCaps(process.stdout as NodeJS.WriteStream);
+        const issues: string[] = [];
+        if (caps.capability === 'none') issues.push('terminal reports no color support — UI rendering will be degraded (no ANSI colors)');
+        if (caps.capability === 'basic16') issues.push('terminal limited to 16 ANSI colors — gradient and true-color UI elements will be approximated');
+        if (!caps.syncedOutput) issues.push('DEC Synchronized Output (mode 2026) is disabled — screen-tearing may be visible on slow connections');
+        ctx.print([
+          'Health Review: Terminal Capabilities',
+          `  color capability: ${caps.capability}`,
+          `  synced output (mode 2026): ${caps.syncedOutput ? 'enabled' : 'disabled'}`,
+          `  NO_COLOR env: ${process.env['NO_COLOR'] !== undefined && process.env['NO_COLOR'] !== '' ? 'set (forces none)' : 'unset'}`,
+          `  TERM env: ${process.env['TERM'] ?? '(unset)'}`,
+          ...(issues.length > 0 ? issues.map((issue) => `  issue: ${issue}`) : ['  no terminal capability issues detected']),
+        ].join('\n'));
+        return;
+      }
+
       if (sub === 'repair') {
         const domain = (args[1] ?? 'review').toLowerCase();
         const lines = ['Health Repair'];
@@ -426,6 +444,7 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
         '  /health remote',
         '  /health maintenance',
         '  /health worktrees',
+        '  /health term',
         '  /health repair <domain>',
         '  /setup onboarding',
       ].join('\n'));

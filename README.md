@@ -1333,14 +1333,23 @@ All shortcuts are customizable via `~/.goodvibes/tui/keybindings.json`. Use `/ke
 | `Enter` | Send message |
 | `Shift+Enter` | Insert newline |
 | `Tab` | Toggle block collapse / path completion |
-| `Ctrl+U` | Clear the prompt line |
-| `Ctrl+W` | Delete word backward |
-| `Ctrl+K` | Kill to end of line |
+| `Ctrl+U` | Kill to start of line (push to kill ring) |
+| `Alt+U` | Clear entire prompt |
+| `Ctrl+W` | Kill word backward (push to kill ring) |
+| `Ctrl+K` | Kill to end of line (push to kill ring) |
+| `Alt+D` | Kill word forward (push to kill ring) |
+| `Ctrl+Shift+Y` | Yank from kill ring |
+| `Alt+Y` | Yank-pop (rotate kill ring, replace last yank) |
+| `Alt+B` | Move word backward |
+| `Alt+F` | Move word forward |
 | `Ctrl+Z` | Undo prompt edit |
 | `Ctrl+Shift+Z` | Redo prompt edit |
 | `Ctrl+V` | Paste (image or text) |
 | `@` | Open file picker (insert file path) |
 | `?` | Open help/command picker (empty prompt) |
+| `r` / `m` | After a turn error: retry the turn / open the model picker (any other key dismisses) |
+
+> **Note:** `Ctrl+W` uses whitespace-delimited word boundaries (readline/unix-word-rubout semantics), while `Alt+D`, `Alt+B`, and `Alt+F` use Unicode word boundaries (letters, digits, underscore).
 
 ### Navigation
 
