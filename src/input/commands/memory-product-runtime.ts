@@ -55,7 +55,7 @@ export function registerMemoryProductRuntimeCommands(registry: CommandRegistry):
 
   registry.register({
     name: 'session-memory',
-    description: 'Dedicated front-door for session-scoped memory capture and review',
+    description: 'Dedicated front-door for session-scoped memory capture and review. All subcommands are filtered to scope=session.',
     usage: '[queue [limit] | export <path> | add <class> <summary...>]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'queue').toLowerCase();
@@ -64,7 +64,8 @@ export function registerMemoryProductRuntimeCommands(registry: CommandRegistry):
         return;
       }
       if (sub === 'queue') {
-        await ctx.executeCommand('recall', ['queue', ...(args[1] ? [args[1]] : [])]);
+        // Pass --scope session so only session-scoped records appear in the queue.
+        await ctx.executeCommand('recall', ['queue', '--scope', 'session', ...(args[1] ? [args[1]] : [])]);
         return;
       }
       if (sub === 'export' && args[1]) {
@@ -75,13 +76,13 @@ export function registerMemoryProductRuntimeCommands(registry: CommandRegistry):
         await ctx.executeCommand('recall', ['add', args[1], ...args.slice(2), '--scope', 'session']);
         return;
       }
-      ctx.print('Usage: /session-memory [queue [limit] | export <path> | add <class> <summary...>]');
+      ctx.print('Usage: /session-memory [queue [limit] | export <path> | add <class> <summary...>]\nAll subcommands are scoped to session records only.');
     },
   });
 
   registry.register({
     name: 'team-memory',
-    description: 'Dedicated front-door for team/shared memory review and exchange',
+    description: 'Dedicated front-door for team/shared memory review and exchange. The queue and export subcommands are filtered to scope=team.',
     usage: '[queue [limit] | export <path> | import <path> | capture policy]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'queue').toLowerCase();
@@ -90,7 +91,8 @@ export function registerMemoryProductRuntimeCommands(registry: CommandRegistry):
         return;
       }
       if (sub === 'queue') {
-        await ctx.executeCommand('recall', ['queue', ...(args[1] ? [args[1]] : [])]);
+        // Pass --scope team so only team-scoped records appear in the queue.
+        await ctx.executeCommand('recall', ['queue', '--scope', 'team', ...(args[1] ? [args[1]] : [])]);
         return;
       }
       if (sub === 'export' && args[1]) {
@@ -105,7 +107,7 @@ export function registerMemoryProductRuntimeCommands(registry: CommandRegistry):
         await ctx.executeCommand('recall', ['capture', 'policy']);
         return;
       }
-      ctx.print('Usage: /team-memory [queue [limit] | export <path> | import <path> | capture policy]');
+      ctx.print('Usage: /team-memory [queue [limit] | export <path> | import <path> | capture policy]\nqueue and export are scoped to team records; import applies the bundle\'s own scopes and capture policy is global.');
     },
   });
 }
