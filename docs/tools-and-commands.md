@@ -68,7 +68,7 @@ Representative slash-command families include:
 - `/replay`
 - `/eval`
 - `/session`
-- `/workplan`
+- `/work-plan`
 
 `/session` is the single front-door for all session work. Two domains:
 - Lifecycle: `list`, `rename`, `resume`, `fork`, `save`, `info`, `export <id|.> [format]`, `search <query>`, `delete <id>`, `events [kind]`, `groups [kind]`, `hotspots`
@@ -107,7 +107,7 @@ Planning artifacts are stored in a project knowledge space named `project:<proje
 
 See [Project planning](project-planning.md) for the panel layout, `/plan` behavior, and route/method list.
 
-`/workplan` is the separate persistent checklist surface. Use it when the work already has concrete tasks and you want durable status tracking rather than another planning interview.
+`/work-plan` is the separate persistent checklist surface. Use it when the work already has concrete tasks and you want durable status tracking rather than another planning interview.
 
 ## Context maintenance
 

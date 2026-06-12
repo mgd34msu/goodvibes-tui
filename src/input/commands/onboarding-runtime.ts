@@ -5,7 +5,6 @@ export function registerOnboardingRuntimeCommands(registry: CommandRegistry): vo
   registry.register({
     name: 'onboarding',
     description: 'Open the onboarding wizard with current settings preloaded for review and editing',
-    usage: '',
     handler(_args, ctx) {
       openOnboardingWizard(ctx, { mode: 'edit', reset: true });
       ctx.print('Opening onboarding wizard.');

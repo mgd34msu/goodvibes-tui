@@ -132,7 +132,7 @@ function renderKnowledgeAskResult(result: KnowledgeAskResult): string {
 export const knowledgeCommand: SlashCommand = {
   name: 'knowledge',
   aliases: ['know'],
-  description: 'Structured knowledge graph: ingest URLs/bookmarks, inspect issues, and build compact prompt packets.',
+  description: 'Structured knowledge graph: ingest URLs/bookmarks, inspect issues, and build compact prompt packets',
   usage: '<subcommand> [args]',
   argsHint: 'status|ask|ingest-url|import-bookmarks|import-urls|list|search|get|queue|review-issue|candidates|reports|schedules|lint|packet|explain|reindex|consolidate',
   handler: async (args: string[], context: CommandContext): Promise<void> => {

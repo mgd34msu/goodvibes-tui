@@ -51,7 +51,7 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
     name: 'diff',
     aliases: ['d'],
-    description: 'Show unified diff of session file changes. Uses git diff HEAD if in a git repo.',
+    description: 'Show unified diff of session file changes. Uses git diff HEAD if in a git repo',
     usage: '[session|head|working|staged|<git-ref>]',
     argsHint: '[session|head|working|staged|<ref>]',
     async handler(args, ctx) {

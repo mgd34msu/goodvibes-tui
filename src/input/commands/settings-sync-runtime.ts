@@ -24,8 +24,8 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
-    name: 'settingssync',
-    aliases: ['settings-sync'],
+    name: 'settings-sync',
+    aliases: ['settingssync'],
     description: 'Review sync posture, export/import settings-sync bundles, and open the settings sync workspace',
     usage: '[review|panel|show <key>|staged|conflicts|resolve <key> <local|synced>|failures|rollback-history|export <path>|inspect <path>|pull <path>|push <path>|lock <key> <source> <reason...>|unlock <key>]',
     handler(args, ctx) {
@@ -39,7 +39,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
       if (sub === 'show') {
         const key = args[1] as ConfigKey | undefined;
         if (!key || !CONFIG_KEYS.has(key)) {
-          ctx.print('Usage: /settingssync show <config-key>');
+          ctx.print('Usage: /settings-sync show <config-key>');
           return;
         }
         ctx.print(formatResolvedSettingReview(ctx.platform.configManager, key));
@@ -63,7 +63,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
         const key = args[1] as ConfigKey | undefined;
         const resolution = (args[2] ?? '').toLowerCase();
         if (!key || !CONFIG_KEYS.has(key) || (resolution !== 'local' && resolution !== 'synced')) {
-          ctx.print('Usage: /settingssync resolve <config-key> <local|synced>');
+          ctx.print('Usage: /settings-sync resolve <config-key> <local|synced>');
           return;
         }
         const changed = resolveSettingsSyncConflict(ctx.platform.configManager, key, resolution);
@@ -102,7 +102,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
       if (sub === 'export' || sub === 'push') {
         const pathArg = args[1];
         if (!pathArg) {
-          ctx.print(`Usage: /settingssync ${sub} <path>`);
+          ctx.print(`Usage: /settings-sync ${sub} <path>`);
           return;
         }
         const targetPath = shellPaths.resolveWorkspacePath(pathArg);
@@ -122,7 +122,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
       if (sub === 'inspect') {
         const pathArg = args[1];
         if (!pathArg) {
-          ctx.print('Usage: /settingssync inspect <path>');
+          ctx.print('Usage: /settings-sync inspect <path>');
           return;
         }
         const sourcePath = shellPaths.resolveWorkspacePath(pathArg);
@@ -133,7 +133,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
       if (sub === 'pull') {
         const pathArg = args[1];
         if (!pathArg) {
-          ctx.print('Usage: /settingssync pull <path>');
+          ctx.print('Usage: /settings-sync pull <path>');
           return;
         }
         const sourcePath = shellPaths.resolveWorkspacePath(pathArg);
@@ -152,7 +152,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
         const source = args[2];
         const reason = args.slice(3).join(' ').trim();
         if (!key || !source || !reason || !CONFIG_KEYS.has(key)) {
-          ctx.print('Usage: /settingssync lock <config-key> <source> <reason...>');
+          ctx.print('Usage: /settings-sync lock <config-key> <source> <reason...>');
           return;
         }
         setManagedSettingLock(key, source, reason, controlPlaneConfigDir);
@@ -162,7 +162,7 @@ export function registerSettingsSyncRuntimeCommands(registry: CommandRegistry): 
       if (sub === 'unlock') {
         const key = args[1] as ConfigKey | undefined;
         if (!key || !CONFIG_KEYS.has(key)) {
-          ctx.print('Usage: /settingssync unlock <config-key>');
+          ctx.print('Usage: /settings-sync unlock <config-key>');
           return;
         }
         ctx.print(clearManagedSettingLock(key, controlPlaneConfigDir) ? `Managed lock cleared for ${key}.` : `No managed lock found for ${key}.`);

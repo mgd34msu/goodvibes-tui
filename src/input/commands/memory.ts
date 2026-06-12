@@ -25,7 +25,7 @@ import { VALID_CLASSES, VALID_REVIEW_STATES, VALID_SCOPES } from './recall-share
 export const recallCommand: SlashCommand = {
   name: 'recall',
   aliases: ['rc'],
-  description: 'Project memory: add decisions, constraints, incidents, and patterns with provenance.',
+  description: 'Project memory: add decisions, constraints, incidents, and patterns with provenance',
   usage: '<subcommand> [args]',
   argsHint: 'add|search|link|get|list|remove',
   handler: async (args: string[], context: CommandContext): Promise<void> => {

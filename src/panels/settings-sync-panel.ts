@@ -56,7 +56,7 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
     const postureLines: Line[] = [
       buildPanelLine(width, [[' resolved keys ', C.label], [String(snapshot.resolvedEntries.length), C.value], ['  conflicts ', C.label], ...buildStatusPill(snapshot.conflicts.length > 0 ? 'bad' : 'good', String(snapshot.conflicts.length)), ['  failures ', C.label], ...buildStatusPill(snapshot.recentFailures.length > 0 ? 'warn' : 'good', String(snapshot.recentFailures.length))]),
       buildPanelLine(width, [[' managed locks ', C.label], [String(snapshot.managedLockCount), snapshot.managedLockCount > 0 ? C.warn : C.dim], ['  staged bundle ', C.label], [snapshot.stagedManagedBundle ? snapshot.stagedManagedBundle.profileName : 'none', snapshot.stagedManagedBundle ? C.info : C.dim]]),
-      buildGuidanceLine(width, '/settingssync conflicts', 'review conflicting synced values before they silently shape effective configuration', C),
+      buildGuidanceLine(width, '/settings-sync conflicts', 'review conflicting synced values before they silently shape effective configuration', C),
       buildGuidanceLine(width, '/managed review', 'inspect staged managed changes, risk posture, and rollback records', C),
     ];
 
@@ -86,7 +86,7 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
         : [buildPanelLine(width, [[' No recent sync or managed-setting failures.', C.dim]])]),
       // Conflicts
       ...(snapshot.conflicts.length > 0
-        ? snapshot.conflicts.map((conflict) => buildPanelLine(width, [[` ${conflict.key}`.padEnd(30), C.value], [` ${conflict.source}`.padEnd(10), C.warn], [` resolve: /settingssync resolve ${conflict.key} local|synced`.slice(0, Math.max(0, width - 42)), C.dim]]))
+        ? snapshot.conflicts.map((conflict) => buildPanelLine(width, [[` ${conflict.key}`.padEnd(30), C.value], [` ${conflict.source}`.padEnd(10), C.warn], [` resolve: /settings-sync resolve ${conflict.key} local|synced`.slice(0, Math.max(0, width - 42)), C.dim]]))
         : [buildPanelLine(width, [[' No settings conflicts detected.', C.dim]])]),
       // Rollback History
       ...(snapshot.rollbackHistory.length > 0
@@ -108,7 +108,7 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
             buildPanelLine(width, [[' managed ', C.label], [String(selectedEntry.managedValue ?? '(unset)').slice(0, Math.max(0, width - 11)), C.warn]]),
           ], C)
         : []),
-      buildPanelLine(width, [[' ↑/↓ browse  /settingssync show <key>  /settingssync resolve <key> <local|synced>  /managed apply-staged [key...] ', C.dim]]),
+      buildPanelLine(width, [[' ↑/↓ browse  /settings-sync show <key>  /settings-sync resolve <key> <local|synced>  /managed apply-staged [key...] ', C.dim]]),
     ];
 
     return this.renderList(width, height, {

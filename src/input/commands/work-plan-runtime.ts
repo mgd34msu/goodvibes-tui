@@ -37,7 +37,7 @@ function openPanel(ctx: import('../command-registry.ts').CommandContext): void {
 
 function formatList(store: WorkPlanStore): string {
   const items = store.listItems();
-  if (items.length === 0) return 'Work plan is empty. Add one with /workplan add <title>.';
+  if (items.length === 0) return 'Work plan is empty. Add one with /work-plan add <title>.';
   return [
     `Work Plan (${items.length})`,
     ...items.map((item) => {
@@ -78,8 +78,8 @@ function parseAddArgs(args: string[]): { title: string; owner?: string; source?:
 
 export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
-    name: 'workplan',
-    aliases: ['wp', 'todo'],
+    name: 'work-plan',
+    aliases: ['wp', 'todo', 'workplan'],
     description: 'Track a persistent workspace-scoped work plan',
     usage: '[panel|list|show|add <title> [--owner name] [--source label] [--notes text]|done <id>|start <id>|block <id>|fail <id>|cancel <id>|pending <id>|remove <id>|clear-done]',
     argsHint: '[panel|add|list|done]',
@@ -107,7 +107,7 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
         if (subcommand === 'add') {
           const parsed = parseAddArgs(args.slice(1));
           if (!parsed.title) {
-            ctx.print('Usage: /workplan add <title> [--owner name] [--source label] [--notes text]');
+            ctx.print('Usage: /work-plan add <title> [--owner name] [--source label] [--notes text]');
             return;
           }
           const addOptions = {
@@ -123,7 +123,7 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
         if (subcommand === 'remove' || subcommand === 'delete' || subcommand === 'rm') {
           const id = args[1];
           if (!id) {
-            ctx.print(`Usage: /workplan ${subcommand} <id>`);
+            ctx.print(`Usage: /work-plan ${subcommand} <id>`);
             return;
           }
           const item = store.removeItem(id);
@@ -138,7 +138,7 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
         if (subcommand === 'cycle' || subcommand === 'toggle') {
           const id = args[1];
           if (!id) {
-            ctx.print(`Usage: /workplan ${subcommand} <id>`);
+            ctx.print(`Usage: /work-plan ${subcommand} <id>`);
             return;
           }
           const item = store.cycleItemStatus(id);
@@ -149,7 +149,7 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
         if (status) {
           const id = args[1];
           if (!id) {
-            ctx.print(`Usage: /workplan ${subcommand} <id>`);
+            ctx.print(`Usage: /work-plan ${subcommand} <id>`);
             return;
           }
           const item = store.setItemStatus(id, status);
@@ -157,7 +157,7 @@ export function registerWorkPlanRuntimeCommands(registry: CommandRegistry): void
           return;
         }
         if (WORK_PLAN_STATUSES.includes(subcommand as WorkPlanItemStatus)) {
-          ctx.print(`Usage: /workplan ${subcommand} <id>`);
+          ctx.print(`Usage: /work-plan ${subcommand} <id>`);
           return;
         }
         ctx.print(`Unknown workplan subcommand: ${subcommand}`);

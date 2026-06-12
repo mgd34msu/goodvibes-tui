@@ -53,7 +53,6 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     name: 'incident-review',
     aliases: [],
     description: 'Alias for /incident open',
-    usage: '',
     handler(_args, ctx) {
       if (ctx.openIncidentPanel) {
         ctx.openIncidentPanel();
@@ -249,7 +248,7 @@ export function registerLocalRuntimeCommands(registry: CommandRegistry): void {
     aliases: ['img'],
     description: 'Attach an image file to the next message',
     usage: '<path> [prompt text]',
-    argsHint: '<path> [prompt]',
+    argsHint: '<path> [prompt text]',
     async handler(args, ctx) {
       if (args.length === 0) {
         ctx.print('Usage: /image <path> [prompt text]\nSupported formats: PNG, JPEG, WebP, GIF');

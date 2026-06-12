@@ -109,8 +109,8 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
 
   protected getEmptyStateActions(): Array<{ command: string; summary: string }> {
     return [
-      { command: '/workplan add <title>', summary: 'add a persistent item' },
-      { command: '/workplan list', summary: 'print the current plan' },
+      { command: '/work-plan add <title>', summary: 'add a persistent item' },
+      { command: '/work-plan list', summary: 'print the current plan' },
     ];
   }
 

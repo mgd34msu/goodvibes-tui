@@ -55,7 +55,7 @@ export function registerMemoryProductRuntimeCommands(registry: CommandRegistry):
 
   registry.register({
     name: 'session-memory',
-    description: 'Dedicated front-door for session-scoped memory capture and review. All subcommands are filtered to scope=session.',
+    description: 'Dedicated front-door for session-scoped memory capture and review. All subcommands are filtered to scope=session',
     usage: '[queue [limit] | export <path> | add <class> <summary...>]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'queue').toLowerCase();
@@ -82,7 +82,7 @@ export function registerMemoryProductRuntimeCommands(registry: CommandRegistry):
 
   registry.register({
     name: 'team-memory',
-    description: 'Dedicated front-door for team/shared memory review and exchange. The queue and export subcommands are filtered to scope=team.',
+    description: 'Dedicated front-door for team/shared memory review and exchange. The queue and export subcommands are filtered to scope=team',
     usage: '[queue [limit] | export <path> | import <path> | capture policy]',
     async handler(args, ctx) {
       const sub = (args[0] ?? 'queue').toLowerCase();

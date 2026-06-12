@@ -365,7 +365,7 @@ function handleFallbackTest(
 export const providerCommand: SlashCommand = {
   name: 'provider-opt',
   aliases: ['prov-opt'],
-  description: 'Manage provider routing optimizer (route, pin, explain, fallback).',
+  description: 'Manage provider routing optimizer (route, pin, explain, fallback)',
   usage: '<subcommand> [args]',
   argsHint: 'optimizer|route|explain-route|pin|fallback',
   handler: async (args: string[], context: CommandContext): Promise<void> => {

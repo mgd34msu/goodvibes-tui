@@ -339,7 +339,7 @@ function handleCancel(args: string[], context: CommandContext): void {
 export const sessionCommand: SlashCommand = {
   name: 'session',
   aliases: ['sess'],
-  description: 'Session lifecycle and orchestration: list, resume, fork, save, export, link-task, handoff, graph, cancel.',
+  description: 'Session lifecycle and orchestration: list, resume, fork, save, export, link-task, handoff, graph, cancel',
   usage: '<subcommand> [args]',
   argsHint: 'list|rename|resume|fork|save|info|export|search|delete|events|groups|hotspots|link-task|handoff|graph|cancel',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
