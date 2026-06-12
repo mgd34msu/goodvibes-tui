@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigManager } from '../config/index.ts';
 import {
+  applyRuntimeConfigDefault,
   applyRuntimeConfigOverrides,
   applyRuntimeConfigValue,
   applyRuntimeCommandEndpointFlagOverrides,
@@ -671,5 +672,107 @@ describe('parseCliFlags', () => {
     expect(errors[0]).toContain('Invalid --config controlPlane.port=99999');
     expect(errors[1]).toContain('Unknown config key: not.real');
     expect(configManager.get('controlPlane.port')).toBe(3421);
+  });
+
+  // ---------------------------------------------------------------------------
+  // applyRuntimeConfigDefault — persisted-value precedence
+  // ---------------------------------------------------------------------------
+
+  test('applyRuntimeConfigDefault: respects explicit false in global settings file', () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-global-'));
+    const configDir = join(root, '.goodvibes', 'tui');
+    mkdirSync(configDir, { recursive: true });
+    // Write explicit false for display.showTokenSpeed to global settings file.
+    writeFileSync(join(configDir, 'settings.json'), JSON.stringify({ display: { showTokenSpeed: false } }), 'utf-8');
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: root });
+
+    // Attempt to apply a TUI default of true — user's explicit false must win.
+    applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
+
+    expect(configManager.get('display.showTokenSpeed')).toBe(false);
+  });
+
+  test('applyRuntimeConfigDefault: respects explicit false in project settings file when global file lacks the key', () => {
+    // Use separate directories so global and project config paths are distinct.
+    const globalRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-global-dir-'));
+    const projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-project-dir-'));
+    // Global configDir is in globalRoot — no settings file there (key absent globally).
+    const configDir = join(globalRoot, '.goodvibes', 'tui');
+    // Project config is at projectRoot/.goodvibes/tui/settings.json.
+    const projectConfigDir = join(projectRoot, '.goodvibes', 'tui');
+    mkdirSync(projectConfigDir, { recursive: true });
+    writeFileSync(join(projectConfigDir, 'settings.json'), JSON.stringify({ display: { showTokenSpeed: false } }), 'utf-8');
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: projectRoot });
+
+    // Attempt to apply a TUI default of true — project-scoped explicit false must win.
+    applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
+
+    expect(configManager.get('display.showTokenSpeed')).toBe(false);
+  });
+
+  test('applyRuntimeConfigDefault: applies default when key absent from both global and project files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-absent-'));
+    const configDir = join(root, '.goodvibes', 'tui');
+    // Neither global nor project settings file contains display.showTokenSpeed.
+    // No files written — clean install scenario.
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: root });
+
+    // SDK default is false; TUI default is true — the TUI default must be applied.
+    applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
+
+    expect(configManager.get('display.showTokenSpeed')).toBe(true);
+    // Must not have written a settings file to disk.
+    expect(existsSync(join(configDir, 'settings.json'))).toBe(false);
+  });
+
+  test('applyRuntimeConfigDefault: corrupt global settings file does not block project file — explicit false respected', () => {
+    // Construct ConfigManager with valid files first so the SDK initialises cleanly,
+    // then overwrite the global settings file with malformed JSON to simulate on-disk
+    // corruption that occurs after startup. applyRuntimeConfigDefault reads the raw
+    // file directly, so the per-path isolation must handle the parse failure without
+    // abandoning the project file check.
+    const globalRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-corrupt-global-'));
+    const projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-corrupt-global-proj-'));
+    const configDir = join(globalRoot, '.goodvibes', 'tui');
+    const projectConfigDir = join(projectRoot, '.goodvibes', 'tui');
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(projectConfigDir, { recursive: true });
+    // Construct with a valid (empty) global file so the SDK initialises cleanly.
+    writeFileSync(join(configDir, 'settings.json'), '{}', 'utf-8');
+    // Project file explicitly sets the key to false.
+    writeFileSync(join(projectConfigDir, 'settings.json'), JSON.stringify({ display: { showTokenSpeed: false } }), 'utf-8');
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: projectRoot });
+    // Now corrupt the global file on disk after construction.
+    writeFileSync(join(configDir, 'settings.json'), '{not valid json', 'utf-8');
+
+    applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
+
+    // User's explicit false in the project file must win even though the global file is corrupt.
+    expect(configManager.get('display.showTokenSpeed')).toBe(false);
+  });
+
+  test('applyRuntimeConfigDefault: corrupt project settings file does not block global file — explicit false respected', () => {
+    // Construct ConfigManager with valid files first so the SDK initialises cleanly,
+    // then overwrite the project settings file with malformed JSON to simulate on-disk
+    // corruption after startup. The global file explicitly sets the key to false:
+    // the per-path isolation must still find and respect it.
+    const globalRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-corrupt-project-'));
+    const projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-config-default-corrupt-project-proj-'));
+    const configDir = join(globalRoot, '.goodvibes', 'tui');
+    const projectConfigDir = join(projectRoot, '.goodvibes', 'tui');
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(projectConfigDir, { recursive: true });
+    // Global file explicitly sets the key to false.
+    writeFileSync(join(configDir, 'settings.json'), JSON.stringify({ display: { showTokenSpeed: false } }), 'utf-8');
+    // Construct with a valid (empty) project file so the SDK initialises cleanly.
+    writeFileSync(join(projectConfigDir, 'settings.json'), '{}', 'utf-8');
+    const configManager = new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: projectRoot });
+    // Now corrupt the project file on disk after construction.
+    writeFileSync(join(projectConfigDir, 'settings.json'), '{not valid json', 'utf-8');
+
+    applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
+
+    // User's explicit false in the global file must win even though the project file is corrupt.
+    expect(configManager.get('display.showTokenSpeed')).toBe(false);
   });
 });

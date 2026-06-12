@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import type { ConfigKey, ConfigManager, ConfigSetting, GoodVibesConfig, PersistedFlagState } from '../config/index.ts';
 import { CONFIG_SCHEMA, ConfigError } from '../config/index.ts';
 import type { GoodVibesCliCommand, GoodVibesCliFlags } from './types.ts';
@@ -60,6 +61,73 @@ function setNestedConfigValue(config: GoodVibesConfig, key: ConfigKey, value: un
     throw new ConfigError(`Invalid config path: section '${parts.slice(0, -1).join('.')}' does not exist`);
   }
   (cursor as Record<string, unknown>)[parts[parts.length - 1]!] = value;
+}
+
+/**
+ * Typed accessor for the SDK's private file paths on ConfigManager.
+ *
+ * SDK coupling: configPath and projectConfigPath are declared `private readonly`
+ * in the SDK's ConfigManager (see manager.d.ts — configPath, projectConfigPath). No public accessors exist
+ * as of the SDK version pinned in this project. This cast is the narrowest
+ * possible workaround. SDK public-accessor request: see HANDOFF-FROM-TUI-SESSION-20260611.md,
+ * Item 6 area. If the SDK ever exposes getConfigPath()/getProjectConfigPath(), replace
+ * this cast with those calls and remove this comment.
+ *
+ * Fail-open: if the cast produces undefined (SDK internal rename), the paths are
+ * treated as absent and the default is applied safely.
+ */
+function getPersistedPaths(configManager: ConfigManager): { configPath: string | undefined; projectConfigPath: string | undefined } {
+  const manager = configManager as unknown as { configPath?: string; projectConfigPath?: string };
+  return {
+    configPath: typeof manager.configPath === 'string' ? manager.configPath : undefined,
+    projectConfigPath: typeof manager.projectConfigPath === 'string' ? manager.projectConfigPath : undefined,
+  };
+}
+
+/**
+ * Returns true if the given dot-path key is explicitly present anywhere
+ * in the provided raw JSON object.
+ */
+function isKeyPresentInRaw(raw: Record<string, unknown>, key: ConfigKey): boolean {
+  const parts = key.split('.');
+  let cursor: unknown = raw;
+  for (const part of parts) {
+    if (cursor == null || typeof cursor !== 'object' || !(part in (cursor as object))) {
+      return false;
+    }
+    cursor = (cursor as Record<string, unknown>)[part];
+  }
+  return true;
+}
+
+/**
+ * Apply a TUI default to a config key, but ONLY if the user has not explicitly
+ * set the key in EITHER their global OR project persisted settings files.
+ * Reads the raw settings JSON from disk (bypasses the in-memory merged config)
+ * so a user's explicit `false` in either file is never silently overridden at startup.
+ *
+ * Each settings file is read independently: a parse failure on one file
+ * contributes nothing but does NOT prevent the other file from being checked.
+ * The default is applied only when the key is absent from every readable file
+ * (e.g. new install, both files missing, or both unparseable).
+ */
+export function applyRuntimeConfigDefault(configManager: ConfigManager, key: ConfigKey, defaultValue: unknown): void {
+  const { configPath, projectConfigPath } = getPersistedPaths(configManager);
+  // Check each settings file independently. A read/parse failure on one path
+  // contributes nothing but must not prevent the other path from being checked.
+  for (const filePath of [configPath, projectConfigPath]) {
+    if (typeof filePath !== 'string' || !existsSync(filePath)) continue;
+    try {
+      const raw = JSON.parse(readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
+      if (isKeyPresentInRaw(raw, key)) {
+        // Key is explicitly set in this persisted config — respect the user's value.
+        return;
+      }
+    } catch {
+      // Unreadable or malformed JSON — this file contributes nothing; continue to next.
+    }
+  }
+  applyRuntimeConfigValue(configManager, key, defaultValue);
 }
 
 export function applyRuntimeConfigValue(configManager: ConfigManager, key: ConfigKey, value: unknown): void {

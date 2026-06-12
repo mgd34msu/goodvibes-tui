@@ -3,6 +3,7 @@ import { LAYOUT, TOOL_STATUS } from './layout.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 import { stripDangerousAnsi } from './ansi-sanitize.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
 
 const TOOL_NAME_MIN_WIDTH = 8;
 const TOOL_NAME_MAX_WIDTH = 20;
@@ -148,6 +149,8 @@ function extractKeyArg(toolCall: ToolCall): string {
  * @param width - Terminal width
  * @param durationMs - Optional duration in milliseconds
  * @param errorMsg - Optional error message for failed calls
+ * @param frameIndex - Spinner frame index for animated icon
+ * @param startedAtMs - Wall-clock ms when execution started; enables live elapsed timer
  */
 export function renderToolCallBlock(
   toolCall: ToolCall,
@@ -157,6 +160,7 @@ export function renderToolCallBlock(
   durationMs?: number,
   errorMsg?: string,
   frameIndex?: number,
+  startedAtMs?: number,
 ): Line[] {
   const line = createEmptyLine(width);
   const margin = LAYOUT.LEFT_MARGIN;
@@ -172,9 +176,15 @@ export function renderToolCallBlock(
     : '244';
   const rightText = (() => {
     if (durationMs !== undefined && status === 'done') {
-      return durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`;
+      return formatElapsed(durationMs);
     }
-    return status === 'executing' ? '...' : '';
+    if (status === 'executing') {
+      if (startedAtMs !== undefined) {
+        return formatElapsed(Date.now() - startedAtMs);
+      }
+      return '...';
+    }
+    return '';
   })();
   const rightWidth = getDisplayWidth(rightText);
   const rightStart = rightText

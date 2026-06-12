@@ -1,6 +1,7 @@
 // Compatibility wrapper for older imports. New CLI code lives in src/cli.
 export type { GoodVibesCliFlags as CliFlags } from './cli/types.ts';
 export {
+  applyRuntimeConfigDefault,
   applyRuntimeConfigOverrides,
   applyRuntimeConfigValue,
   applyRuntimeCommandEndpointFlagOverrides,

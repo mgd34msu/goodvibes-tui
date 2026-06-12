@@ -5,6 +5,7 @@ import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColo
 import type { GitHeaderInfo } from './git-status.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
 import { GLYPHS } from './ui-primitives.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
@@ -381,12 +382,14 @@ export class UIFactory {
   private static readonly THINK_GRADIENT_START = '#00ffff';
   private static readonly THINK_GRADIENT_END = '#d000ff';
 
-  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number): Line[] {
+  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number): Line[] {
     // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)
     const phraseIndex = Math.floor(frame / PHRASE_ROTATION_FRAMES) % this.THINKING_PHRASES.length;
     const phrase = this.THINKING_PHRASES[phraseIndex];
     const speedSuffix = (tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
-    const text = `  ${spinner} ${phrase}${speedSuffix} `;
+    const elapsedSuffix = elapsedMs !== undefined ? ` (${formatElapsed(elapsedMs)})` : '';
+    const ttftSuffix = (ttftMs !== undefined && ttftMs > 0) ? ` ttft:${ttftMs}ms` : '';
+    const text = `  ${spinner} ${phrase}${speedSuffix}${elapsedSuffix}${ttftSuffix} `;
 
     const textWidth = Math.max(1, getDisplayWidth(text) - 1);
     const segments: ConversationStatusSegment[] = Array.from(text).map((char, index) => {

@@ -173,4 +173,45 @@ describe('tool preview truncation', () => {
     const displayW = getDisplayWidth(text.trimEnd());
     expect(displayW).toBeLessThanOrEqual(width);
   });
+
+  it('UIFactory.createThinkingFragment includes elapsed suffix when elapsedMs provided', () => {
+    const width = 80;
+    const elapsedMs = 12_000; // 12 seconds
+    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined, undefined, undefined, elapsedMs);
+    // blank + spinner + blank (no preview line)
+    expect(lines).toHaveLength(3);
+    const spinnerLine = lines[1];
+    const text = spinnerLine.map(c => c.char).join('');
+    // Should include the elapsed time suffix e.g. '(12s)'
+    expect(text).toContain('(12s)');
+  });
+
+  it('UIFactory.createThinkingFragment includes TTFT suffix when ttftMs provided', () => {
+    const width = 80;
+    const ttftMs = 350;
+    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined, undefined, undefined, undefined, ttftMs);
+    expect(lines).toHaveLength(3);
+    const spinnerLine = lines[1];
+    const text = spinnerLine.map(c => c.char).join('');
+    // Should include ttft suffix e.g. 'ttft:350ms'
+    expect(text).toContain('ttft:350ms');
+  });
+
+  it('UIFactory.createThinkingFragment includes both elapsed and TTFT when both provided', () => {
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined, undefined, undefined, 5000, 280);
+    expect(lines).toHaveLength(3);
+    const spinnerLine = lines[1];
+    const text = spinnerLine.map(c => c.char).join('');
+    expect(text).toContain('(5s)');
+    expect(text).toContain('ttft:280ms');
+  });
+
+  it('UIFactory.createThinkingFragment elapsed suffix omitted when elapsedMs is undefined', () => {
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(width, '-', 0, undefined, undefined);
+    const spinnerLine = lines[1];
+    const text = spinnerLine.map(c => c.char).join('');
+    expect(text).not.toMatch(/\(\d+/);
+  });
 });
