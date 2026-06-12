@@ -319,18 +319,52 @@ function handleCancel(args: string[], context: CommandContext): void {
 /**
  * sessionCommand — The `/session` slash command.
  *
- * Routes to multi-session orchestration subcommand handlers based on args[0].
+ * The ONE front-door for all session operations. Owns two domains:
+ *
+ * Lifecycle (continuity, export, resume, pruning):
+ *   list | rename | resume | fork | save | info | events | groups | hotspots | export | search | delete
+ *
+ * Orchestration (cross-session task DAG — 40 tests, cycle detection):
+ *   link-task | handoff | graph | cancel
+ *
+ * Orchestration-command decision (TASK-032):
+ *   Both domains live under /session rather than splitting orchestration into
+ *   a separate /session-orch command. Rationale: they share the same entity
+ *   (a session) and the same operator mental model ("I am working with sessions").
+ *   A second front-door would create ambiguity about which command to reach for.
+ *   Explicit switch routing (not fallthrough) makes both domains first-class;
+ *   the former /session-mgmt alias (session-mgmt/smgmt) is removed so there
+ *   is exactly one registration and no silent shadowing.
  */
 export const sessionCommand: SlashCommand = {
   name: 'session',
   aliases: ['sess'],
-  description: 'Multi-session orchestration: link tasks, handoff, view graph, and cancel across sessions.',
+  description: 'Session lifecycle and orchestration: list, resume, fork, save, export, link-task, handoff, graph, cancel.',
   usage: '<subcommand> [args]',
-  argsHint: 'link-task|handoff|graph|cancel',
+  argsHint: 'list|rename|resume|fork|save|info|export|search|delete|events|groups|hotspots|link-task|handoff|graph|cancel',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const [sub, ...rest] = args;
 
     switch (sub) {
+      // ── Lifecycle subcommands ────────────────────────────────────────────────
+      // Each delegates explicitly to handleSessionWorkflowCommand so every
+      // subcommand has a deterministic, named path — no silent fallthrough.
+      case 'list':
+      case 'rename':
+      case 'resume':
+      case 'fork':
+      case 'save':
+      case 'info':
+      case 'export':
+      case 'search':
+      case 'delete':
+      case 'events':
+      case 'groups':
+      case 'hotspots':
+        await handleSessionWorkflowCommand(args, context);
+        break;
+
+      // ── Orchestration subcommands ─────────────────────────────────────────────
       case 'link-task':
       case 'link':
         handleLinkTask(rest, context);
@@ -350,24 +384,40 @@ export const sessionCommand: SlashCommand = {
         handleCancel(rest, context);
         break;
 
+      // ── No-arg: show current session info ────────────────────────────────────
+      case undefined:
+        await handleSessionWorkflowCommand([], context);
+        break;
+
       default: {
-        const handled = await handleSessionWorkflowCommand(args, context);
-        if (!handled) {
-          const usage = [
-            'Usage: /session <subcommand>',
-            '  list | rename <name> | resume <id|name> | fork [name] | save [name] | info [id] | export <id> [format] | search <query> | delete <id>',
-            '                                 — Session continuity, export, resume, and pruning',
-            '  link-task <taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]',
-            '                                 — Register a task in the cross-session graph',
-            '  handoff <taskId> --to <sid>  [--session <sid>] [--reason <reason>]',
-            '                                 — Hand a task off to another session',
-            '  graph [--session <sid>] [--format text|json]',
-            '                                 — Display the cross-session task dependency graph',
-            '  cancel <taskId> [--scope task|subtree|session] [--session <sid>] [--reason <reason>]',
-            '                                 — Cancel tasks with scoped semantics',
-          ].join('\n');
-          context.print(usage);
-        }
+        const usage = [
+          'Usage: /session <subcommand>',
+          '',
+          'Lifecycle:',
+          '  list                                    — List saved sessions',
+          '  rename <name>                           — Rename the current session',
+          '  resume <id|name>                        — Resume a saved session',
+          '  fork [name]                             — Fork the current session',
+          '  save [name]                             — Save the current session',
+          '  info [id]                               — Show session info',
+          '  export <id|.> [markdown|text]           — Export session transcript',
+          '  search <query>                          — Search session content',
+          '  delete <id>                             — Delete a saved session',
+          '  events [kind]                           — Show transcript events',
+          '  groups [kind]                           — Show transcript groups',
+          '  hotspots                                — Show transcript hotspots',
+          '',
+          'Orchestration:',
+          '  link-task <taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]',
+          '                                          — Register a task in the cross-session graph',
+          '  handoff <taskId> --to <sid> [--session <sid>] [--reason <reason>]',
+          '                                          — Hand a task off to another session',
+          '  graph [--session <sid>] [--format text|json]',
+          '                                          — Display the cross-session task dependency graph',
+          '  cancel <taskId> [--scope task|subtree|session] [--session <sid>] [--reason <reason>]',
+          '                                          — Cancel tasks with scoped semantics',
+        ].join('\n');
+        context.print(usage);
         break;
       }
     }

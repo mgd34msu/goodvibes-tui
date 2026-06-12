@@ -67,7 +67,14 @@ Representative slash-command families include:
 - `/incident`
 - `/replay`
 - `/eval`
+- `/session`
 - `/workplan`
+
+`/session` is the single front-door for all session work. Two domains:
+- Lifecycle: `list`, `rename`, `resume`, `fork`, `save`, `info`, `export <id|.> [format]`, `search <query>`, `delete <id>`, `events [kind]`, `groups [kind]`, `hotspots`
+- Orchestration (cross-session task DAG with cycle detection): `link-task <taskId> [--session <sid>] [--depends-on <sid:taskId>] [--label <label>]`, `handoff <taskId> --to <sid>`, `graph [--session <sid>] [--format text|json]`, `cancel <taskId> [--scope task|subtree|session]`
+
+Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
 `/model` opens the fullscreen provider/model workspace. The left rail chooses the target route (`Main Chat`, `Helper Model`, `Tool LLM`, or `TTS LLM`), and the main table filters large model catalogs by search, price tier, capability, availability, benchmark sort, and grouping. `/provider` opens the same workspace in provider-first mode so users can choose a provider and then a model for the active target.
 
@@ -101,6 +108,14 @@ Planning artifacts are stored in a project knowledge space named `project:<proje
 See [Project planning](project-planning.md) for the panel layout, `/plan` behavior, and route/method list.
 
 `/workplan` is the separate persistent checklist surface. Use it when the work already has concrete tasks and you want durable status tracking rather than another planning interview.
+
+## Context maintenance
+
+GoodVibes automatically compacts the conversation context when token usage reaches the configured threshold. The default threshold is 80% (`behavior.autoCompactThreshold`). You can adjust this in Settings → Behavior; the valid range is 10–100.
+
+When auto-compaction fires, a before/after notice appears in the transcript. The current context fill level is shown in the shell footer when usage exceeds 50%.
+
+Use `/compact` to compact manually at any time.
 
 ## Knowledge Ask
 
