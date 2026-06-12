@@ -256,7 +256,30 @@ describe('performance gate: SLO collector', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Budget enforcement feature flag exists
+// 4. Frame micro-bench: Compositor.composite() throughput
+// ---------------------------------------------------------------------------
+//
+// Delegates to the shared scripts/perf-frame-bench.ts helper so the test and
+// the CI gate script always measure identically — changing methodology in the
+// helper updates both consumers simultaneously.
+//
+// Budgets (ratchets — tighten when measured drops below budget/3):
+//   p95 budget: 16ms (stated product SLO; measured p95 ~4ms on dev linux-x64)
+//   p99 budget: 110ms (ceil(measured p99 ~26.88ms × 4), rounded to 10ms; CI-safe headroom)
+// NEVER launches the interactive TUI binary — all headless.
+
+describe('performance gate: frame micro-bench', () => {
+  test('compositor p95 ≤ 16ms and p99 ≤ 110ms over 200 full-repaint frames', async () => {
+    const { runFrameBench, FRAME_BUDGETS } = await import('../../../scripts/perf-frame-bench.ts');
+    const { p95, p99 } = await runFrameBench();
+
+    expect(p95).toBeLessThanOrEqual(FRAME_BUDGETS.p95_ms);
+    expect(p99).toBeLessThanOrEqual(FRAME_BUDGETS.p99_ms);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Budget enforcement feature flag exists
 // ---------------------------------------------------------------------------
 
 describe('performance gate: budget enforcement flag', () => {
