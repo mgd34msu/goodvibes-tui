@@ -19,6 +19,7 @@ The `/tts` command does not replace text output. The normal assistant response s
 /config tts.voice
 /config tts.llmProvider
 /config tts.llmModel
+/config tts.speed
 ```
 
 `/tts <prompt>` submits the prompt through the normal conversation path. It uses the active chat provider/model by default, unless a separate TTS response model override is configured. Assistant deltas are chunked at sentence or phrase boundaries and sent to streaming TTS in order. Audio failures are reported as non-blocking TUI status messages and do not cancel the text turn.
@@ -48,6 +49,7 @@ The modal and direct commands write the SDK TTS config keys:
 - `tts.voice`
 - `tts.llmProvider`
 - `tts.llmModel`
+- `tts.speed` — playback speed multiplier (see Speed section below)
 
 By default, `/tts` uses the active chat provider/model for text generation. If `tts.llmProvider` and `tts.llmModel` are set through `/config`, `/tts` uses that configured spoken-turn model for `/tts` turns without changing the main chat model. Selecting either TTS LLM row opens the same fullscreen provider/model workspace used by the main model/provider commands, with the target route set to `TTS LLM`.
 
@@ -57,10 +59,13 @@ Spoken turns stay active until the logical turn reaches `TURN_COMPLETED`, `TURN_
 
 The SDK synthesis API (`VoiceSynthesisRequest`) accepts a `speed` field (positive number; 1.0 is normal speed). The TUI reads this from config and passes it through to the synthesis call.
 
-**Status: pending SDK schema addition.** The `tts.speed` ConfigKey does not yet exist in the SDK config schema (`TtsConfig`). Until it is added:
+`tts.speed` is visible in `/config tts` and can be adjusted with arrow keys (0.1 steps) or inline edit mode (Enter). The default is `1` (normal speed).
 
-- The TUI synthesis call correctly passes `speed: undefined` (provider default).
-- No `tts.speed` row is visible in `/config tts`.
+**Status: works today via the TUI bridge; SDK schema registration pending.** The `tts.speed` ConfigKey does not yet exist in the SDK config schema (`TtsConfig`), but the setting is bridged end-to-end NOW: the modal writes `tts.speed` into settings.json, `readOptionalConfigNumber` in `spoken-turn-controller.ts` reads it on every synthesis call, and it flows into `VoiceSynthesisRequest.speed`. What the SDK addition changes is only native static typing (removing the TUI-side cast) and schema/audit recognition.
+
+- The setting row is visible in `/config tts`; adjusting it takes effect on the next spoken turn.
+- The TUI synthesis call passes `speed: undefined` when no value is stored (configManager returns undefined for unknown keys), which means provider default.
+- The isDefault diamond shows accurately via deepEqual against the default of `1`.
 
 **SDK handoff:** add the following to `schema-domain-core.js` to complete this feature:
 
@@ -69,7 +74,7 @@ The SDK synthesis API (`VoiceSynthesisRequest`) accepts a `speed` field (positiv
   description: 'Playback speed multiplier for TTS synthesis (1.0 = normal). Passed directly to the provider; supported range varies by provider.' }
 ```
 
-And add `speed: 1` to `DEFAULT_CONFIG.tts` and `TtsConfig`. Once the key lands the TUI `readOptionalConfigNumber` helper in `spoken-turn-controller.ts` will automatically thread the persisted value through without further changes.
+And add `speed: 1` to `DEFAULT_CONFIG.tts` and `TtsConfig`. The persisted value is already threaded through `readOptionalConfigNumber` in `spoken-turn-controller.ts` today; once the key lands, the synthetic entry in `settings-modal-data.ts` (`buildTtsSpeedSyntheticEntry`) can be replaced by the native CONFIG_SCHEMA entry and the cast dropped.
 
 ## Playback Requirements
 

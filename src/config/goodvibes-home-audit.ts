@@ -117,6 +117,8 @@ const KNOWN_DYNAMIC_KEYS = [
   /^featureFlags(?:\.|$)/,
   /^notifications\.webhookUrls$/,
   /^wrfc\.gates$/,
+  // TUI-bridged setting awaiting SDK schema registration (handoff Item 5b)
+  /^tts\.speed$/,
 ];
 
 export const GOODVIBES_ALLOWED_WRITE_ROOTS = ['tui/', 'daemon/'] as const;
