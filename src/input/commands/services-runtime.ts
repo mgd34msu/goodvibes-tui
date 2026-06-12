@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { atomicWriteFileSync } from '../../config/atomic-write.ts';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { SelectionAction, SelectionItem } from '../selection-modal.ts';
 import { openCommandPanel, requireServiceRegistry, requireShellPaths } from './runtime-services.ts';
@@ -161,8 +162,7 @@ export function registerServicesRuntimeCommands(registry: CommandRegistry): void
         try {
           const parsed = JSON.parse(readFileSync(sourcePath, 'utf-8')) as Record<string, unknown>;
           const targetPath = shellPaths.resolveProjectPath('tui', 'services.json');
-          mkdirSync(dirname(targetPath), { recursive: true });
-          writeFileSync(targetPath, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
+          atomicWriteFileSync(targetPath, JSON.stringify(parsed, null, 2) + '\n', { mkdirp: true });
           ctx.print(`Imported services config from ${sourcePath}`);
         } catch (error) {
           ctx.print(`Failed to import services config: ${summarizeError(error)}`);

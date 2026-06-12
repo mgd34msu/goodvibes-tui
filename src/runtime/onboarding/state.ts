@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { atomicWriteFileSync } from '@/config/atomic-write.ts';
+
 import type {
   OnboardingAcknowledgementRuntimeState,
   OnboardingAcknowledgementTarget,
@@ -133,8 +134,7 @@ export function writeOnboardingAcknowledgementState(
     },
   };
 
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
+  atomicWriteFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, { mkdirp: true });
 
   return readOnboardingRuntimeState(shellPaths, scope);
 }

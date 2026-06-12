@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { atomicWriteFileSync } from '../../config/atomic-write.ts';
 import { isSecretRefInput } from '@pellux/goodvibes-sdk/platform/config';
 import { CONFIG_SCHEMA, DEFAULT_CONFIG } from '../../config/index.ts';
 import type { FeatureFlagConfigKey } from '../surface-feature-flags.ts';
@@ -34,8 +34,7 @@ function readJsonObject(path: string): Record<string, unknown> {
 }
 
 function writeJsonObject(path: string, payload: Record<string, unknown>): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
+  atomicWriteFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, { mkdirp: true });
 }
 
 function setNestedValue(root: Record<string, unknown>, key: string, value: unknown): Record<string, unknown> {
@@ -76,8 +75,7 @@ function restoreFile(path: string, previous: string | null, reload?: () => void)
   if (previous === null) {
     if (existsSync(path)) unlinkSync(path);
   } else {
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, previous, 'utf-8');
+    atomicWriteFileSync(path, previous, { mkdirp: true });
   }
   reload?.();
 }
