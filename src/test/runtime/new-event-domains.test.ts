@@ -119,6 +119,7 @@ describe('new runtime event domains', () => {
       'google-chat',
       'signal',
       'whatsapp',
+      'telephony', // SDK 0.33.36: telephony surface added (Twilio/bridge)
       'imessage',
       'msteams',
       'bluebubbles',

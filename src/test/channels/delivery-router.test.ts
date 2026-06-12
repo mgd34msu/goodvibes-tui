@@ -60,6 +60,7 @@ describe('ChannelDeliveryRouter', () => {
       'channel-delivery:google-chat',
       'channel-delivery:signal',
       'channel-delivery:whatsapp',
+      'channel-delivery:telephony', // SDK 0.33.36: telephony delivery strategy added (Twilio/bridge)
       'channel-delivery:imessage',
       'channel-delivery:msteams',
       'channel-delivery:bluebubbles',
