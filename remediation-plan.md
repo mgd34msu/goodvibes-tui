@@ -198,3 +198,10 @@ The program is complete only when ALL of the following hold:
 5. The final act: one full re-run of the original 10-dimension UX-first review. Target: 10/10 weighted. Anything short of it generates a new wave and the loop continues.
 
 Known caps outside this repo's control (tracked, not forgotten): SDK items (phantom-pass, phantom-work verification, durable chains, secret-writer fsync, account lockout, CF-Connecting-IP validation, SessionManager atomicity) cap affected dimensions until the SDK session; the Claude-side plugin (directive reliability, vec.db leak, notification crossing) is explicitly out of scope per owner.
+
+## Verify-close sweep verdict (2026-06-12, post-0.23.0)
+
+Code-evidence audit of every open checkbox above (sweep agent, committed-state based):
+- CLOSED (38): TASK-009, 010, 013, 014, 023, 024, 028, 033, 034, 035, 036, 039, 040, 041, 042, 043, 044, 045, 046, 047, 048, 049, 051, 052, 053, 054, 055, 056, 058, 071, 072, 073, 074, 076, 087, UI-4, UI-5, UI-6 (+F2 residual). Checkboxes above are stale; evidence per item in .goodvibes/logs/activity.md sweep entry.
+- PARTIAL, SDK-capped (2): TASK-037 (enforceCors/allowedOrigins not in ConfigKey union — SDK handoff Item 5; wizard ships guidance), TASK-050 (requiresRestart still keyword heuristic — SDK ConfigSetting lacks the field, handoff Item 8).
+- Remaining open engineering surface is therefore: wave-7 trio (TASK-029/030/031, in flight), TASK-075/077/078 (committed bf9eaef8), TASK-088 (in flight), E11-4..7 (in flight), E-track unbuilt items, F1/F3/F4/F5, UI-1/2/3/7/8, K1-K6, P4, planning capstone, re-dives, final UX re-run.
