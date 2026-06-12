@@ -402,9 +402,8 @@ describe('SettingsModal', () => {
     expect(modal.getSelectedMcp()?.name).toBe('docs-server');
   });
 
-  test('subscriptions category requires confirmation before sign out', () => {
-    const manager = subscriptionManager;
-    manager.saveSubscription({
+  test('subscriptions category: activateSelected arms confirm gate on first press', () => {
+    subscriptionManager.saveSubscription({
       provider: 'openai',
       accessToken: 'token',
       tokenType: 'Bearer',
@@ -416,20 +415,128 @@ describe('SettingsModal', () => {
 
     modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
     while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
-    expect(modal.subscriptionEntries.some((entry) => entry.provider === 'openai' && entry.state === 'active')).toBe(true);
-
     const openaiIndex = modal.subscriptionEntries.findIndex((entry) => entry.provider === 'openai');
-    expect(openaiIndex).toBeGreaterThanOrEqual(0);
     modal.selectedIndex = openaiIndex;
-    expect(modal.getSelectedSubscription()?.provider).toBe('openai');
-    expect(modal.getSelectedSubscription()?.state).toBe('active');
 
     modal.activateSelected();
     expect(modal.subscriptionLogoutConfirmationTarget).toBe('openai');
     expect(subscriptionManager.get('openai')).not.toBeNull();
+  });
 
+  test('subscriptions logout: Enter confirms via handleSubscriptionLogoutKey', () => {
+    subscriptionManager.saveSubscription({
+      provider: 'openai',
+      accessToken: 'token',
+      tokenType: 'Bearer',
+      authMode: 'oauth',
+      overrideAmbientApiKeys: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    const openaiIndex = modal.subscriptionEntries.findIndex((entry) => entry.provider === 'openai');
+    modal.selectedIndex = openaiIndex;
     modal.activateSelected();
+
+    expect(modal.handleSubscriptionLogoutKey('enter')).toBe('confirmed');
     expect(subscriptionManager.get('openai')).toBeNull();
+    expect(modal.subscriptionLogoutConfirmationTarget).toBeNull();
+  });
+
+  test('subscriptions logout: y confirms via handleSubscriptionLogoutKey', () => {
+    subscriptionManager.saveSubscription({
+      provider: 'openai',
+      accessToken: 'token',
+      tokenType: 'Bearer',
+      authMode: 'oauth',
+      overrideAmbientApiKeys: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    const openaiIndex = modal.subscriptionEntries.findIndex((entry) => entry.provider === 'openai');
+    modal.selectedIndex = openaiIndex;
+    modal.activateSelected();
+
+    expect(modal.handleSubscriptionLogoutKey('y')).toBe('confirmed');
+    expect(subscriptionManager.get('openai')).toBeNull();
+  });
+
+  test('subscriptions logout: n cancels and retains session', () => {
+    subscriptionManager.saveSubscription({
+      provider: 'openai',
+      accessToken: 'token',
+      tokenType: 'Bearer',
+      authMode: 'oauth',
+      overrideAmbientApiKeys: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    const openaiIndex = modal.subscriptionEntries.findIndex((entry) => entry.provider === 'openai');
+    modal.selectedIndex = openaiIndex;
+    modal.activateSelected();
+
+    expect(modal.handleSubscriptionLogoutKey('n')).toBe('cancelled');
+    expect(subscriptionManager.get('openai')).not.toBeNull();
+    expect(modal.subscriptionLogoutConfirmationTarget).toBeNull();
+  });
+
+  test('subscriptions logout: Esc cancels and retains session', () => {
+    subscriptionManager.saveSubscription({
+      provider: 'openai',
+      accessToken: 'token',
+      tokenType: 'Bearer',
+      authMode: 'oauth',
+      overrideAmbientApiKeys: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    const openaiIndex = modal.subscriptionEntries.findIndex((entry) => entry.provider === 'openai');
+    modal.selectedIndex = openaiIndex;
+    modal.activateSelected();
+
+    expect(modal.handleSubscriptionLogoutKey('escape')).toBe('cancelled');
+    expect(subscriptionManager.get('openai')).not.toBeNull();
+    expect(modal.subscriptionLogoutConfirmationTarget).toBeNull();
+  });
+
+  test('subscriptions logout: other keys absorbed, confirm remains pending', () => {
+    subscriptionManager.saveSubscription({
+      provider: 'openai',
+      accessToken: 'token',
+      tokenType: 'Bearer',
+      authMode: 'oauth',
+      overrideAmbientApiKeys: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    const openaiIndex = modal.subscriptionEntries.findIndex((entry) => entry.provider === 'openai');
+    modal.selectedIndex = openaiIndex;
+    modal.activateSelected();
+
+    expect(modal.handleSubscriptionLogoutKey('up')).toBe('absorbed');
+    expect(subscriptionManager.get('openai')).not.toBeNull();
+    // confirm gate remains armed
+    expect(modal.subscriptionLogoutConfirmationTarget).toBe('openai');
+  });
+
+  test('subscriptions logout: handleSubscriptionLogoutKey returns inactive when no confirm pending', () => {
+    modal.open(cm, ffm, subscriptionManager, serviceRegistry, mcpRegistry);
+    while (modal.currentCategory !== 'subscriptions') modal.nextCategory();
+    expect(modal.handleSubscriptionLogoutKey('enter')).toBe('inactive');
   });
 
   test('mcp trust mode requires explicit allow-all confirmation', () => {

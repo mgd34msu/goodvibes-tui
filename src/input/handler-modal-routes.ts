@@ -216,6 +216,10 @@ type SettingsRouteState = {
     editingMode: boolean;
     currentCategory: string;
     focusPane?: 'categories' | 'settings';
+    /** True when the user is actively typing into the search input bar. */
+    searchFocused: boolean;
+    /** Current cross-category search query. */
+    searchQuery: string;
     commitEdit: () => void;
     toggleSelectedFlag: () => void;
     activateSelected: () => void;
@@ -232,6 +236,14 @@ type SettingsRouteState = {
     prevCategory?: () => void;
     editBackspace: () => void;
     editChar: (char: string) => void;
+    /** Enter search mode (focus the search input bar). */
+    focusSearch: () => void;
+    /** Exit search mode without clearing the query. */
+    blurSearch: () => void;
+    /** Set search query and recompute results. */
+    setSearchQuery: (query: string) => void;
+    /** Clear search query, results, and exit search mode. */
+    clearSearch: () => void;
     pendingModelPickerTarget: import('./model-picker.ts').ModelPickerTarget | null;
     pendingProviderModelPickerTarget?: import('./model-picker.ts').ModelPickerTarget | null;
     pendingSettingsPickerAction?: 'tts-provider' | 'tts-voice' | null;
@@ -302,39 +314,78 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
   if (token.type === 'key') {
     const focusPane = state.settingsModal.focusPane ?? 'settings';
     if (token.logicalName === 'escape') {
+      // Two-stage escape: if in search mode, first Esc exits search (clearSearch),
+      // second Esc closes the modal.
+      if (state.settingsModal.searchFocused) {
+        state.settingsModal.clearSearch();
+        state.requestRender();
+        return true;
+      }
       state.handleEscape();
       return true;
     }
-    if (token.logicalName === 'enter' || (token.logicalName === 'space' && !state.settingsModal.editingMode)) {
+    if (token.logicalName === 'enter' || (token.logicalName === 'space' && !state.settingsModal.editingMode && !state.settingsModal.searchFocused)) {
       if (state.settingsModal.editingMode) state.settingsModal.commitEdit();
-      else if (focusPane === 'categories') state.settingsModal.focusSettings?.();
+      else if (state.settingsModal.searchFocused) {
+        // Enter in search mode: activate the selected search result
+        state.settingsModal.activateSelected();
+        consumeSettingsPickerRequest(state);
+      } else if (focusPane === 'categories') state.settingsModal.focusSettings?.();
       else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
       else {
         state.settingsModal.activateSelected();
         consumeSettingsPickerRequest(state);
       }
-    } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.settingsModal.editingMode) {
+    } else if ((token.logicalName === 'left' || token.logicalName === 'right') && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
       if (token.logicalName === 'left') state.settingsModal.focusCategories?.();
       else state.settingsModal.focusSettings?.();
     } else if (token.logicalName === 'up') {
-      if (state.settingsModal.moveFocusedUp) state.settingsModal.moveFocusedUp();
+      if (state.settingsModal.searchFocused) {
+        state.settingsModal.moveUp?.();
+      } else if (state.settingsModal.moveFocusedUp) state.settingsModal.moveFocusedUp();
       else state.settingsModal.moveUp?.();
     } else if (token.logicalName === 'down') {
-      if (state.settingsModal.moveFocusedDown) state.settingsModal.moveFocusedDown();
+      if (state.settingsModal.searchFocused) {
+        state.settingsModal.moveDown?.();
+      } else if (state.settingsModal.moveFocusedDown) state.settingsModal.moveFocusedDown();
       else state.settingsModal.moveDown?.();
     }
-    else if (token.logicalName === 'r' && !state.settingsModal.editingMode) {
+    else if (token.logicalName === 'r' && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
       const reset = state.settingsModal.resetSelected?.();
       if (reset) syncRuntimeAfterSettingReset(state.commandContext, reset.key, reset.value);
     }
-    else if (token.logicalName === 'tab') {
+    else if (token.logicalName === 'tab' && !state.settingsModal.searchFocused) {
       if (state.settingsModal.toggleFocusPane) state.settingsModal.toggleFocusPane();
       else if (focusPane === 'categories') state.settingsModal.focusSettings?.();
       else state.settingsModal.focusCategories?.();
     }
-    else if (token.logicalName === 'backspace' && state.settingsModal.editingMode) state.settingsModal.editBackspace();
+    else if (isTextBackspace(token.logicalName ?? '')) {
+      if (state.settingsModal.editingMode) {
+        state.settingsModal.editBackspace();
+      } else if (state.settingsModal.searchFocused) {
+        // Backspace in search mode: trim query
+        const trimmed = state.settingsModal.searchQuery.slice(0, -1);
+        state.settingsModal.setSearchQuery(trimmed);
+      }
+    }
+    // token.logicalName === 'delete' is intentionally absent: search filters
+    // are end-anchored with no cursor, so forward-delete is a no-op per
+    // delete-key policy (src/input/delete-key-policy.ts).
+    else if (!state.settingsModal.editingMode && !state.settingsModal.searchFocused && token.logicalName === '/') {
+      state.settingsModal.focusSearch();
+    }
   } else if (token.type === 'text') {
-    if (token.value === ' ' && !state.settingsModal.editingMode) {
+    if (state.settingsModal.editingMode) {
+      // editingMode takes priority over search — Enter on a string/number search
+      // result enters inline edit; subsequent chars must go to editChar, not the query.
+      state.settingsModal.editChar(token.value);
+    } else if (state.settingsModal.searchFocused) {
+      // Any printable char in search mode appends to the query
+      state.settingsModal.setSearchQuery(state.settingsModal.searchQuery + token.value);
+    } else if (token.value === '/' && !state.settingsModal.editingMode) {
+      // / enters search mode
+      state.settingsModal.focusSearch();
+    } else if (token.value === ' ' && !state.settingsModal.editingMode) {
       const focusPane = state.settingsModal.focusPane ?? 'settings';
       if (focusPane === 'categories') state.settingsModal.focusSettings?.();
       else if (state.settingsModal.currentCategory === 'flags') state.settingsModal.toggleSelectedFlag();
@@ -342,8 +393,6 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
         state.settingsModal.activateSelected();
         consumeSettingsPickerRequest(state);
       }
-    } else if (state.settingsModal.editingMode) {
-      state.settingsModal.editChar(token.value);
     } else if (token.value === 'r') {
       const reset = state.settingsModal.resetSelected?.();
       if (reset) syncRuntimeAfterSettingReset(state.commandContext, reset.key, reset.value);

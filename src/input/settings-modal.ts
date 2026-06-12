@@ -51,7 +51,9 @@ import {
   buildNetworkFilteredItems,
   refreshEntryValues,
   updateEntryForKey,
+  searchSettingEntries,
 } from './settings-modal-data.ts';
+import { getSettingLabel } from '../renderer/settings-modal-helpers.ts';
 import {
   applySettingValue,
   applyFlagState,
@@ -133,6 +135,27 @@ export class SettingsModal {
   public subscriptionEntries: SubscriptionEntry[] = [];
 
   /**
+   * Whether the user has entered search mode (pressed / or a printable key
+   * in the search input). Distinct from searchQuery.length > 0 because the
+   * user may have deleted all chars while remaining in search mode.
+   * Renderer should display the search prompt when this is true.
+   */
+  public searchFocused = false;
+
+  /**
+   * Current search query. Non-empty activates cross-category search mode.
+   * Renderer should display searchResults instead of the per-category list
+   * when searchQuery is non-empty.
+   */
+  public searchQuery = '';
+
+  /**
+   * Ranked cross-category results when searchQuery is non-empty.
+   * Populated by setSearchQuery(); empty when searchQuery is ''.
+   */
+  public searchResults: SettingEntry[] = [];
+
+  /**
    * Set after a network-category save that touches controlPlane or httpListener
    * config keys.  Renderer reads this to display a transient restart notice.
    * Cleared on next open() or close().
@@ -186,6 +209,9 @@ export class SettingsModal {
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
     this.lastSettingEffectMessage = null;
+    this.searchQuery = '';
+    this.searchResults = [];
+    this.searchFocused = false;
     this.active = true;
   }
 
@@ -200,10 +226,46 @@ export class SettingsModal {
     this.subscriptionLogoutConfirmationTarget = null;
     this.lastSaveTriggeredRestart = null;
     this.lastSettingEffectMessage = null;
+    this.searchQuery = '';
+    this.searchResults = [];
+    this.searchFocused = false;
     this.serviceRegistry = null;
     this.secretsManager = null;
     this.onSettingApplied = null;
     this.focusPane = 'settings';
+  }
+
+  /** Enter search mode (focus the search input bar). */
+  focusSearch(): void {
+    this.searchFocused = true;
+    this.selectedIndex = 0;
+  }
+
+  /** Exit search mode without clearing the query. */
+  blurSearch(): void {
+    this.searchFocused = false;
+  }
+
+  /**
+   * Update the search query and recompute cross-category ranked results.
+   * Setting an empty string clears search mode.
+   */
+  setSearchQuery(query: string): void {
+    this.searchQuery = query;
+    this.searchFocused = true;
+    if (query.trim().length === 0) {
+      this.searchResults = [];
+    } else {
+      this.searchResults = searchSettingEntries(query, this.groups, getSettingLabel);
+    }
+    this.selectedIndex = 0;
+  }
+
+  /** Clear search query, results, and exit search focus mode. */
+  clearSearch(): void {
+    this.searchQuery = '';
+    this.searchResults = [];
+    this.searchFocused = false;
   }
 
   /** Cycle to the next category (Tab). */
@@ -251,6 +313,12 @@ export class SettingsModal {
 
   moveUp(): void {
     if (this.editingMode) return;
+    if (this.searchFocused) {
+      if (this.searchResults.length > 0) {
+        this.selectedIndex = (this.selectedIndex - 1 + this.searchResults.length) % this.searchResults.length;
+      }
+      return;
+    }
     const items = this._currentItems();
     if (items.length === 0) {
       if (this.currentCategory === 'flags' && this.flagEntries.length > 0) {
@@ -269,6 +337,12 @@ export class SettingsModal {
 
   moveDown(): void {
     if (this.editingMode) return;
+    if (this.searchFocused) {
+      if (this.searchResults.length > 0) {
+        this.selectedIndex = (this.selectedIndex + 1) % this.searchResults.length;
+      }
+      return;
+    }
     const items = this._currentItems();
     if (items.length === 0) {
       if (this.currentCategory === 'flags' && this.flagEntries.length > 0) {
@@ -286,6 +360,9 @@ export class SettingsModal {
   }
 
   getSelected(): SettingEntry | null {
+    if (this.searchFocused && this.searchResults.length > 0) {
+      return this.searchResults[Math.max(0, Math.min(this.searchResults.length - 1, this.selectedIndex))] ?? null;
+    }
     const items = this._currentItems();
     if (items.length === 0) return null;
     return items[Math.max(0, Math.min(items.length - 1, this.selectedIndex))] ?? null;
