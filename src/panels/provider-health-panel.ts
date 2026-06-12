@@ -88,18 +88,22 @@ const LATENCY_BAD_MS  = 5_000;
 
 function statusDot(status: ProviderStatus): { char: string; color: string } {
   switch (status) {
-    case 'online':       return { char: '●', color: C.online };
-    case 'rate-limited': return { char: '◐', color: C.rateLimit };
-    case 'error':        return { char: '✕', color: C.error };
+    case 'healthy':      return { char: '●', color: C.online };
+    case 'degraded':     return { char: '◑', color: C.rateLimit };
+    case 'rate_limited': return { char: '◐', color: C.rateLimit };
+    case 'auth_error':   return { char: '✕', color: C.error };
+    case 'unavailable':  return { char: '✕', color: C.error };
     default:             return { char: '○', color: C.unknown };
   }
 }
 
 function statusLabel(status: ProviderStatus): string {
   switch (status) {
-    case 'online':       return 'online';
-    case 'rate-limited': return 'rate-limited';
-    case 'error':        return 'error';
+    case 'healthy':      return 'online';
+    case 'degraded':     return 'degraded';
+    case 'rate_limited': return 'rate-limited';
+    case 'auth_error':   return 'auth error';
+    case 'unavailable':  return 'unavailable';
     default:             return 'unknown';
   }
 }
@@ -562,9 +566,9 @@ export class ProviderHealthPanel extends BasePanel {
     let expiringAuth = 0;
     for (const name of providers) {
       const status = this.providerHealthTracker.get(name)?.status ?? 'unknown';
-      if (status === 'online') online++;
-      else if (status === 'rate-limited') rateLimited++;
-      else if (status === 'error') errored++;
+      if (status === 'healthy') online++;
+      else if (status === 'rate_limited') rateLimited++;
+      else if (status === 'degraded' || status === 'auth_error' || status === 'unavailable') errored++;
       const account = this._accountRecords.get(name);
       if (account) {
         accountIssues += account.issues.length;

@@ -519,3 +519,94 @@ describe('wireStreamEventMetrics — clearFailoverVisited on new submission', ()
     expect(retryTurn).toHaveBeenCalledTimes(2);
   });
 });
+// ---------------------------------------------------------------------------
+// Tests: failover cost delta notice (E11-4)
+// ---------------------------------------------------------------------------
+
+describe('wireStreamEventMetrics — failover cost delta notice', () => {
+  test('cost delta suffix is appended to failover notice when catalog provides pricing', () => {
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const retryTurn = mock(() => {});
+    const optimizer = makeOptimizer({
+      enabled: true,
+      chain: [
+        { position: 0, providerId: 'anthropic', modelId: 'claude-3-5-sonnet', capable: true },
+        { position: 1, providerId: 'openai', modelId: 'gpt-5', capable: true },
+      ],
+    });
+    // Catalog returns pricing for both models.
+    const costLookup = {
+      getCostFromCatalog(modelId: string) {
+        if (modelId === 'claude-3-5-sonnet') return { input: 3.00, output: 15.00 };
+        if (modelId === 'gpt-5') return { input: 10.00, output: 30.00 };
+        return { input: 0, output: 0 };
+      },
+    };
+    const opts = makeOptions(turns, tools, { providerOptimizer: optimizer, retryTurn, costLookup });
+    wireStreamEventMetrics(opts);
+
+    turns.emitTurnError('connection reset');
+
+    const failoverMsg = opts.messages.find((m) => m.startsWith('[Failover]'));
+    expect(failoverMsg).toBeDefined();
+    // Must contain cost/1M reference
+    expect(failoverMsg).toContain('cost/1M');
+    // Must show the arrow direction for input and output
+    expect(failoverMsg).toContain('input');
+    expect(failoverMsg).toContain('output');
+  });
+
+  test('failover notice has no cost suffix when costLookup is absent', () => {
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const retryTurn = mock(() => {});
+    const optimizer = makeOptimizer({
+      enabled: true,
+      chain: [
+        { position: 0, providerId: 'anthropic', modelId: 'claude-3-5-sonnet', capable: true },
+        { position: 1, providerId: 'openai', modelId: 'gpt-5', capable: true },
+      ],
+    });
+    // No costLookup provided.
+    const opts = makeOptions(turns, tools, { providerOptimizer: optimizer, retryTurn });
+    wireStreamEventMetrics(opts);
+
+    turns.emitTurnError('network error');
+
+    const failoverMsg = opts.messages.find((m) => m.startsWith('[Failover]'));
+    expect(failoverMsg).toBeDefined();
+    // No cost suffix — no bracket after the error class.
+    expect(failoverMsg).not.toContain('cost/1M');
+    expect(failoverMsg).not.toContain('unavailable');
+  });
+
+  test('cost data unavailable message when catalog returns zeros for either model', () => {
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const retryTurn = mock(() => {});
+    const optimizer = makeOptimizer({
+      enabled: true,
+      chain: [
+        { position: 0, providerId: 'anthropic', modelId: 'claude-3-5-sonnet', capable: true },
+        { position: 1, providerId: 'openai', modelId: 'unknown-future-model', capable: true },
+      ],
+    });
+    // Catalog knows claude but not the target model.
+    const costLookup = {
+      getCostFromCatalog(modelId: string) {
+        if (modelId === 'claude-3-5-sonnet') return { input: 3.00, output: 15.00 };
+        return { input: 0, output: 0 };
+      },
+    };
+    const opts = makeOptions(turns, tools, { providerOptimizer: optimizer, retryTurn, costLookup });
+    wireStreamEventMetrics(opts);
+
+    turns.emitTurnError('timeout');
+
+    const failoverMsg = opts.messages.find((m) => m.startsWith('[Failover]'));
+    expect(failoverMsg).toBeDefined();
+    expect(failoverMsg).toContain('cost data unavailable');
+    expect(failoverMsg).not.toContain('cost/1M');
+  });
+});

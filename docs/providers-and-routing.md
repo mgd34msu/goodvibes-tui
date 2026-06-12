@@ -87,6 +87,32 @@ Key properties:
 
 For free-tier synthetic models, the runtime can also cascade to the next-best free model when every backend for the current synthetic model is exhausted.
 
+### Failover notices and cost delta
+
+When a turn fails over to another provider, the transcript shows a notice naming both the source and destination providers alongside the error class. If the catalog contains per-1M-token pricing for both models, the notice also includes the cost delta in the form:
+
+```
+[Failover] anthropic -> openai (transient) [cost/1M: input 3.00→10.00, output 15.00→30.00]
+```
+
+If pricing data is unavailable for either model, the notice says `[cost data unavailable]` instead of fabricating a number.
+
+### Chain visibility in the model picker
+
+When a synthetic model is selected in the model picker, the detail area below the list shows the first rung of its fallback ladder (`0. provider/model`) instead of showing a dead-end "synthetic" label. When the chain has more than one entry, the first rung is shown with a `(+N more)` suffix disclosing the remaining fallbacks. Non-synthetic models continue to show context window and capability flags.
+
+### CLI: inspect synthetic chains
+
+Use `goodvibes models chain` to list all synthetic model fallback ladders from the command line — the same data available in the TUI picker:
+
+```sh
+goodvibes models chain               # all synthetic models
+goodvibes models chain balanced      # filter by model id substring
+goodvibes models chain --json        # JSON output for scripting
+```
+
+Each entry shows the model id, tier, configured/total backend count, and a position-numbered list of `provider/model` rungs.
+
 ## Custom providers
 
 Any OpenAI-compatible API can be added by dropping JSON into:

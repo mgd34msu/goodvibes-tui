@@ -60,6 +60,15 @@ interface StreamSystemMessageRouter {
   low(message: string): void;
 }
 
+/**
+ * Minimal cost lookup surface for attaching cost-delta information to failover notices.
+ * Returns USD-per-1M-token pricing for the given model ID.
+ * The implementation may consult a catalog; if the model is unknown both fields are 0.
+ */
+export interface FailoverCostLookup {
+  getCostFromCatalog(modelId: string): { readonly input: number; readonly output: number };
+}
+
 export interface WireStreamEventMetricsOptions {
   /** The UI runtime event bus (turns + tools sub-buses). */
   readonly events: UiRuntimeEvents;
@@ -89,6 +98,13 @@ export interface WireStreamEventMetricsOptions {
    * the optimizer is enabled and a viable next provider exists in the chain.
    */
   readonly retryTurn?: () => void;
+  /**
+   * Optional cost catalog for attaching per-1M-token cost information to
+   * the failover notice.  When provided and both models have non-zero pricing,
+   * the notice includes input and output cost comparisons.  When absent or pricing is
+   * unavailable for either model, the notice honestly states "cost data unavailable".
+   */
+  readonly costLookup?: FailoverCostLookup;
 }
 
 /** Result of wireStreamEventMetrics. */
@@ -102,6 +118,43 @@ export interface WireStreamEventMetricsResult {
    * TURN_COMPLETED, but a new submission may arrive before TURN_COMPLETED fires).
    */
   readonly clearFailoverVisited: () => void;
+}
+
+/**
+ * Build the cost-delta suffix for a failover notice.
+ *
+ * Extracts the model ID from registry keys (format: `provider:modelId`),
+ * queries the cost catalog for both, and formats a human-readable comparison.
+ * If the lookup is absent or either model returns zero pricing (unknown),
+ * returns an honest "cost data unavailable" suffix instead of fabricating values.
+ *
+ * @param lookup - Optional cost catalog; when absent, returns unavailable notice.
+ * @param fromRegistryKey - Registry key of the provider being abandoned (may be undefined).
+ * @param toRegistryKey - Registry key of the provider being selected.
+ * @returns A parenthesised suffix string or empty string.
+ */
+function buildCostDeltaSuffix(
+  lookup: FailoverCostLookup | undefined,
+  fromRegistryKey: string | undefined,
+  toRegistryKey: string,
+): string {
+  if (!lookup) return '';
+  // Registry key format: `provider:modelId` — modelId may itself contain `:`.
+  const fromModelId = fromRegistryKey ? fromRegistryKey.split(':').slice(1).join(':') : '';
+  const toModelId = toRegistryKey.split(':').slice(1).join(':');
+  const fromCost = fromModelId ? lookup.getCostFromCatalog(fromModelId) : { input: 0, output: 0 };
+  const toCost = lookup.getCostFromCatalog(toModelId);
+  // Report unavailable when either side has zero pricing (unknown model).
+  if (fromCost.input === 0 && fromCost.output === 0 && !fromModelId) {
+    return ' [cost data unavailable]';
+  }
+  const hasFromData = fromCost.input > 0 || fromCost.output > 0;
+  const hasToData = toCost.input > 0 || toCost.output > 0;
+  if (!hasFromData || !hasToData) {
+    return ' [cost data unavailable]';
+  }
+  const fmt = (n: number) => `$${n.toFixed(2)}`;
+  return ` [cost/1M: input ${fmt(fromCost.input)}→${fmt(toCost.input)}, output ${fmt(fromCost.output)}→${fmt(toCost.output)}]`;
 }
 
 /**
@@ -123,7 +176,7 @@ export function wireStreamEventMetrics(
 ): WireStreamEventMetricsResult {
   const {
     events, metrics, orchestrator, providerRegistry,
-    systemMessageRouter, render, providerOptimizer, retryTurn,
+    systemMessageRouter, render, providerOptimizer, retryTurn, costLookup,
   } = options;
 
   const unsubs: Array<() => void> = [];
@@ -192,6 +245,8 @@ export function wireStreamEventMetrics(
       if (next) {
         const toRegistryKey = `${next.providerId}:${next.modelId}`;
         const errorClass = formatUserFacingErrorLine(errVal);
+        // Capture FROM registry key before switching — needed for cost comparison.
+        const fromRegistryKey = providerRegistry.getCurrentModel().registryKey;
         try {
           providerRegistry.setCurrentModel(toRegistryKey);
         } catch (switchErr) {
@@ -205,8 +260,9 @@ export function wireStreamEventMetrics(
         // a subsequent TURN_ERROR from that provider also skips it.
         failoverVisited.add(next.providerId);
         providerOptimizer.recordFallbackTransition(fromProvider, next.providerId, errorClass);
+        const costSuffix = buildCostDeltaSuffix(costLookup, fromRegistryKey, toRegistryKey);
         systemMessageRouter.high(
-          `[Failover] ${fromProvider} -> ${next.providerId} (${errorClass})`,
+          `[Failover] ${fromProvider} -> ${next.providerId} (${errorClass})${costSuffix}`,
         );
         render();
         // Re-submit the last user turn on the new provider.

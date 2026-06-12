@@ -6,6 +6,7 @@ import { formatProviderModel, getModelIdFromProviderModel } from '../config/prov
 import { SecretsManager } from '../config/secrets.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { listProviderRuntimeSnapshots } from '@pellux/goodvibes-sdk/platform/providers';
+import type { CanonicalModel } from '@pellux/goodvibes-sdk/platform/providers';
 import { BUILTIN_SECRET_PROVIDER_SOURCES, describeSecretRef, isSecretRefInput, resolveSecretRef } from '@pellux/goodvibes-sdk/platform/config';
 import { getSubscriptionProviderConfig, listAvailableSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
@@ -173,6 +174,40 @@ async function renderProviders(runtime: CliCommandRuntime): Promise<string> {
   });
 }
 
+/**
+ * Build the synthetic chain entry list for `goodvibes models chain` output.
+ * Pure transformation: accepts canonical model data and an optional lowercase filter key,
+ * returns a serializable array suitable for both JSON and text formatting.
+ *
+ * @internal exported for unit testing
+ */
+export function buildSyntheticChainEntries(
+  canonicalModels: readonly CanonicalModel[],
+  filterKey?: string,
+): Array<{
+  id: string;
+  tier: string;
+  backendCount: number;
+  keyedBackendCount: number;
+  backends: Array<{ position: number; provider: string; model: string; registryKey: string }>;
+}> {
+  const filtered = filterKey
+    ? canonicalModels.filter((m) => m.id.toLowerCase().includes(filterKey))
+    : canonicalModels;
+  return filtered.map((m) => ({
+    id: m.id,
+    tier: m.tier,
+    backendCount: m.backendCount,
+    keyedBackendCount: m.keyedBackendCount,
+    backends: m.backends.map((b, idx) => ({
+      position: idx,
+      provider: b.providerName,
+      model: b.modelId,
+      registryKey: b.registryKey ?? `${b.providerName}:${b.modelId}`,
+    })),
+  }));
+}
+
 async function renderModels(runtime: CliCommandRuntime): Promise<string> {
   return await withRuntimeServices(runtime, async (services) => {
     const [subOrFilter, ...rest] = runtime.cli.commandArgs;
@@ -246,23 +281,58 @@ async function renderModels(runtime: CliCommandRuntime): Promise<string> {
         ...recent.map((model) => `  ${model}`),
       ].join('\n'));
     }
+    if (subOrFilter === 'chain' || subOrFilter === 'chains') {
+      // List synthetic model fallback ladders — backend composition for each synthetic model.
+      const canonicalModels = services.providerRegistry.getSyntheticCanonicalModels();
+      if (canonicalModels.length === 0) {
+        return formatJsonOrText(runtime.cli)([], 'No synthetic models found in the current catalog.');
+      }
+      const filterKey = rest[0]?.toLowerCase();
+      const filtered = filterKey
+        ? canonicalModels.filter((m) => m.id.toLowerCase().includes(filterKey))
+        : canonicalModels;
+      const value = buildSyntheticChainEntries(filtered);
+      return formatJsonOrText(runtime.cli)(value, [
+        `GoodVibes synthetic model chains${filterKey ? ` (${filterKey})` : ''}`,
+        ...value.flatMap((m) => [
+          `  ${m.id}  [${m.tier}]  ${m.keyedBackendCount}/${m.backendCount} backends configured`,
+          ...m.backends.map((b) => `    ${b.position}. ${b.provider}/${b.model}`),
+        ]),
+      ].join('\n'));
+    }
     const filter = subOrFilter === 'list' ? rest[0]?.toLowerCase() : subOrFilter?.toLowerCase();
     const models = services.providerRegistry
       .getSelectableModels()
       .filter((model) => !filter || model.provider.toLowerCase() === filter || model.registryKey.toLowerCase().includes(filter))
       .slice(0, 200);
-    const value = models.map((model) => ({
-      registryKey: model.registryKey,
-      provider: model.provider,
-      ...classifyModelProvider(model.provider),
-      id: model.id,
-      displayName: model.displayName,
-      contextWindow: services.providerRegistry.getContextWindowForModel(model),
-      current: model.registryKey === current,
-    }));
+    const value = models.map((model) => {
+      const synthInfo = model.provider === 'synthetic'
+        ? services.providerRegistry.getSyntheticModelInfoFromCatalog(model.id)
+        : null;
+      return {
+        registryKey: model.registryKey,
+        provider: model.provider,
+        ...classifyModelProvider(model.provider),
+        id: model.id,
+        displayName: model.displayName,
+        contextWindow: services.providerRegistry.getContextWindowForModel(model),
+        current: model.registryKey === current,
+        ...(synthInfo !== null ? {
+          isSynthetic: true,
+          syntheticTier: synthInfo.tier,
+          syntheticBackends: synthInfo.backendCount,
+          syntheticConfiguredBackends: synthInfo.keyedBackendCount,
+        } : {}),
+      };
+    });
     return formatJsonOrText(runtime.cli)(value, [
       `GoodVibes models${filter ? ` (${filter})` : ''}`,
-      ...value.map((model) => `  ${model.current ? '*' : ' '} ${model.registryKey.padEnd(42)} setup=${model.setupClass} ctx=${model.contextWindow.toLocaleString()} ${model.displayName}`),
+      ...value.map((model) => {
+        const synthLabel = model.isSynthetic
+          ? ` [synthetic ${model.syntheticConfiguredBackends}/${model.syntheticBackends}p]`
+          : '';
+        return `  ${model.current ? '*' : ' '} ${model.registryKey.padEnd(42)} setup=${model.setupClass} ctx=${model.contextWindow.toLocaleString()}${synthLabel} ${model.displayName}`;
+      }),
     ].join('\n'));
   });
 }
