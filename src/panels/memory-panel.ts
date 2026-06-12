@@ -13,7 +13,7 @@
 import type { Line } from '../types/grid.ts';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { MemoryClass, MemoryRecord, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state';
-import { SearchableListPanel } from './scrollable-list-panel.ts';
+import { ScrollableListPanel, SearchableListPanel } from './scrollable-list-panel.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import {
   buildBodyText,
@@ -212,9 +212,15 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
-  /** Returns the active item list based on the current filter mode. */
-  private activeItems(): readonly MemoryRecord[] {
-    return this.filterMode === 'review' ? this.reviewRecords : this.getItems();
+  /**
+   * Override getItems() so that ScrollableListPanel infrastructure (renderList,
+   * clampSelection, navigation bounds) all operate on reviewRecords in review
+   * mode — preventing the render/action index desync where rendered list index N
+   * did not correspond to reviewRecords[N] when the two lists differ.
+   */
+  protected override getItems(): readonly MemoryRecord[] {
+    if (this.filterMode === 'review') return this.reviewRecords;
+    return super.getItems();
   }
 
   private refreshReviewRecords(): void {
@@ -354,6 +360,12 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       }
     }
 
+    // In review mode, navigation keys (j/k/up/down/etc.) must bypass
+    // SearchableListPanel's printable-character interception, which would
+    // otherwise swallow single-char keys like 'j' and 'k' as search input.
+    if (this.filterMode === 'review') {
+      return ScrollableListPanel.prototype.handleInput.call(this, key);
+    }
     return super.handleInput(key);
   }
 

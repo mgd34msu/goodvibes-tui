@@ -250,6 +250,9 @@ type SettingsRouteState = {
     pendingProviderModelPickerTarget?: import('./model-picker.ts').ModelPickerTarget | null;
     pendingSettingsPickerAction?: 'tts-provider' | 'tts-voice' | null;
     resetSelected?: () => { key: string; value: unknown } | null;
+    initiateResetCategory?: () => void;
+    initiateResetAll?: () => void;
+    handleResetConfirmKey?: (key: string) => 'confirmed' | 'cancelled' | 'absorbed' | 'inactive';
   };
   commandContext?: CommandContext;
   /** Called when the settings modal requests the model picker for a non-main target. */
@@ -313,6 +316,21 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
     }
   }
 
+  // Reset confirm gate: routes all keys through the confirm contract before
+  // normal dispatch when a category or all-settings reset is pending.
+  if (state.settingsModal.handleResetConfirmKey) {
+    const key = token.type === 'key'
+      ? (token.logicalName ?? '')
+      : token.type === 'text'
+        ? token.value
+        : '';
+    const resetResult = state.settingsModal.handleResetConfirmKey(key);
+    if (resetResult !== 'inactive') {
+      state.requestRender();
+      return true;
+    }
+  }
+
   if (token.type === 'key') {
     const focusPane = state.settingsModal.focusPane ?? 'settings';
     if (token.logicalName === 'escape') {
@@ -359,6 +377,12 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
         state.settingsModal.moveDown?.();
       } else if (state.settingsModal.moveFocusedDown) state.settingsModal.moveFocusedDown();
       else state.settingsModal.moveDown?.();
+    }
+    else if (token.logicalName === 'r' && token.shift && token.ctrl && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
+      state.settingsModal.initiateResetAll?.();
+    }
+    else if (token.logicalName === 'r' && token.shift && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
+      state.settingsModal.initiateResetCategory?.();
     }
     else if (token.logicalName === 'r' && !state.settingsModal.editingMode && !state.settingsModal.searchFocused) {
       const reset = state.settingsModal.resetSelected?.();
