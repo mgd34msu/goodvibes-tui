@@ -1,6 +1,6 @@
 import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { getDisplayWidth, padDisplayEnd } from '../utils/terminal-width.ts';
 
 /**
  * renderDiffView - Render a unified diff string as styled Line[].
@@ -13,7 +13,7 @@ export function renderDiffView(diffText: string, width: number, filename?: strin
   // Filename header
   if (filename) {
     const header = ` ≡ ${filename} `;
-    lines.push(UIFactory.stringToLine(header.padEnd(width), width, { fg: '#1a1a1a', bg: '#569cd6', bold: true }));
+    lines.push(UIFactory.stringToLine(padDisplayEnd(header, width), width, { fg: '#1a1a1a', bg: '#569cd6', bold: true }));
   }
 
   const diffLines = diffText.split('\n');

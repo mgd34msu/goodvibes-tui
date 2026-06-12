@@ -43,9 +43,16 @@ function stripAnsi(text: string): string {
 
 /**
  * Calculates the visual width of a string in the terminal.
- * Handles CJK characters, emoji (including ZWJ sequences), and
- * variation selectors correctly as double-width.
- * ANSI escape sequences (SGR/CSI/OSC-8) are stripped before measurement.
+ * Handles CJK characters, emoji, and variation selectors correctly as
+ * double-width. ANSI escape sequences (SGR/CSI/OSC-8) are stripped before
+ * measurement.
+ *
+ * NOTE: Width is measured per Unicode scalar value (code point), not per
+ * grapheme cluster. ZWJ sequences (e.g. 👨‍👩‍👧‍👦) are handled component-by-component:
+ * each component's width is summed and ZWJ/VS chars contribute zero width,
+ * so the total is accurate. However, truncation (truncateDisplay) may split
+ * a ZWJ family mid-sequence, leaving dangling ZWJ/VS characters. This is a
+ * cosmetic degradation only — line widths remain correct.
  */
 export function getDisplayWidth(text: string): number {
   text = stripAnsi(text);

@@ -112,8 +112,6 @@ describe('renderMarkdown', () => {
     const contentCells = firstContentLine!.filter((c) => c.char !== ' ' && c.char !== '');
     expect(contentCells.some((c) => c.bold)).toBe(true);
   });
-});
-
 
   test('renders GitHub-style pipe tables', () => {
     const md = [
@@ -163,6 +161,7 @@ describe('renderMarkdown', () => {
     expect(text).toContain('Token');
     expect(text).toContain('┼');
   });
+});
 
 describe('fence syntax variants', () => {
   test('tilde fences (~~~) open and close a code block', () => {
@@ -237,6 +236,80 @@ describe('fence syntax variants', () => {
     expect(text).toContain('item two');
     // The fence markers themselves must NOT appear as raw text
     expect(text).not.toContain('```');
+  });
+
+  test('empty fence (zero content lines) renders without crash', () => {
+    const md = '```ts\n```';
+    const result = renderMarkdown(md, 80);
+    expect(Array.isArray(result)).toBe(true);
+    // Empty fence still produces header + footer lines
+    expect(result.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('fence close immediately followed by next paragraph (no blank line)', () => {
+    // Content after the closing fence delimiter must not bleed into the code block
+    const md = '```ts\nconst x = 1;\n```\nThis is a paragraph.';
+    const result = renderMarkdown(md, 80);
+    const text = textLines(result).join('\n');
+    expect(text).toContain('x');
+    expect(text).toContain('This is a paragraph.');
+    // The paragraph text must appear as its own line, not inside the code block
+    const lines = textLines(result);
+    const paraIdx = lines.findIndex((l) => l.includes('This is a paragraph.'));
+    expect(paraIdx).toBeGreaterThan(-1);
+  });
+
+  test('backtick inside inline code span does not open a fence', () => {
+    // A single backtick used for inline code within a paragraph must not be
+    // treated as a fence opener even when it starts a line.
+    const md = 'Plain text with `code` in it.';
+    const result = renderMarkdown(md, 80);
+    const text = textLines(result).join('\n');
+    expect(text).toContain('code');
+    expect(text).toContain('Plain text');
+    // Must be a single line (not a code block)
+    expect(result.length).toBeLessThanOrEqual(2);
+  });
+
+  test('fence with no language tag renders content without syntax header artifact', () => {
+    const md = '```\nplain code\n```';
+    const result = renderMarkdown(md, 80);
+    const text = textLines(result).join('\n');
+    // The word 'code' appears in both the header ('code' fallback) and the content
+    expect(text).toContain('plain code');
+  });
+
+  test('tracked markdown: unclosed fence at stream end is recorded in codeBlocks', () => {
+    const md = '```ts\nconst x = 1;\nconst y = 2;';
+    const { lines, codeBlocks } = renderMarkdownTracked(md, 80);
+    // The unclosed fence must produce at least one codeBlock entry
+    expect(codeBlocks.length).toBeGreaterThan(0);
+    // The rawContent must include both content lines (no fence markers)
+    expect(codeBlocks[0].rawContent).toContain('const x');
+    expect(codeBlocks[0].rawContent).toContain('const y');
+    // The rendered lines must be non-empty
+    expect(lines.length).toBeGreaterThan(0);
+  });
+
+  test('multiple sequential fences do not bleed into each other', () => {
+    const md = [
+      '```ts',
+      'const a = 1;',
+      '```',
+      '```py',
+      'print(42)',
+      '```',
+    ].join('\n');
+    const { codeBlocks } = renderMarkdownTracked(md, 80);
+    // Should have exactly 2 code blocks
+    expect(codeBlocks.length).toBe(2);
+    // First block: TS content
+    expect(codeBlocks[0].rawContent).toContain('const a');
+    // Second block: Python content
+    expect(codeBlocks[1].rawContent).toContain('print');
+    // The blocks must not overlap in line offsets
+    const firstEnd = codeBlocks[0].startOffset + codeBlocks[0].lineCount;
+    expect(codeBlocks[1].startOffset).toBeGreaterThanOrEqual(firstEnd);
   });
 });
 

@@ -1,6 +1,6 @@
 import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { getDisplayWidth, padDisplayEnd } from '../utils/terminal-width.ts';
 
 // Rich spinner frames (used by progress indicators)
 export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -17,7 +17,7 @@ export function renderSpinner(
   fg: string = '135'
 ): Line {
   const text = ` ${frame} ${label}`;
-  return UIFactory.stringToLine(text.padEnd(width), width, { fg, bold: true });
+  return UIFactory.stringToLine(padDisplayEnd(text, width), width, { fg, bold: true });
 }
 
 /**
@@ -33,7 +33,7 @@ export function renderToolProgress(
   const counter = `[${current}/${total}]`;
   const text = ` ${counter} ${label}`;
   return [
-    UIFactory.stringToLine(text.padEnd(width), width, { fg: '#ffcc00', bold: true }),
+    UIFactory.stringToLine(padDisplayEnd(text, width), width, { fg: '#ffcc00', bold: true }),
   ];
 }
 
