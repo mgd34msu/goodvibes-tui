@@ -3,6 +3,7 @@
  */
 import { mkdtemp, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { PROJECT_TEST_TMP_ROOT } from './helpers/project-temp.ts';
 import type { LLMProvider, ChatRequest, ChatResponse } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ToolCall } from '@pellux/goodvibes-sdk/platform/types';
 
@@ -76,9 +77,8 @@ export async function setupTestConfigDir(): Promise<{ configDir: string; cleanup
  * Also returns an async cleanup function.
  */
 export async function makeTempDir(): Promise<{ dir: string; cleanup: () => Promise<void> }> {
-  const tmpBase = join(process.cwd(), 'tmp');
-  await mkdir(tmpBase, { recursive: true });
-  const dir = await mkdtemp(join(tmpBase, 'gv-test-'));
+  await mkdir(PROJECT_TEST_TMP_ROOT, { recursive: true });
+  const dir = await mkdtemp(join(PROJECT_TEST_TMP_ROOT, 'gv-test-'));
   return {
     dir,
     cleanup: () => rm(dir, { recursive: true, force: true }),
