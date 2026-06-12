@@ -13,6 +13,13 @@
  * Neither test asserts "exactly one render call" or timing — those would be
  * fragile if a debounce is added. Both assert observable state changes.
  *
+ * Test #1 pins the delta contract precisely: the mock stream has no
+ * getColorDepth(), so probeTermCaps() returns capability='none' and
+ * syncedOutput=false. wrapSynced() therefore returns the empty string for
+ * an all-identical diff, and compositor.composite() guards with `if (diff)`
+ * before calling stdout.write(). An identical second frame produces exactly
+ * 0 writes — not merely "fewer than the first paint".
+ *
  * No real I/O, no real timers. All synchronous.
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
@@ -81,22 +88,25 @@ function makeInputHandler(): InputHandler {
 // ---------------------------------------------------------------------------
 
 describe('ux:resize — compositor.resetDiff causes full redraw on next composite', () => {
-  test('second composite without resetDiff emits fewer or equal writes than first (delta-only)', () => {
+  test('second composite without resetDiff emits exactly 0 writes for an identical frame (strict delta contract)', () => {
     const { compositor, stream } = makeCompositor();
     // First composite: full initial render — writes entire screen
     compositor.composite(makeRequest(80, 24));
     const firstCount = stream.writes.length;
     expect(firstCount).toBeGreaterThan(0);
 
-    // Second composite with identical content — diff engine should emit fewer writes
-    // (only diffs; typically nothing if content is identical).
+    // Second composite with identical content — the diff engine finds no dirty/changed
+    // cells, produces an empty diff string, and wrapSynced() returns it unchanged
+    // (syncedOutput=false on the mock stream). The `if (diff)` guard in composite()
+    // suppresses the write entirely, so exactly 0 writes are emitted.
     const beforeSecond = stream.writes.length;
     compositor.composite(makeRequest(80, 24));
     const secondCount = stream.writes.length - beforeSecond;
 
-    // An unchanged frame emits at least a cursor-positioning write but far fewer than
-    // the first full frame. The point is: without resetDiff the screen is NOT fully redrawn.
-    expect(secondCount).toBeLessThanOrEqual(firstCount);
+    // Strict delta contract: an identical frame must produce 0 writes.
+    // toBeLessThan(firstCount) would pass even on full-redraw regression;
+    // toBe(0) catches any delta-engine bypass.
+    expect(secondCount).toBe(0);
   });
 
   test('resetDiff followed by composite emits more writes than a delta-only frame', () => {
