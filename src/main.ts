@@ -56,7 +56,7 @@ import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/ter
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
-import { createStreamStallWatchdog } from './core/stream-stall-watchdog.ts';
+import { wireStreamEventMetrics, type StreamMetrics } from './core/stream-event-wiring.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -166,20 +166,18 @@ async function main() {
     render();
   });
 
-  let streamStartTime = 0;
-  let streamDeltaCount = 0;
-  let streamTokenSpeed = 0;
-  /** Elapsed ms from STREAM_START to first STREAM_DELTA (time-to-first-token). */
-  let streamTtftMs: number | undefined;
-  /** Whether TTFT has been recorded for the current turn. */
-  let streamTtftRecorded = false;
-  /** Epoch ms when the most recent TOOL_EXECUTING event fired; undefined when idle. */
-  let activeToolStartedAtMs: number | undefined;
-  /** Name of the currently executing tool; cleared when execution completes. */
-  let activeToolName: string | undefined;
-
   let scrollTop = 0;
   let scrollLocked = true;
+  // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
+  const streamMetrics: StreamMetrics = {
+    startTime: 0,
+    deltaCount: 0,
+    tokenSpeed: 0,
+    ttftMs: undefined,
+    ttftRecorded: false,
+    activeToolStartedAtMs: undefined,
+    activeToolName: undefined,
+  };
 
   const getPromptContentWidth = () => {
     const w = stdout.columns || 80;
@@ -498,7 +496,9 @@ async function main() {
       workingDir,
       provider: runtime.provider,
       contextWindow: currentModel.contextWindow,
-      compactThreshold: configManager.get('behavior.autoCompactThreshold') as number,
+      // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
+      // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
+      compactThreshold: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),
       dangerMode: (() => {
         if (configManager.get('behavior.autoApprove')) return true;
         const permMode = configManager.get('permissions.mode');
@@ -582,23 +582,23 @@ async function main() {
       const showPreview = configManager.get('display.showToolPreview') as boolean;
       const partialToolPreview = showPreview ? sessionSnapshot.streamToolPreview : undefined;
       // Elapsed from turn start (stream or tool execution), used for the thinking indicator timer.
-      const turnElapsedMs = streamStartTime > 0 ? Date.now() - streamStartTime : undefined;
+      const turnElapsedMs = streamMetrics.startTime > 0 ? Date.now() - streamMetrics.startTime : undefined;
       const thinking = UIFactory.createThinkingFragment(
         conversationWidth,
         orchestrator.getSpinner(),
         orchestrator.thinkingFrame,
-        showSpeed ? streamTokenSpeed : undefined,
+        showSpeed ? streamMetrics.tokenSpeed : undefined,
         showPreview ? partialToolPreview : undefined,
         orchestrator.streamingInputTokens > 0 ? orchestrator.streamingInputTokens : undefined,
         orchestrator.streamingOutputTokens > 0 ? orchestrator.streamingOutputTokens : undefined,
         turnElapsedMs,
-        streamTtftMs,
+        streamMetrics.ttftMs,
       );
       viewport.push(...thinking);
       // Live tool timer: render the currently executing tool row with ticking elapsed.
-      if (activeToolName !== undefined && activeToolStartedAtMs !== undefined) {
-        const liveToolCall = { id: 'live', name: activeToolName, arguments: {} };
-        viewport.push(...renderToolCallBlock(liveToolCall, 'executing', undefined, conversationWidth, undefined, undefined, undefined, activeToolStartedAtMs));
+      if (streamMetrics.activeToolName !== undefined && streamMetrics.activeToolStartedAtMs !== undefined) {
+        const liveToolCall = { id: 'live', name: streamMetrics.activeToolName, arguments: {} };
+        viewport.push(...renderToolCallBlock(liveToolCall, 'executing', undefined, conversationWidth, undefined, undefined, undefined, streamMetrics.activeToolStartedAtMs));
       }
     }
 
@@ -701,63 +701,16 @@ async function main() {
     refreshGit();
   }));
 
-  unsubs.push(uiServices.events.turns.on('STREAM_START', () => {
-    streamStartTime = Date.now();
-    streamDeltaCount = 0;
-    streamTokenSpeed = 0;
-    streamTtftMs = undefined;
-    streamTtftRecorded = false;
-  }));
-  unsubs.push(uiServices.events.turns.on('STREAM_DELTA', () => {
-    streamDeltaCount++;
-    const elapsed = (Date.now() - streamStartTime) / 1000;
-    // Record TTFT on the first delta of each turn.
-    if (!streamTtftRecorded) {
-      streamTtftMs = Date.now() - streamStartTime;
-      streamTtftRecorded = true;
-    }
-    // Use real output token count for accurate tok/s; fall back to delta count.
-    const tokenCount = orchestrator.streamingOutputTokens > 0
-      ? orchestrator.streamingOutputTokens
-      : streamDeltaCount;
-    streamTokenSpeed = elapsed > 0 ? tokenCount / elapsed : 0;
-  }));
-  unsubs.push(uiServices.events.turns.on('TURN_ERROR', (event) => {
-    const errVal: string = event.error;
-    const formatted = formatUserFacingErrorLine(errVal);
-    systemMessageRouter.high(`[Error] ${formatted}`);
-    render();
-  }));
-
-  // --- Stream stall watchdog: emit one low hint if STREAM_START has no delta within 30s ---
-  const stallWatchdog = createStreamStallWatchdog({
-    events: uiServices.events.turns,
-    onStall: (providerName) => {
-      systemMessageRouter.low(`Still waiting on ${providerName}… Ctrl+C to cancel`);
-      render();
-    },
-    getProviderName: () => providerRegistry.getCurrentModel().provider,
-    // thresholdMs uses the default 30 000
+  // --- Stream metrics + tool-timer event wiring ---
+  const streamUnsubs = wireStreamEventMetrics({
+    events: uiServices.events,
+    orchestrator,
+    providerRegistry,
+    systemMessageRouter,
+    render,
+    metrics: streamMetrics,
   });
-  unsubs.push(() => stallWatchdog.dispose());
-
-  unsubs.push(uiServices.events.tools.on('TOOL_EXECUTING', (ev) => {
-    activeToolStartedAtMs = ev.startedAt;
-    activeToolName = ev.tool;
-    render();
-  }));
-  unsubs.push(uiServices.events.tools.on('TOOL_SUCCEEDED', () => {
-    activeToolStartedAtMs = undefined;
-    activeToolName = undefined;
-  }));
-  unsubs.push(uiServices.events.tools.on('TOOL_FAILED', () => {
-    activeToolStartedAtMs = undefined;
-    activeToolName = undefined;
-  }));
-  unsubs.push(uiServices.events.tools.on('TOOL_CANCELLED', () => {
-    activeToolStartedAtMs = undefined;
-    activeToolName = undefined;
-  }));
+  unsubs.push(...streamUnsubs);
 
   // --- Terminal setup ---
   stdin.setRawMode(true);
