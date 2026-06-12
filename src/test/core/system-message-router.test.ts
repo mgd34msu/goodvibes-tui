@@ -7,10 +7,27 @@ import type { ConversationManager } from '../../core/conversation';
 // Minimal stubs
 // ---------------------------------------------------------------------------
 
-function makeConversation(): { addSystemMessage: ReturnType<typeof mock>; _messages: string[] } {
+function makeConversation(): {
+  addSystemMessage: ReturnType<typeof mock>;
+  addTypedSystemMessage: ReturnType<typeof mock>;
+  _messages: string[];
+  _typedMessages: Array<{ msg: string; kind: string }>;
+} {
   const _messages: string[] = [];
+  const _typedMessages: Array<{ msg: string; kind: string }> = [];
+  // addSystemMessage is a plain-kind fallback (bare callers without kind info)
   const addSystemMessage = mock((msg: string) => { _messages.push(msg); });
-  return { addSystemMessage, _messages } as unknown as { addSystemMessage: ReturnType<typeof mock>; _messages: string[] };
+  // addTypedSystemMessage is called by the router with a kind tag
+  const addTypedSystemMessage = mock((msg: string, kind: string) => {
+    _messages.push(msg);
+    _typedMessages.push({ msg, kind });
+  });
+  return { addSystemMessage, addTypedSystemMessage, _messages, _typedMessages } as unknown as {
+    addSystemMessage: ReturnType<typeof mock>;
+    addTypedSystemMessage: ReturnType<typeof mock>;
+    _messages: string[];
+    _typedMessages: Array<{ msg: string; kind: string }>;
+  };
 }
 
 function makePanel(): { push: ReturnType<typeof mock>; handleInput: ReturnType<typeof mock>; _pushed: { text: string; priority: SystemMessagePriority }[] } {
@@ -89,7 +106,7 @@ describe('classifyPriority (via routeAuto)', () => {
       makeTargetResolver({ operational: 'conversation' }),
     );
     opsRouter.routeAuto('[Tool] edit applied to src/main.ts');
-    expect(conv.addSystemMessage).toHaveBeenCalledWith('[Tool] edit applied to src/main.ts');
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[Tool] edit applied to src/main.ts', 'operational');
   });
 
   test('[MCP] discovery messages classify as low', () => {
@@ -137,7 +154,7 @@ describe('routeSystemMessage', () => {
 
   test('wrfc convenience method routes to both by default', () => {
     router.wrfc('[WRFC] Chain abc started');
-    expect(conv.addSystemMessage).toHaveBeenCalledWith('[WRFC] Chain abc started');
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[WRFC] Chain abc started', 'wrfc');
     expect(panel.push).toHaveBeenCalledWith('[WRFC] Chain abc started', 'high');
   });
 
@@ -150,19 +167,20 @@ describe('routeSystemMessage', () => {
   test('null panel does not throw on high route', () => {
     const noPanel = createSystemMessageRouter(conv as unknown as ConversationManager, null, makeTargetResolver({ system: 'conversation' }));
     expect(() => noPanel.high('msg')).not.toThrow();
-    expect(conv.addSystemMessage).toHaveBeenCalledTimes(1);
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledTimes(1);
   });
 
   test('null panel does not throw on low route', () => {
     const noPanel = createSystemMessageRouter(conv as unknown as ConversationManager, null);
     expect(() => noPanel.low('msg')).not.toThrow();
-    expect(conv.addSystemMessage).toHaveBeenCalledWith('msg');
+    // low routes to panel-only by default; without a panel it falls back to conversation
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('msg', 'system');
   });
 
   test('panel-targeted routes fall back to conversation when no panel is attached', () => {
     const noPanel = createSystemMessageRouter(conv as unknown as ConversationManager, null, makeTargetResolver({ system: 'panel' }));
     noPanel.routeSystemMessage('panel fallback', 'low');
-    expect(conv.addSystemMessage).toHaveBeenCalledWith('panel fallback');
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('panel fallback', 'system');
   });
 
   test('custom system target can route to both', () => {
@@ -172,7 +190,7 @@ describe('routeSystemMessage', () => {
       makeTargetResolver({ system: 'both' }),
     );
     bothRouter.routeSystemMessage('both message', 'high');
-    expect(conv.addSystemMessage).toHaveBeenCalledWith('both message');
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('both message', 'system');
     expect(panel.push).toHaveBeenCalledWith('both message', 'high');
   });
 });
@@ -214,20 +232,22 @@ describe('routeAuto classification', () => {
   for (const msg of highCases) {
     test(`classifies as high: "${msg.slice(0, 40)}"`, () => {
       router.routeAuto(msg);
-      expect(conv.addSystemMessage).toHaveBeenCalledWith(msg);
+      // High-priority system messages use kind='system' and route to conversation
+      expect(conv.addTypedSystemMessage).toHaveBeenCalledWith(msg, 'system');
     });
   }
 
   for (const msg of lowCases) {
     test(`classifies as low: "${msg.slice(0, 40)}"`, () => {
       router.routeAuto(msg);
-      expect(conv.addSystemMessage).toHaveBeenCalledWith(msg);
+      // Low cases are 'operational' kind; without panel they fall back to conversation
+      expect(conv.addTypedSystemMessage).toHaveBeenCalledWith(msg, 'operational');
     });
   }
 
   test('WRFC messages classify as wrfc and follow WRFC target policy', () => {
     router.routeAuto('[WRFC] Chain abc123 started');
-    expect(conv.addSystemMessage).toHaveBeenCalledWith('[WRFC] Chain abc123 started');
+    expect(conv.addTypedSystemMessage).toHaveBeenCalledWith('[WRFC] Chain abc123 started', 'wrfc');
   });
 });
 

@@ -13,6 +13,21 @@ import { GLYPHS } from '../renderer/ui-primitives.ts';
 import type { BlockMeta, ConversationMessageSnapshot } from './conversation';
 import { parseDiffForApply } from '@pellux/goodvibes-sdk/platform/core';
 import { extractUserDisplayText } from '@pellux/goodvibes-sdk/platform/core';
+import type { SystemMessageKind } from './system-message-router.ts';
+
+/**
+ * Navigable system message kinds for error-navigation (nextErrorLine/prevErrorLine).
+ *
+ * Kind → navigable mapping:
+ *   - 'system'      YES — generic/catch-all messages (provider failures, session
+ *                         events, user-visible errors). Default for un-prefixed messages.
+ *   - 'wrfc'        YES — WRFC chain events are important and worth navigating to.
+ *   - 'operational' NO  — tool/scan/plugin/MCP status noise; not useful to jump to.
+ *
+ * When a message has no recorded kind (added via bare addSystemMessage), it
+ * defaults to 'system' and is therefore navigable.
+ */
+const NAVIGABLE_KINDS: ReadonlySet<SystemMessageKind> = new Set(['system', 'wrfc']);
 
 type Message = ConversationMessageSnapshot;
 
@@ -29,6 +44,8 @@ interface ConversationRenderContext {
   readonly blockRegistry: BlockMeta[];
   readonly collapseState: Map<string, boolean>;
   readonly errorLineRegistry: number[];
+  /** Maps message index → SystemMessageKind for typed system messages. */
+  readonly messageKindRegistry: ReadonlyMap<number, SystemMessageKind>;
   readonly configManager: ConfigManager | null;
   readonly splashOptions: SplashOptions;
 }
@@ -180,11 +197,15 @@ export function renderConversationSystemMessage(
   context: ConversationRenderContext,
   message: Extract<Message, { role: 'system' }>,
   width: number,
+  msgIdx: number,
 ): void {
   const sysStartLine = context.history.getLineCount();
   const sysLines = renderSystemMessage(message.content, width);
   context.history.addLines(sysLines);
-  if (/error/i.test(message.content)) {
+  // Resolve navigability from the stored kind, defaulting to 'system'
+  // (navigable) for messages added without an explicit kind tag.
+  const kind: SystemMessageKind = context.messageKindRegistry.get(msgIdx) ?? 'system';
+  if (NAVIGABLE_KINDS.has(kind)) {
     context.errorLineRegistry.push(sysStartLine);
   }
 }
@@ -280,6 +301,13 @@ export function appendConversationMessages(
   messages: Message[],
   width: number,
   messageLineRegistry: number[],
+  /**
+   * Absolute index of messages[0] in the full (unsliced) conversation snapshot.
+   * Required to align slice-relative loop indices with the absolute keys stored
+   * in messageKindRegistry, which is keyed at add-time (before any slice).
+   * Defaults to 0 when the full snapshot is rendered (no clearDisplay in effect).
+   */
+  msgIndexOffset = 0,
 ): void {
   const lineNumberMode = context.configManager?.get('display.lineNumbers') ?? 'off';
   const collapseThreshold = context.configManager?.get('display.collapseThreshold') ?? 30;
@@ -287,14 +315,17 @@ export function appendConversationMessages(
   for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
     const message = messages[msgIdx];
     messageLineRegistry[msgIdx] = context.history.getLineCount();
+    // absoluteIdx aligns the slice-relative loop counter with the absolute
+    // message index used as the key in messageKindRegistry.
+    const absoluteIdx = msgIndexOffset + msgIdx;
     if (message.role === 'user') {
       renderConversationUserMessage(context, message, width);
     } else if (message.role === 'assistant') {
-      renderConversationAssistantMessage(context, message, width, lineNumberMode, collapseThreshold, msgIdx);
+      renderConversationAssistantMessage(context, message, width, lineNumberMode, collapseThreshold, absoluteIdx);
     } else if (message.role === 'system') {
-      renderConversationSystemMessage(context, message, width);
+      renderConversationSystemMessage(context, message, width, absoluteIdx);
     } else if (message.role === 'tool') {
-      renderConversationToolMessage(context, message, width, msgIdx);
+      renderConversationToolMessage(context, message, width, absoluteIdx);
     }
     context.history.addLine(createEmptyLine(width));
   }
