@@ -41,7 +41,7 @@ Auto dark/light token set + 3 built-in themes + user theme files. Natural comple
 | E9 | Push notifications on long-task completion | runtime_external webhook listener + 4 normalizers (unused!) | S-M |
 
 ## Resilience
-| E10 | One-key retry: r retry, m model-picker, from TASK-009 errors | TASK-009 classifier | S after W2 |
+| E10 | ✅ LANDED — One-key retry: r retry, m model-picker, from turn-error notices | TASK-009 classifier | S after W2 |
 | E11 | Provider failover policy (opt-in auto-switch) | provider registry, TURN_ERROR | M |
 | E12 | goodvibes doctor: keys, term caps, daemon, state integrity | runtime_status checks, term-caps | S-M |
 | E13 | WAL-style transcript journal (SIGKILL-proof) | atomic-write helper + auto-save | M |

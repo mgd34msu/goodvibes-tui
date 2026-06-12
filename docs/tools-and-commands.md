@@ -88,7 +88,7 @@ Alias: `/sess`. Run `/session` with no arguments to see current session info.
 
 Many commands also have matching panels and control rooms. High-signal examples:
 
-- provider accounts and health
+- provider accounts and health (`/health` pillars include `setup`, `services`, `sandbox`, `accounts`, `auth`, `settings`, `remote`, `continuity`, `worktrees`, `maintenance`, and `term` for terminal-capability posture)
 - knowledge and memory review
 - remote peers and work queues
 - channels and deliveries
