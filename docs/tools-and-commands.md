@@ -57,6 +57,7 @@ Representative slash-command families include:
 - `/sandbox`
 - `/plugin`
 - `/marketplace`
+- `/share`
 - `/workflow`
 - `/schedule`
 - `/voice`
@@ -168,5 +169,6 @@ For QEMU guest bootstrapping details, including the generated image script and g
 ## Related docs
 
 - [Getting started](getting-started.md)
+- [/share — session export](share-command.md)
 - [Deployment and services](deployment-and-services.md)
 - [Channels, remote runtime, and API](channels-remote-and-api.md)
