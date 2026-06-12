@@ -1,14 +1,17 @@
 /**
  * Post-build smoke test for the daemon binary.
  *
- * Spawns dist/goodvibes-daemon-linux-x64, waits for it to be ready,
- * curls /api/health and /api/memory/vector, and asserts no sqlite-vec errors.
+ * Spawns the platform-appropriate daemon binary, auto-detected from
+ * process.platform/process.arch (dist/goodvibes-daemon-<platform>-<arch>:
+ * linux-x64, linux-arm64, darwin-x64, darwin-arm64), waits for it to be
+ * ready, curls /api/health and /api/memory/vector, and asserts no
+ * sqlite-vec errors. The sqlite-vec addon path is detected the same way.
  *
  * Exit 0 = pass, exit 1 = fail.
  *
  * Usage:
  *   bun run scripts/post-build-smoke.ts
- *   bun run scripts/post-build-smoke.ts --binary dist/goodvibes-daemon-linux-x64
+ *   bun run scripts/post-build-smoke.ts --binary dist/goodvibes-daemon-<platform>-<arch>
  */
 
 import { spawn } from 'child_process';
@@ -24,9 +27,18 @@ const root = process.cwd();
 
 const args = process.argv.slice(2);
 const binaryIdx = args.indexOf('--binary');
+
+function defaultDaemonBinary(): string {
+  if (process.platform === 'linux' && process.arch === 'x64') return join(root, 'dist', 'goodvibes-daemon-linux-x64');
+  if (process.platform === 'linux' && process.arch === 'arm64') return join(root, 'dist', 'goodvibes-daemon-linux-arm64');
+  if (process.platform === 'darwin' && process.arch === 'x64') return join(root, 'dist', 'goodvibes-daemon-macos-x64');
+  if (process.platform === 'darwin' && process.arch === 'arm64') return join(root, 'dist', 'goodvibes-daemon-macos-arm64');
+  return join(root, 'dist', 'goodvibes-daemon-linux-x64');
+}
+
 const BINARY = binaryIdx !== -1 && args[binaryIdx + 1]
   ? args[binaryIdx + 1]
-  : join(root, 'dist', 'goodvibes-daemon-linux-x64');
+  : defaultDaemonBinary();
 
 const SMOKE_PORT = 47921;
 const SMOKE_TOKEN = 'smoke-test-token-local';
@@ -84,9 +96,17 @@ if (!existsSync(BINARY)) {
 }
 
 // Check native addon is present (required for sqlite-vec)
-const addonPath = join(root, 'dist', 'lib', 'sqlite-vec-linux-x64', 'vec0.so');
+// Addon directory and filename are platform-specific.
+function resolveAddonPath(): string {
+  if (process.platform === 'linux' && process.arch === 'x64') return join(root, 'dist', 'lib', 'sqlite-vec-linux-x64', 'vec0.so');
+  if (process.platform === 'linux' && process.arch === 'arm64') return join(root, 'dist', 'lib', 'sqlite-vec-linux-arm64', 'vec0.so');
+  if (process.platform === 'darwin' && process.arch === 'x64') return join(root, 'dist', 'lib', 'sqlite-vec-darwin-x64', 'vec0.dylib');
+  if (process.platform === 'darwin' && process.arch === 'arm64') return join(root, 'dist', 'lib', 'sqlite-vec-darwin-arm64', 'vec0.dylib');
+  return join(root, 'dist', 'lib', 'sqlite-vec-linux-x64', 'vec0.so');
+}
+const addonPath = resolveAddonPath();
 if (!existsSync(addonPath)) {
-  fail(`Native addon missing: ${addonPath} — F5 regression: scripts/build.ts did not copy sqlite-vec vec0.so to dist/lib/`);
+  fail(`Native addon missing: ${addonPath} — F5 regression: scripts/build.ts did not copy sqlite-vec addon to dist/lib/`);
 }
 
 // ---------------------------------------------------------------------------
