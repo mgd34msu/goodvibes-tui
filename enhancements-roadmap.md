@@ -85,3 +85,5 @@ Sequencing: K1 first (single highest-leverage wire, unblocks K2's signal), then 
 - Flagship arc after Wave 5: F1 → F5 → F4 → F2 → F3
 - Long plays: E15, E21, E17
 - P1/P2 alongside Wave 6
+
+> E17 status (2026-06-12, owner decision): CANNED. Terminal-graphics protocols are inherently terminal-dependent (Kitty/iTerm2/sixel coverage gaps in Alacritty, GNOME Terminal, tmux); images continue to render as [image #] text slugs identically everywhere. The one universal alternative (half-block mosaic preview, identical in all truecolor terminals) is recorded in .goodvibes/logs/decisions.md and requires explicit owner sign-off before any build.
