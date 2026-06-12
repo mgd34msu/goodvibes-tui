@@ -40,6 +40,21 @@ jobs:
       - name: Run tests
         run: bun run test
 
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - name: Setup
+        uses: ./.github/actions/setup
+      - name: Configure git for tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@test.com"
+      - name: Coverage gate
+        run: bun run test:coverage
+
   architecture-check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -77,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name == 'push'
-    needs: [typecheck, test, architecture-check, perf-check, eval-gate]
+    needs: [typecheck, test, coverage, architecture-check, perf-check, eval-gate]
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1

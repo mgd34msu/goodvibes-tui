@@ -37,6 +37,8 @@ jobs:
         run: bun x tsc --noEmit --pretty false
       - name: Tests
         run: bun run test
+      - name: Coverage gate
+        run: bun run test:coverage
       - name: Architecture check
         run: bun run architecture:check
       - name: Performance check
@@ -95,6 +97,17 @@ jobs:
       - name: Post-build smoke test (linux-x64 only)
         if: matrix.target == 'linux-x64'
         run: bun run smoke:daemon
+      - name: Live verifier (warn-only, linux-x64)
+        if: matrix.target == 'linux-x64'
+        continue-on-error: true
+        run: |
+          bun run verification:live \
+            --binary dist/${{ matrix.app_artifact }} \
+            --out /tmp/live-verify-report
+          if [ -f /tmp/live-verify-report/live-verification.md ]; then
+            echo "## Live Verifier Report" >> "$GITHUB_STEP_SUMMARY"
+            cat /tmp/live-verify-report/live-verification.md >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
