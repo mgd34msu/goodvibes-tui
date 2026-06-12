@@ -9,7 +9,7 @@ import { applyOnboardingRequest, collectOnboardingSnapshot, verifyOnboardingRequ
 import type { OnboardingApplyRequest, OnboardingVerificationItem } from '../runtime/onboarding/index.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import { captureOnboardingWizardSnapshot, restoreOnboardingWizardSnapshot } from './handler-ui-state.ts';
-import type { InputHandler } from './handler.ts';
+import type { InputHandlerLike as InputHandler, OnboardingRuntimePosture } from './handler-types.ts';
 import {
   formatRuntimeActiveSuccessMessage,
   getRuntimeEndpointStatus,
@@ -19,16 +19,6 @@ import {
   type OnboardingExternalServiceState,
   type OnboardingRuntimeEndpoint,
 } from './onboarding/onboarding-runtime-status.ts';
-
-export interface OnboardingRuntimePosture {
-  readonly serviceEnabled: boolean;
-  readonly serviceAutostart: boolean;
-  readonly restartOnFailure: boolean;
-  readonly expectedDaemon: boolean;
-  readonly expectedHttpListener: boolean;
-  readonly serverBacked: boolean;
-  readonly remoteExposure: boolean;
-}
 
 function extractAuthorizationCode(input: string): string | null {
   const trimmed = input.trim();

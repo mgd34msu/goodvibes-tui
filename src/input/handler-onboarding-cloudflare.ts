@@ -12,7 +12,7 @@ import {
   type CloudflareVerifyResult,
 } from '../runtime/cloudflare-control-plane.ts';
 import type { OnboardingVerificationItem } from '../runtime/onboarding/index.ts';
-import type { InputHandler } from './handler.ts';
+import type { InputHandlerLike as InputHandler } from './handler-types.ts';
 import type { OnboardingWizardAction, OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
 import {
   buildCloudflareApiTokenRef,
