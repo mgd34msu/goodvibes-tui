@@ -160,6 +160,7 @@ export function createBootstrapCommandActions(
   | 'openMcpWorkspace'
   | 'openSecurityPanel'
   | 'openKnowledgePanel'
+  | 'openMemoryPanel'
   | 'openRemotePanel'
   | 'openSubscriptionPanel'
   | 'openLocalAuthMaskedEntry'
@@ -272,6 +273,9 @@ export function createBootstrapCommandActions(
     },
     openKnowledgePanel: () => {
       showPanel('knowledge');
+    },
+    openMemoryPanel: () => {
+      showPanel('memory');
     },
     openRemotePanel: () => {
       showPanel('remote');

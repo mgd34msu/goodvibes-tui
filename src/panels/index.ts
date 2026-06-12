@@ -40,7 +40,7 @@ export { SecurityPanel } from './security-panel.ts';
 export { MarketplacePanel } from './marketplace-panel.ts';
 export { SandboxPanel } from './sandbox-panel.ts';
 export { ApprovalPanel } from './approval-panel.ts';
-export { KnowledgePanel } from './knowledge-panel.ts';
+export { KnowledgeGraphPanel } from './knowledge-graph-panel.ts';
 export { SystemMessagesPanel } from './system-messages-panel.ts';
 export { PanelListPanel } from './panel-list-panel.ts';
 export type { SystemMessageEntry, SystemMessagePriority } from './system-messages-panel.ts';

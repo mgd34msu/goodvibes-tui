@@ -203,11 +203,11 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
     handler(args, ctx) {
       const subcommand = (args[0] ?? 'open').toLowerCase();
       if (subcommand === 'open') {
-        if (ctx.openKnowledgePanel) {
-          ctx.openKnowledgePanel();
+        if (ctx.openMemoryPanel) {
+          ctx.openMemoryPanel();
           return;
         }
-        ctx.print('Knowledge panel is not available in this runtime.');
+        ctx.print('Memory panel is not available in this runtime.');
         return;
       }
       const memory = getMemoryApi(ctx);
@@ -245,8 +245,8 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         ctx.print(prompt ?? 'No reviewed project knowledge matched that task.');
         return;
       }
-      if (ctx.openKnowledgePanel) {
-        ctx.openKnowledgePanel();
+      if (ctx.openMemoryPanel) {
+        ctx.openMemoryPanel();
         return;
       }
       ctx.print(`Unknown project-memory subcommand: ${subcommand}`);
