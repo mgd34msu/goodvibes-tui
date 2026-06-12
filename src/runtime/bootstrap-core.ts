@@ -426,6 +426,30 @@ export async function initializeBootstrapCore(
     }
   };
 
+  // Startup TLS banner — emitted via wrfcBuffer.push() because the
+  // SystemMessageRouter is not attached yet at this point in bootstrap. The
+  // smart-ref setter on systemMessageRouterRef auto-flushes the buffer when
+  // the router attaches, so the message will appear in the WRFC panel on startup.
+  {
+    const cpEnabled = Boolean(configManager.get('controlPlane.enabled'));
+    const cpHostMode = String(configManager.get('controlPlane.hostMode') ?? 'local');
+    const cpTlsMode = String(configManager.get('controlPlane.tls.mode') ?? 'off');
+    const hlEnabled = Boolean(configManager.get('danger.httpListener'));
+    const hlHostMode = String(configManager.get('httpListener.hostMode') ?? 'local');
+    const hlTlsMode = String(configManager.get('httpListener.tls.mode') ?? 'off');
+    const cpNetworkPlaintext = cpEnabled && cpHostMode !== 'local' && cpTlsMode === 'off';
+    const hlNetworkPlaintext = hlEnabled && hlHostMode !== 'local' && hlTlsMode === 'off';
+    if (cpNetworkPlaintext || hlNetworkPlaintext) {
+      const affected: string[] = [];
+      if (cpNetworkPlaintext) affected.push('control plane');
+      if (hlNetworkPlaintext) affected.push('HTTP listener');
+      wrfcBuffer.push(
+        `[SECURITY] TLS is off for the ${affected.join(' and ')} but it is network-reachable. All traffic (credentials, tokens, conversation content) travels in plaintext. Enable TLS (controlPlane.tls.mode / httpListener.tls.mode) or restrict to loopback before exposing to untrusted networks.`,
+        'high',
+      );
+    }
+  }
+
   runtimeUnsubs.push(
     runtimeBus.on<Extract<import('@/runtime/index.ts').WorkflowEvent, { type: 'WORKFLOW_CONSTRAINTS_ENUMERATED' }>>(
       'WORKFLOW_CONSTRAINTS_ENUMERATED',
