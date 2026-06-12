@@ -78,6 +78,7 @@ import { ComponentHealthMonitor } from '@/runtime/index.ts';
 import { WorktreeRegistry } from '@/runtime/index.ts';
 import { SandboxSessionRegistry } from '@/runtime/index.ts';
 import { createShellPathService, type ShellPathService } from '@/runtime/index.ts';
+import { isFeatureFlagEnabled } from './surface-feature-flags.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
@@ -530,7 +531,11 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
   const worktreeRegistry = new WorktreeRegistry(workingDirectory);
   const webhookNotifier = new WebhookNotifier();
   const replayEngine = new DeterministicReplayEngine(workingDirectory);
-  const providerOptimizer = new ProviderOptimizer(providerRegistry, providerCapabilityRegistry, false);
+  const providerOptimizer = new ProviderOptimizer(
+    providerRegistry,
+    providerCapabilityRegistry,
+    isFeatureFlagEnabled(configManager, 'provider-optimizer'),
+  );
   const sessionMemoryStore = new SessionMemoryStore();
   const sessionLineageTracker = new SessionLineageTracker();
   const sessionChangeTracker = new SessionChangeTracker();

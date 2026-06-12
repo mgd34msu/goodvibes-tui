@@ -3,6 +3,7 @@
  *
  * Implements the Provider Optimizer panel commands:
  *
+ *   /provider optimizer on|off   — Enable or disable the provider optimizer
  *   /provider route auto|manual  — Set optimizer routing mode
  *   /provider explain-route      — Print current route explanation
  *   /provider pin <provider:model> — Pin routing to a specific provider/model
@@ -10,13 +11,18 @@
  *
  * When the optimizer is disabled, commands report its status and
  * explain-route still works (reads current model capabilities).
+ * Enabling the optimizer persists the change to config so it survives restart.
  */
 
 import type { SlashCommand, CommandContext } from '../command-registry.ts';
+import type { ConfigKey } from '../../config/index.ts';
 import type { RouteExplanation } from '@pellux/goodvibes-sdk/platform/providers';
 import type { FallbackTestResult, FallbackTransition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ProviderApiModelRecord } from '@pellux/goodvibes-sdk/platform/providers';
 import { requireProviderApi } from './runtime-services.ts';
+
+const PROVIDER_OPTIMIZER_FLAG = 'provider-optimizer';
+const PROVIDER_OPTIMIZER_CONFIG_KEY = `featureFlags.${PROVIDER_OPTIMIZER_FLAG}` as ConfigKey;
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -66,6 +72,49 @@ function fmtExplanation(expl: RouteExplanation, context: CommandContext): void {
 }
 
 // ---------------------------------------------------------------------------
+// /provider optimizer on|off
+// ---------------------------------------------------------------------------
+
+function handleOptimizerToggle(
+  args: string[],
+  context: CommandContext,
+): void {
+  const optimizer = requireProviderOptimizer(context);
+  if (!optimizer) return;
+  const sub = args[0];
+
+  if (sub !== 'on' && sub !== 'off') {
+    context.print('[provider] Usage: /provider optimizer on|off');
+    context.print(`  Current state: optimizer is ${optimizer.enabled ? 'enabled' : 'disabled'}`);
+    context.print('  "on"  — activates intelligent failover and auto-routing');
+    context.print('  "off" — disables optimizer; provider selection is manual only');
+    return;
+  }
+
+  const enable = sub === 'on';
+  const wasEnabled = optimizer.enabled;
+  optimizer.setEnabled(enable);
+
+  // Persist to config so the setting survives restart.
+  const flagValue = enable ? 'enabled' : 'disabled';
+  context.platform.configManager.setDynamic(PROVIDER_OPTIMIZER_CONFIG_KEY, flagValue);
+
+  if (enable && !wasEnabled) {
+    context.print('[provider] Optimizer enabled.');
+    context.print('  Intelligent failover is now active: on a request error the optimizer');
+    context.print('  will attempt the next viable provider and surface a transcript notice');
+    context.print('  naming the from→to transition and reason before retrying.');
+    context.print('  Use "/provider route auto" to enable fully automatic routing.');
+  } else if (!enable && wasEnabled) {
+    context.print('[provider] Optimizer disabled.');
+    context.print('  Provider selection returns to manual-only mode. No automatic failover.');
+    context.print('  Pinned targets and fallback log are preserved; re-enable to resume.');
+  } else {
+    context.print(`[provider] Optimizer already ${enable ? 'enabled' : 'disabled'} — no change.`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // /provider route auto|manual
 // ---------------------------------------------------------------------------
 
@@ -85,9 +134,9 @@ function handleRoute(
 
   if (!optimizer.enabled) {
     context.print(
-      '[provider] Optimizer is currently disabled. Enable it with the provider-optimizer feature flag.',
+      '[provider] Optimizer is off — routing mode recorded but failover will not fire until optimizer is enabled.',
     );
-    context.print(`  Routing mode set to: ${sub} (no-op until optimizer is enabled)`);
+    context.print('  Enable with: /provider optimizer on');
   }
 
   optimizer.setMode(sub);
@@ -318,11 +367,15 @@ export const providerCommand: SlashCommand = {
   aliases: ['prov-opt'],
   description: 'Manage provider routing optimizer (route, pin, explain, fallback).',
   usage: '<subcommand> [args]',
-  argsHint: 'route|explain-route|pin|fallback',
+  argsHint: 'optimizer|route|explain-route|pin|fallback',
   handler: async (args: string[], context: CommandContext): Promise<void> => {
     const [sub, ...rest] = args;
 
     switch (sub) {
+      case 'optimizer':
+        handleOptimizerToggle(rest, context);
+        break;
+
       case 'route':
         handleRoute(rest, context);
         break;
@@ -345,6 +398,7 @@ export const providerCommand: SlashCommand = {
         if (!optimizer) return;
         const lines = [
           'Usage: /provider <subcommand>',
+          '  optimizer on|off               — Enable or disable the provider optimizer',
           '  route auto|manual              — Set optimizer routing mode',
           '  explain-route                  — Show current route explanation',
           '  pin <provider:model>           — Pin routing to specific provider/model',
