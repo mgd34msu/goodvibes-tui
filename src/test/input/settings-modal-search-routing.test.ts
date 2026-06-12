@@ -293,4 +293,34 @@ describe('settings modal search routing integration', () => {
     expect(texts).not.toContain('Search:');
     expect(texts).toContain('Display');
   });
+
+  test('Esc during inline edit (reached via search→Enter) cancels edit, does NOT clear search state prematurely', () => {
+    // Regression: escape branch used to check searchFocused before editingMode,
+    // which called clearSearch() without cancelEdit(), leaving editingMode=true orphaned.
+    const state = makeState();
+    // Enter search mode and search for a plain-string setting.
+    handleSettingsModalToken(state, { type: 'text', value: '/' });
+    for (const ch of 'systemPrompt') {
+      handleSettingsModalToken(state, { type: 'text', value: ch });
+    }
+    // Find the systemPromptFile entry (type=string, enters inline edit on Enter).
+    const promptResult = modal.searchResults.find(
+      e => e.setting.key === 'provider.systemPromptFile',
+    );
+    expect(promptResult).toBeDefined();
+    // Navigate to it.
+    const targetIdx = modal.searchResults.indexOf(promptResult!);
+    modal.selectedIndex = targetIdx;
+    // Press Enter to activate inline edit.
+    handleSettingsModalToken(state, { type: 'key', name: 'enter', logicalName: 'enter', ctrl: false, shift: false, meta: false });
+    expect(modal.editingMode).toBe(true);
+    // Press Esc: must call cancelEdit, NOT just clearSearch.
+    handleSettingsModalToken(state, { type: 'key', name: 'escape', logicalName: 'escape', ctrl: false, shift: false, meta: false });
+    // editingMode must be cleared.
+    expect(modal.editingMode).toBe(false);
+    // editBuffer must be empty.
+    expect(modal.editBuffer).toBe('');
+    // Modal must still be open (Esc cancelled the edit, not the modal).
+    expect(modal.active).toBe(true);
+  });
 });
