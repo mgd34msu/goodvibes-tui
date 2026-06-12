@@ -2,6 +2,7 @@ import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
 import type { ConversationManager } from '../core/conversation';
 import { getOverlayContentBudget, getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
+import { estimateTokens } from '@pellux/goodvibes-sdk/platform/core';
 
 // ─── ContextInspectorModal ────────────────────────────────────────────────────
 
@@ -21,11 +22,6 @@ export class ContextInspectorModal {
 }
 
 // ─── renderContextInspector ───────────────────────────────────────────────────
-
-/** Rough token estimate: 4 chars ≈ 1 token. */
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
 
 /** Format a number with thousands separators. */
 function fmtN(n: number): string {

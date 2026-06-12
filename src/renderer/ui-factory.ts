@@ -302,8 +302,12 @@ export class UIFactory {
       const suffix = ` [ ${fmtNum(ctxTokens)} / ${fmtNum(contextWindow)} ]`;
       const barWidth = Math.max(10, Math.min(30, width - getDisplayWidth(label) - getDisplayWidth(suffix) - 8));
       const ctxPct = Math.min(1, ctxTokens / contextWindow);
+      // Clamp threshold to [0..1]; undefined/0 means no threshold marker.
+      const thresholdFraction = (compactThreshold !== undefined && compactThreshold > 0)
+        ? Math.min(1, compactThreshold)
+        : undefined;
       lines.push(createBaseLine());
-      lines.push(this.createProgressBarLine(label, ctxPct, barWidth, width, suffix));
+      lines.push(this.createProgressBarLine(label, ctxPct, barWidth, width, suffix, thresholdFraction));
     }
     // Context info line (working dir, model+provider, tools)
     if (workingDir || model) {
@@ -488,12 +492,49 @@ export class UIFactory {
    * @param pct - Fill fraction 0..1
    * @param barWidth - Number of bar characters
    * @param lineWidth - Total terminal width to slice to
+   * @param suffix - Optional suffix appended after the percentage
+   * @param compactThreshold - Optional fraction [0..1] at which a threshold marker is drawn
+   *   and the color switches from safe to at-threshold. When omitted, falls back to the
+   *   legacy hardcoded 0.6/0.85 thresholds.
    */
-  private static createProgressBarLine(label: string, pct: number, barWidth: number, lineWidth: number, suffix?: string): Line {
+  private static createProgressBarLine(
+    label: string,
+    pct: number,
+    barWidth: number,
+    lineWidth: number,
+    suffix?: string,
+    compactThreshold?: number,
+  ): Line {
     const pctDisplay = Math.round(pct * 100);
     const filled = Math.round(pct * barWidth);
-    const color = pct < 0.6 ? '82' : pct < 0.85 ? '220' : '196';
-    const bar = GLYPHS.meter.filled.repeat(filled) + GLYPHS.meter.empty.repeat(barWidth - filled);
+
+    // Color: when compactThreshold is provided, switch at the threshold;
+    // otherwise fall back to legacy hardcoded 0.6 (green) / 0.85 (yellow) / red.
+    let color: string;
+    if (compactThreshold !== undefined) {
+      color = pct < compactThreshold ? '82' : pct < 1.0 ? '220' : '196';
+    } else {
+      color = pct < 0.6 ? '82' : pct < 0.85 ? '220' : '196';
+    }
+
+    // Build bar with optional threshold marker.
+    // The marker ('▸') is placed at the threshold column, replacing an empty cell.
+    const emptyChar = GLYPHS.meter.empty;
+    const filledChar = GLYPHS.meter.filled;
+    const thresholdCol = compactThreshold !== undefined
+      ? Math.round(compactThreshold * barWidth)
+      : -1;
+
+    let bar = '';
+    for (let i = 0; i < barWidth; i++) {
+      if (i === thresholdCol && i >= filled) {
+        // Threshold marker sits in the empty region
+        bar += '▸'; // ▸
+      } else {
+        bar += i < filled ? filledChar : emptyChar;
+      }
+    }
+
     const pctStr = `  ${pctDisplay}%`;
     const full = label + bar + pctStr + (suffix ?? '');
     return this.stringToLine(truncateDisplay(full, lineWidth), lineWidth, { fg: color, dim: true });

@@ -5,6 +5,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { registerOperatorPanelCommand } from './operator-panel-runtime.ts';
 import { requireOpsApi, requireProfileManager, requireReplayEngine } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core';
 
 export function registerOperatorRuntimeCommands(registry: CommandRegistry): void {
   registerOperatorPanelCommand(registry);
@@ -32,18 +33,10 @@ export function registerOperatorRuntimeCommands(registry: CommandRegistry): void
           ctx.print('[context] No messages in conversation.');
           return;
         }
-        const estimateTokens = (text: string): number => Math.ceil(text.length / 4);
-        let total = 0;
+        const total = estimateConversationTokens(msgs);
         const lines: string[] = ['Context breakdown:'];
         for (const m of msgs) {
-          const text = typeof m.content === 'string'
-            ? m.content
-            : (m.content as Array<{ type: string; text?: string }>)
-              .filter((p) => p.type === 'text')
-              .map((p) => p.text ?? '')
-              .join('');
-          const t = estimateTokens(text);
-          total += t;
+          const t = estimateConversationTokens([m]);
           lines.push(`  ${m.role.padEnd(12)} ~${t.toLocaleString()} tokens`);
         }
         lines.push(`  ${'Total'.padEnd(12)} ~${total.toLocaleString()} tokens (${msgs.length} messages)`);
