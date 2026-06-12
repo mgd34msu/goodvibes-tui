@@ -137,12 +137,8 @@ export const GLOBAL_FLAGS: readonly CompletionFlag[] = [
   },
   { name: '--continue', takesValue: false, description: 'Continue the latest session' },
   { name: '--fork', takesValue: false, description: 'Fork session when supported' },
-  { name: '--raw-output', takesValue: false, description: 'Raw output mode' },
-  {
-    name: '--accept-raw-output-risk',
-    takesValue: false,
-    description: 'Acknowledge raw output risk',
-  },
+  { name: '--yes', short: '-y', takesValue: false, description: 'Auto-confirm prompts (non-interactive)' },
+  { name: '--non-interactive', takesValue: false, description: 'Disable all interactive prompts (implies --yes)' },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -512,8 +508,8 @@ export function generateZsh(surface: CompletionSurface): string {
   lines.push(`    '(-s --session)'{-s,--session}'[Use a specific session]:id:' \\`);
   lines.push(`    '--continue[Continue the latest session]' \\`);
   lines.push(`    '--fork[Fork session when supported]' \\`);
-  lines.push(`    '--raw-output[Raw output mode]' \\`);
-  lines.push(`    '--accept-raw-output-risk[Acknowledge raw output risk]' \\`);
+  lines.push(`    '(-y --yes)'{-y,--yes}'[Auto-confirm prompts]' \\`);
+  lines.push(`    '--non-interactive[Disable all interactive prompts]' \\`);
   lines.push(`    '1:command:->cmd' \\`);
   lines.push(`    '*:args:->args';`);
   lines.push('');

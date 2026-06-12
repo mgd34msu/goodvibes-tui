@@ -61,6 +61,12 @@ export async function prepareShellCliRuntime(
     process.exit(2);
   }
 
+  if (cli.warnings.length > 0) {
+    for (const warning of cli.warnings) {
+      console.warn(`[goodvibes] warning: ${warning}`);
+    }
+  }
+
   if (cli.flags.help || cli.command === 'help') {
     const helpTopic = cli.command === 'help'
       ? cli.commandArgs[0]

@@ -82,9 +82,9 @@ goodvibes run 'list files' --output json
 goodvibes -o stream-json run 'stream output'
 ```
 
-### `--output-format <format>` (alias)
+### `--output-format <format>` (deprecated alias)
 
-Alias for `--output`. Both map to the same `outputFormat` field. When both appear on the same command line, the last one wins.
+Deprecated alias for `--output/-o`. Prints a deprecation warning to stderr and maps to the same `outputFormat` field. Use `--output` or `-o` instead. When both appear on the same command line, the last one wins.
 
 ### `--json` (alias)
 
