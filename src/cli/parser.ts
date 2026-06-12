@@ -353,6 +353,18 @@ export function parseGoodVibesCli(
     errors.push(`Unknown command: ${rawCommand}`);
   }
 
+  // Session lifecycle conflict detection — only one of --continue / --resume / --fork may be used.
+  const sessionLifecycleFlags = [
+    flags.continueLast ? '--continue' : undefined,
+    flags.resume !== undefined ? '--resume' : undefined,
+    flags.fork !== undefined ? '--fork' : undefined,
+  ].filter((f): f is string => f !== undefined);
+  if (sessionLifecycleFlags.length > 1) {
+    errors.push(
+      `Conflicting session lifecycle flags: ${sessionLifecycleFlags.join(' and ')}. Use only one of --continue, --resume, or --fork.`,
+    );
+  }
+
   return {
     binary,
     command,

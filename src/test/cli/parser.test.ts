@@ -279,12 +279,31 @@ describe('session flags coexistence', () => {
     expect(f.provider).toBe('openai');
   });
 
-  test('all session flags can coexist without errors (though semantically only one takes effect at startup)', () => {
-    const result = parse(['--continue', '--resume', 'sess-1', '--fork', 'sess-2', '--yes', '--non-interactive']);
-    expect(result.errors).toEqual([]);
+  test('--continue and --resume together produce a conflict error', () => {
+    const result = parse(['--continue', '--resume', 'sess-1']);
+    expect(result.errors.some((e) => e.includes('Conflicting session lifecycle flags') && e.includes('--continue') && e.includes('--resume'))).toBe(true);
+  });
+
+  test('--continue and --fork together produce a conflict error', () => {
+    const result = parse(['--continue', '--fork', 'sess-2']);
+    expect(result.errors.some((e) => e.includes('Conflicting session lifecycle flags') && e.includes('--continue') && e.includes('--fork'))).toBe(true);
+  });
+
+  test('--resume and --fork together produce a conflict error', () => {
+    const result = parse(['--resume', 'sess-1', '--fork', 'sess-2']);
+    expect(result.errors.some((e) => e.includes('Conflicting session lifecycle flags') && e.includes('--resume') && e.includes('--fork'))).toBe(true);
+  });
+
+  test('all three lifecycle flags together produce a conflict error listing all three', () => {
+    const result = parse(['--continue', '--resume', 'sess-1', '--fork', 'sess-2']);
+    expect(result.errors.some((e) => e.includes('Conflicting session lifecycle flags') && e.includes('--continue') && e.includes('--resume') && e.includes('--fork'))).toBe(true);
+  });
+
+  test('session lifecycle flags can coexist with non-lifecycle flags without conflict errors', () => {
+    // --yes and --non-interactive do not conflict with lifecycle flags
+    const result = parse(['--continue', '--yes', '--non-interactive']);
+    expect(result.errors.filter((e) => e.includes('Conflicting'))).toHaveLength(0);
     expect(result.flags.continueLast).toBe(true);
-    expect(result.flags.resume).toBe('sess-1');
-    expect(result.flags.fork).toBe('sess-2');
     expect(result.flags.yes).toBe(true);
     expect(result.flags.nonInteractive).toBe(true);
   });
