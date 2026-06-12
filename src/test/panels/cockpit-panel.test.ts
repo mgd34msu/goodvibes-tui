@@ -4,6 +4,7 @@ import { CockpitPanel } from '../../panels/cockpit-panel.ts';
 import type { FailureReport } from '@/runtime/index.ts';
 import type { Line } from '../../types/grid.ts';
 import { createCockpitReadModel } from '../helpers/ui-read-models.ts';
+import type { CockpitRosterReadModel, CockpitRosterSnapshot } from '../../panels/cockpit-read-model.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -115,6 +116,81 @@ describe('CockpitPanel', () => {
     expect(text).toContain('plugins');
     expect(text).toContain('Selected Workspace');
     expect(text).toContain('/orchestration');
+  });
+
+  // ---------------------------------------------------------------------------
+  // Helper: build a minimal CockpitRosterReadModel with one active agent
+  // ---------------------------------------------------------------------------
+  function makeRosterReadModel(agentId: string): CockpitRosterReadModel {
+    const snapshot: CockpitRosterSnapshot = {
+      roster: [{
+        id: agentId,
+        task: 'test task',
+        model: 'claude-sonnet',
+        status: 'running',
+        stalled: false,
+        inputTokens: null,
+        outputTokens: null,
+        cost: null,
+      }],
+      stalledAgentCount: 0,
+      totalInputTokens: null,
+      totalOutputTokens: null,
+      totalCost: null,
+    };
+    return {
+      getSnapshot: () => snapshot,
+      markDirty: () => { /* noop */ },
+      subscribe: (_listener: () => void) => () => { /* noop */ },
+    };
+  }
+
+  test('inspect handler fires for both enter and return keys', () => {
+    const openedIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeRosterReadModel('agent-abc'),
+      { openAgentDetail: (id) => { openedIds.push(id); } },
+    );
+    // Navigate to agents workspace (4 rights from default 'flow')
+    panel.handleInput('right'); // governance
+    panel.handleInput('right'); // health
+    panel.handleInput('right'); // domains
+    panel.handleInput('right'); // agents
+
+    // 'enter' should trigger inspect
+    panel.handleInput('enter');
+    expect(openedIds).toEqual(['agent-abc']);
+
+    // 'return' should also trigger inspect
+    panel.handleInput('return');
+    expect(openedIds).toEqual(['agent-abc', 'agent-abc']);
+  });
+
+  test('cancel-confirm handler accepts both enter and return as confirmation', () => {
+    const cancelledIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeRosterReadModel('agent-xyz'),
+      { cancelAgent: (id) => { cancelledIds.push(id); return true; } },
+    );
+    // Navigate to agents workspace
+    panel.handleInput('right');
+    panel.handleInput('right');
+    panel.handleInput('right');
+    panel.handleInput('right');
+
+    // Initiate cancel — 'c' puts panel into pending-cancel state
+    panel.handleInput('c');
+
+    // Confirm with 'enter'
+    panel.handleInput('enter');
+    expect(cancelledIds).toEqual(['agent-xyz']);
+
+    // Re-initiate cancel to test 'return' path
+    panel.handleInput('c');
+    panel.handleInput('return');
+    expect(cancelledIds).toEqual(['agent-xyz', 'agent-xyz']);
   });
 
   test('supports workspace focus changes with targeted action rails', () => {
