@@ -81,6 +81,8 @@ export class SystemMessageRouter {
    *
    * @param message  - Message text.
    * @param priority - 'high' | 'low'.
+   * @param kind     - Classification kind ('system' | 'wrfc' | 'operational');
+   *                   used to resolve routing target and conversation navigability.
    */
   routeTypedSystemMessage(
     message: string,
@@ -93,7 +95,9 @@ export class SystemMessageRouter {
       this.panel?.push(message, priority);
     }
     if (delivery.toConversation) {
-      this.conversation.addSystemMessage(message);
+      // addTypedSystemMessage threads the kind into the conversation so the
+      // renderer can use kind-based navigability instead of substring matching.
+      this.conversation.addTypedSystemMessage(message, kind);
     }
   }
 

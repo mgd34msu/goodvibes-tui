@@ -5,6 +5,7 @@ import type { ToolCall, ToolResult } from '@pellux/goodvibes-sdk/platform/types'
 import type { ProviderMessage, ContentPart } from '@pellux/goodvibes-sdk/platform/providers';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { TranscriptEventKind } from '@pellux/goodvibes-sdk/platform/core';
+import type { SystemMessageKind } from './system-message-router.ts';
 import {
   ConversationManager as SdkConversationManager,
   type BlockMeta as SdkBlockMeta,
@@ -70,8 +71,23 @@ export class ConversationManager extends SdkConversationManager {
   protected blockRegistry: BlockMeta[] = [];
   /** Message index -> first rendered line index in the history buffer. */
   private messageLineRegistry: number[] = [];
-  /** Registry of rendered line indices for system messages matching /error/i. */
+  /**
+   * Registry of rendered line indices for system messages whose kind is
+   * navigable (error-navigation worthy).
+   *
+   * Kind → navigable mapping:
+   *   - 'system'      YES — generic/catch-all messages (failures, provider errors,
+   *                         session events); the default for any un-prefixed message
+   *   - 'wrfc'        YES — WRFC chain events (failures matter for navigation)
+   *   - 'operational' NO  — noisy tool/scan/plugin/MCP status; not worth jumping to
+   *
+   * This replaces the old /error/i substring test, which missed failure phrases
+   * like "request failed" / "rate limited" and false-positived on benign info
+   * text that happened to contain the word "error".
+   */
   private errorLineRegistry: number[] = [];
+  /** Maps message index → SystemMessageKind for system-role messages. */
+  private messageKindRegistry: Map<number, SystemMessageKind> = new Map();
   /** Streaming block start line in history buffer (for incremental streaming update). */
   private streamingStartLine = -1;
   /**
@@ -135,13 +151,49 @@ export class ConversationManager extends SdkConversationManager {
   }
 
   public override addSystemMessage(content: string): void {
+    // Clear any stale kind entry at the index this message will occupy.
+    // undo() splices the tail of this.messages, freeing indices that ARE reused
+    // by subsequent adds. Without this delete, a recycled index could carry a
+    // stale kind (e.g. 'operational') and silently mis-classify the new message.
+    const nextIndex = this.getMessageSnapshot().length;
+    this.messageKindRegistry.delete(nextIndex);
+    super.addSystemMessage(content);
+    this.markDirty();
+  }
+
+  /**
+   * addTypedSystemMessage - Add a system message with an explicit kind tag.
+   * The kind is stored in messageKindRegistry (keyed by the message index that
+   * will be assigned after the push) so that renderConversationSystemMessage
+   * can use it instead of text-based pattern matching.
+   *
+   * Called by SystemMessageRouter.routeTypedSystemMessage when routing to the
+   * conversation surface. Falls back to addSystemMessage for callers that do
+   * not have kind information.
+   */
+  public addTypedSystemMessage(content: string, kind: SystemMessageKind): void {
+    // getMessageSnapshot().length is the index this message will receive after
+    // addSystemMessage appends it to the messages array.
+    const nextIndex = this.getMessageSnapshot().length;
+    this.messageKindRegistry.set(nextIndex, kind);
     super.addSystemMessage(content);
     this.markDirty();
   }
 
   public override undo(): boolean {
     const result = super.undo();
-    if (result) this.markDirty();
+    if (result) {
+      // undo() splices the messages tail at the last user-message index, meaning
+      // freed indices CAN be reused by subsequent adds. Purge all registry entries
+      // at or after the new message count so a recycled index cannot carry a stale
+      // kind from the evicted turn (e.g. 'operational' mis-classifying a bare add
+      // as non-navigable, or 'wrfc' wrongly making an operational message navigable).
+      const postUndoCount = this.getMessageSnapshot().length;
+      for (const key of this.messageKindRegistry.keys()) {
+        if (key >= postUndoCount) this.messageKindRegistry.delete(key);
+      }
+      this.markDirty();
+    }
     return result;
   }
 
@@ -221,6 +273,7 @@ export class ConversationManager extends SdkConversationManager {
     this.blockRegistry = [];
     this.messageLineRegistry = [];
     this.errorLineRegistry = [];
+    this.messageKindRegistry = new Map();
     this.streamingStartLine = -1;
     this._displayFromMessageIndex = 0; // full reset — show everything on next render
   }
@@ -297,6 +350,8 @@ export class ConversationManager extends SdkConversationManager {
     this.blockRegistry = [];
     this.messageLineRegistry = [];
     this.errorLineRegistry = [];
+    // messageKindRegistry is NOT cleared here: kind info is set at add-time
+    // and must survive width-change rebuilds.
     const width = this._getWidth();
     this.lastRenderedWidth = width;
     this.dirty = false;
@@ -321,7 +376,7 @@ export class ConversationManager extends SdkConversationManager {
       return;
     }
 
-    this.appendMessages(visibleSnapshot, width);
+    this.appendMessages(visibleSnapshot, width, displayStart);
     this.appendedUpTo = snapshot.length;
   }
 
@@ -345,6 +400,7 @@ export class ConversationManager extends SdkConversationManager {
       blockRegistry: this.blockRegistry,
       collapseState: this.collapseState,
       errorLineRegistry: this.errorLineRegistry,
+      messageKindRegistry: this.messageKindRegistry as ReadonlyMap<number, SystemMessageKind>,
       configManager: this._configManager,
       splashOptions: this.splashOptions,
     };
@@ -364,17 +420,24 @@ export class ConversationManager extends SdkConversationManager {
     renderConversationAssistantMessage(this.renderingContext(), message, width, lineNumberMode, collapseThreshold, msgIdx);
   }
 
-  private renderSystemMessage(message: Extract<Message, { role: 'system' }>, width: number): void {
-    renderConversationSystemMessage(this.renderingContext(), message, width);
+  private renderSystemMessage(message: Extract<Message, { role: 'system' }>, width: number, msgIdx: number): void {
+    renderConversationSystemMessage(this.renderingContext(), message, width, msgIdx);
   }
 
   private renderToolMessage(message: Extract<Message, { role: 'tool' }>, width: number, msgIdx: number): void {
     renderConversationToolMessage(this.renderingContext(), message, width, msgIdx);
   }
 
-  /** Render a slice of messages into the history buffer. */
-  private appendMessages(messages: Message[], width: number): void {
-    appendConversationMessages(this.renderingContext(), messages, width, this.messageLineRegistry);
+  /**
+   * Render a slice of messages into the history buffer.
+   *
+   * @param msgIndexOffset - Absolute index of messages[0] in the full snapshot.
+   *   Must equal displayStart when rendering a post-clearDisplay slice so that
+   *   the renderer can resolve messageKindRegistry keys (which are absolute)
+   *   from its slice-relative loop counter.
+   */
+  private appendMessages(messages: Message[], width: number, msgIndexOffset = 0): void {
+    appendConversationMessages(this.renderingContext(), messages, width, this.messageLineRegistry, msgIndexOffset);
   }
 
   /** Find the nearest block to a given line index, optionally filtered by type. */
@@ -446,8 +509,9 @@ export class ConversationManager extends SdkConversationManager {
 
   /**
    * getErrorLines - Returns line indices in the rendered history buffer for
-   * system messages that contain 'error' (case-insensitive).
-   * Triggers a history flush if dirty.
+   * system messages whose kind is navigable (see NAVIGABLE_KINDS in
+   * conversation-rendering.ts: 'system' and 'wrfc'). Operational messages
+   * are excluded regardless of message text. Triggers a history flush if dirty.
    */
   public getErrorLines(): number[] {
     this.flushHistory();
@@ -538,6 +602,12 @@ export class ConversationManager extends SdkConversationManager {
     this.blockRegistry = [];
     this.messageLineRegistry = [];
     this.errorLineRegistry = [];
+    // messageKindRegistry is NOT cleared here. The underlying messages array is
+    // preserved by clearDisplay(); kind entries for pre-clear messages are harmless
+    // because those messages are hidden by _displayFromMessageIndex and never rendered.
+    // Clearing the registry would cause kind loss for pre-clear messages that become
+    // visible again after a subsequent width-change rebuild (which resets displayStart
+    // to 0), incorrectly making operational messages navigable.
     // Advance _displayFromMessageIndex to exclude all current messages from display.
     // rebuildHistory() will only render messages added AFTER this point.
     this._displayFromMessageIndex = this.getMessageSnapshot().length;

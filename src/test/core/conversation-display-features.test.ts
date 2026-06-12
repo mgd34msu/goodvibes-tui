@@ -196,48 +196,207 @@ describe('code block collapse', () => {
   });
 });
 
-describe('ConversationManager.getErrorLines', () => {
+describe('ConversationManager.getErrorLines — kind-based navigation', () => {
   let cm: ConversationManager;
 
   beforeEach(() => {
     cm = new ConversationManager(() => 80);
   });
 
-  test('returns empty when no error messages', () => {
+  test('returns empty when no system messages', () => {
     cm.addUserMessage('hello');
     cm.addAssistantMessage('hi');
     cm.getDisplayBlocks();
     expect(cm.getErrorLines()).toHaveLength(0);
   });
 
-  test('returns line indices for system error messages', () => {
+  test('addSystemMessage (bare, no kind) is navigable — defaults to system kind', () => {
     cm.addUserMessage('run tool');
-    cm.addSystemMessage('Error: command not found');
+    cm.addSystemMessage('request failed: timeout');
     cm.getDisplayBlocks();
 
     const lines = cm.getErrorLines();
+    // 'system' kind is navigable even without the word "error" in the text
     expect(lines.length).toBeGreaterThan(0);
   });
 
-  test('detects multiple error messages', () => {
+  test('failure-kind message without the word "error" IS navigable', () => {
+    cm.addUserMessage('run');
+    // Use addTypedSystemMessage with 'system' kind — simulates a failure message
+    // that never contains the word "error" (e.g. "rate limited", "request failed")
+    cm.addTypedSystemMessage('rate limited: 429 Too Many Requests', 'system');
+    cm.getDisplayBlocks();
+
+    const lines = cm.getErrorLines();
+    expect(lines.length).toBe(1);
+  });
+
+  test('operational-kind message containing the word "error" is NOT navigable', () => {
+    cm.addUserMessage('run');
+    // [Tool] prefix → 'operational' kind → NOT navigable
+    cm.addTypedSystemMessage('[Tool] edit error: file not found', 'operational');
+    cm.getDisplayBlocks();
+
+    const lines = cm.getErrorLines();
+    // Operational messages are excluded from navigation regardless of text content
+    expect(lines.length).toBe(0);
+  });
+
+  test('wrfc-kind message IS navigable', () => {
+    cm.addUserMessage('run');
+    cm.addTypedSystemMessage('[WRFC] Chain abc123 failed', 'wrfc');
+    cm.getDisplayBlocks();
+
+    const lines = cm.getErrorLines();
+    expect(lines.length).toBe(1);
+  });
+
+  test('multiple messages: only navigable kinds register', () => {
     cm.addUserMessage('start');
-    cm.addSystemMessage('Error: first failure');
-    cm.addUserMessage('retry');
-    cm.addSystemMessage('Error: second failure');
+    cm.addTypedSystemMessage('request failed', 'system');          // navigable
+    cm.addTypedSystemMessage('[Scan] found 3 providers', 'operational'); // NOT navigable
+    cm.addTypedSystemMessage('[WRFC] Chain done', 'wrfc');          // navigable
+    cm.addTypedSystemMessage('[Tool] edit applied', 'operational'); // NOT navigable
     cm.getDisplayBlocks();
 
     const lines = cm.getErrorLines();
     expect(lines.length).toBe(2);
   });
 
-  test('is case-insensitive for error detection', () => {
-    cm.addUserMessage('run');
-    cm.addSystemMessage('error: lowercase error');
-    cm.addUserMessage('run2');
-    cm.addSystemMessage('WARNING: some error occurred');
+  test('nextErrorLine wraps around correctly', () => {
+    cm.addUserMessage('start');
+    cm.addTypedSystemMessage('first failure', 'system');
+    cm.addTypedSystemMessage('second failure', 'system');
     cm.getDisplayBlocks();
 
     const lines = cm.getErrorLines();
     expect(lines.length).toBe(2);
+    const [first, second] = lines as [number, number];
+
+    // After last error, wraps to first
+    expect(cm.nextErrorLine(second)).toBe(first);
+    // Before first error, goes to first
+    expect(cm.nextErrorLine(first - 1)).toBe(first);
+  });
+
+  test('prevErrorLine wraps around correctly', () => {
+    cm.addUserMessage('start');
+    cm.addTypedSystemMessage('first failure', 'system');
+    cm.addTypedSystemMessage('second failure', 'system');
+    cm.getDisplayBlocks();
+
+    const lines = cm.getErrorLines();
+    const [first, second] = lines as [number, number];
+
+    // Before first error, wraps to last
+    expect(cm.prevErrorLine(first)).toBe(second);
+    // After second error, goes to second
+    expect(cm.prevErrorLine(second + 1)).toBe(second);
+  });
+
+  test('returns -1 when there are no navigable messages', () => {
+    cm.addUserMessage('run');
+    cm.addTypedSystemMessage('[Scan] provider discovered', 'operational');
+    cm.getDisplayBlocks();
+
+    expect(cm.nextErrorLine(0)).toBe(-1);
+    expect(cm.prevErrorLine(0)).toBe(-1);
+  });
+
+  test('kind registry survives a width-change rebuild', () => {
+    const getWidth = { value: 80 };
+    const cm2 = new ConversationManager(() => getWidth.value);
+    cm2.addUserMessage('start');
+    cm2.addTypedSystemMessage('[Scan] noisy operational', 'operational'); // NOT navigable
+    cm2.addTypedSystemMessage('actual failure', 'system'); // navigable
+    cm2.getDisplayBlocks();
+
+    const linesBefore = cm2.getErrorLines();
+    expect(linesBefore.length).toBe(1);
+
+    // Simulate width change — triggers rebuildHistory
+    getWidth.value = 100;
+    cm2.getDisplayBlocks();
+
+    const linesAfter = cm2.getErrorLines();
+    // Still exactly 1 navigable line after rebuild
+    expect(linesAfter.length).toBe(1);
+  });
+
+  test('operational-kind messages added after clearDisplay() are NOT navigable', () => {
+    // Regression: messageKindRegistry uses absolute indices; appendConversationMessages
+    // loops with a slice-relative counter. Without the msgIndexOffset fix, a message
+    // stored at absolute index N would be read at slice-relative index N - displayStart,
+    // missing the registry lookup and falling back to navigable.
+    cm.addUserMessage('before clear');
+    cm.getDisplayBlocks();
+    cm.clearDisplay();
+
+    // Post-clear messages: these start at displayStart > 0 in the full snapshot
+    cm.addTypedSystemMessage('[Scan] provider discovered', 'operational'); // NOT navigable
+    cm.addTypedSystemMessage('request failed', 'system');                  // navigable
+    cm.getDisplayBlocks();
+
+    const lines = cm.getErrorLines();
+    // Only the 'system' kind message should be navigable
+    expect(lines.length).toBe(1);
+  });
+
+  test('wrfc-kind messages added after clearDisplay() remain navigable', () => {
+    cm.addUserMessage('before clear');
+    cm.getDisplayBlocks();
+    cm.clearDisplay();
+
+    cm.addTypedSystemMessage('[WRFC] Chain abc failed', 'wrfc');           // navigable
+    cm.addTypedSystemMessage('[Tool] edit applied ok', 'operational');     // NOT navigable
+    cm.getDisplayBlocks();
+
+    const lines = cm.getErrorLines();
+    expect(lines.length).toBe(1);
+  });
+
+  test('undo + bare addSystemMessage: stale operational kind cleared, bare add is navigable', () => {
+    // Regression for registry desync via undo + bare addSystemMessage:
+    // 1. Add a typed operational message at index N → registry has N → 'operational'
+    // 2. undo() splices the tail → index N is freed
+    // 3. bare addSystemMessage appends a new message at the same index N
+    // Without the fix, the stale 'operational' entry would suppress navigation
+    // (false negative). With the fix, both undo() and addSystemMessage clear stale
+    // entries, so the bare add has no registry entry → defaults to 'system' → navigable.
+    cm.addUserMessage('turn 1');
+    cm.addTypedSystemMessage('[Scan] noisy operational info', 'operational');
+    cm.getDisplayBlocks();
+
+    // Undo frees the tail (user message + operational system message)
+    cm.undo();
+
+    // Bare addSystemMessage lands at the recycled index
+    cm.addUserMessage('turn 2');
+    cm.addSystemMessage('request failed: connection refused');
+    cm.getDisplayBlocks();
+
+    const lines = cm.getErrorLines();
+    // The bare add has no kind → renderer defaults to 'system' → navigable.
+    // A stale 'operational' entry would produce length 0 (the bug).
+    expect(lines.length).toBeGreaterThan(0);
+  });
+
+  test('undo + bare addSystemMessage: stale navigable kind cleared, bare add still navigable', () => {
+    // Reverse case: stale 'wrfc' kind at a recycled index.
+    // After undo clears the registry, bare addSystemMessage has no kind →
+    // defaults to 'system' → still navigable. No false positive or miss.
+    cm.addUserMessage('turn 1');
+    cm.addTypedSystemMessage('[WRFC] chain failed', 'wrfc');
+    cm.getDisplayBlocks();
+
+    cm.undo();
+
+    cm.addUserMessage('turn 2');
+    cm.addSystemMessage('follow-up system message');
+    cm.getDisplayBlocks();
+
+    const lines = cm.getErrorLines();
+    // Stale 'wrfc' cleared → bare add defaults to 'system' → navigable.
+    expect(lines.length).toBeGreaterThan(0);
   });
 });
