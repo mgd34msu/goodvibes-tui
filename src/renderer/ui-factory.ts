@@ -243,10 +243,20 @@ export class UIFactory {
     });
     const bottomLine = createBaseLine();
     for (let x = 0; x < boxWidth; x++) bottomLine[boxStartX + x] = { char: GLYPHS.surface.bottom, fg: BORDER_COLOR, bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
+    // Multi-line indicator lives inside the bottom border (right-aligned) so
+    // the footer height stays invariant while the user adds prompt lines.
+    if (promptLines.length > 1) {
+      const lineCountTag = ` ${promptLines.length}L `;
+      let tx = boxStartX + boxWidth - lineCountTag.length - 2;
+      for (const ch of lineCountTag) {
+        if (tx >= boxStartX + boxWidth - 1) break;
+        bottomLine[tx] = { char: ch, fg: '244', bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false };
+        tx += 1;
+      }
+    }
     lines.push(bottomLine);
     lines.push(createBaseLine());
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
-    if (promptLines.length > 1) composerTokens.push({ text: ` ${promptLines.length}L `, fg: '244', dim: true });
     if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: '#38bdf8', bold: true });
     if (composerPendingRisk && composerPendingRisk !== 'none') {
       const riskColor = composerPendingRisk === 'approval-wait'
