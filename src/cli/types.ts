@@ -1,3 +1,5 @@
+import type { ConfigManager } from '../config/index.ts';
+
 export type GoodVibesCliCommand =
   | 'tui'
   | 'run'
@@ -66,4 +68,11 @@ export interface GoodVibesCliParseResult {
   readonly positionals: readonly string[];
   readonly flags: GoodVibesCliFlags;
   readonly errors: readonly string[];
+}
+
+export interface CliCommandRuntime {
+  readonly cli: GoodVibesCliParseResult;
+  readonly configManager: ConfigManager;
+  readonly workingDirectory: string;
+  readonly homeDirectory: string;
 }

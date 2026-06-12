@@ -1,5 +1,5 @@
 import { mkdirSync } from 'node:fs';
-import type { CliCommandRuntime } from './management.ts';
+import type { CliCommandRuntime } from './types.ts';
 import { buildCliServicePosture, createPlatformServiceManager, formatCliServicePosture, getServiceStateRoot } from './service-posture.ts';
 import type { CliCommandOutput } from './types.ts';
 

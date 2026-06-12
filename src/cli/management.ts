@@ -21,7 +21,7 @@ import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibe
 import { inspectProviderAuth } from '@/runtime/index.ts';
 import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnectionPayload, formatConnectionBlock } from '@pellux/goodvibes-sdk/platform/pairing';
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
-import type { GoodVibesCliParseResult } from './types.ts';
+import type { CliCommandRuntime, GoodVibesCliParseResult } from './types.ts';
 import { formatProviderAuthRoute, summarizeProviderAuthRoutes } from './provider-auth-routes.ts';
 import { classifyProviderSetup } from './provider-classification.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
@@ -31,13 +31,6 @@ import { handleServiceCommand } from './service-command.ts';
 import { handleBundleCommand } from './bundle-command.ts';
 import { buildListenerTestResult, formatListenerTestResult, handleSurfacesCommand } from './surface-command.ts';
 import { buildControlPlaneStatusResult, formatControlPlaneStatus, handleSecrets, handleSessions, handleTasks, renderPairing, renderRemote, renderSubscriptions, renderWeb } from './management-commands.ts';
-
-export interface CliCommandRuntime {
-  readonly cli: GoodVibesCliParseResult;
-  readonly configManager: ConfigManager;
-  readonly workingDirectory: string;
-  readonly homeDirectory: string;
-}
 
 interface CliCommandResult {
   readonly handled: boolean;
