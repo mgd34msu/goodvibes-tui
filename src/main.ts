@@ -48,6 +48,8 @@ import { buildPersistedSessionContext, formatReturnContextForDisplay, getReturnC
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { prepareShellCliRuntime } from './cli/entrypoint.ts';
 import { applyInitialTuiCliState } from './cli/tui-startup.ts';
+import { applyRuntimeConfigDefault, applyRuntimeConfigValue } from './cli/config-overrides.ts';
+import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
@@ -127,6 +129,15 @@ async function main() {
     }
   }
 
+  // TUI default: show token speed ON. The SDK schema default is false;
+  // applyRuntimeConfigDefault reads both the global settings file and the project
+  // settings file from disk before deciding whether to apply the default. If the
+  // user has explicitly set this key to false in EITHER their global or project
+  // persisted config, their value is respected and the default is NOT applied.
+  // Only when the key is absent from both files (e.g. a new install) does the
+  // TUI default of true take effect in-memory — no disk write occurs either way.
+  applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
+
   const panelManager = ctx.services.panelManager;
   const buildSessionContinuityHints = () => {
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
@@ -157,6 +168,14 @@ async function main() {
   let streamStartTime = 0;
   let streamDeltaCount = 0;
   let streamTokenSpeed = 0;
+  /** Elapsed ms from STREAM_START to first STREAM_DELTA (time-to-first-token). */
+  let streamTtftMs: number | undefined;
+  /** Whether TTFT has been recorded for the current turn. */
+  let streamTtftRecorded = false;
+  /** Epoch ms when the most recent TOOL_EXECUTING event fired; undefined when idle. */
+  let activeToolStartedAtMs: number | undefined;
+  /** Name of the currently executing tool; cleared when execution completes. */
+  let activeToolName: string | undefined;
 
   let scrollTop = 0;
   let scrollLocked = true;
@@ -598,6 +617,8 @@ async function main() {
       const showSpeed = configManager.get('display.showTokenSpeed') as boolean;
       const showPreview = configManager.get('display.showToolPreview') as boolean;
       const partialToolPreview = showPreview ? sessionSnapshot.streamToolPreview : undefined;
+      // Elapsed from turn start (stream or tool execution), used for the thinking indicator timer.
+      const turnElapsedMs = streamStartTime > 0 ? Date.now() - streamStartTime : undefined;
       const thinking = UIFactory.createThinkingFragment(
         conversationWidth,
         orchestrator.getSpinner(),
@@ -606,8 +627,15 @@ async function main() {
         showPreview ? partialToolPreview : undefined,
         orchestrator.streamingInputTokens > 0 ? orchestrator.streamingInputTokens : undefined,
         orchestrator.streamingOutputTokens > 0 ? orchestrator.streamingOutputTokens : undefined,
+        turnElapsedMs,
+        streamTtftMs,
       );
       viewport.push(...thinking);
+      // Live tool timer: render the currently executing tool row with ticking elapsed.
+      if (activeToolName !== undefined && activeToolStartedAtMs !== undefined) {
+        const liveToolCall = { id: 'live', name: activeToolName, arguments: {} };
+        viewport.push(...renderToolCallBlock(liveToolCall, 'executing', undefined, conversationWidth, undefined, undefined, undefined, activeToolStartedAtMs));
+      }
     }
 
     if (pendingPermission) {
@@ -713,12 +741,39 @@ async function main() {
     streamStartTime = Date.now();
     streamDeltaCount = 0;
     streamTokenSpeed = 0;
+    streamTtftMs = undefined;
+    streamTtftRecorded = false;
   }));
   unsubs.push(uiServices.events.turns.on('STREAM_DELTA', () => {
     streamDeltaCount++;
     const elapsed = (Date.now() - streamStartTime) / 1000;
-    // Note: counts stream deltas, not actual tokens. ~1 delta per token for most providers.
-    streamTokenSpeed = elapsed > 0 ? streamDeltaCount / elapsed : 0;
+    // Record TTFT on the first delta of each turn.
+    if (!streamTtftRecorded) {
+      streamTtftMs = Date.now() - streamStartTime;
+      streamTtftRecorded = true;
+    }
+    // Use real output token count for accurate tok/s; fall back to delta count.
+    const tokenCount = orchestrator.streamingOutputTokens > 0
+      ? orchestrator.streamingOutputTokens
+      : streamDeltaCount;
+    streamTokenSpeed = elapsed > 0 ? tokenCount / elapsed : 0;
+  }));
+  unsubs.push(uiServices.events.tools.on('TOOL_EXECUTING', (ev) => {
+    activeToolStartedAtMs = ev.startedAt;
+    activeToolName = ev.tool;
+    render();
+  }));
+  unsubs.push(uiServices.events.tools.on('TOOL_SUCCEEDED', () => {
+    activeToolStartedAtMs = undefined;
+    activeToolName = undefined;
+  }));
+  unsubs.push(uiServices.events.tools.on('TOOL_FAILED', () => {
+    activeToolStartedAtMs = undefined;
+    activeToolName = undefined;
+  }));
+  unsubs.push(uiServices.events.tools.on('TOOL_CANCELLED', () => {
+    activeToolStartedAtMs = undefined;
+    activeToolName = undefined;
   }));
 
   // --- Terminal setup ---
@@ -747,6 +802,15 @@ async function main() {
       render,
       loadRecoveryConversation: () => loadRecoveryConversation({ homeDirectory }),
       deleteRecoveryFile: () => deleteRecoveryFile({ homeDirectory }),
+      reopenPanels: (snapshot) => {
+        const panels = snapshot.returnContext?.openPanels;
+        if (!panels || panels.length === 0) return;
+        for (const panelId of panels.slice(0, 4)) {
+          try { panelManager.open(panelId); } catch { /* unknown panel id — skip */ }
+        }
+        panelManager.show();
+        render();
+      },
     });
     pendingPermission = blocking.pendingPermission;
     recoveryPending = blocking.recoveryPending;
