@@ -142,9 +142,9 @@ describe('pin count in compaction preview', () => {
     expect(id2.length).toBeGreaterThan(0);
   });
 
-  test('pinned honesty: preview says "session memories are in-memory only" via the /pin command wording contract', () => {
+  test('pinned honesty: preview says "session memories are in-memory only" via the /keep command wording contract', () => {
     // This test validates the wording contract: pinning does NOT guarantee
-    // persistence across restarts. The /pin command explicitly states this.
+    // persistence across restarts. The /keep command explicitly states this.
     // We verify the guarantee by checking the compaction-preview.ts functions
     // do NOT claim durability beyond "survives the next compaction".
     const msgs: ProviderMessage[] = [makeMsg('user', 'hello')];
@@ -161,14 +161,14 @@ describe('pin count in compaction preview', () => {
 });
 
 // ---------------------------------------------------------------------------
-// /pin handler text contract — buildPinUsageText and buildPinSuccessText
-// (These functions are called directly by the shell-core /pin handler.)
+// /keep handler text contract — buildPinUsageText and buildPinSuccessText
+// (These functions are called directly by the shell-core /keep handler.)
 // ---------------------------------------------------------------------------
 
-describe('/pin handler text contract', () => {
+describe('/keep handler text contract', () => {
   test('usage text: mentions compaction handoff, no "verbatim" claim', () => {
     const usage = buildPinUsageText();
-    expect(usage).toContain('[Pin] Usage: /pin <text>');
+    expect(usage).toContain('[Pin] Usage: /keep <text>');
     expect(usage).toContain('compaction handoff');
     expect(usage.toLowerCase()).not.toContain('verbatim');
     // Must not falsely promise persistence across restarts
