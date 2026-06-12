@@ -153,6 +153,40 @@ That convention also works well with self-hosted Let’s Encrypt deployment patt
 
 If `direct` is enabled and the certificate files are missing or invalid, GoodVibes fails that server startup clearly instead of silently downgrading to plain HTTP.
 
+### TLS plaintext warning
+
+If a control plane or HTTP listener is configured with `hostMode` other than `local` and `tls.mode = off`, GoodVibes emits a `[SECURITY]` warning in the WRFC panel at startup. The same warning appears in the onboarding wizard network step whenever a network-facing service is selected without TLS.
+
+To suppress the warning: set `controlPlane.tls.mode` or `httpListener.tls.mode` to `direct` (or use the `proxy` deployment shape with a terminating reverse proxy).
+
+### Cloudflare Zero Trust Tunnel and trustProxy
+
+When the onboarding wizard applies with the Zero Trust Tunnel Cloudflare component selected, it writes:
+
+- `controlPlane.trustProxy = true`
+- `httpListener.trustProxy = true`
+
+This allows the login rate-limiter to key on the real client IP from the `CF-Connecting-IP` header rather than the tunnel egress address.
+
+**RESIDUAL RISK:** Until the SDK validates `CF-Connecting-IP` against Cloudflare's published IP ranges (SDK handoff Item 5), a client that reaches the listener directly (bypassing the tunnel) can spoof this header to bypass the per-IP rate-limiter. Do not expose the listener port to untrusted networks without a firewall rule that restricts inbound traffic to Cloudflare egress IPs.
+
+### CORS configuration
+
+`httpListener.enforceCors` and `httpListener.allowedOrigins` are HttpListener constructor parameters and are not in the SDK `ConfigKey` union (SDK handoff Item 5). The onboarding wizard cannot write them via `setConfig()`.
+
+To enable CORS enforcement, edit `~/.goodvibes/tui/settings.json` directly:
+
+```json
+{
+  "httpListener": {
+    "enforceCors": true,
+    "allowedOrigins": ["https://your-origin.example.com"]
+  }
+}
+```
+
+Then restart the daemon. This limitation will be resolved when the SDK adds these keys to `ConfigKey`.
+
 ## Outbound HTTPS trust
 
 GoodVibes now centralizes outbound trust handling for Bun `fetch` traffic. Provider calls, search, webhooks, downloads, telemetry, artifacts, and other fetch-based integrations inherit the same trust policy automatically.

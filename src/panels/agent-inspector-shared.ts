@@ -11,6 +11,24 @@ export const AGENT_TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelle
 /** Agents in a non-terminal state for longer than this are considered STALLED. */
 export const AGENT_STALL_THRESHOLD_MS = 5 * 60 * 1000;
 
+/**
+ * Count stalled agents from a raw record list.
+ * An agent is stalled when it is non-terminal and has been running for at
+ * least AGENT_STALL_THRESHOLD_MS without completing.
+ *
+ * Extracted as a standalone export so read-models and panels can share the
+ * canonical stall-count logic (TASK-046).
+ */
+export function countStalledAgents(
+  records: ReadonlyArray<{ status: string; startedAt: number }>,
+  now: number = Date.now(),
+): number {
+  return records.filter(
+    (r) => !AGENT_TERMINAL_STATUSES.has(r.status) && (now - r.startedAt) >= AGENT_STALL_THRESHOLD_MS,
+  ).length;
+}
+
+
 export interface AgentTimelineEntry {
   kind: AgentInspectorEntryKind;
   timestamp: number;
