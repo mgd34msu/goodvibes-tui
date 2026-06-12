@@ -196,9 +196,9 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
   });
 
   registry.register({
-    name: 'knowledge',
-    aliases: ['know'],
-    description: 'Inspect durable project knowledge, risks, runbooks, and architecture notes',
+    name: 'project-memory',
+    aliases: ['pmem'],
+    description: 'Inspect durable project memory: risks, runbooks, and architecture notes',
     usage: '[open | queue [limit] | explain <task...> [--scope <path> ...]]',
     handler(args, ctx) {
       const subcommand = (args[0] ?? 'open').toLowerCase();
@@ -237,7 +237,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         });
         const task = taskTokens.join(' ').trim();
         if (!task) {
-          ctx.print('Usage: /knowledge explain <task...> [--scope <path> ...]');
+          ctx.print('Usage: /project-memory explain <task...> [--scope <path> ...]');
           return;
         }
         const injections = selectKnowledgeForTask(memory, task, scopeValues);
@@ -249,7 +249,7 @@ export function registerControlRoomRuntimeCommands(registry: CommandRegistry): v
         ctx.openKnowledgePanel();
         return;
       }
-      ctx.print(`Unknown knowledge subcommand: ${subcommand}`);
+      ctx.print(`Unknown project-memory subcommand: ${subcommand}`);
     },
   });
 }

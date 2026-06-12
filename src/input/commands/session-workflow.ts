@@ -443,15 +443,15 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
 
 export function registerSessionWorkflowCommands(registry: CommandRegistry): void {
   registry.register({
-    name: 'session',
-    aliases: ['sess'],
+    name: 'session-mgmt',
+    aliases: ['smgmt'],
     description: 'Manage sessions, resume posture, and transcript structure',
     usage: '[list | rename <name> | resume <id|name> | fork | save | info <id> | events [kind] | groups [kind] | hotspots | export <id> [format] | search <query> | delete <id>]',
     argsHint: '<list|rename|resume|fork|save|info|events|groups|hotspots|export|search|delete>',
     async handler(args, ctx) {
       const handled = await handleSessionWorkflowCommand(args, ctx);
       if (!handled) {
-        ctx.print('Unknown subcommand: ' + (args[0] ?? '') + '\nUsage: /session [list | rename <name> | resume <id> | fork [name] | save [name] | info [id] | events [kind] | groups [kind] | hotspots | export <id> [format] | search <query> | delete <id>]');
+        ctx.print('Unknown subcommand: ' + (args[0] ?? '') + '\nUsage: /session-mgmt [list | rename <name> | resume <id> | fork [name] | save [name] | info [id] | events [kind] | groups [kind] | hotspots | export <id> [format] | search <query> | delete <id>]');
       }
     },
   });

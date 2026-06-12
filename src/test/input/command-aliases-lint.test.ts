@@ -6,8 +6,9 @@
 //   1. No single-letter alias maps to a command whose primary action is
 //      destructive (cancel, delete, rm, remove, discard, clear, reset, revoke,
 //      logout, reject, unpair, force, kill, terminate).
-//   2. No alias is also a primary subcommand name of the same command (not
-//      checkable statically without routing tables — covered by rule 1 scope).
+//   2. Primary names and aliases are globally unique. CommandRegistry.register
+//      throws on any collision, and the tests below assert uniqueness over the
+//      fully-built registry — this IS statically checkable, and is checked.
 //   3. Every alias is either in the command's `aliases` field or in `argsHint`.
 //      (Validates aliases are declared, not leaked through docs.)
 //
@@ -104,5 +105,43 @@ describe('Slash-command alias lint (β4)', () => {
 
   test('registry loads without throwing (smoke test)', () => {
     expect(allCommands.length).toBeGreaterThan(10);
+  });
+
+  test('all primary command names are globally unique', () => {
+    const seen = new Map<string, string>();
+    for (const cmd of allCommands) {
+      const prior = seen.get(cmd.name);
+      expect(prior === undefined ? '' : `"${cmd.name}" registered by /${prior} and /${cmd.name}`).toBe('');
+      seen.set(cmd.name, cmd.name);
+    }
+  });
+
+  test('all aliases are globally unique across the registry', () => {
+    const holders = new Map<string, string>();
+    const violations: string[] = [];
+    for (const cmd of allCommands) {
+      for (const alias of cmd.aliases ?? []) {
+        const holder = holders.get(alias);
+        if (holder) {
+          violations.push(`alias "${alias}" claimed by /${holder} and /${cmd.name}`);
+        }
+        holders.set(alias, cmd.name);
+      }
+    }
+    expect(violations).toHaveLength(0);
+  });
+
+  test('register() throws on duplicate primary name and duplicate alias', () => {
+    const fresh = new CommandRegistry();
+    fresh.register({ name: 'alpha', aliases: ['al'], description: 'first', usage: '', handler: () => {} });
+    expect(() =>
+      fresh.register({ name: 'alpha', aliases: [], description: 'dup name', usage: '', handler: () => {} }),
+    ).toThrow(/collision/i);
+    expect(() =>
+      fresh.register({ name: 'beta', aliases: ['al'], description: 'dup alias', usage: '', handler: () => {} }),
+    ).toThrow(/collision/i);
+    expect(() =>
+      fresh.register({ name: 'al', aliases: [], description: 'name vs alias', usage: '', handler: () => {} }),
+    ).toThrow(/collision/i);
   });
 });
