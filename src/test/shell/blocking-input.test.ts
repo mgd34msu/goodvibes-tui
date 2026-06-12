@@ -2,6 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import { handleBlockingShellInput, type PendingPermissionState } from '../../shell/blocking-input.ts';
 
+/** Default journal-replay stubs: no journal file exists, so replay is a no-op. */
+const JOURNAL_STUBS = {
+  homeDirectory: '/tmp/test-home',
+  sessionId: 'test-session',
+  persistSnapshot: () => {},
+} as const;
+
 interface FromJSONCall {
   messages: Array<Record<string, unknown>>;
   title?: string;
@@ -61,6 +68,7 @@ describe('shell/blocking-input', () => {
       render: () => { rendered++; },
       loadRecoveryConversation: () => null,
       deleteRecoveryFile: () => {},
+      ...JOURNAL_STUBS,
     });
 
     expect(result.handled).toBe(true);
@@ -96,6 +104,7 @@ describe('shell/blocking-input', () => {
       render: () => { rendered++; },
       loadRecoveryConversation: () => null,
       deleteRecoveryFile: () => {},
+      ...JOURNAL_STUBS,
     });
 
     expect(result.handled).toBe(true);
@@ -123,6 +132,7 @@ describe('shell/blocking-input', () => {
         messages: [{ role: 'user', content: 'restored' }],
       }),
       deleteRecoveryFile: () => { deleted++; },
+      ...JOURNAL_STUBS,
     });
 
     expect(result.handled).toBe(true);
@@ -151,6 +161,7 @@ describe('shell/blocking-input', () => {
         messages: [{ role: 'user', content: 'restored' }],
       }),
       deleteRecoveryFile: () => { deleted++; },
+      ...JOURNAL_STUBS,
     });
 
     // Stray key: prompt stays active, file is NOT deleted, key passes through.
@@ -181,6 +192,7 @@ describe('shell/blocking-input', () => {
         titleSource: 'user',
       }),
       deleteRecoveryFile: () => { deleted++; },
+      ...JOURNAL_STUBS,
     });
 
     expect(calls).toHaveLength(1);
@@ -212,6 +224,7 @@ describe('shell/blocking-input', () => {
       loadRecoveryConversation: () => snapshot,
       deleteRecoveryFile: () => {},
       reopenPanels: (s) => { reopenedWith.push(s); },
+      ...JOURNAL_STUBS,
     });
 
     expect(reopenedWith).toHaveLength(1);
@@ -234,6 +247,7 @@ describe('shell/blocking-input', () => {
       render: () => {},
       loadRecoveryConversation: () => ({ messages: [{ role: 'user', content: 'x' }] }),
       deleteRecoveryFile: () => { deleted++; },
+      ...JOURNAL_STUBS,
     });
     expect(deleted).toBe(1);
 
@@ -249,6 +263,7 @@ describe('shell/blocking-input', () => {
       render: () => {},
       loadRecoveryConversation: () => null,
       deleteRecoveryFile: () => { deleted++; },
+      ...JOURNAL_STUBS,
     });
     expect(deleted).toBe(0);
   });
@@ -268,6 +283,7 @@ describe('shell/blocking-input', () => {
       render: () => { rendered++; },
       loadRecoveryConversation: () => recoverySnapshot,
       deleteRecoveryFile: () => { deleted++; },
+      ...JOURNAL_STUBS,
     };
 
     for (const key of ['a', 'b', 'c', ' ', '\t']) {
@@ -331,6 +347,7 @@ describe('shell/blocking-input', () => {
       loadRecoveryConversation: () => snapshot,
       deleteRecoveryFile: () => {},
       reopenPanels: mainTsReopenPanels,
+      ...JOURNAL_STUBS,
     });
 
     expect(opened).toEqual(['context', 'approval']);
@@ -356,6 +373,7 @@ describe('shell/blocking-input', () => {
         messages: [{ role: 'user', content: 'restored' }],
       }),
       deleteRecoveryFile: () => { deleted++; },
+      ...JOURNAL_STUBS,
     });
 
     expect(result.handled).toBe(true);
