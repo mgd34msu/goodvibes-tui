@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { atomicWriteFileSync } from '@/config/atomic-write.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -100,11 +101,39 @@ export class HistorySearch {
   }
 }
 
+/**
+ * A redaction rule applied to command text before it is stored or saved.
+ * Any match of `pattern` in the raw text is replaced with `replacement`.
+ */
+export interface HistoryRedactionRule {
+  readonly pattern: RegExp;
+  readonly replacement: string;
+}
+
+/**
+ * Built-in redaction rules that apply regardless of caller-supplied rules.
+ * Scrubs passwords from local-auth commands before they reach disk.
+ */
+const BUILTIN_REDACTION_RULES: readonly HistoryRedactionRule[] = [
+  {
+    // /auth local add-user <user> <password> [roles]
+    pattern: /(\/auth\s+local\s+add-user\s+\S+)\s+(\S+)/i,
+    replacement: '$1 <redacted>',
+  },
+  {
+    // /auth local rotate-password <user> <password>
+    pattern: /(\/auth\s+local\s+rotate-password\s+\S+)\s+(\S+)/i,
+    replacement: '$1 <redacted>',
+  },
+];
+
 export interface InputHistoryOptions {
   readonly historyPath?: string;
   readonly userRoot?: string;
   readonly homeDirectory?: string;
   readonly persist?: boolean;
+  /** Additional redaction rules applied on top of the built-in set. */
+  readonly redactionRules?: readonly HistoryRedactionRule[];
 }
 
 type StoredInputHistoryEntry = string | {
@@ -130,25 +159,44 @@ export class InputHistory {
   private maxEntries = 500;
   private historyPath: string;
   private persist: boolean;
+  private redactionRules: readonly HistoryRedactionRule[];
 
   constructor(options: InputHistoryOptions) {
     this.persist = options.persist ?? true;
     this.historyPath = resolveHistoryPath(options);
+    this.redactionRules = [
+      ...BUILTIN_REDACTION_RULES,
+      ...(options.redactionRules ?? []),
+    ];
     if (this.persist) {
       this.load();
     }
   }
 
   /**
+   * Apply all active redaction rules to a text string.
+   * Returns the scrubbed text (password arguments replaced with `<redacted>`).
+   */
+  private applyRedaction(text: string): string {
+    let result = text;
+    for (const rule of this.redactionRules) {
+      result = result.replace(rule.pattern, rule.replacement);
+    }
+    return result;
+  }
+
+  /**
    * Add a new entry. Called on submit.
    * - Ignores empty/whitespace-only strings.
    * - Deduplicates consecutive identical entries.
+   * - Applies redaction rules to scrub sensitive arguments before persistence.
    * - Resets browsing position.
    */
   add(text: string, options: { readonly recallText?: string } = {}): void {
-    const trimmed = text.trim();
+    const trimmed = this.applyRedaction(text.trim());
     if (!trimmed) return;
-    const recallText = options.recallText?.trim();
+    const rawRecallText = options.recallText?.trim();
+    const recallText = rawRecallText ? this.applyRedaction(rawRecallText) : undefined;
     const entry: StoredInputHistoryEntry = recallText && recallText !== trimmed
       ? { text: trimmed, recallText }
       : trimmed;
@@ -240,8 +288,7 @@ export class InputHistory {
    */
   save(): void {
     try {
-      mkdirSync(dirname(this.historyPath), { recursive: true });
-      writeFileSync(this.historyPath, JSON.stringify(this.entries), 'utf-8');
+      atomicWriteFileSync(this.historyPath, JSON.stringify(this.entries), { mkdirp: true });
     } catch (err) {
       logger.debug('InputHistory save failed (non-fatal)', { error: summarizeError(err) });
     }
@@ -249,6 +296,10 @@ export class InputHistory {
 
   /**
    * Load history from disk.
+   *
+   * Redaction is applied to every loaded entry so that cleartext passwords
+   * persisted before the redaction rules were deployed are scrubbed on first
+   * load and will not be re-persisted on the next save().
    */
   load(): void {
     try {
@@ -259,6 +310,7 @@ export class InputHistory {
           this.entries = (parsed as unknown[])
             .map((entry) => this.normalizeStoredEntry(entry))
             .filter((entry): entry is StoredInputHistoryEntry => entry !== null)
+            .map((entry) => this.redactEntry(entry))
             .slice(0, this.maxEntries);
         }
       }
@@ -279,6 +331,24 @@ export class InputHistory {
   private sameEntry(a: StoredInputHistoryEntry, b: StoredInputHistoryEntry): boolean {
     return this.getDisplayText(a) === this.getDisplayText(b)
       && this.getRecallText(a) === this.getRecallText(b);
+  }
+
+  /**
+   * Apply redaction rules to a loaded entry, scrubbing any sensitive text that
+   * was persisted before redaction was deployed.
+   */
+  private redactEntry(entry: StoredInputHistoryEntry): StoredInputHistoryEntry {
+    if (typeof entry === 'string') {
+      return this.applyRedaction(entry);
+    }
+    const redactedText = this.applyRedaction(entry.text);
+    const redactedRecallText = entry.recallText !== undefined
+      ? this.applyRedaction(entry.recallText)
+      : undefined;
+    if (redactedRecallText !== undefined && redactedRecallText !== redactedText) {
+      return { text: redactedText, recallText: redactedRecallText };
+    }
+    return redactedText;
   }
 
   private normalizeStoredEntry(entry: unknown): StoredInputHistoryEntry | null {

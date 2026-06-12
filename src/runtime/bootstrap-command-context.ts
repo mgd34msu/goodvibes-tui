@@ -263,6 +263,7 @@ export function createBootstrapCommandContext(
     activatePlan,
     requestPermission,
     completeModelSelectionSideEffect,
+    localUserAuthManager,
   });
 
   return {
