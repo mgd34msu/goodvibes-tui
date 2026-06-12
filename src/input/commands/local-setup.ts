@@ -1,5 +1,6 @@
 import { dirname, join } from 'path';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { atomicWriteFileSync } from '../../config/atomic-write.ts';
 import type { CommandRegistry } from '../command-registry.ts';
 import type { ConfigKey } from '../../config/index.ts';
 import { CONFIG_SCHEMA } from '../../config/index.ts';
@@ -204,18 +205,15 @@ export function registerLocalSetupCommands(registry: CommandRegistry): void {
             }
             if (bundle.services) {
               const servicesPath = getShellPaths().resolveProjectPath('tui', 'services.json');
-              mkdirSync(dirname(servicesPath), { recursive: true });
-              writeFileSync(servicesPath, JSON.stringify(bundle.services, null, 2) + '\n', 'utf-8');
+              atomicWriteFileSync(servicesPath, JSON.stringify(bundle.services, null, 2) + '\n', { mkdirp: true });
             }
             if (bundle.ecosystem?.plugins) {
               const pluginsPath = getShellPaths().resolveProjectPath('tui', 'ecosystem', 'plugins.json');
-              mkdirSync(dirname(pluginsPath), { recursive: true });
-              writeFileSync(pluginsPath, JSON.stringify(bundle.ecosystem.plugins, null, 2) + '\n', 'utf-8');
+              atomicWriteFileSync(pluginsPath, JSON.stringify(bundle.ecosystem.plugins, null, 2) + '\n', { mkdirp: true });
             }
             if (bundle.ecosystem?.skills) {
               const skillsPath = getShellPaths().resolveProjectPath('tui', 'ecosystem', 'skills.json');
-              mkdirSync(dirname(skillsPath), { recursive: true });
-              writeFileSync(skillsPath, JSON.stringify(bundle.ecosystem.skills, null, 2) + '\n', 'utf-8');
+              atomicWriteFileSync(skillsPath, JSON.stringify(bundle.ecosystem.skills, null, 2) + '\n', { mkdirp: true });
             }
             ctx.print(`Imported setup transfer bundle from ${targetPath}`);
           } catch (error) {

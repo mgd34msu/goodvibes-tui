@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { atomicWriteFileSync } from '@/config/atomic-write.ts';
+import { join } from 'node:path';
 
 export const WORK_PLAN_STATUSES = [
   'pending',
@@ -331,10 +332,7 @@ export class WorkPlanStore {
   }
 
   private writePlan(plan: WorkPlan): void {
-    mkdirSync(dirname(this.filePath), { recursive: true });
-    const tmp = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(plan, null, 2)}\n`, { mode: 0o600 });
-    renameSync(tmp, this.filePath);
+    atomicWriteFileSync(this.filePath, `${JSON.stringify(plan, null, 2)}\n`, { mkdirp: true });
   }
 
   private resolveItem(plan: WorkPlan, idOrPrefix: string): WorkPlanItem {
