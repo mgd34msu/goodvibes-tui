@@ -4,8 +4,8 @@
  * architecture cap. No layout logic lives here.
  */
 
-import type { SettingEntry, McpEntry, SubscriptionEntry } from '../input/settings-modal.ts';
-import { SETTINGS_CATEGORIES } from '../input/settings-modal.ts';
+import type { SettingEntry, McpEntry, SubscriptionEntry } from '../input/settings-modal-types.ts';
+import { SETTINGS_CATEGORIES } from '../input/settings-modal-types.ts';
 import { isSecretConfigKey, isSecretReferenceValue } from '../config/secret-config.ts';
 
 function maskSecretValue(value: string): string {

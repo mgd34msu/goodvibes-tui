@@ -18,7 +18,7 @@ import {
   probeTcp,
   readAuthPaths,
   yesNo,
-} from './management.ts';
+} from './management-utils.ts';
 
 export const SURFACE_CONFIGS = [
   ['slack', 'Slack', ['surfaces.slack.signingSecret', 'surfaces.slack.botToken']],
