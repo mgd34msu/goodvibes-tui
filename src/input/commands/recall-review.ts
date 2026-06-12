@@ -7,8 +7,32 @@ export function handleRecallQueue(args: string[], context: CommandContext): void
   if (!memory) {
     return;
   }
-  const limit = Math.max(1, parseInt(args[0] ?? '10', 10) || 10);
-  const queue = memory.reviewQueue(limit);
+
+  // Extract optional --scope filter before parsing the positional limit argument.
+  const scopeIdx = args.indexOf('--scope');
+  let scopeFilter: string | undefined;
+  let remainingArgs = args;
+  if (scopeIdx !== -1 && args[scopeIdx + 1]) {
+    const candidateScope = args[scopeIdx + 1];
+    if (!isValidScope(candidateScope)) {
+      context.print(`[recall] Unknown scope "${candidateScope}". Valid: ${VALID_SCOPES.join(', ')}`);
+      return;
+    }
+    scopeFilter = candidateScope;
+    remainingArgs = args.filter((_, i) => i !== scopeIdx && i !== scopeIdx + 1);
+  }
+
+  const limitRaw = remainingArgs.find((a) => !a.startsWith('--'));
+  const limit = Math.max(1, parseInt(limitRaw ?? '10', 10) || 10);
+
+  // When a scope filter is requested, fetch a larger pool then slice to the
+  // requested limit so scope-sparse queues still return meaningful results.
+  const fetchLimit = scopeFilter ? 1000 : limit;
+  const rawQueue = memory.reviewQueue(fetchLimit);
+  const queue = scopeFilter
+    ? rawQueue.filter((record) => record.scope === scopeFilter).slice(0, limit)
+    : rawQueue;
+
   if (!queue.length) {
     context.print('[recall] Review queue is empty.');
     return;
