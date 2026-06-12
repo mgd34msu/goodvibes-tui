@@ -76,9 +76,9 @@ function createDefaultFlags(): GoodVibesCliFlags {
     continueLast: false,
     resume: undefined,
     session: undefined,
-    fork: false,
-    rawOutput: false,
-    acceptRawOutputRisk: false,
+    fork: undefined,
+    yes: false,
+    nonInteractive: false,
   };
 }
 
@@ -132,9 +132,9 @@ function parsePort(value: string | undefined, optionName: string, errors: string
   return port;
 }
 
-function normalizeOutputFormat(value: string | undefined, errors: string[]): GoodVibesCliOutputFormat {
+function normalizeOutputFormat(value: string | undefined, flagName: string, errors: string[]): GoodVibesCliOutputFormat {
   if (value === 'text' || value === 'json' || value === 'stream-json') return value;
-  errors.push('--output-format must be one of: text, json, stream-json.');
+  errors.push(`${flagName} must be one of: text, json, stream-json.`);
   return 'text';
 }
 
@@ -238,15 +238,17 @@ export function parseGoodVibesCli(
       continue;
     }
     if (name === '--fork') {
-      flags = withFlag(flags, 'fork', true);
+      const consumed = getOptionalValue(argv, index, inlineValue);
+      index = consumed.nextIndex;
+      flags = withFlag(flags, 'fork', consumed.value ?? true);
       continue;
     }
-    if (name === '--raw-output') {
-      flags = withFlag(flags, 'rawOutput', true);
+    if (name === '--yes' || name === '-y') {
+      flags = withFlag(flags, 'yes', true);
       continue;
     }
-    if (name === '--accept-raw-output-risk') {
-      flags = withFlag(flags, 'acceptRawOutputRisk', true);
+    if (name === '--non-interactive') {
+      flags = withFlag(withFlag(flags, 'nonInteractive', true), 'yes', true);
       continue;
     }
 
@@ -289,16 +291,10 @@ export function parseGoodVibesCli(
     if (name === '--output-format' || name === '--output' || name === '-o') {
       const consumed = getValue(argv, index, inlineValue, name, errors);
       index = consumed.nextIndex;
-      flags = withFlag(flags, 'outputFormat', normalizeOutputFormat(consumed.value, errors));
+      flags = withFlag(flags, 'outputFormat', normalizeOutputFormat(consumed.value, name, errors));
       continue;
     }
-    if (name === '--config') {
-      const consumed = getValue(argv, index, inlineValue, name, errors);
-      index = consumed.nextIndex;
-      if (consumed.value !== undefined) flags = appendFlagArray(flags, 'configOverrides', consumed.value);
-      continue;
-    }
-    if (name === '-c') {
+    if (name === '--config' || name === '-c') {
       const consumed = getValue(argv, index, inlineValue, name, errors);
       index = consumed.nextIndex;
       if (consumed.value !== undefined) flags = appendFlagArray(flags, 'configOverrides', consumed.value);

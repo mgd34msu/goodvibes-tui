@@ -31,6 +31,9 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Channels, remote runtime, and API](channels-remote-and-api.md)
   Omnichannel surfaces, reply routing, remote peers, node-host contracts, and the daemon/control-plane HTTP + streaming surfaces.
 
+- [CLI flags](cli-flags.md)
+  Global flags reference: session lifecycle (`--continue`, `--resume`, `--fork`), confirmation bypass (`-y`/`--non-interactive`), output format consolidation, `--host` alias, and all other startup flags.
+
 - [Tools and commands](tools-and-commands.md)
   Built-in tool families, slash-command families, and the operator/workflow surfaces that tie them together.
 

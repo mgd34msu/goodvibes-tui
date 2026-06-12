@@ -55,9 +55,9 @@ export interface GoodVibesCliFlags {
   readonly continueLast: boolean;
   readonly resume: string | undefined;
   readonly session: string | undefined;
-  readonly fork: boolean;
-  readonly rawOutput: boolean;
-  readonly acceptRawOutputRisk: boolean;
+  readonly fork: string | true | undefined;
+  readonly yes: boolean;
+  readonly nonInteractive: boolean;
 }
 
 export interface GoodVibesCliParseResult {
