@@ -174,6 +174,7 @@ export function parseGoodVibesCli(
   const commandArgs: string[] = [];
   const positionals: string[] = [];
   const errors: string[] = [];
+  const warnings: string[] = [];
   let sawCommand = false;
   let passthrough = false;
 
@@ -292,6 +293,9 @@ export function parseGoodVibesCli(
       const consumed = getValue(argv, index, inlineValue, name, errors);
       index = consumed.nextIndex;
       flags = withFlag(flags, 'outputFormat', normalizeOutputFormat(consumed.value, name, errors));
+      if (name === '--output-format') {
+        warnings.push('--output-format is deprecated; use --output (or -o) instead.');
+      }
       continue;
     }
     if (name === '--config' || name === '-c') {
@@ -373,5 +377,6 @@ export function parseGoodVibesCli(
     positionals,
     flags,
     errors,
+    warnings,
   };
 }

@@ -52,6 +52,7 @@ function makeCli(overrides: Partial<GoodVibesCliParseResult> = {}): GoodVibesCli
       nonInteractive: false,
     },
     errors: [],
+    warnings: [],
     ...overrides,
   };
 }

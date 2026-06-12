@@ -68,6 +68,8 @@ export interface GoodVibesCliParseResult {
   readonly positionals: readonly string[];
   readonly flags: GoodVibesCliFlags;
   readonly errors: readonly string[];
+  /** Deprecation and soft-warning messages (non-fatal). Callers should surface these to users. */
+  readonly warnings: readonly string[];
 }
 
 export interface CliCommandRuntime {

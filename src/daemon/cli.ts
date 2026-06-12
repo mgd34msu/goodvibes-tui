@@ -104,6 +104,11 @@ async function main(): Promise<void> {
     console.error(renderGoodVibesDaemonHelp('goodvibes-daemon'));
     process.exit(2);
   }
+  if (cli.warnings.length > 0) {
+    for (const warning of cli.warnings) {
+      console.warn(`[goodvibes-daemon] warning: ${warning}`);
+    }
+  }
   if (cli.flags.help || cli.command === 'help') {
     console.log(renderGoodVibesDaemonHelp('goodvibes-daemon'));
     process.exit(0);
