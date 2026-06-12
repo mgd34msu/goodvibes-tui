@@ -18,6 +18,7 @@ import { registerGitRuntimeCommands } from './commands/git-runtime.ts';
 import { registerNotifyRuntimeCommands } from './commands/notify-runtime.ts';
 import { registerReplayRuntimeCommands } from './commands/replay-runtime.ts';
 import { registerShareRuntimeCommands } from './commands/share-runtime.ts';
+import { registerChannelRuntimeCommands } from './commands/channel-runtime.ts';
 import { registerLocalSetupCommands } from './commands/local-setup.ts';
 import { registerProductRuntimeCommands } from './commands/product-runtime.ts';
 import { registerPlatformRuntimeCommands } from './commands/platform-runtime.ts';
@@ -70,6 +71,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerNotifyRuntimeCommands(registry);
   registerReplayRuntimeCommands(registry);
   registerShareRuntimeCommands(registry);
+  registerChannelRuntimeCommands(registry);
   registerLocalSetupCommands(registry);
   registerProductRuntimeCommands(registry);
   registerPlatformRuntimeCommands(registry);

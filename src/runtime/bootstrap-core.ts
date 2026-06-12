@@ -123,6 +123,88 @@ export interface BootstrapCoreState {
 
 export type CompanionMessagePayload = Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>;
 
+// ---------------------------------------------------------------------------
+// Operator narration of inbound channel events
+// ---------------------------------------------------------------------------
+
+/**
+ * Narrate an inbound channel event to the operator via the SystemMessageRouter.
+ *
+ * When an external surface (GitHub, Slack, ntfy, etc.) triggers an agent turn,
+ * this function produces a human-readable system message so the operator can
+ * observe which event caused the turn. Returns null for internal/companion
+ * sources that do not need operator narration.
+ *
+ * @param event - The normalized inbound event descriptor.
+ * @returns A narration string, or null if no narration is appropriate.
+ */
+export function narrateInboundEvent(event: {
+  source: string;
+  metadata: Readonly<Record<string, unknown>> | undefined;
+}): string | null {
+  const { source, metadata } = event;
+  if (!source) return null;
+
+  // Derive the effective surface — prefer metadata.surface, fall back to source.
+  const surface = typeof metadata?.surface === 'string' ? metadata.surface : source;
+
+  // Internal / companion sources do not need operator narration.
+  if (surface === 'companion' || source === 'companion') return null;
+  if (surface === 'internal' || source === 'internal') return null;
+
+  // Build a surface label for the log prefix.
+  const label = ((): string => {
+    switch (surface) {
+      case 'github':        return '[GitHub]';
+      case 'slack':         return '[Slack]';
+      case 'discord':       return '[Discord]';
+      case 'ntfy':          return '[ntfy]';
+      case 'homeassistant': return '[HomeAssistant]';
+      case 'telegram':      return '[Telegram]';
+      case 'google-chat':   return '[Google Chat]';
+      case 'signal':        return '[Signal]';
+      case 'whatsapp':      return '[WhatsApp]';
+      case 'msteams':       return '[Teams]';
+      case 'imessage':      return '[iMessage]';
+      case 'bluebubbles':   return '[BlueBubbles]';
+      case 'mattermost':    return '[Mattermost]';
+      case 'matrix':        return '[Matrix]';
+      case 'webhook':       return '[Webhook]';
+      default:              return `[${surface[0]!.toUpperCase()}${surface.slice(1)}]`;
+    }
+  })();
+
+  const eventType   = typeof metadata?.eventType   === 'string' ? metadata.eventType   : null;
+  const eventAction = typeof metadata?.eventAction  === 'string' ? metadata.eventAction : null;
+  const topic       = typeof metadata?.topic        === 'string' ? metadata.topic       : null;
+  const prNumber    = typeof metadata?.prNumber     === 'number' ? metadata.prNumber    : null;
+  const issueNumber = typeof metadata?.issueNumber  === 'number' ? metadata.issueNumber : null;
+  const repo        = typeof metadata?.repo         === 'string' ? metadata.repo        : null;
+
+  // Build event-specific detail for GitHub events.
+  if (surface === 'github' && eventType) {
+    const actionPart = eventAction ? ` ${eventAction}` : '';
+    let detail = `${eventType}${actionPart} → agent triggered`;
+    if (prNumber !== null) {
+      detail = `PR #${prNumber}${repo ? ` (${repo})` : ''} ${eventAction ?? eventType} → agent triggered`;
+    } else if (issueNumber !== null) {
+      detail = `Issue #${issueNumber}${repo ? ` (${repo})` : ''} ${eventAction ?? eventType} → agent triggered`;
+    } else if (repo) {
+      detail = `${eventType}${actionPart} in ${repo} → agent triggered`;
+    }
+    return `${label} ${detail}`;
+  }
+
+  // ntfy: include topic when available.
+  if (surface === 'ntfy' && topic) {
+    return `${label} inbound message on topic '${topic}' → agent triggered`;
+  }
+
+  // Generic narration for all other surfaces.
+  const eventDetail = eventType ? ` ${eventType}${eventAction ? ` ${eventAction}` : ''}` : '';
+  return `${label}${eventDetail} inbound event → agent triggered`;
+}
+
 export function companionMessageToOrchestratorInputOptions(
   payload: CompanionMessagePayload,
 ): OrchestratorUserInputOptions {
@@ -525,6 +607,16 @@ export async function initializeBootstrapCore(
   runtimeUnsubs.push(runtimeBus.on<Extract<SessionEvent, { type: 'COMPANION_MESSAGE_RECEIVED' }>>(
     'COMPANION_MESSAGE_RECEIVED',
     ({ payload }) => {
+      // Narrate inbound external events to the operator so they can observe
+      // which channel event triggered the agent turn.
+      const narration = narrateInboundEvent({
+        source: payload.source,
+        metadata: payload.metadata,
+      });
+      if (narration) {
+        routeOrBuffer(narration, 'low');
+      }
+
       if (orchestratorHandleUserInputRef.value) {
         // Delegate to the orchestrator: adds user message + fires a real LLM turn.
         // Preserve surface origin metadata so the SDK can correlate replies back
