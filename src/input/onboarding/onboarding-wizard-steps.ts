@@ -48,8 +48,8 @@ function buildApplyAndContinueAction(step: OnboardingWizardStepDefinition): Onbo
       kind: 'action',
       id: `${step.id}.apply-and-continue`,
       action: 'apply-and-continue',
-      label: 'Apply & Continue To Next Section',
-      hint: 'Save the current wizard selections in this onboarding session and move to the next section. Settings are persisted on the final Review apply.',
+      label: 'Next section',
+      hint: 'Selections are kept in this wizard session and persisted on the final Review apply.',
       defaultValue: 'Apply & next',
       spacerBeforeRows: 2,
     };
@@ -779,18 +779,11 @@ export function buildReviewStep(controller: OnboardingWizardControllerLike): Onb
       fields: [
         ...feedbackFields,
         {
-          kind: 'status',
-          id: 'review.global-marker',
-          label: 'Global onboarding check',
-          hint: 'Opening this wizard marks onboarding as shown for this user account, so new projects do not reopen it automatically.',
-          defaultValue: 'Already marked as shown',
-        },
-        {
           kind: 'action',
           id: 'review.apply',
           action: 'apply',
           label: 'Apply settings and verify',
-          hint: 'Persist the wizard settings and verify the resulting runtime state. The global onboarding check was already recorded when the wizard opened.',
+          hint: 'Persist the wizard settings and verify the resulting runtime state. The global onboarding check marker is recorded when apply succeeds.',
           defaultValue: 'Ready',
         },
       ],

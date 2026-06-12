@@ -505,6 +505,73 @@ describe('onboarding apply and verify helpers', () => {
     expect(auth.inspect().sessionCount).toBe(0);
   });
 
+  test('apply function does not write the onboarding check marker on success', async () => {
+    const request = {
+      mode: 'new' as const,
+      source: 'wizard',
+      operations: [
+        {
+          kind: 'set-config' as const,
+          key: 'display.stream' as const,
+          value: false,
+        },
+      ],
+    };
+
+    const applied = await applyOnboardingRequest(
+      {
+        clock: () => 100,
+        config: configManager,
+        shellPaths,
+        acknowledgementScope: 'project',
+      },
+      request,
+    );
+
+    expect(applied.ok).toBe(true);
+    const markerUser = readOnboardingCheckMarker(shellPaths, 'user');
+    const markerProject = readOnboardingCheckMarker(shellPaths, 'project');
+    expect(markerUser.exists).toBe(false);
+    expect(markerProject.exists).toBe(false);
+  });
+
+  test('apply function does not write the onboarding check marker when apply errors occur', async () => {
+    const request = {
+      mode: 'new' as const,
+      source: 'wizard',
+      operations: [
+        {
+          kind: 'set-config' as const,
+          key: 'display.stream' as const,
+          value: false,
+        },
+      ],
+    };
+
+    const applied = await applyOnboardingRequest(
+      {
+        clock: () => 100,
+        config: {
+          get: configManager.get.bind(configManager),
+          getRaw: configManager.getRaw.bind(configManager),
+          load: configManager.load.bind(configManager),
+          setDynamic: () => {
+            throw new Error('simulated write failure');
+          },
+        },
+        shellPaths,
+        acknowledgementScope: 'project',
+      },
+      request,
+    );
+
+    expect(applied.ok).toBe(false);
+    const markerUser = readOnboardingCheckMarker(shellPaths, 'user');
+    const markerProject = readOnboardingCheckMarker(shellPaths, 'project');
+    expect(markerUser.exists).toBe(false);
+    expect(markerProject.exists).toBe(false);
+  });
+
   test('round-trips persisted acknowledgement state back into reopen hydration', async () => {
     await applyOnboardingRequest(
       {

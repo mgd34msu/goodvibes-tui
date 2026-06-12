@@ -202,7 +202,7 @@ describe('OnboardingWizardController', () => {
       }
 
       expect(applyAndContinue).toBeDefined();
-      expect(applyAndContinue?.label).toBe('Apply & Continue To Next Section');
+      expect(applyAndContinue?.label).toBe('Next section');
       expect(applyAndContinue?.spacerBeforeRows).toBe(2);
       expect(step.fields.at(-1)).toBe(applyAndContinue);
     }
@@ -1034,7 +1034,7 @@ describe('InputHandler onboarding integration', () => {
     expect(input.onboardingWizard.active).toBe(true);
   });
 
-  test('marks onboarding checked as soon as the wizard opens', () => {
+  test('does not write the check marker when the wizard opens and the user escapes without applying', () => {
     const uiServices = createDefaultUiRuntimeServices();
     const input = makeInput(uiServices);
 
@@ -1042,8 +1042,7 @@ describe('InputHandler onboarding integration', () => {
     input.feed('\x1b');
 
     const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
-    expect(marker.exists).toBe(true);
-    expect(marker.payload?.mode).toBe('new');
+    expect(marker.exists).toBe(false);
     expect(input.onboardingWizard.active).toBe(false);
   });
 
@@ -1188,6 +1187,61 @@ describe('InputHandler onboarding integration', () => {
     expect(input.onboardingWizard.applyFeedback).toBeNull();
     expect(uiServices.platform.configManager.get('service.enabled')).toBe(false);
     expect(prints).toEqual([]);
+  });
+
+  test('does not write the global onboarding check marker when the wizard is opened', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    const input = makeInput(uiServices);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(marker.exists).toBe(false);
+    expect(input.onboardingWizard.active).toBe(true);
+  });
+
+  test('writes the global onboarding check marker on successful apply', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    ensureLocalAdminAuth(uiServices);
+    const input = makeInput(uiServices);
+    const prints: string[] = [];
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: (text: string) => prints.push(text),
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+
+    const markerBefore = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(markerBefore.exists).toBe(false);
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
+
+    const markerAfter = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(markerAfter.exists).toBe(true);
+    expect(markerAfter.payload?.source).toBe('wizard');
+    expect(markerAfter.payload?.mode).toBe('new');
+  });
+
+  test('does not write the global onboarding check marker when apply errors occur', async () => {
+    resetTestRuntimeServices();
+    const uiServices = createDefaultUiRuntimeServices();
+    const input = makeInput(uiServices);
+    input.setCommandRegistry(new CommandRegistry(), {
+      session: { runtime: {} },
+      print: () => {},
+    } as unknown as CommandContext);
+    input.openOnboardingWizard({ mode: 'new', preload: () => {} });
+    input.onboardingWizard.hydrateRuntimeState({
+      snapshot: makeOnboardingSnapshot({}),
+    }, { resetValues: true });
+    input.onboardingWizard.setFieldValue('capabilities.browser-access', true);
+
+    await (input as unknown as { handleOnboardingAction(action: 'apply'): Promise<void> }).handleOnboardingAction('apply');
+
+    const marker = readOnboardingCheckMarker(uiServices.environment.shellPaths, 'user');
+    expect(marker.exists).toBe(false);
+    expect(input.onboardingWizard.active).toBe(true);
   });
 
   test('keeps the global onboarding check marker when post-apply verification fails', async () => {
