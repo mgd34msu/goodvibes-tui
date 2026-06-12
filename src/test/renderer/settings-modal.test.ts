@@ -255,7 +255,7 @@ describe('renderSettingsModal', () => {
     modal.subscriptionLogoutConfirmationTarget = 'openai';
     const lines = renderSettingsModal(modal, W);
     const texts = linesToText(lines).join('\n');
-    expect(texts).toContain('Press Enter again to sign out openai');
+    expect(texts).toContain('Sign out openai? Enter/y to confirm, n/Esc to cancel.');
   });
 
   test('works with narrow terminal width', () => {
