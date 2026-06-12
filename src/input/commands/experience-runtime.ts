@@ -222,7 +222,7 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
 
   registry.register({
     name: 'voice',
-    description: 'Review voice posture and package portable voice-surface metadata',
+    description: 'Review or toggle always-speak mode (same switch as /tts on|off) and package portable voice metadata',
     usage: '[review|enable|disable|bundle export <path>|bundle inspect <path>]',
     handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
@@ -231,8 +231,9 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
         const enabled = Boolean(ctx.platform.configManager.get('ui.voiceEnabled') ?? false);
         ctx.print([
           'Voice Review',
-          `  enabled: ${enabled ? 'yes' : 'no'}`,
-          '  posture: optional local companion surface; disabled by default',
+          `  always-speak: ${enabled ? 'on' : 'off'}`,
+          '  config key: ui.voiceEnabled (same as /tts on|off)',
+          '  posture: optional local TTS output; disabled by default',
           '  note: voice remains an optional operator convenience, not a required SaaS dependency',
         ].join('\n'));
         return;
@@ -240,7 +241,7 @@ export function registerExperienceRuntimeCommands(registry: CommandRegistry): vo
       if (sub === 'enable' || sub === 'disable') {
         const next = sub === 'enable';
         ctx.platform.configManager.setDynamic('ui.voiceEnabled', next);
-        ctx.print(`Voice surface ${next ? 'enabled' : 'disabled'} for this runtime.`);
+        ctx.print(`Always-speak mode ${next ? 'enabled' : 'disabled'}. ${next ? 'Every submitted turn will be played through live TTS.' : 'Use /tts <prompt> to speak individual turns.'}`);
         return;
       }
       if (sub === 'bundle') {
