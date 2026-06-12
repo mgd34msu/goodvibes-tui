@@ -37,6 +37,7 @@ import {
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requirePluginManager, requireUiServices } from './shared.ts';
+import { createCockpitRosterReadModel } from '../cockpit-read-model.ts';
 
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
@@ -52,13 +53,33 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     environment: createEnvironmentVariableQuery(process.env),
   });
 
+  const rosterReadModel = createCockpitRosterReadModel(ui.agents.agentManager);
+  // Subscribe to agent lifecycle events so the roster re-renders on state changes.
+  // AGENT_RUNNING covers status transitions; AGENT_CANCELLED covers the cancellation
+  // terminal state not emitted by AGENT_FAILED. Noisy mid-run events (STREAM_DELTA,
+  // AWAITING_TOOL, etc.) are intentionally excluded — they don't affect roster fields.
+  // Note: stall detection is time-based, so stalled/stalledAgentCount will only refresh
+  // on the next lifecycle event; a periodic tick would be needed for real-time stall display.
+  ui.events.agents.on('AGENT_SPAWNING', () => rosterReadModel.markDirty());
+  ui.events.agents.on('AGENT_RUNNING', () => rosterReadModel.markDirty());
+  ui.events.agents.on('AGENT_COMPLETED', () => rosterReadModel.markDirty());
+  ui.events.agents.on('AGENT_FAILED', () => rosterReadModel.markDirty());
+  ui.events.agents.on('AGENT_CANCELLED', () => rosterReadModel.markDirty());
+
   manager.registerType({
     id: 'cockpit',
     name: 'Cockpit',
     icon: 'O',
     category: 'monitoring',
     description: 'Unified operator summary for orchestration, permissions, communication, MCP, plugins, and integrations',
-    factory: () => new CockpitPanel(ui.readModels.cockpit),
+    factory: () => new CockpitPanel(
+      ui.readModels.cockpit,
+      rosterReadModel,
+      {
+        openAgentDetail: (agentId: string) => deps.openAgentDetail?.(agentId),
+        cancelAgent: (agentId: string) => ui.agents.agentManager.cancel(agentId),
+      },
+    ),
   });
 
   manager.registerType({

@@ -57,6 +57,9 @@ import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, type StreamMetrics } from './core/stream-event-wiring.ts';
+import { maybeAutoCompact } from './core/context-auto-compact.ts';
+import { buildContextStatusHint } from './renderer/context-status-hint.ts';
+import { evaluateSessionMaintenance } from './panels/session-maintenance.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
 const ALT_SCREEN_EXIT  = '\x1b[?1049l';
@@ -104,6 +107,7 @@ async function main() {
     permissionPromptRef,
     _writeLastSessionPointer: writeLastSessionPointer,
     systemMessageRouter,
+    setOpenAgentDetail,
   } = ctx;
   const workingDir = ctx.services.workingDirectory;
   const homeDirectory = ctx.services.homeDirectory;
@@ -439,6 +443,7 @@ async function main() {
   input.filePicker.setOnUpdate(() => render());
   input.agentDetailModal.setOnRefresh(() => render());
   input.processModal.setOnRefresh(() => render());
+  setOpenAgentDetail((id) => input.agentDetailModal.open(id));
 
   // Model picker callback is handled in bootstrap.ts — do not duplicate here.
   input.setHistory(inputHistory);
@@ -479,6 +484,17 @@ async function main() {
       hasAttachments: input.getImageAttachments().size > 0,
       turnState: sessionSnapshot.turnState,
     });
+    const maintenanceStatus = evaluateSessionMaintenance({
+      configManager,
+      currentTokens: orchestrator.lastInputTokens,
+      contextWindow: currentModel.contextWindow,
+      sessionMemoryCount: ctx.services.sessionMemoryStore.list().length,
+    });
+    const contextStatusHint = buildContextStatusHint({
+      level: maintenanceStatus.level,
+      autoCompactEnabled: maintenanceStatus.autoCompactEnabled,
+      usagePct: maintenanceStatus.usagePct,
+    });
     const footerLines = buildShellFooter({
       width,
       promptText: promptInfo.visibleLines.join('\n'),
@@ -496,6 +512,7 @@ async function main() {
       workingDir,
       provider: runtime.provider,
       contextWindow: currentModel.contextWindow,
+      contextStatusHint,
       // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
       // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
       compactThreshold: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),
@@ -692,6 +709,18 @@ async function main() {
       );
       hookDispatcher.fire({ path: 'Lifecycle:session:save' as HookEventPath, phase: 'Lifecycle' as HookPhase, category: 'session' as HookCategory, specific: 'save', sessionId: runtime.sessionId, timestamp: Date.now(), payload: { sessionId: runtime.sessionId } }).catch((err: unknown) => logger.debug('hook fire error', { error: summarizeError(err) }));
     } catch (e) { logger.debug('auto-save on turn:complete failed', { error: summarizeError(e) }); }
+    // Auto-compact: check context usage and compact if threshold exceeded
+    const currentModelForCompact = providerRegistry.getCurrentModel();
+    maybeAutoCompact({
+      configManager,
+      conversation,
+      providerRegistry,
+      systemMessageRouter,
+      model: runtime.model,
+      provider: runtime.provider,
+      lastInputTokens: orchestrator.lastInputTokens,
+      contextWindow: currentModelForCompact.contextWindow,
+    }).catch((err: unknown) => logger.debug('maybeAutoCompact error', { error: summarizeError(err) }));
     refreshGit();
   }));
   unsubs.push(uiServices.events.tools.on('TOOL_SUCCEEDED', () => {
