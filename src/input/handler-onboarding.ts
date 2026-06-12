@@ -5,8 +5,14 @@ import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
 import { handleCloudflareOnboardingActionForHandler, maybeProvisionCloudflareOnFinalApplyForHandler } from './handler-onboarding-cloudflare.ts';
-import { applyOnboardingRequest, collectOnboardingSnapshot, verifyOnboardingRequest } from '../runtime/onboarding/index.ts';
+import { applyOnboardingRequest, collectOnboardingSnapshot, deleteWizardProgress, verifyOnboardingRequest, writeOnboardingCheckMarker, writeWizardProgress } from '../runtime/onboarding/index.ts';
 import type { OnboardingApplyRequest, OnboardingVerificationItem } from '../runtime/onboarding/index.ts';
+import {
+  dedupeOnboardingVerificationItems,
+  extractAuthorizationCode,
+  formatOnboardingApplyCompletionMessage,
+  isLoopbackHostValue,
+} from './onboarding/onboarding-verification-helpers.ts';
 import type { ModelPickerTarget } from './model-picker.ts';
 import { captureOnboardingWizardSnapshot, restoreOnboardingWizardSnapshot } from './handler-ui-state.ts';
 import type { InputHandlerLike as InputHandler, OnboardingRuntimePosture } from './handler-types.ts';
@@ -19,63 +25,6 @@ import {
   type OnboardingExternalServiceState,
   type OnboardingRuntimeEndpoint,
 } from './onboarding/onboarding-runtime-status.ts';
-
-function extractAuthorizationCode(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-
-  try {
-    const url = new URL(trimmed);
-    return url.searchParams.get('code');
-  } catch {
-    return trimmed;
-  }
-}
-
-function isLoopbackHostValue(value: string | null | undefined): boolean {
-  const normalized = (value ?? '').trim().toLowerCase();
-  if (normalized.length === 0) return false;
-  return normalized === 'localhost'
-    || normalized === '::1'
-    || normalized === '[::1]'
-    || normalized === '0:0:0:0:0:0:0:1'
-    || /^127(?:\.\d{1,3}){3}$/.test(normalized);
-}
-
-function onboardingVerificationStatusRank(item: OnboardingVerificationItem): number {
-  if (item.status === 'fail') return 3;
-  if (item.status === 'warn') return 2;
-  return 1;
-}
-
-function dedupeOnboardingVerificationItems(
-  items: readonly OnboardingVerificationItem[],
-): OnboardingVerificationItem[] {
-  const order: string[] = [];
-  const byId = new Map<string, OnboardingVerificationItem>();
-  for (const item of items) {
-    const existing = byId.get(item.id);
-    if (!existing) {
-      order.push(item.id);
-      byId.set(item.id, item);
-      continue;
-    }
-    if (onboardingVerificationStatusRank(item) > onboardingVerificationStatusRank(existing)) {
-      byId.set(item.id, item);
-    }
-  }
-  return order.map((id) => byId.get(id)).filter((item): item is OnboardingVerificationItem => Boolean(item));
-}
-
-function formatOnboardingApplyCompletionMessage(items: readonly OnboardingVerificationItem[]): string {
-  const warnings = items.filter((item) => item.status === 'warn');
-  if (warnings.length === 0) return `Onboarding applied and verified ${items.length} item(s).`;
-  const passed = items.filter((item) => item.status === 'pass').length;
-  return [
-    `Onboarding settings applied. ${passed} verification item(s) passed; ${warnings.length} warning(s) need attention.`,
-    ...warnings.map((warning) => `  warning ${warning.id}: ${warning.message}`),
-  ].join('\n');
-}
 
 function getRuntimeEndpointBinding(
   handler: InputHandler,
@@ -282,6 +231,18 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
       }
 
       if (appliedErrors.length === 0) {
+        try {
+          writeOnboardingCheckMarker(handler.uiServices.environment.shellPaths, {
+            scope: 'user',
+            source: 'wizard',
+            mode: request.mode,
+          });
+          deleteWizardProgress(handler.uiServices.environment.shellPaths);
+        } catch (markerError) {
+          handler.commandContext?.print?.(
+            `Onboarding check marker could not be written: ${markerError instanceof Error ? markerError.message : String(markerError)}`,
+          );
+        }
         const activationVerification = await handler.restartOnboardingExternalServicesIfNeeded(request);
         runtimeWarnings = dedupeOnboardingVerificationItems([...activationVerification, ...handler.verifyOnboardingRuntimePosture(request)]
           .map((item): OnboardingVerificationItem => item.status === 'fail'
@@ -529,6 +490,41 @@ export async function handleOpenAiSubscriptionFinishForHandler(handler: InputHan
       handler.onboardingApplyPending = false;
     }
   }
+
+/**
+ * Persist the current wizard field state to onboarding-progress.json.
+ *
+ * Called after each step navigation so the user can resume a partially
+ * completed wizard after a restart. Masked fields (kind === 'masked') are
+ * excluded from the persisted textState to avoid writing secrets to disk.
+ *
+ * This is a best-effort write: if it fails the wizard continues normally.
+ */
+export function saveWizardProgressForHandler(handler: InputHandler): void {
+  const wizard = handler.onboardingWizard;
+  if (!wizard.active) return;
+  try {
+    // Exclude masked fields to avoid persisting secrets.
+    const maskedFieldIds = new Set<string>();
+    for (const step of wizard.steps) {
+      for (const field of step.fields) {
+        if (field.kind === 'masked') maskedFieldIds.add(field.id);
+      }
+    }
+    const safeTextState = [...wizard.textState.entries()]
+      .filter(([id]) => !maskedFieldIds.has(id)) as Array<[string, string]>;
+
+    writeWizardProgress(handler.uiServices.environment.shellPaths, {
+      mode: wizard.mode,
+      stepIndex: wizard.stepIndex,
+      toggleState: [...wizard.toggleState.entries()],
+      radioState: [...wizard.radioState.entries()],
+      textState: safeTextState,
+    });
+  } catch {
+    // Best-effort: never block wizard interaction on a progress write failure.
+  }
+}
 
 export function syncRuntimeFromOnboardingRequestForHandler(handler: InputHandler, request: ReturnType<OnboardingWizardController['buildApplyRequest']>): void {
     const runtime = handler.commandContext?.session.runtime;

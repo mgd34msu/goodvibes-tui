@@ -340,6 +340,26 @@ export interface OnboardingCheckMarkersState {
   readonly effective: OnboardingCheckMarkerState | null;
 }
 
+export interface WizardProgressPayload {
+  readonly version: 1;
+  readonly savedAt: number;
+  readonly mode: OnboardingMode;
+  readonly stepIndex: number;
+  /** Serialised Map<fieldId, boolean> entries */
+  readonly toggleState: ReadonlyArray<readonly [string, boolean]>;
+  /** Serialised Map<fieldId, string> entries */
+  readonly radioState: ReadonlyArray<readonly [string, string]>;
+  /** Serialised Map<fieldId, string> entries */
+  readonly textState: ReadonlyArray<readonly [string, string]>;
+}
+
+export interface WizardProgressState {
+  readonly path: string;
+  readonly exists: boolean;
+  readonly payload: WizardProgressPayload | null;
+  readonly parseError?: string;
+}
+
 export interface WriteOnboardingCheckMarkerOptions {
   readonly scope?: OnboardingStateScope;
   readonly checkedAt?: number;

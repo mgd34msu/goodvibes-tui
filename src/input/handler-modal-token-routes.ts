@@ -92,6 +92,8 @@ export type ModalTokenRouteState = {
   restoreOnboardingModelPickerCancelState?: () => void;
   onModelPickerCommit?: () => boolean;
   onOnboardingAction?: (action: OnboardingWizardAction) => void;
+  /** Called after any wizard step navigation so the handler can persist progress. */
+  onStepChange?: () => void;
 };
 
 export function handleModalTokenRoutes(state: ModalTokenRouteState, token: InputToken): {
@@ -216,6 +218,7 @@ export function handleModalTokenRoutes(state: ModalTokenRouteState, token: Input
     handleEscape: state.handleEscape,
     openModelPickerWithTarget: state.openModelPickerWithTarget,
     onAction: state.onOnboardingAction,
+    onStepChange: state.onStepChange,
   }, token)) {
     return withState(state, true);
   }

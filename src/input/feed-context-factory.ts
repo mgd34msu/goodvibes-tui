@@ -161,6 +161,8 @@ export interface FeedContextClosures {
   openProviderModelPickerWithTarget: (target: ModelPickerTarget, source?: 'settings' | 'onboarding') => boolean;
   onModelPickerCommit: () => boolean;
   onOnboardingAction: (action: import('./onboarding/onboarding-wizard.ts').OnboardingWizardAction) => void;
+  /** Called after any wizard step navigation so the handler can persist progress. */
+  onStepChange?: () => void;
 }
 
 /**

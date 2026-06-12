@@ -7,6 +7,7 @@ import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { CommandRegistry } from '../../input/command-registry.ts';
 import { applyInitialTuiCliState } from '../../cli/tui-startup.ts';
 import { writeOnboardingCheckMarker } from '../../runtime/onboarding/index.ts';
+import { writeWizardProgress } from '../../runtime/onboarding/index.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import type { InputHandler } from '../../input/handler.ts';
 import type { GoodVibesCliParseResult } from '../../cli/types.ts';
@@ -137,6 +138,59 @@ describe('initial TUI onboarding startup check', () => {
     });
 
     expect(runStartup(shellPaths).opened).toBe(0);
+  });
+
+  test('resumes interrupted wizard session when marker exists and progress file is present', () => {
+    const shellPaths = makeShellPaths();
+    // User has completed first-run onboarding (marker present).
+    writeOnboardingCheckMarker(shellPaths, {
+      scope: 'user',
+      source: 'wizard',
+      mode: 'new',
+    });
+    // But they left the wizard part-way through a subsequent edit session.
+    writeWizardProgress(shellPaths, {
+      mode: 'edit',
+      stepIndex: 2,
+      toggleState: [['capabilities.external-integrations', true]],
+      radioState: [],
+      textState: [],
+    });
+
+    let capturedMode: string | undefined;
+    let preloadCalled = false;
+    const input = {
+      prompt: '',
+      cursorPos: 0,
+      openOnboardingWizard: (options: { mode?: string; reset?: boolean; preload?: unknown }) => {
+        capturedMode = options.mode;
+        if (typeof options.preload === 'function') {
+          // Simulate the wizard controller interface the preload callback receives.
+          const wizard = {
+            setStep: (_idx: number) => {},
+            toggleState: new Map<string, boolean>(),
+            radioState: new Map<string, string>(),
+            textState: new Map<string, string>(),
+          };
+          options.preload(wizard);
+          preloadCalled = true;
+        }
+      },
+    } as unknown as InputHandler;
+
+    applyInitialTuiCliState({
+      cli: makeCli(),
+      input,
+      commandRegistry: new CommandRegistry(),
+      commandContext: {} as CommandContext,
+      shellPaths,
+      render: () => {},
+    });
+
+    // The wizard should be opened in the mode that was saved (edit).
+    expect(capturedMode).toBe('edit');
+    // The preload callback must have been invoked to restore wizard state.
+    expect(preloadCalled).toBe(true);
   });
 });
 
