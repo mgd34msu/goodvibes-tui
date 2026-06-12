@@ -9,7 +9,7 @@ import { getOnboardingCheckMarkerPath } from '../runtime/onboarding/index.ts';
 import { CONFIG_SCHEMA } from '../config/index.ts';
 import { SecretsManager } from '../config/secrets.ts';
 import type { ConfigKey } from '../config/index.ts';
-import type { CliCommandRuntime } from './management.ts';
+import type { CliCommandRuntime } from './types.ts';
 import type { CliCommandOutput } from './types.ts';
 import { getPackageVersion } from './help.ts';
 import { classifyProviderSetup } from './provider-classification.ts';

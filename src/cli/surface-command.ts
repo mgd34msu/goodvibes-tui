@@ -8,7 +8,7 @@ import {
 import { enableFeatureFlags, getMissingSurfaceFeatureFlags, getServerSurfaceFeatureFlags } from '../runtime/surface-feature-flags.ts';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
-import type { CliCommandRuntime } from './management.ts';
+import type { CliCommandRuntime } from './types.ts';
 import {
   applyTargetEndpointFlagsOrDefault,
   enableEndpointLanDefault,

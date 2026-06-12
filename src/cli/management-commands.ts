@@ -9,7 +9,7 @@ import { getOrCreateCompanionToken, buildCompanionConnectionInfo, encodeConnecti
 import { generateQrMatrix, renderQrToString } from '@pellux/goodvibes-sdk/platform/pairing';
 import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
-import type { CliCommandRuntime } from './management.ts';
+import type { CliCommandRuntime } from './types.ts';
 import { extractAuthorizationCode, formatJsonOrText, hasCommandFlag, openBrowser, probeTcp, readAuthPaths, runNonInteractiveAgent, urlHostForBindHost, withRuntimeServices, yesNo } from './management.ts';
 
 export async function renderSubscriptions(runtime: CliCommandRuntime): Promise<string> {
