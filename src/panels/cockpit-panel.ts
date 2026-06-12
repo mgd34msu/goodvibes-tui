@@ -73,7 +73,7 @@ export class CockpitPanel extends BasePanel {
   public handleInput(key: string): boolean {
     // Confirm-cancel absorb: when a cancel is pending, only y/enter confirm, escape/n dismiss, everything else is consumed
     if (this.pendingCancelId !== null) {
-      if (key === 'y' || key === 'enter') {
+      if (key === 'y' || key === 'enter' || key === 'return') {
         this.actionCallbacks.cancelAgent(this.pendingCancelId);
         this.pendingCancelId = null;
         this.markDirty();
@@ -121,7 +121,7 @@ export class CockpitPanel extends BasePanel {
         this.markDirty();
         return true;
       }
-      if (key === 'i' || key === 'return') {
+      if (key === 'i' || key === 'enter' || key === 'return') {
         const entry = roster[this.agentCursorIndex];
         if (entry) {
           this.actionCallbacks.openAgentDetail(entry.id);
