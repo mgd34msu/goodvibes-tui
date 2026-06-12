@@ -202,6 +202,7 @@ export function renderShortcutsOverlay(
     row('PageUp / PageDn', 'Scroll by full page'),
     row('Home / End', 'Jump to start / end of line'),
     row(kb('search'), 'Search conversation'),
+    row('n / N (search)', 'Next / previous match'),
     row('Mouse wheel', 'Scroll conversation or hovered panel'),
     '',
     '  Editing',

@@ -17,6 +17,12 @@ export class SearchManager {
   public query = '';
   public matches: SearchMatch[] = [];
   public currentMatch = 0;
+  /**
+   * Set to true when nextMatch/prevMatch wraps around the match list.
+   * Cleared on each navigation call before the wrap check, so it only
+   * reflects the most recent navigation step.
+   */
+  public wrapAround = false;
 
   /** Open search mode. */
   open(): void {
@@ -25,6 +31,7 @@ export class SearchManager {
     this.query = '';
     this.matches = [];
     this.currentMatch = 0;
+    this.wrapAround = false;
   }
 
   /** Lock the query — switches from typing mode to navigation mode. */
@@ -49,6 +56,7 @@ export class SearchManager {
     this.matches = [];
     this.currentMatch = 0;
 
+    this.wrapAround = false;
     if (query.length === 0) return;
 
     const lowerQuery = query.toLowerCase();
@@ -68,16 +76,20 @@ export class SearchManager {
     }
   }
 
-  /** Jump to next match. */
+  /** Jump to next match. Wraps around; sets wrapAround when it does. */
   nextMatch(): void {
-    if (this.matches.length === 0) return;
-    this.currentMatch = (this.currentMatch + 1) % this.matches.length;
+    if (this.matches.length === 0) { this.wrapAround = false; return; }
+    const next = (this.currentMatch + 1) % this.matches.length;
+    this.wrapAround = next < this.currentMatch || (this.currentMatch === this.matches.length - 1);
+    this.currentMatch = next;
   }
 
-  /** Jump to previous match. */
+  /** Jump to previous match. Wraps around; sets wrapAround when it does. */
   prevMatch(): void {
-    if (this.matches.length === 0) return;
-    this.currentMatch = (this.currentMatch - 1 + this.matches.length) % this.matches.length;
+    if (this.matches.length === 0) { this.wrapAround = false; return; }
+    const prev = (this.currentMatch - 1 + this.matches.length) % this.matches.length;
+    this.wrapAround = prev > this.currentMatch || (this.currentMatch === 0);
+    this.currentMatch = prev;
   }
 
   /** Get the line number of the current match (for scroll). */

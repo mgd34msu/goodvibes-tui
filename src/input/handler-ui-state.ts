@@ -267,13 +267,13 @@ export function handleSearchModeToken(
         searchManager.unlock();
       }
     } else if (token.type === 'text') {
-      if (token.value === 'j' || token.value === 'l') {
+      if (token.value === 'n' || token.value === 'j' || token.value === 'l') {
         searchManager.nextMatch();
         const matchLine = searchManager.getCurrentMatchLine();
         if (matchLine >= 0) {
           state.scroll(matchLine - state.getScrollTop() - Math.floor(state.getViewportHeight() / 2));
         }
-      } else if (token.value === 'k' || token.value === 'h') {
+      } else if (token.value === 'N' || token.value === 'k' || token.value === 'h') {
         searchManager.prevMatch();
         const matchLine = searchManager.getCurrentMatchLine();
         if (matchLine >= 0) {
