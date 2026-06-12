@@ -140,6 +140,54 @@ Key remote API paths include:
 - `/remote import <path>`
 - `/remote setup`
 
+## /channel command
+
+The `/channel` command gives in-session visibility into the channel runtime state.
+
+| Invocation | Output |
+|---|---|
+| `/channel` | Opens the Routes panel in the TUI |
+| `/channel panel` | Same as above |
+| `/channel status` | Builds a full integration review (routes, delivery, sessions, tasks, pending approvals) |
+| `/channel routes` | Raw route binding snapshot from the integration helper service |
+| `/channel delivery` | Current delivery snapshot: per-route delivery counts and last-error state |
+| `/channel policy` | Configured channel surfaces (enabled/disabled) and the location of fine-grained ingress policies |
+
+All subcommands accept `--json` for machine-readable output.
+
+Examples:
+
+```
+/channel routes
+/channel status --json
+/channel delivery
+/channel policy
+```
+
+## GitHub event narration
+
+When the daemon receives an inbound GitHub webhook event, it is narrated into the live transcript as a low-priority system message before the event is dispatched to the orchestrator. The narration format is:
+
+```
+[GitHub] <detail> → agent triggered
+```
+
+Examples:
+
+- `[GitHub] PR #42 (owner/repo) opened → agent triggered`
+- `[GitHub] Issue #7 (owner/repo) closed → agent triggered`
+- `[GitHub] push in owner/repo → agent triggered`
+
+Other channel surfaces use a generic format. ntfy includes the topic when available; all others use `inbound event`:
+
+```
+[Slack] inbound event → agent triggered
+[ntfy] inbound message on topic 'alerts' → agent triggered
+[Webhook] inbound event → agent triggered
+```
+
+This narration is purely informational; it does not affect routing or delivery.
+
 ## Related docs
 
 - [Deployment and services](deployment-and-services.md)
