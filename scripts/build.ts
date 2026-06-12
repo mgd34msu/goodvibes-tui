@@ -1,6 +1,7 @@
 import { execSync, spawnSync } from 'child_process';
-import { statSync, mkdirSync, existsSync, copyFileSync } from 'fs';
+import { statSync, mkdirSync, existsSync, copyFileSync, mkdtempSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { tmpdir } from 'os';
 import { patchBunCompileCompatibility } from './bun-compile-compat.ts';
 
 /**
@@ -148,11 +149,38 @@ function buildTarget(
           `Run 'bun install' to ensure ${config.sqliteVecPackage} is installed in node_modules/.`
         );
       } else {
-        console.warn(
-          `  [WARN] Cross-target build: native addon for ${config.sqliteVecPackage} not found at ${srcAddon}.` +
-          ` This runner (${runnerKey}) cannot bundle addons for target '${name}'.` +
-          ` The target-native runner is responsible for copying this addon.`
-        );
+        // Cross-target build: npm only installs the host-matching optional
+        // package, so fetch the TARGET platform's addon tarball from the
+        // registry and extract it. Every artifact must ship its native
+        // library regardless of build host — hard-fail if the fetch fails
+        // (a silently addon-less binary is exactly what the macOS smoke
+        // gate exists to reject).
+        const vecVersion = (JSON.parse(readFileSync(join(root, 'node_modules', 'sqlite-vec', 'package.json'), 'utf-8')) as { version: string }).version;
+        const pkgSpec = `${config.sqliteVecPackage}@${vecVersion}`;
+        console.log(`  Cross-target build: fetching ${pkgSpec} from the npm registry`);
+        const tmpDirPath = mkdtempSync(join(tmpdir(), 'gv-addon-'));
+        try {
+          const packResult = spawnSync('npm', ['pack', pkgSpec, '--pack-destination', tmpDirPath], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf-8' });
+          if (packResult.status !== 0) {
+            console.error(`  ADDON FETCH FAILED: npm pack ${pkgSpec} exited ${packResult.status}\n${packResult.stderr}`);
+            return false;
+          }
+          const tarball = packResult.stdout.trim().split('\n').pop() ?? '';
+          const tarResult = spawnSync('tar', ['-xzf', join(tmpDirPath, tarball), '-C', tmpDirPath], { stdio: 'inherit' });
+          if (tarResult.status !== 0) {
+            console.error(`  ADDON EXTRACT FAILED for ${pkgSpec}`);
+            return false;
+          }
+          const extracted = join(tmpDirPath, 'package', nativeFilename);
+          if (!existsSync(extracted)) {
+            console.error(`  ADDON MISSING IN PACKAGE: ${pkgSpec} does not contain ${nativeFilename}`);
+            return false;
+          }
+          copyFileSync(extracted, join(libDir, nativeFilename));
+          console.log(`  Fetched + copied native addon: lib/${config.sqliteVecPackage}/${nativeFilename}`);
+        } finally {
+          rmSync(tmpDirPath, { recursive: true, force: true });
+        }
       }
     }
   }
