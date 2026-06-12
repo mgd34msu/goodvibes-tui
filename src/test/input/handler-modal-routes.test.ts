@@ -236,6 +236,44 @@ describe('handleSettingsModalToken — reset-confirm gate', () => {
     expect(modal.resetAllConfirm).toBeNull();
   });
 
+  // ─── Runtime sync after Provider-category reset confirm ────────────────────
+
+  test('Shift+R confirm on provider category syncs ctx.session.runtime.model', () => {
+    // Navigate to 'provider' category so the reset targets provider.model.
+    while (modal.currentCategory !== 'provider') modal.nextCategory();
+    renderCalls = 0;
+
+    // Get the schema default for provider.model before reset.
+    const providerModelDefault = cm.get('provider.model');
+
+    // Wire up a fake runtime session with a STALE model value so we can detect
+    // that syncRuntimeAfterSettingReset fires and overwrites it.
+    const staleModel = '__stale_model_value__';
+    const fakeRuntime = { model: staleModel, reasoningEffort: 'medium' } as {
+      model: string;
+      reasoningEffort: string;
+    };
+    const state = {
+      ...makeState(),
+      commandContext: {
+        session: { runtime: fakeRuntime },
+      } as unknown as import('../../input/command-registry.ts').CommandContext,
+    };
+
+    // Arm and confirm the provider-category reset.
+    handleSettingsModalToken(state, keyToken('r', { shift: true }));
+    expect(modal.resetCategoryConfirm).not.toBeNull();
+    handleSettingsModalToken(state, keyToken('enter'));
+
+    // After confirm the gate should be cleared and runtime.model should
+    // have been overwritten by syncRuntimeAfterSettingReset.
+    expect(modal.resetCategoryConfirm).toBeNull();
+    // provider.model is included in provider category — runtime must now reflect
+    // the schema default (not the stale value the runtime held before reset).
+    expect(fakeRuntime.model).toBe(String(providerModelDefault));
+    expect(fakeRuntime.model).not.toBe(staleModel);
+  });
+
   // ─── No confirm pending: gate returns inactive, normal dispatch continues ──
 
   test('without armed confirm, normal keys still dispatch normally', () => {

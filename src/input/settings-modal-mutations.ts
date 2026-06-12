@@ -55,6 +55,9 @@ export function applySettingValue({
   refreshGroups: () => void;
 }): ApplyValueResult {
   const previousValue = configManager.get(key);
+  // REQUIRES_RESTART: SDK's ConfigSetting has no requiresRestart field yet (see
+  // goodvibes-sdk HANDOFF-FROM-TUI-SESSION-20260611.md §Item 8). Until it does,
+  // we detect restart-triggering keys by sub-key name heuristic below.
   const isRestartKey = ['host', 'port', 'hostMode', 'enabled'].includes(key.split('.')[1] ?? '');
 
   try {
