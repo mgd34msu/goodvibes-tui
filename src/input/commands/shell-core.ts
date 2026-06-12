@@ -3,7 +3,9 @@ import type { SelectionItem } from '../selection-modal.ts';
 import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers';
 import { REASONING_BUDGET_MAP } from '@pellux/goodvibes-sdk/platform/providers';
 import { executeWriteQuit } from './quit-shared.ts';
-import { compactConversation, requireKeybindingsManager, requireProviderApi } from './runtime-services.ts';
+import { compactConversation, requireKeybindingsManager, requireProviderApi, requireSessionMemoryStore } from './runtime-services.ts';
+import { buildCompactionPreview, buildCompactionAfterNotice, buildPinUsageText, buildPinSuccessText } from '../../renderer/compaction-preview.ts';
+import { buildCompactionHistoryText } from '../../renderer/compaction-history-modal.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
@@ -204,9 +206,57 @@ export function registerShellCoreCommands(registry: CommandRegistry): void {
     aliases: [],
     description: 'Summarize conversation to free context window',
     async handler(_args, ctx) {
-      ctx.print('Compacting conversation...');
-      await compactConversation(ctx);
-      ctx.print('Conversation compacted.');
+      const messages = ctx.session.conversationManager.getMessagesForLLM();
+      // contextWindow is not on CommandContext; preview shows message/token counts
+      // without the capacity-% clause (still honest; no fabricated value).
+      const contextWindow = 0;
+      const memStore = ctx.session.sessionMemoryStore;
+      const pinnedMemoryCount = memStore ? memStore.list().length : 0;
+      // Pre-compact preview: honest estimate, clearly labelled.
+      const preview = buildCompactionPreview({ messages, contextWindow, pinnedMemoryCount, trigger: 'manual' });
+      ctx.print(preview);
+      const event = await compactConversation(ctx);
+      if (event) {
+        // Post-compact notice: uses real CompactionEvent figures.
+        ctx.print(buildCompactionAfterNotice({ event, pinnedMemoryCount }));
+      } else {
+        ctx.print('[Context] Compact complete.');
+      }
+      ctx.renderRequest();
+    },
+  });
+
+  registry.register({
+    name: 'compact-history',
+    aliases: ['compaction-history'],
+    description: 'Show compaction history for this session',
+    handler(_args, ctx) {
+      ctx.print(buildCompactionHistoryText());
+      ctx.renderRequest();
+    },
+  });
+
+  registry.register({
+    name: 'pin',
+    aliases: [],
+    description: 'Pin text to session memory (survives compaction)',
+    usage: '<text>',
+    argsHint: '<text to preserve>',
+    handler(args, ctx) {
+      const text = args.join(' ').trim();
+      if (!text) {
+        ctx.print(buildPinUsageText());
+        ctx.renderRequest();
+        return;
+      }
+      const memStore = requireSessionMemoryStore(ctx);
+      const id = memStore.add(text);
+      if (!id) {
+        ctx.print('[Pin] Nothing pinned — text was blank.');
+      } else {
+        const count = memStore.list().length;
+        ctx.print(buildPinSuccessText(id, text, count));
+      }
       ctx.renderRequest();
     },
   });
