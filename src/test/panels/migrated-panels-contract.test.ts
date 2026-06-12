@@ -43,7 +43,7 @@ import { WorktreePanel } from '../../panels/worktree-panel.ts';
 import { ControlPlanePanel } from '../../panels/control-plane-panel.ts';
 import { ProviderAccountsPanel } from '../../panels/provider-accounts-panel.ts';
 import { MemoryPanel } from '../../panels/memory-panel.ts';
-import { KnowledgePanel } from '../../panels/knowledge-panel.ts';
+import { KnowledgeGraphPanel } from '../../panels/knowledge-graph-panel.ts';
 import { MarketplacePanel } from '../../panels/marketplace-panel.ts';
 import { SystemMessagesPanel } from '../../panels/system-messages-panel.ts';
 import { OrchestrationPanel } from '../../panels/orchestration-panel.ts';
@@ -439,9 +439,10 @@ const PANELS: PanelEntry[] = [
     label: 'MemoryPanel (no records)',
     factory: () => new MemoryPanel(EMPTY_MEMORY_REGISTRY),
   },
+  // TASK-040: KnowledgeGraphPanel is now the registered 'knowledge' panel id
   {
-    label: 'KnowledgePanel (no records)',
-    factory: () => new KnowledgePanel(EMPTY_MEMORY_REGISTRY),
+    label: 'KnowledgeGraphPanel (graph front-door)',
+    factory: () => new KnowledgeGraphPanel(),
   },
   {
     label: 'MarketplacePanel (no paths)',
@@ -532,7 +533,7 @@ describe('TasksPanel — BasePanel contract', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Wave B1 — Populated-records contract (MemoryPanel, KnowledgePanel, MarketplacePanel)
+// Wave B1 — Populated-records contract (MemoryPanel, MarketplacePanel)
 // ---------------------------------------------------------------------------
 
 const SAMPLE_MEMORY_RECORD = {
@@ -604,53 +605,6 @@ describe('MemoryPanel — populated records', () => {
     const idx = (panel as unknown as { selectedIndex: number }).selectedIndex;
     expect(idx).toBeGreaterThanOrEqual(0);
     expect(idx).toBeLessThan(2);
-  });
-});
-
-describe('KnowledgePanel — populated records', () => {
-  const makeRegistry = () => ({
-    search: (_opts?: unknown) => [SAMPLE_MEMORY_RECORD, SAMPLE_MEMORY_RECORD_2],
-    subscribe: (_cb: () => void) => () => {},
-    reviewQueue: (_limit: number) => [SAMPLE_MEMORY_RECORD],
-    review: (_id: string, _opts: unknown) => {},
-  } as unknown as import('@pellux/goodvibes-sdk/platform/state').MemoryRegistry);
-
-  test('render() returns exactly H lines with records', () => {
-    const panel = new KnowledgePanel(makeRegistry());
-    const lines = panel.render(W, H);
-    expect(lines).toHaveLength(H);
-  });
-
-  test('every rendered line has exactly W cells with records', () => {
-    const panel = new KnowledgePanel(makeRegistry());
-    const lines = panel.render(W, H);
-    for (const line of lines) {
-      expect(line).toHaveLength(W);
-    }
-  });
-
-  test('renderItem: rendered output contains record summary substring', () => {
-    const panel = new KnowledgePanel(makeRegistry());
-    const lines = panel.render(W, H);
-    const rendered = lines.map((l) => l.map((c) => c.char).join('')).join('\n');
-    expect(rendered).toContain('Use Bun runtime');
-  });
-
-  test('clampSelection: selectedIndex stays in bounds after render', () => {
-    const panel = new KnowledgePanel(makeRegistry());
-    panel.render(W, H);
-    const idx = (panel as unknown as { selectedIndex: number }).selectedIndex;
-    expect(idx).toBeGreaterThanOrEqual(0);
-  });
-
-  test('selected-record footer appears when record selected', () => {
-    const panel = new KnowledgePanel(makeRegistry());
-    // Force selectedIndex to 0 so first record is selected
-    (panel as unknown as { selectedIndex: number }).selectedIndex = 0;
-    const lines = panel.render(W, H);
-    const rendered = lines.map((l) => l.map((c) => c.char).join('')).join('\n');
-    // Footer shows review keys hint
-    expect(rendered).toContain('r/Enter');
   });
 });
 

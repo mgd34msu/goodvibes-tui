@@ -328,6 +328,43 @@ describe('operator surfaces gate', () => {
     expect(opened).toBe(true);
   });
 
+  test('project-memory open subcommand calls openMemoryPanel, not openKnowledgePanel', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const pmem = registry.get('project-memory');
+    expect(pmem).toBeDefined();
+
+    let memoryOpened = false;
+    let knowledgeOpened = false;
+    await pmem!.handler(['open'], makeCommandContext('sess-pmem-panel', {
+      openMemoryPanel: () => {
+        memoryOpened = true;
+      },
+      openKnowledgePanel: () => {
+        knowledgeOpened = true;
+      },
+    }));
+
+    expect(memoryOpened).toBe(true);
+    expect(knowledgeOpened).toBe(false);
+  });
+
+  test('project-memory alias pmem open subcommand calls openMemoryPanel', async () => {
+    const registry = new CommandRegistry();
+    registerBuiltinCommands(registry);
+    const pmem = registry.get('pmem');
+    expect(pmem).toBeDefined();
+
+    let memoryOpened = false;
+    await pmem!.handler(['open'], makeCommandContext('sess-pmem-alias-panel', {
+      openMemoryPanel: () => {
+        memoryOpened = true;
+      },
+    }));
+
+    expect(memoryOpened).toBe(true);
+  });
+
   test('remote command opens the remote panel', async () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);

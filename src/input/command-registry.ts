@@ -118,6 +118,7 @@ export interface CommandShellUiOpeners {
   openMcpWorkspace?: () => void;
   openSecurityPanel?: () => void;
   openKnowledgePanel?: () => void;
+  openMemoryPanel?: () => void;
   openRemotePanel?: () => void;
   openSubscriptionPanel?: () => void;
   /**
