@@ -29,6 +29,11 @@ export interface ShellFooterBuildOptions {
   readonly composerStatus?: string;
   readonly composerFlags?: readonly string[];
   readonly composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote';
+  /**
+   * Passive context pressure hint from buildContextStatusHint.
+   * Rendered as a dim informational line above the prompt when non-null.
+   */
+  readonly contextStatusHint?: string | null;
 }
 
 export interface ShellFooterBuildResult {
@@ -84,5 +89,10 @@ export function buildShellFooter(
   );
   const inputBoxRows = Math.max(1, options.promptLineCount) + 2;
   lines.splice(inputBoxRows, 0, ...processIndicator);
+  // Passive context status hint — rendered as a dim informational line before the prompt.
+  if (options.contextStatusHint) {
+    const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: '#64748b' });
+    lines.unshift(hintLine);
+  }
   return { lines, height: lines.length };
 }
