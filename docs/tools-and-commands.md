@@ -166,9 +166,24 @@ Some command families are especially important when you are running GoodVibes as
 
 For QEMU guest bootstrapping details, including the generated image script and guest runtime package list, see [QEMU sandbox bootstrapping](qemu-sandbox.md).
 
+## CLI session lifecycle flags
+
+Three flags control which session is active when the TUI opens:
+
+- `--continue` — resumes the most recently active session for the current working directory (reads the last-session pointer file; does nothing when no pointer exists).
+- `--resume [id]`, `-r [id]` — resumes a specific session by id. When the id is omitted, resolves via the same last-session pointer as `--continue`.
+- `--fork [id]` — forks a session into a new branch. Bare `--fork` forks the session already active when the TUI starts; `--fork <id>` resumes the named session first, then forks it.
+
+Only one of `--continue`, `--resume`, and `--fork` may be used in a single invocation. Combining them is an error.
+
+When a session is resumed, the TUI prints `Resumed session: <id>` with message count and model to the transcript. When a session is forked, it prints `Session forked:` with the new id, fork name, source title, and message count.
+
+See [CLI flags reference](cli-flags.md) for full syntax, inline-value forms, and examples.
+
 ## Related docs
 
 - [Getting started](getting-started.md)
+- [CLI flags reference](cli-flags.md)
 - [/share — session export](share-command.md)
 - [Deployment and services](deployment-and-services.md)
 - [Channels, remote runtime, and API](channels-remote-and-api.md)
