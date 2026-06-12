@@ -4,6 +4,33 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.21.0] — 2026-06-12
+
+First release of the best-in-class program: a full UX-first review of the codebase followed by WRFC-gated remediation (every change passed independent review at 10/10 before commit).
+
+### Features
+- Added masked password entry for local auth: argv-less `/auth local add-user` and `rotate-password` open a bullet-masked prompt (Esc aborts, secrets never echo); input history scrubs cleartext secrets on add, recall, and load.
+- Added ranked fuzzy search to the settings modal (`/` searches keys, labels, and descriptions across categories) with a search header, result-derived context pane, and two-stage Escape.
+- Added a unified confirm/cancel contract across all panels (Enter/y confirms, Esc/n cancels) and a delete-key policy: destructive clears confirm first, end-anchored filters treat Delete as a no-op.
+- Added wizard progress persistence with resume-on-startup; masked fields are stripped before any write, and the onboarding marker is now written on apply success instead of wizard open.
+- Added user-facing turn errors (classified plain-language transcript lines with typed navigation), a stream-stall watchdog, live tool-call rows, TTFT, and honest token-speed in the status line.
+- Added a theme token layer (frozen dark/light palettes replacing hardcoded hex), terminal capability gating with color downsampling, and DEC 2026 synced output.
+- Added WRFC chain snapshots with schema-gated reads, a pre-router message buffer, agent guard traces, and panel controls (cancel, resume, stalled badge).
+- Added a gist upload target for `/share` (`--upload/--copy/--open`) and a shell-completions generator.
+
+### Fixes
+- Fixed the context meter: one SDK token estimator everywhere (three bespoke walkers removed), compact threshold drawn on the meter with color switching, and a percent-to-fraction config conversion that previously kept the marker off-screen.
+- Fixed agent cost and token reporting: real per-agent usage replaces the fabricated tool-call estimate, with a single canonical model-pricing table shared by the cost tracker and share/export.
+- Fixed onboarding state durability: atomic writes with fsync, an advisory lockfile around acknowledgement writes, and version-gated reads that quarantine corrupt or unrecognized files.
+- Fixed session/team memory queue front-doors to be genuinely scope-filtered with honest descriptions.
+- Fixed the always-speak toggle: `/voice` and `/tts on|off` are one switch, labeled correctly, with the no-player notice firing once per session.
+- Fixed dead panel keys (arrows/Enter/Escape), the crash-recovery footgun, command-registry duplicate shadowing, and the Backspace/Delete distinction under Ink.
+- Removed the project/plan auto-detection coordinator: plain text like "plan me a feature" reaches the model untouched; `/plan` and work plans are unchanged.
+
+### Internal
+- Coverage gate enforced in CI (functions >= 71%, lines >= 75%) with an empirical guard against the bun bunfig coverage override; eval gate fails closed in CI with a committed baseline; release script runs the full gate suite.
+- Concurrency-safe test temp dirs; 14 import cycles eliminated; main.ts and handler god-files split under the 800-line architecture limit; program docs (review, plan, roadmap, 14 subsystem dives) committed.
+
 ## [0.20.3] — 2026-05-13
 
 ### Fixes
