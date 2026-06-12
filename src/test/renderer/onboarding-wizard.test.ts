@@ -48,7 +48,7 @@ describe('renderOnboardingWizard', () => {
     const text = linesToText(renderOnboardingWizard(wizard, 100, 14)).join('\n');
 
     expect(text).toContain('more above');
-    expect(text).toContain('Apply & Continue');
+    expect(text).toContain('Next section');
   });
 
   test('separates the apply-and-continue action from normal fields', () => {
@@ -56,7 +56,7 @@ describe('renderOnboardingWizard', () => {
     wizard.open('new');
 
     const textLines = linesToText(renderOnboardingWizard(wizard, 188, 42));
-    const applyLine = textLines.findIndex((line) => line.includes('Apply & Continue To Next Section'));
+    const applyLine = textLines.findIndex((line) => line.includes('Next section'));
     let previousActionLine = -1;
     for (let index = 0; index < applyLine; index += 1) {
       if (textLines[index]?.includes('Use Local TUI Only (No Servers)')) previousActionLine = index;

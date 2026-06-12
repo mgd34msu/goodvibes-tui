@@ -1,6 +1,6 @@
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import type { OnboardingWizardMode } from './onboarding/onboarding-wizard.ts';
-import { collectOnboardingSnapshot, readOnboardingCheckMarker, writeOnboardingCheckMarker } from '../runtime/onboarding/index.ts';
+import { collectOnboardingSnapshot } from '../runtime/onboarding/index.ts';
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, handleBlockCopy, handleBlockRerun, handleBlockSave, handleBlockToggle, handleBookmark, handleClipboardPaste, handleCopy, handleCtrlC, handleDiffApply, registerPaste } from './handler-content-actions.ts';
 import { clearModalStack, handleEscape, modalOpened } from './handler-modal-stack.ts';
 import { openOnboardingWizardState, type OpenOnboardingWizardOptions } from './handler-ui-state.ts';
@@ -11,19 +11,6 @@ export function openOnboardingWizardForHandler(
     modeOrOptions: OnboardingWizardMode | OpenOnboardingWizardOptions = 'new',
   ): void {
     const options = typeof modeOrOptions === 'string' ? { mode: modeOrOptions } : modeOrOptions;
-    const userMarker = readOnboardingCheckMarker(handler.uiServices.environment.shellPaths, 'user');
-    if (!userMarker.payload) {
-      try {
-        writeOnboardingCheckMarker(handler.uiServices.environment.shellPaths, {
-          scope: 'user',
-          source: 'wizard',
-          mode: options.mode ?? 'new',
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        handler.commandContext?.print?.(`Onboarding check marker could not be written: ${message}`);
-      }
-    }
     if (!handler.modalStack.includes('onboarding')) handler.modalOpened('onboarding');
     handler.clearOnboardingModelPickerCancelState();
     openOnboardingWizardState(handler.onboardingWizard, options);
