@@ -1,0 +1,22 @@
+{
+  "_comment": "Perf baseline — generated 2026-06-12 on linux-x64. Ratchet rule: budgets set at ceil(measured_max × 2) for startup, and at the stated SLO for frame timing (p95 ≤ 16ms). Regenerate with: bun run perf:baseline",
+  "startup": {
+    "renderer_load_ms": {
+      "measured_max_ms": 148,
+      "budget_ms": 300,
+      "note": "Time to cold-import compositor + buffer + grid from a fresh bun process. Budget = ceil(max × 2), rounded to 50ms. Ratchet: tighten budget when measured_max drops below budget/2."
+    }
+  },
+  "frame": {
+    "composite_p95_ms": {
+      "measured_ms": 3.77,
+      "budget_ms": 16,
+      "note": "Compositor.composite() p95 over 200 full-repaint frames, 80×24 synthetic content. Budget = stated frame SLO (16ms). Ratchet: tighten when measured drops below budget/3."
+    },
+    "composite_p99_ms": {
+      "measured_ms": 26.88,
+      "budget_ms": 110,
+      "note": "Compositor.composite() p99 over 200 frames. Budget = ceil(measured × 4), rounded to 10ms. Ratchet: tighten when measured drops below budget/3."
+    }
+  }
+}
