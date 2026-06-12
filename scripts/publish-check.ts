@@ -32,6 +32,28 @@ for (const binTarget of [pkg.bin.goodvibes, pkg.bin['goodvibes-daemon']]) {
   }
 }
 
+const registry = process.env.GOODVIBES_PUBLISH_REGISTRY?.trim() || 'https://registry.npmjs.org';
+const skipAuthCheck = process.env.GOODVIBES_SKIP_NPM_AUTH_CHECK === '1';
+
+// Registry auth probe — verifies the npm token is valid for the target registry
+// before binaries and the GitHub release are produced. Skippable via
+// GOODVIBES_SKIP_NPM_AUTH_CHECK=1 for offline / dry-run contexts.
+// GitHub Packages whoami is unreliable; that job uses post-publish npm view instead.
+const isGitHubPackages = registry.includes('npm.pkg.github.com');
+if (!skipAuthCheck && !isGitHubPackages) {
+  try {
+    execSync(`npm whoami --registry ${registry}`, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
+    });
+  } catch {
+    throw new Error(
+      `npm token invalid for ${registry} — refresh NPM_TOKEN / npm login\n` +
+        '  (set GOODVIBES_SKIP_NPM_AUTH_CHECK=1 to bypass in offline/dry-run contexts)',
+    );
+  }
+}
+
 const packRaw = execSync('npm pack --json --dry-run', {
   cwd: root,
   encoding: 'utf8',
