@@ -244,6 +244,8 @@ type SettingsRouteState = {
     setSearchQuery: (query: string) => void;
     /** Clear search query, results, and exit search mode. */
     clearSearch: () => void;
+    /** Cancel inline edit without saving (mirrors SettingsModal.cancelEdit). */
+    cancelEdit: () => void;
     pendingModelPickerTarget: import('./model-picker.ts').ModelPickerTarget | null;
     pendingProviderModelPickerTarget?: import('./model-picker.ts').ModelPickerTarget | null;
     pendingSettingsPickerAction?: 'tts-provider' | 'tts-voice' | null;
@@ -314,6 +316,14 @@ export function handleSettingsModalToken(state: SettingsRouteState, token: Input
   if (token.type === 'key') {
     const focusPane = state.settingsModal.focusPane ?? 'settings';
     if (token.logicalName === 'escape') {
+      // Cancel inline edit first — mirrors the global contract in handler-modal-stack.ts.
+      // Must check editingMode before searchFocused: the reachable path
+      // search→Enter(string/number)→Esc must cancel the edit, NOT just clear search.
+      if (state.settingsModal.editingMode) {
+        state.settingsModal.cancelEdit();
+        state.requestRender();
+        return true;
+      }
       // Two-stage escape: if in search mode, first Esc exits search (clearSearch),
       // second Esc closes the modal.
       if (state.settingsModal.searchFocused) {
