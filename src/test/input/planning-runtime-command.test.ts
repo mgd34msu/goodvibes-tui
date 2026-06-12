@@ -7,6 +7,7 @@ import {
 } from '@pellux/goodvibes-sdk/platform/knowledge';
 import { CommandRegistry, type CommandContext } from '../../input/command-registry.ts';
 import { registerPlanningRuntimeCommands } from '../../input/commands/planning-runtime.ts';
+import { handlePromptTextToken, handlePromptKeyToken, type KeyRouteState } from '../../input/handler-feed-routes.ts';
 
 function makeState(input: Partial<ProjectPlanningState> = {}): ProjectPlanningState {
   const now = Date.now();
@@ -105,6 +106,88 @@ function makeContext(service: ProjectPlanningService, out: string[], opened: str
     exit: () => {},
   } as unknown as CommandContext;
 }
+
+// Regression: after coordinator removal, text containing 'plan' must reach orchestrator.handleUserInput.
+// This test drives plan-keyword text through the real input routing layer (handlePromptTextToken +
+// handlePromptKeyToken) and asserts that submitInput on CommandContext is called with the original text.
+describe('submitInput plan-keyword regression (coordinator removed)', () => {
+  test('text containing "plan" flows through real input routing and reaches submitInput unchanged', () => {
+    const submitCalls: string[] = [];
+
+    const commandContext = {
+      submitInput: (text: string) => { submitCalls.push(text); },
+    } as unknown as CommandContext;
+
+    // Build initial prompt state (empty, not in command mode)
+    const textState = {
+      prompt: '',
+      cursorPos: 0,
+      commandMode: false,
+      nextPasteId: 1,
+      nextImageId: 1,
+      pasteRegistry: new Map<string, string>(),
+      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
+      inputHistory: null,
+      commandRegistry: new CommandRegistry(),
+      commandContext,
+      autocomplete: null,
+      filePicker: { open: () => {} },
+      modalOpened: () => {},
+      saveUndoState: () => {},
+      ensureInputCursorVisible: () => {},
+      registerPaste: (content: string) => content,
+      requestRender: () => {},
+    };
+
+    // Simulate user typing 'plan me a new feature' through the text route
+    const afterText = handlePromptTextToken(textState, { type: 'text', value: 'plan me a new feature' });
+
+    // Build key route state using the updated prompt from text routing
+    const keyState = {
+      prompt: afterText.prompt,
+      cursorPos: afterText.cursorPos,
+      inputScrollTop: 0,
+      commandMode: afterText.commandMode,
+      contentWidth: 80,
+      maxInputRows: 10,
+      inputHistory: null,
+      indicatorFocused: false,
+      conversationManager: null,
+      commandContext,
+      autocomplete: null,
+      blockActionsMenu: { open: () => {} },
+      processModal: { open: () => {} },
+      modalOpened: () => {},
+      saveUndoState: () => {},
+      ensureInputCursorVisible: () => {},
+      getWrappedPromptInfo: () => ({
+        wrappedLines: [afterText.prompt],
+        segments: [],
+        cursorWrappedLine: 0,
+        cursorCol: afterText.cursorPos,
+        visibleLines: [afterText.prompt],
+        visibleCursorLine: 0,
+        visibleCursorCol: afterText.cursorPos,
+      }),
+      moveCursorVertical: () => false,
+      handlePathCompletion: () => false,
+      handleBlockToggle: () => {},
+      findMarkerAtPos: () => null,
+      cleanupMarkerRegistry: () => {},
+      expandPrompt: (text: string) => text,
+      scroll: () => {},
+      exitApp: () => {},
+      requestRender: () => {},
+    };
+
+    // Simulate pressing Enter — drives through real key routing which calls submitInput
+    handlePromptKeyToken(keyState, { type: 'key', name: 'enter', logicalName: 'enter', ctrl: false, shift: false, meta: false });
+
+    // Plan-keyword text must reach submitInput unchanged — not swallowed, not intercepted
+    expect(submitCalls).toHaveLength(1);
+    expect(submitCalls[0]).toBe('plan me a new feature');
+  });
+});
 
 describe('/plan project planning runtime command', () => {
   test('seeding a plan persists the first SDK next question as open state', async () => {
