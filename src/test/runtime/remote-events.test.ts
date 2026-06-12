@@ -111,7 +111,12 @@ describe('remote runtime transport events', () => {
       envelopes.push(envelope);
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    // Reconnect + message delivery run through chained setTimeout(0) ticks;
+    // a fixed sleep races under load. Poll with a hard deadline instead.
+    const deadline = Date.now() + 2000;
+    while (envelopes.length < 1 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
     disconnect?.();
 
     expect(FakeWebSocket.instances).toHaveLength(2);
