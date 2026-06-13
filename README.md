@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.20.3-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.24.0-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -1616,7 +1616,7 @@ src/
 ├── renderer/ / panels/   — raw ANSI UI, overlays, control rooms, panel workspaces
 ├── input/                — slash commands, keybindings, prompt/input routing
 ├── providers/            — native providers, compat providers, discovery, synthetic failover, model catalog
-├── tools/                — built-in tool implementations and schemas
+├── tools/                — re-export of SDK-provided built-in tools plus TUI-local tool guards
 ├── agents/               — in-process agents, WRFC, archetypes, worktrees, reports
 ├── automation/           — schedules, routes, job persistence, managed automation runtime
 ├── channels/ / adapters/ — channel plugins, reply pipeline, delivery routing, webhook adapters
@@ -1664,7 +1664,7 @@ bun run dev
 bun test
 ```
 
-6,900+ tests across contract, security, release gate, runtime, renderer, panel, integration, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
+8,500+ tests across contract, security, release gate, runtime, renderer, panel, integration, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
 
 ### Build standalone binary
 
@@ -1675,8 +1675,7 @@ bun run build
 
 ### Project structure conventions
 
-- Tool implementations live in `src/tools/<name>/index.ts`
-- Tool parameter schemas live in `src/tools/<name>/schema.ts`
+- Built-in tool implementations and parameter schemas live in the extracted `@pellux/goodvibes-sdk` package (`@pellux/goodvibes-sdk/platform/tools`); `src/tools/` re-exports `registerAllTools` and keeps only TUI-local pieces such as the WRFC agent guard
 - Tests mirror the source tree under `src/test/`
 - Project runtime data such as sessions, hooks, MCP config, artifacts, and local state lives under `.goodvibes/` in the working directory
 - Global TUI settings live in `~/.goodvibes/tui/settings.json`; project overrides live in `.goodvibes/tui/settings.json`
