@@ -4,6 +4,15 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.24.1] — 2026-06-17
+
+### Changes
+- 1813b36d test: align suite with goodvibes-sdk 0.33.38 behavior
+- 0ee3b615 chore: bump @pellux/goodvibes-sdk to 0.33.38
+- 32a813e4 chore: untrack internal deep-dive notes (moved to .goodvibes/deepdives/)
+- c73a3fcb docs: refresh README — version badge 0.24.0, SDK-extracted tools, test count
+- ca262d5e docs: handoff updated — 0.24.0 confirmed live on npm
+
 ## [0.24.0] — 2026-06-12
 
 Fourth best-in-class program release: the engineering-task backlog closed, crash durability made real, and the composer brought to readline parity. Every change passed independent review before commit.
