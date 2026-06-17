@@ -100,24 +100,31 @@ describe('extractPassedFromText', () => {
     expect(extractPassedFromText('The code has many issues.', 5, 7)).toBe(false);
   });
 
-  test('returns true when score < threshold but text contains "passed"', () => {
-    expect(extractPassedFromText('The review passed all criteria.', 5, 7)).toBe(true);
+  // As of goodvibes-sdk 0.33.37+, pass/fail is score-driven: prose can no
+  // longer lift a sub-threshold score to a pass. Explicit fail language
+  // remains a safety override that can force a fail even when score clears.
+  test('sub-threshold score fails even when text contains "passed"', () => {
+    expect(extractPassedFromText('The review passed all criteria.', 5, 7)).toBe(false);
   });
 
-  test('returns true when text contains "approved"', () => {
-    expect(extractPassedFromText('Approved for merge.', 5, 7)).toBe(true);
+  test('sub-threshold score fails even when text contains "approved"', () => {
+    expect(extractPassedFromText('Approved for merge.', 5, 7)).toBe(false);
   });
 
-  test('returns false when text contains both "passed" and "failed"', () => {
-    expect(extractPassedFromText('The test passed but the review failed.', 5, 7)).toBe(false);
+  test('sub-threshold score fails for "passes" variant', () => {
+    expect(extractPassedFromText('This passes the quality bar.', 5, 7)).toBe(false);
   });
 
-  test('returns true for "passes" variant', () => {
-    expect(extractPassedFromText('This passes the quality bar.', 5, 7)).toBe(true);
+  test('sub-threshold score fails for "passing" variant', () => {
+    expect(extractPassedFromText('Currently passing minimum threshold.', 5, 7)).toBe(false);
   });
 
-  test('returns true for "passing" variant', () => {
-    expect(extractPassedFromText('Currently passing minimum threshold.', 5, 7)).toBe(true);
+  test('passing score with explicit fail language is overridden to fail', () => {
+    expect(extractPassedFromText('The review failed on critical issues.', 8, 7)).toBe(false);
+  });
+
+  test('passing score with mixed pass/fail language stays a pass', () => {
+    expect(extractPassedFromText('The test passed but one check failed.', 8, 7)).toBe(true);
   });
 
   test('exact threshold boundary: score === threshold returns true', () => {
