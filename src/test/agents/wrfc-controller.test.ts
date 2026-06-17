@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, spyOn, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
@@ -194,6 +194,13 @@ describe('WrfcController', () => {
     runtimeBus = new RuntimeEventBus();
     emitSpy = spyOn(runtimeBus, 'emit');
     projectRoot = mkdtempSync(join(tmpdir(), 'goodvibes-wrfc-test-'));
+    // The SDK (>=0.33.38) runs verifyEngineerClaims, corroborating the engineer/fixer
+    // report's claimed files against disk under projectRoot. Our engineer mock claims
+    // filesModified: ['src/test.ts'], so materialize that file to make the claim
+    // verifiable (kind='files_verified'); otherwise claimsVerified===false mechanically
+    // blocks the pass (MIN-4) and chains land in 'fixing' instead of 'passed'.
+    mkdirSync(join(projectRoot, 'src'), { recursive: true });
+    writeFileSync(join(projectRoot, 'src', 'test.ts'), 'export const placeholder = true;\n');
     agentStore = new Map();
     spawnInputs = [];
     spawnedRecords = [];
