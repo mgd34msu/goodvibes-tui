@@ -4,6 +4,14 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.26.0] — 2026-06-21
+
+### Changes
+- 8852a2f4 chore: set version baseline to published 0.25.0
+- 981adb46 feat(daemon): implement operator-method handlers against goodvibes-sdk 0.34.0 contracts
+- 97f74119 chore: upgrade @pellux/goodvibes-sdk to 0.34.0
+- 6de2627a revert: remove daemon control-plane buildout — duplicated @pellux/goodvibes-sdk 0.34.0
+
 ## [0.24.1] — 2026-06-17
 
 ### Changes
