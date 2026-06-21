@@ -44,9 +44,10 @@ function getBunSpawn(): BunSpawn {
   return globalBun.spawn as unknown as BunSpawn;
 }
 
-async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<string> {
-  if (!stream) return '';
-  const reader = stream.getReader();
+type StreamReader = ReadableStreamDefaultReader<Uint8Array>;
+
+async function drainReader(reader: StreamReader | null): Promise<string> {
+  if (!reader) return '';
   const decoder = new TextDecoder();
   let out = '';
   try {
@@ -56,8 +57,14 @@ async function readStream(stream: ReadableStream<Uint8Array> | null): Promise<st
       if (value) out += decoder.decode(value, { stream: true });
     }
     out += decoder.decode();
+  } catch {
+    // Reader was cancelled (e.g. on timeout) or errored — return what we have.
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch {
+      // lock already released
+    }
   }
   return out;
 }
@@ -90,6 +97,15 @@ export async function runProcess(options: RunOptions): Promise<RunResult> {
     await child.stdin.end();
   }
 
+  // Begin draining stdout/stderr immediately, holding the readers so we can
+  // cancel them on timeout. Otherwise a killed shell whose grandchild (e.g.
+  // `sh -c 'sleep 5'`) inherited the stdout pipe keeps the stream open until
+  // that orphan exits, blocking us for the child's full lifetime.
+  const stdoutReader = child.stdout ? child.stdout.getReader() : null;
+  const stderrReader = child.stderr ? child.stderr.getReader() : null;
+  const stdoutPromise = drainReader(stdoutReader);
+  const stderrPromise = drainReader(stderrReader);
+
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<void>((resolve) => {
@@ -104,13 +120,27 @@ export async function runProcess(options: RunOptions): Promise<RunResult> {
     }, options.timeoutMs);
   });
 
-  const [stdout, stderr, exitCode] = await Promise.all([
-    readStream(child.stdout),
-    readStream(child.stderr),
-    Promise.race([child.exited, timeoutPromise.then(() => child.exited)]),
-  ]);
-
+  // Resolve as soon as the process exits OR the timeout fires.
+  await Promise.race([child.exited, timeoutPromise]);
   if (timer) clearTimeout(timer);
+
+  if (timedOut) {
+    // Unblock the drains in case an orphaned grandchild still holds the pipe.
+    try {
+      await stdoutReader?.cancel();
+    } catch {
+      // already closed
+    }
+    try {
+      await stderrReader?.cancel();
+    } catch {
+      // already closed
+    }
+  }
+
+  const stdout = await stdoutPromise;
+  const stderr = await stderrPromise;
+  const exitCode = await child.exited.catch(() => -1);
 
   return {
     exitCode: typeof exitCode === 'number' ? exitCode : -1,
