@@ -7,15 +7,6 @@ import { AutomationDeliveryManager, AutomationManager, AutomationRouteStore } fr
 import { ChannelPluginRegistry, ChannelPolicyManager, RouteBindingManager, SurfaceRegistry } from '@pellux/goodvibes-sdk/platform/channels';
 import { ChannelDeliveryRouter } from '@pellux/goodvibes-sdk/platform/channels';
 import { ApprovalBroker, GatewayMethodCatalog, SharedSessionBroker } from '@pellux/goodvibes-sdk/platform/control-plane';
-import {
-  registerDaemonOperatorSurfaces,
-  type DaemonOperatorSurfaces,
-} from '../daemon/operator/surfaces.ts';
-import type {
-  OperatorContext,
-  OperatorLogger,
-} from '../daemon/operator/index.ts';
-import { attachRemoteInvokeRoute } from '../daemon/remote/index.ts';
 import { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import { ArtifactStore } from '@pellux/goodvibes-sdk/platform/artifacts';
 import {
@@ -178,7 +169,6 @@ export interface RuntimeServices {
   readonly deliveryManager: AutomationDeliveryManager;
   readonly automationManager: AutomationManager;
   readonly gatewayMethods: GatewayMethodCatalog;
-  readonly operatorSurfaces: DaemonOperatorSurfaces;
   readonly artifactStore: ArtifactStore;
   readonly knowledgeService: KnowledgeService;
   readonly agentKnowledgeService: KnowledgeService;
@@ -281,30 +271,6 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     globalHome: homeDirectory,
     configManager,
   });
-  // Wire the daemon operator surfaces (routing / triaged inbox / drafts /
-  // calendar / email / remote) against the shared gateway-method catalog. Each
-  // surface initializes its stores lazily, so this stays synchronous.
-  const operatorLogger: OperatorLogger = {
-    info: (msg, meta) => console.info(`[operator] ${msg}`, meta ?? ''),
-    warn: (msg, meta) => console.warn(`[operator] ${msg}`, meta ?? ''),
-    error: (msg, meta) => console.error(`[operator] ${msg}`, meta ?? ''),
-  };
-  const operatorContext: OperatorContext = {
-    catalog: gatewayMethods,
-    secrets: secretsManager,
-    configManager,
-    workingDirectory,
-    homeDirectory,
-    logger: operatorLogger,
-  };
-  const operatorSurfaces = registerDaemonOperatorSurfaces(operatorContext);
-  // Wire the remote.peers.invoke route to the remote dispatch adapter, replacing
-  // the SDK builtin stub. This is the single faithful integration point: the
-  // DaemonHttpRouter resolves POST /api/remote/peers/{peerId}/invoke to
-  // catalog.invoke('remote.peers.invoke', ...), which now reaches the
-  // Docker/SSH/cloud-terminal/local-process backends via the dispatch adapter
-  // (which enforces confirm:true + explicitUserRequest before dispatch).
-  attachRemoteInvokeRoute(gatewayMethods, operatorSurfaces.remoteDispatch);
   const subscriptionManager = new SubscriptionManager(
     shellPaths.resolveUserPath('tui', 'subscriptions.json'),
   );
@@ -657,7 +623,6 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     deliveryManager,
     automationManager,
     gatewayMethods,
-    operatorSurfaces,
     artifactStore,
     knowledgeService,
     agentKnowledgeService,
