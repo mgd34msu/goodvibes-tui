@@ -4,6 +4,12 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.25.0] — 2026-06-21
+
+### Changes
+- a8a4cd4f fix(daemon/remote): make runProcess timeout resolve promptly under orphaned children
+- c00461be feat(daemon): implement control-plane operator surfaces for channels, email, calendar, and remote execution
+
 ## [0.24.1] — 2026-06-17
 
 ### Changes
