@@ -7,6 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ModelPickerModal } from '../../input/model-picker.ts';
+import { handleModelPickerToken } from '../../input/handler-picker-routes.ts';
 import {
   type ModelDefinition,
   ProviderRegistry,
@@ -432,5 +433,115 @@ describe('ModelPickerModal — Escape from contextCap resets state', () => {
 
     // The original model object's contextWindow is untouched
     expect(local.contextWindow).toBe(4096);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ModelPickerModal — contextCapError field
+// ---------------------------------------------------------------------------
+
+describe('ModelPickerModal — contextCapError', () => {
+  let picker: ModelPickerModal;
+
+  beforeEach(() => {
+    picker = createPicker();
+  });
+
+  test('starts as null', () => {
+    expect(picker.contextCapError).toBeNull();
+  });
+
+  test('enterContextCapMode clears any prior error', () => {
+    picker.contextCapError = 'previous error';
+    picker.enterContextCapMode(makeLocalModel());
+    expect(picker.contextCapError).toBeNull();
+  });
+
+  test('close() clears contextCapError', () => {
+    picker.enterContextCapMode(makeLocalModel());
+    picker.contextCapError = 'some error';
+    picker.close();
+    expect(picker.contextCapError).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Handler — contextCap Enter with out-of-range value
+// ---------------------------------------------------------------------------
+
+describe('handleModelPickerToken — contextCap Enter with out-of-range value', () => {
+  function makeState(picker: ModelPickerModal) {
+    return {
+      modelPicker: picker,
+      modalStack: [] as string[],
+      commandContext: undefined as never,
+      getViewportHeight: () => 30,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+  }
+
+  test('out-of-range value sets contextCapError and keeps picker open', () => {
+    const picker = createPicker();
+    const local = makeLocalModel();
+    picker.openAllModels([local], local.id);
+    picker.enterContextCapMode(local);
+    // Type a value above the 10,000,000 ceiling
+    for (const d of '20000000') picker.appendContextCapChar(d);
+    expect(picker.contextCapQuery).toBe('20000000');
+
+    handleModelPickerToken(makeState(picker), {
+      type: 'key', name: 'return', logicalName: 'enter', ctrl: false, shift: false, meta: false,
+    });
+
+    expect(picker.mode).toBe('contextCap');
+    expect(picker.active).toBe(true);
+    expect(picker.contextCapError).toBe('Context cap must be 1–10,000,000');
+  });
+
+  test('zero value sets contextCapError and keeps picker open', () => {
+    const picker = createPicker();
+    const local = makeLocalModel();
+    picker.openAllModels([local], local.id);
+    picker.enterContextCapMode(local);
+    picker.appendContextCapChar('0');
+
+    handleModelPickerToken(makeState(picker), {
+      type: 'key', name: 'return', logicalName: 'enter', ctrl: false, shift: false, meta: false,
+    });
+
+    expect(picker.mode).toBe('contextCap');
+    expect(picker.contextCapError).toBe('Context cap must be 1–10,000,000');
+  });
+
+  test('valid value clears contextCapError and closes picker', () => {
+    const picker = createPicker();
+    const local = makeLocalModel();
+    picker.openAllModels([local], local.id);
+    picker.enterContextCapMode(local);
+    picker.contextCapError = 'previous error';
+    for (const d of '8192') picker.appendContextCapChar(d);
+
+    handleModelPickerToken(makeState(picker), {
+      type: 'key', name: 'return', logicalName: 'enter', ctrl: false, shift: false, meta: false,
+    });
+
+    expect(picker.active).toBe(false);
+    expect(picker.contextCapError).toBeNull();
+  });
+
+  test('empty value (no cap) closes picker without error', () => {
+    const picker = createPicker();
+    const local = makeLocalModel();
+    picker.openAllModels([local], local.id);
+    picker.enterContextCapMode(local);
+    // contextCapQuery is empty — user pressed Enter with no digits
+
+    handleModelPickerToken(makeState(picker), {
+      type: 'key', name: 'return', logicalName: 'enter', ctrl: false, shift: false, meta: false,
+    });
+
+    expect(picker.active).toBe(false);
+    expect(picker.contextCapError).toBeNull();
   });
 });

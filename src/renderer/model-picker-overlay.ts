@@ -360,6 +360,12 @@ export function renderModelPickerOverlay(
     putRowText(promptRow, layout.margin + 2, contentW, fitDisplay(`${promptLabel} ${inputDisplay}`, contentW), '#ffffff');
     lines.push(promptRow);
 
+    if (picker.contextCapError) {
+      const errRow = createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg);
+      putRowText(errRow, layout.margin + 2, contentW, fitDisplay(picker.contextCapError, contentW), '#ff6666');
+      lines.push(errRow);
+    }
+
     lines.push(createOverlayContentLine(width, layout, borderFg, DEFAULT_OVERLAY_PALETTE.bodyBg));
 
     const hintText = `Leave blank to use default (current: ${currentCtx}, source: ${provenance})`;
@@ -458,7 +464,7 @@ function getRenderCacheKey(
   } else if (picker.mode === 'effort') {
     base.push(objectId(picker.effortLevels), picker.effortLevels.join('\u001f'), picker.pendingModel?.registryKey ?? picker.pendingModel?.id ?? '');
   } else if (picker.mode === 'contextCap') {
-    base.push(picker.contextCapQuery, picker.contextCapPendingModel?.registryKey ?? picker.contextCapPendingModel?.id ?? '');
+    base.push(picker.contextCapQuery, picker.contextCapPendingModel?.registryKey ?? picker.contextCapPendingModel?.id ?? '', picker.contextCapError ?? '');
   }
 
   return base.join('\u001e');

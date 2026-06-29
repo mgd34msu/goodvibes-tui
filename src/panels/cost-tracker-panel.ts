@@ -17,7 +17,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { getPricing } from '../export/cost-utils.ts';
+import { calcSessionCost } from '../export/cost-utils.ts';
 
 // Pricing lookups are provided by ../export/cost-utils.ts (single source of truth).
 
@@ -172,8 +172,7 @@ export class CostTrackerPanel extends BasePanel {
             if (rec?.usage) {
               entry.inputTokens = rec.usage.inputTokens + (rec.usage.cacheReadTokens ?? 0) + (rec.usage.cacheWriteTokens ?? 0);
               entry.outputTokens = rec.usage.outputTokens;
-              const pricing = getPricing(rec.model ?? 'unknown');
-              entry.cost = (entry.inputTokens * pricing.input + entry.outputTokens * pricing.output) / 1_000_000;
+              entry.cost = calcSessionCost(rec.usage.inputTokens, rec.usage.outputTokens, rec.usage.cacheReadTokens ?? 0, rec.usage.cacheWriteTokens ?? 0, rec.model ?? 'unknown');
               if (rec.model && rec.model !== 'unknown') entry.model = rec.model;
             }
           }
@@ -205,9 +204,7 @@ export class CostTrackerPanel extends BasePanel {
     if (usage.model) this.sessionModel = usage.model;
 
     // Record cost delta for sparkline
-    const pricing = getPricing(this.sessionModel);
-    const billableInput = usage.input + usage.cacheRead + usage.cacheWrite;
-    const totalCost = (billableInput * pricing.input + usage.output * pricing.output) / 1_000_000;
+    const totalCost = calcSessionCost(usage.input, usage.output, usage.cacheRead, usage.cacheWrite, this.sessionModel);
     const delta = Math.max(0, totalCost - this.lastSessionCost);
     this.lastSessionCost = totalCost;
     this.costHistory.push(delta);
@@ -267,9 +264,8 @@ export class CostTrackerPanel extends BasePanel {
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
 
-    const pricing = getPricing(this.sessionModel);
     const totalInputTokens = this.sessionUsage.input + this.sessionUsage.cacheRead + this.sessionUsage.cacheWrite;
-    const sessionCost = (totalInputTokens * pricing.input + this.sessionUsage.output * pricing.output) / 1_000_000;
+    const sessionCost = calcSessionCost(this.sessionUsage.input, this.sessionUsage.output, this.sessionUsage.cacheRead, this.sessionUsage.cacheWrite, this.sessionModel);
     const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;
     const sparkline = buildSparkline(this.costHistory);
     const costStr = formatCost(sessionCost);

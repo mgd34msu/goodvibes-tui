@@ -95,7 +95,7 @@ export class ConversationManager extends SdkConversationManager {
    * Message index at the time of the last clearDisplay() call.
    * rebuildHistory() renders only messages at or after this index, so the
    * display stays blank for messages added before the clear while LLM history
-   * is fully preserved. Reset to 0 on resetAll() or rebuildHistory() width change.
+   * is fully preserved. Persists until resetAll(). rebuildHistory() never resets this value.
    */
   private _displayFromMessageIndex = 0;
 
@@ -369,8 +369,6 @@ export class ConversationManager extends SdkConversationManager {
     const snapshot = this.getMessageSnapshot();
     // When _displayFromMessageIndex > 0, clearDisplay() was called. Only render
     // messages added after the clear — the pre-clear history stays off-screen.
-    // On a full rebuild (e.g. width change), reset the display-start to 0 so the
-    // user can scroll back to the full history if needed.
     const displayStart = this._displayFromMessageIndex;
     const visibleSnapshot = displayStart > 0 ? snapshot.slice(displayStart) : snapshot;
 
@@ -615,9 +613,9 @@ export class ConversationManager extends SdkConversationManager {
     // messageKindRegistry is NOT cleared here. The underlying messages array is
     // preserved by clearDisplay(); kind entries for pre-clear messages are harmless
     // because those messages are hidden by _displayFromMessageIndex and never rendered.
-    // Clearing the registry would cause kind loss for pre-clear messages that become
-    // visible again after a subsequent width-change rebuild (which resets displayStart
-    // to 0), incorrectly making operational messages navigable.
+    // Clearing the registry would cause kind loss for pre-clear messages; if
+    // resetAll() later restores displayStart to 0, those messages re-render
+    // and their kind entries must still be present to suppress navigation.
     // Advance _displayFromMessageIndex to exclude all current messages from display.
     // rebuildHistory() will only render messages added AFTER this point.
     this._displayFromMessageIndex = this.getMessageSnapshot().length;

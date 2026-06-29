@@ -1,6 +1,6 @@
 import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
-import { openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils';
+import { openExternalUrl, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
@@ -258,7 +258,7 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
           deleteWizardProgress(handler.uiServices.environment.shellPaths);
         } catch (markerError) {
           handler.commandContext?.print?.(
-            `Onboarding check marker could not be written: ${markerError instanceof Error ? markerError.message : String(markerError)}`,
+            `Onboarding check marker could not be written: ${summarizeError(markerError)}`,
           );
         }
         const activationVerification = await handler.restartOnboardingExternalServicesIfNeeded(request);

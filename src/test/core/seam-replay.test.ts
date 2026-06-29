@@ -132,6 +132,32 @@ describe('seam-replay: seam 1 — CLI/command resume (replayJournalForSession)',
     expect(conversation.getMessageCount()).toBe(0);
     expect(persistCalled).toBe(false);
   });
+
+  test('conversation title survives journal replay (regression for finding #18)', () => {
+    // Regression: fromJSON({ messages }) with no title field was wiping conversation.title.
+    const sessionId = 'seam1-title-survival';
+    const homeDirectory = tmpDir;
+    const snapshotTimestamp = Date.now() - 5000;
+
+    writeJournalWithRecords(journalPathFor(homeDirectory, sessionId), sessionId, 1, snapshotTimestamp);
+
+    const conversation = new ConversationManager(() => 80);
+    // Pre-load a title as session-workflow.ts would after fromJSON.
+    conversation.fromJSON({ messages: [] as never[], title: 'My Important Session', titleSource: 'user' });
+    expect(conversation.title).toBe('My Important Session');
+
+    const result = replayJournalForSession({
+      homeDirectory,
+      sessionId,
+      snapshotTimestamp,
+      conversation,
+      persistSnapshot: () => {},
+    });
+
+    expect(result.replayed).toBeGreaterThan(0);
+    // Title must survive the replay — it is not stored in journal records.
+    expect(conversation.title).toBe('My Important Session');
+  });
 });
 
 // ── Seam 2: Ctrl+R crash recovery (blocking-input.ts path) ───────────────────
