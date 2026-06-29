@@ -107,9 +107,14 @@ export class GitPanel extends BasePanel {
   private loading = true;
   private error: string | null = null;
 
-  constructor(workingDirectory: string) {
+  constructor(workingDirectory: string, private readonly requestRender: () => void = () => {}) {
     super('git', 'Git', 'G', 'development');
     this.workingDirectory = workingDirectory;
+  }
+
+  private _markDirtyAndRender(): void {
+    this.markDirty();
+    this.requestRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -179,7 +184,7 @@ export class GitPanel extends BasePanel {
       this.error = null;
       this.rebuildItems();
       // Do not clear expandedDiff during auto-refresh — only clear on explicit user action
-      this.markDirty();
+      this._markDirtyAndRender();
     } catch (err) {
       const msg = summarizeError(err);
       // If the failure is because this directory isn't a git repo, auto-initialise
@@ -203,7 +208,7 @@ export class GitPanel extends BasePanel {
       }
       this.loading = false;
       logger.debug('GitPanel: refresh failed', { error: this.error });
-      this.markDirty();
+      this._markDirtyAndRender();
     }
   }
 

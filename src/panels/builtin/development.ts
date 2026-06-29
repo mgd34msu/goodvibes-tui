@@ -18,7 +18,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'G',
     category: 'development',
     description: 'Git status, staged/unstaged changes, and recent commits',
-    factory: () => new GitPanel(requireUiServices(deps).environment.workingDirectory),
+    factory: () => new GitPanel(requireUiServices(deps).environment.workingDirectory, deps.requestRender),
   });
 
   manager.registerType({
@@ -52,6 +52,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
         agentMessageBus: ui.agents.agentMessageBus,
         workingDirectory: ui.environment.workingDirectory,
         cancelAgent: (agentId: string) => ui.agents.agentManager.cancel(agentId),
+        requestRender: deps.requestRender,
       });
     },
   });

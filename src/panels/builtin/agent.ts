@@ -63,6 +63,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       return new AgentLogsPanel(ui.events.agents, {
         agentManager: ui.agents.agentManager,
         workingDirectory: ui.environment.workingDirectory,
+        requestRender: deps.requestRender,
       });
     },
   });
@@ -115,6 +116,6 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'Z',
     category: 'agent',
     description: 'Scheduled agent tasks: cron expressions, next run time, enable/disable, run history',
-    factory: () => new SchedulePanel(requireAutomationManager(deps)),
+    factory: () => new SchedulePanel(requireAutomationManager(deps), deps.requestRender),
   });
 }

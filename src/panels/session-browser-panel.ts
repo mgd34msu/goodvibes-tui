@@ -97,8 +97,14 @@ export class SessionBrowserPanel extends BasePanel {
   constructor(
     private readonly sessionManager: SessionBrowserQuery,
     private resumeSession?: (sessionId: string) => void,
+    private readonly requestRender: () => void = () => {},
   ) {
     super('sessions', 'Sessions', 'H', 'session');
+  }
+
+  private _markDirtyAndRender(): void {
+    this.markDirty();
+    this.requestRender();
   }
 
   override onActivate(): void {
@@ -329,11 +335,11 @@ export class SessionBrowserPanel extends BasePanel {
       this.sessions = this.sessionManager.list();
       this._filter();
       this.loadError = '';
-      this.markDirty();
+      this._markDirtyAndRender();
     } catch (e) {
       logger.debug('SessionBrowserPanel._load failed', { error: summarizeError(e) });
       this.loadError = 'Failed to load sessions';
-      this.markDirty();
+      this._markDirtyAndRender();
     }
   }
 
