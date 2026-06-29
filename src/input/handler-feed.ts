@@ -296,6 +296,19 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         context.cursorPos = shortcutState.cursorPos;
         context.commandMode = shortcutState.commandMode;
         context.panelFocused = shortcutState.panelFocused;
+        if (context.commandMode) {
+          if (!context.prompt.startsWith('/')) {
+            context.commandMode = false;
+            context.autocomplete?.reset();
+          } else {
+            const q = context.prompt.slice(1);
+            if (q.indexOf(' ') === -1) {
+              context.autocomplete?.update(q);
+            } else {
+              context.autocomplete?.reset();
+            }
+          }
+        }
         continue;
       }
     }

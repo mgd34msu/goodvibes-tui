@@ -345,7 +345,7 @@ export function handleHistorySearchToken(state: HistorySearchRouteState, token: 
     if (token.logicalName === 'escape' || (token.ctrl && token.logicalName === 'g')) {
       state.prompt = state.historySearch.cancel();
       state.cursorPos = state.prompt.length;
-    } else if (token.logicalName === 'return') {
+    } else if (token.logicalName === 'enter' || token.logicalName === 'return') {
       state.prompt = state.historySearch.accept();
       state.cursorPos = state.prompt.length;
     } else if (token.logicalName === 'backspace') {
@@ -353,6 +353,10 @@ export function handleHistorySearchToken(state: HistorySearchRouteState, token: 
     } else if (token.ctrl && token.logicalName === 'r') {
       state.historySearch.stepOlder();
     } else if (token.ctrl && token.logicalName === 's') {
+      state.historySearch.stepNewer();
+    } else if (token.logicalName === 'up') {
+      state.historySearch.stepOlder();
+    } else if (token.logicalName === 'down') {
       state.historySearch.stepNewer();
     }
   }
