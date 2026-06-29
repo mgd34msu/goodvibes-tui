@@ -117,7 +117,7 @@ export function handleCommandModeToken(state: CommandModeRouteState, token: Inpu
     return true;
   }
 
-  return token.logicalName !== 'left' && token.logicalName !== 'right';
+  return token.logicalName !== 'left' && token.logicalName !== 'right' && token.logicalName !== 'home' && token.logicalName !== 'end';
 }
 
 function withPanelFocusSync(context: CommandContext, state: CommandModeRouteState): CommandContext {
