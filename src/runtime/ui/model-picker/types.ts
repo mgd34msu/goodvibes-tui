@@ -97,6 +97,10 @@ export interface ModelPickerEntry {
    * - `fallback`       — default constant (no config or API source)
    * - `openrouter`     — sourced from OpenRouter model data (built-in catalog models)
    * - `registry`       — static value in the built-in model registry
+   *
+   * For built-in catalog models this badge is best-effort: when the OpenRouter
+   * resolved value equals the static registry value the source shows 'registry'
+   * even if OpenRouter was consulted at runtime.
    */
   readonly contextWindowSource:
     | 'provider_api'

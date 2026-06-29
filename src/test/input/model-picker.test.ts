@@ -427,6 +427,15 @@ describe('ModelPickerModal', () => {
       picker.openAllModels(ALL_MODELS, 'free-1');
       expect(picker.searchFocused).toBe(false);
     });
+
+    test('restores availableOnly to true after showModelsForProvider set it to false', () => {
+      // showModelsForProvider sets availableOnly=false so synthetic models are visible.
+      // A subsequent /model invocation (openAllModels) must reset the default back to true.
+      picker.showModelsForProvider(ALL_MODELS, 'provA');
+      expect(picker.availableOnly).toBe(false);
+      picker.openAllModels(ALL_MODELS, 'free-1');
+      expect(picker.availableOnly).toBe(true);
+    });
   });
 
   // ── showModelsForProvider ───────────────────────────────────────────────────

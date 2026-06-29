@@ -109,8 +109,9 @@ async function handleCompare(args: string[], context: CommandContext): Promise<v
 // ── /eval gate ────────────────────────────────────────────────────────────────
 
 async function handleGate(args: string[], context: CommandContext): Promise<void> {
-  const suiteName = args[0];
-  const baselineFile = args[1] ?? '.goodvibes/eval/baseline.json';
+  const positionals = args.filter(a => !a.startsWith('--'));
+  const suiteName = positionals[0];
+  const baselineFile = positionals[1] ?? '.goodvibes/eval/baseline.json';
   const saveFlag = args.includes('--save-baseline');
   const projectRoot = requireShellPaths(context).workingDirectory;
 
@@ -141,7 +142,7 @@ async function handleGate(args: string[], context: CommandContext): Promise<void
   context.print(formatGateResult(gate));
 
   if (saveFlag || !baseline) {
-    const label = args[0] ?? 'latest';
+    const label = positionals[0] ?? 'latest';
     const newBaseline = captureBaseline(label, [fresh]);
     try {
       await writeBaseline(baselineFile, newBaseline, projectRoot);

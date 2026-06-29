@@ -239,4 +239,38 @@ describe('modal search focus routing', () => {
     handleModelPickerToken(state, { type: 'text', value: 'b' });
     expect(picker.benchmarkSort).toBe('composite');
   });
+
+  test('model picker appends space to search query when searchFocused — no context-cap hijack', () => {
+    // Regression test for #21: space while searchFocused must go to query even
+    // when the highlighted item is a local model.
+    const local: Parameters<typeof ModelPickerModal.prototype.openAllModels>[0][0] = {
+      id: 'local-1',
+      provider: 'ollama',
+      registryKey: 'ollama:local-1',
+      displayName: 'Local 1',
+      description: '',
+      capabilities: { toolCalling: false, codeEditing: false, reasoning: false, multimodal: false },
+      contextWindow: 4096,
+      contextWindowProvenance: 'provider_api',
+      selectable: true,
+      tier: 'free',
+    };
+    const picker = new ModelPickerModal(harness.favoritesStore, harness.benchmarkStore, harness.providerRegistry);
+    picker.openAllModels([local], local.id!);
+    picker.searchFocused = true;
+
+    const state = {
+      modelPicker: picker,
+      modalStack: [] as string[],
+      commandContext: undefined as never,
+      getViewportHeight: () => 30,
+      requestRender: () => {},
+      handleEscape: () => {},
+    };
+
+    handleModelPickerToken(state, { type: 'text', value: ' ' });
+    // Space must go to query, not trigger contextCap mode
+    expect(picker.mode).toBe('model');
+    expect(picker.query).toBe(' ');
+  });
 });

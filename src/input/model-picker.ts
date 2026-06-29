@@ -92,6 +92,8 @@ export class ModelPickerModal {
   public contextCapPendingModel: ModelDefinition | null = null;
   /** Current input string in contextCap mode. */
   public contextCapQuery = '';
+  /** Validation error from the last context cap commit (e.g. out-of-range value); null when no error. */
+  public contextCapError: string | null = null;
 
   // ── Search / filter ─────────────────────────────────────────────────────────────────────────────
   /** Current search query string (empty = no filter). */
@@ -215,6 +217,7 @@ export class ModelPickerModal {
     this.previousMode = 'model';
     this.contextCapPendingModel = model;
     this.contextCapQuery = '';
+    this.contextCapError = null;
     this.mode = 'contextCap';
   }
 
@@ -245,6 +248,7 @@ export class ModelPickerModal {
     this.query = '';
     this.categoryFilter = 'all';
     this.capabilityFilter = 'none';
+    this.availableOnly = true;
     const filtered = this.getFilteredModels();
     const idx = filtered.findIndex(m => m.id === currentModelId);
     this.selectedIndex = idx >= 0 ? idx : 0;
@@ -310,6 +314,7 @@ export class ModelPickerModal {
     this.pendingModel = null;
     this.contextCapPendingModel = null;
     this.contextCapQuery = '';
+    this.contextCapError = null;
     this.searchFocused = false;
     this.selectedIndex = 0;
     this.scrollOffset = 0;

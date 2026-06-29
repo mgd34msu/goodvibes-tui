@@ -154,6 +154,9 @@ export function enrichModelEntries(
     // Determine source: custom/local providers carry provenance on ModelDefinition;
     // for catalog models, if getContextWindowForModel returned more than the
     // static contextWindow it came from OpenRouter, else it's the registry value.
+    // NOTE: This is a best-effort heuristic. When the OpenRouter live value equals
+    // the static registry value the badge shows 'registry' even though OpenRouter
+    // was consulted. The contextWindow value itself is always accurate.
     let contextWindowSource: ModelPickerEntry['contextWindowSource'];
     if (model.contextWindowProvenance) {
       contextWindowSource = model.contextWindowProvenance;

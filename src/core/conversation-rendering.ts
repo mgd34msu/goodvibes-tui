@@ -320,10 +320,10 @@ export function appendConversationMessages(
 
   for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
     const message = messages[msgIdx];
-    messageLineRegistry[msgIdx] = context.history.getLineCount();
     // absoluteIdx aligns the slice-relative loop counter with the absolute
-    // message index used as the key in messageKindRegistry.
+    // message index used as the key in messageKindRegistry and transcript events.
     const absoluteIdx = msgIndexOffset + msgIdx;
+    messageLineRegistry[absoluteIdx] = context.history.getLineCount();
     if (message.role === 'user') {
       renderConversationUserMessage(context, message, width);
     } else if (message.role === 'assistant') {

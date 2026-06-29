@@ -109,6 +109,8 @@ export function replayJournalIntoConversation(
 
     conversation.fromJSON({
       messages: replayedMessages as never[],
+      title: conversation.title,
+      titleSource: conversation.getTitleSource(),
     });
     conversation.rebuildHistory();
 

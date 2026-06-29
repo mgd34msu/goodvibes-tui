@@ -99,6 +99,7 @@ export function stateColor(state: WrfcState): string {
     case 'gating':
     case 'awaiting_gates':  return C.gating;
     case 'committing':      return C.committing;
+    case 'integrating':     return C.committing;
     default:                return C.pending;
   }
 }
@@ -111,6 +112,7 @@ export function stateLabel(state: WrfcState): string {
     case 'gating':         return 'GATE';
     case 'awaiting_gates': return 'WAIT';
     case 'committing':     return 'COMMIT';
+    case 'integrating':    return 'INTG';
     case 'passed':         return 'PASS';
     case 'failed':         return 'FAIL';
     default:               return 'PEND';
@@ -331,7 +333,9 @@ export class WrfcPanel extends BasePanel {
             buildPanelLine(width, (() => {
               const total = selectedChain.constraints.length;
               const findings = selectedChain.reviewerReport?.constraintFindings;
-              const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
+              const satisfied = selectedChain.constraints.filter(c =>
+                findings?.find(f => f.constraintId === c.id)?.satisfied === true
+              ).length;
               const satFg = !findings || findings.length === 0
                 ? DEFAULT_PANEL_PALETTE.dim
                 : satisfied === total ? C.constraintSat : C.constraintUnsat;
@@ -494,14 +498,19 @@ export class WrfcPanel extends BasePanel {
       if (chain.constraints.length > 0 && !isSelected) {
         const total = chain.constraints.length;
         const findings = chain.reviewerReport?.constraintFindings;
-        const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
-        // Determine badge colour
+        const satisfied = chain.constraints.filter(c =>
+          findings?.find(f => f.constraintId === c.id)?.satisfied === true
+        ).length;
+        // Determine badge colour (per-constraint, mirroring constraintStatusMarker logic)
         let badgeFg: string;
         if (!findings || findings.length === 0) {
           badgeFg = C.constraintUnv;
         } else if (satisfied === total) {
           badgeFg = C.constraintSat;
-        } else if (findings.some(f => !f.satisfied)) {
+        } else if (chain.constraints.some(c => {
+          const f = findings.find(ff => ff.constraintId === c.id);
+          return f !== undefined && !f.satisfied;
+        })) {
           badgeFg = C.constraintUnsat;
         } else {
           badgeFg = C.reviewing; // some unverified but none failed

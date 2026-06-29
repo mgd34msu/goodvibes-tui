@@ -11,6 +11,7 @@ import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { handleConfirmInput, renderConfirmLines, type ConfirmState } from './confirm-state.ts';
 import { isTextBackspace, isTextForwardDelete } from '../input/delete-key-policy.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   buildBodyText,
   buildEmptyState,
@@ -512,7 +513,7 @@ export class ProjectPlanningPanel extends BasePanel {
         };
         this.clearError();
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
       } finally {
         this.loading = false;
         this.markDirty();

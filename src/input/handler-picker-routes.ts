@@ -98,13 +98,22 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
         if (capModel) {
           const rawInput = state.modelPicker.contextCapQuery.trim();
           const parsedCap = rawInput.length > 0 ? parseInt(rawInput, 10) : null;
-          const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
-          const effort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
-          const handled = state.onModelPickerCommit?.() ?? false;
-          if (!handled) state.commandContext?.completeModelSelection?.({ model: capModel, effort, contextCap: validCap, target: state.modelPicker.target });
+          if (parsedCap !== null && (parsedCap <= 0 || parsedCap > 10_000_000)) {
+            // Non-empty but out of valid range — surface notice; keep picker open for correction.
+            state.modelPicker.contextCapError = 'Context cap must be 1–10,000,000';
+          } else {
+            state.modelPicker.contextCapError = null;
+            const validCap = parsedCap !== null && parsedCap > 0 && parsedCap <= 10_000_000 ? parsedCap : null;
+            const effort = state.commandContext?.session.runtime.reasoningEffort ?? 'medium';
+            const handled = state.onModelPickerCommit?.() ?? false;
+            if (!handled) state.commandContext?.completeModelSelection?.({ model: capModel, effort, contextCap: validCap, target: state.modelPicker.target });
+            state.modelPicker.close();
+            if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
+          }
+        } else {
+          state.modelPicker.close();
+          if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
         }
-        state.modelPicker.close();
-        if (state.modalStack[state.modalStack.length - 1] === 'modelPicker') state.modalStack.pop();
       }
     } else if (token.logicalName === 'up') {
       if (state.modelPicker.focusPane === 'targets') {
@@ -158,14 +167,10 @@ export function handleModelPickerToken(state: ModelPickerRouteState, token: Inpu
     if (state.modelPicker.mode === 'contextCap') {
       if (token.value.length === 1) state.modelPicker.appendContextCapChar(token.value);
     } else if ((state.modelPicker.mode === 'model' || state.modelPicker.mode === 'provider') && state.modelPicker.searchFocused) {
+      // When search is focused every printable char — including space — goes to the query.
+      // The space=context-cap shortcut remains active only in the non-search branch below.
       const ch = token.value;
-      if (ch === ' ' && state.modelPicker.mode === 'model') {
-        const selected = state.modelPicker.getSelected();
-        if (selected && state.modelPicker.isLocalModel(selected)) state.modelPicker.enterContextCapMode(selected);
-        else if (ch.length === 1 && ch >= ' ') state.modelPicker.appendChar(ch);
-      } else if (ch.length === 1 && ch >= ' ') {
-        state.modelPicker.appendChar(ch);
-      }
+      if (ch.length === 1 && ch >= ' ') state.modelPicker.appendChar(ch);
     } else if (token.value === ' ' && state.modelPicker.mode === 'model') {
       const selected = state.modelPicker.getSelected();
       if (selected && state.modelPicker.isLocalModel(selected)) state.modelPicker.enterContextCapMode(selected);
