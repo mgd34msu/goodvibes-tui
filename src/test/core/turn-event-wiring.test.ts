@@ -98,6 +98,7 @@ function makeMinimalOptions(
     },
     providerRegistry: {
       getCurrentModel: () => ({ contextWindow: 200_000 }),
+      getContextWindowForModel: (m: { contextWindow: number }) => m.contextWindow,
     },
     systemMessageRouter: {
       high: () => {},
