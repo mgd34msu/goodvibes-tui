@@ -240,7 +240,9 @@ async function main() {
     render();
   };
 
+  let exiting = false;
   const exitApp = (): void => {
+    if (exiting) return; exiting = true;
     stopSpokenOutputForExit?.();
     unsubs.forEach(fn => fn());
     const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
@@ -737,6 +739,19 @@ async function main() {
   stdin.resume();
   stdin.setEncoding('utf8');
   allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE));
+
+  // Terminal restore safety net: returns the terminal to a usable state on
+  // any exit path that bypasses exitApp (crash, SIGTERM, SIGHUP, process.exit).
+  const restoreTerminal = (): void => {
+    try {
+      allowTerminalWrite(() => stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + (cli.flags.noAltScreen ? '' : ALT_SCREEN_EXIT)));
+    } catch { /* crash-safe */ }
+    try { stdin.setRawMode(false); } catch { /* crash-safe */ }
+  };
+  process.on('uncaughtException', (err) => { logger.error('uncaughtException', { error: summarizeError(err) }); restoreTerminal(); process.exit(1); });
+  process.on('exit', restoreTerminal);
+  process.on('SIGTERM', () => exitApp());
+  process.on('SIGHUP', () => exitApp());
 
   applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, render });
 
