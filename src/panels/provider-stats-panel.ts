@@ -12,6 +12,7 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
+import { formatLatencyMs } from '../utils/format-duration.ts';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -351,10 +352,7 @@ export class ProviderStatsPanel extends BasePanel {
   }
 
   private _fmtMs(ms: number): string {
-    if (ms <= 0) return 'n/a';
-    if (ms >= 10000) return `${(ms / 1000).toFixed(1)}s`;
-    if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`;
-    return `${Math.round(ms)}ms`;
+    return formatLatencyMs(ms);
   }
 
   private _latencyColor(ms: number): string {

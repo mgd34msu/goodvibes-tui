@@ -14,6 +14,8 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
+import { computeContextUsage } from '../core/context-usage.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,7 +53,6 @@ const C = {
 
 // Warning thresholds for context window usage
 const WARN_YELLOW = 0.70;
-const WARN_RED = 0.90;
 
 // Maximum turns to keep in per-turn history
 const MAX_TURN_HISTORY = 10;
@@ -62,9 +63,7 @@ const MAX_TURN_HISTORY = 10;
 
 /** Format a token count: up to 9999 shown as-is, then 10.0k, 1.2M, etc. */
 function fmtTok(n: number): string {
-  if (n < 10_000) return String(n);
-  if (n < 1_000_000) return (n / 1000).toFixed(1) + 'k';
-  return (n / 1_000_000).toFixed(2) + 'M';
+  return abbreviateCount(n, { guard: 10_000, decimals: 1, mDecimals: 2 });
 }
 
 // ---------------------------------------------------------------------------
@@ -365,18 +364,21 @@ export class TokenBudgetPanel extends BasePanel {
   /** Renders a full-width progress bar for context window fill. */
   private renderContextBar(width: number): Line[] {
     const lines: Line[] = [];
-    const pct = this.contextWindow > 0
-      ? Math.min(1, this.lastInputTokens / this.contextWindow)
-      : 0;
-    const pctInt = Math.round(pct * 100);
+    const { clampedRatio: pct, pct: pctInt } = computeContextUsage(this.lastInputTokens, this.contextWindow);
+
+    // Config-driven warning thresholds
+    const rawThreshold = Number(this.configManager.get('behavior.autoCompactThreshold') ?? 0);
+    const thresholdFraction = Number.isFinite(rawThreshold) && rawThreshold > 0 ? rawThreshold / 100 : 0.80;
+    const warnRed = thresholdFraction;
+    const warnYellow = Math.max(WARN_YELLOW, thresholdFraction - 0.10);
 
     // Choose color based on thresholds
     let barColor: string;
     let warnSuffix = '';
-    if (pct >= WARN_RED) {
+    if (pct >= warnRed) {
       barColor = C.warnRed;
       warnSuffix = ' ! CRITICAL';
-    } else if (pct >= WARN_YELLOW) {
+    } else if (pct >= warnYellow) {
       barColor = C.warnYellow;
       warnSuffix = ' ! HIGH';
     } else {
@@ -389,9 +391,9 @@ export class TokenBudgetPanel extends BasePanel {
     const filled = Math.round(pct * BAR_W);
     lines.push(buildStyledPanelLine(width, [
       { text: label, fg: C.label },
-      { text: '#'.repeat(filled), fg: barColor, dim: pct < WARN_YELLOW },
-      { text: '.'.repeat(Math.max(0, BAR_W - filled)), fg: C.barBg, dim: pct < WARN_YELLOW },
-      { text: suffix, fg: barColor, dim: pct < WARN_YELLOW },
+      { text: '#'.repeat(filled), fg: barColor, dim: pct < warnYellow },
+      { text: '.'.repeat(Math.max(0, BAR_W - filled)), fg: C.barBg, dim: pct < warnYellow },
+      { text: suffix, fg: barColor, dim: pct < warnYellow },
     ]));
     return lines;
   }

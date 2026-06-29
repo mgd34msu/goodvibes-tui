@@ -1,3 +1,5 @@
+import { formatDuration } from '../utils/format-duration.ts';
+
 export type AgentInspectorEntryKind = 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'session' | 'error';
 
 // ---------------------------------------------------------------------------
@@ -61,9 +63,7 @@ export function agentStatusColor(status: string, colors: Record<string, string>)
 }
 
 export function formatAgentDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60000)}m${Math.floor((ms % 60000) / 1000)}s`;
+  return formatDuration(ms);
 }
 
 export function formatAgentTime(ts: number): string {

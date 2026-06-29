@@ -5,6 +5,7 @@
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, DEFAULT_PANEL_PALETTE } from './polish.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
 import type { ProviderModelCatalogQuery, ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
 import {
   getPanelSearchFocusTransition,
@@ -259,7 +260,7 @@ export class DocsPanel extends BasePanel {
         for (const [provider, pModels] of byProvider) {
           rows.push({ kind: 'header', text: ` ${provider} (${pModels.length})`, fg: C.sectionFg, bg: C.sectionBg, bold: true });
           for (const m of pModels) {
-            const ctxK = m.contextWindow > 0 ? `${(m.contextWindow / 1000).toFixed(0)}k` : '?';
+            const ctxK = m.contextWindow > 0 ? abbreviateCount(m.contextWindow, { noM: true, decimals: 0 }) : '?';
             const caps = [m.contextWindow > 0 ? `ctx:${ctxK}` : ''].filter(Boolean).join(' ');
             rows.push({ kind: 'item', text: `  ${m.displayName}  ${caps}`, fg: C.toolFg, bg: '' });
             rows.push({ kind: 'detail', text: `    ${m.id}`, fg: C.descFg, bg: '' });

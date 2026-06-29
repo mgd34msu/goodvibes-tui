@@ -11,6 +11,7 @@ import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
 import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 
 const PALETTE = {
@@ -129,9 +130,7 @@ function stableWindow(total: number, selected: number, visible: number): { start
 
 function formatContext(value: number | undefined): string {
   if (!value) return '-';
-  if (value >= 1_000_000) return `${Math.round(value / 1_000_000)}M`;
-  if (value >= 1000) return `${Math.round(value / 1000)}k`;
-  return String(value);
+  return abbreviateCount(value, { rounding: 'round', decimals: 0 });
 }
 
 function modelKey(model: ModelDefinition): string {

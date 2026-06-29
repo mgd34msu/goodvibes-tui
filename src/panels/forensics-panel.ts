@@ -20,6 +20,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { formatShortDuration } from '../utils/format-duration.ts';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 const C = {
@@ -59,9 +60,7 @@ function fmtTime(ts: number): string {
 }
 
 function fmtDuration(ms: number | undefined): string {
-  if (ms === undefined) return '?ms';
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+  return formatShortDuration(ms);
 }
 
 function classificationColor(cls: FailureReport['classification']): string {

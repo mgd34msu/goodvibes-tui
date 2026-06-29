@@ -10,6 +10,7 @@
  *    that passes configManager has a coherent call site.
  */
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { computeContextUsage } from '../core/context-usage.ts';
 
 export type PanelGuidanceMode = 'off' | 'minimal' | 'guided';
 export type PanelSessionMaintenanceLevel = 'stable' | 'watch' | 'suggest-compact' | 'compacting' | 'needs-repair' | 'unknown';
@@ -76,8 +77,7 @@ export function evaluateSessionMaintenance(input: PanelSessionMaintenanceInput):
   const thresholdPct = Math.max(0, Number.isFinite(rawThreshold) ? rawThreshold : 0);
   const autoCompactEnabled = thresholdPct > 0;
 
-  const usagePct = input.contextWindow > 0 ? Math.min(100, Math.round((Math.max(0, input.currentTokens) / input.contextWindow) * 100)) : 0;
-  const remainingTokens = Math.max(0, input.contextWindow - input.currentTokens);
+  const { pct: usagePct, remaining: remainingTokens } = computeContextUsage(input.currentTokens, input.contextWindow);
   const sessionMemoryCount = Math.max(0, input.sessionMemoryCount ?? 0);
   const compactionCount = Math.max(0, input.session?.lineage?.filter((entry) => entry.branchReason === 'compaction').length ?? 0);
   const lastCompactedAt = input.session?.lastCompactedAt;
