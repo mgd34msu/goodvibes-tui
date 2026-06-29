@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import type { StatusState } from '../renderer/status-glyphs.ts';
 import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
 
 /**
@@ -67,6 +68,9 @@ export interface Panel {
   // Scroll input (optional)
   // Positive delta scrolls down; negative delta scrolls up.
   handleScroll?(deltaRows: number): boolean;
+
+  // Tab status (optional — for surfacing errors/state in tab bars)
+  getTabStatus?(): StatusState | undefined;
 }
 
 export interface PanelRegistration extends Pick<Panel, 'id' | 'name' | 'icon' | 'category'> {

@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { Panel, PanelRegistration, PanelCategory } from './types.ts';
+import type { StatusState } from '../renderer/status-glyphs.ts';
 
 // ---------------------------------------------------------------------------
 // Pane
@@ -20,6 +21,7 @@ export interface WorkspaceTab {
   readonly pane: 'top' | 'bottom';
   readonly active: boolean;
   readonly focused: boolean;
+  readonly status?: StatusState;
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +361,7 @@ export class PanelManager {
       pane: 'top' as const,
       active: panel.id === topActivePanelId,
       focused: panel.id === focusedPanelId,
+      status: panel.getTabStatus?.(),
     }));
     const bottomTabs = this.bottomPane.panels.map((panel) => ({
       id: panel.id,
@@ -367,6 +370,7 @@ export class PanelManager {
       pane: 'bottom' as const,
       active: panel.id === bottomActivePanelId,
       focused: panel.id === focusedPanelId,
+      status: panel.getTabStatus?.(),
     }));
     const tabs = [...topTabs, ...bottomTabs] as WorkspaceTab[];
     this._cachedWorkspaceTabs = tabs;

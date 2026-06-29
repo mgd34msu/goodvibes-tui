@@ -1,10 +1,12 @@
 import type { Line } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { buildStyledPanelLine, type StyledPanelSegment } from '../panels/polish.ts';
+import { buildStyledPanelLine, type StyledPanelSegment, DEFAULT_PANEL_PALETTE } from '../panels/polish.ts';
+import { type StatusState, STATE_GLYPHS } from './status-glyphs.ts';
 
 export interface TabStripItem {
   readonly label: string;
   readonly active?: boolean;
+  readonly status?: StatusState;
 }
 
 export interface TabStripStyle {
@@ -42,12 +44,21 @@ function makeSegments(
     const separatorWidth = getDisplayWidth('│');
     const labelText = tab.active ? `[${tab.label}]` : tab.label;
     const labelWidth = getDisplayWidth(labelText);
-    const entryWidth = separatorWidth + labelWidth + 1;
+    const glyphText = tab.status !== undefined ? STATE_GLYPHS[tab.status] : '';
+    const glyphWidth = glyphText ? getDisplayWidth(glyphText) + 1 : 0; // glyph + trailing space
+    const entryWidth = separatorWidth + glyphWidth + labelWidth + 1;
     if (used + entryWidth > maxWidth) {
       hasOverflow = true;
       break;
     }
     segments.push({ text: '│', fg: style.separatorFg });
+    if (glyphText) {
+      const glyphFg = tab.status === 'bad'  ? DEFAULT_PANEL_PALETTE.bad
+        : tab.status === 'warn' ? DEFAULT_PANEL_PALETTE.warn
+        : tab.status === 'good' ? DEFAULT_PANEL_PALETTE.good
+        : DEFAULT_PANEL_PALETTE.info;
+      segments.push({ text: `${glyphText} `, fg: glyphFg });
+    }
     segments.push({
       text: `${labelText} `,
       fg: tab.active ? style.activeFg : style.inactiveFg,

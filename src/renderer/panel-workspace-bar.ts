@@ -23,6 +23,7 @@ export function renderPanelWorkspaceBar(
       // active-and-focused (selected in the focused pane).
       label: `${tab.pane === 'bottom' ? 'v' : '^'} ${tab.icon} ${tab.name}${tab.focused ? ' ▸' : ''}`,
       active: tab.active,
+      status: tab.status,
     })),
     prefixLabel: ' PANELS ',
     suffixLabel: ` ${tabs.length} `,

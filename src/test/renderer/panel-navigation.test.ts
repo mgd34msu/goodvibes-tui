@@ -64,6 +64,41 @@ describe('panel navigation chrome', () => {
     expect(text).toContain('v W WRFC');
   });
 
+  test('tab bar renders error glyph for panel with status bad', () => {
+    const errorPanel: Panel = {
+      ...makePanel('err', 'ErrorPanel'),
+      getTabStatus() { return 'bad' as const; },
+    };
+    const line = renderPanelTabBar(
+      [makePanel('ok', 'OkPanel'), errorPanel],
+      0,
+      120,
+      true,
+    );
+    const text = lineToString(line);
+    expect(text).toContain('✕'); // bad glyph ✕
+  });
+
+  test('tab without status renders without any status glyph', () => {
+    const panels = [makePanel('a', 'Alpha'), makePanel('b', 'Beta')];
+    const line = renderPanelTabBar(panels, 0, 80, true, 'top');
+    const text = lineToString(line);
+    expect(text).not.toContain('✕'); // no bad glyph
+    expect(text).not.toContain('⚠'); // no warn glyph
+    expect(text).toContain('Alpha');
+    expect(text).toContain('Beta');
+  });
+
+  test('workspace bar shows error glyph for tab with status bad', () => {
+    const tabs: WorkspaceTab[] = [
+      { id: 'sys', name: 'System', icon: 'J', pane: 'top', active: true, focused: true, status: 'bad' },
+      { id: 'clean', name: 'Clean', icon: 'W', pane: 'bottom', active: false, focused: false },
+    ];
+    const line = renderPanelWorkspaceBar(tabs, 120, true);
+    const text = lineToString(line);
+    expect(text).toContain('✕'); // bad status glyph
+  });
+
   test('panel picker renders selected panel detail block', () => {
     const picker = new PanelPicker();
     picker.open([
