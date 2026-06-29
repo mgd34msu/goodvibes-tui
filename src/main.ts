@@ -165,6 +165,9 @@ async function main() {
 
   let scrollTop = 0;
   let scrollLocked = true;
+  // Cached maxScroll from the last render frame; used by scroll() to clamp against the
+  // same effectiveHeight the renderer computed (overlayRows-aware). Null before first render.
+  let lastMaxScroll: number | null = null;
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
   const streamMetrics: StreamMetrics = {
     startTime: 0,
@@ -191,14 +194,16 @@ async function main() {
   };
 
   const scroll = (delta: number) => {
-    const vHeight = getViewportHeight();
-    const maxScroll = Math.max(0, conversation.history.getLineCount() - vHeight);
+    // Use the renderer's last computed maxScroll (overlay-aware). Fall back to the
+    // height estimate only before the first render frame has run.
+    const maxScroll = lastMaxScroll ?? Math.max(0, conversation.history.getLineCount() - getViewportHeight());
     scrollTop = Math.max(0, Math.min(scrollTop + delta, maxScroll));
     // Re-lock if user scrolled to bottom, otherwise unlock
     scrollLocked = scrollTop >= maxScroll;
   };
 
   const scrollToEnd = (vHeight: number) => {
+    if (!scrollLocked) return;
     scrollTop = Math.max(0, conversation.history.getLineCount() - vHeight);
   };
 
@@ -588,6 +593,7 @@ async function main() {
       overlayRows,
     });
     scrollTop = conversationViewport.nextScrollTop;
+    lastMaxScroll = conversationViewport.maxScroll;
     let viewport = conversationViewport.viewport;
 
     if (orchestrator.isThinking) {
