@@ -165,6 +165,10 @@ export class TokenBudgetPanel extends BasePanel {
   }
 
   override onDeactivate(): void {
+    if (this.refreshTimer !== null) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
     super.onDeactivate();
   }
 
@@ -173,6 +177,7 @@ export class TokenBudgetPanel extends BasePanel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    super.onDestroy();
   }
 
   // ---------------------------------------------------------------------------

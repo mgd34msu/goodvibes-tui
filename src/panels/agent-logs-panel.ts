@@ -83,16 +83,18 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   override onActivate(): void {
     super.onActivate();
     this._refreshAgents();
-    this._pollCurrentAgent();
+    this._startPolling();
   }
 
   override onDeactivate(): void {
+    this._stopPolling();
     super.onDeactivate();
   }
 
   override onDestroy(): void {
     this._stopPolling();
     this._unsubscribeEvents();
+    super.onDestroy();
   }
 
   // ── Input ─────────────────────────────────────────────────────────────────
@@ -238,7 +240,10 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   // ── Private: polling ─────────────────────────────────────────────────────
 
   private _startPolling(): void {
-    if (this.pollTimer !== null) return;
+    if (this.pollTimer !== null) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
     this.pollTimer = setInterval(() => {
       if (!this.paused) {
         this._pollCurrentAgent();
