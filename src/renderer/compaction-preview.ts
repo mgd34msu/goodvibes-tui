@@ -17,6 +17,7 @@
  */
 
 import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core';
+import { computeContextUsage } from '../core/context-usage.ts';
 import type { CompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
 import type { ProviderMessage } from '@pellux/goodvibes-sdk/platform/providers';
 
@@ -58,7 +59,7 @@ export function buildCompactionPreview(opts: CompactionPreviewOptions): string {
   const tokensAfterEstimate = COMPACTION_OUTPUT_CEILING_ESTIMATE;
 
   const contextStr = contextWindow > 0
-    ? ` (${Math.round((tokensBefore / contextWindow) * 100)}% of ${fmtN(contextWindow)} context window)`
+    ? ` (${Math.round(computeContextUsage(tokensBefore, contextWindow).rawRatio * 100)}% of ${fmtN(contextWindow)} context window)`
     : '';
 
   const pinStr = pinnedMemoryCount > 0

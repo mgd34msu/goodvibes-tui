@@ -1,6 +1,7 @@
 import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth, padDisplayEnd } from '../utils/terminal-width.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
 
 // Rich spinner frames (used by progress indicators)
 export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -51,8 +52,8 @@ export function renderTokenBar(
   const lines: Line[] = [];
 
   // Stats row
-  const usedK = used >= 1000 ? `${(used / 1000).toFixed(1)}k` : String(used);
-  const maxK = max >= 1000 ? `${(max / 1000).toFixed(1)}k` : String(max);
+  const usedK = abbreviateCount(used, { noM: true });
+  const maxK = abbreviateCount(max, { noM: true });
   const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   const toolStr = toolCount > 0 ? `  tools:${toolCount}` : '';
   const statsText = ` ${model}  in:${usedK}/${maxK} (${pct}%)${toolStr}`;

@@ -1,5 +1,6 @@
 import { type Line } from '../types/grid.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
 import type { ModelPickerModal } from '../input/model-picker.ts';
 import { EFFORT_DESCRIPTIONS } from '@pellux/goodvibes-sdk/platform/providers';
 import { getQualityTier, getQualityTierFromScore } from '@pellux/goodvibes-sdk/platform/providers';
@@ -15,9 +16,7 @@ import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 
 /** Format a context window number into a short human-readable string. */
 function fmtContext(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(0)}M`;
-  if (n >= 1000) return `${Math.round(n / 1000)}k`;
-  return String(n);
+  return abbreviateCount(n, { rounding: 'round', decimals: 0 });
 }
 
 /** Title text per picker mode. */

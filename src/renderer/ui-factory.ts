@@ -6,6 +6,8 @@ import type { GitHeaderInfo } from './git-status.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
+import { computeContextUsage } from '../core/context-usage.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
@@ -30,11 +32,7 @@ function buildGitSegment(gitInfo: GitHeaderInfo): { text: string; width: number 
 
 /** Format a number: up to 999, then 1.0k, 1.0M, 1.0B, 1.0T */
 function fmtNum(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 1_000_000) return (n / 1000).toFixed(1) + 'k';
-  if (n < 1_000_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n < 1_000_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
-  return (n / 1_000_000_000_000).toFixed(1) + 'T';
+  return abbreviateCount(n, { bSuffix: true });
 }
 
 /**
@@ -312,7 +310,7 @@ export class UIFactory {
       const label = '   Context Usage: ';
       const suffix = ` [ ${fmtNum(ctxTokens)} / ${fmtNum(contextWindow)} ]`;
       const barWidth = Math.max(10, Math.min(30, width - getDisplayWidth(label) - getDisplayWidth(suffix) - 8));
-      const ctxPct = Math.min(1, ctxTokens / contextWindow);
+      const ctxPct = computeContextUsage(ctxTokens, contextWindow).clampedRatio;
       // Clamp threshold to [0..1]; undefined/0 means no threshold marker.
       const thresholdFraction = (compactThreshold !== undefined && compactThreshold > 0)
         ? Math.min(1, compactThreshold)

@@ -25,6 +25,7 @@ import type {
   EvalGateResult,
   EvalDimension,
 } from '@/runtime/index.ts';
+import { formatShortDuration } from '../utils/format-duration.ts';
 
 /**
  * Holds the latest eval run state for display in EvalPanel.
@@ -106,8 +107,7 @@ function scoreColor(score: number): string {
 }
 
 function fmtTime(ms: number): string {
-  if (ms < 1000) return `${ms.toFixed(0)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+  return formatShortDuration(ms);
 }
 
 const DIMENSION_ORDER: EvalDimension[] = ['safety', 'quality', 'latency', 'cost', 'recovery'];

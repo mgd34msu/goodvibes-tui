@@ -19,6 +19,7 @@ import {
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
 
 const C = {
   convFg: '#cc99ff',
@@ -35,8 +36,7 @@ interface ContextSnapshot {
 }
 
 function formatK(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
+  return abbreviateCount(n, { noM: true });
 }
 
 export class ContextVisualizerPanel extends BasePanel {

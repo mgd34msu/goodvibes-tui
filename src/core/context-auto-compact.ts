@@ -18,6 +18,7 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { getLastCompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
 import type { CompactionContext } from '@pellux/goodvibes-sdk/platform/core';
 import { buildCompactionPreview, buildCompactionAfterNotice } from '../renderer/compaction-preview.ts';
+import { computeContextUsage } from './context-usage.ts';
 
 export interface AutoCompactDeps {
   readonly configManager: Pick<ConfigManager, 'get'>;
@@ -49,7 +50,7 @@ export async function maybeAutoCompact(deps: AutoCompactDeps): Promise<void> {
   // Defensive guard: skip only when threshold is missing/non-positive (real config defaults to 80).
   if (thresholdPct <= 0 || deps.contextWindow <= 0) return;
 
-  const usagePct = Math.min(100, Math.round((Math.max(0, deps.lastInputTokens) / deps.contextWindow) * 100));
+  const { pct: usagePct } = computeContextUsage(deps.lastInputTokens, deps.contextWindow);
   if (usagePct < thresholdPct) return;
 
   try {

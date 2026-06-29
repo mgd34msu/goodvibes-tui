@@ -1,4 +1,5 @@
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
+import { formatLatencyMs } from '../utils/format-duration.ts';
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { ProviderAuthRouteDescriptor } from '@pellux/goodvibes-sdk/platform/providers';
@@ -115,10 +116,7 @@ function latencyColor(ms: number): string {
 }
 
 function fmtMs(ms: number): string {
-  if (ms <= 0)      return 'n/a';
-  if (ms >= 10_000) return `${(ms / 1000).toFixed(1)}s`;
-  if (ms >= 1_000)  return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
+  return formatLatencyMs(ms);
 }
 
 function fmtAgo(ts: number | undefined): string {

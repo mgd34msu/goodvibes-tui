@@ -13,6 +13,8 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { abbreviateCount } from '../utils/format-number.ts';
+import { formatLatencyMs } from '../utils/format-duration.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,16 +81,11 @@ const LATENCY_BAD_MS  = 5_000;
 // ---------------------------------------------------------------------------
 
 function fmtTok(n: number): string {
-  if (n < 10_000) return String(n);
-  if (n < 1_000_000) return (n / 1000).toFixed(1) + 'k';
-  return (n / 1_000_000).toFixed(2) + 'M';
+  return abbreviateCount(n, { guard: 10_000, decimals: 1, mDecimals: 2 });
 }
 
 function fmtMs(ms: number): string {
-  if (ms <= 0)       return 'n/a';
-  if (ms >= 10_000)  return `${(ms / 1000).toFixed(1)}s`;
-  if (ms >= 1_000)   return `${(ms / 1000).toFixed(2)}s`;
-  return `${Math.round(ms)}ms`;
+  return formatLatencyMs(ms);
 }
 
 function fmtAgo(ts: number): string {

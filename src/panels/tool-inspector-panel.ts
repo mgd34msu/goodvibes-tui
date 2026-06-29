@@ -16,6 +16,7 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
+import { formatDuration } from '../utils/format-duration.ts';
 
 const C = {
   headerBg:    '#1a1a2e',
@@ -64,9 +65,7 @@ function shortTime(ms: number): string {
 }
 
 function formatMs(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60000)}m${Math.floor((ms % 60000) / 1000)}s`;
+  return formatDuration(ms);
 }
 
 function truncateJson(val: unknown, maxLen = 120): string {
