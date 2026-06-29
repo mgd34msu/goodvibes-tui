@@ -91,6 +91,7 @@ export interface AgentInspectorPanelDeps {
   readonly workingDirectory: string;
   /** Cancel the agent by id. Uses the same orphan-free path as WRFC. Returns true if cancelled. */
   readonly cancelAgent: (agentId: string) => boolean;
+  requestRender?: () => void;
 }
 
 export class AgentInspectorPanel extends BasePanel {
@@ -115,8 +116,16 @@ export class AgentInspectorPanel extends BasePanel {
   /** Pending cancel confirmation — subject is the agent id to cancel. */
   private confirmCancel: ConfirmState<string> | null = null;
 
+  private readonly requestRender: () => void;
+
   constructor(private readonly deps: AgentInspectorPanelDeps) {
     super('inspector', 'Inspector', 'I', 'agent');
+    this.requestRender = deps.requestRender ?? (() => {});
+  }
+
+  private _markDirtyAndRender(): void {
+    this.markDirty();
+    this.requestRender();
   }
 
   // -------------------------------------------------------------------------
@@ -143,7 +152,7 @@ export class AgentInspectorPanel extends BasePanel {
     this.scrollOffset = 0;
     this.cursorIndex = 0;
     this.timeline = [];
-    this.markDirty();
+    this._markDirtyAndRender();
     this._refreshTimeline().catch((err) => { logger.debug('agent inspector timeline refresh failed', { err }); });
   }
 
@@ -534,7 +543,7 @@ export class AgentInspectorPanel extends BasePanel {
       }
       this.timeline = [];
     }
-    this.markDirty();
+    this._markDirtyAndRender();
   }
 
   private _startRefresh(): void {

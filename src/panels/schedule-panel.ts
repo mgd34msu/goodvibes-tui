@@ -90,9 +90,14 @@ export class SchedulePanel extends BasePanel {
   private refreshTimerId: ReturnType<typeof setInterval> | null = null;
   private readonly automationManager: ScheduleAutomationManager;
 
-  constructor(automationManager: ScheduleAutomationManager) {
+  constructor(automationManager: ScheduleAutomationManager, private readonly requestRender: () => void = () => {}) {
     super('schedule', 'Schedule', 'Z', 'agent');
     this.automationManager = automationManager;
+  }
+
+  private _markDirtyAndRender(): void {
+    this.markDirty();
+    this.requestRender();
   }
 
   // -------------------------------------------------------------------------
@@ -103,12 +108,12 @@ export class SchedulePanel extends BasePanel {
     super.onActivate();
     void this.automationManager.start().then(() => {
       this.rebuild();
-      this.markDirty();
+      this._markDirtyAndRender();
     });
     this.rebuild();
     this.refreshTimerId = this.registerTimer(setInterval(() => {
       this.rebuild();
-      this.markDirty();
+      this._markDirtyAndRender();
     }, 5_000));
   }
 

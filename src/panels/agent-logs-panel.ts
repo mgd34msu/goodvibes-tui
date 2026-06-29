@@ -31,6 +31,7 @@ const POLL_INTERVAL_MS = 500;
 export interface AgentLogsPanelDeps {
   readonly agentManager: Pick<AgentManager, 'list'>;
   readonly workingDirectory: string;
+  requestRender?: () => void;
 }
 
 
@@ -58,14 +59,21 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   private fsWatcher: FSWatcher | null = null;
   private unsubs: Array<() => void> = [];
   private readonly agentEvents: UiEventFeed<AgentEvent>;
+  private readonly requestRender: () => void;
 
   constructor(agentEvents: UiEventFeed<AgentEvent>, private readonly deps: AgentLogsPanelDeps) {
     super('agent-logs', 'Agents', 'A', 'agent');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.agentEvents = agentEvents;
+    this.requestRender = deps.requestRender ?? (() => {});
     this._refreshAgents();
     this._startPolling();
     this._subscribeEvents();
+  }
+
+  private _markDirtyAndRender(): void {
+    this.markDirty();
+    this.requestRender();
   }
 
   // ── ScrollableListPanel<LogEntry> contract ────────────────────────────────
@@ -287,7 +295,7 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
       if (this.autoFollow) {
         this.selectedIndex = Math.max(0, this.filteredEntries.length - 1);
       }
-      this.markDirty();
+      this._markDirtyAndRender();
     } catch {
       // Non-fatal: file may be mid-write
     }

@@ -81,7 +81,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     icon: 'H',
     category: 'session',
     description: 'Browse, search, and resume past conversation sessions',
-    factory: () => new SessionBrowserPanel(deps.sessionManager, deps.resumeSession),
+    factory: () => new SessionBrowserPanel(deps.sessionManager, deps.resumeSession, deps.requestRender),
   });
 
   manager.registerType({
