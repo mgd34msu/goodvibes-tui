@@ -49,7 +49,7 @@ export class ContextVisualizerPanel extends BasePanel {
     sessionMemoryStore: SessionMemoryQuery,
     private readonly configManager: Pick<ConfigManager, 'get'>,
     private getUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
-    private contextLimit?: number,
+    private getContextWindow?: () => number,
     private sessionReadModel?: UiReadModel<UiSessionSnapshot>,
   ) {
     super('context', 'Context', 'C', 'ai');
@@ -162,8 +162,8 @@ export class ContextVisualizerPanel extends BasePanel {
     const usage = this.getUsage?.();
     if (usage) {
       this.snapshot.input = usage.input;
-      this.snapshot.limit = this.contextLimit ?? 0;
     }
+    this.snapshot.limit = this.getContextWindow?.() ?? 0;
     this.markDirty();
   }
 

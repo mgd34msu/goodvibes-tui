@@ -46,7 +46,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       deps.sessionMemoryStore,
       deps.configManager,
       deps.getOrchestratorUsage,
-      deps.contextWindow,
+      deps.getCtxWindow ?? (() => deps.contextWindow ?? 0),
       requireUiServices(deps).readModels.session,
     ),
   });

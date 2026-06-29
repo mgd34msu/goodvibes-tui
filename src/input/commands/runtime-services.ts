@@ -246,15 +246,21 @@ export function requireProviderApi(context: CommandContext): ProviderApi {
 export async function compactConversation(context: CommandContext): Promise<CompactionEvent | null> {
   const eventBefore = getLastCompactionEvent();
   const sessionMemories = context.session.sessionMemoryStore?.list() ?? [];
+  // Read lineage counters defensively from the conversation's own tracker (the
+  // same source the auto-compact path uses) so manual and auto handoffs agree.
+  const lineage = context.session.conversationManager.getSessionLineageTracker?.() as unknown as {
+    getCompactionCount?(): number;
+    getEntries?(): string[];
+  } | undefined;
   const compactionCtx: CompactionContext = {
     messages: context.session.conversationManager.getMessagesForLLM(),
     sessionMemories,
     agents: [],
     wrfcChains: [],
     activePlan: null,
-    lineageEntries: [],
-    compactionCount: 0,
-    contextWindow: 0,
+    lineageEntries: lineage?.getEntries?.() ?? [],
+    compactionCount: lineage?.getCompactionCount?.() ?? 0,
+    contextWindow: context.provider.providerRegistry.getContextWindowForModel(context.provider.providerRegistry.getCurrentModel()),
     trigger: 'manual',
     extractionModelId: context.session.runtime.model,
     extractionProvider: context.session.runtime.provider,
