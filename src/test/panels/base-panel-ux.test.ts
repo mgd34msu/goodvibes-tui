@@ -156,4 +156,36 @@ describe('BasePanel loading spinner (I3)', () => {
     const text = line.map((c) => c.char).join('');
     expect(text).toContain('Loading...');
   });
+
+  test('renderLoadingLine with frame=0 uses time-based index (non-space glyph)', () => {
+    panel.exposeStartLoading('work');
+    const line = panel.exposeRenderLoadingLine(80, 0)!;
+    const text = line.map((c) => c.char).join('').trim();
+    // (0 || Date.now()/100) picks a time-based frame — always a non-space spinner char
+    expect(text.length).toBeGreaterThan(0);
+    expect(text[0]).not.toBe(' ');
+  });
+});
+
+describe('BasePanel tab status (PNL-2)', () => {
+  let panel: TestPanel;
+
+  beforeEach(() => {
+    panel = new TestPanel();
+  });
+
+  test('getTabStatus returns undefined by default', () => {
+    expect(panel.getTabStatus()).toBeUndefined();
+  });
+
+  test('getTabStatus returns bad when error is set', () => {
+    panel.exposeSetError('something went wrong');
+    expect(panel.getTabStatus()).toBe('bad');
+  });
+
+  test('getTabStatus returns undefined after error cleared', () => {
+    panel.exposeSetError('oops');
+    panel.exposeClearError();
+    expect(panel.getTabStatus()).toBeUndefined();
+  });
 });

@@ -46,6 +46,7 @@ export function renderPanelTabBar(
   const tabs = panels.map((panel, index) => ({
     label: `${panel.icon} ${panel.name}`,
     active: index === activeIndex,
+    status: panel.getTabStatus?.(),
   }));
 
   return renderTabStrip({

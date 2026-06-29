@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import type { StatusState } from '../renderer/status-glyphs.ts';
 import type { Panel, PanelCategory } from './types.ts';
 import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
@@ -68,6 +69,15 @@ export abstract class BasePanel implements Panel {
   /** Clear the current error. */
   protected clearError(): void {
     this.lastError = null;
+  }
+
+  /**
+   * Returns the tab status for display in tab bars.
+   * Returns 'bad' when lastError is set; undefined otherwise.
+   */
+  public getTabStatus(): StatusState | undefined {
+    if (this.lastError !== null) return 'bad';
+    return undefined;
   }
 
   /**
@@ -142,7 +152,8 @@ export abstract class BasePanel implements Panel {
    */
   protected renderLoadingLine(width: number, frame = 0): Line | null {
     if (this.loadingState !== 'loading') return null;
-    const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? SPINNER_FRAMES[0]!;
+    const idx = (frame || Math.floor(Date.now() / 100)) % SPINNER_FRAMES.length;
+    const spinner = SPINNER_FRAMES[idx] ?? SPINNER_FRAMES[0]!;
     const text = ` ${spinner} ${this._loadingLabel}`;
     return UIFactory.stringToLine(fitDisplay(text, width), width, { fg: '135', bold: true });
   }
