@@ -67,14 +67,22 @@ export async function maybeAutoCompact(deps: AutoCompactDeps): Promise<void> {
     });
     deps.systemMessageRouter.routeSystemMessage(preview, 'high');
     const eventBefore = getLastCompactionEvent();
+    // Lineage counters live on the conversation's own tracker (typed narrowly on
+    // the SDK base — widen to read them). agents/wrfcChains/activePlan stay empty:
+    // the interactive TUI compacts the main conversation only and does not fold
+    // sub-agent/plan state into the handoff summary.
+    const lineage = deps.conversation.getSessionLineageTracker?.() as unknown as {
+      getCompactionCount?(): number;
+      getEntries?(): string[];
+    } | undefined;
     const compactionCtx: CompactionContext = {
       messages,
       sessionMemories,
       agents: [],
       wrfcChains: [],
       activePlan: null,
-      lineageEntries: [],
-      compactionCount: 0,
+      lineageEntries: lineage?.getEntries?.() ?? [],
+      compactionCount: lineage?.getCompactionCount?.() ?? 0,
       contextWindow: deps.contextWindow,
       trigger: 'auto',
       extractionModelId: deps.model,

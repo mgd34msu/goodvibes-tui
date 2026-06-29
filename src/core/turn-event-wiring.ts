@@ -20,6 +20,7 @@ interface TurnOrchestrator {
 /** Minimal provider registry surface required by turn-event wiring. */
 interface TurnProviderRegistry {
   getCurrentModel(): { readonly contextWindow: number };
+  getContextWindowForModel(model: { readonly contextWindow: number }): number;
 }
 
 /** Minimal config manager surface required by turn-event wiring. */
@@ -171,7 +172,7 @@ export function wireTurnEventHandlers(
       model: runtime.model,
       provider: runtime.provider,
       lastInputTokens: orchestrator.lastInputTokens,
-      contextWindow: currentModelForCompact.contextWindow,
+      contextWindow: providerRegistry.getContextWindowForModel(currentModelForCompact),
     }).catch((err: unknown) => logger.debug('maybeAutoCompact error', { error: summarizeError(err) }));
     refreshGit();
   }));

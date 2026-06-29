@@ -187,7 +187,7 @@ async function main() {
     if (input.onboardingWizard.active) return stdout.rows || 24;
     const promptLines: number = input.getVisiblePromptLineCount(getPromptContentWidth());
     const currentModel = providerRegistry.getCurrentModel();
-    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, currentModel.contextWindow);
+    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, providerRegistry.getContextWindowForModel(currentModel));
   };
 
   const scroll = (delta: number) => {
@@ -481,7 +481,7 @@ async function main() {
     const maintenanceStatus = evaluateSessionMaintenance({
       configManager,
       currentTokens: orchestrator.lastInputTokens,
-      contextWindow: currentModel.contextWindow,
+      contextWindow: providerRegistry.getContextWindowForModel(currentModel),
       sessionMemoryCount: ctx.services.sessionMemoryStore.list().length,
     });
     const contextStatusHint = buildContextStatusHint({
@@ -505,7 +505,7 @@ async function main() {
       toolCount: toolRegistry.list().length,
       workingDir,
       provider: runtime.provider,
-      contextWindow: currentModel.contextWindow,
+      contextWindow: providerRegistry.getContextWindowForModel(currentModel),
       contextStatusHint,
       // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
       // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
@@ -628,7 +628,7 @@ async function main() {
       keybindingsManager: ctx.services.keybindingsManager,
       conversationWidth,
       viewportHeight: vHeight,
-      contextWindow: currentModel.contextWindow,
+      contextWindow: providerRegistry.getContextWindowForModel(currentModel),
     });
 
     // Panel composite data

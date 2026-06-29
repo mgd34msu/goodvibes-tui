@@ -17,12 +17,13 @@ function makeConfigManager(threshold: number): AutoCompactDeps['configManager'] 
   return { get: (key: string) => (key === 'behavior.autoCompactThreshold' ? threshold : undefined) };
 }
 
-function makeDeps(overrides: Partial<AutoCompactDeps> = {}): AutoCompactDeps & { routeCalls: string[] } {
+function makeDeps(overrides: Partial<AutoCompactDeps> = {}): AutoCompactDeps & { routeCalls: string[]; compactContexts: Array<{ compactionCount: number; lineageEntries: string[] }> } {
   const routeCalls: string[] = [];
-  const compactFn = mock(async () => {});
+  const compactContexts: Array<{ compactionCount: number; lineageEntries: string[] }> = [];
+  const compactFn = mock(async (...args: unknown[]) => { compactContexts.push(args[4] as { compactionCount: number; lineageEntries: string[] }); });
   return {
     configManager: makeConfigManager(80),
-    conversation: { compact: compactFn, getMessagesForLLM: () => [], getSessionMemoryStore: () => null } as unknown as AutoCompactDeps['conversation'],
+    conversation: { compact: compactFn, getMessagesForLLM: () => [], getSessionMemoryStore: () => null, getSessionLineageTracker: () => ({ getCompactionCount: () => 3, getEntries: () => ['lineage-1', 'lineage-2', 'lineage-3'] }) } as unknown as AutoCompactDeps['conversation'],
     providerRegistry: {} as AutoCompactDeps['providerRegistry'],
     systemMessageRouter: {
       routeSystemMessage: (msg: string) => { routeCalls.push(msg); },
@@ -32,6 +33,7 @@ function makeDeps(overrides: Partial<AutoCompactDeps> = {}): AutoCompactDeps & {
     lastInputTokens: 85_000,
     contextWindow: 100_000,
     routeCalls,
+    compactContexts,
     ...overrides,
   };
 }
@@ -71,6 +73,9 @@ describe('maybeAutoCompact', () => {
     expect(deps.routeCalls.some((m) => m.includes('Auto-compact'))).toBe(true);
     // After notice (low priority) should confirm completion
     expect(deps.routeCalls.some((m) => m.includes('complete'))).toBe(true);
+    // Real lineage counters flow into the CompactionContext (not hardcoded 0/[]).
+    expect(deps.compactContexts[0]?.compactionCount).toBe(3);
+    expect(deps.compactContexts[0]?.lineageEntries).toEqual(['lineage-1', 'lineage-2', 'lineage-3']);
   });
 
   test('posts error notice and does not throw when compact fails', async () => {
