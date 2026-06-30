@@ -7,8 +7,10 @@ import {
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
+  buildSectionHeader,
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
@@ -200,6 +202,8 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
 
     // Jobs quick view
     if (jobs.length > 0) {
+      const enabledJobs = jobs.filter((job) => job.enabled).length;
+      footerLines.push(buildSectionHeader(width, `Jobs (${enabledJobs} enabled / ${jobs.length})`, C));
       footerLines.push(
         ...jobs.slice(0, 6).map((job) => buildPanelLine(width, [
           [' ', C.label],
@@ -209,7 +213,18 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
         ])),
       );
     }
-    footerLines.push(buildPanelLine(width, [['  Up/Down move through runs', C.dim]]));
+    footerLines.push(
+      this.filterActive
+        ? buildKeyboardHints(width, [
+            { keys: 'type', label: 'filter runs' },
+            { keys: 'Enter', label: 'apply' },
+            { keys: 'Esc', label: 'clear' },
+          ], C)
+        : buildKeyboardHints(width, [
+            { keys: 'Up/Down', label: 'select run' },
+            { keys: '/', label: 'filter' },
+          ], C),
+    );
 
     return this.renderList(width, height, {
       title: 'Automation Control',

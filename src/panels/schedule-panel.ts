@@ -7,6 +7,7 @@ import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationScheduleDefinition } from '@pellux/goodvibes-sdk/platform/automation';
 import {
   buildEmptyState,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
   extendPalette,
@@ -222,14 +223,19 @@ export class SchedulePanel extends BasePanel {
             lines: buildEmptyState(
               width,
               ' No scheduled tasks',
-              'Use /schedule add to create a recurring task. Scheduled runs and history will appear here.',
-              [],
+              'Create a recurring task and its next-run timing, run history, and enablement state will appear here.',
+              [
+                { command: '/schedule add cron 0 * * * * repo sweep', summary: 'create a recurring cron task' },
+                { command: '/schedule list', summary: 'inspect scheduled tasks from the shell' },
+              ],
               DEFAULT_PANEL_PALETTE,
             ),
           },
         ],
         footerLines: [
-          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' toggle', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' run now', DEFAULT_PANEL_PALETTE.dim], ['   R', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+          buildKeyboardHints(width, [
+            { keys: '/schedule add', label: 'create a task' },
+          ], DEFAULT_PANEL_PALETTE),
         ],
         palette: DEFAULT_PANEL_PALETTE,
       });
@@ -237,6 +243,7 @@ export class SchedulePanel extends BasePanel {
 
     const taskItems = this.items.filter((item): item is Extract<ViewItem, { kind: 'task' }> => item.kind === 'task');
     this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, taskItems.length - 1));
+    const dueSoon = tasks.filter((task: AutomationJob) => typeof task.nextRunAt === 'number').length;
     const summarySection: PanelWorkspaceSection = {
       title: 'Summary',
       lines: [
@@ -245,14 +252,28 @@ export class SchedulePanel extends BasePanel {
           [String(tasks.length), DEFAULT_PANEL_PALETTE.value],
           ['   Enabled ', DEFAULT_PANEL_PALETTE.label],
           [String(enabled), enabled > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
+          ['   Paused ', DEFAULT_PANEL_PALETTE.label],
+          [String(tasks.length - enabled), tasks.length - enabled > 0 ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+          ['   Scheduled ', DEFAULT_PANEL_PALETTE.label],
+          [String(dueSoon), dueSoon > 0 ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
         ]),
       ],
     };
+    const selectedTask = taskItems[this.selectedIndex]?.task;
+    const toggleLabel = selectedTask
+      ? (selectedTask.enabled ? 'pause task' : 'enable task')
+      : 'toggle';
+    const footerLines = [
+      buildKeyboardHints(width, [
+        { keys: 'Up/Down', label: 'navigate' },
+        { keys: 'Space', label: toggleLabel },
+        { keys: 'r', label: 'run now' },
+        { keys: 'R', label: 'refresh' },
+      ], DEFAULT_PANEL_PALETTE),
+    ];
     const scheduledTasksSection = resolveScrollablePanelSection(width, height, {
       intro: 'Review recurring scheduled tasks, next run timing, recent history, and enablement state.',
-      footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' toggle', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' run now', DEFAULT_PANEL_PALETTE.dim], ['   R', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
       beforeSections: [summarySection],
       section: {
@@ -273,9 +294,7 @@ export class SchedulePanel extends BasePanel {
       title: ' Schedule',
       intro: 'Review recurring scheduled tasks, next run timing, recent history, and enablement state.',
       sections,
-      footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' toggle', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' run now', DEFAULT_PANEL_PALETTE.dim], ['   R', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
     });
   }
@@ -296,7 +315,7 @@ export class SchedulePanel extends BasePanel {
     const scheduleText = formatSchedule(task.schedule);
     const row1 = buildPanelLine(width, [
       [bullet, bulletFg, bg],
-      [task.id.slice(0, 12), fgBase ?? C.id, bg],
+      [fitDisplay(task.id, 12), fgBase ?? C.id, bg],
       ['  ', fgBase ?? C.prompt, bg],
       [nameStr, fgBase ?? C.prompt, bg],
       ['  ', fgBase ?? C.prompt, bg],
