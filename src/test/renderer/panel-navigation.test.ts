@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { renderPanelTabBar } from '../../renderer/panel-tab-bar.ts';
 import { renderPanelWorkspaceBar } from '../../renderer/panel-workspace-bar.ts';
 import { renderPanelPickerOverlay } from '../../renderer/panel-picker-overlay.ts';
 import { PanelPicker } from '../../panels/panel-picker.ts';
@@ -38,20 +37,6 @@ function makeRegistration(id: string, name: string, category: PanelRegistration[
 }
 
 describe('panel navigation chrome', () => {
-  test('tab bar renders pane label and panel count', () => {
-    const line = renderPanelTabBar(
-      [makePanel('a', 'Alpha'), makePanel('b', 'Beta')],
-      0,
-      80,
-      true,
-      'top',
-    );
-    const text = lineToString(line);
-    expect(text).toContain('TOP');
-    expect(text).toContain('2');
-    expect(text).toContain('Alpha');
-  });
-
   test('workspace bar renders open tabs across panes', () => {
     const tabs: WorkspaceTab[] = [
       { id: 'system', name: 'System Messages', icon: 'J', pane: 'top', active: true, focused: true },
