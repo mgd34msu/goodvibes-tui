@@ -33,6 +33,8 @@ export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord>
   public constructor(readModel?: UiReadModel<UiCommunicationSnapshot>) {
     super('communication', 'Communication', 'Y', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter messages';
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
@@ -48,6 +50,13 @@ export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord>
   protected getItems(): readonly CommunicationRecord[] {
     if (!this.readModel) return [];
     return this.readModel.getSnapshot().records;
+  }
+
+  protected override filterMatches(record: CommunicationRecord, q: string): boolean {
+    return (record.content ?? '').toLowerCase().includes(q)
+      || record.kind.toLowerCase().includes(q)
+      || String(record.fromId ?? '').toLowerCase().includes(q)
+      || String(record.toId ?? '').toLowerCase().includes(q);
   }
 
   protected renderItem(record: CommunicationRecord, index: number, selected: boolean, width: number): Line {

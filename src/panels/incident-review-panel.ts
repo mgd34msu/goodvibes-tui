@@ -43,6 +43,8 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
   public constructor(registry?: ForensicsRegistry) {
     super('incident', 'Incident Review', 'N', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter incidents';
     this.registry = registry;
     this.unsub = registry ? registry.subscribe(() => this.markDirty()) : null;
   }
@@ -57,6 +59,12 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
 
   protected getItems(): readonly FailureReport[] {
     return this.registry?.getAll() ?? [];
+  }
+
+  protected override filterMatches(report: FailureReport, q: string): boolean {
+    return report.classification.toLowerCase().includes(q)
+      || report.id.toLowerCase().includes(q)
+      || (report.summary ?? '').toLowerCase().includes(q);
   }
 
   protected renderItem(report: FailureReport, index: number, selected: boolean, width: number): Line {
