@@ -1,5 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { type Line } from '../types/grid.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationJob } from '@pellux/goodvibes-sdk/platform/automation';
 import type { AutomationRun } from '@pellux/goodvibes-sdk/platform/automation';
@@ -291,7 +292,7 @@ export class SchedulePanel extends BasePanel {
 
     const bullet = task.enabled ? '* ' : 'o ';
     const bulletFg = task.enabled ? C.enabled : C.disabled;
-    const nameStr = task.name.length > 28 ? task.name.slice(0, 25) + '...' : task.name.padEnd(28);
+    const nameStr = fitDisplay(task.name, 28);
     const scheduleText = formatSchedule(task.schedule);
     const row1 = buildPanelLine(width, [
       [bullet, bulletFg, bg],
@@ -318,9 +319,7 @@ export class SchedulePanel extends BasePanel {
 
     const maxPromptLen = Math.max(20, width - indent.length - 30);
     const prompt = task.execution.prompt ?? task.description ?? '';
-    const promptPreview = prompt.length > maxPromptLen
-      ? prompt.slice(0, maxPromptLen - 1) + '\u2026'
-      : prompt;
+    const promptPreview = truncateDisplay(prompt, maxPromptLen);
 
     // Show last 3 run statuses as colored dots
     const recentRuns = history.slice(-3);

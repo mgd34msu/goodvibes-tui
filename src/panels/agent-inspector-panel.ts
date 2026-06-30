@@ -399,9 +399,7 @@ export class AgentInspectorPanel extends BasePanel {
     const elapsed = (rec.completedAt ?? now) - rec.startedAt;
     const taskPreview = rec.task.split('\n')[0] ?? '';
     const maxTask = Math.max(0, width - 40);
-    const taskDisplay = taskPreview.length > maxTask
-      ? taskPreview.slice(0, maxTask - 1) + '\u2026'
-      : taskPreview;
+    const taskDisplay = truncateDisplay(taskPreview, maxTask);
     return buildPanelLine(width, [
       [' Status ', DEFAULT_PANEL_PALETTE.label],
       [rec.status.toUpperCase(), rec.status === 'running' ? DEFAULT_PANEL_PALETTE.good : rec.status === 'failed' ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],

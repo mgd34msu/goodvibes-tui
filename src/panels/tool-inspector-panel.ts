@@ -63,7 +63,7 @@ function formatMs(ms: number): string {
 
 function truncateJson(val: unknown, maxLen = 120): string {
   const s = JSON.stringify(val) ?? 'null';
-  return s.length > maxLen ? s.slice(0, maxLen - 1) + '\u2026' : s;
+  return truncateDisplay(s, maxLen);
 }
 
 function summarizeResult(result: unknown): string | undefined {

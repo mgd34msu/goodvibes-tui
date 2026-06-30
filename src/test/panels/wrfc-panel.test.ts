@@ -143,8 +143,10 @@ describe('truncate', () => {
   test('passes through short strings unchanged', () => {
     expect(truncate('hello', 10)).toBe('hello');
   });
-  test('truncates and appends ellipsis', () => {
-    expect(truncate('hello world', 8)).toBe('hello...');
+  test('truncates and appends ellipsis (width-aware, single-glyph ellipsis)', () => {
+    const out = truncate('hello world', 8);
+    expect(out).toHaveLength(8);
+    expect(out.endsWith('…')).toBe(true);
   });
   test('exact length returns unchanged', () => {
     expect(truncate('hello', 5)).toBe('hello');

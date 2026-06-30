@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import type { WrfcChain, WrfcState, QualityGateResult } from '@pellux/goodvibes-sdk/platform/agents';
 import type { Constraint, ConstraintFinding } from '@pellux/goodvibes-sdk/platform/agents';
 import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
@@ -136,8 +137,7 @@ function issuePrefix(severity: string): string {
 }
 
 export function truncate(s: string, max: number): string {
-  if (s.length <= max) return s;
-  return s.slice(0, max - 3) + '...';
+  return truncateDisplay(s, max);
 }
 
 // ---------------------------------------------------------------------------
