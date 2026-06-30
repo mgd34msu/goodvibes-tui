@@ -157,3 +157,49 @@ describe('BasePanel loading spinner (I3)', () => {
     expect(text).toContain('Loading...');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Default mouse-wheel handling — delegates to up/down handleInput
+// ---------------------------------------------------------------------------
+
+class NavPanel extends BasePanel {
+  public cursor = 0;
+  public received: string[] = [];
+  public constructor() { super('nav', 'Nav', 'N', 'monitoring'); }
+  public handleInput(key: string): boolean {
+    this.received.push(key);
+    if (key === 'down') { this.cursor++; return true; }
+    if (key === 'up') { this.cursor = Math.max(0, this.cursor - 1); return true; }
+    return false;
+  }
+  public render(width: number, height: number): Line[] {
+    return Array.from({ length: height }, () => new Array(width).fill({ char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }));
+  }
+}
+
+describe('BasePanel.handleScroll default', () => {
+  test('positive delta drives down navigation', () => {
+    const p = new NavPanel();
+    expect(p.handleScroll(3)).toBe(true);
+    expect(p.cursor).toBe(3);
+    expect(p.received).toEqual(['down', 'down', 'down']);
+  });
+
+  test('negative delta drives up navigation', () => {
+    const p = new NavPanel();
+    p.cursor = 5;
+    expect(p.handleScroll(-2)).toBe(true);
+    expect(p.cursor).toBe(3);
+  });
+
+  test('clamps runaway wheel deltas to 10 steps', () => {
+    const p = new NavPanel();
+    p.handleScroll(1000);
+    expect(p.received).toHaveLength(10);
+  });
+
+  test('returns false for a panel without handleInput', () => {
+    const p = new TestPanel();
+    expect(p.handleScroll(3)).toBe(false);
+  });
+});

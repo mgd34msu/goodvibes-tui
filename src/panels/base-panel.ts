@@ -189,6 +189,27 @@ export abstract class BasePanel implements Panel {
 
   abstract render(width: number, height: number): Line[];
 
+  /**
+   * Default mouse-wheel handling: translate a wheel delta into the panel's
+   * existing up/down keyboard navigation, so every panel scrolls with the wheel
+   * without bespoke code. Panels with richer scroll state (e.g.
+   * `ScrollableListPanel`) override this. No-op for panels that don't implement
+   * `handleInput`. Returns true if any step was consumed.
+   */
+  public handleScroll(deltaRows: number): boolean {
+    const self = this as unknown as { handleInput?: (key: string) => boolean };
+    if (typeof self.handleInput !== 'function') return false;
+    const rows = Math.trunc(deltaRows);
+    if (rows === 0) return false;
+    const key = rows > 0 ? 'down' : 'up';
+    const steps = Math.min(Math.abs(rows), 10); // clamp runaway wheel deltas
+    let consumed = false;
+    for (let i = 0; i < steps; i++) {
+      if (self.handleInput(key)) consumed = true;
+    }
+    return consumed;
+  }
+
   /** R2: Mark this panel dirty — it will be re-rendered on the next compositor frame. */
   public invalidate(): void { this.needsRender = true; }
 
