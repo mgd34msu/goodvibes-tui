@@ -59,6 +59,12 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
   constructor(configManager: ConfigManager, componentHealthMonitor?: ComponentHealthMonitor) {
     super('system-messages', 'System Messages', 'J', 'monitoring', componentHealthMonitor);
     this.configManager = configManager;
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter messages';
+  }
+
+  protected override filterMatches(entry: SystemMessageEntry, q: string): boolean {
+    return entry.text.toLowerCase().includes(q) || entry.priority.toLowerCase().includes(q);
   }
 
   // ---------------------------------------------------------------------------
@@ -176,28 +182,33 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
         buildGuidanceLine(width, '/settings', 'adjust where operational and WRFC messages render across panels and conversation', C),
       ];
 
-      const selected = this._messages[this.selectedIndex]!;
-      const messageRows: Line[] = this._messages.map((entry, index) =>
-        this.renderItem(entry, index, index === this.selectedIndex, width),
-      );
+      const visible = this.getVisibleItems();
+      this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, visible.length - 1));
+      const selected = visible[this.selectedIndex];
+      const messageRows: Line[] = visible.length > 0
+        ? visible.map((entry, index) => this.renderItem(entry, index, index === this.selectedIndex, width))
+        : [buildPanelLine(width, [[`  No messages match "${this.filterQuery.trim()}"  (Esc to clear)`, C.dim]])];
 
+      const filterSection: PanelWorkspaceSection = { lines: [this.buildFilterLine(width)] };
       const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'System posture', postureLines, C) };
-      const detailSection: PanelWorkspaceSection = {
-        title: 'Selected Message',
-        lines: [
-          buildPanelLine(width, [
-            [' Time ', C.label],
-            [fmtTime(selected.ts), C.value],
-            ['   Priority ', C.label],
-            [selected.priority, selected.priority === 'high' ? C.high : C.low],
-          ]),
-          ...buildBodyText(width, selected.text, C, C.value),
-        ],
-      };
+      const detailSection: PanelWorkspaceSection = selected
+        ? {
+            title: 'Selected Message',
+            lines: [
+              buildPanelLine(width, [
+                [' Time ', C.label],
+                [fmtTime(selected.ts), C.value],
+                ['   Priority ', C.label],
+                [selected.priority, selected.priority === 'high' ? C.high : C.low],
+              ]),
+              ...buildBodyText(width, selected.text, C, C.value),
+            ],
+          }
+        : { title: 'Selected Message', lines: [] };
       const messagesSection = resolvePrimaryScrollableSection(width, height, {
         intro,
         palette: C,
-        beforeSections: [postureSection],
+        beforeSections: [filterSection, postureSection],
         section: {
           title: 'Timeline',
           scrollableLines: messageRows,
@@ -210,6 +221,7 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
       });
       this.scrollStart = messagesSection.scrollOffset;
       const sections: PanelWorkspaceSection[] = [
+        filterSection,
         postureSection,
         messagesSection.section,
         detailSection,

@@ -46,7 +46,15 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
     private readonly ecosystemPaths?: EcosystemCatalogPathOptions,
   ) {
     super('marketplace', 'Marketplace', 'M', 'monitoring');
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter marketplace';
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  protected override filterMatches(row: MarketplaceRow, q: string): boolean {
+    return row.kind.toLowerCase().includes(q)
+      || row.entry.name.toLowerCase().includes(q)
+      || (row.entry.provenance ?? 'local').toLowerCase().includes(q);
   }
 
   public override onDestroy(): void {
