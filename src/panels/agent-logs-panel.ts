@@ -1,6 +1,5 @@
 import { promises as fsPromises, watch, type FSWatcher } from 'fs';
 import type { Line } from '../types/grid.ts';
-import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import type { AgentEvent } from '@/runtime/index.ts';
@@ -161,19 +160,28 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
 
   render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const footerLines = [
-      buildPanelLine(width, [
-        [' Tab', DEFAULT_PANEL_PALETTE.info], [' next agent', DEFAULT_PANEL_PALETTE.dim],
-        ['   Space', DEFAULT_PANEL_PALETTE.info], [' pause', DEFAULT_PANEL_PALETTE.dim],
-        ['   f', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim],
-        ['   g/G', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim],
-      ]),
-    ];
+    // Context-aware footer: when there are no agents only the Tab cycle is
+    // meaningless, so hide the per-stream keys; otherwise reflect live state
+    // (Space toggles pause→resume, g/G only matter once there is a tail).
+    const runningCount = this.agents.filter((a) => a.status === 'running' || a.status === 'pending').length;
+    const footerLines = this.agents.length === 0
+      ? [buildPanelLine(width, [[' Waiting for an agent session to start...', DEFAULT_PANEL_PALETTE.dim]])]
+      : [
+          buildPanelLine(width, [
+            [` ${this.selectedAgentIndex + 1}/${this.agents.length}`, DEFAULT_PANEL_PALETTE.dim],
+            ['   Tab', DEFAULT_PANEL_PALETTE.info], [' next agent', DEFAULT_PANEL_PALETTE.dim],
+            ['   Space', DEFAULT_PANEL_PALETTE.info], [this.paused ? ' resume' : ' pause', DEFAULT_PANEL_PALETTE.dim],
+            ['   f', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim],
+            ['   g/G', DEFAULT_PANEL_PALETTE.info], [this.autoFollow ? ' top/follow' : ' top/bottom', DEFAULT_PANEL_PALETTE.dim],
+          ]),
+        ];
 
     const summaryLines = [
       buildPanelLine(width, [
         [' Agents ', DEFAULT_PANEL_PALETTE.label],
         [String(this.agents.length), DEFAULT_PANEL_PALETTE.value],
+        ['   Running ', DEFAULT_PANEL_PALETTE.label],
+        [String(runningCount), runningCount > 0 ? DEFAULT_PANEL_PALETTE.good : DEFAULT_PANEL_PALETTE.dim],
         ['   Filter ', DEFAULT_PANEL_PALETTE.label],
         [FILTER_LABELS[this.filter], DEFAULT_PANEL_PALETTE.info],
         ['   Mode ', DEFAULT_PANEL_PALETTE.label],
@@ -191,8 +199,11 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
             lines: buildEmptyState(
               width,
               ' No agents running',
-              'Spawn or attach to an agent session and its structured logs will appear here.',
-              [],
+              'Spawn or attach to an agent session and its structured logs stream here in real time.',
+              [
+                { command: '/spawn <task>', summary: 'launch an agent and watch its live session log here' },
+                { command: '/inspector', summary: 'open the inspector for a per-agent timeline and tool activity' },
+              ],
               DEFAULT_PANEL_PALETTE,
             ),
           },
@@ -544,22 +555,6 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
 
   // ── Private: rendering helpers ─────────────────────────────────────────────
 
-  /** Top header bar: title + filter label + mode indicators */
-  private _renderHeader(width: number): Line {
-    const title = ' Agent Logs ';
-    const filterLabel = `[${FILTER_LABELS[this.filter]}] `;
-    const pause = this.paused ? ' PAUSED ' : '';
-    const follow = this.autoFollow ? ' AUTO-FOLLOW ' : '';
-    const keyhints = '  Tab:next  Space:pause  f:filter  g/G:scroll ';
-    return buildStyledPanelLine(width, [
-      { text: title, fg: COLOR.header_accent, bold: true },
-      { text: filterLabel, fg: COLOR.filter_active },
-      { text: pause, fg: COLOR.paused },
-      { text: follow, fg: COLOR.auto_follow },
-      { text: keyhints, fg: COLOR.header_label },
-    ]);
-  }
-
   /** Agent selector bar: shows running agents with cycle indicator */
   private _renderAgentSelector(width: number): Line {
     const prefix = ' Agents: ';
@@ -581,32 +576,6 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
       });
     }
     return buildStyledPanelLine(width, segments);
-  }
-
-  private _renderNoAgents(width: number): Line {
-    const msg = ' No agents running. ';
-    return buildStyledPanelLine(width, [{ text: msg, fg: COLOR.dim }]);
-  }
-
-  private _renderSeparator(width: number): Line {
-    return buildStyledPanelLine(width, [{ text: '─'.repeat(width), fg: COLOR.separator }]);
-  }
-
-  private _renderEmpty(width: number, bodyHeight: number): Line[] {
-    const lines: Line[] = [];
-    const msg = this.agents.length === 0
-      ? ' No agents running '
-      : ` No ${this.filter === 'all' ? '' : this.filter + ' '}log entries yet `;
-    const offset = Math.max(0, Math.floor((width - msg.length) / 2));
-    const textLine = buildStyledPanelLine(width, [
-      { text: ' '.repeat(offset), fg: COLOR.dim },
-      { text: msg, fg: COLOR.dim },
-    ]);
-    lines.push(textLine);
-    while (lines.length < bodyHeight) {
-      lines.push(createEmptyLine(width));
-    }
-    return lines;
   }
 
   private _renderEntry(entry: LogEntry, width: number): Line {

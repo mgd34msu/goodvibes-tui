@@ -16,7 +16,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { truncateDisplay, wrapText } from '../utils/terminal-width.ts';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   // Domain-specific reasoning tones (purples) and the active-stream cyan have no
@@ -32,23 +32,6 @@ interface ReasoningBlock {
   content: string;
   active: boolean;  // true = currently streaming
   collapsed: boolean;
-}
-
-function wrapLines(text: string, width: number): string[] {
-  const result: string[] = [];
-  const raw = text.split('\n');
-  for (const line of raw) {
-    if (line.length <= width) {
-      result.push(line);
-    } else {
-      let start = 0;
-      while (start < line.length) {
-        result.push(line.slice(start, start + width));
-        start += width;
-      }
-    }
-  }
-  return result;
 }
 
 type FlatRow = { kind: 'header'; blockIndex: number; text: string } | { kind: 'content'; text: string };
@@ -121,8 +104,8 @@ export class ThinkingPanel extends BasePanel {
             lines: buildEmptyState(
               width,
               ' No reasoning content yet',
-              'When the model emits thinking or reasoning deltas, they accumulate here in expandable blocks.',
-              [],
+              'When the model emits thinking or reasoning deltas during a turn, they accumulate here in expandable per-turn blocks.',
+              [{ command: '/chat <prompt>', summary: 'start a turn with a reasoning-capable model to stream thinking here' }],
               DEFAULT_PANEL_PALETTE,
             ),
           },
@@ -152,12 +135,30 @@ export class ThinkingPanel extends BasePanel {
       ],
     };
 
-    const selectedRow = flat[this.cursorIndex];
+    // Resolve the reasoning block that owns the cursor row (walk back to its
+    // header) so the detail block describes the actual turn, not just row kind.
+    let selectedBlockIndex = -1;
+    for (let i = Math.min(this.cursorIndex, flat.length - 1); i >= 0; i--) {
+      const row = flat[i];
+      if (row?.kind === 'header') { selectedBlockIndex = row.blockIndex; break; }
+    }
+    const selectedBlock = selectedBlockIndex >= 0 ? this.blocks[selectedBlockIndex] : undefined;
     const selectedSection: PanelWorkspaceSection = {
       title: 'Selected',
-      lines: [
-        buildPanelLine(width, [[' Row Type ', DEFAULT_PANEL_PALETTE.label], [selectedRow?.kind ?? 'none', DEFAULT_PANEL_PALETTE.value]]),
-      ],
+      lines: selectedBlock
+        ? [
+            buildPanelLine(width, [
+              [' Turn ', DEFAULT_PANEL_PALETTE.label],
+              [String(selectedBlock.turnId), DEFAULT_PANEL_PALETTE.value],
+              ['   State ', DEFAULT_PANEL_PALETTE.label],
+              [selectedBlock.active ? 'streaming' : 'complete', selectedBlock.active ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.good],
+              ['   View ', DEFAULT_PANEL_PALETTE.label],
+              [selectedBlock.collapsed ? 'collapsed' : 'expanded', DEFAULT_PANEL_PALETTE.info],
+              ['   Chars ', DEFAULT_PANEL_PALETTE.label],
+              [String(selectedBlock.content.length), DEFAULT_PANEL_PALETTE.dim],
+            ]),
+          ]
+        : [buildPanelLine(width, [[' No block selected', DEFAULT_PANEL_PALETTE.dim]])],
     };
 
     const reasoningSection = resolveScrollablePanelSection(width, height, {
@@ -212,7 +213,7 @@ export class ThinkingPanel extends BasePanel {
       const turnLabel = `Turn ${block.turnId}${block.active ? ' (streaming)' : ''}`;
       rows.push({ kind: 'header', blockIndex: i, text: turnLabel });
       if (!block.collapsed) {
-        const wrapped = wrapLines(block.content || '(empty)', Math.max(1, width - 2));
+        const wrapped = wrapText(block.content || '(empty)', Math.max(1, width - 2));
         for (const line of wrapped) {
           rows.push({ kind: 'content', text: line });
         }

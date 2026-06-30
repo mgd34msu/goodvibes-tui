@@ -258,9 +258,11 @@ export class AgentInspectorPanel extends BasePanel {
               width,
               agents.length === 0 ? ' No agents running' : ' No agent selected',
               agents.length === 0
-                ? 'Spawn an agent to inspect its live and historical timeline.'
+                ? 'Spawn an agent to inspect its live and historical timeline, tool calls, and output.'
                 : 'Press Tab to cycle through available agents and open one in the inspector.',
-              [],
+              agents.length === 0
+                ? [{ command: '/spawn <task>', summary: 'launch an agent, then Tab here to inspect its timeline' }]
+                : [{ command: 'Tab', summary: 'select the first available agent' }],
               DEFAULT_PANEL_PALETTE,
             ),
           },
@@ -290,8 +292,12 @@ export class AgentInspectorPanel extends BasePanel {
             lines: buildEmptyState(
               width,
               ' No messages yet',
-              'The selected agent has not emitted any visible timeline entries yet.',
-              [],
+              rec.status === 'running'
+                ? 'The selected agent is running but has not emitted visible timeline entries yet — live output streams in as it works.'
+                : 'The selected agent has not emitted any visible timeline entries.',
+              rec.status === 'running'
+                ? [{ command: 'c', summary: 'cancel this running agent if it appears stalled' }]
+                : [{ command: 'Tab', summary: 'cycle to another agent with timeline activity' }],
               DEFAULT_PANEL_PALETTE,
             ),
           },
