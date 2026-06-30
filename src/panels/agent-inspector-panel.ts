@@ -77,6 +77,8 @@ const COLOR = {
   selected:    '#ffee88',
   dimmed:      '#555566',
   expandHint:  '#445566',
+  stalled:     '#f59e0b',   // amber — stalled-agent warning
+  cursorBg:    '#1a2233',   // timeline cursor row background
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -274,7 +276,7 @@ export class AgentInspectorPanel extends BasePanel {
     const now = Date.now();
     const isStalled = this._isAgentStalled(rec, now);
     if (isStalled) {
-      summaryLines.push(buildPanelLine(width, [['  STALLED', '#f59e0b'], [' — no activity for 5+ minutes', DEFAULT_PANEL_PALETTE.dim]]));
+      summaryLines.push(buildPanelLine(width, [['  STALLED', COLOR.stalled], [' — no activity for 5+ minutes', DEFAULT_PANEL_PALETTE.dim]]));
     }
     const allRows = this._getCachedRows();
     if (allRows.length === 0) {
@@ -425,7 +427,7 @@ export class AgentInspectorPanel extends BasePanel {
     row: DisplayRow,
     isCursor: boolean,
   ): Line {
-    const bg = isCursor ? '#1a2233' : '';
+    const bg = isCursor ? COLOR.cursorBg : '';
     const ts = shortTime(row.timestamp);
     const { fg, prefix } = agentKindStyle(row.kind, COLOR);
     const hint = row.hasDetail ? (row.expanded ? ' ▾' : ' ▸') : '';
@@ -527,9 +529,7 @@ export class AgentInspectorPanel extends BasePanel {
         kind,
         timestamp: msg.timestamp,
         label: msg.from,
-        content: msg.content.length > 200
-          ? msg.content.slice(0, 197) + '\u2026'
-          : msg.content,
+        content: truncateDisplay(msg.content, 200),
         expanded: false,
       } satisfies TimelineEntry);
     }
@@ -669,7 +669,8 @@ export class AgentInspectorPanel extends BasePanel {
     if (!this.selectedAgentId) return;
     const rec = this.deps.agentManager.getStatus(this.selectedAgentId);
     if (!rec || AGENT_TERMINAL_STATUSES.has(rec.status)) return;
-    const label = rec.task.split('\n')[0]?.slice(0, 40) ?? rec.id.slice(-8);
+    const firstLine = rec.task.split('\n')[0];
+    const label = firstLine ? truncateDisplay(firstLine, 40) : rec.id.slice(-8);
     this.confirmCancel = { subject: rec.id, label };
     this.markDirty();
   }
