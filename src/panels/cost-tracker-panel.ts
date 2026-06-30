@@ -145,7 +145,7 @@ export class CostTrackerPanel extends BasePanel {
       agentEvents.on('AGENT_SPAWNING', (payload) => {
         this.agents.set(payload.agentId, {
           id: payload.agentId.slice(0, 8),
-          task: payload.task.length > 40 ? payload.task.slice(0, 37) + '...' : payload.task,
+          task: truncateDisplay(payload.task, 40),
           model: 'unknown',
           inputTokens: 0,
           outputTokens: 0,
