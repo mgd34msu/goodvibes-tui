@@ -16,6 +16,7 @@ import {
   getPanelSearchFocusTransition,
   isPanelSearchCancel,
 } from './search-focus.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -259,7 +260,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
           this.invalidateFilter();
         });
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
       }
       this.markDirty();
     })();

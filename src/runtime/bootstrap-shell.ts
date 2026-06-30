@@ -240,6 +240,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     webhookNotifier: services.webhookNotifier,
     sessionMemoryStore: services.sessionMemoryStore,
     sessionLineageTracker: services.sessionLineageTracker,
+    wrfcController: services.wrfcController,
     changeTracker: services.sessionChangeTracker,
     planManager: services.planManager,
     adaptivePlanner: services.adaptivePlanner,

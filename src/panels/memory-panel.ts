@@ -28,6 +28,7 @@ import {
   getPanelSearchFocusTransition,
   isPanelSearchCancel,
 } from './search-focus.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Colour palette
@@ -267,7 +268,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
               });
             }
           } catch (e) {
-            this.setError(`Review update failed: ${e instanceof Error ? e.message : String(e)}`);
+            this.setError(`Review update failed: ${summarizeError(e)}`);
           }
         }
         this.refreshReviewRecords();

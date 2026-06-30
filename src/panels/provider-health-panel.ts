@@ -36,6 +36,7 @@ import {
   buildPanelWorkspace,
   buildSummaryBlock,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
@@ -62,22 +63,10 @@ export interface ProviderHealthPanelDeps {
 // Colors
 // ---------------------------------------------------------------------------
 
-const C = {
-  title:       '#00ffff',
-  online:      '#5fd700',
-  rateLimit:   '#ffaf00',
-  error:       '#ff5f5f',
-  unknown:     '244',
-  label:       '244',
-  value:       '252',
-  dim:         '240',
-  provName:    '#e2e8f0',
-  errMsg:      '#ff5f5f',
-  latGood:     '#5fd700',
-  latWarn:     '#ffaf00',
-  latBad:      '#ff5f5f',
-  separator:   '#374151',
-} as const;
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  title:   '#00ffff',
+  unknown: '244',
+});
 
 const LATENCY_WARN_MS = 2_000;
 const LATENCY_BAD_MS  = 5_000;
@@ -88,11 +77,11 @@ const LATENCY_BAD_MS  = 5_000;
 
 function statusDot(status: ProviderStatus): { char: string; color: string } {
   switch (status) {
-    case 'healthy':      return { char: '●', color: C.online };
-    case 'degraded':     return { char: '◑', color: C.rateLimit };
-    case 'rate_limited': return { char: '◐', color: C.rateLimit };
-    case 'auth_error':   return { char: '✕', color: C.error };
-    case 'unavailable':  return { char: '✕', color: C.error };
+    case 'healthy':      return { char: '●', color: C.good };
+    case 'degraded':     return { char: '◑', color: C.warn };
+    case 'rate_limited': return { char: '◐', color: C.warn };
+    case 'auth_error':   return { char: '✕', color: C.bad };
+    case 'unavailable':  return { char: '✕', color: C.bad };
     default:             return { char: '○', color: C.unknown };
   }
 }
@@ -109,9 +98,9 @@ function statusLabel(status: ProviderStatus): string {
 }
 
 function latencyColor(ms: number): string {
-  if (ms >= LATENCY_BAD_MS)  return C.latBad;
-  if (ms >= LATENCY_WARN_MS) return C.latWarn;
-  return C.latGood;
+  if (ms >= LATENCY_BAD_MS)  return C.bad;
+  if (ms >= LATENCY_WARN_MS) return C.warn;
+  return C.good;
 }
 
 function fmtMs(ms: number): string {
@@ -154,11 +143,11 @@ interface ProviderRuntimeRecord {
 function domainColor(level: HealthDomainSummary['level']): string {
   switch (level) {
     case 'good':
-      return C.online;
+      return C.good;
     case 'warn':
-      return C.rateLimit;
+      return C.warn;
     case 'bad':
-      return C.error;
+      return C.bad;
     default:
       return C.value;
   }
@@ -184,9 +173,9 @@ function routeColor(route: ProviderPanelAuthRoute): string {
     case 'subscription-oauth':
       return C.title;
     case 'service-oauth':
-      return C.online;
+      return C.good;
     case 'api-key':
-      return C.rateLimit;
+      return C.warn;
     case 'secret-ref':
       return C.value;
     case 'anonymous':
@@ -200,12 +189,12 @@ function routeColor(route: ProviderPanelAuthRoute): string {
 function freshnessColor(freshness: ProviderPanelAuthFreshness): string {
   switch (freshness) {
     case 'expired':
-      return C.error;
+      return C.bad;
     case 'expiring':
     case 'pending':
-      return C.rateLimit;
+      return C.warn;
     case 'healthy':
-      return C.online;
+      return C.good;
     default:
       return C.dim;
   }
@@ -552,10 +541,10 @@ export class ProviderHealthPanel extends BasePanel {
               { command: '/provider', summary: 'review current provider and model selection' },
               { command: '/subscription', summary: 'review provider login and subscription state' },
             ],
-            { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' },
+            { ...DEFAULT_PANEL_PALETTE, header: C.title },
           ),
         }],
-        palette: { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' },
+        palette: { ...DEFAULT_PANEL_PALETTE, header: C.title },
       });
     }
 
@@ -581,14 +570,14 @@ export class ProviderHealthPanel extends BasePanel {
     const postureLines = [
       buildKeyValueLine(width, [
         { label: 'providers', value: String(providers.length), valueColor: C.value },
-        { label: 'online', value: String(online), valueColor: C.online },
-        { label: 'rate-limited', value: String(rateLimited), valueColor: C.rateLimit },
-        { label: 'error', value: String(errored), valueColor: C.error },
-        { label: 'auth alerts', value: String(expiringAuth), valueColor: expiringAuth > 0 ? C.rateLimit : C.dim },
-        { label: 'account issues', value: String(accountIssues), valueColor: accountIssues > 0 ? C.error : C.dim },
-      ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }),
-      buildGuidanceLine(width, '/provider', 'review provider selection and routing if health posture degrades', { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }),
-      buildGuidanceLine(width, '/accounts', 'inspect auth routes, fallback posture, and billing-path safety', { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }),
+        { label: 'online', value: String(online), valueColor: C.good },
+        { label: 'rate-limited', value: String(rateLimited), valueColor: C.warn },
+        { label: 'error', value: String(errored), valueColor: C.bad },
+        { label: 'auth alerts', value: String(expiringAuth), valueColor: expiringAuth > 0 ? C.warn : C.dim },
+        { label: 'account issues', value: String(accountIssues), valueColor: accountIssues > 0 ? C.bad : C.dim },
+      ], { ...DEFAULT_PANEL_PALETTE, header: C.title }),
+      buildGuidanceLine(width, '/provider', 'review provider selection and routing if health posture degrades', { ...DEFAULT_PANEL_PALETTE, header: C.title }),
+      buildGuidanceLine(width, '/accounts', 'inspect auth routes, fallback posture, and billing-path safety', { ...DEFAULT_PANEL_PALETTE, header: C.title }),
     ];
 
     const domainLines: Line[] = [];
@@ -605,16 +594,16 @@ export class ProviderHealthPanel extends BasePanel {
     })) {
       domainLines.push(buildPanelLine(width, [
         ['  ', C.label],
-        [domain.name.padEnd(14), C.provName],
+        [domain.name.padEnd(14), C.value],
         [domain.summary.slice(0, Math.max(0, width - 36)).padEnd(Math.max(0, width - 36)), domainColor(domain.level)],
         [' ', C.label],
         [domain.next.slice(0, 20), C.dim],
       ]));
       for (const detail of domain.details.slice(0, 2)) {
-        domainLines.push(...buildBodyText(width, `    ${detail}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.dim));
+        domainLines.push(...buildBodyText(width, `    ${detail}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.dim));
       }
       if (domain.nextSteps.length > 1) {
-        domainLines.push(...buildBodyText(width, `    next: ${domain.nextSteps.join('  |  ')}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.title));
+        domainLines.push(...buildBodyText(width, `    next: ${domain.nextSteps.join('  |  ')}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.title));
       }
     }
 
@@ -632,61 +621,61 @@ export class ProviderHealthPanel extends BasePanel {
       session: session.session,
     });
     maintenanceLines.push(buildKeyValueLine(width, [
-      { label: 'level', value: maintenance.level, valueColor: maintenance.level === 'needs-repair' ? C.error : maintenance.level === 'suggest-compact' || maintenance.level === 'watch' ? C.rateLimit : C.online },
+      { label: 'level', value: maintenance.level, valueColor: maintenance.level === 'needs-repair' ? C.bad : maintenance.level === 'suggest-compact' || maintenance.level === 'watch' ? C.warn : C.good },
       { label: 'guidance', value: maintenance.guidanceMode, valueColor: C.value },
-      { label: 'usage', value: `${maintenance.usagePct}%`, valueColor: maintenance.usagePct >= 80 ? C.error : maintenance.usagePct >= 70 ? C.rateLimit : C.value },
+      { label: 'usage', value: `${maintenance.usagePct}%`, valueColor: maintenance.usagePct >= 80 ? C.bad : maintenance.usagePct >= 70 ? C.warn : C.value },
       { label: 'remaining', value: maintenance.remainingTokens.toLocaleString(), valueColor: C.value },
-    ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }));
+    ], { ...DEFAULT_PANEL_PALETTE, header: C.title }));
     for (const reason of maintenance.reasons.slice(0, 3)) {
-      maintenanceLines.push(...buildBodyText(width, reason, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.dim));
+      maintenanceLines.push(...buildBodyText(width, reason, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.dim));
     }
     if (maintenance.nextSteps.length > 0) {
-      maintenanceLines.push(...buildBodyText(width, `Next: ${maintenance.nextSteps.join('  |  ')}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.title));
+      maintenanceLines.push(...buildBodyText(width, `Next: ${maintenance.nextSteps.join('  |  ')}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.title));
     }
     if (selectedName) {
       const status = selectedHealth?.status ?? 'unknown';
       selectedLines.push(buildKeyValueLine(width, [
-        { label: 'provider', value: selectedName, valueColor: C.provName },
+        { label: 'provider', value: selectedName, valueColor: C.value },
         { label: 'status', value: statusLabel(status), valueColor: statusDot(status).color },
         { label: 'last ok', value: fmtAgo(selectedHealth?.lastSuccessAt), valueColor: C.value },
-      ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }));
+      ], { ...DEFAULT_PANEL_PALETTE, header: C.title }));
       if (selectedHealth?.rateLimitExpiresAt && selectedHealth.rateLimitExpiresAt > Date.now()) {
-        selectedLines.push(...buildBodyText(width, `Cooldown: ${fmtCooldown(selectedHealth.rateLimitExpiresAt)}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.rateLimit));
+        selectedLines.push(...buildBodyText(width, `Cooldown: ${fmtCooldown(selectedHealth.rateLimitExpiresAt)}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.warn));
       }
       if (selectedHealth?.lastErrorMessage) {
-        selectedLines.push(...buildBodyText(width, `Last error: ${selectedHealth.lastErrorMessage}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.errMsg));
+        selectedLines.push(...buildBodyText(width, `Last error: ${selectedHealth.lastErrorMessage}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.bad));
       }
       if (selectedAccount) {
         selectedLines.push(buildKeyValueLine(width, [
           { label: 'route', value: selectedAccount.activeRoute, valueColor: routeColor(selectedAccount.activeRoute) },
           { label: 'preferred', value: selectedAccount.preferredRoute, valueColor: C.dim },
           { label: 'freshness', value: selectedAccount.authFreshness, valueColor: freshnessColor(selectedAccount.authFreshness) },
-        ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }));
+        ], { ...DEFAULT_PANEL_PALETTE, header: C.title }));
         selectedLines.push(buildKeyValueLine(width, [
           { label: 'models', value: String(selectedAccount.modelCount), valueColor: C.value },
-          { label: 'active', value: selectedAccount.active ? 'yes' : 'no', valueColor: selectedAccount.active ? C.online : C.dim },
-        ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }));
-        selectedLines.push(...buildBodyText(width, `Auth route: ${selectedAccount.activeRouteReason}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.dim));
+          { label: 'active', value: selectedAccount.active ? 'yes' : 'no', valueColor: selectedAccount.active ? C.good : C.dim },
+        ], { ...DEFAULT_PANEL_PALETTE, header: C.title }));
+        selectedLines.push(...buildBodyText(width, `Auth route: ${selectedAccount.activeRouteReason}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.dim));
         if (selectedAccount.fallbackRisk) {
-          selectedLines.push(...buildBodyText(width, `Fallback: ${selectedAccount.fallbackRisk}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.rateLimit));
+          selectedLines.push(...buildBodyText(width, `Fallback: ${selectedAccount.fallbackRisk}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.warn));
         }
         if (selectedAccount.issues.length > 0) {
-          selectedLines.push(...buildBodyText(width, `Issue: ${selectedAccount.issues[0]!}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.errMsg));
+          selectedLines.push(...buildBodyText(width, `Issue: ${selectedAccount.issues[0]!}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.bad));
         }
         if (selectedAccount.recommendedActions.length > 0) {
-          selectedLines.push(...buildBodyText(width, `Next: ${selectedAccount.recommendedActions[0]!}`, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, C.title));
+          selectedLines.push(...buildBodyText(width, `Next: ${selectedAccount.recommendedActions[0]!}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.title));
         }
       }
     }
 
-    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Health posture', postureLines, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }) };
+    const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'Health posture', postureLines, { ...DEFAULT_PANEL_PALETTE, header: C.title }) };
     const domainsSection: PanelWorkspaceSection = { title: 'Repair Domains', lines: domainLines };
     const maintenanceSections = maintenanceLines.length > 0 ? [{ title: 'Session Maintenance', lines: maintenanceLines } satisfies PanelWorkspaceSection] : [];
-    const selectedSections = selectedLines.length > 0 ? [{ lines: buildDetailBlock(width, 'Selected provider', selectedLines, { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }) } satisfies PanelWorkspaceSection] : [];
+    const selectedSections = selectedLines.length > 0 ? [{ lines: buildDetailBlock(width, 'Selected provider', selectedLines, { ...DEFAULT_PANEL_PALETTE, header: C.title }) } satisfies PanelWorkspaceSection] : [];
     const resolvedProvidersSection = resolvePrimaryScrollableSection(width, height, {
       intro,
       footerLines: [buildPanelLine(width, [['  j/k or Up/Down move  live cooldowns refresh while active', C.dim]])],
-      palette: { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' },
+      palette: { ...DEFAULT_PANEL_PALETTE, header: C.title },
       beforeSections: [postureSection, domainsSection, ...maintenanceSections],
       section: {
         title: 'Providers',
@@ -696,13 +685,13 @@ export class ProviderHealthPanel extends BasePanel {
           const latency = health?.lastLatencyMs !== undefined ? fmtMs(health.lastLatencyMs) : 'n/a';
           const latencyFg = health?.lastLatencyMs !== undefined ? latencyColor(health.lastLatencyMs) : C.dim;
           return buildPanelListRow(width, [
-            { text: name.padEnd(16), fg: C.provName },
+            { text: name.padEnd(16), fg: C.value },
             { text: statusLabel(status).padEnd(14), fg: statusDot(status).color },
             { text: ' lat ', fg: C.label },
             { text: latency.padEnd(8), fg: latencyFg },
             { text: ' ok ', fg: C.label },
             { text: fmtAgo(health?.lastSuccessAt).padEnd(10), fg: C.value },
-          ], { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' }, { selected: absolute === this._selectedIndex, selectedBg: '#111827' });
+          ], { ...DEFAULT_PANEL_PALETTE, header: C.title }, { selected: absolute === this._selectedIndex, selectedBg: '#111827' });
         }),
         selectedIndex: this._selectedIndex,
         scrollOffset: this._scrollOffset,
@@ -725,7 +714,7 @@ export class ProviderHealthPanel extends BasePanel {
       intro,
       sections,
       footerLines: [buildPanelLine(width, [['  j/k or Up/Down move  live cooldowns refresh while active', C.dim]])],
-      palette: { ...DEFAULT_PANEL_PALETTE, header: C.title, headerBg: '#0f172a' },
+      palette: { ...DEFAULT_PANEL_PALETTE, header: C.title },
     });
   }
 }

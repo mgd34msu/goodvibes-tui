@@ -74,7 +74,10 @@ describe('InputHistory.add', () => {
   });
 
   test('caps at maxEntries (500)', () => {
-    const h = makeHistory();
+    // persist:false — the 500-entry cap is in-memory logic. Persisting 510 adds
+    // (each a synchronous full-file write) makes this test load-dependent and can
+    // exceed the 5s timeout; persistence is covered by the round-trip tests below.
+    const h = new InputHistory({ historyPath: makeTmpPath(), persist: false });
     for (let i = 0; i < 510; i++) {
       h.add(`entry ${i}`);
     }

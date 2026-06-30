@@ -40,6 +40,7 @@ import { InboundPoller } from './poller.ts';
 import { createSlackAdapter, SLACK_PROVIDER_ID } from './providers/slack.ts';
 import { createDiscordAdapter, DISCORD_PROVIDER_ID } from './providers/discord.ts';
 import { createEmailAdapter, EMAIL_PROVIDER_ID } from './providers/email.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export const INBOX_LIST_METHOD_ID = 'channels.inbox.list';
 const DEFAULT_LIMIT = 50;
@@ -173,7 +174,7 @@ export function registerInboxMethods(
     poller.start();
   })().catch((error: unknown) => {
     ctx.logger.error('inbox surface bootstrap failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: summarizeError(error),
     });
   });
 

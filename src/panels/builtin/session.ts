@@ -119,7 +119,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     category: 'monitoring',
     description: 'Token budget tracker: per-turn and cumulative usage with context window gauge',
     factory: () => {
-      const panel = new TokenBudgetPanel(deps.sessionMemoryStore, deps.configManager);
+      const panel = new TokenBudgetPanel(deps.sessionMemoryStore, deps.configManager, deps.requestRender);
       if (deps.orchestrator && deps.getCtxWindow) {
         panel.wire(deps.orchestrator, deps.getCtxWindow, requireUiServices(deps).readModels.session);
       }

@@ -13,7 +13,6 @@ import {
   openCommandPanel,
   requireLocalUserAuthManager,
   requireOperatorClient,
-  requireProviderApi,
   requireReadModels,
   requireSecretsManager,
   requireServiceRegistry,
@@ -240,15 +239,19 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
 
       if (sub === 'maintenance') {
         const session = readModels.session.getSnapshot();
-        const providerApi = requireProviderApi(ctx);
-        const currentModel = await providerApi.getCurrentModel().catch(() => null); // best-effort: null handled as unknown context window
+        const providerRegistry = ctx.provider.providerRegistry;
+        // Resolve the context window the same way the Tokens panel does so the
+        // maintenance usage %/remaining agree across every diagnostics surface.
+        const contextWindow = providerRegistry.getContextWindowForModel(
+          providerRegistry.getCurrentModel(),
+        );
         const llmMessages = typeof ctx.session.conversationManager.getMessagesForLLM === 'function'
           ? ctx.session.conversationManager.getMessagesForLLM()
           : [];
         const maintenance = evaluateSessionMaintenance({
           configManager: ctx.platform.configManager,
           currentTokens: estimateConversationTokens(llmMessages),
-          contextWindow: currentModel?.contextWindow ?? 0,
+          contextWindow,
           messageCount: llmMessages.length,
           sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
           session: session.session,
@@ -386,12 +389,15 @@ export function registerHealthRuntimeCommands(registry: CommandRegistry): void {
       }
 
       const session = readModels.session.getSnapshot();
-      const providerApi = requireProviderApi(ctx);
-      const currentModel = await providerApi.getCurrentModel().catch(() => null); // best-effort: null handled as unknown context window
+      const providerRegistry = ctx.provider.providerRegistry;
       const llmMessages = typeof ctx.session.conversationManager.getMessagesForLLM === 'function'
         ? ctx.session.conversationManager.getMessagesForLLM()
         : [];
-      const contextWindow = currentModel?.contextWindow ?? 0;
+      // Resolve the context window the same way the Tokens panel does so the
+      // maintenance usage %/remaining agree across every diagnostics surface.
+      const contextWindow = providerRegistry.getContextWindowForModel(
+        providerRegistry.getCurrentModel(),
+      );
       const maintenance = evaluateSessionMaintenance({
         configManager: ctx.platform.configManager,
         currentTokens: estimateConversationTokens(llmMessages),

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createDeferredStartupCoordinator } from '@/runtime/index.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 describe('createDeferredStartupCoordinator', () => {
   test('runs tasks asynchronously after scheduling', async () => {
@@ -30,7 +31,7 @@ describe('createDeferredStartupCoordinator', () => {
         throw new Error('boom');
       },
       onError: (error) => {
-        errors.push(error instanceof Error ? error.message : String(error));
+        errors.push(summarizeError(error));
       },
     });
 

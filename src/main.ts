@@ -165,6 +165,9 @@ async function main() {
 
   let scrollTop = 0;
   let scrollLocked = true;
+  // Cached from the overlay-aware clamp the renderer computes (conversation-layout) each
+  // frame so scroll() clamps against exactly what is displayed, not a footer estimate.
+  let lastMaxScroll: number | null = null;
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
   const streamMetrics: StreamMetrics = {
     startTime: 0,
@@ -187,18 +190,23 @@ async function main() {
     if (input.onboardingWizard.active) return stdout.rows || 24;
     const promptLines: number = input.getVisiblePromptLineCount(getPromptContentWidth());
     const currentModel = providerRegistry.getCurrentModel();
-    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, currentModel.contextWindow);
+    const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
+    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, contextWindow);
   };
 
   const scroll = (delta: number) => {
-    const vHeight = getViewportHeight();
-    const maxScroll = Math.max(0, conversation.history.getLineCount() - vHeight);
+    // Prefer the last clamp the renderer computed (overlay- and real-footer-aware).
+    // The footer estimate is only a fallback for the pre-first-render frame.
+    const maxScroll = lastMaxScroll ?? Math.max(0, conversation.history.getLineCount() - getViewportHeight());
     scrollTop = Math.max(0, Math.min(scrollTop + delta, maxScroll));
     // Re-lock if user scrolled to bottom, otherwise unlock
     scrollLocked = scrollTop >= maxScroll;
   };
 
   const scrollToEnd = (vHeight: number) => {
+    // Respect a manual scroll-up by the user: only auto-follow the tail when parked at the
+    // bottom (scrollLocked). submitInput re-locks on new input so turns resume following.
+    if (!scrollLocked) return;
     scrollTop = Math.max(0, conversation.history.getLineCount() - vHeight);
   };
 
@@ -217,7 +225,7 @@ async function main() {
       _unhandledRejectionWindowStart = now;
     }
     _unhandledRejectionCount++;
-    const msg = reason instanceof Error ? reason.message : String(reason);
+    const msg = summarizeError(reason);
     if (_unhandledRejectionCount > 3) {
       logger.error('CRITICAL: cascading unhandled rejections — consider restarting', {
         count: _unhandledRejectionCount,
@@ -240,23 +248,64 @@ async function main() {
     render();
   };
 
-  const exitApp = (): void => {
+  let terminalRestored = false;
+  // Idempotent, synchronous-only terminal restore. Safe to call from process.on('exit'),
+  // signal handlers, uncaughtException, and exitApp. Disposes the output guard FIRST so a
+  // crash stack reaches the real stderr instead of being suppressed by the guard.
+  const restoreTerminal = (): void => {
+    if (terminalRestored) return;
+    terminalRestored = true;
+    const exitScreen = cli.flags.noAltScreen ? CLEAR_SCREEN : CLEAR_SCREEN + ALT_SCREEN_EXIT;
+    allowTerminalWrite(() => stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + exitScreen));
+    terminalOutputGuard.dispose();
+    try { stdin.setRawMode(false); } catch { /* stdin may not be a TTY */ }
+  };
+
+  const uncaughtExceptionHandler = (err: Error): void => {
+    restoreTerminal();
+    logger.error('uncaughtException — terminal restored, exiting', { error: summarizeError(err) });
+    process.exit(1);
+  };
+  const terminationSignalHandler = (signal: NodeJS.Signals): void => {
+    restoreTerminal();
+    logger.error(`Received ${signal} — terminal restored, exiting`, {});
+    process.exit(signal === 'SIGHUP' ? 129 : 143);
+  };
+  const exitListener = (): void => { restoreTerminal(); };
+
+  let exiting = false;
+  const exitApp = async (): Promise<void> => {
+    // Reentrancy guard: a second /exit or keypress during the awaited shutdown below
+    // must not re-run teardown or double-fire ctx.shutdown.
+    if (exiting) return;
+    exiting = true;
     stopSpokenOutputForExit?.();
     unsubs.forEach(fn => fn());
-    const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
-    ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints()) }).catch((err) => {
-      logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: summarizeError(err) });
-    });
     if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
-    deleteRecoveryFile({ homeDirectory });
     stdin.removeAllListeners('data');
     stdout.removeListener('resize', resizeHandler);
     process.removeListener('SIGINT', sigintHandler);
     process.removeListener('unhandledRejection', unhandledRejectionHandler);
-    const exitScreen = cli.flags.noAltScreen ? CLEAR_SCREEN : CLEAR_SCREEN + ALT_SCREEN_EXIT;
-    allowTerminalWrite(() => stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + exitScreen));
-    terminalOutputGuard.dispose();
-    stdin.setRawMode(false);
+    // Restore the terminal synchronously BEFORE the (possibly slow) async shutdown so the
+    // user is not left staring at a frozen alt screen while we drain and persist.
+    restoreTerminal();
+    const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
+    let shutdownOk = false;
+    try {
+      // Race the graceful shutdown against a hard timeout — externalServices.stop() can hang
+      // and we must still exit; deferredStartup.drain only budgets 100ms internally.
+      await Promise.race([
+        ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints()) }).then(() => { shutdownOk = true; }),
+        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    } catch (err) {
+      logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: summarizeError(err) });
+    }
+    // Only remove the recovery fallback once the durable shutdown save actually completed,
+    // so an interrupted or timed-out shutdown leaves the snapshot for the next launch.
+    if (shutdownOk) {
+      deleteRecoveryFile({ homeDirectory });
+    }
     process.exit(0);
   };
 
@@ -456,6 +505,9 @@ async function main() {
 
     // Cache the current model for consistent values across the entire render frame
     const currentModel = providerRegistry.getCurrentModel();
+    // Resolve the effective context window (provider_api / configured_cap overrides) once,
+    // so the footer meter, footer-height, and context inspector agree with the Tokens panel.
+    const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
@@ -481,7 +533,7 @@ async function main() {
     const maintenanceStatus = evaluateSessionMaintenance({
       configManager,
       currentTokens: orchestrator.lastInputTokens,
-      contextWindow: currentModel.contextWindow,
+      contextWindow,
       sessionMemoryCount: ctx.services.sessionMemoryStore.list().length,
     });
     const contextStatusHint = buildContextStatusHint({
@@ -505,7 +557,7 @@ async function main() {
       toolCount: toolRegistry.list().length,
       workingDir,
       provider: runtime.provider,
-      contextWindow: currentModel.contextWindow,
+      contextWindow,
       contextStatusHint,
       // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
       // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
@@ -586,6 +638,7 @@ async function main() {
       overlayRows,
     });
     scrollTop = conversationViewport.nextScrollTop;
+    lastMaxScroll = conversationViewport.maxScroll;
     let viewport = conversationViewport.viewport;
 
     if (orchestrator.isThinking) {
@@ -628,7 +681,7 @@ async function main() {
       keybindingsManager: ctx.services.keybindingsManager,
       conversationWidth,
       viewportHeight: vHeight,
-      contextWindow: currentModel.contextWindow,
+      contextWindow,
     });
 
     // Panel composite data
@@ -731,6 +784,14 @@ async function main() {
       render();
     }
   });
+
+  // Register terminal-restoring crash/termination handlers BEFORE entering raw mode so a
+  // throw during terminal setup or the initial render still restores the terminal; the
+  // 'exit' listener is the final safety net for any process.exit path.
+  process.on('uncaughtException', uncaughtExceptionHandler);
+  process.on('SIGTERM', terminationSignalHandler);
+  process.on('SIGHUP', terminationSignalHandler);
+  process.on('exit', exitListener);
 
   // --- Terminal setup ---
   stdin.setRawMode(true);

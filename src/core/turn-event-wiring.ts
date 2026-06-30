@@ -1,6 +1,5 @@
 import type { UiRuntimeEvents } from '@/runtime/index.ts';
 import { buildPersistedSessionContext, persistConversation } from '@/runtime/index.ts';
-import { maybeAutoCompact } from './context-auto-compact.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { HookDispatcher, HookPhase, HookCategory, HookEventPath } from '@pellux/goodvibes-sdk/platform/hooks';
@@ -80,8 +79,13 @@ export interface WireTurnEventHandlersResult {
  * Responsibilities:
  *   - Auto-save conversation to persistent store after each LLM turn
  *   - Fire the Lifecycle:session:save hook
- *   - Trigger auto-compact when context usage exceeds the configured threshold
  *   - Refresh git status after turns and tool results
+ *
+ * Note: auto-compaction is intentionally NOT performed here. The SDK
+ * Orchestrator already runs post-turn context maintenance every turn
+ * (handlePostTurnContextMaintenance) using the resolved context window and
+ * its own getAutoCompactDecision; re-triggering it from the TUI duplicated
+ * that work and raced the SDK's compaction on the shared message array.
  *
  * Returns refreshGit (callable externally) and unsubs (push into parent unsubs).
  */
@@ -89,8 +93,7 @@ export function wireTurnEventHandlers(
   options: WireTurnEventHandlersOptions,
 ): WireTurnEventHandlersResult {
   const {
-    events, conversation, runtime, orchestrator, configManager,
-    providerRegistry, systemMessageRouter, hookDispatcher,
+    events, conversation, runtime, configManager, hookDispatcher,
     workingDir, homeDirectory, sessionManager, gitStatusProvider,
     lastGitInfoRef, buildSessionContinuityHints, render, webhookNotifier,
     _clock = Date.now,
@@ -161,18 +164,11 @@ export function wireTurnEventHandlers(
       } catch { /* best-effort */ }
       logger.debug('auto-save on turn:complete failed', { error: summarizeError(e) });
     }
-    // Auto-compact: check context usage and compact if threshold exceeded
-    const currentModelForCompact = providerRegistry.getCurrentModel();
-    maybeAutoCompact({
-      configManager: configManager as Parameters<typeof maybeAutoCompact>[0]['configManager'],
-      conversation,
-      providerRegistry: providerRegistry as Parameters<typeof maybeAutoCompact>[0]['providerRegistry'],
-      systemMessageRouter: systemMessageRouter as Parameters<typeof maybeAutoCompact>[0]['systemMessageRouter'],
-      model: runtime.model,
-      provider: runtime.provider,
-      lastInputTokens: orchestrator.lastInputTokens,
-      contextWindow: currentModelForCompact.contextWindow,
-    }).catch((err: unknown) => logger.debug('maybeAutoCompact error', { error: summarizeError(err) }));
+    // Auto-compaction is owned by the SDK Orchestrator's post-turn maintenance
+    // (handlePostTurnContextMaintenance), which runs on every turn against the
+    // resolved context window (getContextWindowForModel) via the SDK's
+    // getAutoCompactDecision (percentage threshold + 15k safety buffer +
+    // small-window handling). The TUI must not independently re-trigger it.
     refreshGit();
   }));
 

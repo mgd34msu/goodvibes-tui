@@ -30,6 +30,7 @@ import type {
 import { POLL_CADENCE_MS } from '../provider-adapter.ts';
 import { digestSender, toBodyPreview, toSubjectPreview } from '../mapping.ts';
 import { resolveRouteId } from './route-util.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const SLACK_API = 'https://slack.com/api';
 export const SLACK_PROVIDER_ID = 'slack';
@@ -258,5 +259,5 @@ function unavailable(error: string): ProviderPollResult {
 }
 
 function errMsg(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return summarizeError(error);
 }

@@ -10,6 +10,7 @@ import {
   resolveScrollablePanelSection,
   buildStyledPanelLine,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 
 // ---------------------------------------------------------------------------
@@ -56,25 +57,17 @@ const MIN_VISIBLE_DIFF_LINES = 5;
 // Colors
 // ---------------------------------------------------------------------------
 
-const C = {
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   branch: '#00d7ff',
-  clean: '#5fd700',
-  dirty: '#ffaf00',
-  ahead: '#5fd700',
-  behind: '#ff5f5f',
   sectionHeader: '244',
-  staged: '#5fd700',
-  unstaged: '#ff5f5f',
   commit: '250',
   commitHash: '238',
   commitAuthor: '244',
   selected: '#1c1c1c',
   selectedFg: '#ffffff',
-  diffAdd: '#5fd700',
-  diffRemove: '#ff5f5f',
   diffMeta: '#5f87ff',
   diffNeutral: '250',
-} as const;
+});
 
 // ---------------------------------------------------------------------------
 // GitPanel
@@ -352,7 +345,7 @@ export class GitPanel extends BasePanel {
       return this.renderMessage(width, height, 'Loading git status...', C.branch);
     }
     if (this.error) {
-      return this.renderMessage(width, height, `Git error: ${this.error}`, C.unstaged);
+      return this.renderMessage(width, height, `Git error: ${this.error}`, C.bad);
     }
     // I3: spinner during openDiff() async fetch
     if (this.loadingState === 'loading') {
@@ -398,15 +391,15 @@ export class GitPanel extends BasePanel {
     x = this.paintText(line, this.data.branch, x, width, C.branch, { bold: true });
 
     if (this.data.ahead > 0) {
-      x = this.paintText(line, ` +${this.data.ahead}`, x, width, C.ahead);
+      x = this.paintText(line, ` +${this.data.ahead}`, x, width, C.good);
     }
     if (this.data.behind > 0) {
-      x = this.paintText(line, ` -${this.data.behind}`, x, width, C.behind);
+      x = this.paintText(line, ` -${this.data.behind}`, x, width, C.bad);
     }
 
     const isDirty = this.data.stagedFiles.length > 0 || this.data.unstagedFiles.length > 0;
     const statusText = isDirty ? ' * dirty' : ' y clean';
-    const statusFg = isDirty ? C.dirty : C.clean;
+    const statusFg = isDirty ? C.warn : C.good;
     this.paintText(line, statusText, x, width, statusFg);
 
     return line;
@@ -418,7 +411,7 @@ export class GitPanel extends BasePanel {
 
   private renderFileRow(entry: GitFileEntry, selected: boolean, width: number): Line {
     const line = createEmptyLine(width);
-    const fg = entry.staged ? C.staged : C.unstaged;
+    const fg = entry.staged ? C.good : C.bad;
     const prefix = '  ';
     const label = `${prefix}${entry.path}`;
 
@@ -602,9 +595,9 @@ export class GitPanel extends BasePanel {
       const dLine = createEmptyLine(width);
       let fg: string;
       if (rawLine.startsWith('+') && !rawLine.startsWith('+++')) {
-        fg = C.diffAdd;
+        fg = C.good;
       } else if (rawLine.startsWith('-') && !rawLine.startsWith('---')) {
-        fg = C.diffRemove;
+        fg = C.bad;
       } else if (rawLine.startsWith('@@') || rawLine.startsWith('diff') || rawLine.startsWith('index')) {
         fg = C.diffMeta;
       } else {

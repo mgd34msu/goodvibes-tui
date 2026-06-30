@@ -26,7 +26,8 @@
  *    journal silently and return.
  * 3. If records are found, apply the final record's messages — each journal
  *    record carries the full conversation snapshot at that moment, so the
- *    last record by seq is the authoritative post-crash state.
+ *    record with the newest timestamp is the authoritative post-crash state
+ *    (resilient to seq collisions across re-inits onto a stale journal file).
  * 4. Rebuild the conversation history and call the snapshot writer so the
  *    gap is durably closed before the user sees the restored conversation.
  * 5. Rotate the journal (it is no longer needed as a gap-filler).
@@ -64,8 +65,6 @@ export interface ReplayIntoConversationResult {
   readonly replayed: number;
   /** True if the journal tail was corrupt (quarantined). */
   readonly hadCorruptTail: boolean;
-  /** True if the journal had an unrecognised schema version (quarantined). */
-  readonly hadVersionMismatch: boolean;
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -85,29 +84,36 @@ export function replayJournalIntoConversation(
   try {
     const { records, hadCorruptTail } = replayJournal(journalPath, snapshotTimestamp);
 
-    // Detect version mismatch: replayJournal quarantines and returns
-    // hadCorruptTail=true + 0 records when the header version is wrong.
-    // We distinguish it from a genuine corrupt tail by checking whether the
-    // journal file still exists (quarantine renames it away in both cases,
-    // so we cannot inspect the header at this point). We surface both cases
-    // through hadCorruptTail to the caller; hadVersionMismatch is derived
-    // from it to give the caller a distinct notice option.
-    const hadVersionMismatch = hadCorruptTail && records.length === 0;
-
     const journal = openTranscriptJournal(journalPath, sessionId);
 
     if (records.length === 0) {
       // Nothing to replay — rotate the (now-stale) journal silently.
       journal.rotate();
-      return { replayed: 0, hadCorruptTail, hadVersionMismatch };
+      return { replayed: 0, hadCorruptTail };
     }
 
-    // The last record (highest seq) holds the most recent full conversation
-    // state captured before the crash. Apply it.
-    const lastRecord = records[records.length - 1]!;
+    // Select the authoritative record by newest wall-clock timestamp (tie-broken
+    // by highest seq). Each record carries the full conversation snapshot at its
+    // moment, so the newest ts is by definition the most recent state. This is
+    // resilient to seq collisions that arise when a fresh process appends to a
+    // pre-existing, non-rotated journal: its records restart at seq 0 after the
+    // surviving old records, so "last by seq" could otherwise pick a stale one.
+    const lastRecord = records.reduce((newest, candidate) =>
+      candidate.ts > newest.ts ||
+      (candidate.ts === newest.ts && candidate.seq > newest.seq)
+        ? candidate
+        : newest,
+    );
     const replayedMessages = lastRecord.messages as ConversationMessageSnapshot[];
 
+    // Preserve the session identity (title/titleSource/branches/currentBranch)
+    // that the resume seam already hydrated onto the live conversation. Journal
+    // records carry only messages, so a bare fromJSON would blank the title and
+    // reset titleSource to the system default — and the next TURN_COMPLETED
+    // snapshot would then persist the empty title, making the loss permanent.
+    const preserved = conversation.toJSON();
     conversation.fromJSON({
+      ...preserved,
       messages: replayedMessages as never[],
     });
     conversation.rebuildHistory();
@@ -123,10 +129,10 @@ export function replayJournalIntoConversation(
     // Rotate the journal — it is no longer needed as a gap-filler.
     journal.rotate();
 
-    return { replayed: records.length, hadCorruptTail, hadVersionMismatch: false };
+    return { replayed: records.length, hadCorruptTail };
   } catch {
     // Absolute last-resort guard — recovery must never crash a resume.
-    return { replayed: 0, hadCorruptTail: false, hadVersionMismatch: false };
+    return { replayed: 0, hadCorruptTail: false };
   }
 }
 

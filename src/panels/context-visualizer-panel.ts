@@ -18,14 +18,12 @@ import {
   buildStyledPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 
-const C = {
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   convFg: '#cc99ff',
-  overFg: '#ff6666',
-  barEmpty: '#333344',
-  labelFg: '#8888bb',
-} as const;
+});
 
 
 
@@ -49,8 +47,9 @@ export class ContextVisualizerPanel extends BasePanel {
     sessionMemoryStore: SessionMemoryQuery,
     private readonly configManager: Pick<ConfigManager, 'get'>,
     private getUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
-    private contextLimit?: number,
+    private contextLimit?: number | (() => number),
     private sessionReadModel?: UiReadModel<UiSessionSnapshot>,
+    private getLastInputTokens?: () => number,
   ) {
     super('context', 'Context', 'C', 'ai');
     this.sessionMemoryStore = sessionMemoryStore;
@@ -80,7 +79,7 @@ export class ContextVisualizerPanel extends BasePanel {
     const pct = limit > 0 ? Math.min(100, Math.round((input / limit) * 100)) : 0;
     const barWidth = Math.max(1, width - 2);
     const overLimit = limit > 0 && input > limit;
-    const fg = overLimit ? C.overFg : C.convFg;
+    const fg = overLimit ? C.bad : C.convFg;
     if (limit <= 0) {
       return buildPanelWorkspace(width, height, {
         title: ' Context Usage',
@@ -138,10 +137,10 @@ export class ContextVisualizerPanel extends BasePanel {
   private _renderBar(width: number, barWidth: number, input: number, limit: number): Line {
     const filled = limit > 0 ? Math.min(barWidth, Math.round((input / limit) * barWidth)) : 0;
     const overLimit = limit > 0 && input > limit;
-    const barFg = overLimit ? C.overFg : C.convFg;
+    const barFg = overLimit ? C.bad : C.convFg;
     return buildMeterLine(width, filled, barWidth, {
       filled: barFg,
-      empty: C.barEmpty,
+      empty: C.empty,
       label: DEFAULT_PANEL_PALETTE.dim,
     });
   }
@@ -151,7 +150,7 @@ export class ContextVisualizerPanel extends BasePanel {
     const valStr = formatK(val).padStart(7);
     const pctStr = `${pct}%`.padStart(5);
     return buildStyledPanelLine(width, [
-      { text: labelPadded, fg: C.labelFg },
+      { text: labelPadded, fg: C.label },
       { text: valStr, fg },
       { text: '  ', fg: DEFAULT_PANEL_PALETTE.dim },
       { text: pctStr, fg },
@@ -159,10 +158,21 @@ export class ContextVisualizerPanel extends BasePanel {
   }
 
   private _refresh(): void {
-    const usage = this.getUsage?.();
-    if (usage) {
-      this.snapshot.input = usage.input;
-      this.snapshot.limit = this.contextLimit ?? 0;
+    // Resolve the context window live so the panel tracks /model switches when a
+    // getter is supplied; a plain number stays fixed at its provided value.
+    this.snapshot.limit =
+      typeof this.contextLimit === 'function' ? this.contextLimit() : (this.contextLimit ?? 0);
+    // Prefer the live per-call input occupancy (cache-inclusive, matching the
+    // Tokens panel and the auto-compaction threshold) when a getter is wired;
+    // otherwise fall back to the cumulative usage input.
+    const lastInput = this.getLastInputTokens?.();
+    if (lastInput !== undefined) {
+      this.snapshot.input = lastInput;
+    } else {
+      const usage = this.getUsage?.();
+      if (usage) {
+        this.snapshot.input = usage.input;
+      }
     }
     this.markDirty();
   }

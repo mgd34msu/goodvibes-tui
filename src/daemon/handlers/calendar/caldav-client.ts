@@ -26,6 +26,7 @@ import {
   type GenerateICalInput,
   type ParsedICalEvent,
 } from './ics.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -586,7 +587,7 @@ export function createCalDavClient(options: CreateCalDavClientOptions): CalDavCl
           eventIds.push(toRelativeHref(joinUrl(collectionPathOrRoot(collectionUrl, config.baseUrl), resourcePath)));
           imported += 1;
         } catch (error) {
-          const message = error instanceof HandlerError ? error.message : error instanceof Error ? error.message : String(error);
+          const message = error instanceof HandlerError ? error.message : summarizeError(error);
           errors.push(`${uid}: ${message}`);
         }
       }

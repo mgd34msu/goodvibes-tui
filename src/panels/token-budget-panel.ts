@@ -12,6 +12,7 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 
@@ -32,22 +33,16 @@ interface TurnUsage {
 // Colors
 // ---------------------------------------------------------------------------
 
-const C = {
-  title: '#00ffff',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // Token data-series colors (input/output/cache) — categorical, no shared equivalent
   input: '#00ffff',
   output: '#d000ff',
   cacheRead: '#00d700',
   cacheWrite: '#ffaf00',
+  // Progress-bar track shade and per-turn table sub-header gray
   barBg: '236',
-  label: '244',
-  value: '252',
-  sectionHeader: '238',
-  warnYellow: '#ffaf00',
-  warnRed: '#ff5f5f',
-  dim: '240',
-  good: '#5fd700',
   turnHeader: '242',
-} as const;
+});
 
 // Warning thresholds for context window usage
 const WARN_YELLOW = 0.70;
@@ -99,11 +94,17 @@ export class TokenBudgetPanel extends BasePanel {
   private sessionReadModel: UiReadModel<UiSessionSnapshot> | null = null;
   private readonly sessionMemoryStore: SessionMemoryQuery;
   private readonly configManager: Pick<ConfigManager, 'get'>;
+  private readonly requestRender: () => void;
 
-  constructor(sessionMemoryStore: SessionMemoryQuery, configManager: Pick<ConfigManager, 'get'>) {
+  constructor(
+    sessionMemoryStore: SessionMemoryQuery,
+    configManager: Pick<ConfigManager, 'get'>,
+    requestRender: () => void = () => {},
+  ) {
     super('tokens', 'Tokens', 'T', 'monitoring');
     this.sessionMemoryStore = sessionMemoryStore;
     this.configManager = configManager;
+    this.requestRender = requestRender;
   }
 
   // ---------------------------------------------------------------------------
@@ -149,7 +150,7 @@ export class TokenBudgetPanel extends BasePanel {
       this.turnHistory.shift();
     }
 
-    this.refresh();
+    this._refreshAndRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -161,11 +162,17 @@ export class TokenBudgetPanel extends BasePanel {
     this.refresh();
     // Poll every 2 s while active so the context bar stays current during streaming
     if (this.refreshTimer !== null) clearInterval(this.refreshTimer);
-    this.refreshTimer = setInterval(() => this.refresh(), 2_000);
+    this.refreshTimer = setInterval(() => this._refreshAndRender(), 2_000);
   }
 
   override onDeactivate(): void {
     super.onDeactivate();
+    // Stop the off-screen poll so a backgrounded Tokens tab does not keep
+    // refreshing (and, once requestRender is wired, force a repaint) every 2 s.
+    if (this.refreshTimer !== null) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
   }
 
   override onDestroy(): void {
@@ -192,6 +199,15 @@ export class TokenBudgetPanel extends BasePanel {
       this.contextWindow = this.getContextWindow();
     }
     this.markDirty();
+  }
+
+  /**
+   * Refresh data and request a repaint. Used by the background poll and on
+   * turn completion, where no key event will otherwise drive a render.
+   */
+  private _refreshAndRender(): void {
+    this.refresh();
+    this.requestRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -369,10 +385,10 @@ export class TokenBudgetPanel extends BasePanel {
     let barColor: string;
     let warnSuffix = '';
     if (pct >= WARN_RED) {
-      barColor = C.warnRed;
+      barColor = C.bad;
       warnSuffix = ' ! CRITICAL';
     } else if (pct >= WARN_YELLOW) {
-      barColor = C.warnYellow;
+      barColor = C.warn;
       warnSuffix = ' ! HIGH';
     } else {
       barColor = C.good;

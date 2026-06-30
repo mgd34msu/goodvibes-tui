@@ -17,6 +17,7 @@ import type {
   OnboardingApplyRequest,
   OnboardingApplyResult,
 } from './types.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function getNow(deps: Pick<OnboardingApplyDependencies, 'clock'>): number {
   return deps.clock?.() ?? Date.now();
@@ -116,7 +117,7 @@ async function runRollbacks(rollbacks: readonly RollbackAction[]): Promise<reado
     try {
       await rollback();
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error));
+      errors.push(summarizeError(error));
     }
   }
   return errors;
@@ -523,7 +524,7 @@ function prevalidateApplyRequest(
     } catch (error) {
       errors.push({
         kind: operation.kind,
-        message: error instanceof Error ? error.message : String(error),
+        message: summarizeError(error),
       });
     }
   }
@@ -595,7 +596,7 @@ export async function applyOnboardingRequest(
         errors.push({
           kind: operation.kind,
           message: [
-            error instanceof Error ? error.message : String(error),
+            summarizeError(error),
             ...rollbackErrors.map((rollbackError) => `rollback: ${rollbackError}`),
           ].join('; '),
         });

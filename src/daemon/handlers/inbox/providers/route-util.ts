@@ -3,6 +3,7 @@
 // surface) so a route lookup can never crash a provider poll.
 
 import type { AdapterContext, InboundChannelItem } from '../provider-adapter.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export async function resolveRouteId(
   ctx: AdapterContext,
@@ -16,7 +17,7 @@ export async function resolveRouteId(
   } catch (error) {
     ctx.logger.warn('route resolution failed', {
       provider,
-      error: error instanceof Error ? error.message : String(error),
+      error: summarizeError(error),
     });
     return undefined;
   }

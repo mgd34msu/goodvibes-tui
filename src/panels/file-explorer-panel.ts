@@ -24,6 +24,7 @@ import {
   isPanelSearchCommit,
   isPanelSearchPrintable,
 } from './search-focus.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -342,7 +343,7 @@ export class FileExplorerPanel extends BasePanel {
           this.cacheValid = true;
         });
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
       }
       this.markDirty();
     })();

@@ -22,6 +22,7 @@ import {
   getCloudflareSetupSource,
   shouldShowCloudflareStep,
 } from './onboarding/onboarding-wizard-cloudflare.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 type CloudflareOnboardingAction = Extract<OnboardingWizardAction,
   | 'cloudflare-token-requirements'
@@ -44,7 +45,7 @@ function normalizeCloudflareActionError(error: unknown): string {
   if (error instanceof CloudflareDaemonRouteError) {
     return `${error.message} (HTTP ${error.status}, ${error.code})`;
   }
-  return error instanceof Error ? error.message : String(error);
+  return summarizeError(error);
 }
 
 function setCloudflareWizardStatusForHandler(

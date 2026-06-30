@@ -8,6 +8,7 @@ import {
   buildEmptyState,
   buildPanelLine,
   buildPanelWorkspace,
+  extendPalette,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
@@ -17,12 +18,9 @@ import {
 // Colors
 // ---------------------------------------------------------------------------
 
-const C = {
-  header: '#00d7ff',
-  sectionHeader: '244',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   enabled: '#5fd700',
   disabled: '#6c6c6c',
-  selected: '#1c1c1c',
   selectedFg: '#ffffff',
   id: '238',
   cron: '#af87ff',
@@ -32,8 +30,7 @@ const C = {
   runCount: '#ffaf00',
   statusRunning: '#5fd700',
   statusFailed: '#ff5f5f',
-  hint: '240',
-} as const;
+});
 
 // ---------------------------------------------------------------------------
 // View items
@@ -289,7 +286,7 @@ export class SchedulePanel extends BasePanel {
    *   Row 3:          prompt preview  [history]
    */
   private renderTask(task: AutomationJob, history: AutomationRun[], selected: boolean, width: number): Line[] {
-    const bg = selected ? C.selected : undefined;
+    const bg = selected ? C.selectBg : undefined;
     const fgBase = selected ? C.selectedFg : undefined;
 
     const bullet = task.enabled ? '* ' : 'o ';

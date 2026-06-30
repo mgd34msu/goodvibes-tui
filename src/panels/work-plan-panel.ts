@@ -2,6 +2,7 @@ import type { Line } from '../types/grid.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { WorkPlanItem, WorkPlanItemStatus, WorkPlanStore } from '../work-plans/work-plan-store.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const STATUS_LABEL: Record<WorkPlanItemStatus, string> = {
   pending: '[ ]',
@@ -98,7 +99,7 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
           return super.handleInput(key);
       }
     } catch (error) {
-      this.setError(error instanceof Error ? error.message : String(error));
+      this.setError(summarizeError(error));
       return true;
     }
   }

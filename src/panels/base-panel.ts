@@ -142,7 +142,8 @@ export abstract class BasePanel implements Panel {
    */
   protected renderLoadingLine(width: number, frame = 0): Line | null {
     if (this.loadingState !== 'loading') return null;
-    const spinner = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? SPINNER_FRAMES[0]!;
+    const idx = (frame || Math.floor(Date.now() / 100)) % SPINNER_FRAMES.length;
+    const spinner = SPINNER_FRAMES[idx] ?? SPINNER_FRAMES[0]!;
     const text = ` ${spinner} ${this._loadingLabel}`;
     return UIFactory.stringToLine(fitDisplay(text, width), width, { fg: '135', bold: true });
   }

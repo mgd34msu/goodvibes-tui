@@ -12,25 +12,20 @@ import {
   buildStyledPanelLine,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
+  extendPalette,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 
-const C = {
-  headerBg:    '#1a1a2e',
-  headerFg:    '#ffffff',
-  statusBar:   '#222233',
-  statusFg:    '#aaaaaa',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // Domain-specific reasoning tones (purples) and the active-stream cyan have no
+  // clean shared equivalent; selection background maps to the shared selectBg.
   reasoningFg: '#aa88ff',
   activeFg:    '#cc99ff',
-  dimFg:       '#555566',
   turnLabel:   '#7766bb',
   activeLabel: '#00ffff',
-  collapsedFg: '#888899',
-  selected:    '#00ffff',
-  selectedBg:  '#1a2a3a',
-} as const;
+});
 
 interface ReasoningBlock {
   turnId: number;
@@ -195,7 +190,7 @@ export class ThinkingPanel extends BasePanel {
   }
 
   private _renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
-    const bg = isCursor ? C.selectedBg : '';
+    const bg = isCursor ? C.selectBg : '';
     if (row.kind === 'header') {
       const indicator = this.blocks[row.blockIndex]?.collapsed ? '▸' : '▾';
       const active = this.blocks[row.blockIndex]?.active;

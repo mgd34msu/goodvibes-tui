@@ -13,26 +13,18 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 
-const C = {
-  headerBg:    '#1a1a2e',
-  headerFg:    '#ffffff',
-  statusBar:   '#222233',
-  statusFg:    '#aaaaaa',
-  toolFg:      '#00ccff',
-  resultFg:    '#66ddff',
-  errorFg:     '#ff6666',
-  durationFg:  '#aaaa66',
-  argsFg:      '#aaaaaa',
-  dimFg:       '#555566',
-  selected:    '#00ffff',
-  selectedBg:  '#1a2a3a',
-  labelFg:     '#8888bb',
-  filterFg:    '#ffcc44',
-} as const;
+// Panel-specific accents only; shared tones come from DEFAULT_PANEL_PALETTE so
+// theme changes propagate. selectedBg->selectBg, errorFg->bad are shared keys.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  selected: '#00ffff',
+  toolFg:   '#00ccff',
+  argsFg:   '#aaaaaa',
+});
 
 const MAX_ENTRIES = 500;
 
@@ -271,7 +263,7 @@ export class ToolInspectorPanel extends BasePanel {
   }
 
   private _renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
-    const bg = isCursor ? C.selectedBg : '';
+    const bg = isCursor ? C.selectBg : '';
     if (row.kind === 'call') {
       return buildStyledPanelLine(width, [
         { text: isCursor ? '▸' : ' ', fg: C.selected, bg, bold: isCursor },
@@ -280,7 +272,7 @@ export class ToolInspectorPanel extends BasePanel {
     }
     return buildStyledPanelLine(width, [
       { text: '  ', fg: C.argsFg, bg },
-      { text: truncateDisplay(row.text, Math.max(0, width - 2)), fg: row.isError ? C.errorFg : C.argsFg, bg },
+      { text: truncateDisplay(row.text, Math.max(0, width - 2)), fg: row.isError ? C.bad : C.argsFg, bg },
     ]);
   }
 

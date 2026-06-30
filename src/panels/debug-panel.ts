@@ -11,6 +11,7 @@ import {
   resolveScrollablePanelSection,
   resolveStackedScrollableSections,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 
@@ -52,24 +53,12 @@ const MAX_ERROR_LOG  = 20;
 // Colors
 // ---------------------------------------------------------------------------
 
-const C = {
-  title:      '#00ffff',
-  ok:         '#5fd700',
-  error:      '#ff5f5f',
-  warn:       '#ffaf00',
-  label:      '244',
-  value:      '252',
-  dim:        '240',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   provName:   '#e2e8f0',
-  separator:  '#374151',
   input:      '#00ffff',
   output:     '#d000ff',
-  latGood:    '#5fd700',
-  latWarn:    '#ffaf00',
-  latBad:     '#ff5f5f',
-  sectionHdr: '238',
   colHdr:     '242',
-} as const;
+});
 
 const LATENCY_WARN_MS = 2_000;
 const LATENCY_BAD_MS  = 5_000;
@@ -99,9 +88,9 @@ function fmtAgo(ts: number): string {
 }
 
 function latColor(ms: number): string {
-  if (ms >= LATENCY_BAD_MS)  return C.latBad;
-  if (ms >= LATENCY_WARN_MS) return C.latWarn;
-  return C.latGood;
+  if (ms >= LATENCY_BAD_MS)  return C.bad;
+  if (ms >= LATENCY_WARN_MS) return C.warn;
+  return C.good;
 }
 
 function statusCodeFromError(msg: string): number {
@@ -346,9 +335,9 @@ export class DebugPanel extends BasePanel {
         { text: ' Calls: ', fg: C.label },
         { text: String(this._totalCalls), fg: C.value },
         { text: '  OK: ', fg: C.label },
-        { text: String(okCount), fg: C.ok },
+        { text: String(okCount), fg: C.good },
         { text: '  Errors: ', fg: C.label },
-        { text: String(errCount), fg: errCount > 0 ? C.error : C.dim },
+        { text: String(errCount), fg: errCount > 0 ? C.bad : C.dim },
       ]),
     ];
   }
@@ -372,7 +361,7 @@ export class DebugPanel extends BasePanel {
   private _callLogRow(e: ApiCallEntry, width: number): Line {
     const timeStr    = fmtAgo(e.ts).padEnd(8);
     const statusChar = e.status === 'ok' ? '✓' : '✕';
-    const statusFg   = e.status === 'ok' ? C.ok : C.error;
+    const statusFg   = e.status === 'ok' ? C.good : C.bad;
     const provStr    = e.provider.slice(0, 11).padEnd(12);
     const modelStr   = e.model.slice(0, 19).padEnd(20);
     const inStr      = fmtTok(e.inputTokens).padStart(8);
@@ -391,7 +380,7 @@ export class DebugPanel extends BasePanel {
 
     // Append status code for errors
     if (e.status === 'error' && e.statusCode > 0) {
-      segments.push({ text: ` [${e.statusCode}]`, fg: C.error });
+      segments.push({ text: ` [${e.statusCode}]`, fg: C.bad });
     }
 
     return buildStyledPanelLine(
@@ -414,7 +403,7 @@ export class DebugPanel extends BasePanel {
     const codeStr  = e.statusCode > 0 ? `[${e.statusCode}] ` : '';
     const msgStr   = (e.errorMessage ?? 'unknown error').slice(0, width - 12 - codeStr.length);
     const full     = `  ${timeStr} ${codeStr}${msgStr}`;
-    return this._textLine(full.slice(0, width), C.error, width);
+    return this._textLine(full.slice(0, width), C.bad, width);
   }
 
   // -------------------------------------------------------------------------

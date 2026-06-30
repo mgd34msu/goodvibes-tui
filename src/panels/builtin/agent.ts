@@ -46,8 +46,9 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       deps.sessionMemoryStore,
       deps.configManager,
       deps.getOrchestratorUsage,
-      deps.contextWindow,
+      deps.getCtxWindow ?? deps.contextWindow,
       requireUiServices(deps).readModels.session,
+      () => deps.orchestrator?.lastInputTokens ?? 0,
     ),
   });
 
@@ -63,6 +64,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       return new AgentLogsPanel(ui.events.agents, {
         agentManager: ui.agents.agentManager,
         workingDirectory: ui.environment.workingDirectory,
+        requestRender: deps.requestRender,
       });
     },
   });
