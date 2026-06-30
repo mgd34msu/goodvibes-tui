@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import type { UiCockpitSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import type { CockpitRosterReadModel } from './cockpit-read-model.ts';
@@ -171,7 +172,7 @@ export class CockpitPanel extends BasePanel {
         [entry.status, statusColor],
         stalledBadge,
         ['  ', C.dim],
-        [entry.task.slice(0, Math.max(0, width - 30)), C.label],
+        [truncateDisplay(entry.task, Math.max(0, width - 30)), C.label],
       ]));
     }
     if (roster.length === 0) {
@@ -238,7 +239,7 @@ export class CockpitPanel extends BasePanel {
         [' latest incident ', C.label],
         [snapshot.latestIncident.classification, C.bad],
         ['  ', C.label],
-        [snapshot.latestIncident.summary.slice(0, Math.max(0, width - 19 - snapshot.latestIncident.classification.length)), C.dim],
+        [truncateDisplay(snapshot.latestIncident.summary, Math.max(0, width - 19 - snapshot.latestIncident.classification.length)), C.dim],
       ]));
     }
     const domainLines: Line[] = [buildPanelLine(width, [[
@@ -283,18 +284,36 @@ export class CockpitPanel extends BasePanel {
       workspaceLines.push(...this.renderAgentsWorkspace(width));
     }
 
+    // Visible workspace selector so focus and the available workspaces are
+    // obvious at a glance (not buried in a footer string). Rendered as a
+    // title-less row to keep it compact; the ▸ marker + accent show focus.
+    const selectorLine = buildPanelLine(width, [
+      [' switch ', C.label],
+      ...WORKSPACE_IDS.flatMap((id, i): Array<[string, string, string?]> => {
+        const focused = i === this.selectedWorkspaceIndex;
+        return [
+          [focused ? '▸' : ' ', focused ? C.value : C.dim],
+          [`${id} `, focused ? C.header : C.dim, focused ? C.headerBg : undefined],
+        ];
+      }),
+    ]);
+
     const sections: PanelWorkspaceSection[] = [
+      { lines: [selectorLine] },
       { title: 'Flow', lines: flowLines },
       { title: 'Governance', lines: governanceLines },
       { title: 'Health', lines: healthLines },
       { title: 'Domains', lines: domainLines },
-      { title: 'Selected Workspace', lines: workspaceLines },
+      { title: `Workspace · ${selectedWorkspace}`, lines: workspaceLines },
     ];
+    // Context-aware footer: surface the keys that actually work in this view.
+    const footerHint = selectedWorkspace === 'agents'
+      ? '  ←/→ workspace  ↑/↓ select agent  i inspect  c cancel  Home/End jump'
+      : '  ←/→ workspace  Home/End jump  → agents for per-agent inspect/cancel';
     const lines = buildPanelWorkspace(width, height, {
       title: 'Operator Cockpit',
-      intro: 'Live runtime pressure across orchestration, approvals, governance, integrations, and provider trust posture.',
       sections,
-      footerLines: [buildPanelLine(width, [[`  Left/Right move workspace focus  Home/End jump  focus=${selectedWorkspace}`, C.dim]])],
+      footerLines: [buildPanelLine(width, [[footerHint, C.dim]])],
       palette: C,
     });
     while (lines.length < height) lines.push(createEmptyLine(width));
