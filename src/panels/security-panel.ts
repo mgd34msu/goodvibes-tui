@@ -277,7 +277,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       }
       if (latestIncident) {
         detailLines.push(buildPanelLine(width, [[
-          `Latest incident: ${latestIncident.classification} - ${latestIncident.summary}`.slice(0, width),
+          truncateDisplay(`Latest incident: ${latestIncident.classification} - ${latestIncident.summary}`, width),
           C.warn,
         ]]));
       }

@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildDetailBlock,
@@ -137,7 +138,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   protected renderItem(user: LocalAuthUser, _index: number, selected: boolean, width: number): Line {
     return buildPanelListRow(width, [
       { text: user.username.padEnd(20), fg: C.value },
-      { text: ` roles=${formatRoles(user.roles)}`.slice(0, Math.max(0, width - 24)), fg: C.info },
+      { text: truncateDisplay(` roles=${formatRoles(user.roles)}`, Math.max(0, width - 24)), fg: C.info },
     ], C, { selected });
   }
 
@@ -174,7 +175,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
         buildPanelLine(width, [[' user store ', C.label], [snapshot.userStorePath.slice(0, Math.max(0, width - 13)), C.dim]]),
         buildPanelLine(width, [[' bootstrap file ', C.label], [snapshot.bootstrapCredentialPath.slice(0, Math.max(0, width - 18)), C.dim]]),
         ...(issueMessages.length > 0
-          ? issueMessages.map((issue) => buildPanelLine(width, [[` issue: ${issue}`.slice(0, Math.max(0, width)), C.warn]]))
+          ? issueMessages.map((issue) => buildPanelLine(width, [[truncateDisplay(` issue: ${issue}`, width), C.warn]]))
           : [buildPanelLine(width, [[' local auth posture looks healthy.', C.good]])]),
         buildGuidanceLine(width, '/auth local rotate-password <user>', 'open masked password entry for the selected user (no plaintext in history)', C),
       ], C),
@@ -199,8 +200,8 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
       footerLines.push(
         ...buildDetailBlock(width, 'Selected user', [
           buildPanelLine(width, [[' username ', C.label], [selected.username, C.value], ['  roles ', C.label], [formatRoles(selected.roles).slice(0, Math.max(0, width - 23)), C.info]]),
-          buildPanelLine(width, [[` next: /auth local rotate-password ${selected.username}`.slice(0, Math.max(0, width)), C.dim]]),
-          buildPanelLine(width, [[` next: /auth local delete-user ${selected.username}`.slice(0, Math.max(0, width)), C.dim]]),
+          buildPanelLine(width, [[truncateDisplay(` next: /auth local rotate-password ${selected.username}`, width), C.dim]]),
+          buildPanelLine(width, [[truncateDisplay(` next: /auth local delete-user ${selected.username}`, width), C.dim]]),
         ], C),
       );
     }
@@ -210,7 +211,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
         ...snapshot.sessions.slice(0, 8).map((session) => buildPanelLine(width, [
           [' ', C.label],
           [session.username.padEnd(18), C.value],
-          [` expires ${new Date(session.expiresAt).toLocaleString()}`.slice(0, Math.max(0, width - 20)), C.dim],
+          [truncateDisplay(` expires ${new Date(session.expiresAt).toLocaleString()}`, Math.max(0, width - 20)), C.dim],
         ])),
       );
     }
