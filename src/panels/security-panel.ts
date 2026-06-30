@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security';
 import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.ts';
@@ -205,15 +206,15 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       attackPathLines.push(buildPanelLine(width, [[' MCP attack-path review', C.label]]));
       for (const finding of attackPathReview.findings.slice(0, 3)) {
         attackPathLines.push(buildPanelLine(width, [[
-          `  ${finding.severity.toUpperCase()} ${finding.serverName}: ${finding.route}`.slice(0, width),
+          truncateDisplay(`  ${finding.severity.toUpperCase()} ${finding.serverName}: ${finding.route}`, width),
           severityColor(finding.severity),
         ]]));
         attackPathLines.push(buildPanelLine(width, [[
-          `    ${finding.reason}`.slice(0, width),
+          truncateDisplay(`    ${finding.reason}`, width),
           C.dim,
         ]]));
         attackPathLines.push(buildPanelLine(width, [[
-          `    evidence: ${finding.evidence.join(' | ')}`.slice(0, width),
+          truncateDisplay(`    evidence: ${finding.evidence.join(' | ')}`, width),
           C.dim,
         ]]));
       }
@@ -234,7 +235,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         ['  Scope: ', C.label],
         [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
         ['  Excess: ', C.label],
-        [(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none').slice(0, Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
+        [truncateDisplay(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none', Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
       ]));
       detailLines.push(buildPanelLine(width, [
         ['  Rotation: ', C.label],
@@ -250,27 +251,27 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       ]]));
       if (preflightStatus !== 'n/a') {
         detailLines.push(buildPanelLine(width, [[
-          `Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`.slice(0, width),
+          truncateDisplay(`Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`, width),
           preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : C.dim,
         ]]));
       }
       if (quarantinedMcp.length > 0) {
         const server = quarantinedMcp[0]!;
         detailLines.push(buildPanelLine(width, [[
-          `MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`.slice(0, width),
+          truncateDisplay(`MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`, width),
           C.error,
         ]]));
       }
       if (quarantinedPlugins.length > 0) {
         const plugin = quarantinedPlugins[0]!;
         detailLines.push(buildPanelLine(width, [[
-          `Plugin quarantine: ${plugin.name} (${plugin.trustTier})`.slice(0, width),
+          truncateDisplay(`Plugin quarantine: ${plugin.name} (${plugin.trustTier})`, width),
           C.error,
         ]]));
       } else if (untrustedPlugins.length > 0) {
         const plugin = untrustedPlugins[0]!;
         detailLines.push(buildPanelLine(width, [[
-          `Plugin trust warning: ${plugin.name} remains untrusted.`.slice(0, width),
+          truncateDisplay(`Plugin trust warning: ${plugin.name} remains untrusted.`, width),
           C.warn,
         ]]));
       }

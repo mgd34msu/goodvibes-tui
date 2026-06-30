@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildDetailBlock,
@@ -140,8 +141,8 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
         { label: 'oauth ready', value: selected.oauthReady ? 'yes' : 'no', valueColor: selected.oauthReady ? C.info : C.dim },
         { label: 'pending login', value: selected.pendingLogin ? 'yes' : 'no', valueColor: selected.pendingLogin ? C.warn : C.dim },
       ], C),
-      buildPanelLine(width, [[`  Active route reason: ${selected.activeRouteReason}`.slice(0, width), C.dim]]),
-      buildPanelLine(width, [[`  Available routes: ${selected.availableRoutes.join(', ') || 'unconfigured'}`.slice(0, width), C.dim]]),
+      buildPanelLine(width, [[truncateDisplay(`  Active route reason: ${selected.activeRouteReason}`, width), C.dim]]),
+      buildPanelLine(width, [[truncateDisplay(`  Available routes: ${selected.availableRoutes.join(', ') || 'unconfigured'}`, width), C.dim]]),
     ];
     if (selected.expiresAt) {
       detailRows.push(buildPanelLine(width, [
@@ -152,28 +153,28 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
       ]));
     }
     if (selected.fallbackRisk) {
-      detailRows.push(buildPanelLine(width, [[`  fallback: ${selected.fallbackRisk}`.slice(0, width), C.warn]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  fallback: ${selected.fallbackRisk}`, width), C.warn]]));
     }
     for (const route of selected.routeRecords) {
       detailRows.push(buildPanelLine(width, [[
-        `  route ${route.route}: ${route.usable ? 'usable' : 'blocked'} • ${route.freshness} • ${route.detail}`.slice(0, width),
+        truncateDisplay(`  route ${route.route}: ${route.usable ? 'usable' : 'blocked'} • ${route.freshness} • ${route.detail}`, width),
         route.usable ? C.dim : C.bad,
       ]]));
       for (const issue of route.issues) {
-        detailRows.push(buildPanelLine(width, [[`    issue: ${issue}`.slice(0, width), C.bad]]));
+        detailRows.push(buildPanelLine(width, [[truncateDisplay(`    issue: ${issue}`, width), C.bad]]));
       }
     }
     for (const windowHint of selected.usageWindows) {
-      detailRows.push(buildPanelLine(width, [[`  ${windowHint.label}: ${windowHint.detail}`.slice(0, width), C.dim]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  ${windowHint.label}: ${windowHint.detail}`, width), C.dim]]));
     }
     for (const issue of selected.issues) {
-      detailRows.push(buildPanelLine(width, [[`  issue: ${issue}`.slice(0, width), C.bad]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  issue: ${issue}`, width), C.bad]]));
     }
     for (const note of selected.notes) {
-      detailRows.push(buildPanelLine(width, [[`  note: ${note}`.slice(0, width), C.info]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  note: ${note}`, width), C.info]]));
     }
     for (const action of selected.recommendedActions) {
-      detailRows.push(buildPanelLine(width, [[`  next: ${action}`.slice(0, width), C.value]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  next: ${action}`, width), C.value]]));
     }
     if (selected.issues.length === 0 && selected.notes.length === 0 && selected.usageWindows.length === 0 && selected.recommendedActions.length === 0) {
       detailRows.push(buildPanelLine(width, [['  No active account warnings for this provider.', C.dim]]));

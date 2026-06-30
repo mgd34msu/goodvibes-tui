@@ -1,5 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import type { TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { Orchestrator } from '../core/orchestrator';
@@ -355,7 +356,7 @@ export class DebugPanel extends BasePanel {
   private _callLogHeader(width: number): Line {
     // Layout: time(8) status(2) provider(12) model(20) in(8) out(8) lat(8)
     const header = '  Time    S Provider     Model               In       Out      Lat';
-    return this._textLine(header.slice(0, width), C.colHdr, width, { dim: true });
+    return this._textLine(truncateDisplay(header, width), C.colHdr, width, { dim: true });
   }
 
   private _callLogRow(e: ApiCallEntry, width: number): Line {
@@ -401,9 +402,9 @@ export class DebugPanel extends BasePanel {
   private _errorRow(e: ApiCallEntry, width: number): Line {
     const timeStr  = fmtAgo(e.ts).padEnd(8);
     const codeStr  = e.statusCode > 0 ? `[${e.statusCode}] ` : '';
-    const msgStr   = (e.errorMessage ?? 'unknown error').slice(0, width - 12 - codeStr.length);
+    const msgStr   = truncateDisplay(e.errorMessage ?? 'unknown error', Math.max(0, width - 12 - codeStr.length));
     const full     = `  ${timeStr} ${codeStr}${msgStr}`;
-    return this._textLine(full.slice(0, width), C.bad, width);
+    return this._textLine(truncateDisplay(full, width), C.bad, width);
   }
 
   // -------------------------------------------------------------------------

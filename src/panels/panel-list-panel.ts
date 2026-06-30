@@ -326,7 +326,7 @@ export class PanelListPanel extends BasePanel {
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
-    const footerLines = [buildPanelLine(width, [[` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`.slice(0, width), C.hint]])];
+    const footerLines = [buildPanelLine(width, [[truncateDisplay(` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`, width), C.hint]])];
     const postureLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.name : C.dim },
@@ -351,7 +351,7 @@ export class PanelListPanel extends BasePanel {
         const label = ` ── ${entry.label} ${'─'.repeat(Math.max(0, width - 6 - entry.label.length))}`;
         renderedBlocks.push({
           entry,
-          lines: [buildPanelLine(width, [[label.slice(0, width), C.category, C.categoryBg]])],
+          lines: [buildPanelLine(width, [[truncateDisplay(label, width), C.category, C.categoryBg]])],
         });
       } else {
         const flatIdx = flatPanelIndex++;

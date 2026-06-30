@@ -318,7 +318,7 @@ export class RemotePanel extends BasePanel {
           ['  Review: ', C.label],
           [supervisorEntry.negotiation.reviewMode, supervisorEntry.negotiation.reviewMode === 'wrfc' ? C.ok : C.dim],
         ]));
-        detailRows.push(buildPanelLine(width, [[`  ${supervisorEntry.heartbeat.detail}`.slice(0, width), C.dim]]));
+        detailRows.push(buildPanelLine(width, [[truncateDisplay(`  ${supervisorEntry.heartbeat.detail}`, width), C.dim]]));
       }
 
       const recentArtifact = snapshot.artifacts.find((artifact) => artifact.runnerId === selected.agentId);
@@ -400,7 +400,7 @@ export class RemotePanel extends BasePanel {
             { text: ` ${connection.transportState.padEnd(18)}`, fg: stateColor(connection.transportState) },
             { text: ` msgs=${String(connection.messageCount).padEnd(6)}`, fg: C.info },
             { text: ` errs=${String(connection.errorCount).padEnd(4)}`, fg: connection.errorCount > 0 ? C.warn : C.dim },
-            { text: ` ${connection.label}`.slice(0, Math.max(0, width - 56)), fg: C.dim },
+            { text: truncateDisplay(` ${connection.label}`, Math.max(0, width - 56)), fg: C.dim },
           ], C, { selected: absolute === this.selectedIndex, selectedBg: C.headerBg });
         })
       : [
@@ -408,7 +408,7 @@ export class RemotePanel extends BasePanel {
             return buildPanelListRow(width, [
               { text: contract.runnerId.padEnd(18), fg: C.value },
               { text: ` ${contract.transport.state.padEnd(18)}`, fg: stateColor(contract.transport.state) },
-              { text: ` ${contract.template}`.slice(0, Math.max(0, width - 42)), fg: C.dim },
+              { text: truncateDisplay(` ${contract.template}`, Math.max(0, width - 42)), fg: C.dim },
             ], C, { selected: absolute === this.selectedIndex, selectedBg: C.headerBg });
           }),
           buildPanelLine(width, [[' No active connection is currently attached to these contracts.', C.dim]]),
