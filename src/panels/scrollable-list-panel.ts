@@ -5,6 +5,7 @@ import type { PanelCategory } from './types.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import {
   buildEmptyState,
+  buildKeyboardHints,
   buildPanelWorkspace,
   buildSearchInputLine,
   DEFAULT_PANEL_PALETTE,
@@ -253,6 +254,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
     options: {
       readonly header?: readonly Line[];
       readonly footer?: readonly Line[];
+      readonly hints?: ReadonlyArray<{ keys: string; label: string }>;
       readonly emptyMessage?: string;
       readonly title?: string;
       readonly spinnerFrame?: number;
@@ -263,9 +265,15 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
     const items = this.getItems();
     const title = options.title ?? this.name;
 
+    // Standardized keyboard-hints footer row (rendered below any explicit footer).
+    const hintsLine = options.hints && options.hints.length > 0
+      ? buildKeyboardHints(width, options.hints, palette)
+      : null;
+
     // I2: inject error line into footer when present
     const errorLine = this.renderErrorLine(width);
     const baseFooter = options.footer ? [...options.footer as Line[]] : [];
+    if (hintsLine) baseFooter.push(hintsLine);
     const effectiveFooter: Line[] = errorLine ? [errorLine, ...baseFooter] : baseFooter;
 
     // I3: if loading, show spinner in place of normal content
