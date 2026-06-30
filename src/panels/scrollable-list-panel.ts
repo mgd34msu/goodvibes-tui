@@ -57,6 +57,96 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
    */
   protected showSelectionGutter = false;
 
+  // -------------------------------------------------------------------------
+  // Opt-in inline filter ( / to filter, Esc to clear )
+  // -------------------------------------------------------------------------
+  // Set `filterEnabled = true` and override `filterMatches()` to give a list
+  // panel a `/`-to-filter affordance that coexists with single-letter action
+  // keys (filtering is modal: action keys work until you press `/`). A filter
+  // input line is auto-rendered at the top of the list.
+  protected filterEnabled = false;
+  protected filterQuery = '';
+  protected filterActive = false;
+  /** Short noun shown in the filter hint, e.g. "Filter sessions". */
+  protected filterLabel = 'Filter';
+
+  /** Override to define what the lower-cased filter query matches for an item. */
+  protected filterMatches(_item: T, _query: string): boolean {
+    return false;
+  }
+
+  /**
+   * The list after applying the active filter — used for both display and
+   * navigation. Identical to `getItems()` unless a filter is enabled and a
+   * non-empty query is set, so existing panels are unaffected.
+   */
+  protected getVisibleItems(): readonly T[] {
+    const all = this.getItems();
+    const q = this.filterQuery.trim().toLowerCase();
+    if (!this.filterEnabled || !q) return all;
+    return all.filter((item) => this.filterMatches(item, q));
+  }
+
+  /**
+   * Filter-mode key handling. Returns `true`/`false` when consumed/ignored in
+   * filter context, or `null` to fall through to normal navigation.
+   */
+  private _handleFilterKey(key: string): boolean | null {
+    if (!this.filterEnabled) return null;
+    if (this.filterActive) {
+      if (key === 'escape') {
+        this.filterActive = false;
+        this.filterQuery = '';
+        this.selectedIndex = 0;
+        this.needsRender = true;
+        return true;
+      }
+      if (key === 'return' || key === 'enter') {
+        this.filterActive = false; // commit; keep the query applied
+        this.needsRender = true;
+        return true;
+      }
+      if (key === 'backspace' || key === 'delete') {
+        this.filterQuery = this.filterQuery.slice(0, -1);
+        this.selectedIndex = 0;
+        this.needsRender = true;
+        return true;
+      }
+      // Arrow/paging keys navigate the filtered list — fall through.
+      if (key === 'up' || key === 'down' || key === 'pageup' || key === 'pagedown' || key === 'home' || key === 'end') {
+        return null;
+      }
+      // Any printable character (including j/k/g/G) extends the query.
+      if (key.length === 1 && key >= ' ') {
+        this.filterQuery += key;
+        this.selectedIndex = 0;
+        this.needsRender = true;
+        return true;
+      }
+      return false;
+    }
+    if (key === '/') {
+      this.filterActive = true;
+      this.needsRender = true;
+      return true;
+    }
+    return null;
+  }
+
+  /** The filter input line shown at the top of the list when filtering is enabled. */
+  protected buildFilterLine(width: number): Line {
+    const palette = this.getPalette();
+    const label = this.filterActive ? `[${this.filterLabel}] ` : `${this.filterLabel}: `;
+    const value = this.filterActive
+      ? `${this.filterQuery}_`
+      : this.filterQuery || '(/ to filter)';
+    return buildSearchInputLine(width, label, value, palette, {
+      active: false,
+      bg: this.filterActive ? palette.inputBg : palette.sectionBg,
+      valueColor: this.filterActive ? palette.info : (this.filterQuery ? palette.value : palette.dim),
+    });
+  }
+
   constructor(
     id: string,
     name: string,
@@ -144,7 +234,11 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
     // call this.clearError() at the start of their handler.
     if (this.lastError !== null) this.clearError();
 
-    const items = this.getItems();
+    // Opt-in inline filter consumes input before navigation when active.
+    const filterResult = this._handleFilterKey(key);
+    if (filterResult !== null) return filterResult;
+
+    const items = this.getVisibleItems();
     const total = items.length;
 
     switch (key) {
@@ -203,7 +297,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
 
   handleScroll(deltaRows: number): boolean {
     if (this.lastError !== null) this.clearError();
-    const total = this.getItems().length;
+    const total = this.getVisibleItems().length;
     const rows = Math.trunc(deltaRows);
     if (total === 0 || rows === 0) return false;
     const next = Math.max(0, Math.min(total - 1, this.selectedIndex + rows));
@@ -222,7 +316,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
    * Must be called after any data refresh that may shrink the list.
    */
   protected clampSelection(): void {
-    const total = this.getItems().length;
+    const total = this.getVisibleItems().length;
     if (total === 0) {
       this.selectedIndex = 0;
     } else {
@@ -262,8 +356,15 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   ): Line[] {
     this.needsRender = false;
     const palette = this.getPalette();
-    const items = this.getItems();
+    const items = this.getVisibleItems();
     const title = options.title ?? this.name;
+
+    // Auto-inject the filter input line at the top of the header when filtering
+    // is enabled, so every filterable panel gets the same affordance for free.
+    const baseHeader = options.header ? [...options.header as Line[]] : [];
+    const header: Line[] | undefined = this.filterEnabled
+      ? [this.buildFilterLine(width), ...baseHeader]
+      : (options.header ? baseHeader : undefined);
 
     // Standardized keyboard-hints footer row (rendered below any explicit footer).
     const hintsLine = options.hints && options.hints.length > 0
@@ -280,7 +381,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
     const spinnerLine = this.renderLoadingLine(width, options.spinnerFrame ?? 0);
     if (spinnerLine) {
       const loadingSection = { lines: [spinnerLine] };
-      const headerSection = options.header ? [{ lines: options.header as Line[] }] : [];
+      const headerSection = header ? [{ lines: header }] : [];
       const lines = buildPanelWorkspace(width, height, {
         title,
         sections: [...headerSection, loadingSection],
@@ -314,17 +415,22 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
 
     // Empty state
     if (scrollableLines.length === 0) {
+      // Distinguish "filter hides everything" from "genuinely empty".
+      const filteredToEmpty = this.filterEnabled && this.filterQuery.trim() !== '' && this.getItems().length > 0;
+      const emptyMessage = filteredToEmpty
+        ? ` No matches for "${this.filterQuery.trim()}"`
+        : (options.emptyMessage ?? this.getEmptyStateMessage());
       const emptyLines = buildEmptyState(
         width,
-        options.emptyMessage ?? this.getEmptyStateMessage(),
-        '',
-        this.getEmptyStateActions(),
+        emptyMessage,
+        filteredToEmpty ? 'Press Esc to clear the filter.' : '',
+        filteredToEmpty ? [] : this.getEmptyStateActions(),
         palette,
       );
       const lines = buildPanelWorkspace(width, height, {
         title,
         sections: [
-          ...(options.header ? [{ lines: options.header as Line[] }] : []),
+          ...(header ? [{ lines: header }] : []),
           { lines: emptyLines },
           ...(effectiveFooter.length > 0 ? [{ lines: effectiveFooter }] : []),
         ],
@@ -335,7 +441,7 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
     }
 
     // Resolve scrollable section (updates scrollStart)
-    const beforeSections = options.header ? [{ lines: options.header as Line[] }] : [];
+    const beforeSections = header ? [{ lines: header }] : [];
     const afterSections = effectiveFooter.length > 0 ? [{ lines: effectiveFooter }] : [];
 
     const resolved = resolveScrollablePanelSection(width, height, {
