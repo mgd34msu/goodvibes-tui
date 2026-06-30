@@ -41,6 +41,16 @@ export function handlePanelIntegrationAction(
 ): boolean {
   if (!activePanel) return false;
 
+  // Prefer the panel's own integration hook when it provides one. Panels migrated
+  // onto the formal hook opt out of the instanceof routing below.
+  if (activePanel.handlePanelIntegrationAction) {
+    const consumed = activePanel.handlePanelIntegrationAction(key, {
+      panelManager,
+      executeCommand: commandContext?.executeCommand,
+    });
+    if (consumed) return true;
+  }
+
   if ((key === 'enter' || key === 'return' || key === 'right') && activePanel instanceof FileExplorerPanel) {
     const filePath = activePanel.getFocusedFilePath();
     if (!filePath) return false;
