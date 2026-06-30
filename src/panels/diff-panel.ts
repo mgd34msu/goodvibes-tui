@@ -4,6 +4,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import {
   buildBodyText,
@@ -21,14 +22,18 @@ import {
 
 const COLOR = {
   addition:    '#00ff88',
+  additionBg:  '#001a0d',
   deletion:    '#ff4444',
+  deletionBg:  '#1a0000',
   hunk:        '#88aaff',
+  hunkBg:      '#0a0a1a',
   header:      '#aaaaaa',
   lineNum:     '#555555',
   lineNumAdd:  '#00aa55',
   lineNumDel:  '#aa2222',
   filename:    '#ffffff',
   tabActive:   '#ffffff',
+  tabActiveBg: '#333333',
   tabInactive: '#666666',
   tabBg:       '#222222',
   context:     '#888888',
@@ -147,9 +152,7 @@ function makeLine(
   const LEFT_W = 5;
   const usedForNums = LEFT_W + 1 + LEFT_W + 1 + 2; // 14
   const contentWidth = Math.max(0, width - usedForNums);
-  const truncated = content.length > contentWidth
-    ? content.slice(0, contentWidth)
-    : content;
+  const truncated = truncateDisplay(content, contentWidth);
   return buildStyledPanelLine(width, [
     { text: leftNum.padStart(LEFT_W), fg: numFg, bg, dim: true },
     { text: ' ', fg: '', bg },
@@ -161,8 +164,7 @@ function makeLine(
 }
 
 function renderText(width: number, text: string, fg: string, bg: string, bold = false): Line {
-  const truncated = text.length > width ? text.slice(0, width) : text;
-  return buildStyledPanelLine(width, [{ text: truncated, fg, bg, bold }]);
+  return buildStyledPanelLine(width, [{ text: truncateDisplay(text, width), fg, bg, bold }]);
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +456,7 @@ export class DiffPanel extends BasePanel {
       const active = i === this.selectedFile;
       const label = ` ${basename(entry.filePath)} `;
       const fg = active ? COLOR.tabActive : COLOR.tabInactive;
-      const bg = active ? '#333333' : COLOR.tabBg;
+      const bg = active ? COLOR.tabActiveBg : COLOR.tabBg;
 
       for (const ch of label) {
         if (cells.length >= width) break;
@@ -496,11 +498,11 @@ export class DiffPanel extends BasePanel {
 
     switch (pl.kind) {
       case 'addition':
-        return makeLine(width, left, right, `+ ${pl.text}`, COLOR.addition, '#001a0d', COLOR.lineNumAdd, true);
+        return makeLine(width, left, right, `+ ${pl.text}`, COLOR.addition, COLOR.additionBg, COLOR.lineNumAdd, true);
       case 'deletion':
-        return makeLine(width, left, right, `- ${pl.text}`, COLOR.deletion, '#1a0000', COLOR.lineNumDel, false);
+        return makeLine(width, left, right, `- ${pl.text}`, COLOR.deletion, COLOR.deletionBg, COLOR.lineNumDel, false);
       case 'hunk':
-        return renderText(width, pl.text, COLOR.hunk, '#0a0a1a', false);
+        return renderText(width, pl.text, COLOR.hunk, COLOR.hunkBg, false);
       case 'header':
         return renderText(width, pl.text, COLOR.header, '', false);
       case 'context':

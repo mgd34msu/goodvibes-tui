@@ -1,5 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -434,7 +435,7 @@ export class GitPanel extends BasePanel {
   private renderCommitRow(entry: CommitEntry, selected: boolean, width: number): Line {
     const line = createEmptyLine(width);
     const hashPart = `  ${entry.hash} `;
-    const msgPart = entry.message.length > 60 ? `${entry.message.slice(0, 57)}...` : entry.message;
+    const msgPart = truncateDisplay(entry.message, 60);
 
     if (selected) {
       for (let i = 0; i < width; i++) {
