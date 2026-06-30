@@ -29,6 +29,14 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
   public constructor(private readonly configManager: ConfigManager) {
     super('settings-sync', 'Settings Sync', 'S', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter settings';
+  }
+
+  protected override filterMatches(entry: ResolvedEntry, q: string): boolean {
+    return entry.key.toLowerCase().includes(q)
+      || String(entry.effectiveSource).toLowerCase().includes(q)
+      || String(entry.effectiveValue).toLowerCase().includes(q);
   }
 
   protected override getPalette(): PanelPalette {

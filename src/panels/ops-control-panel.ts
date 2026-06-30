@@ -78,6 +78,8 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   public constructor(eventFeed: UiEventFeed<OpsEvent>) {
     super('ops-control', 'Ops Control', 'Q', 'agent');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter audit';
     this._opsPanel = new OpsPanel(eventFeed);
     this._unsub = this._opsPanel.subscribe(() => this.markDirty());
   }
@@ -102,6 +104,13 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   protected getItems(): readonly OpsAuditEntry[] {
     // Return reversed so newest entries appear at top
     return [...this._opsPanel.getSnapshot()].reverse();
+  }
+
+  protected override filterMatches(entry: OpsAuditEntry, q: string): boolean {
+    return entry.action.toLowerCase().includes(q)
+      || entry.targetKind.toLowerCase().includes(q)
+      || entry.targetId.toLowerCase().includes(q)
+      || entry.outcome.toLowerCase().includes(q);
   }
 
   protected renderItem(entry: OpsAuditEntry, _index: number, _selected: boolean, width: number): Line {

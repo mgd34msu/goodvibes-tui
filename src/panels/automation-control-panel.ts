@@ -46,6 +46,8 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
   public constructor(readModel?: UiReadModel<UiAutomationSnapshot>) {
     super('automation', 'Automation', 'M', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter runs';
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
@@ -66,6 +68,12 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
   protected getItems(): readonly AutomationRun[] {
     if (!this.readModel) return [];
     return this.readModel.getSnapshot().runs;
+  }
+
+  protected override filterMatches(run: AutomationRun, q: string): boolean {
+    return run.jobId.toLowerCase().includes(q)
+      || run.status.toLowerCase().includes(q)
+      || run.target.kind.toLowerCase().includes(q);
   }
 
   protected renderItem(run: AutomationRun, _index: number, selected: boolean, width: number): Line {

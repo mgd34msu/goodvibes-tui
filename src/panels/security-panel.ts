@@ -64,6 +64,8 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   public constructor(private readonly readModel: UiReadModel<UiSecuritySnapshot>) {
     super('security', 'Security', 'U', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter tokens';
     this.unsub = this.readModel.subscribe(() => this.markDirty());
   }
 
@@ -97,11 +99,17 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   }
 
   public handleInput(key: string): boolean {
-    if (key === 'r') {
+    if (!this.filterActive && key === 'r') {
       this.markDirty();
       return true;
     }
     return super.handleInput(key);
+  }
+
+  protected override filterMatches(result: TokenAuditResult, q: string): boolean {
+    return result.label.toLowerCase().includes(q)
+      || result.scope.policyId.toLowerCase().includes(q)
+      || result.tokenId.toLowerCase().includes(q);
   }
 
   public render(width: number, height: number): Line[] {
