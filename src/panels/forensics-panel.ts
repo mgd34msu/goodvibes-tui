@@ -7,7 +7,7 @@
  * Open via /forensics or the panel picker.
  */
 import type { Line } from '../types/grid.ts';
-import { fitDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { FailureReport, CausalChainEntry, PhaseTimingEntry } from '@/runtime/index.ts';
 import { ForensicsDataPanel } from '@/runtime/index.ts';
@@ -196,7 +196,21 @@ export class ForensicsPanel extends BasePanel {
   // ── List view ──────────────────────────────────────────────────────────────
 
   private _renderList(lines: Line[], reports: FailureReport[], width: number, height: number, intro: string): void {
+    // Posture summary: how many reports and how many are hard errors, so the
+    // most important signal (recent failures) is visible before scrolling.
+    const errorCount = reports.filter((r) => classificationColor(r.classification) === C.classError).length;
+    const newest = reports[0];
+    const summaryLine = buildPanelLine(width, [
+      [' reports ', C.label],
+      [String(reports.length), C.value],
+      ['  errors ', C.label],
+      [String(errorCount), errorCount > 0 ? C.classError : C.classOk],
+      ['  newest ', C.label],
+      [newest ? fmtTime(newest.generatedAt) : 'n/a', C.timestamp],
+    ]);
+
     const reportRows: Line[] = [
+      summaryLine,
       buildPanelLine(width, [['  ID       TIME      CLASS                 SUMMARY', C.label]]),
     ];
 
@@ -210,7 +224,7 @@ export class ForensicsPanel extends BasePanel {
       const cls     = fitDisplay(report.classification, 20);
       const clsColor = classificationColor(report.classification);
       const summaryMax = Math.max(0, width - 42);
-      const summaryStr = report.summary.slice(0, summaryMax);
+      const summaryStr = truncateDisplay(report.summary, summaryMax);
 
       const segs: Array<[string, string, string?]> = [
         [isSelected ? '▸' : ' ', C.jumpLink, bg],
@@ -227,12 +241,12 @@ export class ForensicsPanel extends BasePanel {
       section: {
         title: 'Reports',
         scrollableLines: reportRows,
-        selectedIndex: this._selectedIndex + 1,
+        selectedIndex: this._selectedIndex + 2,
         scrollOffset: this._scrollOffset,
         minRows: 4,
         appendWindowSummary: {
           dimColor: C.label,
-          formatter: () => buildPanelLine(width, [[` [${this._selectedIndex + 1}/${reports.length}] Up/Down navigate  Enter expand`, C.label]]),
+          formatter: () => buildPanelLine(width, [[` [${this._selectedIndex + 1}/${reports.length}] ↑/↓ navigate  Enter expand report`, C.label]]),
         },
       },
     });
@@ -263,13 +277,13 @@ export class ForensicsPanel extends BasePanel {
     ]));
     detailLines.push(buildPanelLine(width, [
       [' Summary: ', C.label],
-      [report.summary.slice(0, width - 11), C.summaryText],
+      [truncateDisplay(report.summary, Math.max(0, width - 11)), C.summaryText],
     ]));
 
     if (report.errorMessage) {
       detailLines.push(buildPanelLine(width, [
         [' Error:   ', C.label],
-        [report.errorMessage.slice(0, width - 11), C.classError],
+        [truncateDisplay(report.errorMessage, Math.max(0, width - 11)), C.classError],
       ]));
     }
     if (report.stopReason) {
@@ -341,7 +355,7 @@ export class ForensicsPanel extends BasePanel {
     const statusColor = pt.success ? C.phaseOk : C.phaseFail;
     const dur = fmtDuration(pt.durationMs);
     const phaseLabel = fitDisplay(pt.phase, 14);
-    const errPart = pt.error ? `  ${pt.error.slice(0, Math.max(0, width - 32))}` : '';
+    const errPart = pt.error ? `  ${truncateDisplay(pt.error, Math.max(0, width - 32))}` : '';
     lines.push(buildPanelLine(width, [
       ['  ', C.dim],
       [statusChar + ' ', statusColor],
@@ -359,7 +373,7 @@ export class ForensicsPanel extends BasePanel {
     lines.push(buildPanelLine(width, [
       [prefix, color],
       [`${timeStr} `, C.timestamp],
-      [entry.description.slice(0, descMax), color],
+      [truncateDisplay(entry.description, descMax), color],
     ]));
   }
 }

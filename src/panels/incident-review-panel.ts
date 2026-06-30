@@ -72,8 +72,8 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
     return buildPanelLine(width, [
       [' ', C.label, bg],
       [fitDisplay(report.id, 9), C.dim, bg],
-      [report.classification.padEnd(20), classificationColor(report.classification), bg],
-      [report.summary.slice(0, Math.max(0, width - 31)), C.value, bg],
+      [fitDisplay(report.classification, 20), classificationColor(report.classification), bg],
+      [truncateDisplay(report.summary, Math.max(0, width - 31)), C.value, bg],
     ]);
   }
 
@@ -126,7 +126,6 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
         { label: 'selected', value: `${this.selectedIndex + 1}/${reports.length}`, valueColor: C.info },
         { label: 'classification', value: selected.classification, valueColor: classificationColor(selected.classification) },
       ], C),
-      buildPanelLine(width, [['  Up/Down move  Home/End jump  selected incident drives the action rail below', C.dim]]),
     ];
 
     const footerLines: Line[] = [];
@@ -177,7 +176,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
           : `Replay link: ${mismatch.kind}${mismatch.ownerDomain ? `/${mismatch.ownerDomain}` : ''} - ${mismatch.description}`;
         footerLines.push(buildPanelLine(width, [
           ['  ', C.label],
-          ...buildStatusPill('bad', replayDetail.slice(0, Math.max(0, width - 2))),
+          ...buildStatusPill('bad', truncateDisplay(replayDetail, Math.max(0, width - 2))),
         ]));
       } else {
         const ownerBreakdown = Object.entries(bundle.replay.mismatchBreakdown.byOwnerDomain)
@@ -188,7 +187,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
         if (ownerBreakdown.length > 0) {
           footerLines.push(buildPanelLine(width, [
             ['  Replay owners: ', C.label],
-            [ownerBreakdown.slice(0, Math.max(0, width - 17)), C.info],
+            [truncateDisplay(ownerBreakdown, Math.max(0, width - 17)), C.info],
           ]));
         }
       }
@@ -197,10 +196,23 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
     footerLines.push(buildPanelLine(width, [[`  /incident latest   /incident export ${selected.id}   /recall capture incident ${selected.id}`, C.info]]));
     footerLines.push(buildGuidanceLine(width, '/security', 'open the broader trust and incident posture control room', C));
 
+    const hints = this.filterActive
+      ? [
+          { keys: 'type', label: 'filter incidents' },
+          { keys: 'Enter', label: 'apply' },
+          { keys: 'Esc', label: 'clear' },
+        ]
+      : [
+          { keys: '↑/↓', label: 'select incident' },
+          { keys: 'Home/End', label: 'jump' },
+          { keys: '/', label: 'filter' },
+        ];
+
     return this.renderList(width, height, {
       title: 'Incident Review Workspace',
       header: headerLines,
       footer: footerLines,
+      hints,
     });
   }
 }

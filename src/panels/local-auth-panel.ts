@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildDetailBlock,
@@ -137,7 +137,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
 
   protected renderItem(user: LocalAuthUser, _index: number, selected: boolean, width: number): Line {
     return buildPanelListRow(width, [
-      { text: user.username.padEnd(20), fg: C.value },
+      { text: fitDisplay(user.username, 20), fg: C.value },
       { text: truncateDisplay(` roles=${formatRoles(user.roles)}`, Math.max(0, width - 24)), fg: C.info },
     ], C, { selected });
   }
@@ -172,8 +172,8 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
           ['  bootstrap ', C.label],
           [snapshot.bootstrapCredentialPresent ? 'present' : 'cleared', snapshot.bootstrapCredentialPresent ? C.warn : C.good],
         ]),
-        buildPanelLine(width, [[' user store ', C.label], [snapshot.userStorePath.slice(0, Math.max(0, width - 13)), C.dim]]),
-        buildPanelLine(width, [[' bootstrap file ', C.label], [snapshot.bootstrapCredentialPath.slice(0, Math.max(0, width - 18)), C.dim]]),
+        buildPanelLine(width, [[' user store ', C.label], [truncateDisplay(snapshot.userStorePath, Math.max(0, width - 13)), C.dim]]),
+        buildPanelLine(width, [[' bootstrap file ', C.label], [truncateDisplay(snapshot.bootstrapCredentialPath, Math.max(0, width - 18)), C.dim]]),
         ...(issueMessages.length > 0
           ? issueMessages.map((issue) => buildPanelLine(width, [[truncateDisplay(` issue: ${issue}`, width), C.warn]]))
           : [buildPanelLine(width, [[' local auth posture looks healthy.', C.good]])]),
@@ -199,7 +199,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     if (selected) {
       footerLines.push(
         ...buildDetailBlock(width, 'Selected user', [
-          buildPanelLine(width, [[' username ', C.label], [selected.username, C.value], ['  roles ', C.label], [formatRoles(selected.roles).slice(0, Math.max(0, width - 23)), C.info]]),
+          buildPanelLine(width, [[' username ', C.label], [selected.username, C.value], ['  roles ', C.label], [truncateDisplay(formatRoles(selected.roles), Math.max(0, width - 23)), C.info]]),
           buildPanelLine(width, [[truncateDisplay(` next: /auth local rotate-password ${selected.username}`, width), C.dim]]),
           buildPanelLine(width, [[truncateDisplay(` next: /auth local delete-user ${selected.username}`, width), C.dim]]),
         ], C),
@@ -207,10 +207,11 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     }
 
     if (snapshot.sessions.length > 0) {
+      footerLines.push(buildPanelLine(width, [[` Active sessions (${snapshot.sessions.length})`, C.label]]));
       footerLines.push(
         ...snapshot.sessions.slice(0, 8).map((session) => buildPanelLine(width, [
           [' ', C.label],
-          [session.username.padEnd(18), C.value],
+          [fitDisplay(session.username, 18), C.value],
           [truncateDisplay(` expires ${new Date(session.expiresAt).toLocaleString()}`, Math.max(0, width - 20)), C.dim],
         ])),
       );
@@ -221,6 +222,10 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
       title: 'Local Auth Control Room',
       header: headerLines,
       footer: footerLines,
+      hints: [
+        { keys: '↑/↓', label: 'select user' },
+        { keys: '/auth local rotate-password', label: 'masked entry' },
+      ],
     });
   }
 
@@ -234,7 +239,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     const promptLines: Line[] = [
       buildPanelLine(width, [[` ${actionLabel}: ${state.username}`, C.value]]),
       buildPanelLine(width, [['', C.label]]),
-      buildPanelLine(width, [[' Password  ', C.label], [maskedDisplay.slice(0, Math.max(0, width - 12)), C.info]]),
+      buildPanelLine(width, [[' Password  ', C.label], [truncateDisplay(maskedDisplay, Math.max(0, width - 12)), C.info]]),
       buildPanelLine(width, [['', C.label]]),
       buildPanelLine(width, [[' [Enter] Confirm   [Esc] Cancel   [Backspace] Delete char', C.dim]]),
     ];

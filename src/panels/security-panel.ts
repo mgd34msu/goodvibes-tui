@@ -4,6 +4,7 @@ import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security';
 import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.ts';
 import {
+  buildAlignedRow,
   buildEmptyState,
   buildGuidanceLine,
   buildPanelLine,
@@ -88,14 +89,22 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   }
 
   protected renderItem(result: TokenAuditResult, index: number, selected: boolean, width: number): Line {
-    const bg = selected ? C.selectBg : undefined;
-    return buildPanelLine(width, [
-      [' ', C.label, bg],
-      [result.label.padEnd(22), C.value, bg],
-      [` ${result.tokenId.padEnd(12)}`, C.info, bg],
-      [` ${result.scope.policyId.padEnd(10)}`, C.label, bg],
-      [` ${resultSummary(result).slice(0, Math.max(0, width - 49))}`, resultColor(result), bg],
-    ]);
+    return buildAlignedRow(
+      width,
+      [
+        { text: result.label, fg: C.value },
+        { text: result.tokenId, fg: C.info },
+        { text: result.scope.policyId, fg: C.label },
+        { text: resultSummary(result), fg: resultColor(result) },
+      ],
+      [
+        { width: 22 },
+        { width: 12 },
+        { width: 10 },
+        { width: Math.max(8, width - 50) },
+      ],
+      { selected, selectedBg: C.selectBg },
+    );
   }
 
   public handleInput(key: string): boolean {
@@ -177,7 +186,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         [' critical ', C.label],
         ...buildStatusPill(attackPathReview.incoherentFindings > 0 ? 'warn' : 'good', String(attackPathReview.incoherentFindings)),
         [' review ', C.label],
-        [attackPathReview.summary.slice(0, Math.max(0, width - 36)), C.dim],
+        [truncateDisplay(attackPathReview.summary, Math.max(0, width - 36)), C.dim],
       ]),
     ];
 
@@ -227,6 +236,27 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         ]]));
       }
     }
+
+    // Column header for the token audit list so the aligned columns are legible.
+    const listHeader: Line[] = [
+      ...governanceLines,
+      buildAlignedRow(
+        width,
+        [
+          { text: 'TOKEN LABEL', fg: C.label, bold: true },
+          { text: 'TOKEN ID', fg: C.label, bold: true },
+          { text: 'POLICY', fg: C.label, bold: true },
+          { text: `STATUS (${view.results.length} audited)`, fg: C.label, bold: true },
+        ],
+        [
+          { width: 22 },
+          { width: 12 },
+          { width: 10 },
+          { width: Math.max(8, width - 50) },
+        ],
+        {},
+      ),
+    ];
 
     const selected = view.results[this.selectedIndex];
     const detailLines: Line[] = [];
@@ -291,14 +321,27 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       }
     }
 
+    const hints = this.filterActive
+      ? [
+          { keys: 'type', label: 'filter tokens' },
+          { keys: 'Enter', label: 'apply' },
+          { keys: 'Esc', label: 'clear' },
+        ]
+      : [
+          { keys: '↑/↓', label: 'select token' },
+          { keys: '/', label: 'filter' },
+          { keys: 'r', label: 'refresh audit' },
+        ];
+
     return this.renderList(width, height, {
       title: 'Security Control Room',
-      header: governanceLines,
+      header: listHeader,
       footer: [
         ...detailLines,
         ...attackPathLines,
         footerLine,
       ],
+      hints,
     });
   }
 }

@@ -1,14 +1,15 @@
 import type { Line } from '../types/grid.ts';
-import { fitDisplay } from '../utils/terminal-width.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { buildSandboxReview, listSandboxPresets, listSandboxProfiles } from '@/runtime/index.ts';
 import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 import {
+  buildAlignedRow,
   buildBodyText,
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
@@ -126,7 +127,10 @@ export class SandboxPanel extends BasePanel {
       buildGuidanceLine(width, '/sandbox wrapper-test <profile>', 'validate the wrapper bridge contract before wiring a real guest transport', C),
       buildGuidanceLine(width, '/sandbox session run <id> <command> [args...]', 'execute through a tracked sandbox session and capture runtime metadata on the session record', C),
       buildGuidanceLine(width, 'GV_SANDBOX_WRAPPER_MODE=host-exec', 'validate the wrapper contract on the host before wiring a real guest transport', C),
-      buildPanelLine(width, [[`  Up/Down move  Home/End jump  focus=profiles+sessions`, C.dim]]),
+      buildKeyboardHints(width, [
+        { keys: '↑/↓', label: 'select profile/session' },
+        { keys: 'Home/End', label: 'jump to first profile / first session' },
+      ], C),
     ];
 
     const selectionLines: Line[] = [];
@@ -186,41 +190,71 @@ export class SandboxPanel extends BasePanel {
       ));
     } else {
       for (const session of sessions) {
-        const bg = selectedSession?.id === session.id ? C.headerBg : undefined;
-        sessionLines.push(buildPanelLine(width, [
-          ['  ', C.label],
-          [session.profileId.padEnd(15), C.info, bg],
-          [session.state.padEnd(10), session.state === 'running' ? C.good : session.state === 'failed' ? C.bad : C.warn, bg],
-          [(session.shared ? 'shared' : 'dedicated').padEnd(12), C.value, bg],
-          [String(session.resolvedBackend ?? session.backend).padEnd(8), C.dim, bg],
-          [` ${fitDisplay(session.startupStatus ?? 'n/a', 8)}`, session.startupStatus === 'verified' ? C.good : session.startupStatus === 'failed' ? C.bad : C.warn, bg],
-          [` ${String(session.executionCount ?? 0).padStart(3)}x`, C.info, bg],
-          [` ${session.id.slice(0, Math.max(8, Math.min(14, width - 64)))}`, C.dim, bg],
-        ]));
+        const selectedRow = selectedSession?.id === session.id;
+        sessionLines.push(buildAlignedRow(
+          width,
+          [
+            { text: session.profileId, fg: C.info },
+            { text: session.state, fg: session.state === 'running' ? C.good : session.state === 'failed' ? C.bad : C.warn },
+            { text: session.shared ? 'shared' : 'dedicated', fg: C.value },
+            { text: String(session.resolvedBackend ?? session.backend), fg: C.dim },
+            { text: session.startupStatus ?? 'n/a', fg: session.startupStatus === 'verified' ? C.good : session.startupStatus === 'failed' ? C.bad : C.warn },
+            { text: `${session.executionCount ?? 0}x`, fg: C.info },
+            { text: session.id, fg: C.dim },
+          ],
+          [
+            { width: 15 },
+            { width: 10 },
+            { width: 12 },
+            { width: 8 },
+            { width: 9 },
+            { width: 5, align: 'right' },
+            { width: Math.max(8, width - 72) },
+          ],
+          { selected: selectedRow, selectedBg: C.headerBg },
+        ));
       }
     }
 
     const presetLines: Line[] = [];
     for (const preset of presets.slice(0, 2)) {
-      presetLines.push(buildPanelLine(width, [
-        ['  ', C.label],
-        [preset.id.padEnd(18), C.info],
-        [preset.config.replIsolation.padEnd(16), C.value],
-        [preset.config.mcpIsolation.padEnd(16), C.dim],
-        [preset.config.windowsMode, C.warn],
-      ]));
+      presetLines.push(buildAlignedRow(
+        width,
+        [
+          { text: preset.id, fg: C.info },
+          { text: preset.config.replIsolation, fg: C.value },
+          { text: preset.config.mcpIsolation, fg: C.dim },
+          { text: preset.config.windowsMode, fg: C.warn },
+        ],
+        [
+          { width: 18 },
+          { width: 16 },
+          { width: 16 },
+          { width: Math.max(8, width - 62) },
+        ],
+        {},
+      ));
     }
 
     const profileLines: Line[] = [];
     for (const profile of profiles) {
-      const bg = selectedProfile?.id === profile.id ? C.headerBg : undefined;
-      profileLines.push(buildPanelLine(width, [
-        ['  ', C.label],
-        [profile.id.padEnd(15), C.info, bg],
-        [profile.isolation.padEnd(14), C.value, bg],
-        [profile.kind.padEnd(12), C.dim, bg],
-        [` vm=${profile.requiresVm ? 'yes' : 'no'}`, profile.requiresVm ? C.good : C.warn, bg],
-      ]));
+      const selectedRow = selectedProfile?.id === profile.id;
+      profileLines.push(buildAlignedRow(
+        width,
+        [
+          { text: profile.id, fg: C.info },
+          { text: profile.isolation, fg: C.value },
+          { text: profile.kind, fg: C.dim },
+          { text: `vm=${profile.requiresVm ? 'yes' : 'no'}`, fg: profile.requiresVm ? C.good : C.warn },
+        ],
+        [
+          { width: 15 },
+          { width: 14 },
+          { width: 12 },
+          { width: Math.max(6, width - 53) },
+        ],
+        { selected: selectedRow, selectedBg: C.headerBg },
+      ));
     }
     const postureSection: PanelWorkspaceSection = { title: 'Sandbox posture', lines: overviewLines };
     const selectedSection: PanelWorkspaceSection = { title: selectedProfile ? 'Selected Profile' : 'Selected Session', lines: selectionLines };

@@ -1,9 +1,13 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import type { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { PolicyPanelSnapshot } from '../runtime/diagnostics/panels/policy.ts';
 import {
+  buildEmptyState,
+  buildKeyboardHints,
+  buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
@@ -89,28 +93,58 @@ export class PolicyPanel extends BasePanel {
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const snapshot = this._state.getSnapshot();
+    const summaryLine = this._buildSummary(width, snapshot);
     const content = this._buildContent(width, snapshot);
+    const hintsLine = buildKeyboardHints(width, [
+      { keys: '↑/↓', label: 'scroll' },
+      { keys: 'r', label: 'record divergence snapshot' },
+    ], C);
+    const summarySection = { lines: [summaryLine] };
     const governanceSection = resolveScrollablePanelSection(width, height, {
-      footerLines: [buildPanelLine(width, [['  Up/Down scroll  r record divergence trend snapshot', C.dim]])],
+      footerLines: [hintsLine],
       palette: C,
+      beforeSections: [summarySection],
       section: {
         title: 'Governance',
         scrollableLines: content,
         scrollOffset: this._scrollOffset,
         minRows: 4,
+        appendWindowSummary: content.length > 0 ? { dimColor: C.dim } : undefined,
       },
     });
     this._scrollOffset = governanceSection.scrollOffset;
     const lines = buildPanelWorkspace(width, height, {
       title: 'Policy And Governance',
-      sections: [governanceSection.section],
-      footerLines: [buildPanelLine(width, [['  Up/Down scroll  r record divergence trend snapshot', C.dim]])],
+      sections: [summarySection, governanceSection.section],
+      footerLines: [hintsLine],
       palette: C,
     });
     while (lines.length < height) {
       lines.push(createEmptyLine(width));
     }
     return lines.slice(0, height);
+  }
+
+  /** Top-of-panel posture summary: the highest-signal governance state at a glance. */
+  private _buildSummary(width: number, snapshot: PolicyPanelSnapshot): Line {
+    const preflight = snapshot.lastPreflightReview;
+    const divergence = snapshot.divergence;
+    const lintCount = snapshot.lintFindings.length;
+    const preflightStatus = preflight ? preflight.status : 'none';
+    const preflightColor = !preflight
+      ? C.dim
+      : preflight.status === 'pass'
+        ? C.ok
+        : preflight.status === 'warn'
+          ? C.warn
+          : C.error;
+    const gateStatus = divergence?.gate.status ?? 'n/a';
+    return buildKeyValueLine(width, [
+      { label: 'bundles', value: `${snapshot.current ? 1 : 0}+${snapshot.candidate ? 1 : 0}c`, valueColor: snapshot.current || snapshot.candidate ? C.value : C.dim },
+      { label: 'preflight', value: preflightStatus.toUpperCase(), valueColor: preflightColor },
+      { label: 'gate', value: gateStatus, valueColor: gateColor(gateStatus) },
+      { label: 'lint', value: String(lintCount), valueColor: lintCount > 0 ? C.warn : C.dim },
+    ], C);
   }
 
   private _buildContent(width: number, snapshot: PolicyPanelSnapshot): Line[] {
@@ -123,8 +157,22 @@ export class PolicyPanel extends BasePanel {
     const simulationSummary = snapshot.lastSimulationSummary;
     const preflightReview = snapshot.lastPreflightReview;
 
-    if (!current && !candidate) {
-      lines.push(buildPanelLine(width, [[' No policy bundles loaded. Use /policy load to begin.', C.empty]]));
+    const nothingRecorded = !current && !candidate && !divergence
+      && snapshot.history.length === 0 && permissionAudit.length === 0
+      && lintFindings.length === 0 && !simulationSummary && !preflightReview;
+    if (nothingRecorded) {
+      lines.push(...buildEmptyState(
+        width,
+        ' No policy bundles loaded.',
+        'Load a policy bundle to inspect governance gates, divergence trends, permission audit, lint findings, and preflight posture.',
+        [
+          { command: '/policy load', summary: 'load a policy bundle to begin governance review' },
+          { command: '/policy preflight', summary: 'run a proactive preflight posture review' },
+          { command: '/policy simulate', summary: 'compare authoritative vs candidate decisions' },
+        ],
+        C,
+      ));
+      return lines;
     }
 
     if (current) {
@@ -220,7 +268,7 @@ export class PolicyPanel extends BasePanel {
         ]));
         lines.push(buildPanelLine(width, [
           ['    ', C.label],
-          [entry.summary.slice(0, Math.max(0, width - 6)), C.dim],
+          [truncateDisplay(entry.summary, Math.max(0, width - 6)), C.dim],
         ]));
       }
     }
@@ -233,17 +281,12 @@ export class PolicyPanel extends BasePanel {
           ['  ', C.label],
           [finding.severity.toUpperCase(), color],
           ['  ', C.label],
-          [finding.message.slice(0, Math.max(0, width - 14)), color],
+          [truncateDisplay(finding.message, Math.max(0, width - 14)), color],
         ]));
       }
     }
 
-    if (!preflightReview) {
-      if (!current && !candidate && !divergence && snapshot.history.length === 0 && permissionAudit.length === 0 && lintFindings.length === 0 && !simulationSummary) {
-        lines.push(buildPanelLine(width, [[' Preflight Review', C.label]]));
-        lines.push(buildPanelLine(width, [['  No proactive preflight review recorded yet.', C.empty]]));
-      }
-    } else {
+    if (preflightReview) {
       lines.push(buildPanelLine(width, [[' Preflight Review', C.label]]));
       const statusColor =
         preflightReview.status === 'pass'
@@ -261,7 +304,7 @@ export class PolicyPanel extends BasePanel {
       ]));
       lines.push(buildPanelLine(width, [
         ['  ', C.label],
-        [preflightReview.summary.slice(0, Math.max(0, width - 2)), C.dim],
+        [truncateDisplay(preflightReview.summary, Math.max(0, width - 2)), C.dim],
       ]));
       for (const issue of preflightReview.issues.slice(0, 4)) {
         const issueColor = issue.severity === 'error' ? C.error : issue.severity === 'warn' ? C.warn : C.info;
@@ -269,17 +312,12 @@ export class PolicyPanel extends BasePanel {
           ['  ', C.label],
           [issue.severity.toUpperCase(), issueColor],
           ['  ', C.label],
-          [issue.message.slice(0, Math.max(0, width - 14)), issueColor],
+          [truncateDisplay(issue.message, Math.max(0, width - 14)), issueColor],
         ]));
       }
     }
 
-    if (!simulationSummary) {
-      if (!current && !candidate && !divergence && snapshot.history.length === 0 && permissionAudit.length === 0 && lintFindings.length === 0 && !preflightReview) {
-        lines.push(buildPanelLine(width, [[' Simulation Samples', C.label]]));
-        lines.push(buildPanelLine(width, [['  No concrete simulation samples recorded yet.', C.empty]]));
-      }
-    } else {
+    if (simulationSummary) {
       lines.push(buildPanelLine(width, [[' Simulation Samples', C.label]]));
       lines.push(buildPanelLine(width, [
         ['  Mode: ', C.label],
@@ -293,7 +331,7 @@ export class PolicyPanel extends BasePanel {
         const color = result.diverged ? C.warn : (result.authoritativeDecision.allowed ? C.ok : C.error);
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
-          [result.scenario.label.slice(0, Math.max(0, width - 40)), C.value],
+          [truncateDisplay(result.scenario.label, Math.max(0, width - 40)), C.value],
           ['  ', C.label],
           [(result.authoritativeDecision.allowed ? 'allow' : 'deny').toUpperCase(), color],
           ['  ', C.label],
@@ -302,7 +340,6 @@ export class PolicyPanel extends BasePanel {
       }
     }
 
-    lines.push(buildPanelLine(width, [['  /policy opens this panel. Press r to record a divergence trend snapshot.', C.dim]]));
     return lines;
   }
 }
