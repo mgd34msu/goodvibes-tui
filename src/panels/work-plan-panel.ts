@@ -23,6 +23,17 @@ const STATUS_COLOR: Record<WorkPlanItemStatus, string> = {
   cancelled: '#64748b',
 };
 
+// Chrome tones for the header/footer/selection (kept out of render bodies).
+const CHROME = {
+  title:      '#22d3ee',
+  text:       '#cbd5e1',
+  muted:      '#94a3b8',
+  dim:        '#64748b',
+  accent:     '#a5b4fc',
+  selected:   '#e2e8f0',
+  selectedBg: '#1e293b',
+} as const;
+
 function line(text: string, width: number, style: Parameters<typeof UIFactory.stringToLine>[2] = {}): Line {
   return UIFactory.stringToLine(fitDisplay(text, width), width, style);
 }
@@ -122,8 +133,8 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
     const source = item.source ? ` (${item.source})` : '';
     const text = `${status} ${item.title}${owner}${source}`;
     return line(text, width, {
-      fg: selected ? '#e2e8f0' : STATUS_COLOR[item.status],
-      bg: selected ? '#1e293b' : undefined,
+      fg: selected ? CHROME.selected : STATUS_COLOR[item.status],
+      bg: selected ? CHROME.selectedBg : undefined,
       bold: selected || item.status === 'in_progress',
     });
   }
@@ -152,26 +163,26 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
     for (const item of plan.items) counts.set(item.status, (counts.get(item.status) ?? 0) + 1);
     const active = this.items[this.selectedIndex];
     const header = [
-      line(`Persistent Work Plan`, width, { fg: '#22d3ee', bold: true }),
-      line(`Project: ${plan.projectRoot}`, width, { fg: '#cbd5e1' }),
+      line(`Persistent Work Plan`, width, { fg: CHROME.title, bold: true }),
+      line(`Project: ${plan.projectRoot}`, width, { fg: CHROME.text }),
       line(
         `Items: ${plan.items.length}  pending ${counts.get('pending') ?? 0}  active ${counts.get('in_progress') ?? 0}  blocked ${counts.get('blocked') ?? 0}  done ${counts.get('done') ?? 0}`,
         width,
-        { fg: '#94a3b8' },
+        { fg: CHROME.muted },
       ),
-      line(`Saved: ${this.store.filePath}`, width, { fg: '#64748b' }),
+      line(`Saved: ${this.store.filePath}`, width, { fg: CHROME.dim }),
     ];
     if (active) {
       header.push(line('', width));
-      header.push(line(`Selected: ${active.id}  ${statusName(active.status)}  updated ${compactDate(active.updatedAt)}`, width, { fg: '#a5b4fc' }));
-      if (active.notes) header.push(line(`Notes: ${active.notes}`, width, { fg: '#cbd5e1' }));
+      header.push(line(`Selected: ${active.id}  ${statusName(active.status)}  updated ${compactDate(active.updatedAt)}`, width, { fg: CHROME.accent }));
+      if (active.notes) header.push(line(`Notes: ${active.notes}`, width, { fg: CHROME.text }));
     }
     return header;
   }
 
   private renderFooter(width: number): Line[] {
     return [
-      line('Enter/Space cycle  1 pending  2 active  3 blocked  4 done  5 failed  6 cancelled  d delete  c clear done  r refresh', width, { fg: '#94a3b8' }),
+      line('Enter/Space cycle  1 pending  2 active  3 blocked  4 done  5 failed  6 cancelled  d delete  c clear done  r refresh', width, { fg: CHROME.muted }),
     ];
   }
 }
