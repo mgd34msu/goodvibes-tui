@@ -9,6 +9,7 @@ import {
   buildStyledPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
@@ -16,6 +17,15 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+
+// Domain-specific tones not covered by the base palette (latency/token greys).
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  muted2:    '#6b7280', // secondary dim grey for unit labels
+  sep:       '#374151', // inline separator grey
+  tokenDim:  '#64748b', // token-count grey
+  p95:       '#a78bfa', // p95 latency accent
+  latYellow: '#eab308', // mid-latency warning
+});
 
 const SPARKLINE_CHARS = '._-:=+*#';
 const LATENCY_RING_SIZE = 20;
@@ -262,7 +272,7 @@ export class ProviderStatsPanel extends BasePanel {
 
     // Determine health
     const hasErrors = rec !== undefined && rec.errors > 0;
-    const dotColor = hasErrors ? '#ef4444' : '#22c55e';
+    const dotColor = hasErrors ? C.bad : C.good;
 
     // Model ID (truncated)
     const modelId = rec?.lastModelId ?? 'n/a';
@@ -271,18 +281,18 @@ export class ProviderStatsPanel extends BasePanel {
     // Header row: * provider  model
     // Build as segments to avoid multi-byte char indexing issues
     const headerLine = buildStyledPanelLine(width, [
-      { text: '  ', fg: '#94a3b8' },
+      { text: '  ', fg: C.label },
       { text: '●', fg: dotColor },
-      { text: ' ', fg: '#94a3b8' },
-      { text: `${truncateDisplay(provName, 14).padEnd(14)} `, fg: '#e2e8f0', bold: true },
-      { text: modelDisplay, fg: '#cbd5e1' },
+      { text: ' ', fg: C.label },
+      { text: `${truncateDisplay(provName, 14).padEnd(14)} `, fg: C.value, bold: true },
+      { text: modelDisplay, fg: C.accent },
     ]);
 
     rows.push(headerLine);
 
     if (rec === undefined || rec.requests === 0) {
       rows.push(buildStyledPanelLine(width, [
-        { text: '    No requests yet.', fg: '#6b7280' },
+        { text: '    No requests yet.', fg: C.muted2 },
       ]));
     } else {
       const avgLatency = this._avg(rec.latencies);
@@ -291,24 +301,24 @@ export class ProviderStatsPanel extends BasePanel {
       const sparkline = this._sparkline(rec.latencies);
 
       const latFg = avgLatency < LATENCY_GREEN
-        ? '#22c55e'
+        ? C.good
         : avgLatency < LATENCY_YELLOW
-          ? '#eab308'
-          : '#ef4444';
+          ? C.latYellow
+          : C.bad;
 
       const segments = [
-        { text: '    avg ', fg: '#6b7280' },
+        { text: '    avg ', fg: C.muted2 },
         { text: this._fmtMs(avgLatency).padStart(6), fg: latFg, bold: true },
-        { text: '  p95 ', fg: '#6b7280' },
-        { text: this._fmtMs(p95Latency).padStart(6), fg: '#a78bfa' },
-        { text: '  ', fg: '#374151' },
+        { text: '  p95 ', fg: C.muted2 },
+        { text: this._fmtMs(p95Latency).padStart(6), fg: C.p95 },
+        { text: '  ', fg: C.sep },
         { text: sparkline, fg: latFg },
-        { text: '  err ', fg: '#6b7280' },
-        { text: `${errRate.toFixed(0).padStart(3)}%`, fg: errRate > 0 ? '#ef4444' : '#22c55e' },
-        { text: `  ${rec.requests.toString().padStart(4)}r`, fg: '#94a3b8' },
+        { text: '  err ', fg: C.muted2 },
+        { text: `${errRate.toFixed(0).padStart(3)}%`, fg: errRate > 0 ? C.bad : C.good },
+        { text: `  ${rec.requests.toString().padStart(4)}r`, fg: C.label },
       ] as const;
       const tokenSegment = rec.totalTokens > 0
-        ? [{ text: `  ${rec.totalTokens.toString().padStart(6)}tok`, fg: '#64748b' }]
+        ? [{ text: `  ${rec.totalTokens.toString().padStart(6)}tok`, fg: C.tokenDim }]
         : [];
       rows.push(buildStyledPanelLine(width, [...segments, ...tokenSegment]));
     }
