@@ -6,6 +6,9 @@ import { UIFactory } from '../renderer/ui-factory.ts';
 import { SPINNER_FRAMES } from '../renderer/progress.ts';
 import { fitDisplay } from '../utils/terminal-width.ts';
 
+/** Canonical error-surface foreground (bad/red), kept out of the render body. */
+const ERROR_FG = '#ef4444';
+
 export abstract class BasePanel implements Panel {
   public needsRender = true;
   public isTransient = false;
@@ -81,7 +84,7 @@ export abstract class BasePanel implements Panel {
     return UIFactory.stringToLine(
       fitDisplay(` ✕ ${this.lastError}`, width),
       width,
-      { fg: '#ef4444', bold: true },
+      { fg: ERROR_FG, bold: true },
     );
   }
 
