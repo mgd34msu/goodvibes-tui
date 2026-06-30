@@ -114,7 +114,7 @@ describe('CockpitPanel', () => {
     expect(text).toContain('incidents');
     expect(text).toContain('latest incident');
     expect(text).toContain('plugins');
-    expect(text).toContain('Selected Workspace');
+    expect(text).toContain('Workspace · flow');
     expect(text).toContain('/orchestration');
   });
 
@@ -226,8 +226,7 @@ describe('CockpitPanel', () => {
     expect(panel.handleInput('right')).toBe(true);
     expect(panel.handleInput('right')).toBe(true);
     const text = linesText(panel.render(140, 18));
-    expect(text).toContain('focus=health');
-    expect(text).toContain('Selected Workspace');
+    expect(text).toContain('Workspace · health');
     expect(text).toContain('/incident latest');
   });
 });
