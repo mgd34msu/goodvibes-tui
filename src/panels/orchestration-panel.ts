@@ -12,9 +12,11 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiOrchestrationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import type { OrchestrationGraphRecord } from '@/runtime/index.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
@@ -77,12 +79,17 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
     width: number,
   ): Line {
     const bg = selected ? C.selectBg : undefined;
+    const marker = selected ? '▸ ' : '  ';
+    const nodeCount = `${graph.nodeOrder.length}n`;
+    // Reserve room for marker(2) + status(10) + mode(17) + id(8) + nodes(~5) + gaps.
+    const titleBudget = Math.max(0, width - 47);
     return buildPanelLine(width, [
-      [' ', C.label, bg],
+      [marker, selected ? C.value : C.dim, bg],
       [graph.status.padEnd(10), statusColor(graph.status), bg],
       [` ${graph.mode.padEnd(17)}`, C.value, bg],
       [` ${graph.id.slice(0, 8)} `, C.dim, bg],
-      [graph.title.slice(0, Math.max(0, width - 39)), C.value, bg],
+      [`${nodeCount.padStart(4)} `, C.dim, bg],
+      [truncateDisplay(graph.title, titleBudget), C.value, bg],
     ]);
   }
 
@@ -166,14 +173,22 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
 
     this.clampSelection();
     const selected = graphs[this.selectedIndex]!;
+    const isActive = snapshot.activeGraphIds.includes(selected.id);
+    const elapsed = selected.startedAt
+      ? formatElapsed(Math.max(0, (selected.endedAt ?? Date.now()) - selected.startedAt))
+      : 'n/a';
     const detailLines: Line[] = [
       buildPanelLine(width, [
         ['  Title: ', C.label],
-        [selected.title, C.value],
+        [truncateDisplay(selected.title, Math.max(0, width - 11)), C.value],
+      ]),
+      buildPanelLine(width, [
         ['  Status: ', C.label],
         [selected.status, statusColor(selected.status)],
         ['  Mode: ', C.label],
         [selected.mode, C.value],
+        ['  Live: ', C.label],
+        [isActive ? 'yes' : 'no', isActive ? C.running : C.dim],
       ]),
       buildPanelLine(width, [
         ['  Nodes: ', C.label],
@@ -182,6 +197,8 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
         [selected.startedAt ? new Date(selected.startedAt).toLocaleTimeString() : 'n/a', C.dim],
         ['  Ended: ', C.label],
         [selected.endedAt ? new Date(selected.endedAt).toLocaleTimeString() : 'n/a', C.dim],
+        ['  Duration: ', C.label],
+        [elapsed, C.dim],
       ]),
     ];
     if (selected.lastRecursionGuard) {
@@ -236,11 +253,22 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
       this.renderItem(graph, index, index === this.selectedIndex, width),
     );
 
+    // Context-aware footer: surface position + only the keys that work here.
+    const footerLines: Line[] = [
+      buildKeyboardHints(width, [
+        { keys: `${this.selectedIndex + 1}/${graphs.length}`, label: 'graph' },
+        { keys: '↑/↓', label: 'select' },
+        { keys: 'g/G', label: 'top/bottom' },
+        { keys: 'PgUp/PgDn', label: 'page' },
+      ], C),
+    ];
+
     const postureSection: PanelWorkspaceSection = { title: 'Orchestration posture', lines: postureLines };
     const selectedGraphSection: PanelWorkspaceSection = { title: 'Selected Graph', lines: detailLines };
     const nodesSection: PanelWorkspaceSection = { title: 'Nodes', lines: nodeLines };
     const graphsSection = resolveScrollablePanelSection(width, height, {
       intro,
+      footerLines,
       palette: C,
       beforeSections: [postureSection],
       section: {
@@ -266,6 +294,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
       title: 'Orchestration Control Room',
       intro,
       sections,
+      footerLines,
       palette: C,
     });
     while (lines.length < height) lines.push(createEmptyLine(width));

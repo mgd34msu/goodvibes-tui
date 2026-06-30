@@ -73,7 +73,7 @@ function summarizeResult(result: unknown): string | undefined {
   const record = result as Record<string, unknown>;
   if (typeof record.preview === 'string' && record.preview.trim()) {
     const compact = record.preview.replace(/\s+/g, ' ').trim();
-    return compact.length > 72 ? `${compact.slice(0, 69)}\u2026` : compact;
+    return truncateDisplay(compact, 72);
   }
   if (typeof record.kind === 'string' && typeof record.byteSize === 'number') {
     return `${record.kind} (${record.byteSize}B)`;
@@ -142,22 +142,23 @@ export class ToolInspectorPanel extends BasePanel {
     if (height <= 0 || width <= 0) return [];
 
     const running = this.records.filter(r => r.endMs === undefined).length;
+    const distinctTools = new Set(this.records.map((r) => r.tool)).size;
     const filterLabel = this.filterMode === 'all' ? '' : ` [${this.filterMode}]`;
     const title = ` Tools [${this.records.length} calls${running > 0 ? `, ${running} running` : ''}]${filterLabel}`;
-    const footerLines = [
-      buildPanelLine(width, [
-        [' Up/Down', DEFAULT_PANEL_PALETTE.info],
-        [' scroll', DEFAULT_PANEL_PALETTE.dim],
-        ['   Enter', DEFAULT_PANEL_PALETTE.info],
-        [' expand', DEFAULT_PANEL_PALETTE.dim],
-        ['   f', DEFAULT_PANEL_PALETTE.info],
-        [' filter', DEFAULT_PANEL_PALETTE.dim],
-        ['   c', DEFAULT_PANEL_PALETTE.info],
-        [' clear', DEFAULT_PANEL_PALETTE.dim],
-        ['   g', DEFAULT_PANEL_PALETTE.info],
-        [' end', DEFAULT_PANEL_PALETTE.dim],
-      ]),
+    // Context-aware footer: only advertise keys that do something in the current
+    // state — filter needs >1 tool, clear/end need at least one call.
+    const footerSegments: Array<[string, string, string?]> = [
+      [' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim],
+      ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim],
     ];
+    if (distinctTools > 1) {
+      footerSegments.push(['   f', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim]);
+    }
+    if (this.records.length > 0) {
+      footerSegments.push(['   c', DEFAULT_PANEL_PALETTE.info], [' clear', DEFAULT_PANEL_PALETTE.dim]);
+      footerSegments.push(['   g', DEFAULT_PANEL_PALETTE.info], [this.autoScroll ? ' end (live)' : ' jump to end', DEFAULT_PANEL_PALETTE.dim]);
+    }
+    const footerLines = [buildPanelLine(width, footerSegments)];
 
     const flat = this._getFlat();
 
@@ -174,9 +175,15 @@ export class ToolInspectorPanel extends BasePanel {
             title: 'Calls',
             lines: buildEmptyState(
               width,
-              ' No tool calls yet',
-              'Tool executions appear here as the agent works. Expand a call to inspect its arguments and result payload.',
-              [],
+              this.records.length > 0 && this.filterMode !== 'all'
+                ? ` No "${this.filterMode}" calls`
+                : ' No tool calls yet',
+              this.records.length > 0 && this.filterMode !== 'all'
+                ? 'The active tool filter hides every recorded call.'
+                : 'Tool executions appear here as the agent works. Expand a call to inspect its arguments and result payload.',
+              this.records.length > 0 && this.filterMode !== 'all'
+                ? [{ command: 'f', summary: 'cycle the tool filter back to all calls' }]
+                : [{ command: '/spawn <task>', summary: 'run an agent to populate the tool-call timeline' }],
               DEFAULT_PANEL_PALETTE,
             ),
           },

@@ -9,6 +9,7 @@ import {
   buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildPanelListRow,
   buildPanelLine,
   buildSummaryBlock,
@@ -198,7 +199,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       { text: task.status.padEnd(10), fg: statusColor(task.status) },
       { text: ` ${kindLabel(task.kind).padEnd(12)}`, fg: C.value },
       { text: ` ${task.id.slice(0, 8)} `, fg: C.dim },
-      { text: task.title.slice(0, Math.max(0, width - 37)), fg: C.value },
+      { text: truncateDisplay(task.title, Math.max(0, width - 37)), fg: C.value },
     ], C, { selected });
   }
 
@@ -220,7 +221,23 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
   public render(width: number, height: number): Line[] {
     this.clampSelection();
     const intro = 'Live task lifecycle, ownership, retries, and result/error details across runtime execution domains.';
-    const footerLines = [buildPanelLine(width, [['  Up/Down move  Home/End jump', C.dim]])];
+    const visibleCount = this.getVisibleItems().length;
+    // Context-aware footer: position + only the keys that apply in the current
+    // (filtering vs browsing) state.
+    const footerLines = [
+      this.filterActive
+        ? buildKeyboardHints(width, [
+            { keys: 'type', label: 'filter tasks' },
+            { keys: 'Enter', label: 'apply' },
+            { keys: 'Esc', label: 'clear' },
+          ], C)
+        : buildKeyboardHints(width, [
+            { keys: visibleCount > 0 ? `${this.selectedIndex + 1}/${visibleCount}` : '0/0', label: 'task' },
+            { keys: '↑/↓', label: 'move' },
+            { keys: 'Home/End', label: 'jump' },
+            { keys: '/', label: 'filter' },
+          ], C),
+    ];
 
     if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
@@ -277,7 +294,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
         ['  kind ', C.label],
         [selected.kind, C.value],
         ['  owner ', C.label],
-        [selected.owner.slice(0, Math.max(0, width - 46)), C.dim],
+        [truncateDisplay(selected.owner, Math.max(0, width - 46)), C.dim],
       ]));
     }
     postureLines.push(
@@ -378,14 +395,14 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       if (selected.error) {
         detailRows.push(buildPanelLine(width, [
           ['  Error: ', C.label],
-          [selected.error.slice(0, Math.max(0, width - 10)), C.failed],
+          [truncateDisplay(selected.error, Math.max(0, width - 10)), C.failed],
         ]));
       }
       if (selected.result !== undefined) {
         const resultText = safeJson(selected.result);
         detailRows.push(buildPanelLine(width, [
           ['  Result: ', C.label],
-          [resultText.slice(0, Math.max(0, width - 11)), C.dim],
+          [truncateDisplay(resultText, Math.max(0, width - 11)), C.dim],
         ]));
       }
     }

@@ -181,6 +181,47 @@ describe('TasksPanel', () => {
     expect(last).toContain('Result:');
   });
 
+  test('context-aware footer reflects browse vs filter state', () => {
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      tasks: {
+        ...createInitialTasksState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        tasks: new Map([
+          ['queued-1', {
+            id: 'queued-1',
+            kind: 'exec',
+            title: 'Queued task',
+            status: 'queued',
+            owner: 'shell',
+            cancellable: true,
+            childTaskIds: [],
+            queuedAt: now - 5_000,
+          }],
+        ]),
+        queuedIds: ['queued-1'],
+        totalCreated: 1,
+      },
+    }));
+    const panel = new TasksPanel(createTasksReadModel(store));
+
+    const browse = linesText(panel.render(120, 20));
+    // Browsing footer shows position + the navigation/filter affordances.
+    expect(browse).toContain('1/1');
+    expect(browse).toContain('filter');
+
+    // Enter filter mode: footer must switch to the keys that work while typing.
+    panel.handleInput('/');
+    const filtering = linesText(panel.render(120, 20));
+    expect(filtering).toContain('filter tasks');
+    expect(filtering).toContain('apply');
+    expect(filtering).toContain('clear');
+  });
+
   test('is registerable in a panel manager when a runtime store is provided', () => {
     const manager = new PanelManager();
     manager.registerType({
