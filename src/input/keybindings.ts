@@ -38,6 +38,7 @@ export type KeyAction =
   | 'panel-close-all'
   | 'panel-tab-next'
   | 'panel-tab-prev'
+  | 'panel-focus-toggle'
   | 'history-search'
   | 'search'
   | 'block-copy'
@@ -69,6 +70,7 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'panel-close-all':         'Close all open panels',
   'panel-tab-next':        'Next workspace panel tab',
   'panel-tab-prev':        'Previous workspace panel tab',
+  'panel-focus-toggle':    'Switch keyboard focus between top and bottom pane',
   'history-search':        'Reverse input history search',
   'search':                'Toggle conversation search',
   'block-copy':            'Copy nearest block to clipboard',
@@ -101,6 +103,9 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-close-all':         [{ key: 'x', ctrl: true, shift: true }],
   'panel-tab-next':        [{ key: ']', ctrl: true }],
   'panel-tab-prev':        [{ key: '[', ctrl: true }],
+  // Ctrl+G: toggle keyboard focus between the top and bottom panes. Ctrl+G is
+  // otherwise unbound in the default table.
+  'panel-focus-toggle':    [{ key: 'g', ctrl: true }],
   'history-search':        [{ key: 'r', ctrl: true }],
   'search':                [{ key: 'f', ctrl: true }],
   'block-copy':            [{ key: 'y', ctrl: true }],

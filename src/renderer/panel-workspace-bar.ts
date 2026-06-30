@@ -1,13 +1,16 @@
 import type { Line } from '../types/grid.ts';
 import type { WorkspaceTab } from '../panels/panel-manager.ts';
 import { renderTabStrip } from './tab-strip.ts';
+import { UI_TONES } from './ui-primitives.ts';
 
-const ACTIVE_FG = '#e2e8f0';
-const ACTIVE_BG = '#0f172a';
-const INACTIVE_FG = '#94a3b8';
-const SEPARATOR_FG = '238';
-const LABEL_FG = '#cbd5e1';
-const LABEL_BG = '#1e293b';
+// Theme tokens (no raw hex) — keeps the bar in sync with the shared palette.
+const ACTIVE_FG = UI_TONES.fg.primary;       // selected tab text
+const ACTIVE_BG = UI_TONES.bg.selected;      // selected tab fill (stronger contrast)
+const INACTIVE_FG = UI_TONES.fg.muted;       // unselected tabs
+const SEPARATOR_FG = UI_TONES.fg.dim;        // │ separators
+const LABEL_FG = UI_TONES.fg.secondary;      // PANELS prefix label
+const LABEL_BG = UI_TONES.bg.title;          // prefix label background when focused
+const FOCUS_ACCENT_FG = UI_TONES.state.active; // the one focused tab
 
 export function renderPanelWorkspaceBar(
   tabs: readonly WorkspaceTab[],
@@ -32,7 +35,8 @@ export function renderPanelWorkspaceBar(
       activeBold: focused,
       inactiveFg: INACTIVE_FG,
       separatorFg: SEPARATOR_FG,
-      labelFg: LABEL_FG,
+      // Accent the PANELS chip when focused so it ties to the focus border.
+      labelFg: focused ? FOCUS_ACCENT_FG : LABEL_FG,
       labelBg: focused ? LABEL_BG : '',
       labelBold: focused,
       overflowFg: SEPARATOR_FG,

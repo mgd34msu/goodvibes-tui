@@ -84,6 +84,21 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       state.cyclePanelTab('prev');
       return { handled: true, panelFocused };
     }
+    if (kb.matches('panel-focus-toggle', token)) {
+      // Switch keyboard focus between the top and bottom panes (no-op when
+      // there is no visible, non-empty bottom pane).
+      state.panelManager.togglePaneFocus();
+      state.requestRender();
+      return { handled: true, panelFocused };
+    }
+    // Alt+1..9 — jump directly to the Nth workspace tab (across both panes).
+    // Gated behind Alt so plain digits still reach the focused panel.
+    if (token.alt && !token.ctrl && !token.meta && /^[1-9]$/.test(token.logicalName ?? '')) {
+      const index = Number(token.logicalName) - 1;
+      state.panelManager.activateWorkspaceIndex(index);
+      state.requestRender();
+      return { handled: true, panelFocused };
+    }
     if (kb.matches('panel-close-all', token)) {
       const pm = state.panelManager;
       for (const p of pm.getAllOpen()) pm.close(p.id);
@@ -577,14 +592,15 @@ function getPanelUnderMouse(
     return getActivePanelInPane(panelManager, 'top');
   }
 
+  // Single consolidated workspace bar (row 0) + h-separator; the rest splits
+  // between the two panes' content.
   const panelAreaRows = Math.max(0, layout.height - 1);
-  const contentRows = Math.max(0, panelAreaRows - 3);
+  const contentRows = Math.max(0, panelAreaRows - 1);
   const topContentRows = contentRows <= 1
     ? contentRows
     : Math.max(1, Math.floor(contentRows * clampRatio(layout.verticalSplitRatio)));
-  const topLastRow = 2 + topContentRows;
-
-  return panelRow <= topLastRow
+  // panelRow 0 = workspace bar; rows 1..topContentRows = top pane; rest = bottom.
+  return panelRow <= topContentRows
     ? getActivePanelInPane(panelManager, 'top')
     : getActivePanelInPane(panelManager, 'bottom');
 }

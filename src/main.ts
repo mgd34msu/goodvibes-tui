@@ -29,7 +29,6 @@ import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
-import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
 import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
