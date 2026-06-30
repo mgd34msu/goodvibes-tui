@@ -79,7 +79,7 @@ export abstract class BasePanel implements Panel {
   protected renderErrorLine(width: number): Line | null {
     if (!this.lastError) return null;
     return UIFactory.stringToLine(
-      ` ✕ ${this.lastError}`.padEnd(width).slice(0, width),
+      fitDisplay(` ✕ ${this.lastError}`, width),
       width,
       { fg: '#ef4444', bold: true },
     );
