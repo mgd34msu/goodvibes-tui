@@ -1,9 +1,13 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { PluginManagerObserver, PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins';
 import {
+  buildDetailBlock,
   buildEmptyState,
+  buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -130,15 +134,30 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
       return workspace;
     }
 
+    // Provenance/error posture header — surface trust + quarantine pressure first.
+    const quarantined = plugins.filter((p) => p.quarantined).length;
+    const untrusted = plugins.filter((p) => p.trustTier === 'untrusted').length;
+    const active = plugins.filter((p) => p.active).length;
+    const headerLines: Line[] = [
+      buildKeyValueLine(width, [
+        { label: 'plugins', value: String(plugins.length), valueColor: C.info },
+        { label: 'active', value: String(active), valueColor: active > 0 ? C.ok : C.dim },
+        { label: 'untrusted', value: String(untrusted), valueColor: untrusted > 0 ? C.warn : C.dim },
+        { label: 'quarantined', value: String(quarantined), valueColor: quarantined > 0 ? C.error : C.dim },
+      ], C),
+    ];
+
     this.clampSelection();
     const selected = plugins[this.selectedIndex]!;
     const selectedCaps = this.manager.capabilities(selected.name);
     const trustRecord = this.manager.getTrustRecord(selected.name);
     const quarantineRecord = this.manager.getQuarantineRecord(selected.name);
-    const detailLines: Line[] = [
+    const detailRows: Line[] = [
       buildPanelLine(width, [
         ['  Plugin: ', C.label],
         [selected.name, C.value],
+        ['  v', C.label],
+        [selected.version, C.dim],
         ['  State: ', C.label],
         [statusLabel(selected), statusColor(selected)],
         ['  Trust: ', C.label],
@@ -146,12 +165,12 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
       ]),
       buildPanelLine(width, [
         ['  Description: ', C.label],
-        [selected.description.slice(0, Math.max(0, width - 15)), C.dim],
+        [truncateDisplay(selected.description, Math.max(0, width - 15)), C.dim],
       ]),
     ];
 
     if (selectedCaps) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Capabilities: ', C.label],
         [String(selectedCaps.requested.length), C.value],
         ['  High-risk: ', C.label],
@@ -162,25 +181,36 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
     }
 
     if (trustRecord?.signatureFingerprint) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Signature: ', C.label],
-        [trustRecord.signatureFingerprint, C.info],
+        [truncateDisplay(trustRecord.signatureFingerprint, Math.max(0, width - 14)), C.info],
       ]));
+    } else {
+      detailRows.push(buildPanelLine(width, [['  Signature: unsigned (no provenance fingerprint on record)', C.warn]]));
     }
 
     if (quarantineRecord) {
-      detailLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Quarantine: ', C.label],
-        [quarantineRecord.reason.slice(0, Math.max(0, width - 14)), C.error],
+        [truncateDisplay(quarantineRecord.reason, Math.max(0, width - 14)), C.error],
       ]));
     }
 
-    detailLines.push(buildPanelLine(width, [['  Inspect trust and capability state here, then use /plugin to take action.', C.dim]]));
-    detailLines.push(buildPanelLine(width, [['  Up/Down move through discovered plugins', C.dim]]));
+    const hints = this.filterActive
+      ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
+      : [
+          { keys: 'Up/Down', label: 'move' },
+          { keys: '/plugin', label: 'act' },
+          { keys: '/', label: 'filter' },
+        ];
 
     return this.renderList(width, height, {
       title: 'Plugin Control Room',
-      footer: detailLines,
+      header: headerLines,
+      footer: [
+        ...buildDetailBlock(width, `Plugin · ${selected.name}`, detailRows, C),
+        buildKeyboardHints(width, hints, C),
+      ],
     });
   }
 }

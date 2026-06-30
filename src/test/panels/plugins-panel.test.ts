@@ -84,11 +84,16 @@ describe('PluginsPanel', () => {
     expect(text).toContain('alpha-plugin');
     expect(text).toContain('Capabilities:');
     expect(text).toContain('High-risk:');
+    // Provenance/error posture header surfaces trust + quarantine pressure first.
+    expect(text).toContain('quarantined');
+    expect(text).toContain('untrusted');
 
     panel.handleInput('down');
     const secondText = linesText(panel.render(120, 16));
     expect(secondText).toContain('beta-plugin');
     expect(secondText).toContain('Quarantine:');
     expect(secondText).toContain('blocked after suspicious behavior');
+    // No signature fingerprint on record -> unsigned provenance is surfaced.
+    expect(secondText).toContain('unsigned');
   });
 });

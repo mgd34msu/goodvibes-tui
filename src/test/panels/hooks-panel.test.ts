@@ -154,6 +154,8 @@ describe('HooksPanel', () => {
     expect(text).toContain('Recent Activity');
     expect(text).toContain('guard-edit');
     expect(text).toContain('deny');
+    // Summary header surfaces activity signal (recent denials) up front.
+    expect(text).toContain('recent denials');
   });
 
   test('renders managed authoring state and last simulation', () => {

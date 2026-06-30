@@ -61,5 +61,7 @@ describe('MarketplacePanel', () => {
     expect(text).toContain('Guard Pack');
     expect(text).toContain('curated-local');
     expect(text).toContain('/marketplace open');
+    // Curated (not-installed) selection surfaces an install hint in the footer.
+    expect(text).toContain('/marketplace install');
   });
 });
