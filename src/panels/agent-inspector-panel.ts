@@ -91,6 +91,15 @@ export interface AgentInspectorPanelDeps {
   readonly workingDirectory: string;
   /** Cancel the agent by id. Uses the same orphan-free path as WRFC. Returns true if cancelled. */
   readonly cancelAgent: (agentId: string) => boolean;
+  /**
+   * Request a compositor repaint. The 500ms refresh timer and other async
+   * update paths call this (via markDirty) so live agent output is painted
+   * while the main thread is idle — render() is otherwise only invoked on
+   * input/turn/resize, which makes a running agent's timeline look frozen.
+   * Optional: when omitted the panel still marks dirty and repaints on the
+   * next event.
+   */
+  readonly requestRender?: () => void;
 }
 
 export class AgentInspectorPanel extends BasePanel {
@@ -115,6 +124,9 @@ export class AgentInspectorPanel extends BasePanel {
   /** Pending cancel confirmation — subject is the agent id to cancel. */
   private confirmCancel: ConfirmState<string> | null = null;
 
+  /** True while this panel is the active view — gates async repaint requests. */
+  private _active = false;
+
   constructor(private readonly deps: AgentInspectorPanelDeps) {
     super('inspector', 'Inspector', 'I', 'agent');
   }
@@ -131,6 +143,10 @@ export class AgentInspectorPanel extends BasePanel {
   override markDirty(): void {
     this._cachedRows = null;
     super.markDirty();
+    // T17: a bare markDirty() does not repaint — render() only runs on
+    // input/turn/resize. While active, ask the compositor for a frame so
+    // timer/async refreshes (live streaming output) are not stuck off-screen.
+    if (this._active) this.deps.requestRender?.();
   }
 
   // -------------------------------------------------------------------------
@@ -152,11 +168,13 @@ export class AgentInspectorPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override onActivate(): void {
+    this._active = true;
     this.needsRender = true;
     this._startRefresh();
   }
 
   override onDeactivate(): void {
+    this._active = false;
     this._stopRefresh();
   }
 
@@ -441,8 +459,21 @@ export class AgentInspectorPanel extends BasePanel {
 
     // Merge bus messages (live) + JSONL (historical), sorted by timestamp
     const busEntries = this._busToTimeline();
-    const merged = [...this.timeline, ...busEntries]
-      .sort((a, b) => a.timestamp - b.timestamp);
+    const merged = [...this.timeline, ...busEntries];
+
+    // T13: the JSONL timeline only records coarse per-turn summaries
+    // ([assistant] N chars, M tool calls) and never the model's actual text,
+    // so a mid-turn agent looks idle here. Surface the selected agent's live
+    // streaming output while it runs, and its final output once terminal.
+    const liveRec = this.selectedAgentId
+      ? this.deps.agentManager.getStatus(this.selectedAgentId)
+      : null;
+    if (liveRec) {
+      const liveEntry = this._buildLiveOutputEntry(liveRec);
+      if (liveEntry) merged.push(liveEntry);
+    }
+
+    merged.sort((a, b) => a.timestamp - b.timestamp);
 
     // Deduplicate: bus messages that already appear in JSONL will have
     // approximate timestamps. We just show all — bus msgs tend to have
@@ -503,6 +534,45 @@ export class AgentInspectorPanel extends BasePanel {
       } satisfies TimelineEntry);
     }
     return result;
+  }
+
+  /**
+   * Build a synthetic timeline entry exposing the selected agent's live model
+   * output. While the agent runs this is the streaming token buffer
+   * (tail-truncated like AgentDetailModal); once it terminates it is the final
+   * assistant text (expandable). Exactly one is produced — the SDK clears
+   * streamingContent on completion — so live and final rows never coexist.
+   * Returns null when there is nothing to show.
+   */
+  private _buildLiveOutputEntry(rec: AgentRecord): TimelineEntry | null {
+    const STREAM_MAX_CHARS = 500;
+    if (rec.status === 'running' && rec.streamingContent) {
+      const sc = rec.streamingContent;
+      const truncated = sc.length > STREAM_MAX_CHARS;
+      const tail = (truncated ? sc.slice(-STREAM_MAX_CHARS) : sc)
+        .replace(/\s+/g, ' ')
+        .trim();
+      return {
+        kind: 'assistant',
+        timestamp: Date.now(),
+        label: 'streaming',
+        content: `(live) ${truncated ? '…' : ''}${tail}`,
+        expanded: false,
+      } satisfies TimelineEntry;
+    }
+    if (AGENT_TERMINAL_STATUSES.has(rec.status) && rec.fullOutput) {
+      const fo = rec.fullOutput;
+      const firstLine = (fo.split('\n').find((l) => l.trim().length > 0) ?? '').trim();
+      return {
+        kind: 'assistant',
+        timestamp: rec.completedAt ?? Date.now(),
+        label: 'output',
+        content: `(final) ${firstLine}`,
+        detail: fo,
+        expanded: false,
+      } satisfies TimelineEntry;
+    }
+    return null;
   }
 
   // -------------------------------------------------------------------------

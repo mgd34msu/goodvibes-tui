@@ -19,6 +19,7 @@ import { HandlerError } from '../../errors.ts';
 import type { InboundChannelItem } from '../types.ts';
 import type { ApplyTagsResult, TaggerProviderConfig } from './shared.ts';
 import { discordEmojiForTag, stringMeta } from './shared.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export async function applyDiscord(
   item: InboundChannelItem,
@@ -179,7 +180,7 @@ async function fetchDiscordAppliedTags(
     return current.filter((t): t is string => typeof t === 'string');
   } catch (error) {
     ctx.logger.warn('triage: discord thread tag read errored', {
-      message: error instanceof Error ? error.message : String(error),
+      message: summarizeError(error),
     });
     return null;
   }

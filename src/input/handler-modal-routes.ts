@@ -3,6 +3,7 @@ import type { SelectionResult, SelectionAction } from './selection-modal.ts';
 import type { CommandContext } from './command-registry.ts';
 import { openTtsProviderPicker, openTtsVoicePicker } from './tts-settings-actions.ts';
 import { isTextBackspace } from './delete-key-policy.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 type SelectionRouteState = {
   selectionModal: {
@@ -285,7 +286,7 @@ function consumeSettingsPickerRequest(state: SettingsRouteState): void {
       return;
     }
     void openTtsVoicePicker(state.commandContext).catch((error: unknown) => {
-      state.commandContext?.print(`Unable to list TTS voices: ${error instanceof Error ? error.message : String(error)}`);
+      state.commandContext?.print(`Unable to list TTS voices: ${summarizeError(error)}`);
       state.requestRender();
     });
     return;

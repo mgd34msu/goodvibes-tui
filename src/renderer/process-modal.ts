@@ -1,6 +1,6 @@
 import { type Line } from '../types/grid.ts';
 import { ModalFactory } from './modal-factory.ts';
-import { formatDuration } from './modal-utils.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
 import type { ProcessManager } from '@pellux/goodvibes-sdk/platform/tools';
 import type { AgentManager, AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
@@ -623,7 +623,7 @@ export function renderProcessModal(modal: ProcessModal, width: number, viewportH
       cancelled: '–',
     }[e.status] ?? '•';
     const typeTag = e.type === 'agent' ? '[agent]' : '[exec]';
-    const dur = formatDuration(e.elapsedMs);
+    const dur = formatElapsed(e.elapsedMs);
     const statusStr = e.streamSnippet ? `streaming  ${dur}` : `${e.status}  ${dur}`;
     const suffix = `  ${statusStr}`;
     const treePrefix = e.treePrefix ?? '';

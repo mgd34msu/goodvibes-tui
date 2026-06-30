@@ -10,6 +10,7 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
   buildSelectablePanelLine,
   buildStyledPanelLine,
@@ -20,6 +21,7 @@ import {
   type ConfirmState,
   handleConfirmInput,
 } from './confirm-state.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -31,14 +33,22 @@ const STALL_THRESHOLD_MS = 5 * 60 * 1000;
 /** Terminal states — chains in these states cannot be resumed or cancelled. */
 const TERMINAL_STATES: readonly WrfcState[] = ['passed', 'failed'];
 
-/** States from which resume is permitted (pending = chain is awaiting retry). */
-const RESUMABLE_STATES: readonly WrfcState[] = ['pending'];
+/**
+ * States from which resume is permitted. These mirror the states
+ * WrfcController.resumeChain() actually recovers from: 'pending' (awaiting
+ * retry / start engineering), 'reviewing' and 'fixing' (re-spawn the
+ * interrupted child), and 'awaiting_gates' (re-run gates). resumeChain no-ops
+ * safely when a child is still running, so offering resume for these states is
+ * always safe — it is exactly the set an operator needs after a restart or a
+ * STALLED chain.
+ */
+const RESUMABLE_STATES: readonly WrfcState[] = ['pending', 'reviewing', 'fixing', 'awaiting_gates'];
 
 // ---------------------------------------------------------------------------
 // Colour palette
 // ---------------------------------------------------------------------------
-const C = {
-  // states
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // WRFC state-machine colours (domain status -- no shared equivalent)
   passed:     '#22c55e', // green
   failed:     '#ef4444', // red
   reviewing:  '#eab308', // yellow
@@ -47,31 +57,19 @@ const C = {
   pending:    '#6b7280', // grey
   gating:     '#a78bfa', // violet
   committing: '#38bdf8', // sky
+  integrating:'#818cf8', // indigo
 
-  // UI chrome
-  header:     '#94a3b8',
-  headerBold: '#e2e8f0',
-  dim:        '#4b5563',
-  label:      '#64748b',
-  value:      '#cbd5e1',
-  selected:   '#1e40af', // selection bg
-  selectedFg: '#f8fafc',
-  border:     '#334155',
-  spark:      '#38bdf8',
-  sparkLow:   '#ef4444',
-  sparkHigh:  '#22c55e',
+  // Issue-severity ramp (domain -- no shared equivalent)
   issueCrit:  '#ef4444',
   issueMaj:   '#f97316',
   issueMin:   '#eab308',
   issueSug:   '#6b7280',
-  gatePass:   '#22c55e',
-  gateFail:   '#ef4444',
-  // constraint status
-  constraintSat:  '#22c55e', // green — satisfied
-  constraintUnsat:'#ef4444', // red — unsatisfied
-  constraintUnv:  '#4b5563', // grey — unverified (no finding yet)
-  stalled:        '#f59e0b', // amber — stalled / no recent event
-} as const;
+
+  // Selection + divider chrome with no shared equivalent
+  selected:   '#1e40af', // selection bg
+  selectedFg: '#f8fafc',
+  border:     '#334155',
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -99,6 +97,7 @@ export function stateColor(state: WrfcState): string {
     case 'gating':
     case 'awaiting_gates':  return C.gating;
     case 'committing':      return C.committing;
+    case 'integrating':     return C.integrating;
     default:                return C.pending;
   }
 }
@@ -111,6 +110,7 @@ export function stateLabel(state: WrfcState): string {
     case 'gating':         return 'GATE';
     case 'awaiting_gates': return 'WAIT';
     case 'committing':     return 'COMMIT';
+    case 'integrating':    return 'INTG';
     case 'passed':         return 'PASS';
     case 'failed':         return 'FAIL';
     default:               return 'PEND';
@@ -154,10 +154,10 @@ export function constraintStatusMarker(
 ): { tag: string; fg: string; dim: boolean } {
   const finding = findings?.find(f => f.constraintId === constraint.id);
   if (!finding) {
-    return { tag: '[UNV]', fg: C.constraintUnv, dim: true };
+    return { tag: '[UNV]', fg: C.dim, dim: true };
   }
   if (finding.satisfied) {
-    return { tag: '[SAT]', fg: C.constraintSat, dim: false };
+    return { tag: '[SAT]', fg: C.good, dim: false };
   }
   // Unsatisfied — use severity to pick colour and tag text
   const sev = finding.severity ?? 'major';
@@ -334,7 +334,7 @@ export class WrfcPanel extends BasePanel {
               const satisfied = findings ? findings.filter(f => f.satisfied).length : 0;
               const satFg = !findings || findings.length === 0
                 ? DEFAULT_PANEL_PALETTE.dim
-                : satisfied === total ? C.constraintSat : C.constraintUnsat;
+                : satisfied === total ? C.good : C.bad;
               return [
                 [' Constraints ', DEFAULT_PANEL_PALETTE.label],
                 [`${satisfied} sat / ${total} total`, satFg],
@@ -450,7 +450,7 @@ export class WrfcPanel extends BasePanel {
     fg: string,
     stalled = false,
   ): Line[] {
-    const stateCol   = stalled ? C.stalled : stateColor(chain.state);
+    const stateCol   = stalled ? C.warn : stateColor(chain.state);
     const stateTag   = stalled
       ? ` STALLED`
       : ` ${stateLabel(chain.state).padEnd(6)}`;
@@ -483,7 +483,7 @@ export class WrfcPanel extends BasePanel {
     const remaining  = width - usedWidth;
 
     const segments = [
-      { text: prefix,   fg: isSelected ? fg : C.header },
+      { text: prefix,   fg: isSelected ? fg : C.label },
       { text: stateTag, fg: stateCol, bold: true },
       { text: ' ',      fg: '' },
       { text: taskText, fg: isSelected ? fg : C.value },
@@ -498,11 +498,11 @@ export class WrfcPanel extends BasePanel {
         // Determine badge colour
         let badgeFg: string;
         if (!findings || findings.length === 0) {
-          badgeFg = C.constraintUnv;
+          badgeFg = C.dim;
         } else if (satisfied === total) {
-          badgeFg = C.constraintSat;
+          badgeFg = C.good;
         } else if (findings.some(f => !f.satisfied)) {
-          badgeFg = C.constraintUnsat;
+          badgeFg = C.bad;
         } else {
           badgeFg = C.reviewing; // some unverified but none failed
         }
@@ -536,7 +536,7 @@ export class WrfcPanel extends BasePanel {
     if (chain.reviewScores.length > 0) {
       const spark = sparkline(chain.reviewScores);
       const latestScore = chain.reviewScores[chain.reviewScores.length - 1];
-      const sparkColor  = latestScore >= 8 ? C.sparkHigh : latestScore >= 5 ? C.spark : C.sparkLow;
+      const sparkColor  = latestScore >= 8 ? C.good : latestScore >= 5 ? C.info : C.bad;
       lines.push(buildStyledPanelLine(width, [
         { text: `${indent}Scores  `, fg: C.label },
         { text: spark,               fg: sparkColor },
@@ -648,7 +648,7 @@ export class WrfcPanel extends BasePanel {
 
   private renderGateResult(gate: QualityGateResult, width: number, indent: string): Line {
     const icon   = gate.passed ? '✓' : '✕';
-    const iconFg = gate.passed ? C.gatePass : C.gateFail;
+    const iconFg = gate.passed ? C.good : C.bad;
     const dur    = `${gate.durationMs}ms`;
     const nameMax = width - indent.length - 2 - dur.length - 4;
     const name   = truncate(gate.gate, Math.max(8, nameMax));
@@ -740,7 +740,7 @@ export class WrfcPanel extends BasePanel {
       if (hadChains) {
         // Post-init error: the controller was working and now throws.  Surface
         // a faint diagnostic rather than silently preserving stale state.
-        const msg = err instanceof Error ? err.message : String(err);
+        const msg = summarizeError(err);
         this.controllerError = msg;
         console.debug('[WrfcPanel] controller.listChains() error post-init:', msg);
       }
@@ -773,6 +773,8 @@ export class WrfcPanel extends BasePanel {
     if (!chain) return;
     if (!RESUMABLE_STATES.includes(chain.state)) return;
     this.deps.controller.resumeChain(chain.id);
+    // Re-sync so the rows/footer reflect the state resumeChain transitioned to.
+    this.syncFromController();
     this.markDirty();
   }
 

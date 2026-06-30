@@ -13,6 +13,7 @@ import {
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -144,7 +145,7 @@ export class FilePreviewPanel extends BasePanel {
         this.clampScroll(0);
       });
     } catch (err) {
-      this.setError(err instanceof Error ? err.message : String(err));
+      this.setError(summarizeError(err));
     }
     this.markDirty();
   }

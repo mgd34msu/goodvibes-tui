@@ -11,6 +11,7 @@ import {
 } from '../../runtime/cloudflare-control-plane.ts';
 import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { requireShellPaths } from './runtime-services.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 interface ParsedCloudflareArgs {
   readonly positional: readonly string[];
@@ -366,5 +367,5 @@ function formatCloudflareError(error: unknown): string {
   if (error instanceof CloudflareDaemonRouteError) {
     return `${error.message} (HTTP ${error.status}, ${error.code})`;
   }
-  return error instanceof Error ? error.message : String(error);
+  return summarizeError(error);
 }

@@ -345,7 +345,7 @@ export function handleHistorySearchToken(state: HistorySearchRouteState, token: 
     if (token.logicalName === 'escape' || (token.ctrl && token.logicalName === 'g')) {
       state.prompt = state.historySearch.cancel();
       state.cursorPos = state.prompt.length;
-    } else if (token.logicalName === 'return') {
+    } else if (token.logicalName === 'enter' || token.logicalName === 'return') {
       state.prompt = state.historySearch.accept();
       state.cursorPos = state.prompt.length;
     } else if (token.logicalName === 'backspace') {

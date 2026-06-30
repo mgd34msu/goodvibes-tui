@@ -14,6 +14,7 @@ import {
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -35,13 +36,7 @@ function formatWhen(value?: number): string {
 
 function formatDuration(startedAt?: number, endedAt?: number): string {
   if (!startedAt) return 'n/a';
-  const end = endedAt ?? Date.now();
-  const ms = Math.max(0, end - startedAt);
-  if (ms < 1_000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1_000).toFixed(ms < 10_000 ? 1 : 0)}s`;
-  const mins = Math.floor(ms / 60_000);
-  const secs = Math.floor((ms % 60_000) / 1_000);
-  return `${mins}m ${secs}s`;
+  return formatElapsed(Math.max(0, (endedAt ?? Date.now()) - startedAt));
 }
 
 function kindLabel(kind: RuntimeTask['kind']): string {

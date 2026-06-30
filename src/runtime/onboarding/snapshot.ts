@@ -14,6 +14,7 @@ import type {
   OnboardingSnapshotState,
   OnboardingSurfaceRecord,
 } from './types.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function sortUnique(values: readonly string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
@@ -100,7 +101,7 @@ async function buildServicesSnapshot(
       issues: [
         {
           area: 'services',
-          message: error instanceof Error ? error.message : String(error),
+          message: summarizeError(error),
         },
       ],
     };
@@ -147,7 +148,7 @@ async function buildServicesSnapshot(
         } satisfies OnboardingServiceState,
         issue: {
           area: 'services',
-          message: `${name}: ${error instanceof Error ? error.message : String(error)}`,
+          message: `${name}: ${summarizeError(error)}`,
         } satisfies OnboardingSnapshotCollectionIssue,
       };
     }
@@ -244,7 +245,7 @@ async function loadOptionalSnapshot<T>(
       value: fallback,
       issue: {
         area,
-        message: error instanceof Error ? error.message : String(error),
+        message: summarizeError(error),
       },
     };
   }

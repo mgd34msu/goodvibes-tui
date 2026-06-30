@@ -17,6 +17,7 @@
 import type { InboundProviderAdapter, ProviderState } from './provider-adapter.ts';
 import type { InboxCursorStore } from './cursor-store.ts';
 import type { HandlerLogger } from '../context.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export interface ProviderStatus {
   id: string;
@@ -115,7 +116,7 @@ export class InboundPoller {
         lastPolledAt: Date.now(),
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = summarizeError(error);
       this.logger.warn('inbound poll failed', { provider: id, error: message });
       this.setStatus(id, {
         id,

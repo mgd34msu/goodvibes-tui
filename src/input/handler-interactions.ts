@@ -5,6 +5,7 @@ import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, handleBlockCopy, 
 import { clearModalStack, handleEscape, modalOpened } from './handler-modal-stack.ts';
 import { openOnboardingWizardState, type OpenOnboardingWizardOptions } from './handler-ui-state.ts';
 import type { InputHandlerLike as InputHandler } from './handler-types.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export function openOnboardingWizardForHandler(
   handler: InputHandler,
@@ -49,7 +50,7 @@ export async function hydrateOnboardingWizardFromRuntimeForHandler(handler: Inpu
       handler.requestRender();
     } catch (error) {
       if (!handler.onboardingWizard.active || hydrationSerial !== handler.onboardingHydrationSerial) return;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = summarizeError(error);
       handler.onboardingWizard.failRuntimeHydration(message);
       handler.commandContext?.print?.(`Onboarding runtime snapshot failed: ${message}`);
       handler.requestRender();

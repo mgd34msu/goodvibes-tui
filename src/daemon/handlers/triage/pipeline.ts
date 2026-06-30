@@ -23,6 +23,7 @@ import {
   type TriageScore,
   type TriageScorerOptions,
 } from './scorer.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export const TRIAGE_STORE_FILE = 'inbox-triage.sqlite';
 
@@ -158,7 +159,7 @@ export async function runInboxTriage(
     if (ownsStore) await store.save();
   } catch (error) {
     ctx.logger.error('triage: failed to persist scores', {
-      message: error instanceof Error ? error.message : String(error),
+      message: summarizeError(error),
     });
     throw error;
   } finally {

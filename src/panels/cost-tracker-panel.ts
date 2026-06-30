@@ -14,6 +14,7 @@ import {
   buildStyledPanelLine,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
+  extendPalette,
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
@@ -75,20 +76,13 @@ function buildSparkline(history: number[]): string {
 // Colour palette
 // ---------------------------------------------------------------------------
 
-const C = {
-  header:    '#ffffff',
-  label:     '#aaaaaa',
-  value:     '#00ff88',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   cost:      '#ffdd44',
-  alert:     '#ff4444',
-  dim:       '#555555',
   model:     '#88aaff',
   running:   '#88aaff',
-  done:      '#00ff88',
-  failed:    '#ff4444',
   separator: '#333333',
   bg:        '',
-} as const;
+});
 
 // ---------------------------------------------------------------------------
 // CostTrackerPanel
@@ -273,7 +267,7 @@ export class CostTrackerPanel extends BasePanel {
     const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;
     const sparkline = buildSparkline(this.costHistory);
     const costStr = formatCost(sessionCost);
-    const costFg = overBudget ? C.alert : C.cost;
+    const costFg = overBudget ? C.bad : C.cost;
     const budgetStr = this.budgetThreshold > 0
       ? ` / ${formatCost(this.budgetThreshold)}`
       : '';
@@ -281,7 +275,7 @@ export class CostTrackerPanel extends BasePanel {
     const sessionLines: Line[] = [
       this.renderKeyValue(width, ' Total', `${costStr}${budgetStr}${alertStr}`, costFg),
     ];
-    if (sparkline.length > 0) sessionLines.push(this.renderLabeledLine(width, ' Trend', sparkline, C.value));
+    if (sparkline.length > 0) sessionLines.push(this.renderLabeledLine(width, ' Trend', sparkline, C.good));
     sessionLines.push(this.renderKeyValue(width, ' Input',  formatTokens(this.sessionUsage.input),  C.label));
     sessionLines.push(this.renderKeyValue(width, ' Output', formatTokens(this.sessionUsage.output), C.label));
     if (this.sessionUsage.cacheRead > 0 || this.sessionUsage.cacheWrite > 0) {
@@ -307,8 +301,8 @@ export class CostTrackerPanel extends BasePanel {
       ];
       for (const agent of agentList) {
         const statusFg = agent.status === 'running' ? C.running
-          : agent.status === 'failed' ? C.failed
-          : C.done;
+          : agent.status === 'failed' ? C.bad
+          : C.good;
         const statusIcon = agent.status === 'running' ? '…'
           : agent.status === 'failed' ? '✕'
           : '✓';

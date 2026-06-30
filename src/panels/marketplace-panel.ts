@@ -18,6 +18,7 @@ import {
   type EcosystemEntryKind,
 } from '@/runtime/index.ts';
 import type { UiMarketplaceSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -114,7 +115,7 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
       this.clearError();
     } catch (e) {
       // I2: surface catalog load failure
-      this.setError(`Catalog load failed: ${e instanceof Error ? e.message : String(e)}`);
+      this.setError(`Catalog load failed: ${summarizeError(e)}`);
     }
   }
 

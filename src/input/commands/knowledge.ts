@@ -1,5 +1,6 @@
 import type { KnowledgeService } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { CommandContext, SlashCommand } from '../command-registry.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const KNOWLEDGE_REVIEW_ACTIONS = ['accept', 'reject', 'resolve', 'reopen', 'edit', 'forget'] as const;
 
@@ -397,7 +398,7 @@ export const knowledgeCommand: SlashCommand = {
             ...(result.appliedFacts ? [`  applied facts: ${Object.keys(result.appliedFacts).join(', ') || 'none'}`] : []),
           ].join('\n'));
         } catch (error) {
-          context.print(`[knowledge] ${error instanceof Error ? error.message : String(error)}`);
+          context.print(`[knowledge] ${summarizeError(error)}`);
         }
         break;
       }

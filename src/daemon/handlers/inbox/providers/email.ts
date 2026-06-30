@@ -25,6 +25,7 @@ import { digestSender, toBodyPreview, toSubjectPreview } from '../mapping.ts';
 import { resolveRouteId } from './route-util.ts';
 import { ImapClient } from './imap-client.ts';
 import type { ImapConfig, ImapEnvelope } from './imap-client.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export const EMAIL_PROVIDER_ID = 'email';
 export const EMAIL_HOST_KEY = 'surfaces.email.imapHost';
@@ -147,5 +148,5 @@ function unavailable(error: string): ProviderPollResult {
 }
 
 function errMsg(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return summarizeError(error);
 }

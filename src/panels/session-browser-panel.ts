@@ -15,6 +15,7 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
@@ -28,24 +29,15 @@ import {
 } from './search-focus.ts';
 import { type ConfirmState, handleConfirmInput } from './confirm-state.ts';
 
-const C = {
-  headerBg:   '#1a1a2e',
-  headerFg:   '#ffffff',
-  statusBar:  '#222233',
-  statusFg:   '#aaaaaa',
-  selected:   '#00ffff',
-  selectedBg: '#1a2a3a',
-  normal:     '#ccccdd',
-  dim:        '#555566',
-  label:      '#8888bb',
-  value:      '#ccccdd',
-  dateFg:     '#6699aa',
-  modelFg:    '#99aacc',
-  countFg:    '#88bbcc',
-  warnFg:     '#ffcc44',
-  errorFg:    '#ff6666',
-  separator:  '#333355',
-} as const;
+// Panel-specific extras only; shared tones come from DEFAULT_PANEL_PALETTE so
+// theme changes propagate. `selected` is a deliberate bright-cyan cursor accent
+// and the date/model/count column tints have no clean shared equivalent.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  selected: '#00ffff',
+  dateFg:   '#6699aa',
+  modelFg:  '#99aacc',
+  countFg:  '#88bbcc',
+});
 
 function shortDate(ts: number): string {
   const d = new Date(ts);
@@ -308,7 +300,7 @@ export class SessionBrowserPanel extends BasePanel {
   }
 
   private _renderSession(width: number, sess: SessionInfo, isCursor: boolean): Line {
-    const bg = isCursor ? C.selectedBg : '';
+    const bg = isCursor ? C.selectBg : '';
     const date = shortDate(sess.timestamp);
     const cnt = String(sess.messageCount).padStart(3) + 'm ';
     const model = (sess.model || 'unknown').slice(0, 18).padEnd(18) + ' ';
@@ -317,10 +309,10 @@ export class SessionBrowserPanel extends BasePanel {
     return buildStyledPanelLine(width, [
       { text: isCursor ? '▸' : ' ', fg: C.selected, bg, bold: isCursor },
       { text: date, fg: C.dateFg, bg },
-      { text: ' ', fg: C.normal, bg },
+      { text: ' ', fg: C.value, bg },
       { text: cnt, fg: C.countFg, bg },
       { text: model, fg: C.modelFg, bg },
-      { text: title, fg: isCursor ? C.selected : C.normal, bg, bold: isCursor },
+      { text: title, fg: isCursor ? C.selected : C.value, bg, bold: isCursor },
     ]);
   }
 

@@ -23,6 +23,7 @@ import {
   resolveScrollablePanelSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   planning: '#38bdf8',
@@ -512,7 +513,7 @@ export class ProjectPlanningPanel extends BasePanel {
         };
         this.clearError();
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
       } finally {
         this.loading = false;
         this.markDirty();
@@ -647,7 +648,7 @@ export class ProjectPlanningPanel extends BasePanel {
         this.refresh(true);
         this.registerTimer(setTimeout(() => this.refresh(true), 250));
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
         this.requestRender();
       }
     })();
@@ -698,7 +699,7 @@ export class ProjectPlanningPanel extends BasePanel {
         this.dismissPlanning?.();
         this.refresh(true);
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
         this.requestRender();
       }
     })();
@@ -741,7 +742,7 @@ export class ProjectPlanningPanel extends BasePanel {
         });
         this.refresh(true);
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
         this.requestRender();
       }
     })();

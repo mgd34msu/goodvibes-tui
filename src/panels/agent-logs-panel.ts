@@ -29,8 +29,17 @@ import {
 const POLL_INTERVAL_MS = 500;
 
 export interface AgentLogsPanelDeps {
-  readonly agentManager: Pick<AgentManager, 'list'>;
+  readonly agentManager: Pick<AgentManager, 'list'> & Partial<Pick<AgentManager, 'getStatus'>>;
   readonly workingDirectory: string;
+  /**
+   * Request a compositor repaint. The 500ms poll timer, fs.watch callback and
+   * other async update paths call this (via markDirty) so new log lines and
+   * live streaming output are painted while the main thread is idle — render()
+   * is otherwise only invoked on input/turn/resize, which makes a running
+   * agent's log tail look frozen. Optional: when omitted the panel still marks
+   * dirty and repaints on the next event.
+   */
+  readonly requestRender?: () => void;
 }
 
 
@@ -47,11 +56,21 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   private allEntries: LogEntry[] = []; // raw parsed JSONL for selected agent
   private filteredEntries: LogEntry[] = []; // after filter applied
   private lastFileSize = 0;
+  /**
+   * Length of the selected agent's live streamingContent buffer at the last
+   * poll. During an LLM turn the record's streamingContent grows token-by-token
+   * with NO JSONL append, so the file-size gate alone never repaints the live
+   * tail; we also watch this length and markDirty when it advances.
+   */
+  private lastStreamLen = 0;
 
   // ── Modes ────────────────────────────────────────────────────────────────
   private autoFollow = true;
   private paused = false;
   private filter: FilterType = 'all';
+
+  /** True while this panel is the active view — gates async repaint requests. */
+  private _active = false;
 
   // ── Infrastructure ───────────────────────────────────────────────────────
   private pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -81,18 +100,32 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   override onActivate(): void {
+    this._active = true;
     super.onActivate();
     this._refreshAgents();
     this._pollCurrentAgent();
   }
 
   override onDeactivate(): void {
+    this._active = false;
     super.onDeactivate();
   }
 
   override onDestroy(): void {
     this._stopPolling();
     this._unsubscribeEvents();
+  }
+
+  /**
+   * T17: a bare markDirty() does not repaint — render() only runs on
+   * input/turn/resize. While active, ask the compositor for a frame so the
+   * background poll / fs.watch updates (new log lines, live streaming output)
+   * are not stuck off-screen. Gated on active state so the always-on poller
+   * does not force full-frame rebuilds while this panel is hidden.
+   */
+  protected override markDirty(): void {
+    super.markDirty();
+    if (this._active) this.deps.requestRender?.();
   }
 
   // ── Input ─────────────────────────────────────────────────────────────────
@@ -180,7 +213,17 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
       ]));
     }
 
-    if (this.filteredEntries.length === 0) {
+    // T13: surface the selected agent's live streaming output (running) or
+    // final output (terminal) — the per-turn JSONL tail never carries it. Pull
+    // the freshest record via getStatus so the streaming buffer reflects the
+    // current turn; the list() snapshot in this.agents only refreshes on
+    // spawn/complete/fail events, never mid-stream.
+    const liveAgent = selectedAgent
+      ? (this.deps.agentManager.getStatus?.(selectedAgent.id) ?? selectedAgent)
+      : null;
+    const liveLines = liveAgent ? this._buildLiveOutputLines(width, liveAgent) : [];
+
+    if (this.filteredEntries.length === 0 && liveLines.length === 0) {
       return buildPanelWorkspace(width, height, {
         title: ' Agents',
         intro: 'View-only live session stream for running agents, with per-agent switching and filtered event tails.',
@@ -202,9 +245,13 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
       });
     }
 
+    const scrollableLines = [
+      ...this.filteredEntries.map((entry) => this._renderEntry(entry, width)),
+      ...liveLines,
+    ];
     const focusIndex = this.autoFollow
-      ? Math.max(0, this.filteredEntries.length - 1)
-      : Math.min(this.selectedIndex, Math.max(0, this.filteredEntries.length - 1));
+      ? Math.max(0, scrollableLines.length - 1)
+      : Math.min(this.selectedIndex, Math.max(0, scrollableLines.length - 1));
     const summarySection = { title: 'Summary', lines: summaryLines } as const;
     const agentsSection = { title: 'Agents', lines: [selectorLine] } as const;
     const logStreamSection = resolveScrollablePanelSection(width, height, {
@@ -214,7 +261,7 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
       beforeSections: [summarySection, agentsSection],
       section: {
         title: 'Log Stream',
-        scrollableLines: this.filteredEntries.map((entry) => this._renderEntry(entry, width)),
+        scrollableLines,
         selectedIndex: focusIndex,
         scrollOffset: this.scrollStart,
         minRows: 8,
@@ -264,28 +311,50 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
     const agent = this._selectedAgent();
     if (!agent) return;
 
+    // Detect live streaming growth even when no JSONL is written this tick.
+    // During an LLM turn the record's streamingContent grows token-by-token
+    // with no session-log append, so the file-size gate below would never fire
+    // and the live tail (_buildLiveOutputLines) would never repaint.
+    let streamChanged = false;
+    const live = this.deps.agentManager.getStatus?.(agent.id);
+    if (live) {
+      const streamLen = (live.streamingContent ?? '').length;
+      if (streamLen !== this.lastStreamLen) {
+        this.lastStreamLen = streamLen;
+        streamChanged = true;
+      }
+    }
+
     const sessionFile = this._sessionFilePath(agent.id);
+    let fileExists = true;
     try {
       await fsPromises.access(sessionFile);
     } catch {
-      return;
+      fileExists = false;
     }
 
-    try {
-      const content = await fsPromises.readFile(sessionFile, 'utf-8');
-      if (content.length === this.lastFileSize) return;
-      this.lastFileSize = content.length;
+    if (fileExists) {
+      try {
+        const content = await fsPromises.readFile(sessionFile, 'utf-8');
+        if (content.length !== this.lastFileSize) {
+          this.lastFileSize = content.length;
 
-      // Re-parse all lines (simple: no partial-line tracking needed at 500ms)
-      this.allEntries = parseAgentJsonl(content);
-      this._applyFilter();
-      if (this.autoFollow) {
-        this.selectedIndex = Math.max(0, this.filteredEntries.length - 1);
+          // Re-parse all lines (simple: no partial-line tracking needed at 500ms)
+          this.allEntries = parseAgentJsonl(content);
+          this._applyFilter();
+          if (this.autoFollow) {
+            this.selectedIndex = Math.max(0, this.filteredEntries.length - 1);
+          }
+          this.markDirty();
+          return;
+        }
+      } catch {
+        // Non-fatal: file may be mid-write
       }
-      this.markDirty();
-    } catch {
-      // Non-fatal: file may be mid-write
     }
+
+    // File unchanged or absent, but the live stream advanced — repaint the tail.
+    if (streamChanged) this.markDirty();
   }
 
   // ── Private: fs.watch (supplemental) ─────────────────────────────────────
@@ -382,6 +451,7 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
     this.allEntries = [];
     this.filteredEntries = [];
     this.lastFileSize = 0;
+    this.lastStreamLen = 0;
     this.selectedIndex = 0;
     this.scrollStart = 0;
     this.autoFollow = true;
@@ -414,6 +484,7 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
       this.allEntries = [];
       this.filteredEntries = [];
       this.lastFileSize = 0;
+      this.lastStreamLen = 0;
       this.markDirty();
       return;
     }
@@ -543,6 +614,43 @@ export class AgentLogsPanel extends ScrollableListPanel<LogEntry> {
     const prefix = entry.type === 'session_start' ? '' : '  ';
     const fullText = prefix + entry.text;
     return buildStyledPanelLine(width, [{ text: fullText, fg: entry.color, bold: entry.bold }]);
+  }
+
+  /**
+   * Build trailing lines exposing the selected agent's live model output. The
+   * JSONL tail is written per-turn, so while an agent is mid-turn its actual
+   * work is invisible here; this surfaces the streaming token buffer
+   * (tail-truncated like AgentDetailModal) for a running agent, and the final
+   * assistant text once it terminates. Empty when there is nothing live to show.
+   */
+  private _buildLiveOutputLines(width: number, agent: AgentRecord): Line[] {
+    const STREAM_MAX_CHARS = 500;
+    if (agent.status === 'running' && agent.streamingContent) {
+      const sc = agent.streamingContent;
+      const truncated = sc.length > STREAM_MAX_CHARS;
+      const display = truncated ? sc.slice(-STREAM_MAX_CHARS) : sc;
+      const header = truncated
+        ? `  streaming (last ${STREAM_MAX_CHARS} of ${sc.length} chars):`
+        : '  streaming:';
+      const lines: Line[] = [
+        buildStyledPanelLine(width, [{ text: header, fg: COLOR.auto_follow, bold: true }]),
+      ];
+      for (const raw of display.split('\n')) {
+        lines.push(buildStyledPanelLine(width, [{ text: `    ${raw}`, fg: COLOR.assistant }]));
+      }
+      return lines;
+    }
+    if (agent.status !== 'running' && agent.status !== 'pending' && agent.fullOutput) {
+      const fo = agent.fullOutput;
+      const lines: Line[] = [
+        buildStyledPanelLine(width, [{ text: '  output:', fg: COLOR.header_accent, bold: true }]),
+      ];
+      for (const raw of fo.split('\n')) {
+        lines.push(buildStyledPanelLine(width, [{ text: `    ${raw}`, fg: COLOR.assistant }]));
+      }
+      return lines;
+    }
+    return [];
   }
 
   private _agentStatusColor(status: AgentRecord['status']): string {

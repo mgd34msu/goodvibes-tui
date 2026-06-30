@@ -14,6 +14,7 @@ import type { DaemonCredentialStore } from '../../credentials.ts';
 import type { InboundChannelItem } from '../types.ts';
 import type { ApplyTagsResult, TaggerProviderConfig } from './shared.ts';
 import { imapKeywordForTag } from './shared.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export interface ImapStoreArgs {
   host: string;
@@ -227,7 +228,7 @@ export function imapStoreFlagOverTls(
       reject(
         err instanceof ImapStoreError
           ? err
-          : new ImapStoreError(err instanceof Error ? err.message : String(err), false),
+          : new ImapStoreError(summarizeError(err), false),
       );
       return;
     }
@@ -288,7 +289,7 @@ export function imapStoreFlagOverTls(
           finish(
             err instanceof ImapStoreError
               ? err
-              : new ImapStoreError(err instanceof Error ? err.message : String(err), false),
+              : new ImapStoreError(summarizeError(err), false),
           ),
         );
         return;
@@ -318,7 +319,7 @@ export function imapStoreFlagOverTls(
     };
 
     socket.on('error', (err) =>
-      finish(new ImapStoreError(err instanceof Error ? err.message : String(err), true)),
+      finish(new ImapStoreError(summarizeError(err), true)),
     );
     socket.on('close', () => {
       if (completed) finish();

@@ -1,6 +1,7 @@
 import type { ConfigKey } from '@pellux/goodvibes-sdk/platform/config';
 import type { CommandContext } from './command-registry.ts';
 import type { SelectionItem } from './selection-modal.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 function getStreamingTtsProviders(ctx: CommandContext): Array<{ id: string; label: string; capabilities: readonly string[] }> {
   const registry = ctx.platform.voiceProviderRegistry;
@@ -94,7 +95,7 @@ export async function openTtsVoicePicker(ctx: CommandContext, providerArg?: stri
     });
     return true;
   } catch (error) {
-    ctx.print(`Unable to list TTS voices: ${error instanceof Error ? error.message : String(error)}`);
+    ctx.print(`Unable to list TTS voices: ${summarizeError(error)}`);
     return true;
   }
 }

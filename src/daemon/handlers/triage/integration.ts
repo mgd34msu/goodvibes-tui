@@ -47,6 +47,7 @@ import {
   type TriageTagger,
   type TriageTaggerOptions,
 } from './tagger/index.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 /**
  * Canonical id of the inbox list method whose handler we decorate. This is the
@@ -151,7 +152,7 @@ function withInboxEnrichment(ctx: HandlerContext): EnrichmentProxy {
         // Triage is best-effort: a missing/locked store must never break the
         // read-only inbox feed. Log and return the un-enriched result.
         ctx.logger.warn('triage: inbox enrichment skipped', {
-          message: error instanceof Error ? error.message : String(error),
+          message: summarizeError(error),
         });
         return result;
       }
