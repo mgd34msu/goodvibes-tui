@@ -35,6 +35,19 @@ describe('PolicyPanel', () => {
     const panel = new PolicyPanel(policyState);
     const text = linesText(panel.render(100, 12));
     expect(text).toContain('No policy bundles loaded');
+    // Actionable empty state suggests a concrete next command.
+    expect(text).toContain('/policy load');
+  });
+
+  test('renders a posture summary line and keyboard hints', () => {
+    const panel = new PolicyPanel(policyState);
+    const text = linesText(panel.render(100, 16));
+    // Top-of-panel posture summary surfaces the highest-signal governance state.
+    expect(text).toContain('preflight');
+    expect(text).toContain('gate');
+    expect(text).toContain('lint');
+    // Context-aware footer hints.
+    expect(text).toContain('record divergence snapshot');
   });
 
   test('renders current candidate and governance gate state', () => {
