@@ -30,7 +30,7 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { wrapWithHangingIndent } from '../renderer/text-layout.ts';
 import {
   getPanelSearchFocusTransition,
@@ -361,7 +361,7 @@ export class PanelListPanel extends BasePanel {
         const dot = isTopOpen || isBottomOpen ? '●' : '○';
         const dotColor = isTopOpen || isBottomOpen ? C.openDot : C.closedDot;
         const nameColor = isSelected ? C.selected : C.name;
-        const nameStr = entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH);
+        const nameStr = fitDisplay(entry.reg.name, NAME_COL_WIDTH);
         const descStartCol = PREFIX_WIDTH + NAME_COL_WIDTH + 1;
         const descWidth = Math.max(1, width - descStartCol);
         const descLines = wrapPanelDescription(entry.reg.description, descWidth, 2);

@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { WorkPlanItem, WorkPlanItemStatus, WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -23,7 +24,7 @@ const STATUS_COLOR: Record<WorkPlanItemStatus, string> = {
 };
 
 function line(text: string, width: number, style: Parameters<typeof UIFactory.stringToLine>[2] = {}): Line {
-  return UIFactory.stringToLine(text.padEnd(width).slice(0, width), width, style);
+  return UIFactory.stringToLine(fitDisplay(text, width), width, style);
 }
 
 function compactDate(value: number): string {

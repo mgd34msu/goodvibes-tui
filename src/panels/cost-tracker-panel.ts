@@ -4,6 +4,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import type { AgentEvent, TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
@@ -364,7 +365,7 @@ export class CostTrackerPanel extends BasePanel {
   private renderKeyValue(width: number, label: string, value: string, valueFg: string): Line {
     const LABEL_W = 10;
     return buildStyledPanelLine(width, [
-      { text: label.padEnd(LABEL_W).slice(0, LABEL_W), fg: C.label, bg: C.bg },
+      { text: fitDisplay(label, LABEL_W), fg: C.label, bg: C.bg },
       { text: ': ', fg: C.dim, bg: C.bg },
       { text: value, fg: valueFg, bg: C.bg, bold: true },
     ]);
@@ -372,17 +373,17 @@ export class CostTrackerPanel extends BasePanel {
 
   private renderLabeledLine(width: number, label: string, value: string, valueFg: string): Line {
     return buildStyledPanelLine(width, [
-      ...(label.length > 0 ? [{ text: `${label.slice(0, 10).padEnd(10)} `, fg: C.label }] : []),
+      ...(label.length > 0 ? [{ text: `${fitDisplay(label, 10)} `, fg: C.label }] : []),
       { text: value, fg: valueFg },
     ]);
   }
 
   private renderAgent(width: number, label: string, task: string, fg: string): Line {
     const LABEL_W = 12;
-    const remaining = width - LABEL_W - 1;
-    const trimmed = task.length > remaining ? task.slice(0, remaining - 3) + '...' : task;
+    const remaining = Math.max(0, width - LABEL_W - 1);
+    const trimmed = truncateDisplay(task, remaining);
     return buildStyledPanelLine(width, [
-      { text: `${label.padEnd(LABEL_W).slice(0, LABEL_W)} `, fg, bold: true },
+      { text: `${fitDisplay(label, LABEL_W)} `, fg, bold: true },
       { text: trimmed, fg: C.label },
     ]);
   }
