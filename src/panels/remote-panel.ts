@@ -200,7 +200,7 @@ export class RemotePanel extends BasePanel {
     if (daemon.lastError) {
       postureLines.push(buildPanelLine(width, [
         [' daemon error ', C.label],
-        [daemon.lastError.slice(0, Math.max(0, width - 14)), C.error],
+        [truncateDisplay(daemon.lastError, Math.max(0, width - 14)), C.error],
       ]));
     }
     postureLines.push(
@@ -208,9 +208,16 @@ export class RemotePanel extends BasePanel {
       buildGuidanceLine(width, '/remote capabilities', 'inspect transport support before routing remote work or reattaching a session', C),
     );
 
+    const canBrowse = activeConnections.length > 0 || contracts.length > 0;
+    const canSwitch = contracts.length > 0 && activeConnections.length > 0;
+    const navHint = !canBrowse
+      ? `  focus=${this.browseMode}  idle - no connections or contracts to browse`
+      : canSwitch
+        ? `  focus=${this.browseMode}  Up/Down move  Tab switch connections/contracts`
+        : `  focus=${this.browseMode}  Up/Down move`;
     const footerLines = [
       buildGuidanceLine(width, '/remote setup', 'review bridge, tunnel, env, and bootstrap flows for self-hosted remote work', C),
-      buildPanelLine(width, [[`  focus=${this.browseMode}  Up/Down move  Tab switch connections/contracts`, C.dim]]),
+      buildPanelLine(width, [[navHint, C.dim]]),
     ] as const;
 
     if (activeConnections.length === 0 && contracts.length === 0) {

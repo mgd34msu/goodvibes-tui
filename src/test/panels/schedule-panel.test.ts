@@ -85,6 +85,17 @@ describe('SchedulePanel', () => {
       expect(text).toContain('Daily Sweep');
       expect(text).toContain('0 0 * * *');
       expect(text).toContain('Run a daily repo sweep');
+      // UX: summary surfaces enablement counts; footer toggle hint is state-aware.
+      expect(text).toContain('Enabled');
+      expect(text).toContain('pause task');
     });
+  });
+
+  test('empty state offers a concrete create command', () => {
+    const panel = new SchedulePanel(manager);
+    panel.onActivate();
+    const text = linesText(panel.render(90, 20));
+    expect(text).toContain('No scheduled tasks');
+    expect(text).toContain('/schedule add');
   });
 });

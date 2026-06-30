@@ -7,8 +7,10 @@ import {
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
+  buildSectionHeader,
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
@@ -178,6 +180,8 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
     }
 
     if (approvals.length > 0) {
+      const pending = approvals.filter((entry) => entry.status === 'pending').length;
+      footerLines.push(buildSectionHeader(width, `Approvals (${pending} pending / ${approvals.length})`, C));
       footerLines.push(
         ...approvals.slice(0, 6).map((approval) => buildPanelLine(width, [
           [' ', C.label],
@@ -189,6 +193,8 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
     }
 
     if (sessions.length > 0) {
+      const activeSessions = sessions.filter((session) => session.status === 'active').length;
+      footerLines.push(buildSectionHeader(width, `Sessions (${activeSessions} active / ${sessions.length})`, C));
       footerLines.push(
         ...sessions.slice(0, 6).map((session) => buildPanelLine(width, [
           [' ', C.label],
@@ -200,6 +206,7 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
     }
 
     if (recentEvents.length > 0) {
+      footerLines.push(buildSectionHeader(width, `Recent Events (${recentEvents.length})`, C));
       footerLines.push(
         ...recentEvents.slice(0, 6).map((event) => buildPanelLine(width, [
           [' ', C.label],
@@ -208,7 +215,18 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
         ])),
       );
     }
-    footerLines.push(buildPanelLine(width, [['  Up/Down move through connected clients', C.dim]]));
+    footerLines.push(
+      this.filterActive
+        ? buildKeyboardHints(width, [
+            { keys: 'type', label: 'filter clients' },
+            { keys: 'Enter', label: 'apply' },
+            { keys: 'Esc', label: 'clear' },
+          ], C)
+        : buildKeyboardHints(width, [
+            { keys: 'Up/Down', label: 'select client' },
+            { keys: '/', label: 'filter' },
+          ], C),
+    );
 
     return this.renderList(width, height, {
       title: 'Control Plane',
