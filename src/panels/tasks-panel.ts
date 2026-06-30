@@ -153,6 +153,8 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
   ) {
     super('tasks', 'Tasks', 'J', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter tasks';
     this.readModel = readModel;
     this.worktrees = worktrees;
     this.unsubscribers = [
@@ -179,6 +181,13 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
     ];
   }
 
+  protected override filterMatches(task: RuntimeTask, q: string): boolean {
+    return task.title.toLowerCase().includes(q)
+      || task.status.toLowerCase().includes(q)
+      || task.id.toLowerCase().includes(q)
+      || String(task.kind).toLowerCase().includes(q);
+  }
+
   protected getItems(): readonly RuntimeTask[] {
     if (!this.readModel) return [];
     return sortTasks([...this.readModel.getSnapshot().tasks]);
@@ -200,7 +209,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       return true;
     }
     if (key === 'end') {
-      const tasks = this.getItems();
+      const tasks = this.getVisibleItems();
       this.selectedIndex = Math.max(0, tasks.length - 1);
       this.markDirty();
       return true;
