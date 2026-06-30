@@ -52,6 +52,7 @@ import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
+import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
@@ -215,100 +216,31 @@ async function main() {
   let stopSpokenOutputForExit: (() => void) | null = null;
   let recoveryPending = false;
 
-  const sigintHandler = (): void => input.feed('\x03');
-  let _unhandledRejectionCount = 0;
-  let _unhandledRejectionWindowStart = Date.now();
-  const unhandledRejectionHandler = (reason: unknown): void => {
-    const now = Date.now();
-    if (now - _unhandledRejectionWindowStart > 10000) {
-      _unhandledRejectionCount = 0;
-      _unhandledRejectionWindowStart = now;
-    }
-    _unhandledRejectionCount++;
-    const msg = summarizeError(reason);
-    if (_unhandledRejectionCount > 3) {
-      logger.error('CRITICAL: cascading unhandled rejections — consider restarting', {
-        count: _unhandledRejectionCount,
-        windowMs: now - _unhandledRejectionWindowStart,
-        error: String(reason),
-      });
-      systemMessageRouter.high(
-        `[Critical] Multiple errors detected (${_unhandledRejectionCount} in 10s). If the issue persists, please restart. Latest: ${msg}`
-      );
-    } else {
-      const formatted = formatUserFacingErrorLine(reason);
-      systemMessageRouter.high(`[Error] ${formatted}`);
-      logger.error('unhandledRejection', { error: String(reason) });
-    }
-    render();
-  };
-  const resizeHandler = (): void => {
-    input.setContentWidth(getPromptContentWidth());
-    compositor.resetDiff();
-    render();
-  };
-
-  let terminalRestored = false;
-  // Idempotent, synchronous-only terminal restore. Safe to call from process.on('exit'),
-  // signal handlers, uncaughtException, and exitApp. Disposes the output guard FIRST so a
-  // crash stack reaches the real stderr instead of being suppressed by the guard.
-  const restoreTerminal = (): void => {
-    if (terminalRestored) return;
-    terminalRestored = true;
-    const exitScreen = cli.flags.noAltScreen ? CLEAR_SCREEN : CLEAR_SCREEN + ALT_SCREEN_EXIT;
-    allowTerminalWrite(() => stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + exitScreen));
-    terminalOutputGuard.dispose();
-    try { stdin.setRawMode(false); } catch { /* stdin may not be a TTY */ }
-  };
-
-  const uncaughtExceptionHandler = (err: Error): void => {
-    restoreTerminal();
-    logger.error('uncaughtException — terminal restored, exiting', { error: summarizeError(err) });
-    process.exit(1);
-  };
-  const terminationSignalHandler = (signal: NodeJS.Signals): void => {
-    restoreTerminal();
-    logger.error(`Received ${signal} — terminal restored, exiting`, {});
-    process.exit(signal === 'SIGHUP' ? 129 : 143);
-  };
-  const exitListener = (): void => { restoreTerminal(); };
-
-  let exiting = false;
-  const exitApp = async (): Promise<void> => {
-    // Reentrancy guard: a second /exit or keypress during the awaited shutdown below
-    // must not re-run teardown or double-fire ctx.shutdown.
-    if (exiting) return;
-    exiting = true;
-    stopSpokenOutputForExit?.();
-    unsubs.forEach(fn => fn());
-    if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
-    stdin.removeAllListeners('data');
-    stdout.removeListener('resize', resizeHandler);
-    process.removeListener('SIGINT', sigintHandler);
-    process.removeListener('unhandledRejection', unhandledRejectionHandler);
-    // Restore the terminal synchronously BEFORE the (possibly slow) async shutdown so the
-    // user is not left staring at a frozen alt screen while we drain and persist.
-    restoreTerminal();
-    const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
-    let shutdownOk = false;
-    try {
-      // Race the graceful shutdown against a hard timeout — externalServices.stop() can hang
-      // and we must still exit; deferredStartup.drain only budgets 100ms internally.
-      await Promise.race([
-        ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints()) }).then(() => { shutdownOk = true; }),
-        new Promise<void>((resolve) => setTimeout(resolve, 3000)),
-      ]);
-    } catch (err) {
-      logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: summarizeError(err) });
-    }
-    // Only remove the recovery fallback once the durable shutdown save actually completed,
-    // so an interrupted or timed-out shutdown leaves the snapshot for the next launch.
-    if (shutdownOk) {
-      deleteRecoveryFile({ homeDirectory });
-    }
-    process.exit(0);
-  };
-
+  const lifecycle = installProcessLifecycle({
+    stdin,
+    stdout,
+    ctx,
+    noAltScreen: cli.flags.noAltScreen,
+    ansi: { CLEAR_SCREEN, ALT_SCREEN_EXIT, PASTE_DISABLE, KEYBOARD_EXT_DISABLE, MOUSE_DISABLE, CURSOR_SHOW },
+    getInput: () => input,
+    render: () => render(),
+    getPromptContentWidth,
+    getTerminalOutputGuard: () => terminalOutputGuard,
+    buildSessionContinuityHints,
+    unsubs,
+    getRecoveryInterval: () => recoveryInterval,
+    setRecoveryInterval: (value) => { recoveryInterval = value; },
+    getStopSpokenOutputForExit: () => stopSpokenOutputForExit,
+  });
+  const {
+    exitApp,
+    resizeHandler,
+    sigintHandler,
+    unhandledRejectionHandler,
+    uncaughtExceptionHandler,
+    terminationSignalHandler,
+    exitListener,
+  } = lifecycle;
   commandContext.exit = exitApp;
 
   const spokenTurns = wireSpokenTurnRuntime({
