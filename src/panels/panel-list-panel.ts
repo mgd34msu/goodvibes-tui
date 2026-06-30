@@ -78,10 +78,13 @@ const CATEGORY_LABELS: Record<PanelCategory, string> = {
 const NAME_COL_WIDTH = 22;
 const PREFIX_WIDTH = 4; // arrow + dot + space + space
 
-/** A flat entry in the navigable list — either a category header or a panel row. */
+/** A flat entry in the navigable list — either a section header or a panel row. */
 type ListEntry =
-  | { kind: 'header'; category: PanelCategory }
+  | { kind: 'header'; label: string }
   | { kind: 'panel'; reg: PanelRegistration };
+
+/** Number of most-recently-opened panels to surface in the Recent group. */
+const RECENT_LIMIT = 5;
 
 function panelPlacementMarker(options: {
   isTopOpen: boolean;
@@ -345,7 +348,7 @@ export class PanelListPanel extends BasePanel {
     let flatPanelIndex = 0;
     for (const entry of entries) {
       if (entry.kind === 'header') {
-        const label = ` ── ${CATEGORY_LABELS[entry.category]} ${'─'.repeat(Math.max(0, width - 6 - CATEGORY_LABELS[entry.category].length))}`;
+        const label = ` ── ${entry.label} ${'─'.repeat(Math.max(0, width - 6 - entry.label.length))}`;
         renderedBlocks.push({
           entry,
           lines: [buildPanelLine(width, [[label.slice(0, width), C.category, C.categoryBg]])],
@@ -443,6 +446,22 @@ export class PanelListPanel extends BasePanel {
     const q = this._query.toLowerCase();
     const entries: ListEntry[] = [];
 
+    // Recent group (browse mode only): the most-recently-opened panels, newest
+    // first, so frequently used panels are one keystroke away.
+    if (!q) {
+      const byId = new Map(manager.getRegisteredTypes().map((r) => [r.id, r]));
+      const recent: PanelRegistration[] = [];
+      for (const id of manager.getRecentlyOpened()) {
+        const reg = byId.get(id);
+        if (reg) recent.push(reg);
+        if (recent.length >= RECENT_LIMIT) break;
+      }
+      if (recent.length > 0) {
+        entries.push({ kind: 'header', label: 'Recent' });
+        for (const reg of recent) entries.push({ kind: 'panel', reg });
+      }
+    }
+
     for (const cat of CATEGORY_ORDER) {
       const regs = byCategory.get(cat) ?? [];
       const filtered = q
@@ -456,7 +475,7 @@ export class PanelListPanel extends BasePanel {
 
       if (filtered.length === 0) continue;
 
-      entries.push({ kind: 'header', category: cat });
+      entries.push({ kind: 'header', label: CATEGORY_LABELS[cat] });
       for (const reg of filtered) {
         entries.push({ kind: 'panel', reg });
       }

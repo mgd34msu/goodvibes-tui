@@ -469,6 +469,33 @@ describe('PanelListPanel', () => {
     });
   });
 
+  // ── recent group ──────────────────────────────────────────────────────────
+
+  describe('recent group', () => {
+    test('shows a Recent header listing recently-opened panels in browse mode', () => {
+      mgr.open('gamma');
+      mgr.open('alpha');
+      panel.onActivate();
+      const text = linesText(panel.render(95, 40));
+      expect(text).toContain('Recent');
+      // Most-recently-opened (alpha) appears before gamma in the recent group.
+      const recentIdx = text.indexOf('Recent');
+      const alphaIdx = text.indexOf('Alpha', recentIdx);
+      const gammaIdx = text.indexOf('Gamma', recentIdx);
+      expect(alphaIdx).toBeGreaterThan(0);
+      expect(gammaIdx).toBeGreaterThan(alphaIdx);
+    });
+
+    test('hides the Recent group while filtering', () => {
+      mgr.open('gamma');
+      panel.onActivate();
+      panel.handleInput('/');
+      for (const ch of 'beta') panel.handleInput(ch);
+      const text = linesText(panel.render(95, 40));
+      expect(text).not.toContain('Recent');
+    });
+  });
+
   // ── onActivate resets state ──────────────────────────────────────────────
 
   describe('onActivate', () => {
