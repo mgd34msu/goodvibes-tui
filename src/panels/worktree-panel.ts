@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { buildKeyValueLine, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, resolvePrimaryScrollableSection, type PanelWorkspaceSection } from './polish.ts';
 import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '@/runtime/index.ts';
@@ -57,7 +58,7 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
       [` ${row.kind}`.padEnd(14), C.info, bg],
       [` ${row.state}`.padEnd(16), stateColor(row.state), bg],
       [` ${row.branch}`.padEnd(24), C.value, bg],
-      [` ${row.path}`.slice(0, Math.max(0, width - 56)), C.dim, bg],
+      [truncateDisplay(` ${row.path}`, Math.max(0, width - 56)), C.dim, bg],
     ]);
   }
 
@@ -153,7 +154,7 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
               [` ${row.kind}`.padEnd(14), C.info, bg],
               [` ${row.state}`.padEnd(16), stateColor(row.state), bg],
               [` ${row.branch}`.padEnd(24), C.value, bg],
-              [` ${row.path}`.slice(0, Math.max(0, width - 56)), C.dim, bg],
+              [truncateDisplay(` ${row.path}`, Math.max(0, width - 56)), C.dim, bg],
             ]);
           }),
           selectedIndex: this.selectedIndex,

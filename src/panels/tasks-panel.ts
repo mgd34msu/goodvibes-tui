@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { RuntimeTask, TaskLifecycleState } from '@/runtime/index.ts';
 import type { ManagedWorktreeMeta } from '@/runtime/index.ts';
@@ -354,7 +355,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
         ]]));
         for (const record of attachedWorktrees.records.slice(0, 2)) {
           detailRows.push(buildPanelLine(width, [[
-            `  ${record.state.padEnd(15)} ${record.path}`.slice(0, Math.max(0, width - 2)),
+            truncateDisplay(`  ${record.state.padEnd(15)} ${record.path}`, Math.max(0, width - 2)),
             record.state === 'active' ? C.running : record.state === 'paused' ? C.blocked : C.dim,
           ]]));
         }

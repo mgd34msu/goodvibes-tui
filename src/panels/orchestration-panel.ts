@@ -8,6 +8,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiOrchestrationSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import type { OrchestrationGraphRecord } from '@/runtime/index.ts';
@@ -227,7 +228,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
             [node.status.padEnd(10), statusColor(node.status)],
             [` ${node.role.padEnd(10)}`, C.value],
             [` ${node.id.slice(0, 8)} `, C.dim],
-            [`${node.title}${depends}`.slice(0, Math.max(0, width - 34)), C.value],
+            [truncateDisplay(`${node.title}${depends}`, Math.max(0, width - 34)), C.value],
           ]);
         });
 

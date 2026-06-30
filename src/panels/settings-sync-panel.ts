@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildDetailBlock,
@@ -42,7 +43,7 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
     return buildPanelListRow(width, [
       { text: entry.key.padEnd(32), fg: C.value },
       { text: ` ${entry.effectiveSource}`.padEnd(11), fg: entry.effectiveSource === 'managed' ? C.warn : entry.effectiveSource === 'synced' ? C.ok : entry.effectiveSource === 'local' ? C.info : C.dim },
-      { text: `${String(entry.effectiveValue)}`.slice(0, Math.max(0, width - 47)), fg: entry.locked ? C.warn : C.dim },
+      { text: truncateDisplay(`${String(entry.effectiveValue)}`, Math.max(0, width - 47)), fg: entry.locked ? C.warn : C.dim },
     ], C, { selected });
   }
 
@@ -74,23 +75,23 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
         : [buildPanelLine(width, [[' No staged managed settings bundle.', C.dim]])]),
       // Recent Events
       ...(snapshot.recentEvents.length > 0
-        ? snapshot.recentEvents.map((event) => buildPanelLine(width, [[` ${event.surface}/${event.direction}`.padEnd(18), C.info], [` ${event.detail}`.slice(0, Math.max(0, width - 20)), C.dim]]))
+        ? snapshot.recentEvents.map((event) => buildPanelLine(width, [[` ${event.surface}/${event.direction}`.padEnd(18), C.info], [truncateDisplay(` ${event.detail}`, Math.max(0, width - 20)), C.dim]]))
         : [buildPanelLine(width, [[' No sync or managed-setting events recorded yet.', C.dim]])]),
       // Managed Locks
       ...(snapshot.managedLocks.length > 0
-        ? snapshot.managedLocks.slice(0, 10).map((lock) => buildPanelLine(width, [[` ${lock.key}`.padEnd(30), C.value], [` source=${lock.source}`.padEnd(24), C.info], [` ${lock.reason}`.slice(0, Math.max(0, width - 56)), C.dim]]))
+        ? snapshot.managedLocks.slice(0, 10).map((lock) => buildPanelLine(width, [[` ${lock.key}`.padEnd(30), C.value], [` source=${lock.source}`.padEnd(24), C.info], [truncateDisplay(` ${lock.reason}`, Math.max(0, width - 56)), C.dim]]))
         : [buildPanelLine(width, [[' No managed locks are currently active.', C.dim]])]),
       // Failures
       ...(snapshot.recentFailures.length > 0
-        ? snapshot.recentFailures.map((failure) => buildPanelLine(width, [[` ${failure.surface}`.padEnd(10), C.error], [` ${failure.message}`.slice(0, Math.max(0, width - 12)), C.dim]]))
+        ? snapshot.recentFailures.map((failure) => buildPanelLine(width, [[` ${failure.surface}`.padEnd(10), C.error], [truncateDisplay(` ${failure.message}`, Math.max(0, width - 12)), C.dim]]))
         : [buildPanelLine(width, [[' No recent sync or managed-setting failures.', C.dim]])]),
       // Conflicts
       ...(snapshot.conflicts.length > 0
-        ? snapshot.conflicts.map((conflict) => buildPanelLine(width, [[` ${conflict.key}`.padEnd(30), C.value], [` ${conflict.source}`.padEnd(10), C.warn], [` resolve: /settings-sync resolve ${conflict.key} local|synced`.slice(0, Math.max(0, width - 42)), C.dim]]))
+        ? snapshot.conflicts.map((conflict) => buildPanelLine(width, [[` ${conflict.key}`.padEnd(30), C.value], [` ${conflict.source}`.padEnd(10), C.warn], [truncateDisplay(` resolve: /settings-sync resolve ${conflict.key} local|synced`, Math.max(0, width - 42)), C.dim]]))
         : [buildPanelLine(width, [[' No settings conflicts detected.', C.dim]])]),
       // Rollback History
       ...(snapshot.rollbackHistory.length > 0
-        ? snapshot.rollbackHistory.map((entry) => buildPanelLine(width, [[` ${entry.token}`.padEnd(18), C.info], [` ${entry.profileName}`.padEnd(18), C.value], [` restored=${String(entry.restoredKeys.length).padEnd(4)}`, C.warn], [` ${new Date(entry.appliedAt).toLocaleString()}`.slice(0, Math.max(0, width - 46)), C.dim]]))
+        ? snapshot.rollbackHistory.map((entry) => buildPanelLine(width, [[` ${entry.token}`.padEnd(18), C.info], [` ${entry.profileName}`.padEnd(18), C.value], [` restored=${String(entry.restoredKeys.length).padEnd(4)}`, C.warn], [truncateDisplay(` ${new Date(entry.appliedAt).toLocaleString()}`, Math.max(0, width - 46)), C.dim]]))
         : [buildPanelLine(width, [[' No managed rollback records yet.', C.dim]])]),
     ];
 

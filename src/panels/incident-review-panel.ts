@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
@@ -134,26 +135,26 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
       ], C));
       footerLines.push(buildPanelLine(width, [
         ['  Related IDs: ', C.label],
-        [`turn=${bundle.evidence.relatedIds.turnId ?? 'n/a'} task=${bundle.evidence.relatedIds.taskId ?? 'n/a'} agent=${bundle.evidence.relatedIds.agentId ?? 'n/a'}`.slice(0, Math.max(0, width - 14)), C.info],
+        [truncateDisplay(`turn=${bundle.evidence.relatedIds.turnId ?? 'n/a'} task=${bundle.evidence.relatedIds.taskId ?? 'n/a'} agent=${bundle.evidence.relatedIds.agentId ?? 'n/a'}`, Math.max(0, width - 14)), C.info],
       ]));
       if (bundle.evidence.slowPhases.length > 0) {
         footerLines.push(buildPanelLine(width, [
           ['  Slow phases: ', C.label],
-          ...buildStatusPill('warn', bundle.evidence.slowPhases.join(', ').slice(0, Math.max(0, width - 15))),
+          ...buildStatusPill('warn', truncateDisplay(bundle.evidence.slowPhases.join(', '), Math.max(0, width - 15))),
         ]));
       }
       const rootCause = selected.causalChain.find((entry) => entry.isRootCause);
       if (rootCause) {
         footerLines.push(buildPanelLine(width, [
           ['  Root event: ', C.label],
-          [`${rootCause.sourceEventType} - ${rootCause.description}`.slice(0, Math.max(0, width - 14)), C.dim],
+          [truncateDisplay(`${rootCause.sourceEventType} - ${rootCause.description}`, Math.max(0, width - 14)), C.dim],
         ]));
       }
       const denied = selected.permissionEvidence.find((entry) => entry.approved === false);
       if (denied) {
         footerLines.push(buildPanelLine(width, [
           ['  Permission: ', C.label],
-          [`${denied.tool} denied${denied.riskLevel ? ` (${denied.riskLevel})` : ''}${denied.summary ? ` - ${denied.summary}` : ''}`.slice(0, Math.max(0, width - 14)), C.warn],
+          [truncateDisplay(`${denied.tool} denied${denied.riskLevel ? ` (${denied.riskLevel})` : ''}${denied.summary ? ` - ${denied.summary}` : ''}`, Math.max(0, width - 14)), C.warn],
         ]));
       }
       if (bundle.replay.relatedMismatches.length > 0) {

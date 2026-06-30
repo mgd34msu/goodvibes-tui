@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
   buildEmptyState,
@@ -167,8 +168,8 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
     const recommendationLines = recommendations.length > 0
       ? recommendations.slice(0, 4).map((recommendation) => buildPanelLine(width, [
           ['  ', C.label],
-          [`${recommendation.kind} ${recommendation.entry.id}`.slice(0, 28).padEnd(28), C.info],
-          [` ${recommendation.title}`.slice(0, Math.max(0, width - 31)), C.dim],
+          [fitDisplay(`${recommendation.kind} ${recommendation.entry.id}`, 28), C.info],
+          [truncateDisplay(` ${recommendation.title}`, Math.max(0, width - 31)), C.dim],
         ]))
       : [buildPanelLine(width, [['  No contextual marketplace recommendations right now.', C.dim]])];
 
