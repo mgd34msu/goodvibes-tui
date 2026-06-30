@@ -13,8 +13,10 @@ import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildMeterLine,
   buildPanelLine,
+  buildStatusPill,
   buildStyledPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -90,7 +92,10 @@ export class ContextVisualizerPanel extends BasePanel {
               width,
               ' Context limit unavailable',
               'Select a model with a known context window and submit or complete a turn to populate live context usage.',
-              [],
+              [
+                { command: '/model', summary: 'pick an active model so its context window is known' },
+                { command: '/context', summary: 'review current context composition and pressure' },
+              ],
               DEFAULT_PANEL_PALETTE,
             ),
           },
@@ -98,6 +103,11 @@ export class ContextVisualizerPanel extends BasePanel {
         palette: DEFAULT_PANEL_PALETTE,
       });
     }
+
+    // Pressure state drives the headline pill and the footer hint so the most
+    // important signal — am I about to overflow context — is obvious at a glance.
+    const pressureState = overLimit ? 'bad' : pct >= 90 ? 'bad' : pct >= 75 ? 'warn' : 'good';
+    const pressureLabel = overLimit ? 'over limit' : pct >= 90 ? 'critical' : pct >= 75 ? 'elevated' : 'healthy';
 
     return buildPanelWorkspace(width, height, {
       title: ' Context Usage',
@@ -113,6 +123,8 @@ export class ContextVisualizerPanel extends BasePanel {
               [formatK(limit), DEFAULT_PANEL_PALETTE.info],
               ['   Fill ', DEFAULT_PANEL_PALETTE.label],
               [`${pct}%`, overLimit ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.good],
+              ['   ', DEFAULT_PANEL_PALETTE.dim],
+              ...buildStatusPill(pressureState, pressureLabel),
             ]),
           ],
         },
@@ -128,6 +140,18 @@ export class ContextVisualizerPanel extends BasePanel {
           title: 'Maintenance',
           lines: this._renderMaintenance(width),
         },
+      ],
+      footerLines: [
+        buildKeyboardHints(width, pressureState === 'good'
+          ? [
+              { keys: '/context', label: 'composition' },
+              { keys: '/model', label: 'switch model' },
+            ]
+          : [
+              { keys: '/compact', label: 'reduce context now' },
+              { keys: '/context', label: 'composition' },
+              { keys: '/model', label: 'larger window' },
+            ], DEFAULT_PANEL_PALETTE),
       ],
       palette: DEFAULT_PANEL_PALETTE,
     });

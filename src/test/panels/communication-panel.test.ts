@@ -18,7 +18,7 @@ describe('CommunicationPanel', () => {
     const text = linesText(panel.render(100, 12));
 
     expect(text).toContain('Communication Control Room');
-    expect(text).toContain('Communication posture');
+    expect(text).toContain('blocked');
     expect(text).toContain('No structured communication recorded yet');
   });
 
@@ -60,12 +60,14 @@ describe('CommunicationPanel', () => {
     const panel = new CommunicationPanel(createCommunicationReadModel(store));
     const text = linesText(panel.render(120, 16));
 
-    expect(text).toContain('Communication posture');
     expect(text).toContain('sent');
     expect(text).toContain('delivered');
     expect(text).toContain('blocked');
-    expect(text).toContain('reviewer-1 -> engineer-1');
+    // Route is rendered on the message row (from -> to).
+    expect(text).toContain('reviewer-1');
+    expect(text).toContain('engineer-1');
     expect(text).toContain('review');
+    // The blocked broadcast and its reason surface (selected detail / list).
     expect(text).toContain('broadcast reserved for orchestrator');
   });
 });

@@ -14,8 +14,10 @@ import {
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelListRow,
   buildPanelLine,
+  buildStatusBadge,
   buildSummaryBlock,
   buildPanelWorkspace,
   resolvePrimaryScrollableSection,
@@ -85,7 +87,7 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
     return buildPanelListRow(width, [
       { text: `${fmtTime(entry.ts)}  `, fg: C.ts },
       {
-        text: `${entry.priority === 'high' ? 'HIGH' : 'LOW '.padEnd(4)}  `,
+        text: `${(entry.priority === 'high' ? 'HIGH' : 'LOW').padEnd(4)}  `,
         fg: entry.priority === 'high' ? C.high : C.low,
         bold: entry.priority === 'high',
       },
@@ -135,6 +137,23 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
   // Render — multi-section layout (posture + list + detail)
   // ---------------------------------------------------------------------------
 
+  // Context-aware footer: navigation keys plus filter keys that reflect the
+  // current filter state (active typing / applied query / inactive).
+  private footerHints(): Array<{ keys: string; label: string }> {
+    const hints: Array<{ keys: string; label: string }> = [
+      { keys: 'j/k', label: 'scroll' },
+      { keys: 'g/G', label: 'jump' },
+    ];
+    if (this.filterActive) {
+      hints.push({ keys: 'Esc', label: 'clear filter' });
+    } else if (this.filterQuery) {
+      hints.push({ keys: '/', label: 'edit filter' }, { keys: 'Esc', label: 'clear filter' });
+    } else {
+      hints.push({ keys: '/', label: 'filter' });
+    }
+    return hints;
+  }
+
   override render(width: number, height: number): Line[] {
     return this.trackedRender(() => {
       const intro = 'Operational system traffic routed out of the main conversation to reduce noise and keep runtime status reviewable.';
@@ -157,7 +176,7 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
             ),
           }],
           footerLines: [
-            buildPanelLine(width, [['  j/k or Up/Down scroll  g/G jump  low-priority system traffic lands here by default', C.dim]]),
+            buildPanelLine(width, [['  Low-priority system traffic lands here by default. Routing is configurable via /settings.', C.dim]]),
           ],
           palette: C,
         });
@@ -168,12 +187,16 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
       const lowCount = this._messages.length - highCount;
       this.selectedIndex = Math.min(this.selectedIndex, this._messages.length - 1);
       const ui = this.configManager.getRaw().ui;
+      const latest = this._messages[this._messages.length - 1];
       const postureLines = [
-        buildKeyValueLine(width, [
-          { label: 'messages', value: String(this._messages.length), valueColor: C.value },
-          { label: 'high', value: String(highCount), valueColor: highCount > 0 ? C.high : C.dim },
-          { label: 'low', value: String(lowCount), valueColor: lowCount > 0 ? C.low : C.dim },
-        ], C),
+        // Severity + recency first: high-priority count leads, newest message age follows.
+        buildPanelLine(width, [
+          ['  ', C.label],
+          ...buildStatusBadge(highCount > 0 ? 'failed' : 'completed', 'high', { count: highCount }),
+          ['    ', C.dim],
+          ...buildStatusBadge('review', 'low', { count: lowCount }),
+          ...(latest ? ([['    newest ', C.label], [`${fmtTime(latest.ts)}`, C.value]] as Array<[string, string]>) : []),
+        ]),
         buildKeyValueLine(width, [
           { label: 'system route', value: ui.systemMessages, valueColor: C.info },
           { label: 'ops route', value: ui.operationalMessages, valueColor: C.info },
@@ -231,9 +254,7 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
         title: 'System Messages',
         intro,
         sections,
-        footerLines: [
-          buildPanelLine(width, [['  j/k or Up/Down scroll  PgUp/PgDn page  g/G jump', C.dim]]),
-        ],
+        footerLines: [buildKeyboardHints(width, this.footerHints(), C)],
         palette: C,
       });
       return lines;

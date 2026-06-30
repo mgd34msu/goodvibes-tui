@@ -4,7 +4,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
 import {
   buildBodyText,
@@ -50,6 +50,17 @@ interface DiffEntry {
   lines: ParsedLine[];
   /** One-line semantic summary from computeSemanticDiff, if available. */
   semanticSummary?: string;
+}
+
+/** +added / -removed line counts for a parsed diff entry. */
+function diffStat(entry: DiffEntry): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const line of entry.lines) {
+    if (line.kind === 'addition') added++;
+    else if (line.kind === 'deletion') removed++;
+  }
+  return { added, removed };
 }
 
 type LineKind = 'addition' | 'deletion' | 'context' | 'hunk' | 'header';
@@ -450,44 +461,60 @@ export class DiffPanel extends BasePanel {
 
   private renderTabBar(width: number): Line {
     const cells: Line = [];
+    const push = (ch: string, fg: string, bg: string, bold = false): void => {
+      const cw = getDisplayWidth(ch);
+      if (cells.length + cw > width) return;
+      cells.push(createStyledCell(ch, { fg, bg, bold }));
+      if (cw === 2 && cells.length < width) cells.push(createStyledCell('', { fg, bg }));
+    };
 
     for (let i = 0; i < this.entries.length; i++) {
       const entry = this.entries[i]!;
       const active = i === this.selectedFile;
-      const label = ` ${basename(entry.filePath)} `;
+      const stat = diffStat(entry);
       const fg = active ? COLOR.tabActive : COLOR.tabInactive;
       const bg = active ? COLOR.tabActiveBg : COLOR.tabBg;
-
-      for (const ch of label) {
-        if (cells.length >= width) break;
-        cells.push(createStyledCell(ch, { fg, bg, bold: active }));
-      }
-
-      if (cells.length < width) {
-        cells.push(createStyledCell('│', { fg: COLOR.lineNum, bg: COLOR.tabBg }));
-      }
+      // Active file gets a leading marker; every tab shows +adds/-dels at a glance.
+      const marker = active ? '▸ ' : '  ';
+      const label = `${marker}${basename(entry.filePath)} `;
+      for (const ch of label) push(ch, fg, bg, active);
+      if (stat.added > 0) for (const ch of `+${stat.added}`) push(ch, COLOR.addition, bg, active);
+      if (stat.added > 0 && stat.removed > 0) push(' ', fg, bg);
+      if (stat.removed > 0) for (const ch of `-${stat.removed}`) push(ch, COLOR.deletion, bg, active);
+      push(' ', fg, bg);
+      push('│', COLOR.lineNum, COLOR.tabBg);
     }
 
-    // Fill remaining
     while (cells.length < width) {
       cells.push(createStyledCell(' ', { fg: '', bg: COLOR.tabBg }));
     }
-
     return cells.slice(0, width);
   }
 
   // ── Status bar ───────────────────────────────────────────────────────────
 
   private renderStatusBar(width: number, entry: DiffEntry | null): Line {
-    const fileInfo = entry
-      ? `${entry.filePath} [${this.selectedFile + 1}/${this.entries.length}]`
-      : 'No file';
-    const scroll = entry
-      ? `  L${this.scrollOffset + 1}/${entry.lines.length}  Tab: next file  Up/Down: scroll`
-      : '';
-    const semantic = entry?.semanticSummary ? `  * ${entry.semanticSummary}` : '';
-    const text = ` ${fileInfo}${scroll}${semantic}`;
-    return renderText(width, text, COLOR.tabActive, COLOR.statusBar);
+    if (!entry) {
+      return buildStyledPanelLine(width, [{ text: ' No file', fg: COLOR.tabInactive, bg: COLOR.statusBar }], { fillBg: COLOR.statusBar });
+    }
+    const stat = diffStat(entry);
+    // Keep the file path display-width-aware so a long/wide path can't overflow.
+    const pathBudget = Math.max(8, Math.floor(width / 2));
+    const fileInfo = truncateDisplay(entry.filePath, pathBudget);
+    const segments: Array<{ text: string; fg: string; bg?: string; bold?: boolean }> = [
+      { text: ` ${fileInfo} `, fg: COLOR.filename, bg: COLOR.statusBar, bold: true },
+      { text: `[${this.selectedFile + 1}/${this.entries.length}]`, fg: COLOR.tabInactive, bg: COLOR.statusBar },
+      { text: '  +', fg: COLOR.tabInactive, bg: COLOR.statusBar },
+      { text: String(stat.added), fg: COLOR.addition, bg: COLOR.statusBar },
+      { text: ' -', fg: COLOR.tabInactive, bg: COLOR.statusBar },
+      { text: String(stat.removed), fg: COLOR.deletion, bg: COLOR.statusBar },
+      { text: `  L${this.scrollOffset + 1}/${entry.lines.length}`, fg: COLOR.tabInactive, bg: COLOR.statusBar },
+      { text: '  Tab next  ↑/↓ scroll', fg: COLOR.context, bg: COLOR.statusBar },
+    ];
+    if (entry.semanticSummary) {
+      segments.push({ text: `  ◈ ${entry.semanticSummary}`, fg: COLOR.hunk, bg: COLOR.statusBar });
+    }
+    return buildStyledPanelLine(width, segments, { fillBg: COLOR.statusBar });
   }
 
   // ── Parsed line ──────────────────────────────────────────────────────────

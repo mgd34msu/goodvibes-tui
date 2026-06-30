@@ -366,12 +366,18 @@ export class PanelListPanel extends BasePanel {
         const descWidth = Math.max(1, width - descStartCol);
         const descLines = wrapPanelDescription(entry.reg.description, descWidth, 2);
         const placement = panelPlacementMarker({ isTopOpen, isBottomOpen, focusedPane });
+        // When searching, the flat result list loses its category grouping — so
+        // tag each result with a dim [Category] so the origin stays discoverable.
+        const categoryTag = this._query
+          ? `[${CATEGORY_LABELS[entry.reg.category]}] `
+          : '';
         const blockLines: Line[] = [
           buildPanelListRow(width, [
             { text: dot, fg: dotColor },
             { text: placement.text, fg: placement.color },
             { text: ' ', fg: C.dim },
             { text: `${nameStr} `, fg: nameColor },
+            { text: categoryTag, fg: C.category },
             { text: descLines[0] ?? '', fg: C.desc },
           ], C, { selected: isSelected, selectedBg: C.selectedBg, markerColor: C.selIcon }),
         ];
