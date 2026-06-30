@@ -13,6 +13,8 @@ import {
 } from './handler-prompt-buffer.ts';
 import { cleanupMarkerRegistry, expandPrompt, findMarkerAtPos, registerPaste } from './handler-content-actions.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
+import { renderPanelWorkspaceBar } from '../renderer/panel-workspace-bar.ts';
+import type { TabHitRegion } from '../renderer/tab-strip.ts';
 import type { KeybindingsManager } from './keybindings.ts';
 import type { KillRing } from './kill-ring.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -92,8 +94,10 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       return { handled: true, panelFocused };
     }
     // Alt+1..9 — jump directly to the Nth workspace tab (across both panes).
-    // Gated behind Alt so plain digits still reach the focused panel.
-    if (token.alt && !token.ctrl && !token.meta && /^[1-9]$/.test(token.logicalName ?? '')) {
+    // The tokenizer maps the Alt modifier onto `meta`, so an Alt-held digit
+    // arrives as { logicalName: '1'..'9', meta: true }. Gating on the modifier
+    // keeps plain digits reaching the focused panel.
+    if (token.meta && !token.ctrl && /^[1-9]$/.test(token.logicalName ?? '')) {
       const index = Number(token.logicalName) - 1;
       state.panelManager.activateWorkspaceIndex(index);
       state.requestRender();
@@ -605,6 +609,35 @@ function getPanelUnderMouse(
     : getActivePanelInPane(panelManager, 'bottom');
 }
 
+/**
+ * If the mouse is over the consolidated workspace tab bar (the first panel
+ * row), return the index of the tab under the cursor, else null. Recomputes the
+ * tab hit regions by rendering the bar with a layout callback — cheap and keeps
+ * the click geometry in lockstep with what was drawn.
+ */
+function workspaceTabAtMouse(
+  panelManager: PanelManager,
+  layout: PanelMouseLayout | null,
+  row: number,
+  col: number,
+): number | null {
+  if (
+    layout === null
+    || !panelManager.isVisible()
+    || panelManager.getAllOpen().length === 0
+    || row !== layout.y // workspace bar is the first panel row
+    || col < layout.x
+    || col >= layout.x + layout.width
+  ) {
+    return null;
+  }
+  let regions: readonly TabHitRegion[] = [];
+  renderPanelWorkspaceBar(panelManager.getWorkspaceTabs(), layout.width, true, (r) => { regions = r; });
+  const relCol = col - layout.x;
+  const hit = regions.find((rg) => relCol >= rg.startCol && relCol < rg.endCol);
+  return hit ? hit.index : null;
+}
+
 function scrollPanelUnderMouse(
   state: MouseRouteState,
   token: Extract<InputToken, { type: 'mouse' }>,
@@ -650,6 +683,14 @@ export function handleMouseToken(state: MouseRouteState, token: InputToken): {
     return { handled: true, mouseDownRow, mouseDownCol };
   }
   if (token.button === 0 && token.action === 'press') {
+    // Click on a workspace tab activates it (checked before starting a text
+    // selection so a tab click doesn't begin a drag-select).
+    const tabIndex = workspaceTabAtMouse(state.panelManager, state.panelMouseLayout, token.row, token.col);
+    if (tabIndex !== null) {
+      state.panelManager.activateWorkspaceIndex(tabIndex);
+      state.requestRender();
+      return { handled: true, mouseDownRow, mouseDownCol };
+    }
     mouseDownRow = token.row;
     mouseDownCol = token.col;
     state.selection.startSelection(token.col, viewportRow, state.scrollTop, state.viewportHeight, state.lineCount);

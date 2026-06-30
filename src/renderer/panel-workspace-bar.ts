@@ -1,6 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import type { WorkspaceTab } from '../panels/panel-manager.ts';
-import { renderTabStrip } from './tab-strip.ts';
+import { renderTabStrip, type TabHitRegion } from './tab-strip.ts';
 import { UI_TONES } from './ui-primitives.ts';
 
 // Theme tokens (no raw hex) — keeps the bar in sync with the shared palette.
@@ -16,9 +16,11 @@ export function renderPanelWorkspaceBar(
   tabs: readonly WorkspaceTab[],
   width: number,
   focused: boolean,
+  onLayout?: (regions: readonly TabHitRegion[]) => void,
 ): Line {
   return renderTabStrip({
     width,
+    onLayout,
     tabs: tabs.map((tab) => ({
       // tab.active = selected in its own pane (drives highlighted background).
       // tab.focused = has keyboard focus (drives brighter text / focus indicator).
