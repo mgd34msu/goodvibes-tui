@@ -4,6 +4,23 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.27.0] — 2026-06-30
+
+Full deep-review audit of the TUI (33 findings fixed, each reviewed to a score of 10) and adoption of `@pellux/goodvibes-sdk` 0.35.0.
+
+### Fixed
+- **Context window**: the footer meter, footer-height, context-inspector overlay, `/health`, `/guidance`, and the context visualizer now use the resolved `getContextWindowForModel` so every surface agrees; the pre-catalog fallback uses the SDK's family-aware `inferFallbackContextWindow` instead of a hardcoded 128k/32k.
+- **Compaction**: removed the TUI's redundant/racy post-turn auto-compact — the SDK Orchestrator's post-turn maintenance is now the sole, correctly-resolved path (the dead `context-auto-compact` module was deleted).
+- **Sub-agent panels**: the Agent Inspector, Agent Logs, Token Budget, and Context Visualizer panels now repaint live (`requestRender` + live window / `lastInputTokens` wired at their construction sites); Agent Logs repaints on `streamingContent` growth, not just JSONL file-size changes — fixing the frozen-panel and stale-inspector symptoms.
+- **Scroll / lifecycle**: scroll-up respects `scrollLocked` (no overwrite during a turn) and agrees with the renderer (no dead/snap-back when idle); the terminal is restored on `uncaughtException`/SIGTERM/SIGHUP/fatal startup; `exitApp` awaits shutdown before exit.
+- **WRFC**: panel resume covers `reviewing`/`fixing`/`awaiting_gates`; `rehydrate` re-imports interrupted chains; the panel subscribes to the new `WORKFLOW_SCORE_REGRESSION` event.
+- **Core**: journal replay preserves the session title/titleSource; transcript event-navigation indexing fixed; the streaming buffer survives a mid-stream terminal resize; journal seq-collision fixed; high-priority system messages now reach conversation delivery.
+- **Sub-agent firehose**: resolved at the source by adopting SDK 0.35.0 (agent progress no longer dumps raw streamed output into the one-line status slot).
+- **DRY**: standardized 53 error stringifications on the SDK `summarizeError`; consolidated three duration formatters onto `formatElapsed`; migrated 12 panel palettes to `extendPalette(DEFAULT_PANEL_PALETTE, …)` so themes propagate.
+
+### Changed
+- Adopt `@pellux/goodvibes-sdk` **0.35.0** — its own 55-finding audit remediation: tool-loop circuit-breaker fix, window-scaled compaction safety buffer, `configured_cap` context-window resolution, MCP orphan-restart fix, transport-middleware retry + SSE auth fixes, and the new `inferFallbackContextWindow` export.
+
 ## [0.26.0] — 2026-06-21
 
 ### Changes

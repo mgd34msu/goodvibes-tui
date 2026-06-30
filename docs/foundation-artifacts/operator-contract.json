@@ -3,7 +3,7 @@
   "product": {
     "id": "goodvibes",
     "surface": "operator",
-    "version": "0.34.0"
+    "version": "0.35.0"
   },
   "auth": {
     "modes": [
@@ -19468,6 +19468,7 @@
           ],
           "additionalProperties": false
         },
+        "dangerous": true,
         "invokable": true
       },
       {
@@ -20641,6 +20642,7 @@
           ],
           "additionalProperties": false
         },
+        "dangerous": true,
         "invokable": true
       },
       {
@@ -25987,6 +25989,7 @@
           ],
           "additionalProperties": false
         },
+        "dangerous": true,
         "invokable": true
       },
       {

@@ -63,6 +63,7 @@ import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { ModelLimitsService } from '@pellux/goodvibes-sdk/platform/providers';
+import { inferFallbackContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core';
@@ -123,7 +124,9 @@ function buildFallbackModelDefinition(provider: string, modelId: string): ModelD
       reasoning: isReasoningProvider,
       multimodal: isReasoningProvider,
     },
-    contextWindow: isReasoningProvider ? 128_000 : 32_000,
+    // Pre-catalog fallback uses the SDK's family-aware inference (SDK 0.35.0+),
+    // matching the post-catalog window so the meter/compaction denominator agrees.
+    contextWindow: inferFallbackContextWindow(provider, modelId),
     contextWindowProvenance: 'fallback',
     selectable: true,
     tier: 'standard',
