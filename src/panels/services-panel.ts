@@ -80,9 +80,16 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
   ) {
     super('services', 'Services', 'V', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter services';
     this.registry = registry;
     this.subscriptionManager = subscriptionManager;
     void this.refresh();
+  }
+
+  protected override filterMatches(entry: ServicePanelEntry, q: string): boolean {
+    return entry.name.toLowerCase().includes(q)
+      || (entry.inspection.config.baseUrl ?? '').toLowerCase().includes(q);
   }
 
   public override onActivate(): void {
@@ -117,13 +124,15 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
   }
 
   public handleInput(key: string): boolean {
-    if (key === 'r') {
-      void this.refresh();
-      return true;
-    }
-    if (key === 't') {
-      void this.testSelected();
-      return true;
+    if (!this.filterActive) {
+      if (key === 'r') {
+        void this.refresh();
+        return true;
+      }
+      if (key === 't') {
+        void this.testSelected();
+        return true;
+      }
     }
     return super.handleInput(key);
   }

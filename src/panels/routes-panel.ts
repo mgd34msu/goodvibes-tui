@@ -39,8 +39,18 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
   public constructor(readModel?: UiReadModel<UiRoutesSnapshot>) {
     super('routes', 'Routes', 'R', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter routes';
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  protected override filterMatches(binding: RouteBinding, q: string): boolean {
+    return binding.surfaceKind.toLowerCase().includes(q)
+      || (binding.title ?? '').toLowerCase().includes(q)
+      || binding.externalId.toLowerCase().includes(q)
+      || (binding.sessionId ?? '').toLowerCase().includes(q)
+      || (binding.runId ?? '').toLowerCase().includes(q);
   }
 
   public override onDestroy(): void {

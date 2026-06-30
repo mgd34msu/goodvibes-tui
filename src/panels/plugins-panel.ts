@@ -53,8 +53,16 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
   public constructor(manager: PluginManagerObserver) {
     super('plugins', 'Plugins', 'P', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter plugins';
     this.manager = manager;
     this.unsub = manager.subscribe(() => this.markDirty());
+  }
+
+  protected override filterMatches(plugin: PluginStatus, q: string): boolean {
+    return plugin.name.toLowerCase().includes(q)
+      || plugin.trustTier.toLowerCase().includes(q)
+      || plugin.version.toLowerCase().includes(q);
   }
 
   public override onActivate(): void {

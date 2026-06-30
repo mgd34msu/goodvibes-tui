@@ -68,7 +68,15 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
   ) {
     super('hooks', 'Hooks', 'H', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter hooks';
     this.dataSource = dataSource;
+  }
+
+  protected override filterMatches(entry: HookEntry, q: string): boolean {
+    return (entry.hook.name ?? '').toLowerCase().includes(q)
+      || entry.pattern.toLowerCase().includes(q)
+      || entry.hook.type.toLowerCase().includes(q);
   }
 
   protected override getPalette() { return C; }
@@ -96,7 +104,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
   }
 
   public handleInput(key: string): boolean {
-    if (key === 'r') {
+    if (!this.filterActive && key === 'r') {
       this.markDirty();
       return true;
     }

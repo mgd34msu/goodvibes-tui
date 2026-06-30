@@ -59,8 +59,16 @@ export class WatchersPanel extends ScrollableListPanel<WatcherEntry> {
   public constructor(readModel?: UiReadModel<UiWatchersSnapshot>) {
     super('watchers', 'Watchers', 'W', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter watchers';
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  protected override filterMatches(watcher: WatcherEntry, q: string): boolean {
+    return watcher.label.toLowerCase().includes(q)
+      || watcher.state.toLowerCase().includes(q)
+      || String(watcher.sourceStatus ?? '').toLowerCase().includes(q);
   }
 
   public override onDestroy(): void {
