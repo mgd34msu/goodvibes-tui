@@ -68,6 +68,11 @@ describe('ServicesPanel', () => {
     expect(text).toContain('slack');
     expect(text).toContain('CONFIGURED');
     expect(text).toContain('Primary credential: ✓ present');
+    // Health-summary header surfaces the most important counts first.
+    expect(text).toContain('services');
+    expect(text).toContain('healthy');
+    // Context-aware hints include the test action when a service is selected.
+    expect(text).toContain('test selected');
   });
 
   test('runs connection tests for the selected service', async () => {

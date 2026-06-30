@@ -5,10 +5,10 @@ import {
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
-  type PanelWorkspaceSection,
 } from './polish.ts';
 import {
   type EcosystemCatalogPathOptions,
@@ -182,7 +182,7 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
       : [buildPanelLine(width, [['  No contextual marketplace recommendations right now.', C.dim]])];
 
     const startupIssueLines = startupIssues.length > 0
-      ? startupIssues.slice(0, 4).map((issue) => buildPanelLine(width, [['  ', C.label], [issue.slice(0, Math.max(0, width - 2)), C.warn]]))
+      ? startupIssues.slice(0, 4).map((issue) => buildPanelLine(width, [['  ', C.label], [truncateDisplay(issue, Math.max(0, width - 2)), C.warn]]))
       : [buildPanelLine(width, [['  No startup or lifecycle issues are currently pushing marketplace repair recommendations.', C.dim]])];
 
     const selectedRow = this.rows[this.selectedIndex];
@@ -191,11 +191,11 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
       const review = reviewEcosystemCatalogEntry(selectedRow.entry, this.ecosystemPaths!);
       selectedLines.push(buildPanelLine(width, [
         ['  Provenance: ', C.label],
-        [(selectedRow.entry.provenance ?? '(none)').slice(0, Math.max(0, width - 15)), selectedRow.entry.provenance ? C.info : C.dim],
+        [truncateDisplay(selectedRow.entry.provenance ?? '(none)', Math.max(0, width - 15)), selectedRow.entry.provenance ? C.info : C.dim],
       ]));
       selectedLines.push(buildPanelLine(width, [
         ['  Source: ', C.label],
-        [selectedRow.entry.source.slice(0, Math.max(0, width - 11)), C.value],
+        [truncateDisplay(selectedRow.entry.source, Math.max(0, width - 11)), C.value],
       ]));
       selectedLines.push(buildKeyValueLine(width, [
         { label: 'Compatibility', value: review.compatibility.status, valueColor: review.compatibility.status === 'supported' ? C.good : C.warn },
@@ -205,9 +205,19 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
       selectedLines.push(buildGuidanceLine(width, '/marketplace review <id>', 'inspect full compatibility and receipt detail for the selected entry', C));
     }
 
-    const postureSection: PanelWorkspaceSection = { title: 'Marketplace posture', lines: postureLines };
-    const startupIssuesSection: PanelWorkspaceSection = { title: 'Startup Issues', lines: startupIssueLines };
-    const recommendationsSection: PanelWorkspaceSection = { title: 'Recommendations', lines: recommendationLines };
+    // Context-aware hints: filter mode vs. browse mode (install only makes sense
+    // when a curated, not-yet-installed entry is selected).
+    const hints = this.filterActive
+      ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
+      : [
+          { keys: 'Up/Down', label: 'move' },
+          ...(selectedRow && !selectedRow.installed ? [{ keys: '/marketplace install', label: 'add' }] : []),
+          { keys: '/', label: 'filter' },
+        ];
+
+    const footer: Line[] = selectedLines.length > 0 && height >= 20
+      ? [...selectedLines, buildKeyboardHints(width, hints, C)]
+      : [buildKeyboardHints(width, hints, C)];
 
     return this.renderList(width, height, {
       title: 'Marketplace Control Room',
@@ -216,7 +226,7 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
         ...startupIssueLines,
         ...recommendationLines,
       ],
-      footer: selectedLines.length > 0 && height >= 20 ? selectedLines : [],
+      footer,
     });
   }
 }

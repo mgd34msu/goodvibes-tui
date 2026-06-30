@@ -4,9 +4,11 @@ import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiReadModel, UiWatchersSnapshot } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
+  buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -152,7 +154,7 @@ export class WatchersPanel extends ScrollableListPanel<WatcherEntry> {
     this.clampSelection();
     const selected = watchers[this.selectedIndex]!;
 
-    const footerLines: Line[] = [
+    const detailRows: Line[] = [
       buildPanelLine(width, [
         ['  Watcher: ', C.label],
         [selected.label, C.value],
@@ -179,23 +181,33 @@ export class WatchersPanel extends ScrollableListPanel<WatcherEntry> {
       ]),
     ];
     if (selected.degradedReason) {
-      footerLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Reason: ', C.label],
         [truncateDisplay(selected.degradedReason, Math.max(0, width - 11)), C.warn],
       ]));
     }
     if (selected.lastError) {
-      footerLines.push(buildPanelLine(width, [
+      detailRows.push(buildPanelLine(width, [
         ['  Error: ', C.label],
         [truncateDisplay(selected.lastError, Math.max(0, width - 10)), C.error],
       ]));
     }
-    footerLines.push(buildPanelLine(width, [['  Up/Down move through watchers', C.dim]]));
+
+    const hints = this.filterActive
+      ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
+      : [
+          { keys: 'Up/Down', label: 'move' },
+          { keys: '/schedule list', label: 'consumers' },
+          { keys: '/', label: 'filter' },
+        ];
 
     return this.renderList(width, height, {
       title: 'Watchers',
       header: headerLines,
-      footer: footerLines,
+      footer: [
+        ...buildDetailBlock(width, `Watcher · ${selected.label}`, detailRows, C),
+        buildKeyboardHints(width, hints, C),
+      ],
     });
   }
 }
