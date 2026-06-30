@@ -9,6 +9,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { SessionBrowserQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
+  buildKeyboardHints,
   buildPanelLine,
   buildSearchInputLine,
   buildStyledPanelLine,
@@ -84,6 +85,7 @@ export class SessionBrowserPanel extends BasePanel {
   private confirm: ConfirmState<string> | null = null;
   private deleteError = '';
   private loadError = '';
+  private hasLoaded = false;
   private refreshTimerId: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -169,8 +171,15 @@ export class SessionBrowserPanel extends BasePanel {
     if (height <= 0 || width <= 0) return [];
     const intro = 'Browse, search, resume, and prune saved conversations.';
 
+    // Lazily load on first render so the panel works even when rendered without
+    // onActivate(). The session list is a synchronous source, so this resolves
+    // immediately rather than flashing a loading screen.
+    if (!this.hasLoaded) this._load();
+
     const count = this.filtered.length;
     const total = this.sessions.length;
+    const hasSelection = this.filtered.length > 0;
+    // Search/status line — surfaces the active query or any error.
     const searchLine = this.searching
       ? ` Search: ${this.searchQuery}_`
       : this.loadError
@@ -178,11 +187,21 @@ export class SessionBrowserPanel extends BasePanel {
       : this.deleteError
       ? ` Error: ${this.deleteError}`
       : this.searchQuery
-      ? ` Filter: ${this.searchQuery}  (/ or up at top to edit)`
-      : ` / or up at top to search  Enter: resume  d: delete  r: refresh`;
+      ? ` Filter: ${this.searchQuery}`
+      : ` (no filter)`;
     const statusFg = this.loadError || this.deleteError ? DEFAULT_PANEL_PALETTE.bad : this.searching ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim;
+    // Context-aware hints: only advertise keys that work in the current state.
+    const hints: Array<{ keys: string; label: string }> = [];
+    if (this.searching) {
+      hints.push({ keys: 'type', label: 'filter' }, { keys: 'Esc/Enter', label: 'apply' });
+    } else {
+      hints.push({ keys: '/', label: this.searchQuery ? 'edit search' : 'search' });
+      if (hasSelection) hints.push({ keys: 'Enter', label: 'resume' }, { keys: 'd', label: 'delete' });
+      hints.push({ keys: 'r', label: 'refresh' });
+    }
     const footerLines = [
       buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching, valueColor: statusFg }),
+      buildKeyboardHints(width, hints, DEFAULT_PANEL_PALETTE),
     ];
 
     if (this.confirm) {
@@ -208,12 +227,15 @@ export class SessionBrowserPanel extends BasePanel {
       const emptyBody = this.searchQuery
         ? 'Clear or change the current filter to surface saved conversations again.'
         : 'Conversations are saved automatically. Once you have saved sessions, they appear here for review and resume.';
+      const emptyActions = this.searchQuery
+        ? [{ command: 'Esc', summary: 'clear the filter and show all sessions' }]
+        : [{ command: '/session save', summary: 'name and persist the current conversation' }];
       return buildPanelWorkspace(width, height, {
         title: ` Sessions [${count}/${total}]`,
         intro,
         sections: [
           {
-            lines: buildEmptyState(width, emptyTitle, emptyBody, [], DEFAULT_PANEL_PALETTE),
+            lines: buildEmptyState(width, emptyTitle, emptyBody, emptyActions, DEFAULT_PANEL_PALETTE),
           },
         ],
         footerLines,
@@ -321,10 +343,12 @@ export class SessionBrowserPanel extends BasePanel {
       this.sessions = this.sessionManager.list();
       this._filter();
       this.loadError = '';
+      this.hasLoaded = true;
       this.markDirty();
     } catch (e) {
       logger.debug('SessionBrowserPanel._load failed', { error: summarizeError(e) });
       this.loadError = 'Failed to load sessions';
+      this.hasLoaded = true;
       this.markDirty();
     }
   }

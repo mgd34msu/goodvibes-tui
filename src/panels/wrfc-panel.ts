@@ -7,6 +7,7 @@ import { BasePanel } from './base-panel.ts';
 import type { WorkflowEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import {
+  buildMeterLine,
   buildPanelLine,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
@@ -269,7 +270,9 @@ export class WrfcPanel extends BasePanel {
             width,
             ' No WRFC chains yet',
             'WRFC chains appear here as review/fix cycles execute. Expanded rows show scores, gates, issues, and failure detail.',
-            [],
+            [
+              { command: '/wrfc run <task>', summary: 'start a write-review-fix-commit chain for a task' },
+            ],
             DEFAULT_PANEL_PALETTE,
           ),
         },
@@ -344,6 +347,10 @@ export class WrfcPanel extends BasePanel {
         ]
       : [];
 
+    const totalChains = this.chains.length;
+    const stalledCount = this.chains.filter((c) => this.isStalled(c, now)).length;
+    const completedChains = passedCount + failedCount;
+    const meterWidth = Math.max(10, Math.min(24, width - 34));
     const summarySection: PanelWorkspaceSection = {
       title: 'Summary',
       lines: [
@@ -354,7 +361,16 @@ export class WrfcPanel extends BasePanel {
           [String(passedCount), DEFAULT_PANEL_PALETTE.good],
           ['   Failed ', DEFAULT_PANEL_PALETTE.label],
           [String(failedCount), failedCount > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.dim],
+          ['   Stalled ', DEFAULT_PANEL_PALETTE.label],
+          [String(stalledCount), stalledCount > 0 ? C.warn : DEFAULT_PANEL_PALETTE.dim],
         ]),
+        buildMeterLine(
+          width,
+          totalChains > 0 ? Math.round((completedChains / totalChains) * meterWidth) : 0,
+          meterWidth,
+          { filled: failedCount > 0 ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.good, empty: C.border, label: DEFAULT_PANEL_PALETTE.label },
+          { prefix: ' Resolved ', suffix: ` ${completedChains}/${totalChains} ` },
+        ),
       ],
     };
     const selectedSection: PanelWorkspaceSection = {

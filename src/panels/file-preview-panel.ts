@@ -8,6 +8,7 @@ import { SyntaxHighlighter, type SyntaxToken } from '../renderer/syntax-highligh
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import {
   buildEmptyState,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
@@ -273,7 +274,11 @@ export class FilePreviewPanel extends BasePanel {
       ],
     } as const;
     const footerLines = [
-      buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim], ['   PgUp/PgDn', DEFAULT_PANEL_PALETTE.info], [' page', DEFAULT_PANEL_PALETTE.dim], ['   Home/End', DEFAULT_PANEL_PALETTE.info], [' bounds', DEFAULT_PANEL_PALETTE.dim]]),
+      buildKeyboardHints(width, [
+        { keys: '↑/↓', label: 'scroll' },
+        { keys: 'PgUp/PgDn', label: 'page' },
+        { keys: 'Home/End', label: 'top/bottom' },
+      ], DEFAULT_PANEL_PALETTE),
     ];
     const fullCode = this.fileLines.join('\n');
     const hlLines = this.fenceTag
@@ -319,8 +324,10 @@ export class FilePreviewPanel extends BasePanel {
             buildPanelLine(width, [
               [' Lines ', DEFAULT_PANEL_PALETTE.label],
               [String(this.fileLines.length), DEFAULT_PANEL_PALETTE.value],
-              ['   Scroll ', DEFAULT_PANEL_PALETTE.label],
+              ['   Viewing ', DEFAULT_PANEL_PALETTE.label],
               [`${window.start + 1}-${window.end}`, DEFAULT_PANEL_PALETTE.info],
+              ['   Lang ', DEFAULT_PANEL_PALETTE.label],
+              [this.fenceTag || 'text', this.fenceTag ? DEFAULT_PANEL_PALETTE.value : DEFAULT_PANEL_PALETTE.dim],
             ]),
           ],
         },

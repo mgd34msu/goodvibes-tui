@@ -4,7 +4,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, extendPalette, DEFAULT_PANEL_PALETTE } from './polish.ts';
+import { buildKeyboardHints, buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, extendPalette, DEFAULT_PANEL_PALETTE } from './polish.ts';
 import type { ProviderModelCatalogQuery, ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
 import {
   getPanelSearchFocusTransition,
@@ -152,9 +152,24 @@ export class DocsPanel extends BasePanel {
         buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching }),
       ],
     } as const;
+    // Context-aware footer: while searching, surface only the keys that work in
+    // the search field; otherwise surface section + navigation keys.
+    const footerLines = [this.searching
+      ? buildKeyboardHints(width, [
+          { keys: 'type', label: 'filter' },
+          { keys: 'Enter/Esc', label: 'apply / exit search' },
+          { keys: '↓', label: 'back to list' },
+        ], DEFAULT_PANEL_PALETTE)
+      : buildKeyboardHints(width, [
+          { keys: 't/m/k', label: 'tools / models / shortcuts' },
+          { keys: '↑/↓', label: 'navigate' },
+          { keys: '/', label: 'search' },
+        ], DEFAULT_PANEL_PALETTE)];
+
     const sectionWindow = resolveScrollablePanelSection(width, height, {
       intro: 'Browse built-in tool docs, available models, and keyboard shortcuts from one shared reference surface.',
       palette: DEFAULT_PANEL_PALETTE,
+      footerLines,
       beforeSections: [controlsSection],
       section: {
         title: sectionLabel,
@@ -176,6 +191,7 @@ export class DocsPanel extends BasePanel {
         controlsSection,
         sectionWindow.section.lines.length > 0 ? sectionWindow.section : { title: sectionLabel, lines: [buildPanelLine(width, [[' No matching docs', DEFAULT_PANEL_PALETTE.dim]])] },
       ],
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
     });
   }
@@ -207,7 +223,7 @@ export class DocsPanel extends BasePanel {
       const tools = this.toolRegistry?.list() ?? [];
       const filtered = q ? tools.filter(t => t.definition.name.toLowerCase().includes(q) || (t.definition.description ?? '').toLowerCase().includes(q)) : tools;
       if (filtered.length === 0) {
-        rows.push({ kind: 'empty', text: ' No tools match.', fg: C.dim, bg: '' });
+        rows.push({ kind: 'empty', text: q ? ` No tools match "${this.searchQuery}". Press Esc to clear the filter.` : ' Tool registry not wired into this session.', fg: C.dim, bg: '' });
       } else {
         rows.push({ kind: 'header', text: ` Tools (${filtered.length})`, fg: C.sectionFg, bg: C.sectionBg, bold: true });
         for (const tool of filtered) {
@@ -237,7 +253,7 @@ export class DocsPanel extends BasePanel {
       const models = this.providerRegistry?.listModels() ?? [];
       const filtered = q ? models.filter(m => m.id.toLowerCase().includes(q) || m.displayName.toLowerCase().includes(q) || m.provider.toLowerCase().includes(q)) : models;
       if (filtered.length === 0) {
-        rows.push({ kind: 'empty', text: ' No models match.', fg: C.dim, bg: '' });
+        rows.push({ kind: 'empty', text: q ? ` No models match "${this.searchQuery}". Press Esc to clear the filter.` : ' Provider registry not wired into this session.', fg: C.dim, bg: '' });
       } else {
         // Group by provider
         const byProvider = new Map<string, typeof filtered>();

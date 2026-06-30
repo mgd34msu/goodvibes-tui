@@ -316,10 +316,21 @@ export class DebugPanel extends BasePanel {
       }
     }
 
+    const latestError = this._errors[this._errors.length - 1];
+    const footerLines = latestError
+      ? [buildStyledPanelLine(width, [
+          { text: ' ✕ latest error  ', fg: C.bad },
+          { text: truncateDisplay(latestError.errorMessage ?? 'unknown error', Math.max(0, width - 18)), fg: C.dim },
+        ])]
+      : [buildStyledPanelLine(width, [
+          { text: ' Live feed — newest calls at the bottom; auto-follows.', fg: C.dim },
+        ])];
+
     return buildPanelWorkspace(width, height, {
       title: ' API Debug',
       intro: 'Recent provider calls, token deltas, latency, status codes, and error history.',
       sections,
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
     });
   }
@@ -331,16 +342,42 @@ export class DebugPanel extends BasePanel {
   private _renderSummary(width: number): Line[] {
     const errCount = this._totalErrors;
     const okCount  = this._totalCalls - this._totalErrors;
-    return [
+    const last = this._calls[this._calls.length - 1];
+    const recent = this._calls.slice(-10);
+    const avgLat = recent.length > 0
+      ? Math.round(recent.reduce((s, c) => s + c.latencyMs, 0) / recent.length)
+      : 0;
+    const sessionTokens = this._calls.reduce((s, c) => s + c.inputTokens + c.outputTokens, 0);
+
+    const lines: Line[] = [
       buildStyledPanelLine(width, [
-        { text: ' Calls: ', fg: C.label },
+        { text: ' Calls ', fg: C.label },
         { text: String(this._totalCalls), fg: C.value },
-        { text: '  OK: ', fg: C.label },
+        { text: '   OK ', fg: C.label },
         { text: String(okCount), fg: C.good },
-        { text: '  Errors: ', fg: C.label },
+        { text: '   Errors ', fg: C.label },
         { text: String(errCount), fg: errCount > 0 ? C.bad : C.dim },
+        { text: '   Avg latency ', fg: C.label },
+        { text: fmtMs(avgLat), fg: avgLat > 0 ? latColor(avgLat) : C.dim },
+        { text: '   Tokens ', fg: C.label },
+        { text: fmtTok(sessionTokens), fg: C.value },
       ]),
     ];
+    // Live status: most recent call (latency / age) or wiring hint.
+    if (last) {
+      lines.push(buildStyledPanelLine(width, [
+        { text: ' Last ', fg: C.label },
+        { text: last.status === 'ok' ? '✓ ' : '✕ ', fg: last.status === 'ok' ? C.good : C.bad },
+        { text: fitDisplay(last.model, 22), fg: C.value },
+        { text: '  ' + fmtMs(last.latencyMs), fg: latColor(last.latencyMs) },
+        { text: '  ' + fmtAgo(last.ts), fg: C.dim },
+      ]));
+    } else if (!this._orchestrator) {
+      lines.push(buildStyledPanelLine(width, [
+        { text: ' Per-call token deltas need the orchestrator wired (wireOrchestrator).', fg: C.dim },
+      ]));
+    }
+    return lines;
   }
 
   private _renderCallLog(width: number): Line[] {
