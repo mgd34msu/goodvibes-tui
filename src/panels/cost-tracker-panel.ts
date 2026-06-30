@@ -11,8 +11,11 @@ import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import {
   buildEmptyState,
+  buildKeyboardHints,
+  buildMeterLine,
   buildPanelLine,
   buildStyledPanelLine,
+  buildTable,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   extendPalette,
@@ -276,6 +279,20 @@ export class CostTrackerPanel extends BasePanel {
     const sessionLines: Line[] = [
       this.renderKeyValue(width, ' Total', `${costStr}${budgetStr}${alertStr}`, costFg),
     ];
+    // Budget meter — the single most important glance for this panel: how much
+    // of the configured budget the session has consumed. Only shown when a
+    // budget is set (otherwise the bar would be meaningless).
+    if (this.budgetThreshold > 0) {
+      const ratio = sessionCost / this.budgetThreshold;
+      const BAR_W = 24;
+      const filled = Math.max(0, Math.min(BAR_W, Math.round(ratio * BAR_W)));
+      const meterFg = overBudget ? C.bad : ratio >= 0.8 ? C.warn : C.good;
+      const pctStr = `${Math.round(ratio * 100)}%`;
+      sessionLines.push(buildMeterLine(width, filled, BAR_W,
+        { filled: meterFg, empty: C.separator, label: C.label },
+        { prefix: ' Budget [', suffix: `] ${pctStr}` },
+      ));
+    }
     if (sparkline.length > 0) sessionLines.push(this.renderLabeledLine(width, ' Trend', sparkline, C.good));
     sessionLines.push(this.renderKeyValue(width, ' Input',  formatTokens(this.sessionUsage.input),  C.label));
     sessionLines.push(this.renderKeyValue(width, ' Output', formatTokens(this.sessionUsage.output), C.label));
@@ -294,35 +311,63 @@ export class CostTrackerPanel extends BasePanel {
     ];
 
     const agentList = Array.from(this.agents.values());
+    const scrollableAgents = agentList.length > 5;
+    // Footer hints adapt to whether the agent list is long enough to scroll.
+    const hintRow = scrollableAgents
+      ? buildKeyboardHints(width, [
+          { keys: 'Up/Down', label: 'scroll agents' },
+          { keys: 'PgUp/PgDn', label: 'page' },
+        ], DEFAULT_PANEL_PALETTE)
+      : buildKeyboardHints(width, [
+          { keys: '/cost budget <usd>', label: 'set budget alert' },
+        ], DEFAULT_PANEL_PALETTE);
     if (agentList.length > 0) {
       const planCost = agentList.reduce((sum, a) => sum + a.cost, 0);
+      const running = agentList.filter((a) => a.status === 'running').length;
+      const failed = agentList.filter((a) => a.status === 'failed').length;
       const agentRows: Line[] = [
-        this.renderKeyValue(width, ' Plan total', formatCost(planCost + sessionCost), C.cost),
-        this.renderDivider(width),
+        buildStyledPanelLine(width, [
+          { text: ' Plan total ', fg: C.label },
+          { text: formatCost(planCost + sessionCost), fg: C.cost, bold: true },
+          { text: `  ${agentList.length} agent${agentList.length === 1 ? '' : 's'}`, fg: C.dim },
+          ...(running > 0 ? [{ text: `  ${running} running`, fg: C.running }] : []),
+          ...(failed > 0 ? [{ text: `  ${failed} failed`, fg: C.bad }] : []),
+        ]),
+        // Per-agent cost ledger as an aligned table — agent, model, tokens, cost
+        // line up in columns instead of wrapping across two ragged rows.
+        ...buildTable(
+          width,
+          [
+            { label: 'Agent', width: 14 },
+            { label: 'Model', width: 18 },
+            { label: 'In', width: 7, align: 'right' },
+            { label: 'Out', width: 7, align: 'right' },
+            { label: 'Cost', align: 'right' },
+          ],
+          agentList.map((agent) => {
+            const statusFg = agent.status === 'running' ? C.running
+              : agent.status === 'failed' ? C.bad
+              : C.good;
+            const statusIcon = agent.status === 'running' ? '…'
+              : agent.status === 'failed' ? '✕'
+              : '✓';
+            return {
+              cells: [
+                { text: `${statusIcon} ${agent.id}`, fg: statusFg },
+                { text: agent.model, fg: C.model },
+                { text: agent.inputTokens > 0 ? formatTokens(agent.inputTokens) : '-', fg: C.dim },
+                { text: agent.outputTokens > 0 ? formatTokens(agent.outputTokens) : '-', fg: C.dim },
+                { text: agent.cost > 0 ? formatCost(agent.cost) : '-', fg: agent.cost > 0 ? C.cost : C.dim },
+              ],
+            };
+          }),
+          DEFAULT_PANEL_PALETTE,
+        ),
       ];
-      for (const agent of agentList) {
-        const statusFg = agent.status === 'running' ? C.running
-          : agent.status === 'failed' ? C.bad
-          : C.good;
-        const statusIcon = agent.status === 'running' ? '…'
-          : agent.status === 'failed' ? '✕'
-          : '✓';
-
-        const agentLabel = `${statusIcon} ${agent.id}`;
-        const taskText = agent.task;
-        agentRows.push(this.renderAgent(width, agentLabel, taskText, statusFg));
-
-        if (agent.inputTokens > 0 || agent.outputTokens > 0) {
-          const tokenInfo = `  in:${formatTokens(agent.inputTokens)} out:${formatTokens(agent.outputTokens)} ${formatCost(agent.cost)}`;
-          agentRows.push(this.renderLabeledLine(width, '', tokenInfo, C.dim));
-        }
-      }
       const sessionSection: PanelWorkspaceSection = sections[0]!;
       const agentsSection = resolveScrollablePanelSection(width, height, {
         intro: 'Track per-session and per-agent token spend using model pricing and live usage snapshots.',
-        footerLines: [
-          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll agents', DEFAULT_PANEL_PALETTE.dim]]),
-        ],
+        footerLines: [hintRow],
         palette: DEFAULT_PANEL_PALETTE,
         beforeSections: [sessionSection],
         section: {
@@ -330,6 +375,7 @@ export class CostTrackerPanel extends BasePanel {
           scrollableLines: agentRows,
           scrollOffset: this.scrollOffset,
           minRows: 4,
+          appendWindowSummary: scrollableAgents ? { dimColor: DEFAULT_PANEL_PALETTE.dim } : undefined,
         },
       });
       this.scrollOffset = agentsSection.scrollOffset;
@@ -341,7 +387,9 @@ export class CostTrackerPanel extends BasePanel {
           width,
           ' No agents spawned this session',
           'Agent-level cost estimates appear here once delegated or background agents start running.',
-          [],
+          [
+            { command: '/cost budget <usd>', summary: 'set a session budget alert to track spend against a cap' },
+          ],
           DEFAULT_PANEL_PALETTE,
         ),
       });
@@ -351,9 +399,7 @@ export class CostTrackerPanel extends BasePanel {
       title: ' Cost Tracker',
       intro: 'Track per-session and per-agent token spend using model pricing and live usage snapshots.',
       sections,
-      footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll agents', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
+      footerLines: [hintRow],
       palette: DEFAULT_PANEL_PALETTE,
     });
   }
@@ -376,20 +422,6 @@ export class CostTrackerPanel extends BasePanel {
       ...(label.length > 0 ? [{ text: `${fitDisplay(label, 10)} `, fg: C.label }] : []),
       { text: value, fg: valueFg },
     ]);
-  }
-
-  private renderAgent(width: number, label: string, task: string, fg: string): Line {
-    const LABEL_W = 12;
-    const remaining = Math.max(0, width - LABEL_W - 1);
-    const trimmed = truncateDisplay(task, remaining);
-    return buildStyledPanelLine(width, [
-      { text: `${fitDisplay(label, LABEL_W)} `, fg, bold: true },
-      { text: trimmed, fg: C.label },
-    ]);
-  }
-
-  private renderDivider(width: number): Line {
-    return buildStyledPanelLine(width, [{ text: '─'.repeat(width), fg: C.separator }]);
   }
 
 }

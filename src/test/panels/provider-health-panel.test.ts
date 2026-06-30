@@ -245,4 +245,21 @@ describe('ProviderHealthPanel', () => {
     expect(text).toContain('openai');
     expect(text).toContain('online');
   });
+
+  test('provider list shows a column header and context-aware footer hints', () => {
+    const runtimeBus = new RuntimeEventBus();
+    const panel = createPanel(runtimeBus);
+    runtimeBus.emit('providers', createEventEnvelope('PROVIDERS_CHANGED', {
+      type: 'PROVIDERS_CHANGED',
+      added: ['openai'],
+      removed: [],
+      updated: [],
+    }, { sessionId: 'session-1', source: 'test' }));
+    const text = linesText(panel.render(140, 28));
+    // Column header row for the provider roster.
+    expect(text).toContain('last ok');
+    // Footer keyboard hints point at the relevant drill-down commands.
+    expect(text).toContain('/provider');
+    expect(text).toContain('/accounts');
+  });
 });

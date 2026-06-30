@@ -3,11 +3,12 @@ import { createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
+  buildAlignedRow,
   buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildKeyValueLine,
-  buildPanelListRow,
   buildPanelLine,
   buildSummaryBlock,
   buildPanelWorkspace,
@@ -51,14 +52,32 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
     return this.records;
   }
 
+  private readonly listColumns = [
+    { width: 16 },
+    { width: 14 },
+    { width: 8, align: 'right' as const },
+    { width: 11 },
+    { width: 8, align: 'right' as const },
+  ];
+
   protected renderItem(item: ProviderAccountRecord, _index: number, selected: boolean, width: number): Line {
-    return buildPanelListRow(width, [
-      { text: item.providerId.padEnd(16), fg: item.active ? C.good : C.value },
-      { text: ` ${item.activeRoute.padEnd(14)}`, fg: item.activeRoute === 'subscription' ? C.info : item.activeRoute === 'api-key' ? C.warn : item.activeRoute === 'service-oauth' ? C.value : C.dim },
-      { text: ` models=${String(item.modelCount).padEnd(4)}`, fg: C.dim },
-      { text: ` ${item.authFreshness.padEnd(10)}`, fg: item.authFreshness === 'expired' ? C.bad : item.authFreshness === 'expiring' || item.authFreshness === 'pending' ? C.warn : C.dim },
-      { text: ` issues=${String(item.issues.length).padEnd(2)}`, fg: item.issues.length > 0 ? C.bad : C.good },
-    ], C, { selected });
+    const routeFg = item.activeRoute === 'subscription' ? C.info
+      : item.activeRoute === 'api-key' ? C.warn
+      : item.activeRoute === 'service-oauth' ? C.value : C.dim;
+    const freshFg = item.authFreshness === 'expired' ? C.bad
+      : item.authFreshness === 'expiring' || item.authFreshness === 'pending' ? C.warn : C.dim;
+    return buildAlignedRow(
+      width,
+      [
+        { text: item.providerId, fg: item.active ? C.good : C.value, bold: selected },
+        { text: item.activeRoute, fg: routeFg },
+        { text: `${item.modelCount} mdl`, fg: C.dim },
+        { text: item.authFreshness, fg: freshFg },
+        { text: item.issues.length > 0 ? `${item.issues.length} !` : 'ok', fg: item.issues.length > 0 ? C.bad : C.good },
+      ],
+      this.listColumns,
+      { selected, selectedBg: C.selectBg, marker: '▸' },
+    );
   }
 
   public handleInput(key: string): boolean {
@@ -86,7 +105,11 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Provider auth routes, subscription posture, quota-window hints, and routing-safety notes.';
-    const footerLines = [buildPanelLine(width, [['  Up/Down move  r refresh  /accounts routes <provider>  /accounts repair <provider>', C.dim]])];
+    const footerLines = [buildKeyboardHints(width, [
+      { keys: 'Up/Down', label: 'select' },
+      { keys: 'r', label: 'refresh' },
+      { keys: '/accounts repair <provider>', label: 'recover routing' },
+    ], C)];
     if (this.loading && this.records.length === 0) {
       const lines = buildPanelWorkspace(width, height, {
         title: 'Provider Account Control Room',
@@ -184,6 +207,18 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
     const rawProviderLines: Line[] = this.records.map((record, absolute) =>
       this.renderItem(record, absolute, absolute === this.selectedIndex, width),
     );
+    const columnHeader = buildAlignedRow(
+      width,
+      [
+        { text: 'provider', fg: C.label, bold: true },
+        { text: 'route', fg: C.label, bold: true },
+        { text: 'models', fg: C.label, bold: true },
+        { text: 'auth', fg: C.label, bold: true },
+        { text: 'issues', fg: C.label, bold: true },
+      ],
+      this.listColumns,
+      { marker: '▸' },
+    );
     const resolvedProvidersSection = resolvePrimaryScrollableSection(width, height, {
       intro,
       footerLines,
@@ -191,6 +226,7 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
       beforeSections: [postureSection],
       section: {
         title: 'Providers',
+        fixedLines: [columnHeader],
         scrollableLines: rawProviderLines,
         selectedIndex: this.selectedIndex,
         scrollOffset: this.scrollStart,

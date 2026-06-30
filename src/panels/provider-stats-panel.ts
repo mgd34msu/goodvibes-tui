@@ -5,7 +5,9 @@ import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { UiProvidersSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import {
   buildEmptyState,
+  buildKeyboardHints,
   buildKeyValueLine,
+  buildPanelLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
@@ -212,7 +214,10 @@ export class ProviderStatsPanel extends BasePanel {
               width,
               ' No providers registered',
               'Load or configure a provider to begin collecting per-provider latency and error metrics.',
-              [],
+              [
+                { command: '/provider', summary: 'review current provider and model selection' },
+                { command: '/subscription', summary: 'sign in to a subscription-backed provider' },
+              ],
               DEFAULT_PANEL_PALETTE,
             ),
           },
@@ -255,6 +260,18 @@ export class ProviderStatsPanel extends BasePanel {
       title: ' Provider Stats',
       intro: 'Per-provider request performance, latency distribution, error pressure, and session totals.',
       sections: providerSections,
+      footerLines: [
+        buildPanelLine(width, [
+          ['  sparkline ', C.muted2],
+          ['low', C.good],
+          [' → ', C.muted2],
+          ['high latency', C.bad],
+        ]),
+        buildKeyboardHints(width, [
+          { keys: '/provider', label: 'switch provider/model' },
+          { keys: '/health', label: 'live provider health' },
+        ], DEFAULT_PANEL_PALETTE),
+      ],
       palette: DEFAULT_PANEL_PALETTE,
     });
   }

@@ -26,13 +26,13 @@ import type {
 } from '../runtime/ui-read-models.ts';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 import {
+  buildAlignedRow,
   buildBodyText,
   buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildKeyValueLine,
-  buildPanelListRow,
-  buildPanelLine,
   buildPanelWorkspace,
   buildSummaryBlock,
   DEFAULT_PANEL_PALETTE,
@@ -66,6 +66,7 @@ export interface ProviderHealthPanelDeps {
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   title:   '#00ffff',
   unknown: '244',
+  rowSelectBg: '#111827',
 });
 
 const LATENCY_WARN_MS = 2_000;
@@ -592,13 +593,19 @@ export class ProviderHealthPanel extends BasePanel {
       worktrees: this.deps.worktrees.getSnapshot(),
       session: this.deps.session.getSnapshot(),
     })) {
-      domainLines.push(buildPanelLine(width, [
-        ['  ', C.label],
-        [domain.name.padEnd(14), C.value],
-        [domain.summary.slice(0, Math.max(0, width - 36)).padEnd(Math.max(0, width - 36)), domainColor(domain.level)],
-        [' ', C.label],
-        [domain.next.slice(0, 20), C.dim],
-      ]));
+      domainLines.push(buildAlignedRow(
+        width,
+        [
+          { text: domain.name, fg: C.value, bold: true },
+          { text: domain.summary, fg: domainColor(domain.level) },
+          { text: domain.next, fg: C.dim },
+        ],
+        [
+          { width: 14 },
+          { width: Math.max(10, width - 38) },
+          { width: 20 },
+        ],
+      ));
       for (const detail of domain.details.slice(0, 2)) {
         domainLines.push(...buildBodyText(width, `    ${detail}`, { ...DEFAULT_PANEL_PALETTE, header: C.title }, C.dim));
       }
@@ -672,26 +679,63 @@ export class ProviderHealthPanel extends BasePanel {
     const domainsSection: PanelWorkspaceSection = { title: 'Repair Domains', lines: domainLines };
     const maintenanceSections = maintenanceLines.length > 0 ? [{ title: 'Session Maintenance', lines: maintenanceLines } satisfies PanelWorkspaceSection] : [];
     const selectedSections = selectedLines.length > 0 ? [{ lines: buildDetailBlock(width, 'Selected provider', selectedLines, { ...DEFAULT_PANEL_PALETTE, header: C.title }) } satisfies PanelWorkspaceSection] : [];
+    const footerHint = buildKeyboardHints(width, [
+      { keys: 'j/k or Up/Down', label: 'select provider' },
+      { keys: '/provider', label: 'switch model' },
+      { keys: '/accounts', label: 'auth routes' },
+    ], { ...DEFAULT_PANEL_PALETTE, header: C.title });
+    const providerColumnHeader = buildAlignedRow(
+      width,
+      [
+        { text: 'provider', fg: C.label, bold: true },
+        { text: 'status', fg: C.label, bold: true },
+        { text: 'lat', fg: C.label, bold: true },
+        { text: 'last ok', fg: C.label, bold: true },
+        { text: 'auth', fg: C.label, bold: true },
+      ],
+      [
+        { width: 18 },
+        { width: 13 },
+        { width: 8, align: 'right' },
+        { width: 10, align: 'right' },
+        { width: 12 },
+      ],
+      { marker: '▸' },
+    );
     const resolvedProvidersSection = resolvePrimaryScrollableSection(width, height, {
       intro,
-      footerLines: [buildPanelLine(width, [['  j/k or Up/Down move  live cooldowns refresh while active', C.dim]])],
+      footerLines: [footerHint],
       palette: { ...DEFAULT_PANEL_PALETTE, header: C.title },
       beforeSections: [postureSection, domainsSection, ...maintenanceSections],
       section: {
         title: 'Providers',
+        fixedLines: [providerColumnHeader],
         scrollableLines: providers.map((name, absolute) => {
           const health = this.providerHealthTracker.get(name);
           const status = health?.status ?? 'unknown';
+          const dot = statusDot(status);
           const latency = health?.lastLatencyMs !== undefined ? fmtMs(health.lastLatencyMs) : 'n/a';
           const latencyFg = health?.lastLatencyMs !== undefined ? latencyColor(health.lastLatencyMs) : C.dim;
-          return buildPanelListRow(width, [
-            { text: name.padEnd(16), fg: C.value },
-            { text: statusLabel(status).padEnd(14), fg: statusDot(status).color },
-            { text: ' lat ', fg: C.label },
-            { text: latency.padEnd(8), fg: latencyFg },
-            { text: ' ok ', fg: C.label },
-            { text: fmtAgo(health?.lastSuccessAt).padEnd(10), fg: C.value },
-          ], { ...DEFAULT_PANEL_PALETTE, header: C.title }, { selected: absolute === this._selectedIndex, selectedBg: '#111827' });
+          const account = this._accountRecords.get(name);
+          const authFg = account ? freshnessColor(account.authFreshness) : C.dim;
+          return buildAlignedRow(
+            width,
+            [
+              { text: `${dot.char} ${name}`, fg: C.value, bold: absolute === this._selectedIndex },
+              { text: statusLabel(status), fg: dot.color },
+              { text: latency, fg: latencyFg },
+              { text: fmtAgo(health?.lastSuccessAt), fg: C.value },
+              { text: account ? account.authFreshness : '-', fg: authFg },
+            ],
+            [
+              { width: 18 },
+              { width: 13 },
+              { width: 8, align: 'right' },
+              { width: 10, align: 'right' },
+              { width: 12 },
+            ],
+            { selected: absolute === this._selectedIndex, selectedBg: C.rowSelectBg, marker: '▸' },
+          );
         }),
         selectedIndex: this._selectedIndex,
         scrollOffset: this._scrollOffset,
@@ -713,7 +757,7 @@ export class ProviderHealthPanel extends BasePanel {
       title: 'Health',
       intro,
       sections,
-      footerLines: [buildPanelLine(width, [['  j/k or Up/Down move  live cooldowns refresh while active', C.dim]])],
+      footerLines: [footerHint],
       palette: { ...DEFAULT_PANEL_PALETTE, header: C.title },
     });
   }
