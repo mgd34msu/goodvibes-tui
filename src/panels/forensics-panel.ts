@@ -7,6 +7,7 @@
  * Open via /forensics or the panel picker.
  */
 import type { Line } from '../types/grid.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import type { FailureReport, CausalChainEntry, PhaseTimingEntry } from '@/runtime/index.ts';
 import { ForensicsDataPanel } from '@/runtime/index.ts';
@@ -204,9 +205,9 @@ export class ForensicsPanel extends BasePanel {
       const isSelected = i === this._selectedIndex;
       const bg = isSelected ? C.selectBg : undefined;
 
-      const idStr   = report.id.slice(0, 8).padEnd(8, ' ');
+      const idStr   = fitDisplay(report.id, 8);
       const timeStr = fmtTime(report.generatedAt);
-      const cls     = report.classification.slice(0, 20).padEnd(20, ' ');
+      const cls     = fitDisplay(report.classification, 20);
       const clsColor = classificationColor(report.classification);
       const summaryMax = Math.max(0, width - 42);
       const summaryStr = report.summary.slice(0, summaryMax);
@@ -339,7 +340,7 @@ export class ForensicsPanel extends BasePanel {
     const statusChar = pt.success ? '✓' : '✕';
     const statusColor = pt.success ? C.phaseOk : C.phaseFail;
     const dur = fmtDuration(pt.durationMs);
-    const phaseLabel = pt.phase.slice(0, 14).padEnd(14, ' ');
+    const phaseLabel = fitDisplay(pt.phase, 14);
     const errPart = pt.error ? `  ${pt.error.slice(0, Math.max(0, width - 32))}` : '';
     lines.push(buildPanelLine(width, [
       ['  ', C.dim],

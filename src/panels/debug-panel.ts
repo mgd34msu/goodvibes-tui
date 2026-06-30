@@ -1,6 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import type { TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { Orchestrator } from '../core/orchestrator';
@@ -363,8 +363,8 @@ export class DebugPanel extends BasePanel {
     const timeStr    = fmtAgo(e.ts).padEnd(8);
     const statusChar = e.status === 'ok' ? '✓' : '✕';
     const statusFg   = e.status === 'ok' ? C.good : C.bad;
-    const provStr    = e.provider.slice(0, 11).padEnd(12);
-    const modelStr   = e.model.slice(0, 19).padEnd(20);
+    const provStr    = fitDisplay(e.provider, 12);
+    const modelStr   = fitDisplay(e.model, 20);
     const inStr      = fmtTok(e.inputTokens).padStart(8);
     const outStr     = fmtTok(e.outputTokens).padStart(8);
     const latStr     = fmtMs(e.latencyMs).padStart(8);

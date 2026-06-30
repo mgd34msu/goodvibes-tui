@@ -18,7 +18,7 @@ import {
   extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   getPanelSearchFocusTransition,
@@ -303,7 +303,7 @@ export class SessionBrowserPanel extends BasePanel {
     const bg = isCursor ? C.selectBg : '';
     const date = shortDate(sess.timestamp);
     const cnt = String(sess.messageCount).padStart(3) + 'm ';
-    const model = (sess.model || 'unknown').slice(0, 18).padEnd(18) + ' ';
+    const model = fitDisplay(sess.model || 'unknown', 18) + ' ';
     const prefixLength = 1 + 16 + 1 + 4 + 19;
     const title = truncateDisplay(sess.title || sess.name || '(untitled)', Math.max(0, width - prefixLength));
     return buildStyledPanelLine(width, [
