@@ -72,8 +72,8 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
     return buildPanelLine(width, [
       ['  ', C.label, bg],
       [row.kind.padEnd(11), C.info, bg],
-      [row.entry.name.slice(0, 20).padEnd(20), C.value, bg],
-      [` ${provenance.slice(0, 16).padEnd(16)}`, provenance === 'local' ? C.dim : C.info, bg],
+      [fitDisplay(row.entry.name, 20), C.value, bg],
+      [` ${fitDisplay(provenance, 16)}`, provenance === 'local' ? C.dim : C.info, bg],
       [` ${(row.installed ? 'INSTALLED' : 'CURATED').padEnd(9)} `, statusColor(row.installed), bg],
       [` ${row.entry.version ?? 'n/a'}`, C.dim, bg],
     ]);

@@ -8,6 +8,7 @@
  * Open via Ctrl+O keybind or `/ops view` command.
  */
 import type { Line } from '../types/grid.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
 import type { OpsEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsAuditEntry } from '../runtime/diagnostics/panels/ops.ts';
@@ -106,11 +107,11 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   protected renderItem(entry: OpsAuditEntry, _index: number, _selected: boolean, width: number): Line {
     const seqStr   = String(entry.seq).padStart(4, ' ');
     const timeStr  = fmtTime(entry.ts);
-    const action   = entry.action.slice(0, 15).padEnd(15, ' ');
+    const action   = fitDisplay(entry.action, 15);
     const kindTag  = entry.targetKind === 'task' ? 'T:' : 'A:';
     // Truncation is intentional: TUI column width limits target ID display to 14 chars
     const shortId  = entry.targetId.slice(-10);
-    const target   = (kindTag + shortId).slice(0, 14).padEnd(14, ' ');
+    const target   = fitDisplay(kindTag + shortId, 14);
     const outLabel = outcomeLabel(entry.outcome);
     const noteRaw  = (entry.note ?? entry.errorMessage ?? '').slice(0, Math.max(0, width - 63));
 

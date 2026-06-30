@@ -22,6 +22,8 @@ const PANELS_DIR = join(import.meta.dir, '../../panels');
 
 // `.padEnd(...).slice(...)` — pad-then-truncate string formatting (use fitDisplay).
 const PADEND_SLICE = /padEnd\([^)]*\)\.slice\(/;
+// `.slice(0, N).padEnd(N)` — truncate-then-pad fixed-width column (use fitDisplay).
+const SLICE_PADEND = /\.slice\(0, *[0-9]+\)\.padEnd\(/;
 // A template literal immediately truncated by `.slice(0, ...)` (use truncateDisplay).
 const TEMPLATE_SLICE = /`[^`]*`\.slice\(0,/;
 
@@ -51,10 +53,7 @@ describe('panel formatting anti-pattern ratchet', () => {
     expect([...offenders].filter((f) => !TEMPLATE_SLICE_BASELINE.has(f))).toEqual([]);
   });
 
-  test('baselines do not list files that are already clean (keep them tight)', () => {
-    const padEnd = panelFilesUsing(PADEND_SLICE);
-    const template = panelFilesUsing(TEMPLATE_SLICE);
-    expect([...PADEND_SLICE_BASELINE].filter((f) => !padEnd.has(f))).toEqual([]);
-    expect([...TEMPLATE_SLICE_BASELINE].filter((f) => !template.has(f))).toEqual([]);
+  test('no panel uses .slice(0,N).padEnd(N) truncate-then-pad columns', () => {
+    expect([...panelFilesUsing(SLICE_PADEND)]).toEqual([]);
   });
 });

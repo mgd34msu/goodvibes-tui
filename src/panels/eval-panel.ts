@@ -6,6 +6,7 @@
  */
 
 import { BasePanel } from './base-panel.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
 import type { Line } from '../types/grid.ts';
 import type { KeyName } from './types.ts';
 import { createEmptyLine } from '../types/grid.ts';
@@ -286,7 +287,7 @@ export class EvalPanel extends BasePanel {
       const nameColor = selected ? C.selected : C.white;
       const bg = selected ? C.selectBg : undefined;
       const prefix = selected ? '▸ ' : '  ';
-      const name = suite.suite.slice(0, 24).padEnd(26);
+      const name = fitDisplay(suite.suite, 26);
 
       sectionLines.push(buildPanelLine(width, [
         [prefix + name, nameColor, bg],

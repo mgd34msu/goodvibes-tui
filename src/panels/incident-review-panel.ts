@@ -1,5 +1,5 @@
 import type { Line } from '../types/grid.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import type { ForensicsRegistry } from '@/runtime/index.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
@@ -63,7 +63,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
     const bg = selected ? C.selectBg : undefined;
     return buildPanelLine(width, [
       [' ', C.label, bg],
-      [report.id.slice(0, 8).padEnd(9), C.dim, bg],
+      [fitDisplay(report.id, 9), C.dim, bg],
       [report.classification.padEnd(20), classificationColor(report.classification), bg],
       [report.summary.slice(0, Math.max(0, width - 31)), C.value, bg],
     ]);

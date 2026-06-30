@@ -1,4 +1,5 @@
 import type { Line } from '../types/grid.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
@@ -192,7 +193,7 @@ export class SandboxPanel extends BasePanel {
           [session.state.padEnd(10), session.state === 'running' ? C.good : session.state === 'failed' ? C.bad : C.warn, bg],
           [(session.shared ? 'shared' : 'dedicated').padEnd(12), C.value, bg],
           [String(session.resolvedBackend ?? session.backend).padEnd(8), C.dim, bg],
-          [` ${(session.startupStatus ?? 'n/a').slice(0, 8).padEnd(8)}`, session.startupStatus === 'verified' ? C.good : session.startupStatus === 'failed' ? C.bad : C.warn, bg],
+          [` ${fitDisplay(session.startupStatus ?? 'n/a', 8)}`, session.startupStatus === 'verified' ? C.good : session.startupStatus === 'failed' ? C.bad : C.warn, bg],
           [` ${String(session.executionCount ?? 0).padStart(3)}x`, C.info, bg],
           [` ${session.id.slice(0, Math.max(8, Math.min(14, width - 64)))}`, C.dim, bg],
         ]));
