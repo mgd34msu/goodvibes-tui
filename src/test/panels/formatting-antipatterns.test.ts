@@ -24,13 +24,9 @@ const PANELS_DIR = join(import.meta.dir, '../../panels');
 const PADEND_SLICE = /padEnd\([^)]*\)\.slice\(/;
 
 // Files known to still use the idiom. Shrink as panels migrate to the shared
-// formatting helpers — never add to it.
-const BASELINE_OFFENDERS = new Set<string>([
-  'cost-tracker-panel.ts',
-  'panel-list-panel.ts',
-  'subscription-panel.ts',
-  'work-plan-panel.ts',
-]);
+// formatting helpers — never add to it. Now empty: the idiom is fully swept,
+// so any reintroduction anywhere fails the test.
+const BASELINE_OFFENDERS = new Set<string>([]);
 
 function panelFilesUsing(pattern: RegExp): Set<string> {
   const hits = new Set<string>();

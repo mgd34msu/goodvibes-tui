@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { KeyName } from './types.ts';
 import type { ProviderSubscription, PendingSubscriptionLogin } from '@pellux/goodvibes-sdk/platform/config';
@@ -94,7 +95,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
   protected renderItem(row: SubscriptionRow, index: number, selected: boolean, width: number): Line {
     const status = statusOf(row);
     return buildPanelListRow(width, [
-      { text: row.provider.padEnd(16).slice(0, 16), fg: C.value },
+      { text: fitDisplay(row.provider, 16), fg: C.value },
       { text: ` ${status.toUpperCase().padEnd(12)}`, fg: statusColor(status) },
       { text: ` oauth=${row.hasOAuthConfig ? 'yes' : 'no'} `, fg: row.hasOAuthConfig ? C.info : C.dim },
       { text: ` override=${row.subscription ? 'active' : 'off'}`, fg: row.subscription ? C.good : C.dim },
