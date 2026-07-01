@@ -492,17 +492,6 @@ export class PanelListPanel extends BasePanel {
     return entries;
   }
 
-  /** Get the flat panel index (counting only panel entries) for a given panel id. */
-  private _flatPanelIndex(entries: ListEntry[], id: string): number {
-    let idx = 0;
-    for (const e of entries) {
-      if (e.kind !== 'panel') continue;
-      if (e.reg.id === id) return idx;
-      idx++;
-    }
-    return -1;
-  }
-
   /** Get the ListEntry for the currently selected panel. */
   private _getSelectedPanelEntry(entries: ListEntry[]): Extract<ListEntry, { kind: 'panel' }> | null {
     let idx = 0;

@@ -2,8 +2,16 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
-import type { PolicyRuntimeState } from '@/runtime/index.ts';
-import type { PolicyPanelSnapshot } from '../runtime/diagnostics/panels/policy.ts';
+import type {
+  PolicyRuntimeState,
+  PolicyBundleVersion,
+  PolicyDiffResult,
+  DivergenceDashboardSnapshot,
+  PermissionAuditEntry,
+  PolicyLintFinding,
+  PolicySimulationSummary,
+  PolicyPreflightReview,
+} from '@/runtime/index.ts';
 import {
   buildEmptyState,
   buildKeyboardHints,
@@ -49,6 +57,32 @@ function gateColor(status: string | undefined): string {
     default:
       return C.dim;
   }
+}
+
+/**
+ * A point-in-time snapshot of policy state for diagnostics rendering.
+ */
+interface PolicyPanelSnapshot {
+  /** The currently enforced bundle, or null if no policy is active. */
+  current: PolicyBundleVersion | null;
+  /** The pending candidate bundle, or null if none loaded. */
+  candidate: PolicyBundleVersion | null;
+  /** History of previous active bundles (most recent first). */
+  history: PolicyBundleVersion[];
+  /** Diff between current and candidate, or null if unavailable. */
+  diff: PolicyDiffResult | null;
+  /** Divergence dashboard snapshot, or null if no panel attached. */
+  divergence: DivergenceDashboardSnapshot | null;
+  /** Recent permission requests and decisions for operator audit review. */
+  recentPermissionAudit: readonly PermissionAuditEntry[];
+  /** Policy lint findings for current and candidate bundles. */
+  lintFindings: readonly PolicyLintFinding[];
+  /** Concrete scenario results from the most recent policy simulation run. */
+  lastSimulationSummary: PolicySimulationSummary | null;
+  /** Most recent proactive policy preflight review. */
+  lastPreflightReview: PolicyPreflightReview | null;
+  /** ISO 8601 timestamp of when this snapshot was captured. */
+  capturedAt: string;
 }
 
 export class PolicyPanel extends BasePanel {
