@@ -4,11 +4,10 @@ import { ContextVisualizerPanel } from '../context-visualizer-panel.ts';
 import { ThinkingPanel } from '../thinking-panel.ts';
 import { ToolInspectorPanel } from '../tool-inspector-panel.ts';
 import { WrfcPanel } from '../wrfc-panel.ts';
-import { SchedulePanel } from '../schedule-panel.ts';
 import { ProjectPlanningPanel } from '../project-planning-panel.ts';
 import { WorkPlanPanel } from '../work-plan-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
-import { requireAutomationManager, requireUiServices } from './shared.ts';
+import { requireUiServices } from './shared.ts';
 
 export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   manager.registerType({
@@ -109,14 +108,5 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       submitAnswer: deps.submitPlanningAnswer,
       dismissPlanning: deps.dismissPlanning,
     }),
-  });
-
-  manager.registerType({
-    id: 'schedule',
-    name: 'Schedule',
-    icon: 'Z',
-    category: 'agent',
-    description: 'Scheduled agent tasks: cron expressions, next run time, enable/disable, run history',
-    factory: () => new SchedulePanel(requireAutomationManager(deps)),
   });
 }

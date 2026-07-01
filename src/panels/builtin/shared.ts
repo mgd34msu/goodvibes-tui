@@ -256,7 +256,7 @@ export function requireControlPlanePanelDeps(deps: BuiltinPanelDeps): ControlPla
 
 export function requireAutomationManager(deps: BuiltinPanelDeps): AutomationManager {
   if (!deps.automationManager) {
-    throw new Error('SchedulePanel requires an automation manager to be wired at bootstrap.');
+    throw new Error('AutomationControlPanel requires an automation manager to be wired at bootstrap.');
   }
   return deps.automationManager;
 }
