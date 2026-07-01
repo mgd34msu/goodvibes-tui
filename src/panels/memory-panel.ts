@@ -35,9 +35,9 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 // Colour palette
 // ---------------------------------------------------------------------------
 
+// Domain accents only — one hue per memory class (base chrome: header/
+// headerBg/selectBg come from DEFAULT_PANEL_PALETTE).
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  header: '#94a3b8',
-  headerBg: '#1e293b',
   decision: '#38bdf8',
   constraint: '#f97316',
   incident: '#ef4444',
@@ -47,9 +47,6 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   runbook: '#eab308',
   architecture: '#60a5fa',
   ownership: '#14b8a6',
-  selected: '#1e3a5f',
-  searchBg: '#0f172a',
-  searchFg: '#e2e8f0',
 });
 
 // ---------------------------------------------------------------------------
@@ -181,7 +178,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       ]);
     }
     // All-mode row: scope/class + id + time + summary (matches former MemoryPanel row)
-    const bg = selected ? C.selected : undefined;
+    const bg = selected ? C.selectBg : undefined;
     return buildPanelLine(width, [
       ['  ', C.label, bg],
       [`[${record.scope.slice(0, 1).toUpperCase()}/${record.cls.slice(0, 3).toUpperCase()}] `, classColor(record.cls), bg],

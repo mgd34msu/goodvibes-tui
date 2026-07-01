@@ -16,16 +16,9 @@ import {
   type PanelPalette,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function formatTime(value?: number): string {
   if (!value) return 'n/a';
@@ -121,9 +114,9 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'bindings', value: String(snapshot.totalBindings), valueColor: snapshot.totalBindings > 0 ? C.info : C.dim },
-        { label: 'active', value: String(snapshot.activeBindingIds.length), valueColor: snapshot.activeBindingIds.length > 0 ? C.ok : C.dim },
-        { label: 'resolved', value: String(snapshot.totalResolved), valueColor: snapshot.totalResolved > 0 ? C.ok : C.dim },
-        { label: 'failures', value: String(snapshot.totalFailures), valueColor: snapshot.totalFailures > 0 ? C.error : C.dim },
+        { label: 'active', value: String(snapshot.activeBindingIds.length), valueColor: snapshot.activeBindingIds.length > 0 ? C.good : C.dim },
+        { label: 'resolved', value: String(snapshot.totalResolved), valueColor: snapshot.totalResolved > 0 ? C.good : C.dim },
+        { label: 'failures', value: String(snapshot.totalFailures), valueColor: snapshot.totalFailures > 0 ? C.bad : C.dim },
       ], C),
       buildGuidanceLine(width, '/communication', 'inspect routed message flow and delivery behavior across bound surfaces', C),
     ];

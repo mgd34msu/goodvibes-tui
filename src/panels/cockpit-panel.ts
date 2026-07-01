@@ -15,11 +15,9 @@ import {
 } from './polish.ts';
 import { agentStatusColor } from './agent-inspector-shared.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#cbd5e1',
-  headerBg: '#0f172a',
-} as const;
+// Base chrome only — title band and text tokens come straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function pickColor(value: number, warnAt = 1, badAt = 3): string {
   if (value >= badAt) return C.bad;

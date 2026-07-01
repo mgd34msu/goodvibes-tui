@@ -19,27 +19,18 @@ import {
   buildKeyboardHints,
   buildPanelLine,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelPalette,
 } from './polish.ts';
 
 // ── Colour palette ──────────────────────────────────────────────────────────
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header:     '#94a3b8',
-  headerBg:   '#1e293b',
-  success:    '#22c55e',
-  rejected:   '#f97316',
-  error:      '#ef4444',
-  dim:        '#4b5563',
-  label:      '#64748b',
-  value:      '#cbd5e1',
-  note:       '#eab308',
-  seq:        '#475569',
-  taskColor:  '#22d3ee',
-  agentColor: '#a78bfa',
-  empty:      '#334155',
-  selectBg:   '#0f172a',
-} as const;
+// Domain accents only; base chrome (header/headerBg/dim/label/value/good/bad/
+// warn/empty/selectBg) comes from DEFAULT_PANEL_PALETTE.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  rejected:   '#f97316',   // rejected-outcome badge — distinct from success/error
+  taskColor:  '#22d3ee',   // task-target tag
+  agentColor: '#a78bfa',   // agent-target tag
+} as const);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -53,9 +44,9 @@ function fmtTime(ts: number): string {
 
 function outcomeColor(outcome: OpsAuditEntry['outcome']): string {
   switch (outcome) {
-    case 'success':  return C.success;
+    case 'success':  return C.good;
     case 'rejected': return C.rejected;
-    case 'error':    return C.error;
+    case 'error':    return C.bad;
   }
 }
 
@@ -127,13 +118,13 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
     const noteRaw  = truncateDisplay(entry.note ?? entry.errorMessage ?? '', Math.max(0, width - 63));
 
     const segs: Array<[string, string, string?]> = [
-      [` ${seqStr} `, C.seq],
+      [` ${seqStr} `, C.dim],
       [`${timeStr} `, C.dim],
       [`${action} `, C.value],
       [`${target}  `, targetColor(entry.targetKind)],
       [outLabel, outcomeColor(entry.outcome)],
     ];
-    if (noteRaw) segs.push([` ${noteRaw}`, C.note]);
+    if (noteRaw) segs.push([` ${noteRaw}`, C.warn]);
     return buildPanelLine(width, segs);
   }
 
@@ -162,9 +153,9 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'logged', value: String(entries.length), valueColor: entries.length > 0 ? C.value : C.dim },
-        { label: 'ok', value: String(ok), valueColor: ok > 0 ? C.success : C.dim },
+        { label: 'ok', value: String(ok), valueColor: ok > 0 ? C.good : C.dim },
         { label: 'rejected', value: String(rejected), valueColor: rejected > 0 ? C.rejected : C.dim },
-        { label: 'errors', value: String(errored), valueColor: errored > 0 ? C.error : C.dim },
+        { label: 'errors', value: String(errored), valueColor: errored > 0 ? C.bad : C.dim },
       ], C),
       buildPanelLine(width, [['  SEQ  TIME      ACTION          TARGET             OUT    NOTE', C.label]]),
     ];
@@ -186,7 +177,7 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
         ]),
         buildPanelLine(width, [
           ['  ', C.label],
-          [truncateDisplay(detail, Math.max(0, width - 4)), C.note],
+          [truncateDisplay(detail, Math.max(0, width - 4)), C.warn],
         ]),
       );
     }

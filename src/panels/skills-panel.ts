@@ -11,6 +11,7 @@ import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 import {
   getPanelSearchFocusTransition,
@@ -18,24 +19,12 @@ import {
 } from './search-focus.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  searchFg: '#f97316',
-  searchBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#64748b',
-  empty: '#334155',
-  selectedFg: '#e2e8f0',
-  selectedBg: '#1e3a5f',
-  project: '#38bdf8',
-  global: '#a78bfa',
-  hint: '#475569',
-  path: '#94a3b8',
-  selectBg: '#1e3a5f',
-} as const;
+// Domain accents only; base chrome (header/headerBg/label/value/dim/empty/
+// selectBg) comes from DEFAULT_PANEL_PALETTE.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  project: '#38bdf8',   // project-local skill origin
+  global:  '#a78bfa',   // global skill origin
+} as const);
 
 export type SkillOrigin = 'project-local' | 'global' | 'custom';
 
@@ -294,13 +283,13 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
     const descLines = wordWrap(desc, descWidth);
     return buildPanelLine(width, [
-      [selected ? '\u25b8' : ' ', C.selectedFg, bg],
+      [selected ? '\u25b8' : ' ', C.value, bg],
       [' ', C.dim, bg],
       [dot, originColor(skill.origin), bg],
       [' ', C.dim, bg],
-      [skill.name, selected ? C.selectedFg : C.value, bg],
+      [skill.name, selected ? C.value : C.value, bg],
       ['  ', C.dim, bg],
-      [descLines[0] ?? '', selected ? C.selectedFg : C.dim, bg],
+      [descLines[0] ?? '', selected ? C.value : C.dim, bg],
     ]);
   }
 
@@ -412,13 +401,13 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     if (selected) {
       detailLines.push(
         buildPanelLine(width, [['  Selected: ', C.label], [selected.name, C.value], ['  [', C.dim], [originLabel(selected.origin), originColor(selected.origin)], [']', C.dim]]),
-        buildPanelLine(width, [['  Path: ', C.label], [truncatePathDisplay(selected.path, Math.max(1, width - 8)), C.path]]),
+        buildPanelLine(width, [['  Path: ', C.label], [truncatePathDisplay(selected.path, Math.max(1, width - 8)), C.label]]),
         buildPanelLine(width, [['  Desc: ', C.label], [selected.description || 'No description provided.', C.value]]),
         buildPanelLine(width, [['  Depends: ', C.label], [selected.dependencies.length > 0 ? selected.dependencies.join(', ') : 'none', C.dim]]),
         buildPanelLine(width, [['  Includes: ', C.label], [selected.includes.length > 0 ? selected.includes.join(', ') : 'none', C.dim]]),
       );
     }
-    detailLines.push(buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.hint]]));
+    detailLines.push(buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.dim]]));
 
     const lines = this.renderList(width, height, {
       title: 'Skills - discover project-local and global skill packs',

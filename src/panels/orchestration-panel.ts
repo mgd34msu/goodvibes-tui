@@ -27,23 +27,18 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 
+// Domain accents only; base chrome (header/headerBg/info/good/warn/bad/
+// selectBg) comes from DEFAULT_PANEL_PALETTE.
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  running: '#22c55e',
-  ready: '#38bdf8',
-  blocked: '#f59e0b',
-  failed: '#ef4444',
-  completed: '#a78bfa',
-  selectBg: '#0f172a',
+  completed: '#a78bfa',   // completed-graph badge, distinct from running/good
 } as const);
 
 function statusColor(status: string): string {
   switch (status) {
-    case 'ready':     return C.ready;
-    case 'running':   return C.running;
-    case 'blocked':   return C.blocked;
-    case 'failed':    return C.failed;
+    case 'ready':     return C.info;
+    case 'running':   return C.good;
+    case 'blocked':   return C.warn;
+    case 'failed':    return C.bad;
     case 'completed': return C.completed;
     default:          return C.dim;
   }
@@ -137,10 +132,10 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
     const postureLines = [
       buildKeyValueLine(width, [
         { label: 'graphs', value: String(snapshot.totalGraphs), valueColor: snapshot.totalGraphs > 0 ? C.value : C.dim },
-        { label: 'active', value: String(snapshot.activeGraphIds.length), valueColor: snapshot.activeGraphIds.length > 0 ? C.running : C.dim },
+        { label: 'active', value: String(snapshot.activeGraphIds.length), valueColor: snapshot.activeGraphIds.length > 0 ? C.good : C.dim },
         { label: 'completed', value: String(snapshot.totalCompletedGraphs), valueColor: snapshot.totalCompletedGraphs > 0 ? C.completed : C.dim },
-        { label: 'failed', value: String(snapshot.totalFailedGraphs), valueColor: snapshot.totalFailedGraphs > 0 ? C.failed : C.dim },
-        { label: 'guards', value: String(snapshot.recursionGuardTrips), valueColor: snapshot.recursionGuardTrips > 0 ? C.blocked : C.dim },
+        { label: 'failed', value: String(snapshot.totalFailedGraphs), valueColor: snapshot.totalFailedGraphs > 0 ? C.bad : C.dim },
+        { label: 'guards', value: String(snapshot.recursionGuardTrips), valueColor: snapshot.recursionGuardTrips > 0 ? C.warn : C.dim },
       ], C),
       buildGuidanceLine(width, '/orchestration', 'inspect recursive execution posture, graph health, and node contract flow', C),
     ];
@@ -188,7 +183,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
         ['  Mode: ', C.label],
         [selected.mode, C.value],
         ['  Live: ', C.label],
-        [isActive ? 'yes' : 'no', isActive ? C.running : C.dim],
+        [isActive ? 'yes' : 'no', isActive ? C.good : C.dim],
       ]),
       buildPanelLine(width, [
         ['  Nodes: ', C.label],
@@ -204,7 +199,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
     if (selected.lastRecursionGuard) {
       detailLines.push(buildPanelLine(width, [
         ['  Recursion guard: ', C.label],
-        [`depth ${selected.lastRecursionGuard.depth} active ${selected.lastRecursionGuard.activeAgents} ${selected.lastRecursionGuard.reason}`, C.blocked],
+        [`depth ${selected.lastRecursionGuard.depth} active ${selected.lastRecursionGuard.activeAgents} ${selected.lastRecursionGuard.reason}`, C.warn],
       ]));
     }
 

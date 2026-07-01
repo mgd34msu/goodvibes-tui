@@ -27,6 +27,7 @@ import {
   buildSummaryBlock,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
@@ -42,28 +43,12 @@ import {
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header:      '#94a3b8',
-  headerBg:    '#1e293b',
-  category:    '#64748b',
-  categoryBg:  '#1e293b',
-  icon:        '#38bdf8',
-  name:        '#e2e8f0',
-  desc:        '#64748b',
-  openDot:     '#22c55e',
-  closedDot:   '#475569',
-  selected:    '#e2e8f0',
-  selectedBg:  '#1e3a5f',
-  selIcon:     '#38bdf8',
-  hint:        '#475569',
-  search:      '#f97316',
-  searchBg:    '#1e293b',
-  dim:         '#334155',
-  paneTop:     '#38bdf8',
-  paneBottom:  '#a78bfa',
-  intro:       '#94a3b8',
-} as const;
+// Domain accents only; base chrome (header/headerBg/label/value/dim/good/bad/
+// info/selectBg) comes from DEFAULT_PANEL_PALETTE.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  search:      '#f97316',   // active search-filter highlight
+  paneBottom:  '#a78bfa',   // bottom-pane placement marker (distinct from top/info cyan)
+} as const);
 
 const CATEGORY_ORDER: PanelCategory[] = ['development', 'agent', 'monitoring', 'session', 'ai'];
 const CATEGORY_LABELS: Record<PanelCategory, string> = {
@@ -92,8 +77,8 @@ function panelPlacementMarker(options: {
   focusedPane: 'top' | 'bottom';
 }): { text: string; color: string } {
   const { isTopOpen, isBottomOpen, focusedPane } = options;
-  if (isTopOpen && isBottomOpen) return { text: '◆', color: C.selected };
-  if (isTopOpen) return { text: focusedPane === 'top' ? '▲' : '△', color: C.paneTop };
+  if (isTopOpen && isBottomOpen) return { text: '◆', color: C.value };
+  if (isTopOpen) return { text: focusedPane === 'top' ? '▲' : '△', color: C.info };
   if (isBottomOpen) return { text: focusedPane === 'bottom' ? '▼' : '▽', color: C.paneBottom };
   return { text: ' ', color: C.dim };
 }
@@ -300,7 +285,7 @@ export class PanelListPanel extends BasePanel {
           title: 'Filter',
           lines: [buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
             active: this._filterFocused,
-            bg: C.searchBg,
+            bg: C.headerBg,
             emptyLabel: this._filterFocused ? '(type to filter)' : '(/ or up at top)',
             valueColor: C.search,
           })],
@@ -326,20 +311,20 @@ export class PanelListPanel extends BasePanel {
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
-    const footerLines = [buildPanelLine(width, [[truncateDisplay(` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`, width), C.hint]])];
+    const footerLines = [buildPanelLine(width, [[truncateDisplay(` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`, width), C.dim]])];
     const postureLines: Line[] = [
       buildKeyValueLine(width, [
-        { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.name : C.dim },
-        { label: 'focused pane', value: focusedPane, valueColor: focusedPane === 'top' ? C.paneTop : C.paneBottom },
+        { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.value : C.dim },
+        { label: 'focused pane', value: focusedPane, valueColor: focusedPane === 'top' ? C.info : C.paneBottom },
         { label: 'split', value: pm.isBottomPaneVisible() ? 'dual' : 'single', valueColor: pm.isBottomPaneVisible() ? C.info : C.dim },
         { label: 'results', value: String(panelEntries.length), valueColor: C.value },
       ], C),
-      buildPanelLine(width, [[` Filter owns input only when selected. Open and switch operations should land directly in focused panel state.`, C.intro]]),
+      buildPanelLine(width, [[` Filter owns input only when selected. Open and switch operations should land directly in focused panel state.`, C.header]]),
     ];
     const entryLines: Line[] = [
       buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
         active: this._filterFocused,
-        bg: C.searchBg,
+        bg: C.headerBg,
         emptyLabel: this._filterFocused ? '(type to filter)' : '(/ or up at top)',
         valueColor: C.search,
       }),
@@ -351,7 +336,7 @@ export class PanelListPanel extends BasePanel {
         const label = ` ── ${entry.label} ${'─'.repeat(Math.max(0, width - 6 - entry.label.length))}`;
         renderedBlocks.push({
           entry,
-          lines: [buildPanelLine(width, [[truncateDisplay(label, width), C.category, C.categoryBg]])],
+          lines: [buildPanelLine(width, [[truncateDisplay(label, width), C.label, C.headerBg]])],
         });
       } else {
         const flatIdx = flatPanelIndex++;
@@ -359,8 +344,8 @@ export class PanelListPanel extends BasePanel {
         const isTopOpen = topIds.has(entry.reg.id);
         const isBottomOpen = bottomIds.has(entry.reg.id);
         const dot = isTopOpen || isBottomOpen ? '●' : '○';
-        const dotColor = isTopOpen || isBottomOpen ? C.openDot : C.closedDot;
-        const nameColor = isSelected ? C.selected : C.name;
+        const dotColor = isTopOpen || isBottomOpen ? C.good : C.dim;
+        const nameColor = C.value;
         const nameStr = fitDisplay(entry.reg.name, NAME_COL_WIDTH);
         const descStartCol = PREFIX_WIDTH + NAME_COL_WIDTH + 1;
         const descWidth = Math.max(1, width - descStartCol);
@@ -377,16 +362,16 @@ export class PanelListPanel extends BasePanel {
             { text: placement.text, fg: placement.color },
             { text: ' ', fg: C.dim },
             { text: `${nameStr} `, fg: nameColor },
-            { text: categoryTag, fg: C.category },
-            { text: descLines[0] ?? '', fg: C.desc },
-          ], C, { selected: isSelected, selectedBg: C.selectedBg, markerColor: C.selIcon }),
+            { text: categoryTag, fg: C.label },
+            { text: descLines[0] ?? '', fg: C.label },
+          ], C, { selected: isSelected, selectedBg: C.selectBg, markerColor: C.info }),
         ];
         if ((descLines[1] ?? '').length > 0) {
           blockLines.push(buildPanelLine(width, [
-            [' '.repeat(PREFIX_WIDTH), C.dim, isSelected ? C.selectedBg : C.surfaceBg],
-            [' '.repeat(NAME_COL_WIDTH), C.dim, isSelected ? C.selectedBg : C.surfaceBg],
-            [' ', C.dim, isSelected ? C.selectedBg : C.surfaceBg],
-            [descLines[1] ?? '', C.desc, isSelected ? C.selectedBg : C.surfaceBg],
+            [' '.repeat(PREFIX_WIDTH), C.dim, isSelected ? C.selectBg : C.surfaceBg],
+            [' '.repeat(NAME_COL_WIDTH), C.dim, isSelected ? C.selectBg : C.surfaceBg],
+            [' ', C.dim, isSelected ? C.selectBg : C.surfaceBg],
+            [descLines[1] ?? '', C.label, isSelected ? C.selectBg : C.surfaceBg],
           ]));
         }
         renderedBlocks.push({ entry, lines: blockLines, panelFlatIndex: flatIdx });

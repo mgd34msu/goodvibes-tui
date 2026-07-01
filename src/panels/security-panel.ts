@@ -14,27 +14,20 @@ import {
 } from './polish.ts';
 import { createEmptyLine } from '../types/grid.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  dim: '#475569',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function managedColor(managed: boolean): string {
   return managed ? C.warn : C.info;
 }
 
 function resultColor(result: TokenAuditResult): string {
-  if (result.blocked) return C.error;
-  if (result.scope.outcome === 'violation') return C.error;
-  if (result.rotation.outcome === 'overdue') return C.error;
+  if (result.blocked) return C.bad;
+  if (result.scope.outcome === 'violation') return C.bad;
+  if (result.rotation.outcome === 'overdue') return C.bad;
   if (result.rotation.outcome === 'warning') return C.warn;
-  return C.ok;
+  return C.good;
 }
 
 function resultSummary(result: TokenAuditResult): string {
@@ -50,12 +43,12 @@ function severityColor(severity: 'low' | 'medium' | 'high' | 'critical'): string
   switch (severity) {
     case 'critical':
     case 'high':
-      return C.error;
+      return C.bad;
     case 'medium':
       return C.warn;
     case 'low':
     default:
-      return C.ok;
+      return C.good;
   }
 }
 
@@ -267,17 +260,17 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         ['  Policy: ', C.label],
         [selected.scope.policyId, C.info],
         ['  Blocked: ', C.label],
-        [selected.blocked ? 'yes' : 'no', selected.blocked ? C.error : C.ok],
+        [selected.blocked ? 'yes' : 'no', selected.blocked ? C.bad : C.good],
       ]));
       detailLines.push(buildPanelLine(width, [
         ['  Scope: ', C.label],
-        [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
+        [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.bad : C.good],
         ['  Excess: ', C.label],
-        [truncateDisplay(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none', Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
+        [truncateDisplay(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none', Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.bad : C.dim],
       ]));
       detailLines.push(buildPanelLine(width, [
         ['  Rotation: ', C.label],
-        [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.ok : selected.rotation.outcome === 'warning' ? C.warn : C.error],
+        [selected.rotation.outcome, selected.rotation.outcome === 'ok' ? C.good : selected.rotation.outcome === 'warning' ? C.warn : C.bad],
         ['  Due: ', C.label],
         [new Date(selected.rotation.dueAt).toISOString(), C.value],
         ['  Age(d): ', C.label],
@@ -290,21 +283,21 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       if (preflightStatus !== 'n/a') {
         detailLines.push(buildPanelLine(width, [[
           truncateDisplay(`Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`, width),
-          preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : C.dim,
+          preflightStatus === 'block' ? C.bad : preflightStatus === 'warn' ? C.warn : C.dim,
         ]]));
       }
       if (quarantinedMcp.length > 0) {
         const server = quarantinedMcp[0]!;
         detailLines.push(buildPanelLine(width, [[
           truncateDisplay(`MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`, width),
-          C.error,
+          C.bad,
         ]]));
       }
       if (quarantinedPlugins.length > 0) {
         const plugin = quarantinedPlugins[0]!;
         detailLines.push(buildPanelLine(width, [[
           truncateDisplay(`Plugin quarantine: ${plugin.name} (${plugin.trustTier})`, width),
-          C.error,
+          C.bad,
         ]]));
       } else if (untrustedPlugins.length > 0) {
         const plugin = untrustedPlugins[0]!;

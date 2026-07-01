@@ -20,6 +20,7 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 import {
   type ConfirmState,
@@ -46,12 +47,12 @@ import {
 const REFRESH_MS = 500;
 const MAX_JSONL_ENTRIES = 200;
 
-const COLOR = {
-  // Header / chrome
-  headerBg:    '#1a1a2e',
-  headerFg:    '#ffffff',
+// Domain accents only — base chrome (header/headerBg/label/value/dim/selectBg/
+// warn) comes from DEFAULT_PANEL_PALETTE via extendPalette; the title band is
+// the one canonical UI_TONES.bg.title, not a per-panel override.
+const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // Agent selector chrome
   statusBar:   '#222233',
-  statusFg:    '#aaaaaa',
   separator:   '#333355',
 
   // Timeline roles
@@ -63,22 +64,10 @@ const COLOR = {
   system:      '#888888',   // dim grey
   timestamp:   '#555577',
 
-  // Status badges
-  pending:     '#ffcc44',
-  running:     '#44ffcc',
-  completed:   '#44ff88',
-  failed:      '#ff4444',
-  cancelled:   '#888888',
-
   // Selector / labels
-  label:       '#8888bb',
-  value:       '#ccccdd',
   selected:    '#ffee88',
-  dimmed:      '#555566',
   expandHint:  '#445566',
-  stalled:     '#f59e0b',   // amber — stalled-agent warning
-  cursorBg:    '#1a2233',   // timeline cursor row background
-} as const;
+} as const);
 
 // ---------------------------------------------------------------------------
 // AgentInspectorPanel
@@ -277,7 +266,7 @@ export class AgentInspectorPanel extends BasePanel {
     const now = Date.now();
     const isStalled = this._isAgentStalled(rec, now);
     if (isStalled) {
-      summaryLines.push(buildPanelLine(width, [['  STALLED', COLOR.stalled], [' — no activity for 5+ minutes', DEFAULT_PANEL_PALETTE.dim]]));
+      summaryLines.push(buildPanelLine(width, [['  STALLED', COLOR.warn], [' — no activity for 5+ minutes', DEFAULT_PANEL_PALETTE.dim]]));
     }
     const allRows = this._getCachedRows();
     if (allRows.length === 0) {
@@ -380,17 +369,17 @@ export class AgentInspectorPanel extends BasePanel {
   ): Line {
     if (agents.length === 0) {
       return buildStyledPanelLine(width, [
-        { text: ' (no agents)', fg: COLOR.dimmed, bg: COLOR.statusBar, dim: true },
+        { text: ' (no agents)', fg: COLOR.dim, bg: COLOR.statusBar, dim: true },
       ]);
     }
-    const segments: StyledPanelSegment[] = [{ text: ' ', fg: COLOR.statusFg, bg: COLOR.statusBar }];
+    const segments: StyledPanelSegment[] = [{ text: ' ', fg: COLOR.dim, bg: COLOR.statusBar }];
     for (const agent of agents) {
       const isSelected = agent.id === this.selectedAgentId;
       const shortId = agent.id.slice(-8);
       const badge = ` ${shortId} `;
       segments.push({
         text: badge,
-        fg: isSelected ? COLOR.selected : COLOR.dimmed,
+        fg: isSelected ? COLOR.selected : COLOR.dim,
         bg: COLOR.statusBar,
         bold: isSelected,
       });
@@ -430,7 +419,7 @@ export class AgentInspectorPanel extends BasePanel {
     row: DisplayRow,
     isCursor: boolean,
   ): Line {
-    const bg = isCursor ? COLOR.cursorBg : '';
+    const bg = isCursor ? COLOR.selectBg : '';
     const ts = shortTime(row.timestamp);
     const { fg, prefix } = agentKindStyle(row.kind, COLOR);
     const hint = row.hasDetail ? (row.expanded ? ' ▾' : ' ▸') : '';

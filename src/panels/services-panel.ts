@@ -18,20 +18,9 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#475569',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-  empty: '#334155',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 interface ServicePanelEntry {
   readonly name: string;
@@ -48,8 +37,8 @@ function statusLabel(entry: ServicePanelEntry): string {
 
 function statusColor(entry: ServicePanelEntry): string {
   const label = statusLabel(entry);
-  if (label === 'HEALTHY') return C.ok;
-  if (label === 'ERROR') return C.error;
+  if (label === 'HEALTHY') return C.good;
+  if (label === 'ERROR') return C.bad;
   if (label === 'CONFIGURED') return C.warn;
   return C.dim;
 }
@@ -200,8 +189,8 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'services', value: String(this.entries.length), valueColor: this.entries.length > 0 ? C.info : C.dim },
-        { label: 'healthy', value: String(counts.healthy), valueColor: counts.healthy > 0 ? C.ok : C.dim },
-        { label: 'errors', value: String(counts.error), valueColor: counts.error > 0 ? C.error : C.dim },
+        { label: 'healthy', value: String(counts.healthy), valueColor: counts.healthy > 0 ? C.good : C.dim },
+        { label: 'errors', value: String(counts.error), valueColor: counts.error > 0 ? C.bad : C.dim },
         { label: 'unconfigured', value: String(counts.unconfigured), valueColor: counts.unconfigured > 0 ? C.warn : C.dim },
       ], C),
     ];
@@ -244,7 +233,7 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
         if (selected.lastTest.error) {
           detailRows.push(buildPanelLine(width, [
             ['  Error: ', C.label],
-            [truncateDisplay(selected.lastTest.error, Math.max(0, width - 10)), C.error],
+            [truncateDisplay(selected.lastTest.error, Math.max(0, width - 10)), C.bad],
           ]));
         }
       } else {
