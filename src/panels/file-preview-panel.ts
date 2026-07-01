@@ -24,8 +24,6 @@ const HEADER_BG = '#1e1e1e';
 const HEADER_FG = '#d4d4d4';
 const HEADER_ACCENT = '#4ec9b0';
 const LINE_NUM_FG = '238';
-const WARNING_FG = '#f44747';
-const EMPTY_FG = '244';
 
 // ─── Language Detection (from file extension) ─────────────────────────────────
 
@@ -382,31 +380,6 @@ export class FilePreviewPanel extends BasePanel {
       }
     }
 
-    return line;
-  }
-
-  private renderEmpty(width: number, height: number, message: string): Line[] {
-    const lines: Line[] = [];
-    const msgLine = createEmptyLine(width);
-    const isWarning = message.startsWith('File too large');
-    const fg = isWarning ? WARNING_FG : EMPTY_FG;
-    let cx = 2;
-    for (const ch of message) {
-      if (cx >= width - 1) break;
-      msgLine[cx++] = createStyledCell(ch, { fg, bg: BG });
-    }
-    lines.push(msgLine);
-    for (let i = 1; i < height; i++) {
-      lines.push(this.renderBgLine(width));
-    }
-    return lines;
-  }
-
-  private renderBgLine(width: number): Line {
-    const line = createEmptyLine(width);
-    for (let x = 0; x < width; x++) {
-      line[x] = createStyledCell(' ', { bg: BG });
-    }
     return line;
   }
 

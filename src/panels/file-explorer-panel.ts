@@ -473,15 +473,6 @@ export class FileExplorerPanel extends BasePanel {
     this.markDirty();
   }
 
-  private _clampScroll(viewHeight: number): void {
-    if (this.cursor < this.scrollTop) {
-      this.scrollTop = this.cursor;
-    } else if (this.cursor >= this.scrollTop + viewHeight) {
-      this.scrollTop = this.cursor - viewHeight + 1;
-    }
-    this.scrollTop = Math.max(0, this.scrollTop);
-  }
-
   private _activateNode(): void {
     const node = this.flat[this.cursor];
     if (!node) return;
