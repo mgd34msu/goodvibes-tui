@@ -8,7 +8,8 @@ import {
   putOverlayText,
 } from './overlay-box.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
-import { GLYPHS, UI_TONES } from './ui-primitives.ts';
+import { GLYPHS } from './ui-primitives.ts';
+import { resolveUiTones } from './theme.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -90,19 +91,24 @@ export interface ModalConfig {
 
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
+// DEFAULT_STYLE is built from the mode-resolved chrome tones (resolveUiTones)
+// rather than the static UI_TONES constant — WO-001 single read path. Mode is
+// fixed to 'dark' until the terminal-bg-probe lands.
+const TONES = resolveUiTones('dark');
+
 const DEFAULT_STYLE: Required<ModalStyle> = {
-  titleFg: UI_TONES.fg.primary,
-  borderFg: UI_TONES.fg.dim,
-  hintFg: UI_TONES.fg.muted,
-  selectedFg: UI_TONES.fg.primary,
-  selectedBg: UI_TONES.bg.selected,
-  textFg: UI_TONES.fg.primary,
-  accentFg: UI_TONES.state.info,
-  titleRowFg: UI_TONES.fg.secondary,
-  titleBg: UI_TONES.bg.title,
-  sectionBg: UI_TONES.bg.section,
-  inputBg: UI_TONES.bg.input,
-  surfaceBg: UI_TONES.bg.surface,
+  titleFg: TONES.fg.primary,
+  borderFg: TONES.fg.dim,
+  hintFg: TONES.fg.muted,
+  selectedFg: TONES.fg.primary,
+  selectedBg: TONES.bg.selected,
+  textFg: TONES.fg.primary,
+  accentFg: TONES.state.info,
+  titleRowFg: TONES.fg.secondary,
+  titleBg: TONES.bg.title,
+  sectionBg: TONES.bg.section,
+  inputBg: TONES.bg.input,
+  surfaceBg: TONES.bg.surface,
 };
 
 // ── ModalFactory ─────────────────────────────────────────────────────────────
