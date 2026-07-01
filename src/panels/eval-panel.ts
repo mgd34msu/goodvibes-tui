@@ -87,24 +87,18 @@ export class EvalRegistry {
 
 // ── Colour palette (no inline hex in render bodies) ──────────────────────────
 
+// Domain accents only; base chrome (header/headerBg/info/good/warn/bad/
+// value/selectBg) comes from DEFAULT_PANEL_PALETTE.
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  header:   '#94a3b8',
-  headerBg: '#1e293b',
-  cyan:     '#38bdf8',
-  green:    '#22c55e',
-  yellow:   '#eab308',
-  red:      '#ef4444',
-  white:    '#cbd5e1',
-  selected: '#f1f5f9',
-  selectBg: '#0f172a',
+  selected: '#f1f5f9',   // emphasized row/text highlight, brighter than value
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function scoreColor(score: number): string {
-  if (score >= 80) return C.green;
-  if (score >= 60) return C.yellow;
-  return C.red;
+  if (score >= 80) return C.good;
+  if (score >= 60) return C.warn;
+  return C.bad;
 }
 
 function fmtTime(ms: number): string {
@@ -254,11 +248,11 @@ export class EvalPanel extends BasePanel {
     const failed = suites.length - passed;
     return buildPanelLine(width, [
       ['  state ', C.label],
-      [running ? 'running' : 'idle', running ? C.yellow : C.dim],
+      [running ? 'running' : 'idle', running ? C.warn : C.dim],
       ['  passed ', C.label],
-      [String(passed), passed > 0 ? C.green : C.dim],
+      [String(passed), passed > 0 ? C.good : C.dim],
       ['  failed ', C.label],
-      [String(failed), failed > 0 ? C.red : C.dim],
+      [String(failed), failed > 0 ? C.bad : C.dim],
       ['  last ', C.label],
       [lastRun ? new Date(lastRun).toLocaleTimeString() : 'n/a', C.dim],
     ]);
@@ -280,14 +274,14 @@ export class EvalPanel extends BasePanel {
       const selected = idx === this._selectedSuiteIdx;
       const gate = gateMap.get(suite.suite);
       const gateStr = gate ? (gate.passed ? 'ok' : 'FAIL') : '-';
-      const gateColor = gate ? (gate.passed ? C.green : C.red) : C.dim;
+      const gateColor = gate ? (gate.passed ? C.good : C.bad) : C.dim;
       const durationMs = suite.finishedAt - suite.startedAt;
       return {
         selected,
         cells: [
-          { text: suite.suite, fg: selected ? C.selected : C.white, bold: selected },
+          { text: suite.suite, fg: selected ? C.selected : C.value, bold: selected },
           { text: suite.meanScore.toFixed(1), fg: scoreColor(suite.meanScore) },
-          { text: suite.passed ? 'PASS' : 'FAIL', fg: suite.passed ? C.green : C.red },
+          { text: suite.passed ? 'PASS' : 'FAIL', fg: suite.passed ? C.good : C.bad },
           { text: gateStr, fg: gateColor },
           { text: fmtTime(durationMs), fg: C.dim },
         ],
@@ -308,9 +302,9 @@ export class EvalPanel extends BasePanel {
       const passCount = selectedSuite.results.filter((r) => r.scorecard.passed).length;
       detailLines.push(buildPanelLine(width, [
         [' selected ', C.label],
-        [selectedSuite.suite, C.cyan],
+        [selectedSuite.suite, C.info],
         ['  scenarios ', C.label],
-        [`${passCount}/${selectedSuite.results.length} passed`, passCount === selectedSuite.results.length ? C.green : C.yellow],
+        [`${passCount}/${selectedSuite.results.length} passed`, passCount === selectedSuite.results.length ? C.good : C.warn],
       ]));
       const meterW = Math.max(10, Math.min(30, width - 24));
       detailLines.push(buildMeterLine(width, Math.round((selectedSuite.meanScore / 100) * meterW), meterW, {
@@ -353,13 +347,13 @@ export class EvalPanel extends BasePanel {
       this._statusLine(width),
       buildPanelLine(width, [
         [' suite ', C.label],
-        [suite.suite, C.cyan],
+        [suite.suite, C.info],
         ['  mean ', C.label],
         [suite.meanScore.toFixed(1), scoreColor(suite.meanScore)],
         ['  ', C.label],
-        [suite.passed ? 'PASS' : 'FAIL', suite.passed ? C.green : C.red],
+        [suite.passed ? 'PASS' : 'FAIL', suite.passed ? C.good : C.bad],
         ['  scenarios ', C.label],
-        [`${passCount}/${suite.results.length} passed`, passCount === suite.results.length ? C.green : C.yellow],
+        [`${passCount}/${suite.results.length} passed`, passCount === suite.results.length ? C.good : C.warn],
       ]),
     ];
 
@@ -407,12 +401,12 @@ export class EvalPanel extends BasePanel {
   ): void {
     const sc = result.scorecard;
     const scoreC = scoreColor(sc.compositeScore);
-    const passC = sc.passed ? C.green : C.red;
+    const passC = sc.passed ? C.good : C.bad;
 
     lines.push(buildAlignedRow(
       width,
       [
-        { text: result.scenario.name, fg: selected ? C.selected : C.white, bold: selected },
+        { text: result.scenario.name, fg: selected ? C.selected : C.value, bold: selected },
         { text: sc.compositeScore.toFixed(1), fg: scoreC },
         { text: sc.passed ? 'PASS' : 'FAIL', fg: passC },
       ],
@@ -439,8 +433,8 @@ export class EvalPanel extends BasePanel {
       if (sc.notes && sc.notes.length > 0) {
         for (const note of sc.notes) {
           lines.push(buildPanelLine(width, [
-            ['    ! ', C.yellow],
-            [truncateDisplay(note, Math.max(8, width - 6)), C.yellow],
+            ['    ! ', C.warn],
+            [truncateDisplay(note, Math.max(8, width - 6)), C.warn],
           ]));
         }
       }

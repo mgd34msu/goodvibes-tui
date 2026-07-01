@@ -22,19 +22,9 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#475569',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  empty: '#334155',
-} as const;
+// Base chrome only — no domain accents needed; the title band, state colors,
+// and text tokens all come straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function fmtTime(value: string | undefined): string {
   if (!value) return 'n/a';
@@ -49,9 +39,9 @@ function fmtRate(value: number | undefined): string {
 function gateColor(status: string | undefined): string {
   switch (status) {
     case 'allowed':
-      return C.ok;
+      return C.good;
     case 'blocked':
-      return C.error;
+      return C.bad;
     case 'no_data':
       return C.warn;
     default:
@@ -168,10 +158,10 @@ export class PolicyPanel extends BasePanel {
     const preflightColor = !preflight
       ? C.dim
       : preflight.status === 'pass'
-        ? C.ok
+        ? C.good
         : preflight.status === 'warn'
           ? C.warn
-          : C.error;
+          : C.bad;
     const gateStatus = divergence?.gate.status ?? 'n/a';
     return buildKeyValueLine(width, [
       { label: 'bundles', value: `${snapshot.current ? 1 : 0}+${snapshot.candidate ? 1 : 0}c`, valueColor: snapshot.current || snapshot.candidate ? C.value : C.dim },
@@ -247,9 +237,9 @@ export class PolicyPanel extends BasePanel {
         ['  Changes: ', C.label],
         [String(snapshot.diff.totalChanges), C.value],
         ['  Added: ', C.label],
-        [String(snapshot.diff.added.length), C.ok],
+        [String(snapshot.diff.added.length), C.good],
         ['  Removed: ', C.label],
-        [String(snapshot.diff.removed.length), C.error],
+        [String(snapshot.diff.removed.length), C.bad],
         ['  Changed: ', C.label],
         [String(snapshot.diff.changed.length), C.warn],
       ]));
@@ -291,7 +281,7 @@ export class PolicyPanel extends BasePanel {
       lines.push(buildPanelLine(width, [[' Permission Audit', C.label]]));
       for (const entry of permissionAudit.slice(0, 5)) {
         const outcome = entry.approved === undefined ? 'pending' : entry.approved ? 'approved' : 'denied';
-        const outcomeColor = entry.approved === undefined ? C.warn : entry.approved ? C.ok : C.error;
+        const outcomeColor = entry.approved === undefined ? C.warn : entry.approved ? C.good : C.bad;
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
           [entry.tool, C.value],
@@ -310,7 +300,7 @@ export class PolicyPanel extends BasePanel {
     if (lintFindings.length > 0) {
       lines.push(buildPanelLine(width, [[' Policy Lint', C.label]]));
       for (const finding of lintFindings.slice(0, 5)) {
-        const color = finding.severity === 'error' ? C.error : finding.severity === 'warn' ? C.warn : C.info;
+        const color = finding.severity === 'error' ? C.bad : finding.severity === 'warn' ? C.warn : C.info;
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
           [finding.severity.toUpperCase(), color],
@@ -324,10 +314,10 @@ export class PolicyPanel extends BasePanel {
       lines.push(buildPanelLine(width, [[' Preflight Review', C.label]]));
       const statusColor =
         preflightReview.status === 'pass'
-          ? C.ok
+          ? C.good
           : preflightReview.status === 'warn'
             ? C.warn
-            : C.error;
+            : C.bad;
       lines.push(buildPanelLine(width, [
         ['  Status: ', C.label],
         [preflightReview.status.toUpperCase(), statusColor],
@@ -341,7 +331,7 @@ export class PolicyPanel extends BasePanel {
         [truncateDisplay(preflightReview.summary, Math.max(0, width - 2)), C.dim],
       ]));
       for (const issue of preflightReview.issues.slice(0, 4)) {
-        const issueColor = issue.severity === 'error' ? C.error : issue.severity === 'warn' ? C.warn : C.info;
+        const issueColor = issue.severity === 'error' ? C.bad : issue.severity === 'warn' ? C.warn : C.info;
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
           [issue.severity.toUpperCase(), issueColor],
@@ -357,12 +347,12 @@ export class PolicyPanel extends BasePanel {
         ['  Mode: ', C.label],
         [simulationSummary.mode, C.info],
         ['  Diverged: ', C.label],
-        [`${simulationSummary.divergentScenarios}/${simulationSummary.totalScenarios}`, simulationSummary.divergentScenarios > 0 ? C.warn : C.ok],
+        [`${simulationSummary.divergentScenarios}/${simulationSummary.totalScenarios}`, simulationSummary.divergentScenarios > 0 ? C.warn : C.good],
         ['  Allowed(actual/sim): ', C.label],
         [`${simulationSummary.allowedByActual}/${simulationSummary.allowedBySimulated}`, C.value],
       ]));
       for (const result of simulationSummary.results.slice(0, 4)) {
-        const color = result.diverged ? C.warn : (result.authoritativeDecision.allowed ? C.ok : C.error);
+        const color = result.diverged ? C.warn : (result.authoritativeDecision.allowed ? C.good : C.bad);
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
           [truncateDisplay(result.scenario.label, Math.max(0, width - 40)), C.value],

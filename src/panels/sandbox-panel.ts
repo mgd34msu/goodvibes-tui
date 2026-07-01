@@ -18,11 +18,9 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#e2e8f0',
-  headerBg: '#0f172a',
-} as const;
+// Base chrome only — title band comes straight from DEFAULT_PANEL_PALETTE
+// (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 export class SandboxPanel extends BasePanel {
   private selectedIndex = 0;

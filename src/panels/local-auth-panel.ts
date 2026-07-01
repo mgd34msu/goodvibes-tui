@@ -18,13 +18,9 @@ import type { KeyName } from './types.ts';
 import { isTextBackspace } from '../input/delete-key-policy.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  info: '#38bdf8',
-  warn: '#eab308',
-  error: '#ef4444',
-  selectBg: '#1e293b',
-} as const;
+// Base chrome only — state colors and text tokens come straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function formatRoles(roles: readonly string[]): string {
   return roles.length > 0 ? roles.join(', ') : '(none)';

@@ -17,14 +17,9 @@ import {
   type StyledPanelSegment,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  good: '#22c55e',
-  warn: '#f59e0b',
-  bad: '#ef4444',
-  info: '#38bdf8',
-  headerBg: '#1e293b',
-} as const;
+// Base chrome only — state colors and text tokens come straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 interface DiagnosticFile {
   readonly filePath: string;

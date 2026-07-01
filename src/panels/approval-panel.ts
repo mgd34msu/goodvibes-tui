@@ -15,10 +15,9 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 import type { PolicyRuntimeState, PermissionAuditEntry } from '@/runtime/index.ts';
 import { buildPermissionRuleSuggestions } from '@/runtime/index.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  headerBg: '#111827',
-} as const;
+// Base chrome only — title band comes straight from DEFAULT_PANEL_PALETTE
+// (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 // Reference catalog of approval lanes and where each one is reviewed. Used to
 // resolve the next-step command for a live request and as a fallback reference

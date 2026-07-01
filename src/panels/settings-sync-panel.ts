@@ -15,14 +15,9 @@ import {
 import { getSettingsControlPlaneSnapshot } from '@/runtime/index.ts';
 import type { ConfigManager } from '../config/index.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  dim: '#475569',
-  info: '#38bdf8',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-} as const;
+// Base chrome only — state colors and text tokens come straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 type ResolvedEntry = ReturnType<typeof getSettingsControlPlaneSnapshot>['resolvedEntries'][number];
 
@@ -51,7 +46,7 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
   protected renderItem(entry: ResolvedEntry, _index: number, selected: boolean, width: number): Line {
     return buildPanelListRow(width, [
       { text: fitDisplay(entry.key, 32).padEnd(32), fg: C.value },
-      { text: ` ${entry.effectiveSource}`.padEnd(11), fg: entry.effectiveSource === 'managed' ? C.warn : entry.effectiveSource === 'synced' ? C.ok : entry.effectiveSource === 'local' ? C.info : C.dim },
+      { text: ` ${entry.effectiveSource}`.padEnd(11), fg: entry.effectiveSource === 'managed' ? C.warn : entry.effectiveSource === 'synced' ? C.good : entry.effectiveSource === 'local' ? C.info : C.dim },
       { text: truncateDisplay(`${String(entry.effectiveValue)}`, Math.max(0, width - 47)), fg: entry.locked ? C.warn : C.dim },
     ], C, { selected });
   }
@@ -73,12 +68,12 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
     const headerLines: Line[] = [
       ...buildSummaryBlock(width, 'Settings posture', postureLines, C),
       buildPanelLine(width, [[' local typed config ', C.label], [String(snapshot.liveKeyCount), C.value], ['  saved profiles ', C.label], [String(snapshot.profileCount), C.info], ['  managed locks ', C.label], [String(snapshot.managedLockCount), snapshot.managedLockCount > 0 ? C.warn : C.dim]]),
-      buildPanelLine(width, [[' effective local ', C.label], [String(snapshot.resolvedCounts.local), C.info], ['  synced ', C.label], [String(snapshot.resolvedCounts.synced), snapshot.resolvedCounts.synced > 0 ? C.ok : C.dim], ['  managed ', C.label], [String(snapshot.resolvedCounts.managed), snapshot.resolvedCounts.managed > 0 ? C.warn : C.dim]]),
-      buildPanelLine(width, [[' last sync ', C.label], [snapshot.lastSync ? `${snapshot.lastSync.surface}/${snapshot.lastSync.direction}` : 'none', snapshot.lastSync ? C.ok : C.dim], ['  when ', C.label], [snapshot.lastSync ? new Date(snapshot.lastSync.timestamp).toLocaleString() : 'n/a', C.dim]]),
+      buildPanelLine(width, [[' effective local ', C.label], [String(snapshot.resolvedCounts.local), C.info], ['  synced ', C.label], [String(snapshot.resolvedCounts.synced), snapshot.resolvedCounts.synced > 0 ? C.good : C.dim], ['  managed ', C.label], [String(snapshot.resolvedCounts.managed), snapshot.resolvedCounts.managed > 0 ? C.warn : C.dim]]),
+      buildPanelLine(width, [[' last sync ', C.label], [snapshot.lastSync ? `${snapshot.lastSync.surface}/${snapshot.lastSync.direction}` : 'none', snapshot.lastSync ? C.good : C.dim], ['  when ', C.label], [snapshot.lastSync ? new Date(snapshot.lastSync.timestamp).toLocaleString() : 'n/a', C.dim]]),
       // Staged Bundle
       ...(snapshot.stagedManagedBundle
         ? [
-            buildPanelLine(width, [[' profile ', C.label], [snapshot.stagedManagedBundle.profileName, C.value], ['  risk ', C.label], [snapshot.stagedManagedBundle.risk, snapshot.stagedManagedBundle.risk === 'high' ? C.error : snapshot.stagedManagedBundle.risk === 'medium' ? C.warn : C.ok], ['  changes ', C.label], [String(snapshot.stagedManagedBundle.changeCount), C.info]]),
+            buildPanelLine(width, [[' profile ', C.label], [snapshot.stagedManagedBundle.profileName, C.value], ['  risk ', C.label], [snapshot.stagedManagedBundle.risk, snapshot.stagedManagedBundle.risk === 'high' ? C.bad : snapshot.stagedManagedBundle.risk === 'medium' ? C.warn : C.good], ['  changes ', C.label], [String(snapshot.stagedManagedBundle.changeCount), C.info]]),
             buildPanelLine(width, [[' path ', C.label], [truncateDisplay(snapshot.stagedManagedBundle.path, Math.max(0, width - 9)), C.dim]]),
           ]
         : [buildPanelLine(width, [[' No staged managed settings bundle.', C.dim]])]),
@@ -92,7 +87,7 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
         : [buildPanelLine(width, [[' No managed locks are currently active.', C.dim]])]),
       // Failures
       ...(snapshot.recentFailures.length > 0
-        ? snapshot.recentFailures.map((failure) => buildPanelLine(width, [[` ${failure.surface}`.padEnd(10), C.error], [truncateDisplay(` ${failure.message}`, Math.max(0, width - 12)), C.dim]]))
+        ? snapshot.recentFailures.map((failure) => buildPanelLine(width, [[` ${failure.surface}`.padEnd(10), C.bad], [truncateDisplay(` ${failure.message}`, Math.max(0, width - 12)), C.dim]]))
         : [buildPanelLine(width, [[' No recent sync or managed-setting failures.', C.dim]])]),
       // Conflicts
       ...(snapshot.conflicts.length > 0
@@ -110,11 +105,11 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
       ...(selectedEntry
         ? buildDetailBlock(width, 'Selected setting', [
             buildPanelLine(width, [[' key ', C.label], [selectedEntry.key, C.value], ['  category ', C.label], [selectedEntry.category, C.info]]),
-            buildPanelLine(width, [[' effective ', C.label], [selectedEntry.effectiveSource, selectedEntry.effectiveSource === 'managed' ? C.warn : selectedEntry.effectiveSource === 'synced' ? C.ok : selectedEntry.effectiveSource === 'local' ? C.info : C.dim], ['  locked ', C.label], [selectedEntry.locked ? 'yes' : 'no', selectedEntry.locked ? C.warn : C.dim], ['  conflict ', C.label], [selectedEntry.conflict ? 'yes' : 'no', selectedEntry.conflict ? C.error : C.good]]),
+            buildPanelLine(width, [[' effective ', C.label], [selectedEntry.effectiveSource, selectedEntry.effectiveSource === 'managed' ? C.warn : selectedEntry.effectiveSource === 'synced' ? C.good : selectedEntry.effectiveSource === 'local' ? C.info : C.dim], ['  locked ', C.label], [selectedEntry.locked ? 'yes' : 'no', selectedEntry.locked ? C.warn : C.dim], ['  conflict ', C.label], [selectedEntry.conflict ? 'yes' : 'no', selectedEntry.conflict ? C.bad : C.good]]),
             buildPanelLine(width, [[' source ', C.label], [truncateDisplay(selectedEntry.sourceLabel ?? 'local/default', Math.max(0, width - 10)), C.dim]]),
             buildPanelLine(width, [[' overrides ', C.label], [truncateDisplay(selectedEntry.overriddenSources.length > 0 ? selectedEntry.overriddenSources.join(', ') : 'none', Math.max(0, width - 13)), C.dim]]),
             buildPanelLine(width, [[' local ', C.label], [truncateDisplay(String(selectedEntry.localValue), Math.max(0, width - 9)), C.dim]]),
-            buildPanelLine(width, [[' synced ', C.label], [truncateDisplay(String(selectedEntry.syncedValue ?? '(unset)'), Math.max(0, width - 10)), C.ok]]),
+            buildPanelLine(width, [[' synced ', C.label], [truncateDisplay(String(selectedEntry.syncedValue ?? '(unset)'), Math.max(0, width - 10)), C.good]]),
             buildPanelLine(width, [[' managed ', C.label], [truncateDisplay(String(selectedEntry.managedValue ?? '(unset)'), Math.max(0, width - 11)), C.warn]]),
           ], C)
         : [buildPanelLine(width, [[' Select a setting above to inspect its effective value, source, and overrides.', C.dim]])]),

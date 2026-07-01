@@ -15,14 +15,9 @@ import {
 } from './polish.ts';
 import type { FailureReport } from '@/runtime/index.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#cbd5e1',
-  headerBg: '#0f172a',
-  warn: '#f59e0b',
-  bad: '#ef4444',
-  selectBg: '#111827',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function classificationColor(value: string): string {
   switch (value) {

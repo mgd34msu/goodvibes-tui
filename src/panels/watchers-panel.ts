@@ -15,28 +15,21 @@ import {
   type PanelPalette,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function stateColor(state: string): string {
-  if (state === 'running') return C.ok;
+  if (state === 'running') return C.good;
   if (state === 'degraded') return C.warn;
-  if (state === 'failed') return C.error;
+  if (state === 'failed') return C.bad;
   return C.dim;
 }
 
 function sourceStatusColor(state?: string): string {
-  if (state === 'healthy') return C.ok;
+  if (state === 'healthy') return C.good;
   if (state === 'lagging' || state === 'stale' || state === 'degraded') return C.warn;
-  if (state === 'failed') return C.error;
+  if (state === 'failed') return C.bad;
   return C.dim;
 }
 
@@ -136,7 +129,7 @@ export class WatchersPanel extends ScrollableListPanel<WatcherEntry> {
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'watchers', value: String(snapshot.totalWatchers), valueColor: snapshot.totalWatchers > 0 ? C.info : C.dim },
-        { label: 'active', value: String(snapshot.activeWatcherIds.length), valueColor: snapshot.activeWatcherIds.length > 0 ? C.ok : C.dim },
+        { label: 'active', value: String(snapshot.activeWatcherIds.length), valueColor: snapshot.activeWatcherIds.length > 0 ? C.good : C.dim },
         { label: 'degraded', value: String(snapshot.totalDegraded), valueColor: snapshot.totalDegraded > 0 ? C.warn : C.dim },
         { label: 'lagged', value: String(snapshot.totalLagged), valueColor: snapshot.totalLagged > 0 ? C.warn : C.dim },
       ], C),
@@ -189,7 +182,7 @@ export class WatchersPanel extends ScrollableListPanel<WatcherEntry> {
     if (selected.lastError) {
       detailRows.push(buildPanelLine(width, [
         ['  Error: ', C.label],
-        [truncateDisplay(selected.lastError, Math.max(0, width - 10)), C.error],
+        [truncateDisplay(selected.lastError, Math.max(0, width - 10)), C.bad],
       ]));
     }
 

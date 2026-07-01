@@ -14,31 +14,61 @@ import {
   buildStyledPanelLine,
   type PanelWorkspaceSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 
 // ---------------------------------------------------------------------------
-// Colour palette
+// Colour palette — dedicated diff-viewer scheme (like a mini syntax
+// highlighter). Each hex literal is named once and reused for every role
+// that shares it, including the workspace-chrome aliases (info/dim/value/
+// empty) so the raw-hex count never grows. The title band itself is NOT
+// overridden — buildPanelWorkspace always falls back to the canonical
+// DEFAULT_PANEL_PALETTE.headerBg (WO-002: one title band everywhere).
 // ---------------------------------------------------------------------------
 
-const COLOR = {
-  addition:    '#00ff88',
-  additionBg:  '#001a0d',
-  deletion:    '#ff4444',
-  deletionBg:  '#1a0000',
-  hunk:        '#88aaff',
-  hunkBg:      '#0a0a1a',
-  header:      '#aaaaaa',
-  lineNum:     '#555555',
-  lineNumAdd:  '#00aa55',
-  lineNumDel:  '#aa2222',
-  filename:    '#ffffff',
-  tabActive:   '#ffffff',
-  tabActiveBg: '#333333',
-  tabInactive: '#666666',
-  tabBg:       '#222222',
-  context:     '#888888',
-  statusBar:   '#444444',
-} as const;
+const HUNK_BLUE = '#88aaff';
+const CONTEXT_GRAY = '#888888';
+const FILENAME_WHITE = '#ffffff';
+const ADD_GREEN = '#00ff88';
+const ADD_BG = '#001a0d';
+const DEL_RED = '#ff4444';
+const DEL_BG = '#1a0000';
+const HUNK_BG = '#0a0a1a';
+const MARKER_GRAY = '#aaaaaa';
+const LINE_NUM_GRAY = '#555555';
+const LINE_NUM_ADD = '#00aa55';
+const LINE_NUM_DEL = '#aa2222';
+const TAB_ACTIVE_BG = '#333333';
+const TAB_INACTIVE_GRAY = '#666666';
+const TAB_BG = '#222222';
+const STATUS_BAR_BG = '#444444';
+
+const COLOR = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // Workspace-chrome aliases (title band excluded — no headerBg override)
+  info:  HUNK_BLUE,
+  dim:   CONTEXT_GRAY,
+  value: FILENAME_WHITE,
+  empty: CONTEXT_GRAY,
+
+  // Domain accents
+  addition:    ADD_GREEN,
+  additionBg:  ADD_BG,
+  deletion:    DEL_RED,
+  deletionBg:  DEL_BG,
+  hunk:        HUNK_BLUE,
+  hunkBg:      HUNK_BG,
+  markerText:  MARKER_GRAY,
+  lineNum:     LINE_NUM_GRAY,
+  lineNumAdd:  LINE_NUM_ADD,
+  lineNumDel:  LINE_NUM_DEL,
+  filename:    FILENAME_WHITE,
+  tabActive:   FILENAME_WHITE,
+  tabActiveBg: TAB_ACTIVE_BG,
+  tabInactive: TAB_INACTIVE_GRAY,
+  tabBg:       TAB_BG,
+  context:     CONTEXT_GRAY,
+  statusBar:   STATUS_BAR_BG,
+} as const);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -364,12 +394,7 @@ export class DiffPanel extends BasePanel {
     if (this.entries.length === 0) {
       return buildPanelWorkspace(width, height, {
         title: 'Diff Workspace',
-        palette: {
-          ...DEFAULT_PANEL_PALETTE,
-          info: COLOR.hunk,
-          dim: COLOR.context,
-          value: COLOR.filename,
-        },
+        palette: COLOR,
         sections: [{
           title: 'Diff',
           lines: buildEmptyState(
@@ -377,13 +402,7 @@ export class DiffPanel extends BasePanel {
             ' No diff to display.',
             'Load a git diff or select a changed file to populate the workspace.',
             [{ command: '/git diff', summary: 'load the current working-tree diff into the diff workspace' }],
-            {
-              ...DEFAULT_PANEL_PALETTE,
-              info: COLOR.hunk,
-              dim: COLOR.context,
-              value: COLOR.filename,
-              empty: COLOR.context,
-            },
+            COLOR,
           ),
         }],
       });
@@ -396,20 +415,10 @@ export class DiffPanel extends BasePanel {
 
     const compact = height <= 12;
     const summaryLines = entry.semanticSummary
-      ? buildBodyText(width, `Semantic summary: ${entry.semanticSummary}`, {
-          ...DEFAULT_PANEL_PALETTE,
-          dim: COLOR.context,
-          value: COLOR.filename,
-        }, COLOR.context)
+      ? buildBodyText(width, `Semantic summary: ${entry.semanticSummary}`, COLOR, COLOR.context)
       : [];
     const previewSection = resolveScrollablePanelSection(width, height, {
-      palette: {
-        ...DEFAULT_PANEL_PALETTE,
-        info: COLOR.hunk,
-        dim: COLOR.context,
-        value: COLOR.filename,
-        headerBg: COLOR.tabBg,
-      },
+      palette: COLOR,
       footerLines: [this.renderStatusBar(width, entry)],
       beforeSections: [
         {
@@ -444,13 +453,7 @@ export class DiffPanel extends BasePanel {
     ];
     return buildPanelWorkspace(width, height, {
       title: 'Diff Workspace',
-      palette: {
-        ...DEFAULT_PANEL_PALETTE,
-        info: COLOR.hunk,
-        dim: COLOR.context,
-        value: COLOR.filename,
-        headerBg: COLOR.tabBg,
-      },
+      palette: COLOR,
       sections,
       footerLines: [this.renderStatusBar(width, entry)],
     });
@@ -531,7 +534,7 @@ export class DiffPanel extends BasePanel {
       case 'hunk':
         return renderText(width, pl.text, COLOR.hunk, COLOR.hunkBg, false);
       case 'header':
-        return renderText(width, pl.text, COLOR.header, '', false);
+        return renderText(width, pl.text, COLOR.markerText, '', false);
       case 'context':
       default:
         return makeLine(width, left, right, `  ${pl.text}`, COLOR.context, '', COLOR.lineNum, false);
