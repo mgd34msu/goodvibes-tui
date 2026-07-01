@@ -436,6 +436,17 @@ if (this.confirm) {
 }
 ```
 
+By default the prompt reads `Delete "<label>"?`. Non-destructive confirms (cancel, regenerate,
+promote) should set `verb` to the honest action word instead of borrowing "Delete" copy:
+
+```ts
+this.confirm = { subject: agentId, label: agentName, verb: 'Cancel' };
+// renders: Cancel "agentName"?
+```
+
+`verb` is optional and defaults to `'Delete'`; the confirm/cancel keybinding contract
+(`y`/`enter`/`return` confirms, `n`/`escape` cancels, all other keys absorbed) is unchanged.
+
 ---
 
 ## Performance
@@ -530,6 +541,57 @@ if (isPanelSearchCancel(key)) {
 }
 ```
 
+### Action-callback plumbing pattern
+
+Panels get real services (not just read-only snapshots) through `ResolvedBuiltinPanelDeps`
+(`src/panels/builtin/shared.ts`). Bootstrap wires the already-constructed runtime singletons —
+`opsApi`, `planRuntime`, `watcherRegistry`, `runtimeStore`, `approvalBroker`, `sessionBroker`,
+`automationManager`, `openAgentDetail`, `openPanel`, etc. — onto this single deps object, and
+each `registerXPanels(manager, deps)` factory forwards exactly the slice a panel needs into its
+constructor (see `CockpitPanel`'s `openAgentDetail` forwarding in
+`src/panels/builtin/operations.ts` for the established shape).
+
+**Rule: no signpost where an action is possible.** If a real service reachable from `deps` can
+perform the action, bind a key to it directly. Never render a panel line like
+`Run: /automation run <id>` when `deps.opsApi`/`deps.automationManager` (or the panel-specific
+manager method) is already available in the factory closure.
+
+Two dispatch paths cover nearly every case:
+
+1. **Direct service call** — call the bound service method straight from `handleInput()`:
+
+   ```ts
+   public handleInput(key: string): boolean {
+     if (key === 'c') { this.deps.opsApi?.cancel(this.selectedId); return true; }
+     return super.handleInput(key);
+   }
+   ```
+
+2. **`handlePanelIntegrationAction(key, ctx)`** — for cross-panel navigation or dispatching a
+   command through the shared command pipeline. Implement this optional `Panel` hook
+   (`src/panels/types.ts`); the router in `src/input/panel-integration-actions.ts` calls it
+   BEFORE its own `instanceof` fallback chain, so new panels never need an `instanceof` addition
+   there:
+
+   ```ts
+   public handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
+     if (key === 'enter') {
+       ctx.panelManager.open('agent-inspector'); // direct panel jump — never print "/panel open …"
+       return true;
+     }
+     if (key === 'r' && ctx.executeCommand) {
+       void ctx.executeCommand('automation', ['run', this.selectedJobId]);
+       return true;
+     }
+     return false;
+   }
+   ```
+
+   `ctx.executeCommand(name, args)` dispatches through the same `CommandRegistry` path the
+   prompt uses; `ctx.panelManager.open(id)` (or the equivalent `deps.openPanel(id)` callback)
+   performs a direct panel jump. Both are always preferable to printing a command string for the
+   user to retype.
+
 ---
 
 ## Contract test registration
@@ -588,6 +650,7 @@ const EMPTY_SOME_SERVICE = {
 | Subscribing to registry events in the constructor | Subscribe in `onActivate()` and unsubscribe in `onDeactivate()` to avoid zombie listeners. |
 | Overriding `getItems()` in a `SearchableListPanel` subclass | Override `getAllItems()` instead — `getItems()` is the filter cache and must not be replaced. |
 | Forgetting to add the panel to the contract test | All panels in `src/panels/` must have a corresponding entry in `migrated-panels-contract.test.ts`. |
+| Rendering an action as printed text (e.g. `Run: /automation run <id>`) instead of binding a key to the real service already in `deps` | Bind the key directly, or implement `handlePanelIntegrationAction` to dispatch via `ctx.executeCommand` / `ctx.panelManager.open`. See "Action-callback plumbing pattern" under Input handling. |
 
 ---
 

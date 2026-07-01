@@ -25,6 +25,9 @@ import type { ApiTokenAuditor } from '@pellux/goodvibes-sdk/platform/security';
 import type { ComponentHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
 import type { WorktreeRegistry } from '@/runtime/index.ts';
 import type { SandboxSessionRegistry } from '@/runtime/index.ts';
+import type { OpsApi, PlanRuntimeService } from '@/runtime/index.ts';
+import type { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
+import type { RuntimeStore } from '../../runtime/store/index.ts';
 
 export interface BuiltinPanelDeps {
   /** Config manager for settings-sync and other config-backed panels. */
@@ -114,6 +117,20 @@ export interface BuiltinPanelDeps {
   hookActivityTracker?: Pick<HookActivityTracker, 'listRecent'>;
   /** Shared MCP registry for security panels and MCP workspace commands. */
   mcpRegistry?: McpRegistry;
+  /** Ops control-plane API (cancel/pause/resume/retry) for operator/ops panels to drive real actions. */
+  opsApi?: OpsApi;
+  /** Plan runtime service for plan/ops-strategy panels to drive adaptive-planner actions. */
+  planRuntime?: PlanRuntimeService;
+  /** Watcher registry for the watchers panel to drive watcher lifecycle actions. */
+  watcherRegistry?: WatcherRegistry;
+  /** Root runtime store for panels that need direct selector access to runtime state (see `src/runtime/store/selectors/index.ts`). */
+  runtimeStore?: RuntimeStore;
+  /**
+   * Open (or focus) a panel by id, wrapping `PanelManager.open`. Use for direct
+   * cross-panel navigation instead of printing a "/panel open …" signpost
+   * (mirrors the openAgentDetail callback below).
+   */
+  openPanel?: (panelId: string) => void;
   /**
    * Open the agent detail modal for the given agent id.  Wired from
    * InputHandler.agentDetailModal.open() at bootstrap — passed to the
