@@ -9,6 +9,8 @@ import type { HookChain, HookDefinition } from '@pellux/goodvibes-sdk/platform/h
 import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
+  buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildStatusPill,
   DEFAULT_PANEL_PALETTE,
@@ -68,7 +70,15 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
   ) {
     super('hooks', 'Hooks', 'H', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter hooks';
     this.dataSource = dataSource;
+  }
+
+  protected override filterMatches(entry: HookEntry, q: string): boolean {
+    return (entry.hook.name ?? '').toLowerCase().includes(q)
+      || entry.pattern.toLowerCase().includes(q)
+      || entry.hook.type.toLowerCase().includes(q);
   }
 
   protected override getPalette() { return C; }
@@ -96,7 +106,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
   }
 
   public handleInput(key: string): boolean {
-    if (key === 'r') {
+    if (!this.filterActive && key === 'r') {
       this.markDirty();
       return true;
     }
@@ -224,15 +234,39 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
       });
     }
 
+    // Summary header — surface registration + activity counts first so the most
+    // important "what's firing" signal is visible without scrolling to the footer.
+    const denials = recentActivity.filter((r) => r.ok && r.decision === 'deny').length;
+    const errors = recentActivity.filter((r) => !r.ok).length;
+    const headerLines: Line[] = [
+      buildKeyValueLine(width, [
+        { label: 'hooks', value: String(hooks.length), valueColor: C.info },
+        { label: 'chains', value: String(chains.length), valueColor: C.value },
+        { label: 'contracts', value: String(contracts.length), valueColor: C.value },
+        { label: 'recent denials', value: String(denials), valueColor: denials > 0 ? C.warn : C.dim },
+        { label: 'errors', value: String(errors), valueColor: errors > 0 ? C.error : C.dim },
+      ], C),
+    ];
+
+    const hints = this.filterActive
+      ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
+      : [
+          { keys: 'Up/Down', label: 'move' },
+          { keys: 'r', label: 'refresh' },
+          { keys: '/hooks', label: 'full listing' },
+          { keys: '/', label: 'filter' },
+        ];
+
     return this.renderList(width, height, {
       title: 'Hooks Control Room',
+      header: headerLines,
       footer: [
         ...detailLines,
         buildPanelLine(width, [['  Recent Activity', C.label]]),
         ...activityLines,
         buildPanelLine(width, [['  Authoring', C.label]]),
         ...authoringLines,
-        buildPanelLine(width, [['  Up/Down move  r refresh  /hooks for full contract listing', C.dim]]),
+        buildKeyboardHints(width, hints, C),
       ],
     });
   }

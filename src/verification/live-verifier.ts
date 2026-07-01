@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { auditGoodVibesHome } from '../config/goodvibes-home-audit.ts';
 import { buildVerificationLedger } from './verification-ledger.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export type LiveVerificationStatus = 'pass' | 'warn' | 'fail' | 'skip';
 
@@ -111,7 +112,7 @@ function runCommand(command: string, args: string[], cwd: string, timeoutMs = 15
       resolveCommand({
         exitCode: -1,
         stdout: '',
-        stderr: error instanceof Error ? error.message : String(error),
+        stderr: summarizeError(error),
         timedOut,
       });
     });
@@ -161,7 +162,7 @@ function commandCheck(
         title,
         status: 'fail',
         summary: 'Command succeeded but did not return valid JSON.',
-        detail: error instanceof Error ? error.message : String(error),
+        detail: summarizeError(error),
       };
     }
   }
@@ -208,7 +209,7 @@ async function fetchCheck(
       title,
       status: 'fail',
       summary: 'Request failed.',
-      detail: error instanceof Error ? error.message : String(error),
+      detail: summarizeError(error),
     };
   }
 }

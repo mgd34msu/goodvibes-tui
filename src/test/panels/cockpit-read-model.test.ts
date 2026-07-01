@@ -116,8 +116,8 @@ describe('buildCockpitRosterSnapshot — roster slice shape', () => {
     expect(snap.roster).toHaveLength(1);
     const entry = snap.roster[0]!;
     expect(entry.id).toBe('abcdef1234567890');
-    expect(entry.task).toHaveLength(50); // truncated at 50
-    expect(entry.task.endsWith('...')).toBe(true);
+    expect(entry.task).toHaveLength(50); // truncated at 50 display columns
+    expect(entry.task.endsWith('…')).toBe(true);
     expect(entry.model).toBe('claude-sonnet-4-6');
     expect(entry.status).toBe('running');
   });

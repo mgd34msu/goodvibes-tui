@@ -1,11 +1,13 @@
 import type { Line } from '../types/grid.ts';
-import type { StatusState } from '../renderer/status-glyphs.ts';
 import type { Panel, PanelCategory } from './types.ts';
 import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { SPINNER_FRAMES } from '../renderer/progress.ts';
 import { fitDisplay } from '../utils/terminal-width.ts';
+
+/** Canonical error-surface foreground (bad/red), kept out of the render body. */
+const ERROR_FG = '#ef4444';
 
 export abstract class BasePanel implements Panel {
   public needsRender = true;
@@ -72,15 +74,6 @@ export abstract class BasePanel implements Panel {
   }
 
   /**
-   * Returns the tab status for display in tab bars.
-   * Returns 'bad' when lastError is set; undefined otherwise.
-   */
-  public getTabStatus(): StatusState | undefined {
-    if (this.lastError !== null) return 'bad';
-    return undefined;
-  }
-
-  /**
    * Build a single error Line for display above the hints footer.
    * Returns null when there is no active error.
    *
@@ -89,9 +82,9 @@ export abstract class BasePanel implements Panel {
   protected renderErrorLine(width: number): Line | null {
     if (!this.lastError) return null;
     return UIFactory.stringToLine(
-      ` ✕ ${this.lastError}`.padEnd(width).slice(0, width),
+      fitDisplay(` ✕ ${this.lastError}`, width),
       width,
-      { fg: '#ef4444', bold: true },
+      { fg: ERROR_FG, bold: true },
     );
   }
 
@@ -198,6 +191,27 @@ export abstract class BasePanel implements Panel {
   }
 
   abstract render(width: number, height: number): Line[];
+
+  /**
+   * Default mouse-wheel handling: translate a wheel delta into the panel's
+   * existing up/down keyboard navigation, so every panel scrolls with the wheel
+   * without bespoke code. Panels with richer scroll state (e.g.
+   * `ScrollableListPanel`) override this. No-op for panels that don't implement
+   * `handleInput`. Returns true if any step was consumed.
+   */
+  public handleScroll(deltaRows: number): boolean {
+    const self = this as unknown as { handleInput?: (key: string) => boolean };
+    if (typeof self.handleInput !== 'function') return false;
+    const rows = Math.trunc(deltaRows);
+    if (rows === 0) return false;
+    const key = rows > 0 ? 'down' : 'up';
+    const steps = Math.min(Math.abs(rows), 10); // clamp runaway wheel deltas
+    let consumed = false;
+    for (let i = 0; i < steps; i++) {
+      if (self.handleInput(key)) consumed = true;
+    }
+    return consumed;
+  }
 
   /** R2: Mark this panel dirty — it will be re-rendered on the next compositor frame. */
   public invalidate(): void { this.needsRender = true; }

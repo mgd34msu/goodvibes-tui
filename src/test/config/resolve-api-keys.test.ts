@@ -22,7 +22,12 @@ function makeTmpDir(): string {
   return dir;
 }
 
-/** Known provider env var names for cleanup — must match all envVars in resolveApiKeys(). */
+/**
+ * Every provider env var resolveApiKeys() reads, cleared before each test so an
+ * ambient value (e.g. GITHUB_TOKEN from gh auth → github-copilot) can't leak
+ * into the resolved set. Kept in sync with the SDK's api-keys provider table
+ * (@pellux/goodvibes-sdk/platform/config/api-keys).
+ */
 const PROVIDER_ENV_VARS = [
   'OPENAI_API_KEY', 'OPENAI_KEY',
   'ANTHROPIC_API_KEY', 'CLAUDE_API_KEY',
@@ -37,6 +42,15 @@ const PROVIDER_ENV_VARS = [
   'HF_API_KEY', 'HUGGINGFACE_API_KEY', 'HF_TOKEN',
   'NVIDIA_API_KEY',
   'LLM7_API_KEY',
+  // github-copilot — the gap that let an ambient GITHUB_TOKEN leak in.
+  'COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'COPILOT_PROXY_API_KEY',
+  // Remaining providers in the SDK table.
+  'AI_GATEWAY_API_KEY', 'CLOUDFLARE_AI_GATEWAY_API_KEY', 'AZURE_OPENAI_API_KEY',
+  'DASHSCOPE_API_KEY', 'DEEPSEEK_API_KEY', 'FIREWORKS_API_KEY',
+  'LITELLM_API_KEY', 'MINIMAX_API_KEY', 'MODELSTUDIO_API_KEY', 'MOONSHOT_API_KEY',
+  'QIANFAN_API_KEY', 'QWEN_API_KEY', 'SGLANG_API_KEY', 'STEPFUN_API_KEY',
+  'TOGETHER_API_KEY', 'VENICE_API_KEY', 'VOLCANO_ENGINE_API_KEY',
+  'XAI_API_KEY', 'XIAOMI_API_KEY', 'ZAI_API_KEY', 'Z_AI_API_KEY',
 ];
 
 /** Snapshot env vars before each test. */

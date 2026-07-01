@@ -1,15 +1,19 @@
 /**
  * SystemMessageRouter — routes system messages to the appropriate surfaces
- * based on priority.
+ * based on their kind and configured routing target.
  *
- * Two tiers:
- *   - 'high' — appears in both the main conversation AND the SystemMessagesPanel.
- *     Use for: fatal errors, model/provider confirmations, session save/load,
- *     compaction events (e.g. [Compaction] completed).
- *   - 'low'  — appears in the SystemMessagesPanel only (panel-only routing).
- *     Use for: scan results, provider discovery, plugin load/unload, feature
- *     flag changes, tool execution status, permission decisions,
- *     health/cascade events, debug/operational info.
+ * Delivery is resolved from the message KIND ('system' | 'wrfc' |
+ * 'operational'), which maps to a configurable routing target
+ * (ui.systemMessages / ui.wrfcMessages / ui.operationalMessages, each
+ * 'panel' | 'conversation' | 'both'). resolveSystemMessageDelivery() turns that
+ * target — plus whether a panel is attached — into a { toPanel, toConversation }
+ * decision. The priority ('high' | 'low') only sets the panel emphasis; it does
+ * not by itself decide conversation delivery.
+ *
+ * Critical override: errors, provider failovers, and compaction/context notices
+ * (see FORCE_CONVERSATION_PREFIXES) ALWAYS also reach the main conversation,
+ * regardless of target, so the user never has to open the SystemMessagesPanel
+ * to discover them.
  *
  * Usage:
  * ```ts
@@ -18,9 +22,9 @@
  * router.routeSystemMessage('[Session] Saved session abc123', 'high');
  * ```
  *
- * The router can also be used as a drop-in replacement for
- * conversation.addSystemMessage() calls — it classifies messages by priority
- * automatically when using routeAuto().
+ * routeAuto() can be used as a drop-in replacement for
+ * conversation.addSystemMessage(): it classifies the message kind and priority
+ * automatically before routing.
  *
  * @remarks
  * This router handles system messages (operational status, errors). It is
@@ -28,8 +32,6 @@
  * notifications with policy-based routing.
  */
 
-import { getConfigSnapshot } from '../config/index.ts';
-import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ConversationManager } from './conversation';
 import type { SystemMessagesPanel, SystemMessagePriority } from '../panels/system-messages-panel.ts';
 import {
@@ -46,14 +48,23 @@ export type {
   SystemMessageTarget,
 } from '@/runtime/index.ts';
 
-function targetForKind(
-  configManager: Pick<ConfigManager, 'getRaw'>,
-  kind: SystemMessageKind,
-): SystemMessageTarget {
-  const ui = getConfigSnapshot(configManager).ui;
-  if (kind === 'wrfc') return ui.wrfcMessages;
-  if (kind === 'operational') return ui.operationalMessages;
-  return ui.systemMessages;
+/**
+ * Message categories that are operationally critical enough that the user must
+ * see them inline in the main conversation, regardless of the configured
+ * routing target (ui.systemMessages defaults to panel-only). Errors, provider
+ * failovers, and compaction/context notices fall here: a user should never have
+ * to open the SystemMessagesPanel to discover that a turn errored, a provider
+ * failed over, or the context was compacted.
+ *
+ * Detection is by the stable message prefix tag, mirroring how the SDK
+ * classifiers key off message content. This deliberately does NOT force every
+ * high-priority message inline (model/provider/session confirmations still
+ * honour the configured target), so the routing-target config stays meaningful.
+ */
+const FORCE_CONVERSATION_PREFIXES = ['[Error]', '[Failover]', '[Compaction]', '[Context]'] as const;
+
+function mustReachConversation(message: string): boolean {
+  return FORCE_CONVERSATION_PREFIXES.some((prefix) => message.startsWith(prefix));
 }
 
 // ---------------------------------------------------------------------------
@@ -74,10 +85,11 @@ export class SystemMessageRouter {
   // ── Public API ────────────────────────────────────────────────────────────
 
   /**
-   * Route a system message with explicit priority.
+   * Route a system message.
    *
-   * - 'high': delivered to both conversation AND panel.
-   * - 'low':  delivered to panel only (conversation is not touched).
+   * Delivery is resolved from the kind and its configured target; priority only
+   * sets panel emphasis. Critical notices (errors/failover/compaction, see
+   * FORCE_CONVERSATION_PREFIXES) are additionally forced into the conversation.
    *
    * @param message  - Message text.
    * @param priority - 'high' | 'low'.
@@ -94,7 +106,11 @@ export class SystemMessageRouter {
     if (delivery.toPanel) {
       this.panel?.push(message, priority);
     }
-    if (delivery.toConversation) {
+    // Critical notices (errors, failover, compaction) must surface inline even
+    // when the configured target is panel-only — otherwise a user without the
+    // SystemMessagesPanel open would never see them.
+    const toConversation = delivery.toConversation || mustReachConversation(message);
+    if (toConversation) {
       // addTypedSystemMessage threads the kind into the conversation so the
       // renderer can use kind-based navigability instead of substring matching.
       this.conversation.addTypedSystemMessage(message, kind);

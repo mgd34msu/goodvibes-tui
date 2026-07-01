@@ -10,6 +10,7 @@ import { resolveRuntimeEndpointBinding } from './endpoints.ts';
 import type { RuntimeEndpointBinding, RuntimeEndpointId } from './endpoints.ts';
 import { classifyBindPosture, isNetworkFacing } from './network-posture.ts';
 import { redactText } from './redaction.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 export interface CliServiceRuntime {
   readonly configManager: ConfigManager;
@@ -326,7 +327,7 @@ function readLogPosture(path: string | undefined, tailBytes: number): CliService
       exists: true,
       size: 0,
       modifiedAt: null,
-      readError: error instanceof Error ? error.message : String(error),
+      readError: summarizeError(error),
     };
   }
 }

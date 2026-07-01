@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/mgd34msu/goodvibes-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.24.1-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
+[![Version](https://img.shields.io/badge/version-0.27.0-blue.svg)](https://github.com/mgd34msu/goodvibes-tui)
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
@@ -125,7 +125,7 @@ The interface is rendered directly to the alternate screen buffer with raw ANSI 
 
 The runtime is organized around typed store domains, typed runtime events, a shared control plane for permissions and orchestration, and product surfaces for reviewing and repairing state. Agents run in-process with isolated histories, scoped tools, and optional worktrees. Operational state such as provider routing, local auth, daemon/gateway posture, channels, search, artifacts, structured knowledge, multimodal analysis, remote sessions, settings control-plane state, and task execution is routed into dedicated panels and APIs.
 
-The TUI now consumes the extracted `@pellux/goodvibes-sdk` platform layer for shared contracts, daemon route surfaces, transports, remote runtime contracts, and other reusable runtime code. The repo keeps the terminal UI, host wiring, and product-specific composition while future surfaces consume the same SDK-backed runtime foundation.
+The TUI now consumes the extracted `@pellux/goodvibes-sdk` (`0.34.0`) platform layer for shared contracts, daemon route surfaces, transports, remote runtime contracts, and other reusable runtime code. The repo keeps the terminal UI, host wiring, and product-specific composition while future surfaces consume the same SDK-backed runtime foundation.
 
 ---
 
@@ -145,6 +145,7 @@ The TUI now consumes the extracted `@pellux/goodvibes-sdk` platform layer for sh
 - Width-aware overlays, stable bottom docking above the prompt, half-height message surfaces, and structured footer layers
 - Shared panel workspace layout budgeting with renderer-owned visible-row budgets
 - Copy/selection logic that strips decorative gutters and visual scaffolding from clipboard output
+- Line-count indicator rendered right-aligned inside the prompt border on multi-line input (footer height stays stable regardless of prompt line count)
 
 ### Conversation And Transcript Workflow
 - Markdown rendering, syntax highlighting, inline diffs, collapsible blocks, bookmarks, block copy, and block save
@@ -540,6 +541,7 @@ Related storage paths:
 | `behavior.autoCompactThreshold` | `80` | Context % before auto-compact triggers |
 | `behavior.saveHistory` | `true` | Persist conversation history |
 | `behavior.returnContextMode` | `off` | Session return-context mode: `off`, `local`, `assisted` |
+| `behavior.notifyAfterSeconds` | `60` | Send desktop and webhook notifications for long-running turns after this many seconds (`0` disables); metadata-only — no conversation text is included |
 | `behavior.guidanceMode` | `minimal` | Operational guidance mode: `off`, `minimal`, `guided` |
 | `storage.secretPolicy` | `preferred_secure` | Secret storage policy: prefer secure backing store, fall back when allowed |
 | `permissions.mode` | `prompt` | Permission mode: `prompt`, `allow-all`, `custom` |
@@ -803,7 +805,7 @@ Key commands:
 - `/update`
 - `/trust`
 - `/bridge`
-- `/profile-sync`
+- `/profile-sync` (alias: `/profilesync`)
 
 The setup surface is also broader than a single readiness screen:
 
@@ -874,7 +876,7 @@ Key commands:
 
 - `/services inspect|test|resolve|auth|auth-review|doctor|export|import`
 - `/profiles`
-- `/profile-sync`
+- `/profile-sync` (alias: `/profilesync`)
 - `/setup transfer export|inspect|import`
 
 Service entries can use existing `tokenKey` fields, a SecretRef in the key field, or explicit `tokenRef` / `passwordRef` / `webhookUrlRef` / `signingSecretRef` / `publicKeyRef` / `appTokenRef` fields:
@@ -1270,6 +1272,8 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/accounts [action]` | — | Review provider-account routes, auth posture, and repair actions |
 | `/auth [action]` | — | Review auth posture and manage local service auth users/sessions |
 | `/memory [action]` | — | Session memory management: `list`, `add <text>`, `remove <id>` |
+| `/keep <text>` | — | Pin text to session memory; survives context compaction |
+| `/memory-sync [action]` | `/memsync` | Durable memory export/import and bundle exchange: `export <path> [scope]`, `import <path>` |
 | `/recall [action]` | `/rc` | Durable knowledge and memory substrate: capture, review, explain, export, import, and handoff |
 | `/knowledge [action]` | `/know`, `/kb` | Structured knowledge graph: ingest URLs/bookmarks, inspect issues, build packets, and run consolidation jobs |
 | `/context` | `/ctx` | Inspect context window usage (token breakdown per message) |
@@ -1281,7 +1285,7 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/git [action]` | `/g` | Git commands: status, log, diff. Opens git panel if no action given |
 | `/scan` | — | Scan for local LLM servers |
 | `/plan [goal]` | — | Inspect or seed TUI-owned project planning state; `panel`, `approve`, `list`, and `show <id>` are supported |
-| `/work-plan [action]` | `/wp`, `/todo` | Open or update the persistent workspace work-plan checklist |
+| `/work-plan [action]` | `/wp`, `/todo`, `/workplan` | Open or update the persistent workspace work-plan checklist |
 | `/panel [action]` | `/panels` | Panel management: open, close, list, toggle, move, focus, split, width, height |
 | `/plugin [action]` | — | Manage plugins (enable/disable/reload/list) |
 | `/marketplace [action]` | — | Browse curated plugin, skill, hook-pack, and policy-pack surfaces |
@@ -1363,6 +1367,7 @@ All shortcuts are customizable via `~/.goodvibes/tui/keybindings.json`. Use `/ke
 | `Mouse wheel` | Scroll |
 | `Click drag` | Select text |
 | `Middle click` | Paste |
+| `n` / `N` | Next / previous match in locked search mode; wraps with a `(wrap)` marker |
 | `Escape` | Exit current mode (search, command, modal) |
 
 ### Blocks & Content
@@ -1646,7 +1651,7 @@ src/
 - **Agent Client Protocol** — subagents communicate via @agentclientprotocol/sdk over stdio ndJsonStream
 - **Backend-first external surface** — the daemon/control plane exposes typed HTTP/gateway methods for knowledge, artifacts, media, search, channels, and remote peers so future clients do not have to reimplement runtime logic
 - **Plugin system** — manifest.json + sandboxed API surface for commands, providers, tools, gateway methods, channels, embeddings, voice, media, and search
-- **Crash recovery** — periodic JSONL snapshots with recovery prompt on next startup
+- **Crash recovery** — periodic JSONL snapshots with recovery prompt on next startup; an fsync-per-record append-only transcript journal between snapshots is replayed at every resume seam (command resume, Ctrl+R crash recovery, panel resume) for SIGKILL-proof durability
 
 ---
 
@@ -1664,7 +1669,7 @@ bun run dev
 bun test
 ```
 
-8,500+ tests across contract, security, release gate, runtime, renderer, panel, integration, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
+8,978 tests across contract, security, release gate, runtime, renderer, panel, integration, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
 
 ### Build standalone binary
 

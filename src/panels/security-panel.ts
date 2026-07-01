@@ -1,8 +1,10 @@
 import type { Line } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { TokenAuditResult } from '@pellux/goodvibes-sdk/platform/security';
 import type { UiReadModel, UiSecuritySnapshot } from '../runtime/ui-read-models.ts';
 import {
+  buildAlignedRow,
   buildEmptyState,
   buildGuidanceLine,
   buildPanelLine,
@@ -63,6 +65,8 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   public constructor(private readonly readModel: UiReadModel<UiSecuritySnapshot>) {
     super('security', 'Security', 'U', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter tokens';
     this.unsub = this.readModel.subscribe(() => this.markDirty());
   }
 
@@ -85,22 +89,36 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   }
 
   protected renderItem(result: TokenAuditResult, index: number, selected: boolean, width: number): Line {
-    const bg = selected ? C.selectBg : undefined;
-    return buildPanelLine(width, [
-      [' ', C.label, bg],
-      [result.label.padEnd(22), C.value, bg],
-      [` ${result.tokenId.padEnd(12)}`, C.info, bg],
-      [` ${result.scope.policyId.padEnd(10)}`, C.label, bg],
-      [` ${resultSummary(result).slice(0, Math.max(0, width - 49))}`, resultColor(result), bg],
-    ]);
+    return buildAlignedRow(
+      width,
+      [
+        { text: result.label, fg: C.value },
+        { text: result.tokenId, fg: C.info },
+        { text: result.scope.policyId, fg: C.label },
+        { text: resultSummary(result), fg: resultColor(result) },
+      ],
+      [
+        { width: 22 },
+        { width: 12 },
+        { width: 10 },
+        { width: Math.max(8, width - 50) },
+      ],
+      { selected, selectedBg: C.selectBg },
+    );
   }
 
   public handleInput(key: string): boolean {
-    if (key === 'r') {
+    if (!this.filterActive && key === 'r') {
       this.markDirty();
       return true;
     }
     return super.handleInput(key);
+  }
+
+  protected override filterMatches(result: TokenAuditResult, q: string): boolean {
+    return result.label.toLowerCase().includes(q)
+      || result.scope.policyId.toLowerCase().includes(q)
+      || result.tokenId.toLowerCase().includes(q);
   }
 
   public render(width: number, height: number): Line[] {
@@ -168,7 +186,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         [' critical ', C.label],
         ...buildStatusPill(attackPathReview.incoherentFindings > 0 ? 'warn' : 'good', String(attackPathReview.incoherentFindings)),
         [' review ', C.label],
-        [attackPathReview.summary.slice(0, Math.max(0, width - 36)), C.dim],
+        [truncateDisplay(attackPathReview.summary, Math.max(0, width - 36)), C.dim],
       ]),
     ];
 
@@ -205,19 +223,40 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       attackPathLines.push(buildPanelLine(width, [[' MCP attack-path review', C.label]]));
       for (const finding of attackPathReview.findings.slice(0, 3)) {
         attackPathLines.push(buildPanelLine(width, [[
-          `  ${finding.severity.toUpperCase()} ${finding.serverName}: ${finding.route}`.slice(0, width),
+          truncateDisplay(`  ${finding.severity.toUpperCase()} ${finding.serverName}: ${finding.route}`, width),
           severityColor(finding.severity),
         ]]));
         attackPathLines.push(buildPanelLine(width, [[
-          `    ${finding.reason}`.slice(0, width),
+          truncateDisplay(`    ${finding.reason}`, width),
           C.dim,
         ]]));
         attackPathLines.push(buildPanelLine(width, [[
-          `    evidence: ${finding.evidence.join(' | ')}`.slice(0, width),
+          truncateDisplay(`    evidence: ${finding.evidence.join(' | ')}`, width),
           C.dim,
         ]]));
       }
     }
+
+    // Column header for the token audit list so the aligned columns are legible.
+    const listHeader: Line[] = [
+      ...governanceLines,
+      buildAlignedRow(
+        width,
+        [
+          { text: 'TOKEN LABEL', fg: C.label, bold: true },
+          { text: 'TOKEN ID', fg: C.label, bold: true },
+          { text: 'POLICY', fg: C.label, bold: true },
+          { text: `STATUS (${view.results.length} audited)`, fg: C.label, bold: true },
+        ],
+        [
+          { width: 22 },
+          { width: 12 },
+          { width: 10 },
+          { width: Math.max(8, width - 50) },
+        ],
+        {},
+      ),
+    ];
 
     const selected = view.results[this.selectedIndex];
     const detailLines: Line[] = [];
@@ -234,7 +273,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
         ['  Scope: ', C.label],
         [selected.scope.outcome, selected.scope.outcome === 'violation' ? C.error : C.ok],
         ['  Excess: ', C.label],
-        [(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none').slice(0, Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
+        [truncateDisplay(selected.scope.excessScopes.length > 0 ? selected.scope.excessScopes.join(', ') : 'none', Math.max(0, width - 27)), selected.scope.excessScopes.length > 0 ? C.error : C.dim],
       ]));
       detailLines.push(buildPanelLine(width, [
         ['  Rotation: ', C.label],
@@ -250,46 +289,59 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       ]]));
       if (preflightStatus !== 'n/a') {
         detailLines.push(buildPanelLine(width, [[
-          `Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`.slice(0, width),
+          truncateDisplay(`Policy preflight: ${preflightStatus} (${preflightIssueCount} issue${preflightIssueCount === 1 ? '' : 's'})`, width),
           preflightStatus === 'block' ? C.error : preflightStatus === 'warn' ? C.warn : C.dim,
         ]]));
       }
       if (quarantinedMcp.length > 0) {
         const server = quarantinedMcp[0]!;
         detailLines.push(buildPanelLine(width, [[
-          `MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`.slice(0, width),
+          truncateDisplay(`MCP quarantine: ${server.name} ${server.quarantineReason ?? 'unknown'}${server.quarantineDetail ? ` - ${server.quarantineDetail}` : ''}`, width),
           C.error,
         ]]));
       }
       if (quarantinedPlugins.length > 0) {
         const plugin = quarantinedPlugins[0]!;
         detailLines.push(buildPanelLine(width, [[
-          `Plugin quarantine: ${plugin.name} (${plugin.trustTier})`.slice(0, width),
+          truncateDisplay(`Plugin quarantine: ${plugin.name} (${plugin.trustTier})`, width),
           C.error,
         ]]));
       } else if (untrustedPlugins.length > 0) {
         const plugin = untrustedPlugins[0]!;
         detailLines.push(buildPanelLine(width, [[
-          `Plugin trust warning: ${plugin.name} remains untrusted.`.slice(0, width),
+          truncateDisplay(`Plugin trust warning: ${plugin.name} remains untrusted.`, width),
           C.warn,
         ]]));
       }
       if (latestIncident) {
         detailLines.push(buildPanelLine(width, [[
-          `Latest incident: ${latestIncident.classification} - ${latestIncident.summary}`.slice(0, width),
+          truncateDisplay(`Latest incident: ${latestIncident.classification} - ${latestIncident.summary}`, width),
           C.warn,
         ]]));
       }
     }
 
+    const hints = this.filterActive
+      ? [
+          { keys: 'type', label: 'filter tokens' },
+          { keys: 'Enter', label: 'apply' },
+          { keys: 'Esc', label: 'clear' },
+        ]
+      : [
+          { keys: '↑/↓', label: 'select token' },
+          { keys: '/', label: 'filter' },
+          { keys: 'r', label: 'refresh audit' },
+        ];
+
     return this.renderList(width, height, {
       title: 'Security Control Room',
-      header: governanceLines,
+      header: listHeader,
       footer: [
         ...detailLines,
         ...attackPathLines,
         footerLine,
       ],
+      hints,
     });
   }
 }

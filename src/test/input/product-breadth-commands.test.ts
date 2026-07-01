@@ -65,9 +65,18 @@ describe('product breadth commands', () => {
   const originalHome = process.env.HOME;
   const originalPath = process.env.PATH;
   const originalFetch = globalThis.fetch;
+  // Service-registry token env vars that must not leak in from the ambient
+  // environment (e.g. GITHUB_TOKEN from gh auth) — otherwise the `services
+  // resolve github` assertion ("has no resolvable auth headers") flips.
+  const SERVICE_TOKEN_ENV_VARS = ['GITHUB_TOKEN', 'GH_TOKEN', 'SLACK_BOT_TOKEN', 'SLACK_APP_TOKEN'];
+  const savedServiceTokens: Record<string, string | undefined> = {};
   let root = '';
 
   beforeEach(() => {
+    for (const key of SERVICE_TOKEN_ENV_VARS) {
+      savedServiceTokens[key] = process.env[key];
+      delete process.env[key];
+    }
     resetTestRuntimeServices();
     mkdirSync(TEST_TMP_ROOT, { recursive: true });
     root = mkdtempSync(join(TEST_TMP_ROOT, 'gv-product-commands-'));
@@ -112,6 +121,13 @@ describe('product breadth commands', () => {
       delete process.env.PATH;
     } else {
       process.env.PATH = originalPath;
+    }
+    for (const key of SERVICE_TOKEN_ENV_VARS) {
+      if (savedServiceTokens[key] !== undefined) {
+        process.env[key] = savedServiceTokens[key];
+      } else {
+        delete process.env[key];
+      }
     }
   });
 

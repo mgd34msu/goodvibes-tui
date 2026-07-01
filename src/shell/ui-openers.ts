@@ -13,6 +13,7 @@ import type { SecretsManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { ServiceInspectionQuery } from '../runtime/ui-service-queries.ts';
 import type { ModelPickerTargetInfo } from '../input/model-picker.ts';
 import { syncServiceSettingToPlatform } from './service-settings-sync.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 type WireShellUiOpenersOptions = {
   commandContext: CommandContext;
@@ -203,7 +204,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       input.modelPicker.openAllModels(models, getCurrentModelForPickerTarget());
       render();
     })().catch((error: unknown) => {
-      commandContext.print?.(`Model picker failed to open: ${error instanceof Error ? error.message : String(error)}`);
+      commandContext.print?.(`Model picker failed to open: ${summarizeError(error)}`);
       render();
     });
   };
@@ -223,7 +224,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
       input.modelPicker.openProviders(providers, getCurrentProviderForPickerTarget());
       render();
     })().catch((error: unknown) => {
-      commandContext.print?.(`Provider picker failed to open: ${error instanceof Error ? error.message : String(error)}`);
+      commandContext.print?.(`Provider picker failed to open: ${summarizeError(error)}`);
       render();
     });
   };

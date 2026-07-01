@@ -14,6 +14,7 @@ import type { Line } from '../types/grid.ts';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { MemoryClass, MemoryRecord, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state';
 import { ScrollableListPanel, SearchableListPanel } from './scrollable-list-panel.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import {
   buildBodyText,
@@ -28,6 +29,7 @@ import {
   getPanelSearchFocusTransition,
   isPanelSearchCancel,
 } from './search-focus.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Colour palette
@@ -175,7 +177,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
         ['  ', C.label, bg],
         [record.reviewState.padEnd(13), reviewStateColor(record.reviewState), bg],
         [` ${formatConfidence(record.confidence)} `, C.value, bg],
-        [record.summary.slice(0, Math.max(0, width - 26)), C.value, bg],
+        [truncateDisplay(record.summary, Math.max(0, width - 26)), C.value, bg],
       ]);
     }
     // All-mode row: scope/class + id + time + summary (matches former MemoryPanel row)
@@ -187,7 +189,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       ['  ', C.label, bg],
       [fmtTime(record.createdAt), C.dim, bg],
       ['  ', C.label, bg],
-      [record.summary.slice(0, Math.max(0, width - 33)), C.value, bg],
+      [truncateDisplay(record.summary, Math.max(0, width - 33)), C.value, bg],
     ]);
   }
 
@@ -267,7 +269,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
               });
             }
           } catch (e) {
-            this.setError(`Review update failed: ${e instanceof Error ? e.message : String(e)}`);
+            this.setError(`Review update failed: ${summarizeError(e)}`);
           }
         }
         this.refreshReviewRecords();
@@ -305,13 +307,13 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       }
       if (key === 's') {
         if (!selected) return false;
-        this.confirm = { subject: { id: selected.id, action: 'stale' }, label: selected.summary.slice(0, 40) };
+        this.confirm = { subject: { id: selected.id, action: 'stale' }, label: truncateDisplay(selected.summary, 40) };
         this.markDirty();
         return true;
       }
       if (key === 'c') {
         if (!selected) return false;
-        this.confirm = { subject: { id: selected.id, action: 'contradicted' }, label: selected.summary.slice(0, 40) };
+        this.confirm = { subject: { id: selected.id, action: 'contradicted' }, label: truncateDisplay(selected.summary, 40) };
         this.markDirty();
         return true;
       }

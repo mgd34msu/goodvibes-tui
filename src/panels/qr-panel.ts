@@ -2,9 +2,12 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import {
+  buildKeyboardHints,
   buildPanelLine,
+  buildPanelTitle,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { renderQrMatrix, generateQrMatrix } from '../renderer/qr-renderer.ts';
 import { encodeConnectionPayload } from '@pellux/goodvibes-sdk/platform/pairing';
 
@@ -101,32 +104,41 @@ export class QrPanel extends BasePanel {
     const lines: Line[] = [];
 
     const { url, token, username, password } = this.connectionInfo;
+    const valueWidth = Math.max(0, width - 12);
+
+    // ── Title + purpose: tell the operator exactly what this code is for ────
+    lines.push(buildPanelTitle(width, 'Companion Pairing', C));
+    lines.push(
+      buildPanelLine(width, [
+        [' Scan with the GoodVibes companion app to pair this session.', C.hint],
+      ]),
+    );
 
     // ── Connection info header ─────────────────────────────────────────────
     lines.push(createEmptyLine(width));
     lines.push(
       buildPanelLine(width, [
         [' URL      ', C.label],
-        [url.slice(0, Math.max(0, width - 12)), C.url],
+        [truncateDisplay(url, valueWidth), C.url],
       ]),
     );
     lines.push(
       buildPanelLine(width, [
         [' Token    ', C.label],
-        [token, C.token],
+        [truncateDisplay(token, valueWidth), C.token],
       ]),
     );
     lines.push(
       buildPanelLine(width, [
         [' Username ', C.label],
-        [username.slice(0, Math.max(0, width - 12)), C.value],
+        [truncateDisplay(username, valueWidth), C.value],
       ]),
     );
     if (password !== undefined) {
       lines.push(
         buildPanelLine(width, [
           [' Password ', C.label],
-          [password, C.value],
+          [truncateDisplay(password, valueWidth), C.value],
         ]),
       );
     }
@@ -158,13 +170,13 @@ export class QrPanel extends BasePanel {
       );
     }
 
-    // ── Hints ──────────────────────────────────────────────────────────────
-    const hintsLine = buildPanelLine(width, [
-      [' r ', C.hint],
-      ['regenerate  ', C.dim],
-      [' c ', C.hint],
-      ['copy token', C.dim],
-    ]);
+    // ── Hints ── only advertise actions that are actually wired ─────────────
+    const hints: Array<{ keys: string; label: string }> = [];
+    if (this.regenerateToken) hints.push({ keys: 'r', label: 'regenerate token' });
+    if (this.copyToClipboard) hints.push({ keys: 'c', label: 'copy token' });
+    const hintsLine = hints.length > 0
+      ? buildKeyboardHints(width, hints, C)
+      : buildPanelLine(width, [[' Pairing is read-only in this surface.', C.dim]]);
 
     // Push hints at the bottom if we have room, otherwise append after QR
     const remaining = height - lines.length;

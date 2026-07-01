@@ -81,7 +81,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     icon: 'H',
     category: 'session',
     description: 'Browse, search, and resume past conversation sessions',
-    factory: () => new SessionBrowserPanel(deps.sessionManager, deps.resumeSession, deps.requestRender),
+    factory: () => new SessionBrowserPanel(deps.sessionManager, deps.resumeSession),
   });
 
   manager.registerType({
@@ -119,7 +119,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     category: 'monitoring',
     description: 'Token budget tracker: per-turn and cumulative usage with context window gauge',
     factory: () => {
-      const panel = new TokenBudgetPanel(deps.sessionMemoryStore, deps.configManager);
+      const panel = new TokenBudgetPanel(deps.sessionMemoryStore, deps.configManager, deps.requestRender);
       if (deps.orchestrator && deps.getCtxWindow) {
         panel.wire(deps.orchestrator, deps.getCtxWindow, requireUiServices(deps).readModels.session);
       }

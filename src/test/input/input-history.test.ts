@@ -74,11 +74,9 @@ describe('InputHistory.add', () => {
   });
 
   test('caps at maxEntries (500)', () => {
-    // persist:false on purpose — this verifies the IN-MEMORY cap only. With
-    // persist:true, add() does a synchronous full-file write per call, so 510
-    // adds = 510 growing-file writes, which can exceed bun's 5s per-test timeout
-    // under full-suite load (flaky). On-disk capping is covered separately by the
-    // load() cap test ('caps loaded entries at maxEntries (500)').
+    // persist:false — the 500-entry cap is in-memory logic. Persisting 510 adds
+    // (each a synchronous full-file write) makes this test load-dependent and can
+    // exceed the 5s timeout; persistence is covered by the round-trip tests below.
     const h = new InputHistory({ historyPath: makeTmpPath(), persist: false });
     for (let i = 0; i < 510; i++) {
       h.add(`entry ${i}`);

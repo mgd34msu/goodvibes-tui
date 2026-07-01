@@ -46,8 +46,9 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       deps.sessionMemoryStore,
       deps.configManager,
       deps.getOrchestratorUsage,
-      deps.getCtxWindow ?? (() => deps.contextWindow ?? 0),
+      deps.getCtxWindow ?? deps.contextWindow,
       requireUiServices(deps).readModels.session,
+      () => deps.orchestrator?.lastInputTokens ?? 0,
     ),
   });
 
@@ -116,6 +117,6 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     icon: 'Z',
     category: 'agent',
     description: 'Scheduled agent tasks: cron expressions, next run time, enable/disable, run history',
-    factory: () => new SchedulePanel(requireAutomationManager(deps), deps.requestRender),
+    factory: () => new SchedulePanel(requireAutomationManager(deps)),
   });
 }

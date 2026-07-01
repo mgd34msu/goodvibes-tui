@@ -13,20 +13,19 @@ import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildMeterLine,
   buildPanelLine,
+  buildStatusPill,
   buildStyledPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
-import { abbreviateCount } from '../utils/format-number.ts';
 
-const C = {
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   convFg: '#cc99ff',
-  overFg: '#ff6666',
-  barEmpty: '#333344',
-  labelFg: '#8888bb',
-} as const;
+});
 
 
 
@@ -36,7 +35,8 @@ interface ContextSnapshot {
 }
 
 function formatK(n: number): string {
-  return abbreviateCount(n, { noM: true });
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
 }
 
 export class ContextVisualizerPanel extends BasePanel {
@@ -49,8 +49,9 @@ export class ContextVisualizerPanel extends BasePanel {
     sessionMemoryStore: SessionMemoryQuery,
     private readonly configManager: Pick<ConfigManager, 'get'>,
     private getUsage?: () => { input: number; output: number; cacheRead: number; cacheWrite: number; model?: string },
-    private getContextWindow?: () => number,
+    private contextLimit?: number | (() => number),
     private sessionReadModel?: UiReadModel<UiSessionSnapshot>,
+    private getLastInputTokens?: () => number,
   ) {
     super('context', 'Context', 'C', 'ai');
     this.sessionMemoryStore = sessionMemoryStore;
@@ -80,7 +81,7 @@ export class ContextVisualizerPanel extends BasePanel {
     const pct = limit > 0 ? Math.min(100, Math.round((input / limit) * 100)) : 0;
     const barWidth = Math.max(1, width - 2);
     const overLimit = limit > 0 && input > limit;
-    const fg = overLimit ? C.overFg : C.convFg;
+    const fg = overLimit ? C.bad : C.convFg;
     if (limit <= 0) {
       return buildPanelWorkspace(width, height, {
         title: ' Context Usage',
@@ -91,7 +92,10 @@ export class ContextVisualizerPanel extends BasePanel {
               width,
               ' Context limit unavailable',
               'Select a model with a known context window and submit or complete a turn to populate live context usage.',
-              [],
+              [
+                { command: '/model', summary: 'pick an active model so its context window is known' },
+                { command: '/context', summary: 'review current context composition and pressure' },
+              ],
               DEFAULT_PANEL_PALETTE,
             ),
           },
@@ -99,6 +103,11 @@ export class ContextVisualizerPanel extends BasePanel {
         palette: DEFAULT_PANEL_PALETTE,
       });
     }
+
+    // Pressure state drives the headline pill and the footer hint so the most
+    // important signal — am I about to overflow context — is obvious at a glance.
+    const pressureState = overLimit ? 'bad' : pct >= 90 ? 'bad' : pct >= 75 ? 'warn' : 'good';
+    const pressureLabel = overLimit ? 'over limit' : pct >= 90 ? 'critical' : pct >= 75 ? 'elevated' : 'healthy';
 
     return buildPanelWorkspace(width, height, {
       title: ' Context Usage',
@@ -114,6 +123,8 @@ export class ContextVisualizerPanel extends BasePanel {
               [formatK(limit), DEFAULT_PANEL_PALETTE.info],
               ['   Fill ', DEFAULT_PANEL_PALETTE.label],
               [`${pct}%`, overLimit ? DEFAULT_PANEL_PALETTE.bad : DEFAULT_PANEL_PALETTE.good],
+              ['   ', DEFAULT_PANEL_PALETTE.dim],
+              ...buildStatusPill(pressureState, pressureLabel),
             ]),
           ],
         },
@@ -130,6 +141,18 @@ export class ContextVisualizerPanel extends BasePanel {
           lines: this._renderMaintenance(width),
         },
       ],
+      footerLines: [
+        buildKeyboardHints(width, pressureState === 'good'
+          ? [
+              { keys: '/context', label: 'composition' },
+              { keys: '/model', label: 'switch model' },
+            ]
+          : [
+              { keys: '/compact', label: 'reduce context now' },
+              { keys: '/context', label: 'composition' },
+              { keys: '/model', label: 'larger window' },
+            ], DEFAULT_PANEL_PALETTE),
+      ],
       palette: DEFAULT_PANEL_PALETTE,
     });
     });
@@ -138,10 +161,10 @@ export class ContextVisualizerPanel extends BasePanel {
   private _renderBar(width: number, barWidth: number, input: number, limit: number): Line {
     const filled = limit > 0 ? Math.min(barWidth, Math.round((input / limit) * barWidth)) : 0;
     const overLimit = limit > 0 && input > limit;
-    const barFg = overLimit ? C.overFg : C.convFg;
+    const barFg = overLimit ? C.bad : C.convFg;
     return buildMeterLine(width, filled, barWidth, {
       filled: barFg,
-      empty: C.barEmpty,
+      empty: C.empty,
       label: DEFAULT_PANEL_PALETTE.dim,
     });
   }
@@ -151,7 +174,7 @@ export class ContextVisualizerPanel extends BasePanel {
     const valStr = formatK(val).padStart(7);
     const pctStr = `${pct}%`.padStart(5);
     return buildStyledPanelLine(width, [
-      { text: labelPadded, fg: C.labelFg },
+      { text: labelPadded, fg: C.label },
       { text: valStr, fg },
       { text: '  ', fg: DEFAULT_PANEL_PALETTE.dim },
       { text: pctStr, fg },
@@ -159,11 +182,22 @@ export class ContextVisualizerPanel extends BasePanel {
   }
 
   private _refresh(): void {
-    const usage = this.getUsage?.();
-    if (usage) {
-      this.snapshot.input = usage.input;
+    // Resolve the context window live so the panel tracks /model switches when a
+    // getter is supplied; a plain number stays fixed at its provided value.
+    this.snapshot.limit =
+      typeof this.contextLimit === 'function' ? this.contextLimit() : (this.contextLimit ?? 0);
+    // Prefer the live per-call input occupancy (cache-inclusive, matching the
+    // Tokens panel and the auto-compaction threshold) when a getter is wired;
+    // otherwise fall back to the cumulative usage input.
+    const lastInput = this.getLastInputTokens?.();
+    if (lastInput !== undefined) {
+      this.snapshot.input = lastInput;
+    } else {
+      const usage = this.getUsage?.();
+      if (usage) {
+        this.snapshot.input = usage.input;
+      }
     }
-    this.snapshot.limit = this.getContextWindow?.() ?? 0;
     this.markDirty();
   }
 

@@ -8,12 +8,15 @@
  * Open via Ctrl+O keybind or `/ops view` command.
  */
 import type { Line } from '../types/grid.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import type { OpsEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsAuditEntry } from '../runtime/diagnostics/panels/ops.ts';
 import { OpsPanel } from '../runtime/diagnostics/panels/ops.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
+  buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
@@ -77,6 +80,8 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   public constructor(eventFeed: UiEventFeed<OpsEvent>) {
     super('ops-control', 'Ops Control', 'Q', 'agent');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter audit';
     this._opsPanel = new OpsPanel(eventFeed);
     this._unsub = this._opsPanel.subscribe(() => this.markDirty());
   }
@@ -103,16 +108,23 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
     return [...this._opsPanel.getSnapshot()].reverse();
   }
 
+  protected override filterMatches(entry: OpsAuditEntry, q: string): boolean {
+    return entry.action.toLowerCase().includes(q)
+      || entry.targetKind.toLowerCase().includes(q)
+      || entry.targetId.toLowerCase().includes(q)
+      || entry.outcome.toLowerCase().includes(q);
+  }
+
   protected renderItem(entry: OpsAuditEntry, _index: number, _selected: boolean, width: number): Line {
     const seqStr   = String(entry.seq).padStart(4, ' ');
     const timeStr  = fmtTime(entry.ts);
-    const action   = entry.action.slice(0, 15).padEnd(15, ' ');
+    const action   = fitDisplay(entry.action, 15);
     const kindTag  = entry.targetKind === 'task' ? 'T:' : 'A:';
-    // Truncation is intentional: TUI column width limits target ID display to 14 chars
+    // Last 10 chars of the id keep the unique suffix; fitDisplay caps display width.
     const shortId  = entry.targetId.slice(-10);
-    const target   = (kindTag + shortId).slice(0, 14).padEnd(14, ' ');
+    const target   = fitDisplay(kindTag + shortId, 14);
     const outLabel = outcomeLabel(entry.outcome);
-    const noteRaw  = (entry.note ?? entry.errorMessage ?? '').slice(0, Math.max(0, width - 63));
+    const noteRaw  = truncateDisplay(entry.note ?? entry.errorMessage ?? '', Math.max(0, width - 63));
 
     const segs: Array<[string, string, string?]> = [
       [` ${seqStr} `, C.seq],
@@ -134,12 +146,62 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   }
 
   public render(width: number, height: number): Line[] {
+    const entries = this.getVisibleItems();
+    this.clampSelection();
+
+    // Outcome tallies surface posture at a glance (most important runtime info first).
+    let ok = 0;
+    let rejected = 0;
+    let errored = 0;
+    for (const e of entries) {
+      if (e.outcome === 'success') ok++;
+      else if (e.outcome === 'rejected') rejected++;
+      else errored++;
+    }
+
     const headerLines: Line[] = [
+      buildKeyValueLine(width, [
+        { label: 'logged', value: String(entries.length), valueColor: entries.length > 0 ? C.value : C.dim },
+        { label: 'ok', value: String(ok), valueColor: ok > 0 ? C.success : C.dim },
+        { label: 'rejected', value: String(rejected), valueColor: rejected > 0 ? C.rejected : C.dim },
+        { label: 'errors', value: String(errored), valueColor: errored > 0 ? C.error : C.dim },
+      ], C),
       buildPanelLine(width, [['  SEQ  TIME      ACTION          TARGET             OUT    NOTE', C.label]]),
     ];
-    const footerLines: Line[] = [
-      buildPanelLine(width, [['  Up/Down scroll the intervention log', C.dim]]),
-    ];
+
+    const selected = entries[this.selectedIndex];
+    const footerLines: Line[] = [];
+    if (selected) {
+      const detail = selected.note ?? selected.errorMessage ?? '(no note)';
+      footerLines.push(
+        buildPanelLine(width, [
+          ['  #', C.label],
+          [String(selected.seq), C.value],
+          ['  ', C.dim],
+          [outcomeLabel(selected.outcome).trim(), outcomeColor(selected.outcome)],
+          ['  ', C.dim],
+          [selected.action, C.value],
+          ['  ', C.dim],
+          [`${selected.targetKind}:${selected.targetId}`, targetColor(selected.targetKind)],
+        ]),
+        buildPanelLine(width, [
+          ['  ', C.label],
+          [truncateDisplay(detail, Math.max(0, width - 4)), C.note],
+        ]),
+      );
+    }
+    footerLines.push(
+      this.filterActive
+        ? buildKeyboardHints(width, [
+            { keys: 'type', label: 'filter audit' },
+            { keys: 'Enter', label: 'apply' },
+            { keys: 'Esc', label: 'clear' },
+          ], C)
+        : buildKeyboardHints(width, [
+            { keys: 'Up/Down', label: 'browse log' },
+            { keys: '/', label: 'filter' },
+          ], C),
+    );
 
     return this.renderList(width, height, {
       title: 'Operator Control Plane',

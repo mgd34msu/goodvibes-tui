@@ -469,7 +469,7 @@ describe('fetch tool - error handling', () => {
     });
     expect(result.success).toBe(true);
     const out = JSON.parse(result.output!);
-    expect(out.results[0].error).toContain('Timeout');
+    expect(out.results[0].error?.toLowerCase()).toContain('timed out');
     expect(out.summary.failed).toBe(1);
   }, 5000);
 

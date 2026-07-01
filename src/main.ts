@@ -29,7 +29,6 @@ import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { registerBuiltinPanels } from './panels/builtin-panels.ts';
-import { renderPanelTabBar } from './renderer/panel-tab-bar.ts';
 import { bootstrapRuntime } from './runtime/bootstrap.ts';
 import type { BootstrapContext } from './runtime/bootstrap.ts';
 import type { HITLMode } from '@pellux/goodvibes-sdk/platform/state';
@@ -52,6 +51,7 @@ import { renderToolCallBlock } from './renderer/tool-call.ts';
 import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
+import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
@@ -165,8 +165,8 @@ async function main() {
 
   let scrollTop = 0;
   let scrollLocked = true;
-  // Cached maxScroll from the last render frame; used by scroll() to clamp against the
-  // same effectiveHeight the renderer computed (overlayRows-aware). Null before first render.
+  // Cached from the overlay-aware clamp the renderer computes (conversation-layout) each
+  // frame so scroll() clamps against exactly what is displayed, not a footer estimate.
   let lastMaxScroll: number | null = null;
   // Stream and tool-timer state; mutated by wireStreamEventMetrics handlers, read during render.
   const streamMetrics: StreamMetrics = {
@@ -190,12 +190,13 @@ async function main() {
     if (input.onboardingWizard.active) return stdout.rows || 24;
     const promptLines: number = input.getVisiblePromptLineCount(getPromptContentWidth());
     const currentModel = providerRegistry.getCurrentModel();
-    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, providerRegistry.getContextWindowForModel(currentModel));
+    const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
+    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, contextWindow);
   };
 
   const scroll = (delta: number) => {
-    // Use the renderer's last computed maxScroll (overlay-aware). Fall back to the
-    // height estimate only before the first render frame has run.
+    // Prefer the last clamp the renderer computed (overlay- and real-footer-aware).
+    // The footer estimate is only a fallback for the pre-first-render frame.
     const maxScroll = lastMaxScroll ?? Math.max(0, conversation.history.getLineCount() - getViewportHeight());
     scrollTop = Math.max(0, Math.min(scrollTop + delta, maxScroll));
     // Re-lock if user scrolled to bottom, otherwise unlock
@@ -203,6 +204,8 @@ async function main() {
   };
 
   const scrollToEnd = (vHeight: number) => {
+    // Respect a manual scroll-up by the user: only auto-follow the tail when parked at the
+    // bottom (scrollLocked). submitInput re-locks on new input so turns resume following.
     if (!scrollLocked) return;
     scrollTop = Math.max(0, conversation.history.getLineCount() - vHeight);
   };
@@ -212,61 +215,31 @@ async function main() {
   let stopSpokenOutputForExit: (() => void) | null = null;
   let recoveryPending = false;
 
-  const sigintHandler = (): void => input.feed('\x03');
-  let _unhandledRejectionCount = 0;
-  let _unhandledRejectionWindowStart = Date.now();
-  const unhandledRejectionHandler = (reason: unknown): void => {
-    const now = Date.now();
-    if (now - _unhandledRejectionWindowStart > 10000) {
-      _unhandledRejectionCount = 0;
-      _unhandledRejectionWindowStart = now;
-    }
-    _unhandledRejectionCount++;
-    const msg = reason instanceof Error ? reason.message : String(reason);
-    if (_unhandledRejectionCount > 3) {
-      logger.error('CRITICAL: cascading unhandled rejections — consider restarting', {
-        count: _unhandledRejectionCount,
-        windowMs: now - _unhandledRejectionWindowStart,
-        error: String(reason),
-      });
-      systemMessageRouter.high(
-        `[Critical] Multiple errors detected (${_unhandledRejectionCount} in 10s). If the issue persists, please restart. Latest: ${msg}`
-      );
-    } else {
-      const formatted = formatUserFacingErrorLine(reason);
-      systemMessageRouter.high(`[Error] ${formatted}`);
-      logger.error('unhandledRejection', { error: String(reason) });
-    }
-    render();
-  };
-  const resizeHandler = (): void => {
-    input.setContentWidth(getPromptContentWidth());
-    compositor.resetDiff();
-    render();
-  };
-
-  let exiting = false;
-  const exitApp = (): void => {
-    if (exiting) return; exiting = true;
-    stopSpokenOutputForExit?.();
-    unsubs.forEach(fn => fn());
-    const snapshot = conversation.toJSON() as { messages: Array<import('./core/conversation.ts').ConversationMessageSnapshot>; timestamp?: number };
-    ctx.shutdown({ ...snapshot, ...buildPersistedSessionContext(snapshot.messages, conversation.getTitleSource(), buildSessionContinuityHints()) }).catch((err) => {
-      logger.debug('ctx.shutdown error during exitApp (non-fatal)', { error: summarizeError(err) });
-    });
-    if (recoveryInterval !== null) { clearInterval(recoveryInterval); recoveryInterval = null; }
-    deleteRecoveryFile({ homeDirectory });
-    stdin.removeAllListeners('data');
-    stdout.removeListener('resize', resizeHandler);
-    process.removeListener('SIGINT', sigintHandler);
-    process.removeListener('unhandledRejection', unhandledRejectionHandler);
-    const exitScreen = cli.flags.noAltScreen ? CLEAR_SCREEN : CLEAR_SCREEN + ALT_SCREEN_EXIT;
-    allowTerminalWrite(() => stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + exitScreen));
-    terminalOutputGuard.dispose();
-    stdin.setRawMode(false);
-    process.exit(0);
-  };
-
+  const lifecycle = installProcessLifecycle({
+    stdin,
+    stdout,
+    ctx,
+    noAltScreen: cli.flags.noAltScreen,
+    ansi: { CLEAR_SCREEN, ALT_SCREEN_EXIT, PASTE_DISABLE, KEYBOARD_EXT_DISABLE, MOUSE_DISABLE, CURSOR_SHOW },
+    getInput: () => input,
+    render: () => render(),
+    getPromptContentWidth,
+    getTerminalOutputGuard: () => terminalOutputGuard,
+    buildSessionContinuityHints,
+    unsubs,
+    getRecoveryInterval: () => recoveryInterval,
+    setRecoveryInterval: (value) => { recoveryInterval = value; },
+    getStopSpokenOutputForExit: () => stopSpokenOutputForExit,
+  });
+  const {
+    exitApp,
+    resizeHandler,
+    sigintHandler,
+    unhandledRejectionHandler,
+    uncaughtExceptionHandler,
+    terminationSignalHandler,
+    exitListener,
+  } = lifecycle;
   commandContext.exit = exitApp;
 
   const spokenTurns = wireSpokenTurnRuntime({
@@ -463,6 +436,9 @@ async function main() {
 
     // Cache the current model for consistent values across the entire render frame
     const currentModel = providerRegistry.getCurrentModel();
+    // Resolve the effective context window (provider_api / configured_cap overrides) once,
+    // so the footer meter, footer-height, and context inspector agree with the Tokens panel.
+    const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const sessionSnapshot = uiServices.readModels.session.getSnapshot();
     const agentSnapshot = uiServices.readModels.agents.getSnapshot();
 
@@ -488,7 +464,7 @@ async function main() {
     const maintenanceStatus = evaluateSessionMaintenance({
       configManager,
       currentTokens: orchestrator.lastInputTokens,
-      contextWindow: providerRegistry.getContextWindowForModel(currentModel),
+      contextWindow,
       sessionMemoryCount: ctx.services.sessionMemoryStore.list().length,
     });
     const contextStatusHint = buildContextStatusHint({
@@ -512,7 +488,7 @@ async function main() {
       toolCount: toolRegistry.list().length,
       workingDir,
       provider: runtime.provider,
-      contextWindow: providerRegistry.getContextWindowForModel(currentModel),
+      contextWindow,
       contextStatusHint,
       // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
       // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
@@ -636,7 +612,7 @@ async function main() {
       keybindingsManager: ctx.services.keybindingsManager,
       conversationWidth,
       viewportHeight: vHeight,
-      contextWindow: providerRegistry.getContextWindowForModel(currentModel),
+      contextWindow,
     });
 
     // Panel composite data
@@ -740,24 +716,19 @@ async function main() {
     }
   });
 
+  // Register terminal-restoring crash/termination handlers BEFORE entering raw mode so a
+  // throw during terminal setup or the initial render still restores the terminal; the
+  // 'exit' listener is the final safety net for any process.exit path.
+  process.on('uncaughtException', uncaughtExceptionHandler);
+  process.on('SIGTERM', terminationSignalHandler);
+  process.on('SIGHUP', terminationSignalHandler);
+  process.on('exit', exitListener);
+
   // --- Terminal setup ---
   stdin.setRawMode(true);
   stdin.resume();
   stdin.setEncoding('utf8');
   allowTerminalWrite(() => stdout.write((cli.flags.noAltScreen ? '' : ALT_SCREEN_ENTER) + CLEAR_SCREEN + CURSOR_HIDE + MOUSE_ENABLE + KEYBOARD_EXT_ENABLE + PASTE_ENABLE));
-
-  // Terminal restore safety net: returns the terminal to a usable state on
-  // any exit path that bypasses exitApp (crash, SIGTERM, SIGHUP, process.exit).
-  const restoreTerminal = (): void => {
-    try {
-      allowTerminalWrite(() => stdout.write(PASTE_DISABLE + KEYBOARD_EXT_DISABLE + MOUSE_DISABLE + CURSOR_SHOW + (cli.flags.noAltScreen ? '' : ALT_SCREEN_EXIT)));
-    } catch { /* crash-safe */ }
-    try { stdin.setRawMode(false); } catch { /* crash-safe */ }
-  };
-  process.on('uncaughtException', (err) => { logger.error('uncaughtException', { error: summarizeError(err) }); restoreTerminal(); process.exit(1); });
-  process.on('exit', restoreTerminal);
-  process.on('SIGTERM', () => exitApp());
-  process.on('SIGHUP', () => exitApp());
 
   applyInitialTuiCliState({ cli, input, commandRegistry, commandContext, shellPaths: ctx.services.shellPaths, render });
 

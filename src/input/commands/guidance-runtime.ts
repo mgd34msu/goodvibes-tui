@@ -2,7 +2,7 @@ import { estimateConversationTokens } from '@pellux/goodvibes-sdk/platform/core'
 import { evaluateSessionMaintenance, formatSessionMaintenanceLines, getGuidanceMode } from '@/runtime/index.ts';
 import { dismissGuidance, evaluateContextualGuidance, formatGuidanceItems, resetGuidance } from '@/runtime/index.ts';
 import type { CommandRegistry } from '../command-registry.ts';
-import { requireProviderApi, requireReadModels, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
+import { requireReadModels, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
 
 export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void {
   registry.register({
@@ -68,8 +68,6 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
         return;
       }
 
-      const providerApi = requireProviderApi(ctx);
-      const currentModel = await providerApi.getCurrentModel().catch(() => null); // best-effort: null handled as unknown context window
       const llmMessages = ctx.session.conversationManager.getMessagesForLLM();
       const readModels = requireReadModels(ctx);
       const session = readModels.session.getSnapshot();
@@ -80,7 +78,7 @@ export function registerGuidanceRuntimeCommands(registry: CommandRegistry): void
       const maintenance = evaluateSessionMaintenance({
         configManager: ctx.platform.configManager,
         currentTokens: estimateConversationTokens(llmMessages),
-        contextWindow: currentModel?.contextWindow ?? 0,
+        contextWindow: ctx.provider.providerRegistry.getContextWindowForModel(ctx.provider.providerRegistry.getCurrentModel()),
         messageCount: llmMessages.length,
         sessionMemoryCount: requireSessionMemoryStore(ctx).list().length,
         session: session.session,

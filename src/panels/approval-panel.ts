@@ -1,12 +1,18 @@
 import type { Line } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
+  buildBodyText,
+  buildDetailBlock,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
+  buildStatusBadge,
   DEFAULT_PANEL_PALETTE,
+  type StatusBadgeKind,
 } from './polish.ts';
-import type { PolicyRuntimeState } from '@/runtime/index.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
+import type { PolicyRuntimeState, PermissionAuditEntry } from '@/runtime/index.ts';
 import { buildPermissionRuleSuggestions } from '@/runtime/index.ts';
 
 const C = {
@@ -14,21 +20,56 @@ const C = {
   headerBg: '#111827',
 } as const;
 
-const APPROVAL_ROWS = [
-  ['shell', 'why prompted: side effects, destructive ops, secret exposure, escalation', 'review via /security and /policy preflight'],
-  ['file', 'why prompted: config mutation, notebook edits, secret-bearing paths', 'review via /approval review file'],
-  ['network', 'why prompted: external hosts, fetch scope, egress policy', 'review via /approval review network'],
-  ['delegate', 'why prompted: recursive agents, spawn ceilings, write-set inheritance', 'review via /approval review delegate'],
-  ['mcp', 'why prompted: trust escalation, host scope, path scope, coherence mismatch', 'review via /mcp trust and /security'],
-  ['remote', 'why prompted: runner trust, remote write scope, artifact requirements', 'review via /remote and /sandbox'],
-  ['hook', 'why prompted: deny/mutate authority, blocking behavior, runner provenance', 'review via /hooks and /security'],
-  ['plugin', 'why prompted: install/update lifecycle, provenance, capability grants', 'review via /marketplace and /security'],
-  ['sandbox', 'why prompted: WSL/VM isolation changes alter host risk posture', 'review via /sandbox preset and /sandbox review'],
-] as const;
+// Reference catalog of approval lanes and where each one is reviewed. Used to
+// resolve the next-step command for a live request and as a fallback reference
+// when no live requests are present.
+const LANE_REVIEW: Record<string, { command: string; why: string }> = {
+  shell:    { command: '/security', why: 'side effects, destructive ops, secret exposure, escalation' },
+  file:     { command: '/approval review file', why: 'config mutation, notebook edits, secret-bearing paths' },
+  network:  { command: '/approval review network', why: 'external hosts, fetch scope, egress policy' },
+  delegate: { command: '/approval review delegate', why: 'recursive agents, spawn ceilings, write-set inheritance' },
+  mcp:      { command: '/mcp trust', why: 'trust escalation, host scope, path scope, coherence mismatch' },
+  remote:   { command: '/remote', why: 'runner trust, remote write scope, artifact requirements' },
+  hook:     { command: '/hooks', why: 'deny/mutate authority, blocking behavior, runner provenance' },
+  plugin:   { command: '/marketplace', why: 'install/update lifecycle, provenance, capability grants' },
+  sandbox:  { command: '/sandbox review', why: 'WSL/VM isolation changes alter host risk posture' },
+};
 
-type ApprovalRow = (typeof APPROVAL_ROWS)[number];
+function laneOf(entry: PermissionAuditEntry): string {
+  const key = (entry.category || entry.tool || '').toLowerCase();
+  for (const lane of Object.keys(LANE_REVIEW)) {
+    if (key.includes(lane)) return lane;
+  }
+  return key || 'shell';
+}
 
-export class ApprovalPanel extends ScrollableListPanel<ApprovalRow> {
+function reviewFor(entry: PermissionAuditEntry): { command: string; why: string } {
+  return LANE_REVIEW[laneOf(entry)] ?? { command: '/security', why: 'review approval posture' };
+}
+
+function decisionOf(entry: PermissionAuditEntry): 'pending' | 'approved' | 'denied' {
+  return entry.approved === undefined ? 'pending' : entry.approved ? 'approved' : 'denied';
+}
+
+function badgeKind(decision: 'pending' | 'approved' | 'denied'): StatusBadgeKind {
+  return decision === 'pending' ? 'pending' : decision === 'approved' ? 'completed' : 'failed';
+}
+
+function riskColor(risk: string): string {
+  const r = risk.toLowerCase();
+  if (r.includes('critical') || r.includes('high')) return C.bad;
+  if (r.includes('medium') || r.includes('moderate')) return C.warn;
+  return C.good;
+}
+
+function fmtAgo(ts: number): string {
+  const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (sec < 60) return `${sec}s ago`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+  return `${Math.floor(sec / 3600)}h ago`;
+}
+
+export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
   private readonly policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>;
 
   public constructor(policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>) {
@@ -38,113 +79,123 @@ export class ApprovalPanel extends ScrollableListPanel<ApprovalRow> {
   }
 
   protected override getPalette() { return C; }
-  protected override getEmptyStateMessage() { return ' No approval lanes defined.'; }
-
-  protected getItems(): readonly ApprovalRow[] {
-    return APPROVAL_ROWS;
+  protected override getEmptyStateMessage() { return ' No approval pressure right now.'; }
+  protected override getEmptyStateActions() {
+    return [
+      { command: '/security', summary: 'inspect trust, tokens, quarantines, and incident pressure' },
+      { command: '/policy simulate', summary: 'preview which requests a rule change would auto-approve' },
+    ];
   }
 
-  protected renderItem(row: ApprovalRow, index: number, selected: boolean, width: number): Line {
+  // Pending requests (those still needing a decision) are surfaced first so the
+  // operator sees actionable items at the top, then most-recent decisions.
+  protected getItems(): readonly PermissionAuditEntry[] {
+    const audit = this.policyRuntimeState.getSnapshot().recentPermissionAudit;
+    const pending = audit.filter((e) => e.approved === undefined);
+    const decided = audit.filter((e) => e.approved !== undefined);
+    return [...pending, ...decided];
+  }
+
+  protected renderItem(entry: PermissionAuditEntry, _index: number, selected: boolean, width: number): Line {
     const bg = selected ? C.selectBg : undefined;
+    const decision = decisionOf(entry);
+    const badge = buildStatusBadge(badgeKind(decision), decision)[0]!;
+    const detailWidth = Math.max(0, width - 40);
     return buildPanelLine(width, [
-      ['  ', C.label],
-      [row[0].padEnd(10), C.info, bg],
-      [row[1].slice(0, Math.max(0, width - 18)), C.value, bg],
+      [' ', C.label, bg],
+      [`${badge.text} `.padEnd(12), badge.fg, bg],
+      [`${truncateDisplay(entry.tool, 12)} `.padEnd(13), C.value, bg],
+      [`${truncateDisplay(entry.riskLevel, 6)} `.padEnd(7), riskColor(entry.riskLevel), bg],
+      [truncateDisplay(entry.summary, detailWidth), C.dim, bg],
     ]);
   }
 
-  public handleInput(key: string): boolean {
-    if (key === 'home') {
-      this.selectedIndex = 0;
-      this.markDirty();
-      return true;
-    }
-    if (key === 'end') {
-      this.selectedIndex = APPROVAL_ROWS.length - 1;
-      this.markDirty();
-      return true;
-    }
-    if (key === 'enter' || key === 'return') {
-      return true;
-    }
-    return super.handleInput(key);
-  }
-
+  /** Next-step review command for the currently selected request (if any). */
   public getSelectedCommand(): string | null {
-    const selected = APPROVAL_ROWS[this.selectedIndex] ?? null;
-    return selected ? selected[2].replace('review via ', '').trim() : null;
+    const items = this.getVisibleItems();
+    const selected = items[this.selectedIndex];
+    return selected ? reviewFor(selected).command : null;
   }
 
   public render(width: number, height: number): Line[] {
     this.clampSelection();
-    const policySnapshot = this.policyRuntimeState.getSnapshot();
-    const approvalCount = policySnapshot.recentPermissionAudit.filter((e) => e.approved === true).length;
-    const denialCount = policySnapshot.recentPermissionAudit.filter((e) => e.approved === false).length;
-    const pendingCount = policySnapshot.recentPermissionAudit.filter((e) => e.approved === undefined).length;
+    const audit = this.policyRuntimeState.getSnapshot().recentPermissionAudit;
+    const approvalCount = audit.filter((e) => e.approved === true).length;
+    const denialCount = audit.filter((e) => e.approved === false).length;
+    const pendingCount = audit.filter((e) => e.approved === undefined).length;
 
-    const selected = APPROVAL_ROWS[this.selectedIndex] ?? null;
+    const items = this.getVisibleItems();
+    const selected = items[this.selectedIndex] ?? null;
+
+    // ---- Posture summary (severity + counts first) ----
+    const headerLines: Line[] = [
+      buildPanelLine(width, [
+        ['  ', C.label],
+        ...buildStatusBadge('pending', 'pending', { count: pendingCount }),
+        ['   ', C.dim],
+        ...buildStatusBadge('completed', 'approved', { count: approvalCount }),
+        ['   ', C.dim],
+        ...buildStatusBadge('failed', 'denied', { count: denialCount }),
+      ]),
+      pendingCount > 0
+        ? buildPanelLine(width, [[`  ${pendingCount} request${pendingCount !== 1 ? 's' : ''} awaiting a decision — select one to see its review path.`, C.warn]])
+        : buildGuidanceLine(width, '/policy simulate', 'preview which requests a scoped rule change would auto-approve', C),
+    ];
+
+    // ---- Detail block for the selected request ----
     const detailLines: Line[] = [];
     if (selected) {
-      detailLines.push(buildPanelLine(width, [['  Selected Lane', C.label]]));
-      detailLines.push(buildKeyValueLine(width, [
-        { label: 'lane', value: selected[0], valueColor: C.info },
-        { label: 'next review', value: selected[2], valueColor: C.dim },
+      const review = reviewFor(selected);
+      const decision = decisionOf(selected);
+      detailLines.push(...buildDetailBlock(width, `Request · ${selected.tool}`, [
+        buildKeyValueLine(width, [
+          { label: 'decision', value: decision, valueColor: decision === 'pending' ? C.info : decision === 'approved' ? C.good : C.bad },
+          { label: 'risk', value: selected.riskLevel, valueColor: riskColor(selected.riskLevel) },
+          { label: 'lane', value: laneOf(selected), valueColor: C.info },
+        ], C),
+        buildKeyValueLine(width, [
+          { label: 'requested', value: fmtAgo(selected.requestedAt), valueColor: C.dim },
+          ...(selected.decidedAt ? [{ label: 'decided', value: fmtAgo(selected.decidedAt), valueColor: C.dim }] : []),
+          ...(selected.target ? [{ label: 'target', value: truncateDisplay(selected.target, 24), valueColor: C.value }] : []),
+        ], C),
+        ...buildBodyText(width, selected.summary, C, C.value),
+        ...(selected.reasons[0]
+          ? buildBodyText(width, `why prompted: ${selected.reasons[0]}`, C, C.dim)
+          : buildBodyText(width, `why prompted: ${review.why}`, C, C.dim)),
+        buildGuidanceLine(width, review.command, `review and decide the ${laneOf(selected)} request`, C),
       ], C));
-      detailLines.push(buildPanelLine(width, [[` ${selected[1]}`, C.value]]));
-      detailLines.push(buildGuidanceLine(width, selected[2].replace('review via ', ''), `open the ${selected[0]} review path`, C));
     }
 
-    const recentAuditLines: Line[] = [];
-    for (const entry of policySnapshot.recentPermissionAudit.slice(0, 5)) {
-      const decision = entry.approved === undefined ? 'pending' : entry.approved ? 'approved' : 'denied';
-      const decisionColor = entry.approved === undefined ? C.info : entry.approved ? C.good : C.bad;
-      recentAuditLines.push(buildPanelLine(width, [
-        [`  ${decision.padEnd(8)}`, decisionColor],
-        [`${entry.tool}`.padEnd(14), C.label],
-        [entry.summary.slice(0, Math.max(0, width - 28)), C.value],
-      ]));
-      if (entry.reasons[0]) {
-        recentAuditLines.push(buildPanelLine(width, [[`    ${entry.reasons[0]}`, C.dim]]));
-      }
-    }
-    if (recentAuditLines.length === 0) {
-      recentAuditLines.push(buildPanelLine(width, [[`  No recent approval pressure. Live requests and decisions will appear here.`, C.dim]]));
-    }
-
+    // ---- Durable-rule suggestions from repeated denials ----
     const ruleSuggestionLines: Line[] = [];
-    for (const suggestion of buildPermissionRuleSuggestions(policySnapshot.recentPermissionAudit).slice(0, 3)) {
-      ruleSuggestionLines.push(buildPanelLine(width, [[`  ${suggestion.summary}`, C.info]]));
+    for (const suggestion of buildPermissionRuleSuggestions(audit).slice(0, 3)) {
+      ruleSuggestionLines.push(buildPanelLine(width, [[`  ${truncateDisplay(suggestion.summary, Math.max(0, width - 4))}`, C.info]]));
       ruleSuggestionLines.push(buildGuidanceLine(width, suggestion.command, suggestion.reason, C));
     }
-    if (ruleSuggestionLines.length === 0) {
-      ruleSuggestionLines.push(buildPanelLine(width, [[`  No repeated denials currently suggest a durable rule.`, C.dim]]));
+    if (ruleSuggestionLines.length > 0) {
+      ruleSuggestionLines.unshift(buildPanelLine(width, [['  Suggested durable rules', C.label]]));
     }
 
-    const headerLines: Line[] = [
-      buildPanelLine(width, [['  Approval posture', C.label]]),
-      buildKeyValueLine(width, [
-        { label: 'why prompted', value: 'risk summary', valueColor: C.value },
-        { label: 'what-if', value: '/policy simulate + preflight', valueColor: C.info },
-        { label: 'operator', value: '/security + /cockpit', valueColor: C.good },
-      ], C),
-      buildPanelLine(width, [
-        ['  \u2713 ', C.good],
-        [`approvals (${approvalCount})  `, C.good],
-        ['\u2715 ', C.bad],
-        [`denials (${denialCount})  `, C.bad],
-        ['\u25cb ', C.info],
-        [`pending (${pendingCount})`, C.info],
-      ]),
-      buildGuidanceLine(width, '/approval review shell', 'inspect the highest-risk approval lane and refine scoped review posture', C),
-      ...detailLines,
-      ...recentAuditLines,
-      ...ruleSuggestionLines,
-    ];
+    // ---- Context-aware footer: only show review key when a request is selected ----
+    const hints = selected
+      ? [
+          { keys: '↑/↓', label: 'select' },
+          { keys: 'Enter', label: `review (${reviewFor(selected).command})` },
+          { keys: 'g/G', label: 'top/bottom' },
+        ]
+      : [
+          { keys: '↑/↓', label: 'select' },
+          { keys: 'g/G', label: 'top/bottom' },
+        ];
 
     return this.renderList(width, height, {
       title: 'Approval Control Room',
       header: headerLines,
-      footer: [buildPanelLine(width, [[`  Up/Down move  Home/End jump  selected lane opens the next command path`, C.dim]])],
+      footer: [...detailLines, ...ruleSuggestionLines, buildKeyboardHints(width, hints, C)],
     });
+  }
+
+  protected override onSelect(item: PermissionAuditEntry): void {
+    void item; // Enter is wired by the shell to open getSelectedCommand(); selection model lives here.
   }
 }

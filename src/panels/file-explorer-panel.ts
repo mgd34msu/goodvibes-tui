@@ -9,14 +9,15 @@ import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import {
   buildEmptyState,
+  buildKeyboardHints,
   buildPanelLine,
   buildSearchInputLine,
-  buildSelectablePanelLine,
+  buildTreeRow,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -24,6 +25,7 @@ import {
   isPanelSearchCommit,
   isPanelSearchPrintable,
 } from './search-focus.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -83,15 +85,12 @@ interface TreeNode {
 // ---------------------------------------------------------------------------
 // Colour palette
 // ---------------------------------------------------------------------------
-const CLR_DIR      = '#00ffff'; // cyan — directories
-const CLR_FILE     = '#e0e0e0'; // near-white — files
-const CLR_SIZE     = '244';     // dim grey — sizes
-const CLR_CURSOR   = '#1a2a3a'; // cursor background
-const CLR_CURSOR_FG = '#ffffff';
-const CLR_SEARCH_BG = '#2a1a3a';
-const CLR_SEARCH_FG = '#ff79c6';
-const CLR_TOGGLE   = '244';     // ▶/▼ toggle arrows
-const CLR_ICON     = '244';     // file type icon
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  dirColor: '#00ffff',   // cyan — directories
+  fileColor: '#e0e0e0',  // near-white — files
+  sizeColor: '244',      // dim grey — sizes
+  cursorBg: '#1a2a3a',   // cursor background
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -214,21 +213,29 @@ export class FileExplorerPanel extends BasePanel {
         ? `Filter: ${this.searchQuery}  (/ or up at top to edit)`
         : `Root: ${relative(this.workingDirectory, this.rootPath) || '.'}  (/ or up at top to search)`;
 
+    // Context-aware hints: only surface keys that act in the current mode.
+    const hintsLine = this.searchMode
+      ? buildKeyboardHints(width, [
+          { keys: 'type', label: 'filter' },
+          { keys: '↑/↓', label: 'move' },
+          { keys: 'Enter', label: 'keep results' },
+          { keys: 'Esc', label: 'clear' },
+        ], C)
+      : buildKeyboardHints(width, [
+          { keys: '↑/↓', label: 'navigate' },
+          { keys: 'Enter/→', label: 'expand' },
+          { keys: '←', label: 'collapse' },
+          { keys: '/', label: 'search' },
+          { keys: 'r', label: 'refresh' },
+        ], C);
+
     if (this.flat.length === 0) {
       return buildPanelWorkspace(width, height, {
         title: ' Explorer',
         intro: 'Browse the project tree, expand directories, and search for paths.',
         sections: [
           {
-            lines: buildEmptyState(
-              width,
-              ' No files found',
-              this.searchQuery
-                ? 'No files or directories match the current search.'
-                : 'This root did not produce any visible files after the explorer filters were applied.',
-              [],
-              DEFAULT_PANEL_PALETTE,
-            ),
+            lines: buildEmptyState(width, ' No files found', this.searchQuery ? 'No files or directories match the current search.' : 'This root did not produce any visible files after the explorer filters were applied.', this.searchQuery ? [{ command: 'Esc', summary: 'clear the filter to show the full tree again' }] : [{ command: 'r', summary: 'rescan this root from disk' }], C),
           },
         ],
         footerLines: [
@@ -236,7 +243,7 @@ export class FileExplorerPanel extends BasePanel {
             active: this.searchMode,
             valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
           }),
-          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter/Right', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim], ['   Left', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+          hintsLine,
         ],
         palette: DEFAULT_PANEL_PALETTE,
       });
@@ -278,7 +285,7 @@ export class FileExplorerPanel extends BasePanel {
           active: this.searchMode,
           valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
         }),
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter/Right', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim], ['   Left', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+        hintsLine,
       ],
       palette: DEFAULT_PANEL_PALETTE,
       beforeSections: [summarySection],
@@ -286,24 +293,17 @@ export class FileExplorerPanel extends BasePanel {
         title: 'Tree',
         scrollableLines: this.flat.map((node, absoluteIdx) => {
           const isCursor = absoluteIdx === this.cursor;
-          const baseBg = isCursor ? CLR_CURSOR : '';
-          const baseFg = isCursor ? CLR_CURSOR_FG : (node.isDir ? CLR_DIR : CLR_FILE);
-          const indent = '  '.repeat(node.depth);
-          const segments = [
-            { text: indent, fg: baseFg },
-            node.isDir
-              ? { text: node.expanded ? '▾ ' : '▸ ', fg: CLR_TOGGLE, bold: isCursor }
-              : { text: `${fileIcon(node.name)} `, fg: CLR_ICON, dim: !isCursor },
-            { text: node.name, fg: baseFg, bold: node.isDir || isCursor },
-          ];
-          if (!node.isDir && node.size > 0) {
-            const sizeStr = ` ${formatSize(node.size)}`;
-            const contentWidth = getDisplayWidth(indent) + 2 + getDisplayWidth(node.name);
-            const gap = Math.max(1, width - contentWidth - getDisplayWidth(sizeStr));
-            segments.push({ text: ' '.repeat(gap), fg: baseFg });
-            segments.push({ text: sizeStr, fg: CLR_SIZE, dim: true });
-          }
-          return buildSelectablePanelLine(width, segments, { selected: isCursor, selectedBg: baseBg, fillFg: baseFg });
+          return buildTreeRow(width, {
+            depth: node.depth,
+            label: node.name,
+            icon: node.isDir ? undefined : fileIcon(node.name),
+            expandable: node.isDir,
+            expanded: node.expanded,
+            labelColor: node.isDir ? C.dirColor : C.fileColor,
+            metadata: (!node.isDir && node.size > 0)
+              ? [{ text: formatSize(node.size), fg: C.sizeColor }]
+              : undefined,
+          }, C, { selected: isCursor, selectedBg: C.cursorBg });
         }),
         selectedIndex: this.cursor,
         scrollOffset: this.scrollTop,
@@ -325,7 +325,7 @@ export class FileExplorerPanel extends BasePanel {
           active: this.searchMode,
           valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
         }),
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Enter/Right', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim], ['   Left', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim], ['   r', DEFAULT_PANEL_PALETTE.info], [' refresh', DEFAULT_PANEL_PALETTE.dim]]),
+        hintsLine,
       ],
       palette: DEFAULT_PANEL_PALETTE,
     });
@@ -342,7 +342,7 @@ export class FileExplorerPanel extends BasePanel {
           this.cacheValid = true;
         });
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
       }
       this.markDirty();
     })();

@@ -1,6 +1,6 @@
 import { createOAuthLocalListener } from '@pellux/goodvibes-sdk/platform/config';
 import { beginOpenAICodexLogin, exchangeOpenAICodexCode } from '@pellux/goodvibes-sdk/platform/config';
-import { openExternalUrl, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { summarizeError, openExternalUrl } from '@pellux/goodvibes-sdk/platform/utils';
 import { getProviderIdFromModel } from '../config/provider-model.ts';
 import { buildProviderAccountSnapshot } from '@/runtime/index.ts';
 import { OnboardingWizardController, type OnboardingWizardAction, type OnboardingWizardApplyFeedback } from './onboarding/onboarding-wizard.ts';
@@ -275,7 +275,7 @@ export async function handleOnboardingActionForHandler(handler: InputHandler, ac
         severity: 'error',
         title: 'Apply failed',
         summary: 'The wizard could not persist these settings. No service restart was attempted.',
-        messages: [error instanceof Error ? error.message : String(error)],
+        messages: [summarizeError(error)],
       });
       return;
     } finally {
@@ -346,7 +346,7 @@ export async function refreshOnboardingHydrationForHandler(handler: InputHandler
       handler.requestRender();
     } catch (error) {
       if (!handler.onboardingWizard.active || hydrationSerial !== handler.onboardingHydrationSerial) return;
-      const message = error instanceof Error ? error.message : String(error);
+      const message = summarizeError(error);
       handler.onboardingWizard.failRuntimeHydration(message);
       handler.requestRender();
     }
@@ -405,7 +405,7 @@ export async function handleOpenAiSubscriptionStartForHandler(handler: InputHand
       listener?.close();
       handler.commandContext?.print?.([
         'OpenAI subscription sign-in could not start.',
-        `  ${error instanceof Error ? error.message : String(error)}`,
+        `  ${summarizeError(error)}`,
       ].join('\n'));
       handler.requestRender();
     } finally {
@@ -449,7 +449,7 @@ export async function completeOpenAiSubscriptionFromListenerForHandler(
     } catch (error) {
       handler.commandContext?.print?.([
         'OpenAI subscription listener could not complete automatically.',
-        `  listener: ${error instanceof Error ? error.message : String(error)}`,
+        `  listener: ${summarizeError(error)}`,
         'Paste the callback code or URL into the OpenAI callback field to finish in onboarding.',
       ].join('\n'));
       handler.requestRender();
@@ -501,7 +501,7 @@ export async function handleOpenAiSubscriptionFinishForHandler(handler: InputHan
     } catch (error) {
       handler.commandContext?.print?.([
         'OpenAI subscription sign-in could not finish.',
-        `  ${error instanceof Error ? error.message : String(error)}`,
+        `  ${summarizeError(error)}`,
       ].join('\n'));
       handler.requestRender();
     } finally {
@@ -663,7 +663,7 @@ export async function restartOnboardingExternalServicesIfNeededForHandler(handle
       return [{
         id: 'runtime:activation-restart',
         status: 'fail',
-        message: `Background services could not restart: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Background services could not restart: ${summarizeError(error)}`,
         target: 'service',
       }];
     }

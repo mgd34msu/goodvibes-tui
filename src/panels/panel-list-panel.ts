@@ -30,7 +30,7 @@ import {
   resolvePrimaryScrollableSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { wrapWithHangingIndent } from '../renderer/text-layout.ts';
 import {
   getPanelSearchFocusTransition,
@@ -78,10 +78,13 @@ const CATEGORY_LABELS: Record<PanelCategory, string> = {
 const NAME_COL_WIDTH = 22;
 const PREFIX_WIDTH = 4; // arrow + dot + space + space
 
-/** A flat entry in the navigable list — either a category header or a panel row. */
+/** A flat entry in the navigable list — either a section header or a panel row. */
 type ListEntry =
-  | { kind: 'header'; category: PanelCategory }
+  | { kind: 'header'; label: string }
   | { kind: 'panel'; reg: PanelRegistration };
+
+/** Number of most-recently-opened panels to surface in the Recent group. */
+const RECENT_LIMIT = 5;
 
 function panelPlacementMarker(options: {
   isTopOpen: boolean;
@@ -323,7 +326,7 @@ export class PanelListPanel extends BasePanel {
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
-    const footerLines = [buildPanelLine(width, [[` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`.slice(0, width), C.hint]])];
+    const footerLines = [buildPanelLine(width, [[truncateDisplay(` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`, width), C.hint]])];
     const postureLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.name : C.dim },
@@ -345,10 +348,10 @@ export class PanelListPanel extends BasePanel {
     let flatPanelIndex = 0;
     for (const entry of entries) {
       if (entry.kind === 'header') {
-        const label = ` ── ${CATEGORY_LABELS[entry.category]} ${'─'.repeat(Math.max(0, width - 6 - CATEGORY_LABELS[entry.category].length))}`;
+        const label = ` ── ${entry.label} ${'─'.repeat(Math.max(0, width - 6 - entry.label.length))}`;
         renderedBlocks.push({
           entry,
-          lines: [buildPanelLine(width, [[label.slice(0, width), C.category, C.categoryBg]])],
+          lines: [buildPanelLine(width, [[truncateDisplay(label, width), C.category, C.categoryBg]])],
         });
       } else {
         const flatIdx = flatPanelIndex++;
@@ -358,17 +361,23 @@ export class PanelListPanel extends BasePanel {
         const dot = isTopOpen || isBottomOpen ? '●' : '○';
         const dotColor = isTopOpen || isBottomOpen ? C.openDot : C.closedDot;
         const nameColor = isSelected ? C.selected : C.name;
-        const nameStr = entry.reg.name.padEnd(NAME_COL_WIDTH, ' ').slice(0, NAME_COL_WIDTH);
+        const nameStr = fitDisplay(entry.reg.name, NAME_COL_WIDTH);
         const descStartCol = PREFIX_WIDTH + NAME_COL_WIDTH + 1;
         const descWidth = Math.max(1, width - descStartCol);
         const descLines = wrapPanelDescription(entry.reg.description, descWidth, 2);
         const placement = panelPlacementMarker({ isTopOpen, isBottomOpen, focusedPane });
+        // When searching, the flat result list loses its category grouping — so
+        // tag each result with a dim [Category] so the origin stays discoverable.
+        const categoryTag = this._query
+          ? `[${CATEGORY_LABELS[entry.reg.category]}] `
+          : '';
         const blockLines: Line[] = [
           buildPanelListRow(width, [
             { text: dot, fg: dotColor },
             { text: placement.text, fg: placement.color },
             { text: ' ', fg: C.dim },
             { text: `${nameStr} `, fg: nameColor },
+            { text: categoryTag, fg: C.category },
             { text: descLines[0] ?? '', fg: C.desc },
           ], C, { selected: isSelected, selectedBg: C.selectedBg, markerColor: C.selIcon }),
         ];
@@ -443,6 +452,22 @@ export class PanelListPanel extends BasePanel {
     const q = this._query.toLowerCase();
     const entries: ListEntry[] = [];
 
+    // Recent group (browse mode only): the most-recently-opened panels, newest
+    // first, so frequently used panels are one keystroke away.
+    if (!q) {
+      const byId = new Map(manager.getRegisteredTypes().map((r) => [r.id, r]));
+      const recent: PanelRegistration[] = [];
+      for (const id of manager.getRecentlyOpened()) {
+        const reg = byId.get(id);
+        if (reg) recent.push(reg);
+        if (recent.length >= RECENT_LIMIT) break;
+      }
+      if (recent.length > 0) {
+        entries.push({ kind: 'header', label: 'Recent' });
+        for (const reg of recent) entries.push({ kind: 'panel', reg });
+      }
+    }
+
     for (const cat of CATEGORY_ORDER) {
       const regs = byCategory.get(cat) ?? [];
       const filtered = q
@@ -456,7 +481,7 @@ export class PanelListPanel extends BasePanel {
 
       if (filtered.length === 0) continue;
 
-      entries.push({ kind: 'header', category: cat });
+      entries.push({ kind: 'header', label: CATEGORY_LABELS[cat] });
       for (const reg of filtered) {
         entries.push({ kind: 'panel', reg });
       }

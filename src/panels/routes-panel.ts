@@ -4,9 +4,11 @@ import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { UiReadModel, UiRoutesSnapshot } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
+  buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
   buildStatusPill,
@@ -39,8 +41,18 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
   public constructor(readModel?: UiReadModel<UiRoutesSnapshot>) {
     super('routes', 'Routes', 'R', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter routes';
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  protected override filterMatches(binding: RouteBinding, q: string): boolean {
+    return binding.surfaceKind.toLowerCase().includes(q)
+      || (binding.title ?? '').toLowerCase().includes(q)
+      || binding.externalId.toLowerCase().includes(q)
+      || (binding.sessionId ?? '').toLowerCase().includes(q)
+      || (binding.runId ?? '').toLowerCase().includes(q);
   }
 
   public override onDestroy(): void {
@@ -127,7 +139,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
     this.clampSelection();
     const selected = bindings[this.selectedIndex]!;
 
-    const footerLines: Line[] = [
+    const detailRows: Line[] = [
       buildPanelLine(width, [
         ['  Binding: ', C.label],
         [selected.id, C.value],
@@ -159,20 +171,30 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
     ];
 
     if (surfaceEntries.length > 0) {
-      footerLines.push(
-        ...surfaceEntries.slice(0, 6).map(([surface, ids]) => buildPanelLine(width, [
+      detailRows.push(
+        ...surfaceEntries.slice(0, 4).map(([surface, ids]) => buildPanelLine(width, [
           [' ', C.label],
           [surface.padEnd(10), C.info],
           [` ${String(ids.length)} binding(s)`, C.value],
         ])),
       );
     }
-    footerLines.push(buildPanelLine(width, [['  Up/Down move through route bindings', C.dim]]));
+
+    const hints = this.filterActive
+      ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
+      : [
+          { keys: 'Up/Down', label: 'move' },
+          { keys: '/communication', label: 'inspect flow' },
+          { keys: '/', label: 'filter' },
+        ];
 
     return this.renderList(width, height, {
       title: 'Route Bindings',
       header: headerLines,
-      footer: footerLines,
+      footer: [
+        ...buildDetailBlock(width, `Binding · ${selected.surfaceKind}`, detailRows, C),
+        buildKeyboardHints(width, hints, C),
+      ],
     });
   }
 }

@@ -22,10 +22,14 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeProjectTempDir } from '../helpers/project-temp.ts';
 import {
+  JOURNAL_SCHEMA_VERSION,
   journalPathFor,
   openTranscriptJournal,
 } from '../../core/transcript-journal.ts';
-import { replayJournalForSession } from '../../core/session-recovery.ts';
+import {
+  replayJournalForSession,
+  replayJournalIntoConversation,
+} from '../../core/session-recovery.ts';
 import { handleBlockingShellInput } from '../../shell/blocking-input.ts';
 import { ConversationManager } from '../../core/conversation.ts';
 import { createResumeSessionHandler } from '../../runtime/bootstrap-hook-bridge.ts';
@@ -405,6 +409,138 @@ describe('seam-replay: seam 3 — in-TUI panel resume (createResumeSessionHandle
     // No journal means no replay; only snapshot messages (none in our stub).
     expect(conversation.getMessageCount()).toBe(0);
     expect(persistCalled).toBe(false);
+  });
+});
+
+// ── Regression: title/titleSource preserved across post-snapshot replay (T25) ─
+
+describe('seam-replay: title/titleSource preservation (T25)', () => {
+  test('post-snapshot replay preserves the seam-restored title and titleSource', () => {
+    const sessionId = 'seam-title-ses';
+    const homeDirectory = tmpDir;
+    const journalPath = journalPathFor(homeDirectory, sessionId);
+    const snapshotTimestamp = Date.now() - 5000;
+
+    // Journal carries POST-snapshot records (messages only — journal records
+    // never carry the title/titleSource).
+    writeJournalWithRecords(journalPath, sessionId, 2, snapshotTimestamp);
+
+    // The resume seam hydrates session identity (title + titleSource) onto the
+    // live conversation BEFORE replay runs. Simulate that hydration.
+    const conversation = new ConversationManager(() => 80);
+    conversation.fromJSON({
+      messages: [],
+      title: 'Restored Session Title',
+      titleSource: 'user',
+    });
+    expect(conversation.title).toBe('Restored Session Title');
+    expect(conversation.getTitleSource()).toBe('user');
+
+    const result = replayJournalIntoConversation({
+      journalPath,
+      snapshotTimestamp,
+      conversation,
+      sessionId,
+      persistSnapshot: () => {},
+    });
+
+    // Records were replayed (messages applied)...
+    expect(result.replayed).toBeGreaterThan(0);
+    expect(conversation.getMessageCount()).toBeGreaterThan(0);
+
+    // ...but the toJSON-spread fromJSON preserved the seam-restored identity.
+    // A bare fromJSON({ messages }) would have blanked the title and reset
+    // titleSource to the system default.
+    expect(conversation.title).toBe('Restored Session Title');
+    expect(conversation.getTitleSource()).toBe('user');
+  });
+});
+
+// ── Regression: seq-collision authoritative-record selection (T30) ───────────
+
+describe('seam-replay: seq-collision authoritative-record selection (T30)', () => {
+  test('newest-ts append wins over a stale high-seq tail from a non-rotated journal', () => {
+    const sessionId = 'seam-seqcollision';
+    const journalPath = journalPathFor(tmpDir, sessionId);
+    const snapshotTimestamp = Date.now() - 10_000;
+    const base = Date.now() - 5000;
+
+    // A prior process left this journal WITHOUT rotating: old records
+    // (seq 0..2, earlier ts, STALE 10-message snapshots) are followed by a
+    // fresh process's appends that restart at seq 0 (NEWER ts, CURRENT
+    // 3-message snapshot). Sorting by seq alone leaves the stale seq-2 record
+    // last — recovery must instead pick the record with the newest ts.
+    const dir = join(journalPath, '..');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const header = JSON.stringify({
+      version: JOURNAL_SCHEMA_VERSION,
+      sessionId,
+      createdAt: base,
+    });
+    const stale = (seq: number, ts: number) =>
+      JSON.stringify({ type: 'assistant_turn', seq, ts, messages: makeMessages(10) });
+    const fresh = (seq: number, ts: number, count: number) =>
+      JSON.stringify({ type: 'assistant_turn', seq, ts, messages: makeMessages(count) });
+    writeFileSync(
+      journalPath,
+      [
+        header,
+        stale(0, base + 100),
+        stale(1, base + 200),
+        stale(2, base + 300), // sorts LAST by seq, but is STALE
+        fresh(0, base + 1000, 2),
+        fresh(1, base + 1100, 3), // NEWEST ts — authoritative
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const conversation = new ConversationManager(() => 80);
+    const result = replayJournalIntoConversation({
+      journalPath,
+      snapshotTimestamp,
+      conversation,
+      sessionId,
+      persistSnapshot: () => {},
+    });
+
+    // All five records post-date the snapshot.
+    expect(result.replayed).toBe(5);
+    // Authoritative record is the newest-ts append (3 messages), NOT the stale
+    // seq-2 record (10 messages) that the seq-sort leaves last.
+    expect(conversation.getMessageCount()).toBe(3);
+  });
+
+  test('ties on ts are broken by the highest seq', () => {
+    const sessionId = 'seam-seqtie';
+    const journalPath = journalPathFor(tmpDir, sessionId);
+    const snapshotTimestamp = Date.now() - 10_000;
+    const sameTs = Date.now() - 1000;
+
+    const dir = join(journalPath, '..');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    const header = JSON.stringify({
+      version: JOURNAL_SCHEMA_VERSION,
+      sessionId,
+      createdAt: sameTs,
+    });
+    // Two records share the max ts; the higher seq carries the current state.
+    const r0 = JSON.stringify({ type: 'assistant_turn', seq: 0, ts: sameTs, messages: makeMessages(7) });
+    const r1 = JSON.stringify({ type: 'assistant_turn', seq: 1, ts: sameTs, messages: makeMessages(4) });
+    writeFileSync(journalPath, [header, r0, r1, ''].join('\n'), 'utf-8');
+
+    const conversation = new ConversationManager(() => 80);
+    const result = replayJournalIntoConversation({
+      journalPath,
+      snapshotTimestamp,
+      conversation,
+      sessionId,
+      persistSnapshot: () => {},
+    });
+
+    expect(result.replayed).toBe(2);
+    // Tie on ts → highest seq (r1, 4 messages) wins.
+    expect(conversation.getMessageCount()).toBe(4);
   });
 });
 

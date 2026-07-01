@@ -64,7 +64,15 @@ export class ConversationManager extends SdkConversationManager {
   private collapseState: Map<string, boolean> = new Map();
   /** Block registry: track rendered blocks for copy/apply. */
   protected blockRegistry: BlockMeta[] = [];
-  /** Message index -> first rendered line index in the history buffer. */
+  /**
+   * Absolute message index -> first rendered line index in the history buffer.
+   * Keyed by the message's ABSOLUTE position in the full (unsliced) snapshot —
+   * appendConversationMessages writes `messageLineRegistry[absoluteIdx]`, not the
+   * slice-relative loop counter — so transcript-event navigation
+   * (next/prevTranscriptEventLine), whose event.messageIndex is absolute, resolves
+   * correctly even after clearDisplay() renders only a tail slice. Holes (indices
+   * not currently rendered) read back as undefined and are filtered out by consumers.
+   */
   private messageLineRegistry: number[] = [];
   /**
    * Registry of rendered line indices for system messages whose kind is
@@ -91,6 +99,13 @@ export class ConversationManager extends SdkConversationManager {
    * Reset to 0 on startStreamingBlock and finalizeStreamingBlock.
    */
   private _lastStreamRenderMs = 0;
+  /**
+   * Terminal width captured when the current streaming block was anchored.
+   * If the width changes mid-stream, updateStreamingBlock forces a rebuild so
+   * streamingStartLine is re-anchored to the new buffer (see rebuildHistory).
+   * -1 when no stream is active.
+   */
+  private _streamWidth = -1;
   /**
    * Message index at the time of the last clearDisplay() call.
    * rebuildHistory() renders only messages at or after this index, so the
@@ -229,6 +244,7 @@ export class ConversationManager extends SdkConversationManager {
     // Reset the render throttle so the first delta always renders immediately.
     this.flushHistory();
     this.streamingStartLine = this.history.getLineCount();
+    this._streamWidth = this._getWidth();
     this._lastStreamRenderMs = 0;
   }
 
@@ -243,6 +259,13 @@ export class ConversationManager extends SdkConversationManager {
     // Throttle renderMarkdown to the 16ms render-coalescer cadence to avoid
     // O(n) parse overhead on every delta token during streaming.
     if (this.streamingStartLine >= 0) {
+      // If the terminal was resized mid-stream, force the pending width-change
+      // rebuild now. rebuildHistory() re-anchors streamingStartLine to the new
+      // buffer (see its streaming branch), so the incremental truncate below
+      // targets the correct offset instead of a stale one.
+      if (this._getWidth() !== this._streamWidth) {
+        this.flushHistory();
+      }
       const now = Date.now();
       if (now - this._lastStreamRenderMs >= 16) {
         this._lastStreamRenderMs = now;
@@ -261,6 +284,7 @@ export class ConversationManager extends SdkConversationManager {
   public override finalizeStreamingBlock(): void {
     super.finalizeStreamingBlock();
     this.streamingStartLine = -1;
+    this._streamWidth = -1;
     this._lastStreamRenderMs = 0;
     this.markDirty();
   }
@@ -367,10 +391,21 @@ export class ConversationManager extends SdkConversationManager {
     this.dirty = false;
 
     const snapshot = this.getMessageSnapshot();
+    // During streaming, the in-progress placeholder (always the last message) is
+    // rendered here as EMPTY; the incremental streaming path (updateStreamingBlock)
+    // owns its content. This keeps streamingStartLine valid across width-change
+    // rebuilds — otherwise the placeholder would be re-rendered with its content at
+    // the new width while streamingStartLine still pointed into the old buffer.
+    const lastMsg = snapshot[snapshot.length - 1];
+    const isStreaming = this.streamingStartLine >= 0 && lastMsg?.role === 'assistant';
+    const renderSnapshot = isStreaming
+      ? [...snapshot.slice(0, -1), { ...lastMsg, content: '' } as Message]
+      : snapshot;
+
     // When _displayFromMessageIndex > 0, clearDisplay() was called. Only render
     // messages added after the clear — the pre-clear history stays off-screen.
     const displayStart = this._displayFromMessageIndex;
-    const visibleSnapshot = displayStart > 0 ? snapshot.slice(displayStart) : snapshot;
+    const visibleSnapshot = displayStart > 0 ? renderSnapshot.slice(displayStart) : renderSnapshot;
 
     // Tool messages ARE rendered (as collapsed blocks); this filter is only
     // for determining whether to show the splash screen (tool-only messages
@@ -386,6 +421,18 @@ export class ConversationManager extends SdkConversationManager {
 
     this.appendMessages(visibleSnapshot, width, displayStart);
     this.appendedUpTo = snapshot.length;
+
+    if (isStreaming) {
+      // Re-anchor the streaming block to the freshly rebuilt buffer and re-render
+      // the in-progress content at the current width, mirroring startStreamingBlock.
+      this.streamingStartLine = this.history.getLineCount();
+      this._streamWidth = width;
+      this._lastStreamRenderMs = 0;
+      const streamingContent = lastMsg?.content;
+      if (typeof streamingContent === 'string' && streamingContent.length > 0) {
+        this.history.addLines(renderMarkdown(streamingContent, width, { isStreaming: true }));
+      }
+    }
   }
 
   /**

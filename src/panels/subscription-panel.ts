@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { fitDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { KeyName } from './types.ts';
 import type { ProviderSubscription, PendingSubscriptionLogin } from '@pellux/goodvibes-sdk/platform/config';
@@ -9,6 +10,7 @@ import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime
 import {
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildKeyValueLine,
   buildPanelListRow,
   buildPanelLine,
@@ -94,7 +96,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
   protected renderItem(row: SubscriptionRow, index: number, selected: boolean, width: number): Line {
     const status = statusOf(row);
     return buildPanelListRow(width, [
-      { text: row.provider.padEnd(16).slice(0, 16), fg: C.value },
+      { text: fitDisplay(row.provider, 16), fg: C.value },
       { text: ` ${status.toUpperCase().padEnd(12)}`, fg: statusColor(status) },
       { text: ` oauth=${row.hasOAuthConfig ? 'yes' : 'no'} `, fg: row.hasOAuthConfig ? C.info : C.dim },
       { text: ` override=${row.subscription ? 'active' : 'off'}`, fg: row.subscription ? C.good : C.dim },
@@ -177,6 +179,22 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.rows.length - 1));
   }
 
+  /** Footer hints that reflect the current view: confirm-pending vs browsing. */
+  private buildFooterHint(width: number): Line {
+    if (this.confirm) {
+      return buildKeyboardHints(width, [
+        { keys: 'y/Enter', label: 'confirm sign out' },
+        { keys: 'n/Esc', label: 'cancel' },
+      ], C);
+    }
+    const selected = this.rows[this.selectedIndex];
+    const hints: Array<{ keys: string; label: string }> = [{ keys: 'Up/Down', label: 'select' }];
+    if (selected?.subscription) hints.push({ keys: 'Enter', label: 'sign out' });
+    else if (selected?.hasOAuthConfig) hints.push({ keys: '/subscription login <p> start', label: 'sign in' });
+    hints.push({ keys: 'r', label: 'refresh' });
+    return buildKeyboardHints(width, hints, C);
+  }
+
   public render(width: number, height: number): Line[] {
     this.refresh();
     this.clampSelection();
@@ -214,7 +232,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
         sections: [{ lines: [...summaryLines, ...emptyLines] }],
         footerLines: [
           buildGuidanceLine(width, '/subscription login <provider> start', 'start browser-based provider login from the packaged subscription surface', C),
-          buildPanelLine(width, [['  Up/Down move  Enter sign out selected provider  y/Esc confirm/cancel  r refresh', C.dim]]),
+          this.buildFooterHint(width),
         ],
         palette: C,
       });
@@ -264,7 +282,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
       footer: [
         ...detailRows,
         buildGuidanceLine(width, '/subscription login <provider> start', 'start browser-based provider login from the packaged subscription surface', C),
-        buildPanelLine(width, [['  Up/Down move  Enter sign out selected provider  y/Esc confirm/cancel  r refresh', C.dim]]),
+        this.buildFooterHint(width),
       ],
     });
   }

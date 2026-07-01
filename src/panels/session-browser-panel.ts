@@ -9,15 +9,17 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { SessionBrowserQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
+  buildKeyboardHints,
   buildPanelLine,
   buildSearchInputLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { truncateDisplay } from '../utils/terminal-width.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   getPanelSearchFocusTransition,
@@ -28,24 +30,15 @@ import {
 } from './search-focus.ts';
 import { type ConfirmState, handleConfirmInput } from './confirm-state.ts';
 
-const C = {
-  headerBg:   '#1a1a2e',
-  headerFg:   '#ffffff',
-  statusBar:  '#222233',
-  statusFg:   '#aaaaaa',
-  selected:   '#00ffff',
-  selectedBg: '#1a2a3a',
-  normal:     '#ccccdd',
-  dim:        '#555566',
-  label:      '#8888bb',
-  value:      '#ccccdd',
-  dateFg:     '#6699aa',
-  modelFg:    '#99aacc',
-  countFg:    '#88bbcc',
-  warnFg:     '#ffcc44',
-  errorFg:    '#ff6666',
-  separator:  '#333355',
-} as const;
+// Panel-specific extras only; shared tones come from DEFAULT_PANEL_PALETTE so
+// theme changes propagate. `selected` is a deliberate bright-cyan cursor accent
+// and the date/model/count column tints have no clean shared equivalent.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  selected: '#00ffff',
+  dateFg:   '#6699aa',
+  modelFg:  '#99aacc',
+  countFg:  '#88bbcc',
+});
 
 function shortDate(ts: number): string {
   const d = new Date(ts);
@@ -92,19 +85,14 @@ export class SessionBrowserPanel extends BasePanel {
   private confirm: ConfirmState<string> | null = null;
   private deleteError = '';
   private loadError = '';
+  private hasLoaded = false;
   private refreshTimerId: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly sessionManager: SessionBrowserQuery,
     private resumeSession?: (sessionId: string) => void,
-    private readonly requestRender: () => void = () => {},
   ) {
     super('sessions', 'Sessions', 'H', 'session');
-  }
-
-  private _markDirtyAndRender(): void {
-    this.markDirty();
-    this.requestRender();
   }
 
   override onActivate(): void {
@@ -183,8 +171,15 @@ export class SessionBrowserPanel extends BasePanel {
     if (height <= 0 || width <= 0) return [];
     const intro = 'Browse, search, resume, and prune saved conversations.';
 
+    // Lazily load on first render so the panel works even when rendered without
+    // onActivate(). The session list is a synchronous source, so this resolves
+    // immediately rather than flashing a loading screen.
+    if (!this.hasLoaded) this._load();
+
     const count = this.filtered.length;
     const total = this.sessions.length;
+    const hasSelection = this.filtered.length > 0;
+    // Search/status line — surfaces the active query or any error.
     const searchLine = this.searching
       ? ` Search: ${this.searchQuery}_`
       : this.loadError
@@ -192,11 +187,21 @@ export class SessionBrowserPanel extends BasePanel {
       : this.deleteError
       ? ` Error: ${this.deleteError}`
       : this.searchQuery
-      ? ` Filter: ${this.searchQuery}  (/ or up at top to edit)`
-      : ` / or up at top to search  Enter: resume  d: delete  r: refresh`;
+      ? ` Filter: ${this.searchQuery}`
+      : ` (no filter)`;
     const statusFg = this.loadError || this.deleteError ? DEFAULT_PANEL_PALETTE.bad : this.searching ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim;
+    // Context-aware hints: only advertise keys that work in the current state.
+    const hints: Array<{ keys: string; label: string }> = [];
+    if (this.searching) {
+      hints.push({ keys: 'type', label: 'filter' }, { keys: 'Esc/Enter', label: 'apply' });
+    } else {
+      hints.push({ keys: '/', label: this.searchQuery ? 'edit search' : 'search' });
+      if (hasSelection) hints.push({ keys: 'Enter', label: 'resume' }, { keys: 'd', label: 'delete' });
+      hints.push({ keys: 'r', label: 'refresh' });
+    }
     const footerLines = [
       buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching, valueColor: statusFg }),
+      buildKeyboardHints(width, hints, DEFAULT_PANEL_PALETTE),
     ];
 
     if (this.confirm) {
@@ -222,12 +227,15 @@ export class SessionBrowserPanel extends BasePanel {
       const emptyBody = this.searchQuery
         ? 'Clear or change the current filter to surface saved conversations again.'
         : 'Conversations are saved automatically. Once you have saved sessions, they appear here for review and resume.';
+      const emptyActions = this.searchQuery
+        ? [{ command: 'Esc', summary: 'clear the filter and show all sessions' }]
+        : [{ command: '/session save', summary: 'name and persist the current conversation' }];
       return buildPanelWorkspace(width, height, {
         title: ` Sessions [${count}/${total}]`,
         intro,
         sections: [
           {
-            lines: buildEmptyState(width, emptyTitle, emptyBody, [], DEFAULT_PANEL_PALETTE),
+            lines: buildEmptyState(width, emptyTitle, emptyBody, emptyActions, DEFAULT_PANEL_PALETTE),
           },
         ],
         footerLines,
@@ -314,19 +322,19 @@ export class SessionBrowserPanel extends BasePanel {
   }
 
   private _renderSession(width: number, sess: SessionInfo, isCursor: boolean): Line {
-    const bg = isCursor ? C.selectedBg : '';
+    const bg = isCursor ? C.selectBg : '';
     const date = shortDate(sess.timestamp);
     const cnt = String(sess.messageCount).padStart(3) + 'm ';
-    const model = (sess.model || 'unknown').slice(0, 18).padEnd(18) + ' ';
+    const model = fitDisplay(sess.model || 'unknown', 18) + ' ';
     const prefixLength = 1 + 16 + 1 + 4 + 19;
     const title = truncateDisplay(sess.title || sess.name || '(untitled)', Math.max(0, width - prefixLength));
     return buildStyledPanelLine(width, [
       { text: isCursor ? '▸' : ' ', fg: C.selected, bg, bold: isCursor },
       { text: date, fg: C.dateFg, bg },
-      { text: ' ', fg: C.normal, bg },
+      { text: ' ', fg: C.value, bg },
       { text: cnt, fg: C.countFg, bg },
       { text: model, fg: C.modelFg, bg },
-      { text: title, fg: isCursor ? C.selected : C.normal, bg, bold: isCursor },
+      { text: title, fg: isCursor ? C.selected : C.value, bg, bold: isCursor },
     ]);
   }
 
@@ -335,11 +343,13 @@ export class SessionBrowserPanel extends BasePanel {
       this.sessions = this.sessionManager.list();
       this._filter();
       this.loadError = '';
-      this._markDirtyAndRender();
+      this.hasLoaded = true;
+      this.markDirty();
     } catch (e) {
       logger.debug('SessionBrowserPanel._load failed', { error: summarizeError(e) });
       this.loadError = 'Failed to load sessions';
-      this._markDirtyAndRender();
+      this.hasLoaded = true;
+      this.markDirty();
     }
   }
 

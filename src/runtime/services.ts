@@ -63,6 +63,7 @@ import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
 import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
 import { ModelLimitsService } from '@pellux/goodvibes-sdk/platform/providers';
+import { inferFallbackContextWindow } from '@pellux/goodvibes-sdk/platform/providers';
 import { KeybindingsManager } from '../input/keybindings.ts';
 import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
 import { SessionLineageTracker } from '@pellux/goodvibes-sdk/platform/core';
@@ -87,6 +88,19 @@ import {
   type WorkflowServices,
 } from '@pellux/goodvibes-sdk/platform/tools';
 import { WorkPlanStore } from '../work-plans/work-plan-store.ts';
+import {
+  registerDaemonHandlers,
+  type DaemonHandlerSurfaces,
+} from '../daemon/handlers/index.ts';
+import type { HandlerContext, HandlerLogger } from '../daemon/handlers/context.ts';
+import { createDaemonCredentialStore } from '../daemon/handlers/credentials.ts';
+import { registerRouting } from '../daemon/handlers/routing/index.ts';
+import { registerInboxMethods } from '../daemon/handlers/inbox/index.ts';
+import { registerTriagedInbox } from '../daemon/handlers/triage/index.ts';
+import { registerDraftMethods } from '../daemon/handlers/drafts/index.ts';
+import { registerCalendar } from '../daemon/handlers/calendar/index.ts';
+import { registerEmailMethods } from '../daemon/handlers/email/index.ts';
+import { registerRemoteSurface } from '../daemon/handlers/remote/index.ts';
 
 const REGULAR_KNOWLEDGE_DB_FILE = 'knowledge-wiki.sqlite';
 const HOME_GRAPH_KNOWLEDGE_DB_FILE = 'knowledge-home-graph.sqlite';
@@ -110,7 +124,9 @@ function buildFallbackModelDefinition(provider: string, modelId: string): ModelD
       reasoning: isReasoningProvider,
       multimodal: isReasoningProvider,
     },
-    contextWindow: isReasoningProvider ? 128_000 : 32_000,
+    // Pre-catalog fallback uses the SDK's family-aware inference (SDK 0.35.0+),
+    // matching the post-catalog window so the meter/compaction denominator agrees.
+    contextWindow: inferFallbackContextWindow(provider, modelId),
     contextWindowProvenance: 'fallback',
     selectable: true,
     tier: 'standard',
@@ -215,6 +231,7 @@ export interface RuntimeServices {
   readonly providerRegistry: ProviderRegistry;
   readonly toolLLM: ToolLLM;
   readonly distributedRuntime: DistributedRuntimeManager;
+  readonly daemonHandlers: DaemonHandlerSurfaces;
   readonly remoteRunnerRegistry: RemoteRunnerRegistry;
   readonly remoteSupervisor: RemoteSupervisor;
   readonly sessionMemoryStore: SessionMemoryStore;
@@ -517,6 +534,39 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     approvalBridge: approvalBroker,
     automationBridge: automationManager,
   });
+
+  // Daemon handler surfaces: attach HOST handlers to the SDK-auto-registered
+  // builtin gateway descriptors (channels.* / email.* / calendar.*). The SDK
+  // owns every id/descriptor/schema; this only fills the handler slot via
+  // catalog.register(descriptor, handler, { replace: true }). Routing returns
+  // the resolver the inbox surface consumes; triage decorates channels.inbox.list.
+  // The remote surface reuses the SAME DistributedRuntimeManager the SDK facade
+  // injects, so its peer/work methods share one persistent store; remote.peers.*
+  // stay SDK-published routes (not catalog methods).
+  const handlerLogger: HandlerLogger = {
+    info: (message, meta) => console.info(message, meta ?? ''),
+    warn: (message, meta) => console.warn(message, meta ?? ''),
+    error: (message, meta) => console.error(message, meta ?? ''),
+  };
+  const handlerContext: HandlerContext = {
+    catalog: gatewayMethods,
+    credentials: createDaemonCredentialStore(secretsManager),
+    configManager,
+    workingDirectory,
+    homeDirectory,
+    logger: handlerLogger,
+  };
+  const daemonHandlers = registerDaemonHandlers(handlerContext, {
+    registerRouting,
+    registerInbox: (ctx, routing) =>
+      registerTriagedInbox(ctx, (inboxCtx) => registerInboxMethods(inboxCtx, routing))
+        .unregister,
+    registerDrafts: (ctx) => registerDraftMethods(ctx),
+    registerCalendar,
+    registerEmail: (ctx) => registerEmailMethods(ctx),
+    registerRemote: (ctx) => registerRemoteSurface(ctx, { manager: distributedRuntime }),
+  });
+
   const remoteRunnerRegistry = new RemoteRunnerRegistry(agentManager);
   const remoteSupervisor = new RemoteSupervisor(remoteRunnerRegistry);
   const sandboxSessionRegistry = new SandboxSessionRegistry(workingDirectory);
@@ -669,6 +719,7 @@ export function createRuntimeServices(options: RuntimeServicesOptions): RuntimeS
     providerRegistry,
     toolLLM,
     distributedRuntime,
+    daemonHandlers,
     remoteRunnerRegistry,
     remoteSupervisor,
     sessionMemoryStore,

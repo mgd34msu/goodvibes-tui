@@ -16,6 +16,8 @@
 // the URL can view it).
 // ---------------------------------------------------------------------------
 
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+
 export type UploadResult =
   | { ok: true; url: string }
   | { ok: false; error: string };
@@ -96,7 +98,7 @@ export class GistUploadTarget implements UploadTarget {
         body,
       });
     } catch (fetchErr: unknown) {
-      const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      const msg = summarizeError(fetchErr);
       return { ok: false, error: `Network error: ${msg}` };
     }
 

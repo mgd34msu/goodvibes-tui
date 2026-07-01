@@ -139,6 +139,7 @@ export interface CommandSessionServices {
   readonly sessionManager?: import('@pellux/goodvibes-sdk/platform/sessions').SessionManager;
   readonly sessionMemoryStore?: import('@pellux/goodvibes-sdk/platform/core').SessionMemoryStore;
   readonly sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core').SessionLineageTracker;
+  readonly wrfcController?: import('@pellux/goodvibes-sdk/platform/agents').WrfcController;
   readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions').SessionChangeTracker;
 }
 

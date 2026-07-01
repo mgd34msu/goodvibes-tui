@@ -13,27 +13,19 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { formatDuration } from '../utils/format-duration.ts';
 
-const C = {
-  headerBg:    '#1a1a2e',
-  headerFg:    '#ffffff',
-  statusBar:   '#222233',
-  statusFg:    '#aaaaaa',
-  toolFg:      '#00ccff',
-  resultFg:    '#66ddff',
-  errorFg:     '#ff6666',
-  durationFg:  '#aaaa66',
-  argsFg:      '#aaaaaa',
-  dimFg:       '#555566',
-  selected:    '#00ffff',
-  selectedBg:  '#1a2a3a',
-  labelFg:     '#8888bb',
-  filterFg:    '#ffcc44',
-} as const;
+// Panel-specific accents only; shared tones come from DEFAULT_PANEL_PALETTE so
+// theme changes propagate. selectedBg->selectBg, errorFg->bad are shared keys.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  selected: '#00ffff',
+  toolFg:   '#00ccff',
+  argsFg:   '#aaaaaa',
+});
 
 const MAX_ENTRIES = 500;
 
@@ -70,7 +62,7 @@ function formatMs(ms: number): string {
 
 function truncateJson(val: unknown, maxLen = 120): string {
   const s = JSON.stringify(val) ?? 'null';
-  return s.length > maxLen ? s.slice(0, maxLen - 1) + '\u2026' : s;
+  return truncateDisplay(s, maxLen);
 }
 
 function summarizeResult(result: unknown): string | undefined {
@@ -80,7 +72,7 @@ function summarizeResult(result: unknown): string | undefined {
   const record = result as Record<string, unknown>;
   if (typeof record.preview === 'string' && record.preview.trim()) {
     const compact = record.preview.replace(/\s+/g, ' ').trim();
-    return compact.length > 72 ? `${compact.slice(0, 69)}\u2026` : compact;
+    return truncateDisplay(compact, 72);
   }
   if (typeof record.kind === 'string' && typeof record.byteSize === 'number') {
     return `${record.kind} (${record.byteSize}B)`;
@@ -149,22 +141,23 @@ export class ToolInspectorPanel extends BasePanel {
     if (height <= 0 || width <= 0) return [];
 
     const running = this.records.filter(r => r.endMs === undefined).length;
+    const distinctTools = new Set(this.records.map((r) => r.tool)).size;
     const filterLabel = this.filterMode === 'all' ? '' : ` [${this.filterMode}]`;
     const title = ` Tools [${this.records.length} calls${running > 0 ? `, ${running} running` : ''}]${filterLabel}`;
-    const footerLines = [
-      buildPanelLine(width, [
-        [' Up/Down', DEFAULT_PANEL_PALETTE.info],
-        [' scroll', DEFAULT_PANEL_PALETTE.dim],
-        ['   Enter', DEFAULT_PANEL_PALETTE.info],
-        [' expand', DEFAULT_PANEL_PALETTE.dim],
-        ['   f', DEFAULT_PANEL_PALETTE.info],
-        [' filter', DEFAULT_PANEL_PALETTE.dim],
-        ['   c', DEFAULT_PANEL_PALETTE.info],
-        [' clear', DEFAULT_PANEL_PALETTE.dim],
-        ['   g', DEFAULT_PANEL_PALETTE.info],
-        [' end', DEFAULT_PANEL_PALETTE.dim],
-      ]),
+    // Context-aware footer: only advertise keys that do something in the current
+    // state — filter needs >1 tool, clear/end need at least one call.
+    const footerSegments: Array<[string, string, string?]> = [
+      [' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll', DEFAULT_PANEL_PALETTE.dim],
+      ['   Enter', DEFAULT_PANEL_PALETTE.info], [' expand', DEFAULT_PANEL_PALETTE.dim],
     ];
+    if (distinctTools > 1) {
+      footerSegments.push(['   f', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim]);
+    }
+    if (this.records.length > 0) {
+      footerSegments.push(['   c', DEFAULT_PANEL_PALETTE.info], [' clear', DEFAULT_PANEL_PALETTE.dim]);
+      footerSegments.push(['   g', DEFAULT_PANEL_PALETTE.info], [this.autoScroll ? ' end (live)' : ' jump to end', DEFAULT_PANEL_PALETTE.dim]);
+    }
+    const footerLines = [buildPanelLine(width, footerSegments)];
 
     const flat = this._getFlat();
 
@@ -181,9 +174,15 @@ export class ToolInspectorPanel extends BasePanel {
             title: 'Calls',
             lines: buildEmptyState(
               width,
-              ' No tool calls yet',
-              'Tool executions appear here as the agent works. Expand a call to inspect its arguments and result payload.',
-              [],
+              this.records.length > 0 && this.filterMode !== 'all'
+                ? ` No "${this.filterMode}" calls`
+                : ' No tool calls yet',
+              this.records.length > 0 && this.filterMode !== 'all'
+                ? 'The active tool filter hides every recorded call.'
+                : 'Tool executions appear here as the agent works. Expand a call to inspect its arguments and result payload.',
+              this.records.length > 0 && this.filterMode !== 'all'
+                ? [{ command: 'f', summary: 'cycle the tool filter back to all calls' }]
+                : [{ command: '/spawn <task>', summary: 'run an agent to populate the tool-call timeline' }],
               DEFAULT_PANEL_PALETTE,
             ),
           },
@@ -270,7 +269,7 @@ export class ToolInspectorPanel extends BasePanel {
   }
 
   private _renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
-    const bg = isCursor ? C.selectedBg : '';
+    const bg = isCursor ? C.selectBg : '';
     if (row.kind === 'call') {
       return buildStyledPanelLine(width, [
         { text: isCursor ? '▸' : ' ', fg: C.selected, bg, bold: isCursor },
@@ -279,7 +278,7 @@ export class ToolInspectorPanel extends BasePanel {
     }
     return buildStyledPanelLine(width, [
       { text: '  ', fg: C.argsFg, bg },
-      { text: truncateDisplay(row.text, Math.max(0, width - 2)), fg: row.isError ? C.errorFg : C.argsFg, bg },
+      { text: truncateDisplay(row.text, Math.max(0, width - 2)), fg: row.isError ? C.bad : C.argsFg, bg },
     ]);
   }
 

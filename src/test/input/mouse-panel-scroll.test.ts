@@ -73,3 +73,45 @@ describe('handleMouseToken panel wheel routing', () => {
     expect(state.requestRender).not.toHaveBeenCalled();
   });
 });
+
+describe('handleMouseToken workspace tab clicks', () => {
+  const tabs = [
+    { id: 'a', name: 'Alpha', icon: 'A', pane: 'top', active: true, focused: true },
+    { id: 'b', name: 'Beta', icon: 'B', pane: 'bottom', active: false, focused: false },
+  ];
+
+  function clickableState(onActivate: (i: number) => void): MouseRouteState {
+    return buildState({
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{}, {}],
+        getWorkspaceTabs: () => tabs,
+        activateWorkspaceIndex: onActivate,
+      } as unknown as MouseRouteState['panelManager'],
+    });
+  }
+
+  test('left-click on the workspace bar activates the tab and does not start a selection', () => {
+    let activated = -1;
+    const state = clickableState((i) => { activated = i; });
+    // Bar is at y=2, x=80; the first tab sits just past the ' PANELS ' prefix.
+    const result = handleMouseToken(state, {
+      type: 'mouse', button: 0, col: 90, row: 2, action: 'press',
+    });
+    expect(result.handled).toBe(true);
+    expect(activated).toBe(0);
+    expect(state.selection.startSelection).not.toHaveBeenCalled();
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('left-click below the bar falls through to text selection', () => {
+    let activated = -1;
+    const state = clickableState((i) => { activated = i; });
+    const result = handleMouseToken(state, {
+      type: 'mouse', button: 0, col: 90, row: 6, action: 'press',
+    });
+    expect(result.handled).toBe(true);
+    expect(activated).toBe(-1);
+    expect(state.selection.startSelection).toHaveBeenCalled();
+  });
+});
