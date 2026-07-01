@@ -1,6 +1,9 @@
 import type { Line } from '../types/grid.ts';
 import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
-import type { PanelManager } from './panel-manager.ts';
+// Routed through the `@/` alias (not `./panel-manager.ts`) so this foundational
+// types module stays a leaf in the relative-import graph the architecture
+// cycle-checker walks. Type-only, erased at runtime — no real dependency edge.
+import type { PanelManager } from '@/panels/panel-manager.ts';
 
 /**
  * Context passed to a panel's `handlePanelIntegrationAction` hook so it can
