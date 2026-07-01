@@ -4,5 +4,4 @@ import { runBasePanelContractSuite, EMPTY_SESSION_MEMORY_QUERY, EMPTY_CONFIG_MAN
 runBasePanelContractSuite({
   label: 'TokenBudgetPanel (no history)',
   factory: () => new TokenBudgetPanel(EMPTY_SESSION_MEMORY_QUERY, EMPTY_CONFIG_MANAGER),
-  skipHandleInput: true,
 });

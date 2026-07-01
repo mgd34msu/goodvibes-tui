@@ -561,8 +561,18 @@ export class PanelManager {
     return registration.factory();
   }
 
+  /**
+   * Legacy panel ids retired by a merge resolve to their target panel here, so
+   * old `/panel open <id>` calls, saved workspace state, and muscle memory
+   * keep working. Extend this map when a future merge retires another id.
+   */
+  private static readonly PANEL_ID_ALIASES: Readonly<Record<string, string>> = {
+    context: 'tokens',
+  };
+
   private _getRegistration(panelId: string): PanelRegistration | undefined {
-    return this.registry.find((registration) => registration.id === panelId);
+    const resolvedId = PanelManager.PANEL_ID_ALIASES[panelId] ?? panelId;
+    return this.registry.find((registration) => registration.id === resolvedId);
   }
 
   private _shouldRetain(panelId: string): boolean {
