@@ -26,7 +26,6 @@ import { ProviderStatsPanel } from '../provider-stats-panel.ts';
 import { ProviderHealthPanel } from '../provider-health-panel.ts';
 import { DebugPanel } from '../debug-panel.ts';
 import { IncidentReviewPanel } from '../incident-review-panel.ts';
-import { ForensicsPanel } from '../forensics-panel.ts';
 import { PolicyPanel } from '../policy-panel.ts';
 import { EvalPanel } from '../eval-panel.ts';
 import { createProviderAccountSnapshotQuery } from '../provider-account-snapshot.ts';
@@ -348,21 +347,26 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
 
   if (deps.forensicsRegistry) {
     const { forensicsRegistry } = deps;
+    const incidentFactory = () => new IncidentReviewPanel(forensicsRegistry);
     manager.registerType({
       id: 'incident',
       name: 'Incident',
       icon: 'N',
       category: 'monitoring',
-      description: 'Incident workspace with root cause, permission, budget, and replay evidence',
-      factory: () => new IncidentReviewPanel(forensicsRegistry),
+      description: 'Incident workspace with root cause, permission, budget, replay, causal-chain, phase-timing, and jump-link evidence',
+      factory: incidentFactory,
     });
+    // Legacy alias (WO-114 merge): the standalone Forensics panel was absorbed
+    // into Incident. Keep the 'forensics' id resolvable so pre-existing
+    // openForensicsPanel()/`/forensics` callers still land on the merged
+    // workspace instead of a dead panel id.
     manager.registerType({
       id: 'forensics',
-      name: 'Forensics',
-      icon: 'F',
+      name: 'Incident',
+      icon: 'N',
       category: 'monitoring',
-      description: 'Failure Forensics: auto-classified failure reports with causal chains, phase timings, and jump links',
-      factory: () => new ForensicsPanel(forensicsRegistry),
+      description: 'Alias for the Incident workspace (Forensics panel merged into Incident in WO-114).',
+      factory: incidentFactory,
     });
   }
 
