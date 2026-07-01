@@ -26,10 +26,9 @@ export interface ProviderAccountsPanelDeps {
   readonly providerAccounts: ProviderAccountSnapshotQuery;
 }
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  selectBg: '#1e293b',
-} as const;
+// Base chrome only — selection background comes straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRecord> {
   private records: ProviderAccountRecord[] = [];

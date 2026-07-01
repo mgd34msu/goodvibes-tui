@@ -5,18 +5,13 @@ import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { buildAlignedRow, buildKeyValueLine, buildKeyboardHints, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, resolvePrimaryScrollableSection, type ColumnSpec, type PanelWorkspaceSection } from './polish.ts';
 import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '@/runtime/index.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  dim: '#475569',
-  info: '#38bdf8',
-  ok: '#22c55e',
-  warn: '#eab308',
-  headerBg: '#1e293b',
-} as const;
+// Base chrome only — state colors and text tokens come straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function stateColor(state: WorktreeStatusRecord['state']): string {
   switch (state) {
-    case 'active': return C.ok;
+    case 'active': return C.good;
     case 'paused':
     case 'kept': return C.warn;
     default: return C.dim;
@@ -127,7 +122,7 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
         lines: [
           buildKeyValueLine(width, [
             { label: 'total', value: String(summary.total), valueColor: C.value },
-            { label: 'active', value: String(summary.active), valueColor: C.ok },
+            { label: 'active', value: String(summary.active), valueColor: C.good },
             { label: 'paused', value: String(summary.paused), valueColor: summary.paused > 0 ? C.warn : C.dim },
             { label: 'cleanup', value: String(summary.pendingCleanup), valueColor: summary.pendingCleanup > 0 ? C.warn : C.dim },
           ], C),

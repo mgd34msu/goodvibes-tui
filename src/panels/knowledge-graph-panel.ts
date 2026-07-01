@@ -27,11 +27,7 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-} as const;
+const C = DEFAULT_PANEL_PALETTE;
 
 interface CommandEntry {
   readonly command: string;

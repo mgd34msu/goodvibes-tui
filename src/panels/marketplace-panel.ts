@@ -21,11 +21,9 @@ import {
 import type { UiMarketplaceSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#e2e8f0',
-  headerBg: '#1f2937',
-} as const;
+// Base chrome only — title band and text tokens come straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 type MarketplaceRow = {
   kind: EcosystemEntryKind;

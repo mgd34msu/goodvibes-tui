@@ -15,20 +15,15 @@ import {
   buildSummaryBlock,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  queued: '#38bdf8',
-  running: '#22c55e',
-  blocked: '#f59e0b',
-  failed: '#ef4444',
-  completed: '#a78bfa',
-  selectBg: '#0f172a',
-} as const;
+// Domain accents only; base chrome (header/headerBg/info/good/warn/bad/
+// selectBg) comes from DEFAULT_PANEL_PALETTE.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  completed: '#a78bfa',   // completed-task badge — distinct from running/good
+} as const);
 
 const STATUS_ORDER: TaskLifecycleState[] = ['queued', 'running', 'blocked', 'failed', 'completed'];
 
@@ -57,13 +52,13 @@ function kindLabel(kind: RuntimeTask['kind']): string {
 function statusColor(status: TaskLifecycleState): string {
   switch (status) {
     case 'queued':
-      return C.queued;
+      return C.info;
     case 'running':
-      return C.running;
+      return C.good;
     case 'blocked':
-      return C.blocked;
+      return C.warn;
     case 'failed':
-      return C.failed;
+      return C.bad;
     case 'completed':
       return C.completed;
     case 'cancelled':
@@ -272,13 +267,13 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
     const postureLines: Line[] = [
       buildPanelLine(width, [
         [' queued ', C.label],
-        [String(queuedCount), queuedCount > 0 ? C.queued : C.dim],
+        [String(queuedCount), queuedCount > 0 ? C.info : C.dim],
         ['  running ', C.label],
-        [String(runningCount), runningCount > 0 ? C.running : C.dim],
+        [String(runningCount), runningCount > 0 ? C.good : C.dim],
         ['  blocked ', C.label],
-        [String(blockedCount), blockedCount > 0 ? C.blocked : C.dim],
+        [String(blockedCount), blockedCount > 0 ? C.warn : C.dim],
         ['  failed ', C.label],
-        [String(failedCount), failedCount > 0 ? C.failed : C.dim],
+        [String(failedCount), failedCount > 0 ? C.bad : C.dim],
         ['  completed ', C.label],
         [String(completedCount), completedCount > 0 ? C.completed : C.dim],
       ]),
@@ -317,7 +312,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
         ['  Owner: ', C.label],
         [selected.owner, C.value],
         ['  Cancellable: ', C.label],
-        [selected.cancellable ? 'yes' : 'no', selected.cancellable ? C.running : C.failed],
+        [selected.cancellable ? 'yes' : 'no', selected.cancellable ? C.good : C.bad],
         ['  Queue: ', C.label],
         [formatWhen(selected.queuedAt), C.dim],
       ]));
@@ -371,9 +366,9 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
           ['  Worktrees: ', C.label],
           [`${attachedWorktrees.total} tracked`, C.info],
           ['  Active: ', C.label],
-          [String(attachedWorktrees.active), attachedWorktrees.active > 0 ? C.running : C.dim],
+          [String(attachedWorktrees.active), attachedWorktrees.active > 0 ? C.good : C.dim],
           ['  Paused: ', C.label],
-          [String(attachedWorktrees.paused), attachedWorktrees.paused > 0 ? C.blocked : C.dim],
+          [String(attachedWorktrees.paused), attachedWorktrees.paused > 0 ? C.warn : C.dim],
         ]));
         detailRows.push(buildPanelLine(width, [[
           `  Next: /worktree task ${selected.id}  /worktree recover task ${selected.id}`,
@@ -382,7 +377,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
         for (const record of attachedWorktrees.records.slice(0, 2)) {
           detailRows.push(buildPanelLine(width, [[
             truncateDisplay(`  ${record.state.padEnd(15)} ${record.path}`, Math.max(0, width - 2)),
-            record.state === 'active' ? C.running : record.state === 'paused' ? C.blocked : C.dim,
+            record.state === 'active' ? C.good : record.state === 'paused' ? C.warn : C.dim,
           ]]));
         }
       }
@@ -395,7 +390,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       if (selected.error) {
         detailRows.push(buildPanelLine(width, [
           ['  Error: ', C.label],
-          [truncateDisplay(selected.error, Math.max(0, width - 10)), C.failed],
+          [truncateDisplay(selected.error, Math.max(0, width - 10)), C.bad],
         ]));
       }
       if (selected.result !== undefined) {

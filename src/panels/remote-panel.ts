@@ -17,28 +17,22 @@ import {
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { getTrackedVisibleWindow } from '../renderer/surface-layout.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  dim: '#475569',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function stateColor(state: string): string {
   switch (state) {
     case 'connected':
     case 'syncing':
-      return C.ok;
+      return C.good;
     case 'degraded':
     case 'reconnecting':
     case 'authenticating':
     case 'initializing':
       return C.warn;
     case 'terminal_failure':
-      return C.error;
+      return C.bad;
     default:
       return C.dim;
   }
@@ -161,9 +155,9 @@ export class RemotePanel extends BasePanel {
         [' daemon ', C.label],
         [daemon.transportState.toUpperCase(), stateColor(daemon.transportState)],
         ['  running ', C.label],
-        [daemon.isRunning ? 'yes' : 'no', daemon.isRunning ? C.ok : C.dim],
+        [daemon.isRunning ? 'yes' : 'no', daemon.isRunning ? C.good : C.dim],
         ['  reconnects ', C.label],
-        [String(daemon.reconnectAttempts), daemon.reconnectAttempts > 0 ? C.warn : C.ok],
+        [String(daemon.reconnectAttempts), daemon.reconnectAttempts > 0 ? C.warn : C.good],
         ['  jobs ', C.label],
         [String(daemon.runningJobCount), daemon.runningJobCount > 0 ? C.info : C.dim],
       ]),
@@ -181,17 +175,17 @@ export class RemotePanel extends BasePanel {
         ['  pools ', C.label],
         [String(pools.length), pools.length > 0 ? C.info : C.dim],
         ['  review artifacts ', C.label],
-        [String(artifactCount), artifactCount > 0 ? C.ok : C.dim],
+        [String(artifactCount), artifactCount > 0 ? C.good : C.dim],
       ]),
       buildPanelLine(width, [
         [' supervisor ', C.label],
         [String(supervisor.sessions.length), C.info],
         ['  degraded ', C.label],
-        [String(supervisor.degradedConnections), supervisor.degradedConnections > 0 ? C.warn : C.ok],
+        [String(supervisor.degradedConnections), supervisor.degradedConnections > 0 ? C.warn : C.good],
         [' distributed peers ', C.label],
         [String(distributed.peers?.total ?? 0), C.info],
         ['  connected ', C.label],
-        [String(distributed.peers?.connected ?? 0), (distributed.peers?.connected ?? 0) > 0 ? C.ok : C.dim],
+        [String(distributed.peers?.connected ?? 0), (distributed.peers?.connected ?? 0) > 0 ? C.good : C.dim],
         ['  queued work ', C.label],
         [String(distributed.work?.queued ?? 0), (distributed.work?.queued ?? 0) > 0 ? C.info : C.dim],
       ]),
@@ -200,7 +194,7 @@ export class RemotePanel extends BasePanel {
     if (daemon.lastError) {
       postureLines.push(buildPanelLine(width, [
         [' daemon error ', C.label],
-        [truncateDisplay(daemon.lastError, Math.max(0, width - 14)), C.error],
+        [truncateDisplay(daemon.lastError, Math.max(0, width - 14)), C.bad],
       ]));
     }
     postureLines.push(
@@ -276,7 +270,7 @@ export class RemotePanel extends BasePanel {
       if (selected.lastError) {
         detailRows.push(buildPanelLine(width, [
           ['  Last error: ', C.label],
-          [selected.lastError.slice(0, Math.max(0, width - 13)), C.error],
+          [selected.lastError.slice(0, Math.max(0, width - 13)), C.bad],
         ]));
       }
 
@@ -319,11 +313,11 @@ export class RemotePanel extends BasePanel {
       if (supervisorEntry) {
         detailRows.push(buildPanelLine(width, [
           ['  Heartbeat: ', C.label],
-          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.ok : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.error],
+          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.good : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.bad],
           ['  Protocol: ', C.label],
           [supervisorEntry.negotiation.executionProtocol, C.value],
           ['  Review: ', C.label],
-          [supervisorEntry.negotiation.reviewMode, supervisorEntry.negotiation.reviewMode === 'wrfc' ? C.ok : C.dim],
+          [supervisorEntry.negotiation.reviewMode, supervisorEntry.negotiation.reviewMode === 'wrfc' ? C.good : C.dim],
         ]));
         detailRows.push(buildPanelLine(width, [[truncateDisplay(`  ${supervisorEntry.heartbeat.detail}`, width), C.dim]]));
       }
@@ -377,7 +371,7 @@ export class RemotePanel extends BasePanel {
       if (supervisorEntry) {
         detailRows.push(buildPanelLine(width, [
           ['  Heartbeat: ', C.label],
-          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.ok : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.error],
+          [supervisorEntry.heartbeat.status, supervisorEntry.heartbeat.status === 'fresh' ? C.good : supervisorEntry.heartbeat.status === 'stale' ? C.warn : C.bad],
           ['  Lane: ', C.label],
           [supervisorEntry.negotiation.communicationLane, C.info],
         ]));
@@ -389,7 +383,7 @@ export class RemotePanel extends BasePanel {
       if (recentArtifact) {
         detailRows.push(buildPanelLine(width, [
           ['  Recent artifact: ', C.label],
-          [recentArtifact.id, C.ok],
+          [recentArtifact.id, C.good],
           ['  Status: ', C.label],
           [recentArtifact.task.status, stateColor(recentArtifact.evidence.transportState)],
         ]));

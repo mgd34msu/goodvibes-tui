@@ -30,9 +30,9 @@ import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 const MAX_MESSAGES = 500;
 
+// Domain accents only; the title band comes straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
-  header: '#00ffff',
-  headerBg: '#0f172a',
   high: '#fbbf24',
   low: '#9ca3af',
   ts: '#6b7280',

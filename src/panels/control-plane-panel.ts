@@ -15,16 +15,9 @@ import {
   type PanelPalette,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function formatTime(value?: number): string {
   if (!value) return 'n/a';
@@ -32,9 +25,9 @@ function formatTime(value?: number): string {
 }
 
 function connectionColor(state: string): string {
-  if (state === 'connected' || state === 'healthy') return C.ok;
+  if (state === 'connected' || state === 'healthy') return C.good;
   if (state === 'degraded' || state === 'connecting' || state === 'initializing') return C.warn;
-  if (state === 'terminal_failure') return C.error;
+  if (state === 'terminal_failure') return C.bad;
   return C.dim;
 }
 
@@ -123,9 +116,9 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'state', value: snapshot.connectionState, valueColor: connectionColor(snapshot.connectionState) },
-        { label: 'clients', value: String(snapshot.activeClientIds.length), valueColor: snapshot.activeClientIds.length > 0 ? C.ok : C.dim },
+        { label: 'clients', value: String(snapshot.activeClientIds.length), valueColor: snapshot.activeClientIds.length > 0 ? C.good : C.dim },
         { label: 'requests', value: String(snapshot.requestCount), valueColor: snapshot.requestCount > 0 ? C.info : C.dim },
-        { label: 'errors', value: String(snapshot.errorCount), valueColor: snapshot.errorCount > 0 ? C.error : C.dim },
+        { label: 'errors', value: String(snapshot.errorCount), valueColor: snapshot.errorCount > 0 ? C.bad : C.dim },
       ], C),
       buildKeyValueLine(width, [
         { label: 'host', value: `${snapshot.host}:${snapshot.port}`, valueColor: C.value },
@@ -160,7 +153,7 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
           ['  Transport: ', C.label],
           [selected.transport, C.value],
           ['  Connected: ', C.label],
-          [selected.connected ? 'yes' : 'no', selected.connected ? C.ok : C.warn],
+          [selected.connected ? 'yes' : 'no', selected.connected ? C.good : C.warn],
         ]),
         buildPanelLine(width, [
           ['  Route: ', C.label],
@@ -185,7 +178,7 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
       footerLines.push(
         ...approvals.slice(0, 6).map((approval) => buildPanelLine(width, [
           [' ', C.label],
-          [approval.status.padEnd(10), approval.status === 'pending' ? C.warn : approval.status === 'approved' ? C.ok : approval.status === 'denied' ? C.error : C.dim],
+          [approval.status.padEnd(10), approval.status === 'pending' ? C.warn : approval.status === 'approved' ? C.good : approval.status === 'denied' ? C.bad : C.dim],
           [` ${truncateDisplay(approval.request.tool, 16).padEnd(16)}`, C.value],
           [` ${truncateDisplay(approval.sessionId ?? approval.id, Math.max(0, width - 30))}`, C.dim],
         ])),
@@ -198,7 +191,7 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneClient> {
       footerLines.push(
         ...sessions.slice(0, 6).map((session) => buildPanelLine(width, [
           [' ', C.label],
-          [session.status.padEnd(10), session.status === 'active' ? C.ok : C.dim],
+          [session.status.padEnd(10), session.status === 'active' ? C.good : C.dim],
           [` ${truncateDisplay(session.title, 20).padEnd(20)}`, C.value],
           [` ${truncateDisplay(session.activeAgentId ?? session.id, Math.max(0, width - 34))}`, C.dim],
         ])),

@@ -19,17 +19,9 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#e2e8f0',
-  headerBg: '#1e293b',
-  dim: '#64748b',
-  info: '#38bdf8',
-  good: '#22c55e',
-  warn: '#f59e0b',
-  bad: '#ef4444',
-  selectedBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 interface SubscriptionRow {
   readonly provider: string;
@@ -100,7 +92,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
       { text: ` ${status.toUpperCase().padEnd(12)}`, fg: statusColor(status) },
       { text: ` oauth=${row.hasOAuthConfig ? 'yes' : 'no'} `, fg: row.hasOAuthConfig ? C.info : C.dim },
       { text: ` override=${row.subscription ? 'active' : 'off'}`, fg: row.subscription ? C.good : C.dim },
-    ], C, { selected, selectedBg: C.selectedBg });
+    ], C, { selected, selectedBg: C.selectBg });
   }
 
   public handleInput(key: KeyName): boolean {

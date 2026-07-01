@@ -15,16 +15,9 @@ import {
   type PanelPalette,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function formatTime(value?: number): string {
   if (!value) return 'n/a';
@@ -32,8 +25,8 @@ function formatTime(value?: number): string {
 }
 
 function runStatusColor(status: string): string {
-  if (status === 'completed') return C.ok;
-  if (status === 'failed' || status === 'dead_lettered') return C.error;
+  if (status === 'completed') return C.good;
+  if (status === 'failed' || status === 'dead_lettered') return C.bad;
   if (status === 'cancelled') return C.warn;
   return C.info;
 }
@@ -133,11 +126,11 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
         { label: 'jobs', value: String(snapshot.totalJobs), valueColor: snapshot.totalJobs > 0 ? C.info : C.dim },
         { label: 'runs', value: String(snapshot.totalRuns), valueColor: snapshot.totalRuns > 0 ? C.value : C.dim },
         { label: 'active', value: String(snapshot.activeRunIds.length), valueColor: snapshot.activeRunIds.length > 0 ? C.warn : C.dim },
-        { label: 'failed', value: String(snapshot.totalFailed), valueColor: snapshot.totalFailed > 0 ? C.error : C.dim },
+        { label: 'failed', value: String(snapshot.totalFailed), valueColor: snapshot.totalFailed > 0 ? C.bad : C.dim },
       ], C),
       buildKeyValueLine(width, [
-        { label: 'deliveries ok', value: String(snapshot.deliveryTotals.succeeded), valueColor: snapshot.deliveryTotals.succeeded > 0 ? C.ok : C.dim },
-        { label: 'delivery fail', value: String(snapshot.deliveryTotals.failed), valueColor: snapshot.deliveryTotals.failed > 0 ? C.error : C.dim },
+        { label: 'deliveries ok', value: String(snapshot.deliveryTotals.succeeded), valueColor: snapshot.deliveryTotals.succeeded > 0 ? C.good : C.dim },
+        { label: 'delivery fail', value: String(snapshot.deliveryTotals.failed), valueColor: snapshot.deliveryTotals.failed > 0 ? C.bad : C.dim },
         { label: 'dead letters', value: String(snapshot.deliveryTotals.deadLettered), valueColor: snapshot.deliveryTotals.deadLettered > 0 ? C.warn : C.dim },
         { label: 'sources', value: String(snapshot.sourceCount), valueColor: snapshot.sourceCount > 0 ? C.info : C.dim },
       ], C),
@@ -193,7 +186,7 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
       if (selectedRun.error) {
         footerLines.push(buildPanelLine(width, [
           ['  Error: ', C.label],
-          [truncateDisplay(selectedRun.error, Math.max(0, width - 10)), C.error],
+          [truncateDisplay(selectedRun.error, Math.max(0, width - 10)), C.bad],
         ]));
       }
     } else {
@@ -207,7 +200,7 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
       footerLines.push(
         ...jobs.slice(0, 6).map((job) => buildPanelLine(width, [
           [' ', C.label],
-          [job.enabled ? 'ENABLED ' : 'PAUSED  ', job.enabled ? C.ok : C.warn],
+          [job.enabled ? 'ENABLED ' : 'PAUSED  ', job.enabled ? C.good : C.warn],
           [truncateDisplay(job.name, 24).padEnd(24), C.value],
           [` next ${truncateDisplay(formatTime(job.nextRunAt), Math.max(0, width - 43))}`, C.dim],
         ])),
