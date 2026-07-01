@@ -1,7 +1,12 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { UI_TONES } from '../renderer/ui-primitives.ts';
+import { resolveUiTones } from '../renderer/theme.ts';
+
+// DEFAULT_PANEL_PALETTE is built from the mode-resolved chrome tones
+// (resolveUiTones) rather than the static UI_TONES constant — WO-001 single
+// read path. Mode is fixed to 'dark' until the terminal-bg-probe lands.
+const UI_TONES = resolveUiTones('dark');
 
 // ---------------------------------------------------------------------------
 // Panel palette + core line primitives.
@@ -41,7 +46,7 @@ export const DEFAULT_PANEL_PALETTE: Readonly<Required<PanelPalette>> = {
   good: UI_TONES.state.good,
   warn: UI_TONES.state.warn,
   bad: UI_TONES.state.bad,
-  empty: '#334155',
+  empty: UI_TONES.fg.empty,
   surfaceBg: UI_TONES.bg.surface,
   sectionBg: UI_TONES.bg.section,
   summaryBg: UI_TONES.bg.summary,
