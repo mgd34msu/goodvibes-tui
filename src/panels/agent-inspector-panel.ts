@@ -32,7 +32,6 @@ import {
   type AgentInspectorEntryKind as EntryKind,
   type AgentTimelineEntry as TimelineEntry,
   agentKindStyle,
-  agentStatusColor,
   formatAgentDuration as formatMs,
   formatAgentTime as shortTime,
   jsonlToTimeline,
