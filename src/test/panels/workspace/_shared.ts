@@ -3,10 +3,11 @@
 //
 // Shared fixtures used by the per-panel shared-workspace suites in this
 // directory (WO-006 decongestion of the former workspace-migration.test.ts).
-// Panels that also carry a BasePanel contract entry (AgentLogsPanel,
-// WrfcPanel, ContextVisualizerPanel) had their shared-workspace test moved
-// into the matching src/test/panels/contract/<panel-id>.contract.ts module
-// instead of living here.
+// Panels that also carry a BasePanel contract entry (WrfcPanel,
+// ContextVisualizerPanel) had their shared-workspace test moved into the
+// matching src/test/panels/contract/<panel-id>.contract.ts module instead
+// of living here. (agent-logs-panel.contract.ts was removed under WO-110:
+// AgentLogsPanel was merged into AgentInspectorPanel.)
 // ---------------------------------------------------------------------------
 
 import { RuntimeEventBus } from '@/runtime/index.ts';
