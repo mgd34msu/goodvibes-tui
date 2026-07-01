@@ -109,6 +109,25 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     homeDirectory: services.homeDirectory,
   });
 
+  const foundationClients = createRuntimeFoundationClients({
+    runtimeServices: services,
+    tasksReadModel: uiServices.readModels.tasks,
+    taskManager,
+    opsControlPlane,
+  });
+  const {
+    directTransport,
+    hookApi,
+    knowledgeApi,
+    mcpApi,
+    opsApi,
+    providerApi,
+  } = foundationClients;
+  const planRuntime = createShellPlanRuntime({
+    adaptivePlanner: services.adaptivePlanner,
+    runtimeBus,
+  });
+
   const openAgentDetailRef: { fn: (agentId: string) => void } = { fn: (_agentId: string) => {} };
 
   let commandContextRef: CommandContext | null = null;
@@ -153,6 +172,11 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     mcpRegistry: services.mcpRegistry,
     openAgentDetail: (agentId: string) => openAgentDetailRef.fn(agentId),
     daemonHomeDir: join(services.homeDirectory, '.goodvibes', 'daemon'),
+    opsApi,
+    planRuntime,
+    watcherRegistry: services.watcherRegistry,
+    runtimeStore,
+    openPanel: (panelId: string) => { services.panelManager.open(panelId); },
   });
   services.panelManager.prewarmRegistered();
 
@@ -170,28 +194,10 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
 
   const commandRegistry = new CommandRegistry();
   registerBuiltinCommands(commandRegistry);
-  const foundationClients = createRuntimeFoundationClients({
-    runtimeServices: services,
-    tasksReadModel: uiServices.readModels.tasks,
-    taskManager,
-    opsControlPlane,
-  });
-  const {
-    directTransport,
-    hookApi,
-    knowledgeApi,
-    mcpApi,
-    opsApi,
-    providerApi,
-  } = foundationClients;
   const remoteRuntime = createShellRemoteCommandService({
     readModels: uiServices.readModels,
     remoteRunnerRegistry: services.remoteRunnerRegistry,
     runtimeStore,
-  });
-  const planRuntime = createShellPlanRuntime({
-    adaptivePlanner: services.adaptivePlanner,
-    runtimeBus,
   });
 
   const commandContext: CommandContext = createBootstrapCommandContext({
