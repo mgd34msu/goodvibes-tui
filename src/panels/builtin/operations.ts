@@ -6,7 +6,6 @@ import { SkillsPanel } from '../skills-panel.ts';
 import { ServicesPanel } from '../services-panel.ts';
 import { AutomationControlPanel } from '../automation-control-panel.ts';
 import { RoutesPanel } from '../routes-panel.ts';
-import { WatchersPanel } from '../watchers-panel.ts';
 import { ControlPlanePanel } from '../control-plane-panel.ts';
 import { SubscriptionPanel } from '../subscription-panel.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
@@ -126,8 +125,11 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     name: 'Automation',
     icon: 'M',
     category: 'monitoring',
-    description: 'Automation jobs, runs, deliveries, and failure posture across the control plane',
-    factory: () => new AutomationControlPanel(ui.readModels.automation),
+    description: 'Automation jobs, runs, deliveries, and watcher-fed sources across the control plane, with real enable/disable and run-now controls',
+    factory: () => new AutomationControlPanel(ui.readModels.automation, ui.readModels.watchers, {
+      automationManager: requireAutomationManager(deps),
+      watcherRegistry: deps.watcherRegistry,
+    }),
   });
 
   manager.registerType({
@@ -137,15 +139,6 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     category: 'monitoring',
     description: 'Cross-surface route bindings and shared session attachment state',
     factory: () => new RoutesPanel(ui.readModels.routes),
-  });
-
-  manager.registerType({
-    id: 'watchers',
-    name: 'Watchers',
-    icon: 'W',
-    category: 'monitoring',
-    description: 'Watcher health, lag, and degraded source state for automation inputs',
-    factory: () => new WatchersPanel(ui.readModels.watchers),
   });
 
   manager.registerType({
