@@ -106,4 +106,30 @@ describe('renderConfirmLines', () => {
     expect(lines).toHaveLength(2);
     expect(lineText(lines[0]!)).toContain('Contradict this record');
   });
+
+  test('renders default verb "Delete" when verb is omitted', () => {
+    const lines = renderConfirmLines(80, state);
+    expect(lineText(lines[0]!)).toContain('Delete "my-skill"?');
+  });
+
+  test('renders custom verb honestly for non-destructive confirms', () => {
+    const cancelState: ConfirmState = { subject: 'agent-1', label: 'Agent One', verb: 'Cancel' };
+    const lines = renderConfirmLines(80, cancelState);
+    expect(lineText(lines[0]!)).toContain('Cancel "Agent One"?');
+    expect(lineText(lines[0]!)).not.toContain('Delete');
+  });
+
+  test('custom verb preserves exact-width + confirm/cancel keybinding contract', () => {
+    const width = 60;
+    const promoteState: ConfirmState = { subject: 'policy-1', label: 'Policy A', verb: 'Promote' };
+    const lines = renderConfirmLines(width, promoteState);
+    expect(lines).toHaveLength(2);
+    for (const line of lines) expect(line.length).toBe(width);
+    expect(handleConfirmInput(promoteState, 'y')).toBe('confirmed');
+    expect(handleConfirmInput(promoteState, 'enter')).toBe('confirmed');
+    expect(handleConfirmInput(promoteState, 'return')).toBe('confirmed');
+    expect(handleConfirmInput(promoteState, 'n')).toBe('cancelled');
+    expect(handleConfirmInput(promoteState, 'escape')).toBe('cancelled');
+    expect(handleConfirmInput(promoteState, 'x')).toBe('absorbed');
+  });
 });

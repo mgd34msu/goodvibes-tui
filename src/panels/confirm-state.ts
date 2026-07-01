@@ -28,6 +28,12 @@ export interface ConfirmState<T = string> {
   readonly subject: T;
   /** Human-readable label for the item being destroyed. */
   readonly label: string;
+  /**
+   * Action verb shown in the confirmation prompt (e.g. 'Cancel', 'Regenerate',
+   * 'Promote'). Defaults to 'Delete' so existing destructive confirms are
+   * unaffected; non-destructive confirms should set this for honest copy.
+   */
+  readonly verb?: string;
 }
 
 /**
@@ -61,9 +67,10 @@ export function handleConfirmInput<T = string>(
  */
 export function renderConfirmLines<T = string>(width: number, state: ConfirmState<T>): Line[] {
   const palette = DEFAULT_PANEL_PALETTE;
+  const verb = state.verb ?? 'Delete';
   return [
     buildPanelLine(width, [[
-      ` Delete "${state.label}"?`,
+      ` ${verb} "${state.label}"?`,
       palette.warn,
     ]]),
     buildPanelLine(width, [
