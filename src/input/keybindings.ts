@@ -52,7 +52,6 @@ export type KeyAction =
   | 'undo'
   | 'redo'
   | 'paste'
-  | 'replay-panel'
   | 'word-back'
   | 'word-forward'
   | 'kill-to-start'
@@ -84,7 +83,6 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'undo':                  'Undo last prompt edit',
   'redo':                  'Redo last undone edit',
   'paste':                 'Paste from clipboard (image priority)',
-  'replay-panel':          'Open / close the Replay panel',
   'word-back':             'Move cursor to start of previous word (Alt+B)',
   'word-forward':          'Move cursor to end of next word (Alt+F)',
   'kill-to-start':         'Kill from cursor to start of line into kill ring (Ctrl+U)',
@@ -122,7 +120,6 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'undo':                  [{ key: 'z', ctrl: true }],
   'redo':                  [{ key: 'z', ctrl: true, shift: true }],
   'paste':                 [{ key: 'v', ctrl: true }],
-  'replay-panel':          [{ key: 'r', ctrl: true, shift: true }],
   // Word navigation (Alt+B / Alt+F — emacs readline standard)
   'word-back':             [{ key: 'b', alt: true }],
   'word-forward':          [{ key: 'f', alt: true }],
