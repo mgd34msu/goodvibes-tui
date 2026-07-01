@@ -111,11 +111,6 @@ export const EMPTY_OPS_EVENT_FEED = {
   emit: () => {},
 } as unknown as import('../../../runtime/ui-events.ts').UiEventFeed<never>;
 
-export const EMPTY_AGENT_DEPS = {
-  agentManager: { list: () => [] },
-  workingDirectory: '/tmp',
-} as unknown as import('../../../panels/agent-logs-panel.ts').AgentLogsPanelDeps;
-
 export const EMPTY_WORKTREE_REGISTRY = {
   list: async () => [],
   subscribe: (_cb: () => void) => () => {},

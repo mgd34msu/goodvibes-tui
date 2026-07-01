@@ -55,11 +55,18 @@ function makePanel(options: {
     getMessages: mock(() => []),
   };
 
+  const agentEvents = {
+    on: () => () => {},
+    onEnvelope: () => () => {},
+    emit: () => {},
+  } as unknown as import('../../runtime/ui-events.ts').UiEventFeed<import('@/runtime/index.ts').AgentEvent>;
+
   const panel = new AgentInspectorPanel({
     agentManager,
     agentMessageBus,
     workingDirectory: '/tmp/test',
     cancelAgent,
+    agentEvents,
   });
 
   return { panel, agentManager, cancelAgent };

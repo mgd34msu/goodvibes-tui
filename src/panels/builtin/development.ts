@@ -2,7 +2,6 @@ import type { PanelManager } from '../panel-manager.ts';
 import { GitPanel } from '../git-panel.ts';
 import { DiffPanel } from '../diff-panel.ts';
 import { PlanDashboardPanel } from '../plan-dashboard-panel.ts';
-import { AgentInspectorPanel } from '../agent-inspector-panel.ts';
 import { CostTrackerPanel } from '../cost-tracker-panel.ts';
 import { IntelligencePanel } from '../intelligence-panel.ts';
 import { FileExplorerPanel } from '../file-explorer-panel.ts';
@@ -39,23 +38,8 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     factory: () => new DiffPanel(requireUiServices(deps).environment.workingDirectory),
   });
 
-  manager.registerType({
-    id: 'inspector',
-    name: 'Inspector',
-    icon: 'I',
-    category: 'agent',
-    description: "Detailed timeline view of a specific agent's messages and tool calls",
-    factory: () => {
-      const ui = requireUiServices(deps);
-      return new AgentInspectorPanel({
-        agentManager: ui.agents.agentManager,
-        agentMessageBus: ui.agents.agentMessageBus,
-        workingDirectory: ui.environment.workingDirectory,
-        cancelAgent: (agentId: string) => ui.agents.agentManager.cancel(agentId),
-        requestRender: deps.requestRender,
-      });
-    },
-  });
+  // WO-110: 'inspector' registration moved to builtin/agent.ts (category
+  // 'agent') — it now absorbs the merged agent-logs capabilities.
 
   if (deps.getOrchestratorUsage) {
     const { getOrchestratorUsage, budgetThreshold } = deps;
