@@ -18,15 +18,9 @@ import {
 } from './polish.ts';
 import { createEmptyLine } from '../types/grid.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 type CommunicationRecord = UiCommunicationSnapshot['records'][number];
 
@@ -178,7 +172,7 @@ export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord>
     if (selected) {
       detailLines.push(...buildDetailBlock(width, `Message · ${selected.kind}`, [
         buildKeyValueLine(width, [
-          { label: 'status', value: selected.status, valueColor: selected.status === 'blocked' ? C.error : C.ok },
+          { label: 'status', value: selected.status, valueColor: selected.status === 'blocked' ? C.bad : C.good },
           { label: 'scope', value: selected.scope, valueColor: C.value },
           { label: 'when', value: `${fmtAgo(selected.timestamp)} ago`, valueColor: C.dim },
         ], C),

@@ -14,31 +14,24 @@ import {
   type PanelPalette,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function trustColor(tier: PluginStatus['trustTier']): string {
   switch (tier) {
     case 'trusted':
-      return C.ok;
+      return C.good;
     case 'limited':
       return C.warn;
     case 'untrusted':
-      return C.error;
+      return C.bad;
   }
 }
 
 function statusColor(status: PluginStatus): string {
-  if (status.quarantined) return C.error;
-  if (status.active) return C.ok;
+  if (status.quarantined) return C.bad;
+  if (status.active) return C.good;
   if (status.enabled) return C.warn;
   return C.dim;
 }
@@ -141,9 +134,9 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'plugins', value: String(plugins.length), valueColor: C.info },
-        { label: 'active', value: String(active), valueColor: active > 0 ? C.ok : C.dim },
+        { label: 'active', value: String(active), valueColor: active > 0 ? C.good : C.dim },
         { label: 'untrusted', value: String(untrusted), valueColor: untrusted > 0 ? C.warn : C.dim },
-        { label: 'quarantined', value: String(quarantined), valueColor: quarantined > 0 ? C.error : C.dim },
+        { label: 'quarantined', value: String(quarantined), valueColor: quarantined > 0 ? C.bad : C.dim },
       ], C),
     ];
 
@@ -174,9 +167,9 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
         ['  Capabilities: ', C.label],
         [String(selectedCaps.requested.length), C.value],
         ['  High-risk: ', C.label],
-        [String(selectedCaps.highRisk.length), selectedCaps.highRisk.length > 0 ? C.warn : C.ok],
+        [String(selectedCaps.highRisk.length), selectedCaps.highRisk.length > 0 ? C.warn : C.good],
         ['  Blocked: ', C.label],
-        [String(selectedCaps.blocked.length), selectedCaps.blocked.length > 0 ? C.error : C.ok],
+        [String(selectedCaps.blocked.length), selectedCaps.blocked.length > 0 ? C.bad : C.good],
       ]));
     }
 
@@ -192,7 +185,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
     if (quarantineRecord) {
       detailRows.push(buildPanelLine(width, [
         ['  Quarantine: ', C.label],
-        [truncateDisplay(quarantineRecord.reason, Math.max(0, width - 14)), C.error],
+        [truncateDisplay(quarantineRecord.reason, Math.max(0, width - 14)), C.bad],
       ]));
     }
 

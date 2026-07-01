@@ -6,19 +6,20 @@ import {
   buildPanelLine,
   buildPanelTitle,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { renderQrMatrix, generateQrMatrix } from '../renderer/qr-renderer.ts';
 import { encodeConnectionPayload } from '@pellux/goodvibes-sdk/platform/pairing';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  url: '#38bdf8',
+// Domain accents only; base chrome (header/headerBg/label/info) comes from
+// DEFAULT_PANEL_PALETTE. qrFg/qrBg stay pure black/white — scanner contrast
+// requirements override theming.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   token: '#a78bfa',
-  hint: '#64748b',
-  qrFg: '#000000',
-  qrBg: '#ffffff',
-} as const;
+  qrFg:  '#000000',
+  qrBg:  '#ffffff',
+} as const);
 
 /**
  * Connection info passed to the QR panel.
@@ -110,7 +111,7 @@ export class QrPanel extends BasePanel {
     lines.push(buildPanelTitle(width, 'Companion Pairing', C));
     lines.push(
       buildPanelLine(width, [
-        [' Scan with the GoodVibes companion app to pair this session.', C.hint],
+        [' Scan with the GoodVibes companion app to pair this session.', C.label],
       ]),
     );
 
@@ -119,7 +120,7 @@ export class QrPanel extends BasePanel {
     lines.push(
       buildPanelLine(width, [
         [' URL      ', C.label],
-        [truncateDisplay(url, valueWidth), C.url],
+        [truncateDisplay(url, valueWidth), C.info],
       ]),
     );
     lines.push(
@@ -165,7 +166,7 @@ export class QrPanel extends BasePanel {
     if (this.lastStatus) {
       lines.push(
         buildPanelLine(width, [
-          [` ${this.lastStatus} `, C.hint],
+          [` ${this.lastStatus} `, C.label],
         ]),
       );
     }

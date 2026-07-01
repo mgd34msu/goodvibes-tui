@@ -16,16 +16,9 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 export interface HooksPanelWorkbenchView {
   listManagedHooks(): Array<{ pattern: string; hook: HookDefinition }>;
@@ -170,7 +163,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
     const activityLines: Line[] = recentActivity.length === 0
       ? [buildPanelLine(width, [['  No hook activity recorded yet.', C.empty]])]
       : recentActivity.map((record) => {
-          const color = !record.ok ? C.error : record.decision === 'deny' ? C.warn : C.ok;
+          const color = !record.ok ? C.bad : record.decision === 'deny' ? C.warn : C.good;
           return buildPanelLine(width, [
             ['  ', C.label],
             [truncateDisplay(record.hookName, 18).padEnd(18), C.value],
@@ -244,7 +237,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
         { label: 'chains', value: String(chains.length), valueColor: C.value },
         { label: 'contracts', value: String(contracts.length), valueColor: C.value },
         { label: 'recent denials', value: String(denials), valueColor: denials > 0 ? C.warn : C.dim },
-        { label: 'errors', value: String(errors), valueColor: errors > 0 ? C.error : C.dim },
+        { label: 'errors', value: String(errors), valueColor: errors > 0 ? C.bad : C.dim },
       ], C),
     ];
 

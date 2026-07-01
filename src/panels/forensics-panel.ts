@@ -19,36 +19,18 @@ import {
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { formatShortDuration } from '../utils/format-duration.ts';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header:          '#94a3b8',
-  headerBg:        '#1e293b',
-  reportId:        '#475569',
-  timestamp:       '#64748b',
-  classification:  '#f97316',
-  classOk:         '#22c55e',
-  classCancelled:  '#94a3b8',
-  classError:      '#ef4444',
-  classWarn:       '#eab308',
-  summaryText:     '#cbd5e1',
-  label:           '#64748b',
-  value:           '#e2e8f0',
-  chainRoot:       '#f97316',
-  chainEntry:      '#94a3b8',
-  phaseOk:         '#22c55e',
-  phaseFail:       '#ef4444',
-  phasePending:    '#64748b',
-  jumpLink:        '#38bdf8',
-  separator:       '#1e293b',
-  dim:             '#334155',
-  empty:           '#4b5563',
-  selectBg:        '#1e3a5f',
-} as const;
+// Domain accents only; base chrome (header/headerBg/label/value/dim/good/bad/
+// warn/info/empty/selectBg) comes from DEFAULT_PANEL_PALETTE.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  classification: '#f97316',   // default/unclassified failure accent
+  chainRoot:      '#f97316',   // causal-chain root-cause marker
+} as const);
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -66,15 +48,15 @@ function fmtDuration(ms: number | undefined): string {
 
 function classificationColor(cls: FailureReport['classification']): string {
   switch (cls) {
-    case 'cancelled':        return C.classCancelled;
-    case 'max_tokens':       return C.classWarn;
-    case 'unknown':          return C.classWarn;
-    case 'llm_error':        return C.classError;
-    case 'tool_failure':     return C.classError;
-    case 'permission_denied':return C.classError;
-    case 'cascade_failure':  return C.classError;
-    case 'turn_timeout':     return C.classError;
-    case 'compaction_error': return C.classError;
+    case 'cancelled':        return C.dim;
+    case 'max_tokens':       return C.warn;
+    case 'unknown':          return C.warn;
+    case 'llm_error':        return C.bad;
+    case 'tool_failure':     return C.bad;
+    case 'permission_denied':return C.bad;
+    case 'cascade_failure':  return C.bad;
+    case 'turn_timeout':     return C.bad;
+    case 'compaction_error': return C.bad;
     default:                 return C.classification;
   }
 }
@@ -197,15 +179,15 @@ export class ForensicsPanel extends BasePanel {
   private _renderList(lines: Line[], reports: FailureReport[], width: number, height: number, intro: string): void {
     // Posture summary: how many reports and how many are hard errors, so the
     // most important signal (recent failures) is visible before scrolling.
-    const errorCount = reports.filter((r) => classificationColor(r.classification) === C.classError).length;
+    const errorCount = reports.filter((r) => classificationColor(r.classification) === C.bad).length;
     const newest = reports[0];
     const summaryLine = buildPanelLine(width, [
       [' reports ', C.label],
       [String(reports.length), C.value],
       ['  errors ', C.label],
-      [String(errorCount), errorCount > 0 ? C.classError : C.classOk],
+      [String(errorCount), errorCount > 0 ? C.bad : C.good],
       ['  newest ', C.label],
-      [newest ? fmtTime(newest.generatedAt) : 'n/a', C.timestamp],
+      [newest ? fmtTime(newest.generatedAt) : 'n/a', C.label],
     ]);
 
     const reportRows: Line[] = [
@@ -226,11 +208,11 @@ export class ForensicsPanel extends BasePanel {
       const summaryStr = truncateDisplay(report.summary, summaryMax);
 
       const segs: Array<[string, string, string?]> = [
-        [isSelected ? '▸' : ' ', C.jumpLink, bg],
-        [`${idStr} `, C.reportId, bg],
-        [`${timeStr} `, C.timestamp, bg],
+        [isSelected ? '▸' : ' ', C.info, bg],
+        [`${idStr} `, C.dim, bg],
+        [`${timeStr} `, C.label, bg],
         [`${cls} `, clsColor, bg],
-        [summaryStr, C.summaryText, bg],
+        [summaryStr, C.value, bg],
       ];
       reportRows.push(buildPanelLine(width, segs));
     }
@@ -268,7 +250,7 @@ export class ForensicsPanel extends BasePanel {
       [' Report: ', C.label],
       [report.id, C.value],
       ['  Generated: ', C.label],
-      [fmtTime(report.generatedAt), C.timestamp],
+      [fmtTime(report.generatedAt), C.label],
     ]));
     detailLines.push(buildPanelLine(width, [
       [' Class:   ', C.label],
@@ -276,19 +258,19 @@ export class ForensicsPanel extends BasePanel {
     ]));
     detailLines.push(buildPanelLine(width, [
       [' Summary: ', C.label],
-      [truncateDisplay(report.summary, Math.max(0, width - 11)), C.summaryText],
+      [truncateDisplay(report.summary, Math.max(0, width - 11)), C.value],
     ]));
 
     if (report.errorMessage) {
       detailLines.push(buildPanelLine(width, [
         [' Error:   ', C.label],
-        [truncateDisplay(report.errorMessage, Math.max(0, width - 11)), C.classError],
+        [truncateDisplay(report.errorMessage, Math.max(0, width - 11)), C.bad],
       ]));
     }
     if (report.stopReason) {
       detailLines.push(buildPanelLine(width, [
         [' Stop:    ', C.label],
-        [report.stopReason, C.classWarn],
+        [report.stopReason, C.warn],
       ]));
     }
     if (report.taskId) {
@@ -321,8 +303,8 @@ export class ForensicsPanel extends BasePanel {
         const kindTag = link.kind === 'panel' ? '[panel]' : '[cmd]  ';
         detailLines.push(buildPanelLine(width, [
           ['  ', C.dim],
-          [kindTag, C.timestamp],
-          [` ${link.label}`, C.jumpLink],
+          [kindTag, C.label],
+          [` ${link.label}`, C.info],
           [link.args ? ` (${link.args})` : '', C.dim],
         ]));
       }
@@ -351,7 +333,7 @@ export class ForensicsPanel extends BasePanel {
 
   private _renderPhase(lines: Line[], pt: PhaseTimingEntry, width: number): void {
     const statusChar = pt.success ? '✓' : '✕';
-    const statusColor = pt.success ? C.phaseOk : C.phaseFail;
+    const statusColor = pt.success ? C.good : C.bad;
     const dur = fmtDuration(pt.durationMs);
     const phaseLabel = fitDisplay(pt.phase, 14);
     const errPart = pt.error ? `  ${truncateDisplay(pt.error, Math.max(0, width - 32))}` : '';
@@ -359,19 +341,19 @@ export class ForensicsPanel extends BasePanel {
       ['  ', C.dim],
       [statusChar + ' ', statusColor],
       [phaseLabel, C.value],
-      [dur.padStart(6, ' '), C.timestamp],
-      [errPart, C.classError],
+      [dur.padStart(6, ' '), C.label],
+      [errPart, C.bad],
     ]));
   }
 
   private _renderCausal(lines: Line[], entry: CausalChainEntry, width: number): void {
     const prefix = entry.isRootCause ? '  * ' : '  - ';
-    const color = entry.isRootCause ? C.chainRoot : C.chainEntry;
+    const color = entry.isRootCause ? C.chainRoot : C.dim;
     const timeStr = fmtTime(entry.ts);
     const descMax = Math.max(0, width - prefix.length - 9);
     lines.push(buildPanelLine(width, [
       [prefix, color],
-      [`${timeStr} `, C.timestamp],
+      [`${timeStr} `, C.label],
       [truncateDisplay(entry.description, descMax), color],
     ]));
   }
