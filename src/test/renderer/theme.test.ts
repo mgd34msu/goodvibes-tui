@@ -13,7 +13,8 @@
 import { describe, test, expect } from 'bun:test';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { resolveTheme, DARK_THEME, type ThemeTokens } from '../../renderer/theme.ts';
+import { resolveTheme, resolveUiTones, DARK_THEME, type ThemeTokens } from '../../renderer/theme.ts';
+import { UI_TONES } from '../../renderer/ui-primitives.ts';
 
 // ---------------------------------------------------------------------------
 // resolveTheme()
@@ -185,6 +186,76 @@ describe('light mode token values differ from dark', () => {
 // This is a lint-style regression guard — it will fail if someone re-introduces
 // a hardcoded colour at one of those call sites.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// resolveUiTones() — chrome-token mode dimension (WO-001)
+//
+// UI_TONES (ui-primitives.ts) is the dark entry; dark resolution must stay
+// byte-identical (same reference) to that constant. The light entry must be
+// type-complete (every nested role present as a non-empty string) even
+// though it is not yet a shipped, fully-designed light theme.
+// ---------------------------------------------------------------------------
+
+function collectStringLeaves(value: unknown, path: string, out: Array<[string, unknown]>): void {
+  if (typeof value === 'string') {
+    out.push([path, value]);
+    return;
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      collectStringLeaves(nested, path ? `${path}.${key}` : key, out);
+    }
+  }
+}
+
+describe('resolveUiTones', () => {
+  test("dark mode is byte-identical to UI_TONES (same reference)", () => {
+    expect(resolveUiTones('dark')).toBe(UI_TONES);
+  });
+
+  test('dark mode roles match the historical UI_TONES values', () => {
+    const dark = resolveUiTones('dark');
+    expect(dark.accent.brand).toBe('#00ffff');
+    expect(dark.accent.gradientStart).toBe('#00ffff');
+    expect(dark.accent.gradientEnd).toBe('#d000ff');
+    expect(dark.state.reasoning).toBe('#a855f7');
+    expect(dark.border).toBe('#64748b');
+    expect(dark.bg.footer).toBe('#111827');
+    expect(dark.fg.empty).toBe('#334155');
+  });
+
+  test('light mode is a distinct object from dark', () => {
+    expect(resolveUiTones('light')).not.toBe(resolveUiTones('dark'));
+  });
+
+  test('light mode is type-complete: every leaf role is a non-empty string', () => {
+    const light = resolveUiTones('light');
+    const leaves: Array<[string, unknown]> = [];
+    collectStringLeaves(light, '', leaves);
+    expect(leaves.length).toBeGreaterThan(0);
+    for (const [path, value] of leaves) {
+      expect(typeof value).toBe('string');
+      expect((value as string).length).toBeGreaterThan(0);
+    }
+  });
+
+  test('light mode has the same shape (leaf paths) as dark mode', () => {
+    const dark = resolveUiTones('dark');
+    const light = resolveUiTones('light');
+    const darkLeaves: Array<[string, unknown]> = [];
+    const lightLeaves: Array<[string, unknown]> = [];
+    collectStringLeaves(dark, '', darkLeaves);
+    collectStringLeaves(light, '', lightLeaves);
+    expect(lightLeaves.map(([path]) => path).sort()).toEqual(darkLeaves.map(([path]) => path).sort());
+  });
+
+  test('light mode substitutes at least one role away from the dark value', () => {
+    const dark = resolveUiTones('dark');
+    const light = resolveUiTones('light');
+    expect(light.state.reasoning).not.toBe(dark.state.reasoning);
+    expect(light.accent.brand).not.toBe(dark.accent.brand);
+  });
+});
 
 describe('no hardcoded hex literals at replaced call sites', () => {
   const root = path.resolve(import.meta.dir, '../..');

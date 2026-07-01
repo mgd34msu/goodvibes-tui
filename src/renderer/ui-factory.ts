@@ -4,7 +4,7 @@ import { VERSION } from '../version.ts';
 import { fitDisplay, getDisplayWidth, truncateDisplay, wrapText, interpolateColor } from '../utils/terminal-width.ts';
 import type { GitHeaderInfo } from './git-status.ts';
 import { renderConversationFragment, renderConversationStatusLine, type ConversationStatusSegment } from './conversation-surface.ts';
-import { GLYPHS } from './ui-primitives.ts';
+import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
@@ -41,9 +41,9 @@ function fmtNum(n: number): string {
 export class UIFactory {
   public static createHeader(width: number, model: string, provider: string, title?: string, gitInfo?: GitHeaderInfo): Line[] {
     const lines: Line[] = [];
-    const CYAN = '#00ffff';
-    const GREY = '244';
-    const TITLE_COLOR = '250';
+    const CYAN = UI_TONES.accent.brand;
+    const GREY = UI_TONES.fg.dim;
+    const TITLE_COLOR = UI_TONES.fg.muted;
     const brand = ` GoodVibes `;
     const ver = `v${VERSION} `;
     const stats = ` ${model} `;
@@ -77,11 +77,11 @@ export class UIFactory {
     }
     // Build git info segment
     let gitStr = '';
-    let gitFg = '238';
+    let gitFg: string = UI_TONES.fg.dim;
     if (gitInfo) {
       gitStr = buildGitSegment(gitInfo).text;
       if (gitInfo.dirty || gitInfo.ahead > 0 || gitInfo.behind > 0) {
-        gitFg = '220'; // yellow when dirty or out-of-sync
+        gitFg = UI_TONES.state.warn; // yellow when dirty or out-of-sync
       }
     }
     const rightSideText = stats + prov;
@@ -91,7 +91,7 @@ export class UIFactory {
     for (const char of stats) { if (rightX < width) line[rightX++] = { char, fg: CYAN, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false }; }
     for (const char of prov) { if (rightX < width) line[rightX++] = { char, fg: GREY, bg: '', bold: false, dim: true, underline: false, italic: false, strikethrough: false }; }
     lines.push(line);
-    lines.push(this.stringToLine('━'.repeat(width), width, { fg: '244' }));
+    lines.push(this.stringToLine('━'.repeat(width), width, { fg: UI_TONES.fg.dim }));
     return lines;
   }
 
@@ -101,12 +101,12 @@ export class UIFactory {
    */
   public static createMessageBar(
     width: number, text: string,
-    bgColor = '#2a2a2a', textColor = '252', prefixStr = ' › ',
+    bgColor: string = '#2a2a2a', textColor: string = UI_TONES.fg.secondary, prefixStr: string = ' › ',
     strikethrough = false
   ): Line[] {
     return renderConversationFragment(text, width, {
       prefix: prefixStr,
-      prefixFg: '135',
+      prefixFg: UI_TONES.state.reasoning,
       text: textColor,
       bodyBg: bgColor,
       strikethrough,
@@ -119,8 +119,8 @@ export class UIFactory {
   public static createQueuedMessageFragment(width: number, text: string): Line[] {
     return renderConversationFragment(text, width, {
       prefix: ' (...) ',
-      prefixFg: '135',
-      text: '240',
+      prefixFg: UI_TONES.state.reasoning,
+      text: UI_TONES.fg.dim,
       bodyBg: '#1a1a1a',
       dim: true,
     });
@@ -392,8 +392,8 @@ export class UIFactory {
   ];
 
   /** Gradient colors for thinking text — cyan to purple (matches splash). */
-  private static readonly THINK_GRADIENT_START = '#00ffff';
-  private static readonly THINK_GRADIENT_END = '#d000ff';
+  private static readonly THINK_GRADIENT_START = UI_TONES.accent.gradientStart;
+  private static readonly THINK_GRADIENT_END = UI_TONES.accent.gradientEnd;
 
   public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number): Line[] {
     // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)

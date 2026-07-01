@@ -2,11 +2,12 @@ import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth, padDisplayEnd } from '../utils/terminal-width.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
+import { SPINNER_FRAMES } from './ui-primitives.ts';
 
-// Rich spinner frames (used by progress indicators)
-export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-// Braille thinking spinner frames (used by the orchestrator thinking animation)
-export const THINKING_SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+// Rich spinner frames (used by progress indicators) — single source in ui-primitives.ts.
+export { SPINNER_FRAMES };
+// Braille thinking spinner frames (used by the orchestrator thinking animation) — same frame set.
+export const THINKING_SPINNER_FRAMES = SPINNER_FRAMES;
 
 /**
  * renderSpinner - Render a spinner with label as a single Line.

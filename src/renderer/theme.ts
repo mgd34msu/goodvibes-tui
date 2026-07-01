@@ -14,7 +14,18 @@
  * IMPORTANT: inline code has NO background token. The bg:#1a1a1a hardcode
  * that previously existed caused a near-black box on light terminals.
  * Differentiate inline code via inlineCodeFg + bold only; bg inherits terminal.
+ *
+ * resolveUiTones(mode) is the sibling read path for CHROME tokens (UI_TONES
+ * in ui-primitives.ts — panel/modal/overlay/fullscreen backgrounds, borders,
+ * status colours). It composes the same ThemeMode dimension so that
+ * DEFAULT_PANEL_PALETTE, DEFAULT_STYLE, FULLSCREEN_PALETTE and
+ * DEFAULT_OVERLAY_PALETTE all read through ONE mode-resolved path instead of
+ * importing the static UI_TONES constant directly. Mode stays 'dark'
+ * everywhere until the terminal-bg-probe lands (see WO-001) — the light
+ * entry is type-complete, not a shipped light theme.
  */
+
+import { UI_TONES } from './ui-primitives.ts';
 
 /** Background mode — dark is the safe default until terminal-bg-probe lands. */
 export type ThemeMode = 'dark' | 'light';
@@ -78,9 +89,9 @@ const DARK: ThemeTokens = {
   searchCurrentFg: '#000000',
   strikethrough:   '244',
   blockquote:      '244',
-  assistantHeader: '#22d3ee',
-  reasoningAccent: '#a855f7',
-  toolAccent:      '#38bdf8',
+  assistantHeader: UI_TONES.accent.control,
+  reasoningAccent: UI_TONES.state.reasoning,
+  toolAccent:      UI_TONES.state.info,
   collapsedBodyBg: '#1a1a1a',
   checkboxChecked: '#22c55e',
   errorBarBg:      '#3a1a1a',
@@ -156,3 +167,49 @@ Object.freeze(LIGHT);
  * Frozen — do not mutate.
  */
 export const DARK_THEME: Readonly<ThemeTokens> = DARK;
+
+// ---------------------------------------------------------------------------
+// Chrome tokens (UI_TONES) — mode-resolved sibling to resolveTheme().
+//
+// UI_TONES (ui-primitives.ts) is the dark entry. The light entry mirrors
+// dark for every role that has no light-appropriate equivalent yet — the
+// WO-001 deliverable is the mode dimension and single read path, not a
+// shipped light chrome theme (see module doc comment above).
+// ---------------------------------------------------------------------------
+
+/** Recursively widen the `as const` literal leaves of UI_TONES to `string`
+ * so mode variants (e.g. UI_TONES_LIGHT) can assign different colour
+ * values without fighting TypeScript's literal-type inference. */
+type DeepWidenToString<T> = T extends string ? string : { [K in keyof T]: DeepWidenToString<T[K]> };
+
+export type UiToneTokens = DeepWidenToString<typeof UI_TONES>;
+
+const UI_TONES_LIGHT: UiToneTokens = {
+  ...UI_TONES,
+  state: {
+    ...UI_TONES.state,
+    info: LIGHT.toolAccent,
+    reasoning: LIGHT.reasoningAccent,
+  },
+  accent: {
+    ...UI_TONES.accent,
+    brand: LIGHT.heading1,
+    gradientStart: LIGHT.heading1,
+    gradientEnd: LIGHT.reasoningAccent,
+  },
+};
+
+Object.freeze(UI_TONES_LIGHT.state);
+Object.freeze(UI_TONES_LIGHT.accent);
+Object.freeze(UI_TONES_LIGHT);
+
+/**
+ * resolveUiTones — Return the chrome (panel/modal/overlay/fullscreen) token
+ * set for the given background mode. Single read path for UI_TONES; the
+ * 'dark' resolution is byte-identical to the UI_TONES constant.
+ *
+ * Call with 'dark' (the safe default) until terminal-bg-probe lands.
+ */
+export function resolveUiTones(mode: ThemeMode): Readonly<UiToneTokens> {
+  return mode === 'light' ? UI_TONES_LIGHT : UI_TONES;
+}

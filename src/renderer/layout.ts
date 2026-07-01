@@ -1,4 +1,4 @@
-import { GLYPHS } from './ui-primitives.ts';
+import { GLYPHS, SPINNER_FRAMES, UI_TONES } from './ui-primitives.ts';
 
 /**
  * Layout constants — single source of truth for margins and content width.
@@ -14,19 +14,19 @@ export const LAYOUT = {
 
 export const TOOL_STATUS = {
   SUCCESS_ICON: GLYPHS.status.success,
-  SPINNER_FRAMES: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
+  SPINNER_FRAMES,
   FAIL_ICON: GLYPHS.status.failure,
   PENDING_ICON: GLYPHS.status.pending,
   TOOL_NAME_PAD: 8,
 } as const;
 
 export const COLORS = {
-  DIM_TEXT: '244',
+  DIM_TEXT: UI_TONES.fg.dim,
 } as const;
 
 export const BORDERS = {
-  THINKING: { char: '▌', color: '#9945FF' },
-  ERROR:    { char: '▌', color: '#ef4444' },
-  WARNING:  { char: '▌', color: '#eab308' },
-  INFO:     { char: '▌', color: '#22d3ee' },
+  THINKING: { char: '▌', color: UI_TONES.state.reasoning },
+  ERROR:    { char: '▌', color: UI_TONES.state.bad },
+  WARNING:  { char: '▌', color: UI_TONES.state.warn },
+  INFO:     { char: '▌', color: UI_TONES.state.info },
 } as const;
