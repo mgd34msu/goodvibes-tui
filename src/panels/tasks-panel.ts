@@ -1,5 +1,6 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import type { RuntimeTask, TaskLifecycleState } from '@/runtime/index.ts';
 import type { ManagedWorktreeMeta } from '@/runtime/index.ts';
@@ -8,12 +9,14 @@ import {
   buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildPanelListRow,
   buildPanelLine,
   buildSummaryBlock,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
 
 const C = {
   ...DEFAULT_PANEL_PALETTE,
@@ -35,13 +38,7 @@ function formatWhen(value?: number): string {
 
 function formatDuration(startedAt?: number, endedAt?: number): string {
   if (!startedAt) return 'n/a';
-  const end = endedAt ?? Date.now();
-  const ms = Math.max(0, end - startedAt);
-  if (ms < 1_000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1_000).toFixed(ms < 10_000 ? 1 : 0)}s`;
-  const mins = Math.floor(ms / 60_000);
-  const secs = Math.floor((ms % 60_000) / 1_000);
-  return `${mins}m ${secs}s`;
+  return formatElapsed(Math.max(0, (endedAt ?? Date.now()) - startedAt));
 }
 
 function kindLabel(kind: RuntimeTask['kind']): string {
@@ -157,6 +154,8 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
   ) {
     super('tasks', 'Tasks', 'J', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter tasks';
     this.readModel = readModel;
     this.worktrees = worktrees;
     this.unsubscribers = [
@@ -183,6 +182,13 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
     ];
   }
 
+  protected override filterMatches(task: RuntimeTask, q: string): boolean {
+    return task.title.toLowerCase().includes(q)
+      || task.status.toLowerCase().includes(q)
+      || task.id.toLowerCase().includes(q)
+      || String(task.kind).toLowerCase().includes(q);
+  }
+
   protected getItems(): readonly RuntimeTask[] {
     if (!this.readModel) return [];
     return sortTasks([...this.readModel.getSnapshot().tasks]);
@@ -193,7 +199,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       { text: task.status.padEnd(10), fg: statusColor(task.status) },
       { text: ` ${kindLabel(task.kind).padEnd(12)}`, fg: C.value },
       { text: ` ${task.id.slice(0, 8)} `, fg: C.dim },
-      { text: task.title.slice(0, Math.max(0, width - 37)), fg: C.value },
+      { text: truncateDisplay(task.title, Math.max(0, width - 37)), fg: C.value },
     ], C, { selected });
   }
 
@@ -204,7 +210,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       return true;
     }
     if (key === 'end') {
-      const tasks = this.getItems();
+      const tasks = this.getVisibleItems();
       this.selectedIndex = Math.max(0, tasks.length - 1);
       this.markDirty();
       return true;
@@ -215,7 +221,23 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
   public render(width: number, height: number): Line[] {
     this.clampSelection();
     const intro = 'Live task lifecycle, ownership, retries, and result/error details across runtime execution domains.';
-    const footerLines = [buildPanelLine(width, [['  Up/Down move  Home/End jump', C.dim]])];
+    const visibleCount = this.getVisibleItems().length;
+    // Context-aware footer: position + only the keys that apply in the current
+    // (filtering vs browsing) state.
+    const footerLines = [
+      this.filterActive
+        ? buildKeyboardHints(width, [
+            { keys: 'type', label: 'filter tasks' },
+            { keys: 'Enter', label: 'apply' },
+            { keys: 'Esc', label: 'clear' },
+          ], C)
+        : buildKeyboardHints(width, [
+            { keys: visibleCount > 0 ? `${this.selectedIndex + 1}/${visibleCount}` : '0/0', label: 'task' },
+            { keys: '↑/↓', label: 'move' },
+            { keys: 'Home/End', label: 'jump' },
+            { keys: '/', label: 'filter' },
+          ], C),
+    ];
 
     if (!this.readModel) {
       const workspace = buildPanelWorkspace(width, height, {
@@ -272,7 +294,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
         ['  kind ', C.label],
         [selected.kind, C.value],
         ['  owner ', C.label],
-        [selected.owner.slice(0, Math.max(0, width - 46)), C.dim],
+        [truncateDisplay(selected.owner, Math.max(0, width - 46)), C.dim],
       ]));
     }
     postureLines.push(
@@ -359,7 +381,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
         ]]));
         for (const record of attachedWorktrees.records.slice(0, 2)) {
           detailRows.push(buildPanelLine(width, [[
-            `  ${record.state.padEnd(15)} ${record.path}`.slice(0, Math.max(0, width - 2)),
+            truncateDisplay(`  ${record.state.padEnd(15)} ${record.path}`, Math.max(0, width - 2)),
             record.state === 'active' ? C.running : record.state === 'paused' ? C.blocked : C.dim,
           ]]));
         }
@@ -373,14 +395,14 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       if (selected.error) {
         detailRows.push(buildPanelLine(width, [
           ['  Error: ', C.label],
-          [selected.error.slice(0, Math.max(0, width - 10)), C.failed],
+          [truncateDisplay(selected.error, Math.max(0, width - 10)), C.failed],
         ]));
       }
       if (selected.result !== undefined) {
         const resultText = safeJson(selected.result);
         detailRows.push(buildPanelLine(width, [
           ['  Result: ', C.label],
-          [resultText.slice(0, Math.max(0, width - 11)), C.dim],
+          [truncateDisplay(resultText, Math.max(0, width - 11)), C.dim],
         ]));
       }
     }

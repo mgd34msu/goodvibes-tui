@@ -3,13 +3,14 @@ import { createEmptyLine } from '../types/grid.ts';
 import type { Line } from '../types/grid.ts';
 import {
   buildEmptyState,
+  buildKeyboardHints,
   buildPanelLine,
-  buildSelectablePanelLine,
+  buildTreeRow,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
 
 // ── Symbol types ────────────────────────────────────────────────────────────
 
@@ -25,6 +26,10 @@ export interface SymbolEntry {
 
 // ── Rendering constants ──────────────────────────────────────────────────────
 
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  selectedBg: '236',
+});
+
 /** ANSI 256-color fg codes per symbol kind. */
 const KIND_COLORS: Record<SymbolKind, string> = {
   function:  '87',   // cyan
@@ -36,15 +41,15 @@ const KIND_COLORS: Record<SymbolKind, string> = {
   const:     '245',  // grey
 };
 
-/** Short type indicator labels. */
-const KIND_LABELS: Record<SymbolKind, string> = {
-  function:  'fn ',
-  method:    'fn ',
-  class:     'cls',
-  namespace: 'ns ',
-  interface: 'int',
-  type:      'typ',
-  const:     'cst',
+/** Single-char type icon for the tree row (kept ASCII for column safety). */
+const KIND_ICONS: Record<SymbolKind, string> = {
+  function:  'ƒ',
+  method:    'ƒ',
+  class:     'C',
+  namespace: 'N',
+  interface: 'I',
+  type:      'T',
+  const:     'k',
 };
 
 /** Regex patterns to extract symbols. Each produces named groups: kind, name, line. */
@@ -188,8 +193,10 @@ export class SymbolOutlinePanel extends BasePanel {
               this.currentPath
                 ? 'The current file did not produce outline entries with the lightweight parser heuristics.'
                 : 'Load a file in the preview panel to populate its outline here.',
-              [],
-              DEFAULT_PANEL_PALETTE,
+              this.currentPath
+                ? []
+                : [{ command: '/explorer', summary: 'pick a file in the explorer, then Enter to preview and outline it' }],
+              C,
             ),
           },
         ],
@@ -201,7 +208,7 @@ export class SymbolOutlinePanel extends BasePanel {
     const outlineSection = resolveScrollablePanelSection(width, height, {
       intro: this.currentPath ? this.currentPath : 'Outline the current file into navigable symbols and lightweight parent/child structure.',
       footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' jump target', DEFAULT_PANEL_PALETTE.dim]]),
+        buildKeyboardHints(width, [{ keys: '↑/↓', label: 'navigate' }, { keys: 'Space/←/→', label: 'collapse' }, { keys: 'Enter', label: 'jump to source →' }], DEFAULT_PANEL_PALETTE),
       ],
       palette: DEFAULT_PANEL_PALETTE,
       beforeSections: [
@@ -291,7 +298,7 @@ export class SymbolOutlinePanel extends BasePanel {
         },
       ],
       footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' navigate', DEFAULT_PANEL_PALETTE.dim], ['   Space', DEFAULT_PANEL_PALETTE.info], [' collapse', DEFAULT_PANEL_PALETTE.dim], ['   Enter', DEFAULT_PANEL_PALETTE.info], [' jump target', DEFAULT_PANEL_PALETTE.dim]]),
+        buildKeyboardHints(width, [{ keys: '↑/↓', label: 'navigate' }, { keys: 'Space/←/→', label: 'collapse' }, { keys: 'Enter', label: 'jump to source →' }], DEFAULT_PANEL_PALETTE),
       ],
       palette: DEFAULT_PANEL_PALETTE,
     });
@@ -434,10 +441,7 @@ function buildVisibleRows(symbols: SymbolEntry[], collapsed: Set<string>): Visib
   return rows;
 }
 
-/**
- * Write a string into a Line starting at column x, applying fg/bg/style.
- */
-/** Render a container header row (class / namespace). */
+/** Render a container header row (class / namespace) via the shared tree row. */
 function _renderHeader(
   width: number,
   row: Extract<VisibleRow, { kind: 'header' }>,
@@ -445,24 +449,19 @@ function _renderHeader(
   bgColor: string,
   collapsed: Set<string>,
 ): Line {
-  // Collapse indicator
   const isCollapsed = collapsed.has(row.name);
-  const chevron = row.hasChildren ? (isCollapsed ? '▸ ' : '▾ ') : '  ';
-  const lineNumStr = `:${row.line}`;
-  const kindLabel = KIND_LABELS[row.symbolKind];
-  const leadingWidth = 1 + getDisplayWidth(chevron) + getDisplayWidth(kindLabel) + 1 + getDisplayWidth(row.name);
-  const gap = Math.max(1, width - leadingWidth - getDisplayWidth(lineNumStr) - 1);
-  return buildSelectablePanelLine(width, [
-    { text: ` ${chevron}`, fg: '245' },
-    { text: kindLabel, fg: KIND_COLORS[row.symbolKind], bold: true },
-    { text: ' ', fg: isSelected ? '255' : '252' },
-    { text: row.name, fg: isSelected ? '255' : '252', bold: isSelected },
-    { text: ' '.repeat(gap), fg: DEFAULT_PANEL_PALETTE.dim },
-    { text: lineNumStr, fg: DEFAULT_PANEL_PALETTE.dim },
-  ], { selected: isSelected, selectedBg: bgColor, fillFg: isSelected ? '255' : '' });
+  return buildTreeRow(width, {
+    depth: 0,
+    label: row.name,
+    icon: KIND_ICONS[row.symbolKind],
+    expandable: row.hasChildren,
+    expanded: !isCollapsed,
+    labelColor: KIND_COLORS[row.symbolKind],
+    metadata: [{ text: `:${row.line}`, fg: DEFAULT_PANEL_PALETTE.dim }],
+  }, C, { selected: isSelected, selectedBg: bgColor || C.selectedBg });
 }
 
-/** Render a regular symbol row. */
+/** Render a regular symbol row via the shared tree row. */
 function _renderSymbol(
   width: number,
   row: Extract<VisibleRow, { kind: 'symbol' }>,
@@ -470,17 +469,11 @@ function _renderSymbol(
   bgColor: string,
 ): Line {
   const { symbol, depth } = row;
-  const indent = depth === 0 ? 1 : 3; // children indented by 3 (chevron + space)
-  const kindLabel = KIND_LABELS[symbol.kind];
-  const lineNumStr = `:${symbol.line}`;
-  const leadingWidth = indent + getDisplayWidth(kindLabel) + 1 + getDisplayWidth(symbol.name);
-  const gap = Math.max(1, width - leadingWidth - getDisplayWidth(lineNumStr) - 1);
-  return buildSelectablePanelLine(width, [
-    { text: ' '.repeat(indent), fg: DEFAULT_PANEL_PALETTE.dim },
-    { text: kindLabel, fg: KIND_COLORS[symbol.kind] },
-    { text: ' ', fg: isSelected ? '255' : '251' },
-    { text: symbol.name, fg: isSelected ? '255' : '251', bold: isSelected },
-    { text: ' '.repeat(gap), fg: DEFAULT_PANEL_PALETTE.dim },
-    { text: lineNumStr, fg: DEFAULT_PANEL_PALETTE.dim },
-  ], { selected: isSelected, selectedBg: bgColor, fillFg: isSelected ? '255' : '' });
+  return buildTreeRow(width, {
+    depth,
+    label: symbol.name,
+    icon: KIND_ICONS[symbol.kind],
+    labelColor: KIND_COLORS[symbol.kind],
+    metadata: [{ text: `:${symbol.line}`, fg: DEFAULT_PANEL_PALETTE.dim }],
+  }, C, { selected: isSelected, selectedBg: bgColor || C.selectedBg });
 }

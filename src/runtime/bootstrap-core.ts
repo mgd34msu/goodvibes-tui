@@ -399,50 +399,50 @@ export async function initializeBootstrapCore(
   });
 
   const renderRequestRef = { value: (): void => {} };
-  // R1: Coalescing render scheduler — collapses N same-microtask requestRender() calls into 1.
-  // Also enforces a 16ms minimum interval to cap at ~60fps during streaming.
+  // R1: Coalescing render scheduler — collapses N requestRender() calls into 1
+  // and enforces a 16ms minimum interval to cap repaints at ~60fps.
+  //
+  // renderScheduled stays set for the ENTIRE window (until run() executes), so
+  // requestRender() calls that arrive on later event-loop ticks within the same
+  // 16ms window are coalesced into the one already-pending tail render instead
+  // of each queuing their own setTimeout. (The streaming hot path drives its own
+  // direct repaints and does not flow through this scheduler.)
   let renderScheduled = false;
   let lastRenderTime = 0;
   const RENDER_INTERVAL_MS = 16;
+  // run() performs the actual render. It clears renderScheduled FIRST — even if
+  // the render callback throws — otherwise a single render exception would wedge
+  // the entire TUI (no future requestRender() call would schedule anything). The
+  // renderer is expected to surface failures via its own error path; we log at
+  // error so the next requestRender() can still reschedule.
+  const run = (): void => {
+    renderScheduled = false;
+    lastRenderTime = Date.now();
+    try {
+      renderRequestRef.value();
+    } catch (err) {
+      logger.error('Render threw; next requestRender will reschedule', { error: String(err) });
+    }
+  };
   const requestRender = (): void => {
     if (renderScheduled) return;
     renderScheduled = true;
     setImmediate(() => {
-      // Error Handling: the scheduler flag MUST be cleared even if the render
-      // callback throws; otherwise a single render exception would wedge the
-      // entire TUI (no future requestRender() call would schedule anything).
-      renderScheduled = false;
-      const now = Date.now();
-      const elapsed = now - lastRenderTime;
-      try {
-        if (elapsed < RENDER_INTERVAL_MS) {
-          // Too soon — debounce to the tail of the current 16ms window
-          const delay = RENDER_INTERVAL_MS - elapsed;
-          setTimeout(() => {
-            try {
-              lastRenderTime = Date.now();
-              renderRequestRef.value();
-            } catch (err) {
-              // Throttled-render error: swallow but log at error so the next
-              // requestRender() call can still schedule. The renderer itself
-              // is expected to surface failures via its own error path.
-              logger.error('Throttled render threw; next requestRender will reschedule', { error: String(err) });
-            }
-          }, delay);
-        } else {
-          lastRenderTime = now;
-          renderRequestRef.value();
-        }
-      } catch (err) {
-        logger.error('Immediate render threw; next requestRender will reschedule', { error: String(err) });
+      const elapsed = Date.now() - lastRenderTime;
+      if (elapsed < RENDER_INTERVAL_MS) {
+        // Too soon — debounce to the tail of the current 16ms window. The flag
+        // stays set until run() fires, so window-local requests coalesce here.
+        setTimeout(run, RENDER_INTERVAL_MS - elapsed);
+      } else {
+        run();
       }
     });
   };
   const permissionPromptRef = {
     requestPermission: (async () => ({ approved: false, remember: false })) as PermissionRequestHandler,
   };
-  void approvalBroker.start();
-  void sharedSessionBroker.start();
+  approvalBroker.start().catch((err) => logger.warn('approval broker start failed at bootstrap', { err }));
+  sharedSessionBroker.start().catch((err) => logger.warn('shared session broker start failed at bootstrap', { err }));
   const runtimeSessionIdRef = { value: userSessionId };
   const wrfcBuffer = new WrfcPreRouterBuffer();
   // Smart ref: setting .value auto-flushes the pre-router buffer so events

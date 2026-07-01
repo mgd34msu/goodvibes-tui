@@ -3,7 +3,6 @@
 // ---------------------------------------------------------------------------
 
 import type { Panel, PanelRegistration, PanelCategory } from './types.ts';
-import type { StatusState } from '../renderer/status-glyphs.ts';
 
 // ---------------------------------------------------------------------------
 // Pane
@@ -21,7 +20,6 @@ export interface WorkspaceTab {
   readonly pane: 'top' | 'bottom';
   readonly active: boolean;
   readonly focused: boolean;
-  readonly status?: StatusState;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +41,22 @@ export class PanelManager {
 
   // Cache for getWorkspaceTabs() — invalidated on every panel lifecycle event
   private _cachedWorkspaceTabs: readonly WorkspaceTab[] | null = null;
+
+  // Most-recently-opened panel ids (front = newest), for the picker's "Recent"
+  // group. Session-scoped; capped to keep it a short list.
+  private _recentlyOpened: string[] = [];
+  private static readonly RECENT_CAP = 8;
+
+  /** Record a panel id as most-recently-opened (front of the ring, deduped). */
+  private _recordRecent(panelId: string): void {
+    this._recentlyOpened = [panelId, ...this._recentlyOpened.filter((id) => id !== panelId)]
+      .slice(0, PanelManager.RECENT_CAP);
+  }
+
+  /** Most-recently-opened panel ids, newest first. */
+  getRecentlyOpened(): readonly string[] {
+    return this._recentlyOpened;
+  }
 
   // -------------------------------------------------------------------------
   // Registration
@@ -90,6 +104,7 @@ export class PanelManager {
   }
 
   open(panelId: string, pane?: 'top' | 'bottom'): Panel {
+    this._recordRecent(panelId);
     const existingPane = this._findPaneOf(panelId);
     if (existingPane) {
       this._activateByIdInPane(panelId, existingPane);
@@ -287,10 +302,11 @@ export class PanelManager {
           this.bottomPane.panels.push(panel);
           this.bottomPane.activeIndex = 0;
         } else {
-          // Open a default panel in bottom pane
-          const firstType = this.registry[0];
-          if (firstType) {
-            this.open(firstType.id, 'bottom');
+          // Open a predictable default panel in the bottom pane (the panel list),
+          // rather than an arbitrary registration-order-dependent panel.
+          const defaultPanel = this._getRegistration('panel-list') ?? this.registry[0];
+          if (defaultPanel) {
+            this.open(defaultPanel.id, 'bottom');
           }
         }
       }
@@ -361,7 +377,6 @@ export class PanelManager {
       pane: 'top' as const,
       active: panel.id === topActivePanelId,
       focused: panel.id === focusedPanelId,
-      status: panel.getTabStatus?.(),
     }));
     const bottomTabs = this.bottomPane.panels.map((panel) => ({
       id: panel.id,
@@ -370,7 +385,6 @@ export class PanelManager {
       pane: 'bottom' as const,
       active: panel.id === bottomActivePanelId,
       focused: panel.id === focusedPanelId,
-      status: panel.getTabStatus?.(),
     }));
     const tabs = [...topTabs, ...bottomTabs] as WorkspaceTab[];
     this._cachedWorkspaceTabs = tabs;
@@ -464,6 +478,7 @@ export class PanelManager {
     this.bottomPane = { panels: [], activeIndex: 0 };
     this.retainedPanels.clear();
     this.registry = [];
+    this._recentlyOpened = [];
     this._focusedPane = 'top';
     this._bottomPaneVisible = false;
     this._visible = false;

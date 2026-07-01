@@ -6,8 +6,14 @@ import type { SearchManager } from '../input/search.ts';
 import { allowTerminalWrite } from '../runtime/terminal-output-guard.ts';
 import { probeTermCaps, type TermColorCaps } from './term-caps.ts';
 import { DARK_THEME } from './theme.ts';
+import { UI_TONES } from './ui-primitives.ts';
 
 const T = DARK_THEME;
+
+// Accent / dim colors for the panel focus border. The focused pane's left
+// border column is drawn in the accent tone; the unfocused pane stays dim.
+const PANEL_FOCUS_ACCENT = UI_TONES.state.active; // bright blue
+const PANEL_BORDER_DIM = '238';
 
 export interface SelectionInfo {
   isCellSelected: (col: number, absoluteRow: number) => boolean;
@@ -22,16 +28,18 @@ export interface SearchInfo {
 }
 
 export interface PanelCompositeData {
-  /** Workspace-level tab bar spanning all open panels. */
+  /**
+   * The single consolidated workspace tab bar spanning all open panels across
+   * both panes. There are no per-pane tab bars — pane focus is shown by the
+   * accent border (see `topFocused`/`bottomFocused`).
+   */
   workspaceBar: Line;
-  /** Top pane: tab bar */
-  topTabBar?: Line;
   /** Top pane: panel content lines */
   topContent: Line[];
-  /** Whether the top pane is focused (affects separator color) */
+  /** Whether the top pane is focused (drives the accent border) */
   topFocused: boolean;
-  /** Bottom pane tab bar. Undefined = no bottom pane. */
-  bottomTabBar?: Line;
+  /** Whether a bottom pane is present (splits the panel area). */
+  hasBottomPane: boolean;
   /** Bottom pane content lines. Undefined = no bottom pane. */
   bottomContent?: Line[];
   /** Whether the bottom pane is focused */
@@ -113,29 +121,31 @@ export class Compositor {
     const offset = Math.max(0, vHeight - lineCount);
 
     // --- Pre-compute panel row layout when split pane is active ---
-    // When both top and bottom panes are visible, the panel area is split:
+    // A single consolidated workspace bar heads the panel area; there are no
+    // per-pane tab bars. When both panes are visible the layout is:
     //   row 0:              workspace tab bar
-    //   row 1:              top tab bar
-    //   rows 2..topH+1:     top content
-    //   row topH+2:         horizontal separator (───)
-    //   row topH+3:         bottom tab bar
-    //   rows topH+4..end:   bottom content
-    const hasBottomPane = hasPanel && panel!.bottomTabBar !== undefined;
+    //   rows 1..topH:       top content
+    //   row topH+1:         horizontal separator (───)
+    //   rows topH+2..end:   bottom content
+    const hasBottomPane = hasPanel && panel!.hasBottomPane;
     let topPaneHeight = 0;   // number of content rows in top pane
-    let bottomPaneHeight = 0;
     let hSepRow = -1;        // viewport row of the horizontal separator
     if (hasPanel && hasBottomPane) {
-      const panelAreaRows = Math.max(0, vHeight - 1); // subtract workspace tab bar
-      // top: 1 (tabbar) + topContent rows; bottom: 1 (sep) + 1 (tabbar) + bottomContent
-      const contentRows = Math.max(0, panelAreaRows - 3); // subtract top-tabbar + h-sep + bottom-tabbar
+      const panelAreaRows = Math.max(0, vHeight - 1); // subtract workspace bar
+      const contentRows = Math.max(0, panelAreaRows - 1); // subtract h-separator
       topPaneHeight = Math.max(1, Math.floor(contentRows * panel!.verticalSplitRatio));
-      bottomPaneHeight = Math.max(1, contentRows - topPaneHeight);
-      hSepRow = 2 + topPaneHeight; // workspace bar + top tab bar + top content rows
+      hSepRow = 1 + topPaneHeight; // workspace bar + top content rows
     }
 
-    const sepFg = hasPanel && panel!.separator
-      ? (panel!.topFocused || panel!.bottomFocused ? '244' : '238')
-      : '238';
+    const panelFocused = hasPanel && (panel!.topFocused || panel!.bottomFocused);
+    // Per-row left-border color: the focused pane's rows get the accent tone.
+    const borderFgForRow = (i: number): string => {
+      if (!hasPanel || !panel!.separator || !panelFocused) return PANEL_BORDER_DIM;
+      if (!hasBottomPane) return panel!.topFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
+      if (i === 0) return PANEL_FOCUS_ACCENT; // workspace bar — panel is focused
+      if (i <= topPaneHeight) return panel!.topFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
+      return panel!.bottomFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
+    };
 
     viewport.forEach((line, i) => {
       const screenY = viewportStartY + i;
@@ -163,9 +173,10 @@ export class Compositor {
 
         const p = panel!;
 
-        // Separator column (vertical bar between left and panel area)
+        // Separator column (vertical bar between left and panel area).
+        // Colored per-row so the focused pane shows a bright accent border.
         if (p.separator) {
-          newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: sepFg }));
+          newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: borderFgForRow(i) }));
         }
 
         const panelStartX = sepX + 1;
@@ -195,39 +206,31 @@ export class Compositor {
           const panelLine = i === 0 ? p.workspaceBar : p.topContent[i - 1];
           drawPanelLine(panelLine);
         } else {
-          // --- Two pane mode ---
+          // --- Two pane mode (single consolidated workspace bar) ---
           // Row layout (by viewport row i):
           //   i = 0:                      workspace tab bar
-          //   i = 1:                      top tab bar
-          //   2 <= i <= topPaneHeight+1:  top content[i-2]
+          //   1 <= i <= topPaneHeight:    top content[i-1]
           //   i = hSepRow:                horizontal separator
-          //   i = hSepRow+1:              bottom tab bar
-          //   i >= hSepRow+2:             bottom content[i - (hSepRow+2)]
+          //   i >= hSepRow+1:             bottom content[i - (hSepRow+1)]
           let panelLine: Line | undefined;
 
           if (i === 0) {
             panelLine = p.workspaceBar;
-          } else if (i === 1) {
-            panelLine = p.topTabBar;
-          } else if (i <= topPaneHeight + 1) {
-            panelLine = p.topContent[i - 2];
+          } else if (i <= topPaneHeight) {
+            panelLine = p.topContent[i - 1];
           } else if (i === hSepRow) {
-            // Horizontal separator between the two panes
-            // Render ─ chars across the panel width
-            const focusFg = p.bottomFocused ? '36' : '238'; // cyan if bottom pane focused
+            // Horizontal separator between the two panes. Accent when the bottom
+            // pane has focus so the divider reinforces the focus border.
+            const focusFg = p.bottomFocused ? PANEL_FOCUS_ACCENT : PANEL_BORDER_DIM;
             for (let x = 0; x < panelWidth; x++) {
               newBuffer.setCell(panelStartX + x, screenY, createStyledCell('─', { fg: focusFg }));
             }
-            // Also update the separator column char to T-junction (├):
-            // ├ connects the vertical left-separator with the horizontal pane divider,
-            // forming a clean T-shaped joint at the split point.
+            // T-junction (├) joins the vertical left-border with the pane divider.
             if (p.separator) {
               newBuffer.setCell(sepX, screenY, createStyledCell('├', { fg: focusFg }));
             }
-          } else if (i === hSepRow + 1) {
-            panelLine = p.bottomTabBar;
           } else {
-            panelLine = p.bottomContent?.[i - (hSepRow + 2)];
+            panelLine = p.bottomContent?.[i - (hSepRow + 1)];
           }
 
           if (i !== hSepRow) {
@@ -269,7 +272,7 @@ export class Compositor {
       for (let i = viewport.length; i < vHeight; i++) {
         const screenY = viewportStartY + i;
         if (screenY >= height) break;
-        newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: sepFg }));
+        newBuffer.setCell(sepX, screenY, createStyledCell('│', { fg: borderFgForRow(i) }));
       }
     }
 

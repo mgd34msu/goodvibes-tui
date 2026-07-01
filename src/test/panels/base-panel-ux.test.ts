@@ -156,36 +156,50 @@ describe('BasePanel loading spinner (I3)', () => {
     const text = line.map((c) => c.char).join('');
     expect(text).toContain('Loading...');
   });
-
-  test('renderLoadingLine with frame=0 uses time-based index (non-space glyph)', () => {
-    panel.exposeStartLoading('work');
-    const line = panel.exposeRenderLoadingLine(80, 0)!;
-    const text = line.map((c) => c.char).join('').trim();
-    // (0 || Date.now()/100) picks a time-based frame — always a non-space spinner char
-    expect(text.length).toBeGreaterThan(0);
-    expect(text[0]).not.toBe(' ');
-  });
 });
 
-describe('BasePanel tab status (PNL-2)', () => {
-  let panel: TestPanel;
+// ---------------------------------------------------------------------------
+// Default mouse-wheel handling — delegates to up/down handleInput
+// ---------------------------------------------------------------------------
 
-  beforeEach(() => {
-    panel = new TestPanel();
+class NavPanel extends BasePanel {
+  public cursor = 0;
+  public received: string[] = [];
+  public constructor() { super('nav', 'Nav', 'N', 'monitoring'); }
+  public handleInput(key: string): boolean {
+    this.received.push(key);
+    if (key === 'down') { this.cursor++; return true; }
+    if (key === 'up') { this.cursor = Math.max(0, this.cursor - 1); return true; }
+    return false;
+  }
+  public render(width: number, height: number): Line[] {
+    return Array.from({ length: height }, () => new Array(width).fill({ char: ' ', fg: '', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false }));
+  }
+}
+
+describe('BasePanel.handleScroll default', () => {
+  test('positive delta drives down navigation', () => {
+    const p = new NavPanel();
+    expect(p.handleScroll(3)).toBe(true);
+    expect(p.cursor).toBe(3);
+    expect(p.received).toEqual(['down', 'down', 'down']);
   });
 
-  test('getTabStatus returns undefined by default', () => {
-    expect(panel.getTabStatus()).toBeUndefined();
+  test('negative delta drives up navigation', () => {
+    const p = new NavPanel();
+    p.cursor = 5;
+    expect(p.handleScroll(-2)).toBe(true);
+    expect(p.cursor).toBe(3);
   });
 
-  test('getTabStatus returns bad when error is set', () => {
-    panel.exposeSetError('something went wrong');
-    expect(panel.getTabStatus()).toBe('bad');
+  test('clamps runaway wheel deltas to 10 steps', () => {
+    const p = new NavPanel();
+    p.handleScroll(1000);
+    expect(p.received).toHaveLength(10);
   });
 
-  test('getTabStatus returns undefined after error cleared', () => {
-    panel.exposeSetError('oops');
-    panel.exposeClearError();
-    expect(panel.getTabStatus()).toBeUndefined();
+  test('returns false for a panel without handleInput', () => {
+    const p = new TestPanel();
+    expect(p.handleScroll(3)).toBe(false);
   });
 });

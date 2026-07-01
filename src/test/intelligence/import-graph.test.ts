@@ -34,14 +34,14 @@ describe('extractRelativeSpecifiersForTest', () => {
     expect(specs).toEqual(['./a', './b', './c']);
   });
 
-  it('ignores side-effect imports and non-relative specifiers', () => {
+  it('captures relative side-effect imports, ignores non-relative specifiers (SDK 0.35.0+)', () => {
     const specs = extractRelativeSpecifiersForTest([
-      `import './setup';`,
-      `import React from 'react';`,
-      `import { x } from '@scope/pkg';`,
+      `import './setup';`,            // relative side-effect import → captured
+      `import React from 'react';`,   // non-relative → ignored
+      `import { x } from '@scope/pkg';`, // non-relative → ignored
     ].join('\n'));
 
-    expect(specs).toEqual([]);
+    expect(specs).toEqual(['./setup']);
   });
 });
 

@@ -78,6 +78,73 @@ describe('handlePanelFocusToken', () => {
     expect(state.requestRender).toHaveBeenCalled();
   });
 
+  test('Alt+digit jumps directly to the Nth workspace tab', () => {
+    let jumpedTo = -1;
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+        getActive: () => ({ id: 'a', handleInput: () => false }),
+        getActivePanel: () => ({ id: 'a' }),
+        close: () => {},
+        activateWorkspaceIndex: (i: number) => { jumpedTo = i; },
+      } as unknown as PanelFocusRouteState['panelManager'],
+    });
+    // The tokenizer delivers the Alt modifier as `meta`.
+    const result = handlePanelFocusToken(state, {
+      type: 'key', name: '3', logicalName: '3', ctrl: false, shift: false, meta: true,
+    } as never);
+    expect(result.handled).toBe(true);
+    expect(jumpedTo).toBe(2); // Alt+3 → index 2
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('plain digit is forwarded to the panel, not treated as a tab jump', () => {
+    let jumped = false;
+    const received: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }],
+        getActive: () => ({ id: 'a', handleInput: (k: string) => { received.push(k); return true; } }),
+        getActivePanel: () => ({ id: 'a' }),
+        close: () => {},
+        activateWorkspaceIndex: () => { jumped = true; },
+      } as unknown as PanelFocusRouteState['panelManager'],
+    });
+    handlePanelFocusToken(state, {
+      type: 'key', name: '3', logicalName: '3', ctrl: false, shift: false, meta: false, alt: false,
+    } as never);
+    expect(jumped).toBe(false);
+    expect(received).toEqual(['3']);
+  });
+
+  test('panel-focus-toggle binding switches the focused pane', () => {
+    let toggled = false;
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }],
+        getActive: () => ({ id: 'a', handleInput: () => false }),
+        getActivePanel: () => ({ id: 'a' }),
+        close: () => {},
+        togglePaneFocus: () => { toggled = true; },
+      } as unknown as PanelFocusRouteState['panelManager'],
+      keybindingsManager: {
+        matches: (action: string) => action === 'panel-focus-toggle',
+      } as unknown as PanelFocusRouteState['keybindingsManager'],
+    });
+    const result = handlePanelFocusToken(state, {
+      type: 'key', name: '\x07', logicalName: 'g', ctrl: true, shift: false, meta: false,
+    } as never);
+    expect(result.handled).toBe(true);
+    expect(toggled).toBe(true);
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
   test('panel close hotkey always returns focus to prompt even when another panel remains open', () => {
     const closed: string[] = [];
     const state = buildState({

@@ -1,5 +1,6 @@
 import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import type { TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { Orchestrator } from '../core/orchestrator';
@@ -11,6 +12,7 @@ import {
   resolveScrollablePanelSection,
   resolveStackedScrollableSections,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
@@ -54,24 +56,12 @@ const MAX_ERROR_LOG  = 20;
 // Colors
 // ---------------------------------------------------------------------------
 
-const C = {
-  title:      '#00ffff',
-  ok:         '#5fd700',
-  error:      '#ff5f5f',
-  warn:       '#ffaf00',
-  label:      '244',
-  value:      '252',
-  dim:        '240',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   provName:   '#e2e8f0',
-  separator:  '#374151',
   input:      '#00ffff',
   output:     '#d000ff',
-  latGood:    '#5fd700',
-  latWarn:    '#ffaf00',
-  latBad:     '#ff5f5f',
-  sectionHdr: '238',
   colHdr:     '242',
-} as const;
+});
 
 const LATENCY_WARN_MS = 2_000;
 const LATENCY_BAD_MS  = 5_000;
@@ -96,9 +86,9 @@ function fmtAgo(ts: number): string {
 }
 
 function latColor(ms: number): string {
-  if (ms >= LATENCY_BAD_MS)  return C.latBad;
-  if (ms >= LATENCY_WARN_MS) return C.latWarn;
-  return C.latGood;
+  if (ms >= LATENCY_BAD_MS)  return C.bad;
+  if (ms >= LATENCY_WARN_MS) return C.warn;
+  return C.good;
 }
 
 function statusCodeFromError(msg: string): number {
@@ -323,10 +313,21 @@ export class DebugPanel extends BasePanel {
       }
     }
 
+    const latestError = this._errors[this._errors.length - 1];
+    const footerLines = latestError
+      ? [buildStyledPanelLine(width, [
+          { text: ' ✕ latest error  ', fg: C.bad },
+          { text: truncateDisplay(latestError.errorMessage ?? 'unknown error', Math.max(0, width - 18)), fg: C.dim },
+        ])]
+      : [buildStyledPanelLine(width, [
+          { text: ' Live feed — newest calls at the bottom; auto-follows.', fg: C.dim },
+        ])];
+
     return buildPanelWorkspace(width, height, {
       title: ' API Debug',
       intro: 'Recent provider calls, token deltas, latency, status codes, and error history.',
       sections,
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
     });
   }
@@ -338,16 +339,42 @@ export class DebugPanel extends BasePanel {
   private _renderSummary(width: number): Line[] {
     const errCount = this._totalErrors;
     const okCount  = this._totalCalls - this._totalErrors;
-    return [
+    const last = this._calls[this._calls.length - 1];
+    const recent = this._calls.slice(-10);
+    const avgLat = recent.length > 0
+      ? Math.round(recent.reduce((s, c) => s + c.latencyMs, 0) / recent.length)
+      : 0;
+    const sessionTokens = this._calls.reduce((s, c) => s + c.inputTokens + c.outputTokens, 0);
+
+    const lines: Line[] = [
       buildStyledPanelLine(width, [
-        { text: ' Calls: ', fg: C.label },
+        { text: ' Calls ', fg: C.label },
         { text: String(this._totalCalls), fg: C.value },
-        { text: '  OK: ', fg: C.label },
-        { text: String(okCount), fg: C.ok },
-        { text: '  Errors: ', fg: C.label },
-        { text: String(errCount), fg: errCount > 0 ? C.error : C.dim },
+        { text: '   OK ', fg: C.label },
+        { text: String(okCount), fg: C.good },
+        { text: '   Errors ', fg: C.label },
+        { text: String(errCount), fg: errCount > 0 ? C.bad : C.dim },
+        { text: '   Avg latency ', fg: C.label },
+        { text: fmtMs(avgLat), fg: avgLat > 0 ? latColor(avgLat) : C.dim },
+        { text: '   Tokens ', fg: C.label },
+        { text: fmtTok(sessionTokens), fg: C.value },
       ]),
     ];
+    // Live status: most recent call (latency / age) or wiring hint.
+    if (last) {
+      lines.push(buildStyledPanelLine(width, [
+        { text: ' Last ', fg: C.label },
+        { text: last.status === 'ok' ? '✓ ' : '✕ ', fg: last.status === 'ok' ? C.good : C.bad },
+        { text: fitDisplay(last.model, 22), fg: C.value },
+        { text: '  ' + fmtMs(last.latencyMs), fg: latColor(last.latencyMs) },
+        { text: '  ' + fmtAgo(last.ts), fg: C.dim },
+      ]));
+    } else if (!this._orchestrator) {
+      lines.push(buildStyledPanelLine(width, [
+        { text: ' Per-call token deltas need the orchestrator wired (wireOrchestrator).', fg: C.dim },
+      ]));
+    }
+    return lines;
   }
 
   private _renderCallLog(width: number): Line[] {
@@ -363,15 +390,15 @@ export class DebugPanel extends BasePanel {
   private _callLogHeader(width: number): Line {
     // Layout: time(8) status(2) provider(12) model(20) in(8) out(8) lat(8)
     const header = '  Time    S Provider     Model               In       Out      Lat';
-    return this._textLine(header.slice(0, width), C.colHdr, width, { dim: true });
+    return this._textLine(truncateDisplay(header, width), C.colHdr, width, { dim: true });
   }
 
   private _callLogRow(e: ApiCallEntry, width: number): Line {
     const timeStr    = fmtAgo(e.ts).padEnd(8);
     const statusChar = e.status === 'ok' ? '✓' : '✕';
-    const statusFg   = e.status === 'ok' ? C.ok : C.error;
-    const provStr    = e.provider.slice(0, 11).padEnd(12);
-    const modelStr   = e.model.slice(0, 19).padEnd(20);
+    const statusFg   = e.status === 'ok' ? C.good : C.bad;
+    const provStr    = fitDisplay(e.provider, 12);
+    const modelStr   = fitDisplay(e.model, 20);
     const inStr      = fmtTok(e.inputTokens).padStart(8);
     const outStr     = fmtTok(e.outputTokens).padStart(8);
     const latStr     = fmtMs(e.latencyMs).padStart(8);
@@ -388,7 +415,7 @@ export class DebugPanel extends BasePanel {
 
     // Append status code for errors
     if (e.status === 'error' && e.statusCode > 0) {
-      segments.push({ text: ` [${e.statusCode}]`, fg: C.error });
+      segments.push({ text: ` [${e.statusCode}]`, fg: C.bad });
     }
 
     return buildStyledPanelLine(
@@ -409,9 +436,9 @@ export class DebugPanel extends BasePanel {
   private _errorRow(e: ApiCallEntry, width: number): Line {
     const timeStr  = fmtAgo(e.ts).padEnd(8);
     const codeStr  = e.statusCode > 0 ? `[${e.statusCode}] ` : '';
-    const msgStr   = (e.errorMessage ?? 'unknown error').slice(0, width - 12 - codeStr.length);
+    const msgStr   = truncateDisplay(e.errorMessage ?? 'unknown error', Math.max(0, width - 12 - codeStr.length));
     const full     = `  ${timeStr} ${codeStr}${msgStr}`;
-    return this._textLine(full.slice(0, width), C.error, width);
+    return this._textLine(truncateDisplay(full, width), C.bad, width);
   }
 
   // -------------------------------------------------------------------------

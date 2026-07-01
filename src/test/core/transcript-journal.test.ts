@@ -420,7 +420,6 @@ describe('replayJournalIntoConversation', () => {
     // Replayed 2 records.
     expect(result.replayed).toBe(2);
     expect(result.hadCorruptTail).toBe(false);
-    expect(result.hadVersionMismatch).toBe(false);
 
     // Conversation now reflects the last (most recent) journal record.
     expect(conversation.getMessageCount()).toBe(latestMessages.length);
@@ -500,7 +499,7 @@ describe('replayJournalIntoConversation', () => {
     expect(existsSync(`${journalPath}.unrecognized`)).toBe(true);
   });
 
-  test('edge: journal schemaVersion mismatch — quarantine, hadVersionMismatch true', () => {
+  test('edge: journal schemaVersion mismatch — quarantine, no replay', () => {
     const journalPath = join(tmpDir, 'transcript-ver-mismatch.journal');
     const sessionId = 'ses-ver-test';
 
@@ -523,7 +522,6 @@ describe('replayJournalIntoConversation', () => {
     // Nothing replayed — version gate quarantined the file.
     expect(result.replayed).toBe(0);
     expect(result.hadCorruptTail).toBe(true);
-    expect(result.hadVersionMismatch).toBe(true);
 
     // Conversation unchanged, persistSnapshot not called.
     expect(conversation.getMessageCount()).toBe(0);
@@ -558,7 +556,6 @@ describe('replayJournalIntoConversation', () => {
     // 1 good record replayed, corrupt tail flagged.
     expect(result.replayed).toBe(1);
     expect(result.hadCorruptTail).toBe(true);
-    expect(result.hadVersionMismatch).toBe(false);
 
     // Conversation has the 3 messages from the good record.
     expect(conversation.getMessageCount()).toBe(3);

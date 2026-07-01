@@ -189,5 +189,7 @@ describe('RemotePanel', () => {
     expect(text).toContain('Registered Remote Runner Contracts');
     expect(text).toContain('Selected contract');
     expect(text).toContain(agent.id);
+    // UX: with contracts but no active connections, the switch affordance is hidden.
+    expect(text).not.toContain('Tab switch connections/contracts');
   });
 });

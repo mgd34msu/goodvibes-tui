@@ -1,12 +1,14 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import {
+  buildAlignedRow,
   buildDetailBlock,
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
   buildKeyValueLine,
-  buildPanelListRow,
   buildPanelLine,
   buildSummaryBlock,
   buildPanelWorkspace,
@@ -50,14 +52,32 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
     return this.records;
   }
 
+  private readonly listColumns = [
+    { width: 16 },
+    { width: 14 },
+    { width: 8, align: 'right' as const },
+    { width: 11 },
+    { width: 8, align: 'right' as const },
+  ];
+
   protected renderItem(item: ProviderAccountRecord, _index: number, selected: boolean, width: number): Line {
-    return buildPanelListRow(width, [
-      { text: item.providerId.padEnd(16), fg: item.active ? C.good : C.value },
-      { text: ` ${item.activeRoute.padEnd(14)}`, fg: item.activeRoute === 'subscription' ? C.info : item.activeRoute === 'api-key' ? C.warn : item.activeRoute === 'service-oauth' ? C.value : C.dim },
-      { text: ` models=${String(item.modelCount).padEnd(4)}`, fg: C.dim },
-      { text: ` ${item.authFreshness.padEnd(10)}`, fg: item.authFreshness === 'expired' ? C.bad : item.authFreshness === 'expiring' || item.authFreshness === 'pending' ? C.warn : C.dim },
-      { text: ` issues=${String(item.issues.length).padEnd(2)}`, fg: item.issues.length > 0 ? C.bad : C.good },
-    ], C, { selected });
+    const routeFg = item.activeRoute === 'subscription' ? C.info
+      : item.activeRoute === 'api-key' ? C.warn
+      : item.activeRoute === 'service-oauth' ? C.value : C.dim;
+    const freshFg = item.authFreshness === 'expired' ? C.bad
+      : item.authFreshness === 'expiring' || item.authFreshness === 'pending' ? C.warn : C.dim;
+    return buildAlignedRow(
+      width,
+      [
+        { text: item.providerId, fg: item.active ? C.good : C.value, bold: selected },
+        { text: item.activeRoute, fg: routeFg },
+        { text: `${item.modelCount} mdl`, fg: C.dim },
+        { text: item.authFreshness, fg: freshFg },
+        { text: item.issues.length > 0 ? `${item.issues.length} !` : 'ok', fg: item.issues.length > 0 ? C.bad : C.good },
+      ],
+      this.listColumns,
+      { selected, selectedBg: C.selectBg, marker: '▸' },
+    );
   }
 
   public handleInput(key: string): boolean {
@@ -85,7 +105,11 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
     const intro = 'Provider auth routes, subscription posture, quota-window hints, and routing-safety notes.';
-    const footerLines = [buildPanelLine(width, [['  Up/Down move  r refresh  /accounts routes <provider>  /accounts repair <provider>', C.dim]])];
+    const footerLines = [buildKeyboardHints(width, [
+      { keys: 'Up/Down', label: 'select' },
+      { keys: 'r', label: 'refresh' },
+      { keys: '/accounts repair <provider>', label: 'recover routing' },
+    ], C)];
     if (this.loading && this.records.length === 0) {
       const lines = buildPanelWorkspace(width, height, {
         title: 'Provider Account Control Room',
@@ -140,8 +164,8 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
         { label: 'oauth ready', value: selected.oauthReady ? 'yes' : 'no', valueColor: selected.oauthReady ? C.info : C.dim },
         { label: 'pending login', value: selected.pendingLogin ? 'yes' : 'no', valueColor: selected.pendingLogin ? C.warn : C.dim },
       ], C),
-      buildPanelLine(width, [[`  Active route reason: ${selected.activeRouteReason}`.slice(0, width), C.dim]]),
-      buildPanelLine(width, [[`  Available routes: ${selected.availableRoutes.join(', ') || 'unconfigured'}`.slice(0, width), C.dim]]),
+      buildPanelLine(width, [[truncateDisplay(`  Active route reason: ${selected.activeRouteReason}`, width), C.dim]]),
+      buildPanelLine(width, [[truncateDisplay(`  Available routes: ${selected.availableRoutes.join(', ') || 'unconfigured'}`, width), C.dim]]),
     ];
     if (selected.expiresAt) {
       detailRows.push(buildPanelLine(width, [
@@ -152,28 +176,28 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
       ]));
     }
     if (selected.fallbackRisk) {
-      detailRows.push(buildPanelLine(width, [[`  fallback: ${selected.fallbackRisk}`.slice(0, width), C.warn]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  fallback: ${selected.fallbackRisk}`, width), C.warn]]));
     }
     for (const route of selected.routeRecords) {
       detailRows.push(buildPanelLine(width, [[
-        `  route ${route.route}: ${route.usable ? 'usable' : 'blocked'} • ${route.freshness} • ${route.detail}`.slice(0, width),
+        truncateDisplay(`  route ${route.route}: ${route.usable ? 'usable' : 'blocked'} • ${route.freshness} • ${route.detail}`, width),
         route.usable ? C.dim : C.bad,
       ]]));
       for (const issue of route.issues) {
-        detailRows.push(buildPanelLine(width, [[`    issue: ${issue}`.slice(0, width), C.bad]]));
+        detailRows.push(buildPanelLine(width, [[truncateDisplay(`    issue: ${issue}`, width), C.bad]]));
       }
     }
     for (const windowHint of selected.usageWindows) {
-      detailRows.push(buildPanelLine(width, [[`  ${windowHint.label}: ${windowHint.detail}`.slice(0, width), C.dim]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  ${windowHint.label}: ${windowHint.detail}`, width), C.dim]]));
     }
     for (const issue of selected.issues) {
-      detailRows.push(buildPanelLine(width, [[`  issue: ${issue}`.slice(0, width), C.bad]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  issue: ${issue}`, width), C.bad]]));
     }
     for (const note of selected.notes) {
-      detailRows.push(buildPanelLine(width, [[`  note: ${note}`.slice(0, width), C.info]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  note: ${note}`, width), C.info]]));
     }
     for (const action of selected.recommendedActions) {
-      detailRows.push(buildPanelLine(width, [[`  next: ${action}`.slice(0, width), C.value]]));
+      detailRows.push(buildPanelLine(width, [[truncateDisplay(`  next: ${action}`, width), C.value]]));
     }
     if (selected.issues.length === 0 && selected.notes.length === 0 && selected.usageWindows.length === 0 && selected.recommendedActions.length === 0) {
       detailRows.push(buildPanelLine(width, [['  No active account warnings for this provider.', C.dim]]));
@@ -183,6 +207,18 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
     const rawProviderLines: Line[] = this.records.map((record, absolute) =>
       this.renderItem(record, absolute, absolute === this.selectedIndex, width),
     );
+    const columnHeader = buildAlignedRow(
+      width,
+      [
+        { text: 'provider', fg: C.label, bold: true },
+        { text: 'route', fg: C.label, bold: true },
+        { text: 'models', fg: C.label, bold: true },
+        { text: 'auth', fg: C.label, bold: true },
+        { text: 'issues', fg: C.label, bold: true },
+      ],
+      this.listColumns,
+      { marker: '▸' },
+    );
     const resolvedProvidersSection = resolvePrimaryScrollableSection(width, height, {
       intro,
       footerLines,
@@ -190,6 +226,7 @@ export class ProviderAccountsPanel extends ScrollableListPanel<ProviderAccountRe
       beforeSections: [postureSection],
       section: {
         title: 'Providers',
+        fixedLines: [columnHeader],
         scrollableLines: rawProviderLines,
         selectedIndex: this.selectedIndex,
         scrollOffset: this.scrollStart,

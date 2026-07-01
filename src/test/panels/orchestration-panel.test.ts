@@ -112,6 +112,12 @@ describe('OrchestrationPanel', () => {
     expect(text).toContain('gather-plan-apply');
     expect(text).toContain('wrfc');
     expect(text).toContain('parent-only');
+    // New UX: selected-graph detail surfaces live/duration, footer surfaces
+    // position + only the keys that work in this view.
+    expect(text).toContain('Live:');
+    expect(text).toContain('Duration:');
+    expect(text).toContain('1/1');
+    expect(text).toContain('select');
   });
 
   test('is registered as a built-in panel when a runtime store is provided', () => {

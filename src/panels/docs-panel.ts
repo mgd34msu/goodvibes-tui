@@ -4,8 +4,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
-import { buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, DEFAULT_PANEL_PALETTE } from './polish.ts';
-import { abbreviateCount } from '../utils/format-number.ts';
+import { buildKeyboardHints, buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, extendPalette, DEFAULT_PANEL_PALETTE } from './polish.ts';
 import type { ProviderModelCatalogQuery, ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
 import {
   getPanelSearchFocusTransition,
@@ -15,22 +14,12 @@ import {
   isPanelSearchPrintable,
 } from './search-focus.ts';
 
-const C = {
-  headerBg:   '#1a1a2e',
-  headerFg:   '#ffffff',
-  statusBar:  '#222233',
-  statusFg:   '#aaaaaa',
-  sectionFg:  '#00ffff',
-  sectionBg:  '#0d1a2a',
-  toolFg:     '#88ccff',
-  descFg:     '#aaaaaa',
-  keyFg:      '#ffcc44',
-  valueFg:    '#ccccdd',
-  dimFg:      '#555566',
-  selected:   '#00ffff',
-  selectedBg: '#1a2a3a',
-  searchFg:   '#ffffff',
-} as const;
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // Panel-specific domain colors with no clean shared equivalent.
+  sectionFg: '#00ffff',
+  toolFg:    '#88ccff',
+  selected:  '#00ffff',
+});
 
 // ---------------------------------------------------------------------------
 // Hardcoded keyboard shortcut reference
@@ -69,7 +58,7 @@ interface FlatRow {
 }
 
 function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
-  const bg = isCursor ? C.selectedBg : row.bg;
+  const bg = isCursor ? C.selectBg : row.bg;
   return buildPanelLine(width, [
     [isCursor ? '▸' : ' ', C.selected, bg],
     [row.text, isCursor ? C.selected : row.fg, bg],
@@ -163,9 +152,24 @@ export class DocsPanel extends BasePanel {
         buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching }),
       ],
     } as const;
+    // Context-aware footer: while searching, surface only the keys that work in
+    // the search field; otherwise surface section + navigation keys.
+    const footerLines = [this.searching
+      ? buildKeyboardHints(width, [
+          { keys: 'type', label: 'filter' },
+          { keys: 'Enter/Esc', label: 'apply / exit search' },
+          { keys: '↓', label: 'back to list' },
+        ], DEFAULT_PANEL_PALETTE)
+      : buildKeyboardHints(width, [
+          { keys: 't/m/k', label: 'tools / models / shortcuts' },
+          { keys: '↑/↓', label: 'navigate' },
+          { keys: '/', label: 'search' },
+        ], DEFAULT_PANEL_PALETTE)];
+
     const sectionWindow = resolveScrollablePanelSection(width, height, {
       intro: 'Browse built-in tool docs, available models, and keyboard shortcuts from one shared reference surface.',
       palette: DEFAULT_PANEL_PALETTE,
+      footerLines,
       beforeSections: [controlsSection],
       section: {
         title: sectionLabel,
@@ -187,6 +191,7 @@ export class DocsPanel extends BasePanel {
         controlsSection,
         sectionWindow.section.lines.length > 0 ? sectionWindow.section : { title: sectionLabel, lines: [buildPanelLine(width, [[' No matching docs', DEFAULT_PANEL_PALETTE.dim]])] },
       ],
+      footerLines,
       palette: DEFAULT_PANEL_PALETTE,
     });
   }
@@ -218,13 +223,13 @@ export class DocsPanel extends BasePanel {
       const tools = this.toolRegistry?.list() ?? [];
       const filtered = q ? tools.filter(t => t.definition.name.toLowerCase().includes(q) || (t.definition.description ?? '').toLowerCase().includes(q)) : tools;
       if (filtered.length === 0) {
-        rows.push({ kind: 'empty', text: ' No tools match.', fg: C.dimFg, bg: '' });
+        rows.push({ kind: 'empty', text: q ? ` No tools match "${this.searchQuery}". Press Esc to clear the filter.` : ' Tool registry not wired into this session.', fg: C.dim, bg: '' });
       } else {
         rows.push({ kind: 'header', text: ` Tools (${filtered.length})`, fg: C.sectionFg, bg: C.sectionBg, bold: true });
         for (const tool of filtered) {
           rows.push({ kind: 'item', text: `  ${tool.definition.name}`, fg: C.toolFg, bg: '', bold: true });
           if (tool.definition.description) {
-            rows.push({ kind: 'detail', text: `    ${tool.definition.description}`, fg: C.descFg, bg: '' });
+            rows.push({ kind: 'detail', text: `    ${tool.definition.description}`, fg: C.label, bg: '' });
           }
           const metadata: string[] = [];
           if (tool.definition.sideEffects && tool.definition.sideEffects.length > 0) {
@@ -240,7 +245,7 @@ export class DocsPanel extends BasePanel {
             metadata.push('streaming');
           }
           if (metadata.length > 0) {
-            rows.push({ kind: 'detail', text: `    ${metadata.join('  |  ')}`, fg: C.dimFg, bg: '' });
+            rows.push({ kind: 'detail', text: `    ${metadata.join('  |  ')}`, fg: C.dim, bg: '' });
           }
         }
       }
@@ -248,7 +253,7 @@ export class DocsPanel extends BasePanel {
       const models = this.providerRegistry?.listModels() ?? [];
       const filtered = q ? models.filter(m => m.id.toLowerCase().includes(q) || m.displayName.toLowerCase().includes(q) || m.provider.toLowerCase().includes(q)) : models;
       if (filtered.length === 0) {
-        rows.push({ kind: 'empty', text: ' No models match.', fg: C.dimFg, bg: '' });
+        rows.push({ kind: 'empty', text: q ? ` No models match "${this.searchQuery}". Press Esc to clear the filter.` : ' Provider registry not wired into this session.', fg: C.dim, bg: '' });
       } else {
         // Group by provider
         const byProvider = new Map<string, typeof filtered>();
@@ -260,10 +265,10 @@ export class DocsPanel extends BasePanel {
         for (const [provider, pModels] of byProvider) {
           rows.push({ kind: 'header', text: ` ${provider} (${pModels.length})`, fg: C.sectionFg, bg: C.sectionBg, bold: true });
           for (const m of pModels) {
-            const ctxK = m.contextWindow > 0 ? abbreviateCount(m.contextWindow, { noM: true, decimals: 0 }) : '?';
+            const ctxK = m.contextWindow > 0 ? `${(m.contextWindow / 1000).toFixed(0)}k` : '?';
             const caps = [m.contextWindow > 0 ? `ctx:${ctxK}` : ''].filter(Boolean).join(' ');
             rows.push({ kind: 'item', text: `  ${m.displayName}  ${caps}`, fg: C.toolFg, bg: '' });
-            rows.push({ kind: 'detail', text: `    ${m.id}`, fg: C.descFg, bg: '' });
+            rows.push({ kind: 'detail', text: `    ${m.id}`, fg: C.label, bg: '' });
           }
         }
       }
@@ -273,7 +278,7 @@ export class DocsPanel extends BasePanel {
       rows.push({ kind: 'header', text: ' Keyboard Shortcuts', fg: C.sectionFg, bg: C.sectionBg, bold: true });
       for (const s of filtered) {
         const key = s.key.padEnd(16);
-        rows.push({ kind: 'item', text: `  ${key} ${s.desc}`, fg: C.valueFg, bg: '' });
+        rows.push({ kind: 'item', text: `  ${key} ${s.desc}`, fg: C.value, bg: '' });
       }
     }
 

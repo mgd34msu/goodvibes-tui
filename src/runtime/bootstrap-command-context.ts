@@ -112,6 +112,7 @@ export type CreateBootstrapCommandContextOptions = {
   activatePlan: (planId: string, task: string) => void;
   completeModelSelectionSideEffect?: () => void;
   sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core').SessionLineageTracker;
+  wrfcController?: import('@pellux/goodvibes-sdk/platform/agents').WrfcController;
   componentHealthMonitor: import('@/runtime/index.ts').ComponentHealthMonitor;
 };
 
@@ -164,6 +165,7 @@ export function createBootstrapCommandContext(
     webhookNotifier,
     sessionMemoryStore,
     sessionLineageTracker,
+    wrfcController,
     changeTracker,
     planManager,
     adaptivePlanner,
@@ -219,6 +221,7 @@ export function createBootstrapCommandContext(
     sessionManager,
     sessionMemoryStore,
     sessionLineageTracker,
+    wrfcController,
     changeTracker,
   });
   const provider = createBootstrapCommandProviderSection({

@@ -4,7 +4,7 @@ import { ModalFactory } from './modal-factory.ts';
 import type { AgentManager } from '@pellux/goodvibes-sdk/platform/tools';
 import type { AgentMessageBus } from '@pellux/goodvibes-sdk/platform/agents';
 import type { WrfcController } from '@pellux/goodvibes-sdk/platform/agents';
-import { formatDuration } from './modal-utils.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
@@ -249,7 +249,7 @@ export function renderAgentDetailModal(
   sections.push({ type: 'text', content: `Model    : ${modelStr}` });
   const isStalled = !MODAL_TERMINAL_STATUSES.has(rec.status) && (now - rec.startedAt) >= MODAL_STALL_THRESHOLD_MS;
   sections.push({ type: 'text', content: `Status   : ${rec.status}${isStalled ? '  [STALLED — 5+ min no activity]' : ''}` });
-  sections.push({ type: 'text', content: `Duration : ${formatDuration(elapsedMs)}` });
+  sections.push({ type: 'text', content: `Duration : ${formatElapsed(elapsedMs)}` });
   sections.push({ type: 'separator' });
 
   // Metrics

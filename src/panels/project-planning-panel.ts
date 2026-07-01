@@ -11,7 +11,6 @@ import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { handleConfirmInput, renderConfirmLines, type ConfirmState } from './confirm-state.ts';
 import { isTextBackspace, isTextForwardDelete } from '../input/delete-key-policy.ts';
-import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   buildBodyText,
   buildEmptyState,
@@ -24,6 +23,7 @@ import {
   resolveScrollablePanelSection,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   planning: '#38bdf8',
@@ -367,12 +367,34 @@ export class ProjectPlanningPanel extends BasePanel {
       : readiness === 'needs-user-input'
       ? C.blocked
       : C.dim;
+    const blockingGaps = (evaluation?.gaps ?? []).filter((gap) => gap.severity === 'blocking').length;
+    const openQuestions = state.openQuestions.filter((q) => (q.status ?? 'open') === 'open').length;
+    // Surface the most important thing first: is this plan executable, and what
+    // is the single blocker to getting there.
+    const nextStep = state.executionApproved
+      ? 'approved — execution may proceed'
+      : openQuestions > 0
+      ? `answer ${openQuestions} open question${openQuestions === 1 ? '' : 's'}`
+      : blockingGaps > 0
+      ? `resolve ${blockingGaps} blocking gap${blockingGaps === 1 ? '' : 's'}`
+      : readiness === 'executable'
+      ? 'press a to approve execution'
+      : 'continue the planning interview';
     const lines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'readiness', value: readiness, valueColor: readinessColor },
         { label: 'approved', value: state.executionApproved ? 'yes' : 'no', valueColor: state.executionApproved ? C.approved : C.blocked },
         { label: 'questions', value: `${state.openQuestions.length} open / ${state.answeredQuestions.length} answered`, valueColor: C.value },
       ], C),
+      buildKeyValueLine(width, [
+        { label: 'blocking gaps', value: String(blockingGaps), valueColor: blockingGaps > 0 ? C.blocked : C.good },
+        { label: 'tasks', value: String(state.tasks.length), valueColor: state.tasks.length > 0 ? C.value : C.dim },
+        { label: 'gates', value: String(state.verificationGates.length), valueColor: state.verificationGates.length > 0 ? C.good : C.dim },
+      ], C),
+      buildPanelLine(width, [
+        [' Next step ', C.label],
+        [nextStep, state.executionApproved ? C.approved : C.planning],
+      ]),
       ...buildBodyText(width, `Goal: ${state.goal || '(not set)'}`, C, state.goal ? C.value : C.blocked),
     ];
     if (state.scope) lines.push(...buildBodyText(width, `Scope: ${state.scope}`, C, C.value));
@@ -648,7 +670,7 @@ export class ProjectPlanningPanel extends BasePanel {
         this.refresh(true);
         this.registerTimer(setTimeout(() => this.refresh(true), 250));
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
         this.requestRender();
       }
     })();
@@ -699,7 +721,7 @@ export class ProjectPlanningPanel extends BasePanel {
         this.dismissPlanning?.();
         this.refresh(true);
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
         this.requestRender();
       }
     })();
@@ -742,7 +764,7 @@ export class ProjectPlanningPanel extends BasePanel {
         });
         this.refresh(true);
       } catch (err) {
-        this.setError(err instanceof Error ? err.message : String(err));
+        this.setError(summarizeError(err));
         this.requestRender();
       }
     })();

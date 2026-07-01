@@ -9,25 +9,37 @@
 
 import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
+import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { PlannerDecision, ExecutionStrategy } from '@pellux/goodvibes-sdk/platform/core';
 import type { PlannerEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsStrategyQuery } from '../runtime/ui-service-queries.ts';
 import {
+  buildAlignedRow,
   buildEmptyState,
+  buildKeyboardHints,
   buildPanelLine,
   buildStyledPanelLine,
   buildPanelWorkspace,
+  extendPalette,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
-const STRATEGY_FG: Record<ExecutionStrategy, string> = {
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   auto:       '#00cccc',
   single:     '#00cc66',
   cohort:     '#cccc00',
   background: '#cc66cc',
   remote:     '#cccccc',
+});
+
+const STRATEGY_FG: Record<ExecutionStrategy, string> = {
+  auto:       C.auto,
+  single:     C.single,
+  cohort:     C.cohort,
+  background: C.background,
+  remote:     C.remote,
 };
 
 const STRATEGY_ICON: Record<ExecutionStrategy, string> = {
@@ -104,58 +116,63 @@ export class OpsStrategyPanel extends BasePanel {
     const latest   = this.adaptivePlanner.getLatest();
     const mode     = this.adaptivePlanner.getMode();
     const override = this.adaptivePlanner.getOverride();
+    const intro = 'Review adaptive execution planner decisions, overrides, and recent strategy history.';
+    const footerLines = [
+      buildKeyboardHints(width, [
+        { keys: 'Up/Down', label: 'scroll history' },
+        { keys: 'g/G', label: 'top/bottom' },
+      ], C),
+    ];
     const statusLines: Line[] = [
       buildPanelLine(width, [
-        [' Mode ', DEFAULT_PANEL_PALETTE.label],
-        [mode.toUpperCase(), DEFAULT_PANEL_PALETTE.value],
-        ['   Override ', DEFAULT_PANEL_PALETTE.label],
-        [override ? `${override.toUpperCase()} [ACTIVE]` : 'none', override ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.dim],
+        [' Mode ', C.label],
+        [mode.toUpperCase(), C.value],
+        ['   Override ', C.label],
+        [override ? `${override.toUpperCase()} [ACTIVE]` : 'none', override ? C.warn : C.dim],
+        ['   Decisions ', C.label],
+        [String(this.history.length), this.history.length > 0 ? C.info : C.dim],
       ]),
     ];
 
     if (latest) {
       statusLines.push(buildPanelLine(width, [
-        [' Last ', DEFAULT_PANEL_PALETTE.label],
+        [' Last ', C.label],
         [`${STRATEGY_ICON[latest.selected]} ${latest.selected.toUpperCase()}`, STRATEGY_FG[latest.selected]],
-        ['   Reason ', DEFAULT_PANEL_PALETTE.label],
-        [latest.reasonCode, DEFAULT_PANEL_PALETTE.dim],
+        ['   Reason ', C.label],
+        [latest.reasonCode, C.dim],
       ]));
     }
 
     if (this.history.length === 0) {
       return buildPanelWorkspace(width, height, {
         title: ' Ops Strategy',
-        intro: 'Review adaptive execution planner decisions, overrides, and recent strategy history.',
+        intro,
         sections: [
           { title: 'Status', lines: statusLines },
           {
             lines: buildEmptyState(
               width,
               ' No decisions recorded yet',
-              'Adaptive planner decisions appear here once the planner begins selecting strategies.',
-              [],
-              DEFAULT_PANEL_PALETTE,
+              'Adaptive planner decisions appear here once the planner begins selecting strategies. Run agents or use /ops to drive runtime activity.',
+              [{ command: '/ops', summary: 'open the operator control room to drive planner activity' }],
+              C,
             ),
           },
         ],
-        footerLines: [
-          buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll history', DEFAULT_PANEL_PALETTE.dim], ['   g/G', DEFAULT_PANEL_PALETTE.info], [' top/bottom', DEFAULT_PANEL_PALETTE.dim]]),
-        ],
-        palette: DEFAULT_PANEL_PALETTE,
+        footerLines,
+        palette: C,
       });
     }
 
     const historyLines = this._renderHistory(width);
     const statusSection = { title: 'Status', lines: statusLines } as const;
     const historySection = resolveScrollablePanelSection(width, height, {
-      intro: 'Review adaptive execution planner decisions, overrides, and recent strategy history.',
-      footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll history', DEFAULT_PANEL_PALETTE.dim], ['   g/G', DEFAULT_PANEL_PALETTE.info], [' top/bottom', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
-      palette: DEFAULT_PANEL_PALETTE,
+      intro,
+      footerLines,
+      palette: C,
       beforeSections: [statusSection],
       section: {
-        title: 'Decision History',
+        title: `Decision History (${this.history.length})`,
         scrollableLines: historyLines,
         scrollOffset: Math.min(this.scrollOffset, Math.max(0, historyLines.length - 1)),
         minRows: 8,
@@ -165,15 +182,13 @@ export class OpsStrategyPanel extends BasePanel {
 
     return buildPanelWorkspace(width, height, {
       title: ' Ops Strategy',
-      intro: 'Review adaptive execution planner decisions, overrides, and recent strategy history.',
+      intro,
       sections: [
         statusSection,
         historySection.section,
       ],
-      footerLines: [
-        buildPanelLine(width, [[' Up/Down', DEFAULT_PANEL_PALETTE.info], [' scroll history', DEFAULT_PANEL_PALETTE.dim], ['   g/G', DEFAULT_PANEL_PALETTE.info], [' top/bottom', DEFAULT_PANEL_PALETTE.dim]]),
-      ],
-      palette: DEFAULT_PANEL_PALETTE,
+      footerLines,
+      palette: C,
     });
   }
 
@@ -187,11 +202,10 @@ export class OpsStrategyPanel extends BasePanel {
 
   private _renderHistory(width: number): Line[] {
     if (this.history.length === 0) {
-      return [buildStyledPanelLine(width, [{ text: '  No history yet.', fg: DEFAULT_PANEL_PALETTE.dim, dim: true }])];
+      return [buildStyledPanelLine(width, [{ text: '  No history yet.', fg: C.dim, dim: true }])];
     }
 
     const lines: Line[] = [];
-    lines.push(buildStyledPanelLine(width, [{ text: ' Decision History', fg: DEFAULT_PANEL_PALETTE.value, bold: true }]));
 
     const reversed = [...this.history].reverse();
     for (let i = 0; i < reversed.length; i++) {
@@ -202,29 +216,33 @@ export class OpsStrategyPanel extends BasePanel {
       const num  = String(i + 1).padStart(3);
       const overrideMark = d.overrideActive ? ' [O]' : '';
 
-      // Row 1: index + icon + strategy + timestamp (right-aligned)
-      const leftBase  = ` ${num}. ${icon} ${d.selected.toUpperCase()}${overrideMark}`;
-      const rightText = `  ${ts}`;
-      const pad       = Math.max(1, width - leftBase.length - rightText.length);
-      lines.push(buildStyledPanelLine(width, [
-        { text: ` ${num}. `, fg: DEFAULT_PANEL_PALETTE.dim, dim: true },
-        { text: `${icon} ${d.selected.toUpperCase()}`, fg, bold: true },
-        { text: overrideMark, fg: DEFAULT_PANEL_PALETTE.warn },
-        { text: ' '.repeat(pad), fg: DEFAULT_PANEL_PALETTE.dim },
-        { text: rightText, fg: DEFAULT_PANEL_PALETTE.dim, dim: true },
-      ]));
+      // Row 1: index + icon + strategy on the left, timestamp right-aligned.
+      // buildAlignedRow keeps the timestamp flush-right even with wide glyphs.
+      const tsCol = getDisplayWidth(`${ts}  `);
+      lines.push(buildAlignedRow(
+        width,
+        [
+          { text: ` ${num}. ${icon} ${d.selected.toUpperCase()}${overrideMark}`, fg, bold: true },
+          { text: `${ts}  `, fg: C.dim, dim: true },
+        ],
+        [
+          { width: Math.max(0, width - tsCol - 1) },
+          { width: tsCol, align: 'right' },
+        ],
+        { gap: 1 },
+      ));
 
       // Row 2: reason code
-      lines.push(buildStyledPanelLine(width, [{ text: `       ${d.reasonCode}`, fg: DEFAULT_PANEL_PALETTE.dim, dim: true }]));
+      lines.push(buildStyledPanelLine(width, [{ text: `       ${d.reasonCode}`, fg: C.dim, dim: true }]));
 
       // Row 3+: top-2 scored candidates (auto mode only)
       if (!d.overrideActive && d.candidates.length > 1) {
         const top2 = d.candidates.slice(0, 2);
         for (const c of top2) {
           lines.push(buildStyledPanelLine(width, [
-            { text: '         ', fg: DEFAULT_PANEL_PALETTE.dim, dim: true },
+            { text: '         ', fg: C.dim, dim: true },
             { text: c.strategy.padEnd(12), fg: STRATEGY_FG[c.strategy] },
-            { text: ` score ${c.score}`, fg: DEFAULT_PANEL_PALETTE.dim, dim: true },
+            { text: ` score ${c.score}`, fg: C.dim, dim: true },
           ]));
         }
       }

@@ -284,6 +284,33 @@ describe('CostTrackerPanel — agent cost attribution on AGENT_COMPLETED', () =>
     expect(text).toContain('$0.065');
   });
 
+  test('renders a budget meter with percent when a budget threshold is set', async () => {
+    const events = createUiRuntimeEvents(runtimeBus);
+    const panel = new CostTrackerPanel(
+      events.turns,
+      events.agents,
+      () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }),
+      { budgetThreshold: 5 },
+    );
+    const lines = panel.render(80, 20);
+    const text = lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
+    // Budget meter row is the headline glance for this panel.
+    expect(text).toContain('Budget [');
+    expect(text).toContain('0%');
+  });
+
+  test('empty agents state suggests a concrete /cost command', async () => {
+    const events = createUiRuntimeEvents(runtimeBus);
+    const panel = new CostTrackerPanel(
+      events.turns,
+      events.agents,
+      () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }),
+    );
+    const lines = panel.render(80, 20);
+    const text = lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
+    expect(text).toContain('/cost budget');
+  });
+
   test('agent entry model is updated from AgentRecord on AGENT_COMPLETED', async () => {
     const agentRec = makeAgentRecord({
       id: 'agt-3',

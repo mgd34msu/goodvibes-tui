@@ -143,8 +143,10 @@ describe('truncate', () => {
   test('passes through short strings unchanged', () => {
     expect(truncate('hello', 10)).toBe('hello');
   });
-  test('truncates and appends ellipsis', () => {
-    expect(truncate('hello world', 8)).toBe('hello...');
+  test('truncates and appends ellipsis (width-aware, single-glyph ellipsis)', () => {
+    const out = truncate('hello world', 8);
+    expect(out).toHaveLength(8);
+    expect(out.endsWith('…')).toBe(true);
   });
   test('exact length returns unchanged', () => {
     expect(truncate('hello', 5)).toBe('hello');
@@ -291,11 +293,11 @@ describe('WrfcPanel render', () => {
   });
 
   test('resume disabled reason shown in footer for active chain', () => {
-    const chain = makeChain({ state: 'reviewing' }); // not in RESUMABLE_STATES
+    const chain = makeChain({ state: 'engineering' }); // not in RESUMABLE_STATES
     const { panel } = makePanel([chain]);
     const text = linesText(panel.render(120, 24));
     // footer should mention the disabled reason inline
-    expect(text).toContain('REV'); // resume reason includes state label
+    expect(text).toContain('ENG'); // resume reason includes state label
   });
 });
 
@@ -400,8 +402,19 @@ describe('WrfcPanel resume flow', () => {
     expect(resumeFn).toHaveBeenCalledWith(chain.id);
   });
 
-  test('r on non-resumable active chain (e.g. reviewing) is a noop', () => {
-    const chain = makeChain({ state: 'reviewing' });
+  test('r on reviewing/fixing/awaiting_gates chain calls resumeChain', () => {
+    for (const state of ['reviewing', 'fixing', 'awaiting_gates'] as const) {
+      const chain = makeChain({ state });
+      const resumeFn = mock((_id: string) => true);
+      const { panel } = makePanel([chain], { resumeChain: resumeFn });
+
+      panel.handleInput('r');
+      expect(resumeFn).toHaveBeenCalledWith(chain.id);
+    }
+  });
+
+  test('r on non-resumable active chain (e.g. engineering) is a noop', () => {
+    const chain = makeChain({ state: 'engineering' });
     const resumeFn = mock((_id: string) => true);
     const { panel } = makePanel([chain], { resumeChain: resumeFn });
 

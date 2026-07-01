@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
+import { truncateDisplay } from '../utils/terminal-width.ts';
 import { calcSessionCost } from '../export/cost-utils.ts';
 import {
   AGENT_TERMINAL_STATUSES,
@@ -137,7 +138,7 @@ export function buildCockpitRosterSnapshot(
       totalCost += agentCost;
     }
 
-    const task = rec.task.length > 50 ? rec.task.slice(0, 47) + '...' : rec.task;
+    const task = truncateDisplay(rec.task, 50);
 
     return {
       id: rec.id,

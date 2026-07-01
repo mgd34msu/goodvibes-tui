@@ -10,10 +10,11 @@
  *
  * 2. `WrfcPersistence.rehydrate(router)` is called once on boot (after the
  *    SystemMessageRouter is available). It reads the snapshot, identifies
- *    chains that were in a non-terminal state at last write, and emits a
- *    high-priority 'wrfc' system message per interrupted chain. The
- *    `interruptedChains` accessor makes the data available for panel reads
- *    without coupling this module to wrfc-panel.ts.
+ *    chains that were in a non-terminal state at last write, emits a
+ *    high-priority 'wrfc' system message per interrupted chain, and re-imports
+ *    each interrupted chain into the WrfcController so it reappears as a panel
+ *    row and can be resumed by the operator. The `interruptedChains` accessor
+ *    additionally exposes the recovered set for inspection.
  *
  * 3. Snapshot lifecycle:
  *    - Terminal chains ('passed' | 'failed') are pruned from the snapshot
@@ -57,6 +58,14 @@ interface WrfcSnapshot {
 /** Subset of WrfcController needed by this module. */
 export interface WrfcControllerReader {
   listChains(): WrfcChain[];
+  /**
+   * Re-import a chain recovered from a previous process so it reappears in the
+   * controller's in-memory map and becomes selectable/resumable from the panel.
+   * Optional so read-only test doubles can omit it; the real WrfcController
+   * provides it. `force` is left at its default — on a fresh start the map is
+   * empty so importing never clobbers a live chain.
+   */
+  importChain?(chain: WrfcChain, force?: boolean): boolean;
 }
 
 export interface WrfcPersistenceOptions {
@@ -64,7 +73,7 @@ export interface WrfcPersistenceOptions {
   readonly snapshotPath: string;
   /** Factory for the current SystemMessageRouter — may return null before it is wired. */
   readonly getSystemMessageRouter: () => SystemMessageRouter | null;
-  /** WrfcController reader — only listChains() is needed. */
+  /** WrfcController access — listChains() (read) plus optional importChain() (re-import on rehydrate). */
   readonly controller: WrfcControllerReader;
 }
 
@@ -140,6 +149,12 @@ class WrfcPersistenceImpl implements WrfcPersistence {
 
     const router = this.getSystemMessageRouter();
     for (const chain of interrupted) {
+      // Re-import so the chain reappears in the controller's in-memory map and
+      // becomes selectable/resumable from the panel. On a fresh process start
+      // the map is empty, so importChain (force=false) never clobbers a live
+      // chain. The accessor is optional for read-only test doubles.
+      this.controller.importChain?.(chain);
+
       const msg =
         `[WRFC] Chain ${chain.id.slice(0, 12)} (${chain.task.slice(0, 60).trim()}) ` +
         `was interrupted by a restart — state was '${chain.state}' ` +

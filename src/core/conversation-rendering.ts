@@ -321,7 +321,7 @@ export function appendConversationMessages(
   for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
     const message = messages[msgIdx];
     // absoluteIdx aligns the slice-relative loop counter with the absolute
-    // message index used as the key in messageKindRegistry and transcript events.
+    // message index used as the key in messageKindRegistry and messageLineRegistry.
     const absoluteIdx = msgIndexOffset + msgIdx;
     messageLineRegistry[absoluteIdx] = context.history.getLineCount();
     if (message.role === 'user') {

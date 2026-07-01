@@ -7,8 +7,10 @@ import {
   buildEmptyState,
   buildGuidanceLine,
   buildKeyValueLine,
+  buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
+  buildSectionHeader,
   DEFAULT_PANEL_PALETTE,
   type PanelPalette,
 } from './polish.ts';
@@ -46,6 +48,8 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
   public constructor(readModel?: UiReadModel<UiAutomationSnapshot>) {
     super('automation', 'Automation', 'M', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter runs';
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }
@@ -66,6 +70,12 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
   protected getItems(): readonly AutomationRun[] {
     if (!this.readModel) return [];
     return this.readModel.getSnapshot().runs;
+  }
+
+  protected override filterMatches(run: AutomationRun, q: string): boolean {
+    return run.jobId.toLowerCase().includes(q)
+      || run.status.toLowerCase().includes(q)
+      || run.target.kind.toLowerCase().includes(q);
   }
 
   protected renderItem(run: AutomationRun, _index: number, selected: boolean, width: number): Line {
@@ -192,6 +202,8 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
 
     // Jobs quick view
     if (jobs.length > 0) {
+      const enabledJobs = jobs.filter((job) => job.enabled).length;
+      footerLines.push(buildSectionHeader(width, `Jobs (${enabledJobs} enabled / ${jobs.length})`, C));
       footerLines.push(
         ...jobs.slice(0, 6).map((job) => buildPanelLine(width, [
           [' ', C.label],
@@ -201,7 +213,18 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationRun> {
         ])),
       );
     }
-    footerLines.push(buildPanelLine(width, [['  Up/Down move through runs', C.dim]]));
+    footerLines.push(
+      this.filterActive
+        ? buildKeyboardHints(width, [
+            { keys: 'type', label: 'filter runs' },
+            { keys: 'Enter', label: 'apply' },
+            { keys: 'Esc', label: 'clear' },
+          ], C)
+        : buildKeyboardHints(width, [
+            { keys: 'Up/Down', label: 'select run' },
+            { keys: '/', label: 'filter' },
+          ], C),
+    );
 
     return this.renderList(width, height, {
       title: 'Automation Control',

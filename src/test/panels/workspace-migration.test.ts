@@ -213,6 +213,8 @@ describe('workspace panel migrations', () => {
     expect(lines.every((line) => line.length === 80)).toBe(true);
     expect(linesText(lines)).toContain('Ops Strategy');
     expect(linesText(lines)).toContain('No decisions recorded yet');
+    // UX: empty state offers a concrete next-step command instead of a dead end.
+    expect(linesText(lines)).toContain('/ops');
   });
 
   test('AgentLogsPanel renders shared workspace empty state cleanly', async () => {

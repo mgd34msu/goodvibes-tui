@@ -161,6 +161,18 @@ describe('SubscriptionPanel', () => {
     expect(text).toContain('Sign out openai?');
   });
 
+  test('footer hints become confirm-specific while a sign-out is pending', async () => {
+    const panel = await makeActivePanelWithOpenai();
+    // Before confirm: normal hints (sign out available for the active provider).
+    const before = linesText(panel.render(110, 16));
+    expect(before).toContain('sign out');
+    // After Enter: confirm-pending hints surface.
+    panel.handleInput('enter');
+    const after = linesText(panel.render(110, 16));
+    expect(after).toContain('confirm sign out');
+    expect(after).toContain('cancel');
+  });
+
   test('navigation is absorbed while confirm pending (confirm stays active)', async () => {
     const panel = await makeActivePanelWithOpenai();
     panel.handleInput('enter'); // prompt

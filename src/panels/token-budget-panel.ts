@@ -8,14 +8,16 @@ import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
+  buildKeyboardHints,
+  buildMeterLine,
   buildStyledPanelLine,
+  buildTable,
   buildPanelWorkspace,
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { abbreviateCount } from '../utils/format-number.ts';
-import { computeContextUsage } from '../core/context-usage.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,25 +36,20 @@ interface TurnUsage {
 // Colors
 // ---------------------------------------------------------------------------
 
-const C = {
-  title: '#00ffff',
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  // Token data-series colors (input/output/cache) — categorical, no shared equivalent
   input: '#00ffff',
   output: '#d000ff',
   cacheRead: '#00d700',
   cacheWrite: '#ffaf00',
+  // Progress-bar track shade and per-turn table sub-header gray
   barBg: '236',
-  label: '244',
-  value: '252',
-  sectionHeader: '238',
-  warnYellow: '#ffaf00',
-  warnRed: '#ff5f5f',
-  dim: '240',
-  good: '#5fd700',
   turnHeader: '242',
-} as const;
+});
 
 // Warning thresholds for context window usage
 const WARN_YELLOW = 0.70;
+const WARN_RED = 0.90;
 
 // Maximum turns to keep in per-turn history
 const MAX_TURN_HISTORY = 10;
@@ -63,7 +60,9 @@ const MAX_TURN_HISTORY = 10;
 
 /** Format a token count: up to 9999 shown as-is, then 10.0k, 1.2M, etc. */
 function fmtTok(n: number): string {
-  return abbreviateCount(n, { guard: 10_000, decimals: 1, mDecimals: 2 });
+  if (n < 10_000) return String(n);
+  if (n < 1_000_000) return (n / 1000).toFixed(1) + 'k';
+  return (n / 1_000_000).toFixed(2) + 'M';
 }
 
 // ---------------------------------------------------------------------------
@@ -98,11 +97,17 @@ export class TokenBudgetPanel extends BasePanel {
   private sessionReadModel: UiReadModel<UiSessionSnapshot> | null = null;
   private readonly sessionMemoryStore: SessionMemoryQuery;
   private readonly configManager: Pick<ConfigManager, 'get'>;
+  private readonly requestRender: () => void;
 
-  constructor(sessionMemoryStore: SessionMemoryQuery, configManager: Pick<ConfigManager, 'get'>) {
+  constructor(
+    sessionMemoryStore: SessionMemoryQuery,
+    configManager: Pick<ConfigManager, 'get'>,
+    requestRender: () => void = () => {},
+  ) {
     super('tokens', 'Tokens', 'T', 'monitoring');
     this.sessionMemoryStore = sessionMemoryStore;
     this.configManager = configManager;
+    this.requestRender = requestRender;
   }
 
   // ---------------------------------------------------------------------------
@@ -148,7 +153,7 @@ export class TokenBudgetPanel extends BasePanel {
       this.turnHistory.shift();
     }
 
-    this.refresh();
+    this._refreshAndRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -160,15 +165,17 @@ export class TokenBudgetPanel extends BasePanel {
     this.refresh();
     // Poll every 2 s while active so the context bar stays current during streaming
     if (this.refreshTimer !== null) clearInterval(this.refreshTimer);
-    this.refreshTimer = setInterval(() => this.refresh(), 2_000);
+    this.refreshTimer = setInterval(() => this._refreshAndRender(), 2_000);
   }
 
   override onDeactivate(): void {
+    super.onDeactivate();
+    // Stop the off-screen poll so a backgrounded Tokens tab does not keep
+    // refreshing (and, once requestRender is wired, force a repaint) every 2 s.
     if (this.refreshTimer !== null) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    super.onDeactivate();
   }
 
   override onDestroy(): void {
@@ -176,7 +183,6 @@ export class TokenBudgetPanel extends BasePanel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
-    super.onDestroy();
   }
 
   // ---------------------------------------------------------------------------
@@ -196,6 +202,15 @@ export class TokenBudgetPanel extends BasePanel {
       this.contextWindow = this.getContextWindow();
     }
     this.markDirty();
+  }
+
+  /**
+   * Refresh data and request a repaint. Used by the background poll and on
+   * turn completion, where no key event will otherwise drive a render.
+   */
+  private _refreshAndRender(): void {
+    this.refresh();
+    this.requestRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -225,6 +240,12 @@ export class TokenBudgetPanel extends BasePanel {
       const priorSections = [...sections];
       const turnsSection = resolveScrollablePanelSection(width, height, {
         intro: 'Live context pressure, session token composition, cache usage, and recent turn deltas.',
+        footerLines: [
+          buildKeyboardHints(width, [
+            { keys: '/compact', label: 'compress context' },
+            { keys: '/clear', label: 'reset session' },
+          ], DEFAULT_PANEL_PALETTE),
+        ],
         palette: DEFAULT_PANEL_PALETTE,
         beforeSections: priorSections,
         section: {
@@ -261,6 +282,12 @@ export class TokenBudgetPanel extends BasePanel {
       title: ' Token Budget',
       intro: 'Live context pressure, session token composition, cache usage, and recent turn deltas.',
       sections,
+      footerLines: [
+        buildKeyboardHints(width, [
+          { keys: '/compact', label: 'compress context' },
+          { keys: '/clear', label: 'reset session' },
+        ], DEFAULT_PANEL_PALETTE),
+      ],
       palette: DEFAULT_PANEL_PALETTE,
     });
     });
@@ -364,22 +391,19 @@ export class TokenBudgetPanel extends BasePanel {
   /** Renders a full-width progress bar for context window fill. */
   private renderContextBar(width: number): Line[] {
     const lines: Line[] = [];
-    const { clampedRatio: pct, pct: pctInt } = computeContextUsage(this.lastInputTokens, this.contextWindow);
-
-    // Config-driven warning thresholds
-    const rawThreshold = Number(this.configManager.get('behavior.autoCompactThreshold') ?? 0);
-    const thresholdFraction = Number.isFinite(rawThreshold) && rawThreshold > 0 ? rawThreshold / 100 : 0.80;
-    const warnRed = thresholdFraction;
-    const warnYellow = Math.max(WARN_YELLOW, thresholdFraction - 0.10);
+    const pct = this.contextWindow > 0
+      ? Math.min(1, this.lastInputTokens / this.contextWindow)
+      : 0;
+    const pctInt = Math.round(pct * 100);
 
     // Choose color based on thresholds
     let barColor: string;
     let warnSuffix = '';
-    if (pct >= warnRed) {
-      barColor = C.warnRed;
+    if (pct >= WARN_RED) {
+      barColor = C.bad;
       warnSuffix = ' ! CRITICAL';
-    } else if (pct >= warnYellow) {
-      barColor = C.warnYellow;
+    } else if (pct >= WARN_YELLOW) {
+      barColor = C.warn;
       warnSuffix = ' ! HIGH';
     } else {
       barColor = C.good;
@@ -389,12 +413,12 @@ export class TokenBudgetPanel extends BasePanel {
     const suffix = ` ${fmtTok(this.lastInputTokens)}/${fmtTok(this.contextWindow)} (${pctInt}%)${warnSuffix}`;
     const BAR_W = Math.max(8, width - label.length - suffix.length - 2);
     const filled = Math.round(pct * BAR_W);
-    lines.push(buildStyledPanelLine(width, [
-      { text: label, fg: C.label },
-      { text: '#'.repeat(filled), fg: barColor, dim: pct < warnYellow },
-      { text: '.'.repeat(Math.max(0, BAR_W - filled)), fg: C.barBg, dim: pct < warnYellow },
-      { text: suffix, fg: barColor, dim: pct < warnYellow },
-    ]));
+    // Context fill is the headline metric — render it with the shared meter
+    // primitive so the bar glyphs and width handling match every other panel.
+    lines.push(buildMeterLine(width, filled, BAR_W,
+      { filled: barColor, empty: C.barBg, label: C.label },
+      { prefix: label, suffix },
+    ));
     return lines;
   }
 
@@ -427,41 +451,37 @@ export class TokenBudgetPanel extends BasePanel {
 
   /** Last N turns table: turn#, in, out, CR, CW, total. */
   private renderTurnHistory(width: number, maxRows: number): Line[] {
-    const lines: Line[] = [];
-
-    // Column headers
-    const colLine = createEmptyLine(width);
-    const headers = ['  #', '    Input', '   Output', '  CR', '  CW', '   Total'];
-    const cols = [3, 9, 9, 6, 6, 9];
-    let hx = 0;
-    for (let i = 0; i < headers.length; i++) {
-      const h = headers[i]!;
-      for (const ch of h.slice(0, cols[i]!)) {
-        if (hx >= width) break;
-        colLine[hx++] = createStyledCell(ch, { fg: C.turnHeader, dim: true });
-      }
-    }
-    lines.push(colLine);
-
     const available = Math.max(0, maxRows - 1); // minus col header
     const toShow = this.turnHistory.slice(-Math.max(0, available));
 
-    toShow.forEach((t, i) => {
-      if (lines.length >= maxRows) return;
-      const turnNum = this.turnHistory.length - toShow.length + i + 1;
-      const total = t.input + t.output + t.cacheRead + t.cacheWrite;
-      const cells: Array<[string, string]> = [
-        [String(turnNum).padStart(3), C.dim],
-        [fmtTok(t.input).padStart(9),      C.input],
-        [fmtTok(t.output).padStart(9),     C.output],
-        [fmtTok(t.cacheRead).padStart(6),  C.cacheRead],
-        [fmtTok(t.cacheWrite).padStart(6), C.cacheWrite],
-        [fmtTok(total).padStart(9),        C.value],
-      ];
-      lines.push(buildStyledPanelLine(width, cells.map(([val, color]) => ({ text: val, fg: color }))));
-    });
-
-    return lines;
+    // Width-aware aligned table via the shared primitive (replaces manual
+    // per-cell column math, which miscounts on wide glyphs).
+    return buildTable(
+      width,
+      [
+        { label: '#', width: 4, align: 'right' },
+        { label: 'Input', width: 9, align: 'right' },
+        { label: 'Output', width: 9, align: 'right' },
+        { label: 'CR', width: 7, align: 'right' },
+        { label: 'CW', width: 7, align: 'right' },
+        { label: 'Total', align: 'right' },
+      ],
+      toShow.map((t, i) => {
+        const turnNum = this.turnHistory.length - toShow.length + i + 1;
+        const total = t.input + t.output + t.cacheRead + t.cacheWrite;
+        return {
+          cells: [
+            { text: String(turnNum), fg: C.dim },
+            { text: fmtTok(t.input), fg: C.input },
+            { text: fmtTok(t.output), fg: C.output },
+            { text: fmtTok(t.cacheRead), fg: C.cacheRead },
+            { text: fmtTok(t.cacheWrite), fg: C.cacheWrite },
+            { text: fmtTok(total), fg: C.value },
+          ],
+        };
+      }),
+      { ...DEFAULT_PANEL_PALETTE, label: C.turnHeader },
+    );
   }
 
   /** Paint a plain text string into a new Line. */

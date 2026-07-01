@@ -15,6 +15,7 @@ import { getPackageVersion } from './help.ts';
 import { classifyProviderSetup } from './provider-classification.ts';
 import { buildCliServicePosture } from './service-posture.ts';
 import { REDACTED_VALUE, collectSensitiveConfigValues, isRedactedValue, redactConfig, redactSerializedSecrets } from './redaction.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 interface BundleInspectSummary {
   readonly type: string;
@@ -43,7 +44,7 @@ function readJsonFile(path: string): { readonly ok: true; readonly value: Record
   try {
     return { ok: true, value: JSON.parse(readFileSync(path, 'utf-8')) as Record<string, unknown> };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: summarizeError(error) };
   }
 }
 

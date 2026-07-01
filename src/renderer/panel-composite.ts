@@ -4,7 +4,6 @@ import type { InputHandler } from '../input/handler.ts';
 import type { PanelManager } from '../panels/panel-manager.ts';
 import type { PanelCompositeData } from './compositor.ts';
 import { createSplitPaneLayout } from './layout-engine.ts';
-import { renderPanelTabBar } from './panel-tab-bar.ts';
 import { renderPanelWorkspaceBar } from './panel-workspace-bar.ts';
 
 /**
@@ -108,33 +107,22 @@ export function buildPanelCompositeData(
   const workspaceBar = renderPanelWorkspaceBar(workspaceTabs, panelWidth, input.panelFocused);
 
   let topContent: Line[];
-  let topTabBar: Line | undefined;
-  let bottomTabBar: Line | undefined;
   let bottomContent: Line[] | undefined;
 
   const topActivePanel = topPane.panels[topPane.activeIndex] ?? null;
 
   if (hasBottom) {
-    topTabBar = renderPanelTabBar(
-      topPane.panels,
-      topPane.activeIndex,
-      panelWidth,
-      input.panelFocused && focusedPane === 'top',
-      'top',
-    );
-    const paneLayout = createSplitPaneLayout(Math.max(0, panelHeight - 1), verticalSplitRatio);
+    // Single consolidated workspace bar (1 row) + h-separator (1 row); the rest
+    // splits between the two panes' content.
+    const paneLayout = createSplitPaneLayout(Math.max(0, panelHeight - 1), verticalSplitRatio, {
+      topTabRows: 0,
+      bottomTabRows: 0,
+    });
     const topH = paneLayout.topContentRows;
     const bottomH = paneLayout.bottomContentRows;
     topContent = topActivePanel ? renderPanel(topActivePanel, panelWidth, topH) : [];
 
     const bottomActivePanel = bottomPane.panels[bottomPane.activeIndex] ?? null;
-    bottomTabBar = renderPanelTabBar(
-      bottomPane.panels,
-      bottomPane.activeIndex,
-      panelWidth,
-      input.panelFocused && focusedPane === 'bottom',
-      'bottom',
-    );
     bottomContent = bottomActivePanel ? renderPanel(bottomActivePanel, panelWidth, bottomH) : [];
   } else {
     const topH = Math.max(0, panelHeight - 1);
@@ -144,10 +132,9 @@ export function buildPanelCompositeData(
   return {
     panelData: {
       workspaceBar,
-      topTabBar,
       topContent,
       topFocused: input.panelFocused && focusedPane === 'top',
-      bottomTabBar,
+      hasBottomPane: hasBottom,
       bottomContent,
       bottomFocused: input.panelFocused && focusedPane === 'bottom',
       separator: true,

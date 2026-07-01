@@ -7,7 +7,7 @@ import type {
   CommandSessionServices,
   CommandWorkspaceServices,
 } from '../command-registry.ts';
-import { getLastCompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
+import { compactSmallWindow, getLastCompactionEvent, SMALL_WINDOW_THRESHOLD } from '@pellux/goodvibes-sdk/platform/core';
 import type { CompactionContext, CompactionEvent } from '@pellux/goodvibes-sdk/platform/core';
 import type { UiReadModels } from '../../runtime/ui-read-models.ts';
 import type { ShellPathService } from '@/runtime/index.ts';
@@ -244,29 +244,53 @@ export function requireProviderApi(context: CommandContext): ProviderApi {
  * change).
  */
 export async function compactConversation(context: CommandContext): Promise<CompactionEvent | null> {
+  const conversationManager = context.session.conversationManager;
+  const providerRegistry = context.provider.providerRegistry;
+  // Resolve the live context window for the current model so manual /compact
+  // matches the auto-compaction path (which scales behaviour by window size)
+  // instead of passing a meaningless 0.
+  const contextWindow = providerRegistry.getContextWindowForModel(
+    providerRegistry.getCurrentModel(),
+  );
+
+  // Small-window models lack room for the structured (multi-LLM) extraction
+  // pipeline, so mirror the SDK auto-compaction path and degrade to the
+  // simplified "keep the most recent messages" compaction.
+  if (contextWindow > 0 && contextWindow < SMALL_WINDOW_THRESHOLD) {
+    const compacted = compactSmallWindow(conversationManager.getMessagesForLLM(), 10);
+    conversationManager.replaceMessagesForLLM(compacted);
+    return null;
+  }
+
   const eventBefore = getLastCompactionEvent();
   const sessionMemories = context.session.sessionMemoryStore?.list() ?? [];
-  // Read lineage counters defensively from the conversation's own tracker (the
-  // same source the auto-compact path uses) so manual and auto handoffs agree.
-  const lineage = context.session.conversationManager.getSessionLineageTracker?.() as unknown as {
-    getCompactionCount?(): number;
-    getEntries?(): string[];
-  } | undefined;
+  const lineageTracker = context.session.sessionLineageTracker;
+  const agentManager = context.ops.agentManager;
+  const planManager = context.ops.planManager;
   const compactionCtx: CompactionContext = {
-    messages: context.session.conversationManager.getMessagesForLLM(),
+    messages: conversationManager.getMessagesForLLM(),
     sessionMemories,
-    agents: [],
-    wrfcChains: [],
-    activePlan: null,
-    lineageEntries: lineage?.getEntries?.() ?? [],
-    compactionCount: lineage?.getCompactionCount?.() ?? 0,
-    contextWindow: context.provider.providerRegistry.getContextWindowForModel(context.provider.providerRegistry.getCurrentModel()),
+    // Mirror buildAutoCompactionContext: pass the running/pending agents, the
+    // active execution plan, and the session-lineage log so the handoff summary
+    // and lineage section are populated correctly (not "compaction #0").
+    agents:
+      agentManager
+        ?.exportState()
+        .filter((agent) => agent.status === 'running' || agent.status === 'pending') ?? [],
+    // Mirror buildAutoCompactionContext: include the live WRFC chains (wired
+    // through context.session.wrfcController) so the handoff summary's
+    // orchestration section matches the SDK auto-compaction path.
+    wrfcChains: context.session.wrfcController?.listChains() ?? [],
+    activePlan: planManager?.getActive(context.session.runtime.sessionId) ?? null,
+    lineageEntries: lineageTracker?.getEntries() ?? [],
+    compactionCount: lineageTracker?.getCompactionCount() ?? 0,
+    contextWindow,
     trigger: 'manual',
     extractionModelId: context.session.runtime.model,
     extractionProvider: context.session.runtime.provider,
   };
-  await context.session.conversationManager.compact(
-    context.provider.providerRegistry,
+  await conversationManager.compact(
+    providerRegistry,
     context.session.runtime.model,
     'manual',
     context.session.runtime.provider,

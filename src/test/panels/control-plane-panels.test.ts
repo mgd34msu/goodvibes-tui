@@ -192,6 +192,9 @@ describe('control-plane operator panels', () => {
     expect(text).toContain('Nightly Sweep');
     expect(text).toContain('running');
     expect(text).toContain('deliveries ok');
+    // UX: jobs section header with enabled/total counts + context-aware hints.
+    expect(text).toContain('Jobs (1 enabled / 1)');
+    expect(text).toContain('select run');
   });
 
   test('RoutesPanel renders bound surface/session context', () => {
@@ -285,5 +288,10 @@ describe('control-plane operator panels', () => {
     expect(text).toContain('exec');
     expect(text).toContain('Shared session');
     expect(text).toContain('session-update');
+    // UX: labelled sections + context-aware hints replace the static nav line.
+    expect(text).toContain('Approvals (');
+    expect(text).toContain('Sessions (');
+    expect(text).toContain('Recent Events (');
+    expect(text).toContain('select client');
   });
 });

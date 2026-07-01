@@ -7,7 +7,6 @@ import { FileExplorerPanel } from '../../panels/file-explorer-panel.ts';
 import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { SymbolOutlinePanel } from '../../panels/symbol-outline-panel.ts';
 import { ApprovalPanel } from '../../panels/approval-panel.ts';
-import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
 
 let panelManager = createTestManagers().panelManager;
@@ -92,7 +91,25 @@ describe('panel integration actions', () => {
 
   test('approval enter executes the selected review command', async () => {
     const executeCommand = mock(async () => true);
-    const panel = new ApprovalPanel(new PolicyRuntimeState());
+    // The panel is data-driven: it surfaces the live permission-audit requests
+    // and resolves the next-step review command from the selected request's
+    // lane. Seed a pending "file"-lane request so Enter dispatches its review.
+    const policyDep = {
+      getSnapshot: () => ({
+        recentPermissionAudit: [{
+          callId: 'call-0',
+          tool: 'Write',
+          category: 'file',
+          approved: undefined,
+          riskLevel: 'high',
+          classification: 'destructive',
+          summary: 'write secret-bearing config',
+          reasons: ['config mutation'],
+          requestedAt: Date.now() - 5000,
+        }],
+      }),
+    } as unknown as ConstructorParameters<typeof ApprovalPanel>[0];
+    const panel = new ApprovalPanel(policyDep);
     panel.handleInput('down');
 
     expect(handlePanelIntegrationAction(panelManager, panel, 'enter', { executeCommand } as never)).toBe(true);

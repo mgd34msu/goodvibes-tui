@@ -1,10 +1,9 @@
 // ---------------------------------------------------------------------------
-// panel-timer-lifecycle.test.ts — Regression tests for finding #26:
-// refresh/poll timers must STOP while a panel is off-screen (onDeactivate) and
-// RESTART when it is re-shown (onActivate). The AgentLogsPanel case is the
-// subtle one: onActivate previously called the one-shot _pollCurrentAgent()
-// instead of _startPolling(), so the polling interval stayed dead after the
-// first switch-away.
+// panel-timer-lifecycle.test.ts — Regression tests for panel refresh/poll timers.
+// TokenBudgetPanel STOPS its refresh timer while off-screen (onDeactivate) and
+// RESTARTS it when re-shown (onActivate). AgentLogsPanel takes the other valid
+// approach: one always-on poll timer from ctor to onDestroy, with repaints gated
+// on `_active` (markDirty) — so it is inherently immune to a "dead interval".
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, afterEach } from 'bun:test';
@@ -58,22 +57,22 @@ describe('panel timer lifecycle (#26: no polling while off-screen)', () => {
     expect(active.size).toBe(baseline);
   });
 
-  test('AgentLogsPanel restarts polling after deactivate -> activate (regression: interval was left dead)', () => {
+  test('AgentLogsPanel keeps one poll timer alive across activate/deactivate and clears it on destroy', () => {
     installTimerSpy();
     const bus = new RuntimeEventBus();
     const panel = new AgentLogsPanel(createUiRuntimeEvents(bus).agents, {
       agentManager: { list: () => [] },
       workingDirectory: TEST_ROOT,
     });
-    const baseline = active.size; // constructor starts polling
+    const baseline = active.size; // constructor starts the always-on poll timer
     expect(baseline).toBeGreaterThanOrEqual(1);
     panel.onActivate();
-    expect(active.size).toBe(baseline); // clears the ctor timer, starts a fresh one
+    expect(active.size).toBe(baseline); // no new interval — onActivate only flips _active + polls once
     panel.onDeactivate();
-    expect(active.size).toBe(baseline - 1); // polling stopped while off-screen
+    expect(active.size).toBe(baseline); // timer stays alive off-screen; markDirty() gates repaints on _active
     panel.onActivate();
-    expect(active.size).toBe(baseline); // KEY: polling resumes (previously stayed dead)
+    expect(active.size).toBe(baseline); // still exactly one timer (immune to the "dead interval" bug)
     panel.onDestroy();
-    expect(active.size).toBe(baseline - 1);
+    expect(active.size).toBe(baseline - 1); // poll timer cleared on destroy
   });
 });
