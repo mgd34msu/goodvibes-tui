@@ -58,7 +58,7 @@ import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
-import { evaluateSessionMaintenance } from './panels/session-maintenance.ts';
+import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h'; const ALT_SCREEN_EXIT  = '\x1b[?1049l';
 const MOUSE_ENABLE     = '\x1b[?1000h\x1b[?1002h\x1b[?1006h'; const MOUSE_DISABLE    = '\x1b[?1006l\x1b[?1002l\x1b[?1000l';
