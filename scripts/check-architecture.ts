@@ -10,6 +10,10 @@
  *   6. SDK contract catalog invariants
  *   7. **Import-cycle detection** — Tarjan SCC over the src/ import graph
  *   8. **Layer-boundary rules** — codified allowed dependency directions
+ *   9. **Hex-literal ratchet** (WO-001) — bans raw #RRGGBB literals in
+ *      src/panels/**\/*.ts and src/renderer/**\/*.ts except ui-primitives.ts,
+ *      theme.ts and syntax-highlighter.ts; a seeded baseline
+ *      (scripts/hex-literal-baseline.json) may only shrink, never grow
  *
  * ─── LAYER MAP ───────────────────────────────────────────────────────────────
  *
@@ -48,6 +52,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
+import { checkHexLiteralRatchet } from './hex-literal-rule.ts';
 
 const ROOT = join(import.meta.dir, '..');
 const SRC_ROOT = join(ROOT, 'src');
@@ -568,6 +573,21 @@ for (const rule of rules) {
       violations.push(`${rel}: ${rule.message} [${rule.name}]`);
     }
   }
+}
+
+// ─── Hex-literal ratchet (WO-001) ──────────────────────────────────────────────────
+
+const hexLiteralBaseline: Record<string, number> = JSON.parse(
+  readFileSync(join(ROOT, 'scripts/hex-literal-baseline.json'), 'utf-8'),
+);
+const hexLiteralCandidates = nonTestFiles
+  .filter((file) => {
+    const rel = relative(ROOT, file);
+    return rel.startsWith('src/panels/') || rel.startsWith('src/renderer/');
+  })
+  .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
+for (const v of checkHexLiteralRatchet(hexLiteralCandidates, hexLiteralBaseline)) {
+  violations.push(v);
 }
 
 for (const file of explicitAnyFiles) {
