@@ -4,6 +4,29 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [0.28.0] — 2026-06-30
+
+Panel navigation & UI/UX overhaul, plus the accumulated post-0.27.0 UX fixes.
+
+### Added
+- **Unified panel navigation**: a single consolidated tab bar with a focus-accent border; jump directly to any panel with `Alt+1`–`Alt+9`, click tabs, and toggle the active pane with `Ctrl+G`.
+- **In-panel filtering**: press `/` to filter the list in panels that support it.
+- **Mouse-wheel scrolling** on every panel (via `BasePanel.handleScroll`).
+
+### Changed
+- **Width-aware formatting** across panels: shared toolkit primitives (`fitDisplay`, table/tree/badge/meter helpers) replace hand-rolled `.slice()`/`.padEnd()`, so rows stay aligned across emoji, CJK, and other wide characters.
+- **Scroll-back**: you can scroll up during and after a turn; the view only auto-follows the tail when parked at the bottom.
+- **Auto-compaction is now owned entirely by the SDK** (`@pellux/goodvibes-sdk` 0.35.0 `handlePostTurnContextMaintenance`). The redundant TUI-side trigger was removed to prevent double-compaction; manual `/compact` now builds a richer handoff context (running agents, WRFC chains, active plan, session lineage).
+
+### Fixed
+- Timer/async panels repaint while the main thread is idle instead of looking frozen (repaints gated on panel-active state).
+- Input/keybinding papercuts: reverse-search accept, Home/End, and the command palette.
+- Crash/signal safety net: the terminal is always restored on uncaught exceptions and termination signals.
+- Consolidated number/duration/context-usage formatting and routed the context window through one corrected `getContextWindowForModel` source across every surface.
+
+### Internal
+- Split `polish.ts` into leaf `polish-core.ts` + `polish-tables.ts` and extracted `wrfc-panel-format.ts` to satisfy the 800-line architecture gate; no public API changes (all symbols re-exported).
+
 ## [0.27.0] — 2026-06-30
 
 Full deep-review audit of the TUI (33 findings fixed, each reviewed to a score of 10) and adoption of `@pellux/goodvibes-sdk` 0.35.0.
