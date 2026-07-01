@@ -1,6 +1,5 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { AgentLogsPanel } from '../agent-logs-panel.ts';
-import { ContextVisualizerPanel } from '../context-visualizer-panel.ts';
 import { ThinkingPanel } from '../thinking-panel.ts';
 import { ToolInspectorPanel } from '../tool-inspector-panel.ts';
 import { WrfcPanel } from '../wrfc-panel.ts';
@@ -32,24 +31,6 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
       const ui = requireUiServices(deps);
       return new ToolInspectorPanel(ui.events.tools, ui.events.turns);
     },
-  });
-
-  manager.registerType({
-    id: 'context',
-    name: 'Context',
-    icon: 'C',
-    category: 'ai',
-    description: 'Context window visualizer: stacked bar showing token usage per section',
-    preload: true,
-    factory: () => new ContextVisualizerPanel(
-      requireUiServices(deps).events.turns,
-      deps.sessionMemoryStore,
-      deps.configManager,
-      deps.getOrchestratorUsage,
-      deps.getCtxWindow ?? deps.contextWindow,
-      requireUiServices(deps).readModels.session,
-      () => deps.orchestrator?.lastInputTokens ?? 0,
-    ),
   });
 
   manager.registerType({

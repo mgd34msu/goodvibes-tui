@@ -48,7 +48,7 @@ export interface BuiltinPanelDeps {
   subscriptionManager?: SubscriptionManager;
   /** Shared service registry for services-backed panels. */
   serviceRegistry?: ServiceRegistry;
-  /** Context window size in tokens (for ContextVisualizerPanel). */
+  /** Context window size in tokens. Unused since WO-113 folded ContextVisualizerPanel into TokenBudgetPanel (which reads getCtxWindow instead); kept for source compatibility. */
   contextWindow?: number;
   /** Main Orchestrator instance for TokenBudgetPanel.wire(). */
   orchestrator?: Orchestrator;

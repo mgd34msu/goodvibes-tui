@@ -294,10 +294,23 @@ describe('TokenBudgetPanel', () => {
       expect(text).toContain('no data');
     });
 
-    test('shows "No turns recorded" when no turn history', () => {
+    test('shows "No turns recorded" before any turn completes', () => {
       const lines = panel.render(80, 20);
       const text = linesText(lines);
       expect(text).toContain('No turns recorded');
+    });
+  });
+
+  describe('recordTurn()', () => {
+    test('populates Recent Turns and clears the pre-first-turn empty state', () => {
+      const orch = makeOrchMock({ input: 1200, output: 400, cacheRead: 100, cacheWrite: 50 });
+      panel.wire(asOrchestratorMock(orch), () => 0);
+      panel.onActivate();
+      panel.recordTurn();
+      const lines = panel.render(80, 30);
+      const text = linesText(lines);
+      expect(text).not.toContain('No turns recorded');
+      expect(text).toContain('Recent Turns');
     });
   });
 
