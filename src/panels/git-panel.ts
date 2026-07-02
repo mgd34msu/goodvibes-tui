@@ -4,25 +4,34 @@ import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { UI_TONES } from '../renderer/ui-primitives.ts';
 import {
   buildEmptyState,
   buildKeyboardHints,
   buildPanelLine,
   buildPanelWorkspace,
+  buildSearchInputLine,
   resolveScrollablePanelSection,
   buildSelectablePanelLine,
   buildStyledPanelLine,
   DEFAULT_PANEL_PALETTE,
   extendPalette,
 } from './polish.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
+import {
+  isPanelSearchBackspace,
+  isPanelSearchCancel,
+  isPanelSearchCommit,
+  isPanelSearchPrintable,
+} from './search-focus.ts';
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
 
 interface GitFileEntry {
   path: string;
   staged: boolean;
+  /** True when this file was touched during the current session (best-effort). */
+  sessionChanged?: boolean;
 }
 
 interface CommitEntry {
@@ -46,19 +55,19 @@ type ViewItem =
   | { kind: 'section'; label: string }
   | { kind: 'file'; entry: GitFileEntry }
   | { kind: 'commit'; entry: CommitEntry }
-  | { kind: 'empty'; label: string }
-  | { kind: 'diff-line'; text: string; diffType: 'add' | 'remove' | 'meta' | 'neutral' };
+  | { kind: 'empty'; label: string };
 
-// ---------------------------------------------------------------------------
+/** Subject carried by the panel's single ConfirmState — either a repo init or a commit. */
+type GitConfirmSubject =
+  | { kind: 'init' }
+  | { kind: 'commit'; message: string };
+
 // Constants
-// ---------------------------------------------------------------------------
 
 /** Minimum number of diff lines kept visible when clamping scroll offset. */
 const MIN_VISIBLE_DIFF_LINES = 5;
 
-// ---------------------------------------------------------------------------
 // Colors
-// ---------------------------------------------------------------------------
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   branch: '#00d7ff',
@@ -70,14 +79,18 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   selectedFg: '#ffffff',
   diffMeta: '#5f87ff',
   diffNeutral: '250',
+  // Reuses the existing workflow accent token rather than adding a new hex
+  // literal (architecture gate ratchets the raw-hex-literal count).
+  sessionChanged: UI_TONES.accent.workflow,
 });
 
-// ---------------------------------------------------------------------------
 // GitPanel
-// ---------------------------------------------------------------------------
 
 export class GitPanel extends BasePanel {
   private readonly workingDirectory: string;
+  private readonly git: GitService;
+  private readonly getChangedFiles?: () => readonly string[];
+
   private data: GitData = {
     branch: '...',
     ahead: 0,
@@ -93,7 +106,7 @@ export class GitPanel extends BasePanel {
   /** Selected row index within `items`. */
   private selectedIndex = 0;
 
-  /** When truthy, shows the diff for the selected file. */
+  /** When truthy, shows the diff for the selected file or commit. */
   private expandedDiff: string[] | null = null;
 
   /** Scroll offset for both main view and diff view. */
@@ -103,9 +116,26 @@ export class GitPanel extends BasePanel {
   private loading = true;
   private error: string | null = null;
 
-  constructor(workingDirectory: string, private readonly requestRender: () => void = () => {}) {
+  /** True when the last refresh failed because `workingDirectory` isn't a git repo. */
+  private notGitRepo = false;
+
+  /** Single pending confirm — either "init this repo" or "commit with this message". */
+  private confirm: ConfirmState<GitConfirmSubject> | null = null;
+
+  /** Non-null while composing a commit message; null means the compose UI is closed. */
+  private commitMessage: string | null = null;
+
+  constructor(
+    workingDirectory: string,
+    private readonly requestRender: () => void = () => {},
+    getChangedFiles?: () => readonly string[],
+  ) {
     super('git', 'Git', 'G', 'development');
     this.workingDirectory = workingDirectory;
+    // I2: reuse a single GitService instance across the panel's lifetime instead
+    // of constructing a new one for every refresh/diff/stage/commit call.
+    this.git = new GitService(workingDirectory);
+    this.getChangedFiles = getChangedFiles;
   }
 
   private _markDirtyAndRender(): void {
@@ -113,9 +143,7 @@ export class GitPanel extends BasePanel {
     this.requestRender();
   }
 
-  // ---------------------------------------------------------------------------
   // Lifecycle
-  // ---------------------------------------------------------------------------
 
   override onActivate(): void {
     super.onActivate();
@@ -137,30 +165,35 @@ export class GitPanel extends BasePanel {
     super.onDestroy();
   }
 
-  // ---------------------------------------------------------------------------
   // Data fetching
-  // ---------------------------------------------------------------------------
 
-  private async refresh(isRetry = false): Promise<void> {
+  private async refresh(): Promise<void> {
     try {
-      const git = new GitService(this.workingDirectory);
       const [statusResult, branchResult, logEntries] = await Promise.all([
-        git.status(),
-        git.branch(),
-        git.log(10),
+        this.git.status(),
+        this.git.branch(),
+        this.git.log(10),
       ]);
 
-      const stagedFiles: GitFileEntry[] = [
-        ...statusResult.staged.map((p) => ({ path: p, staged: true })),
-        ...statusResult.created.map((p) => ({ path: p, staged: true })),
-      ];
+      const changed = this.getChangedFiles ? new Set(this.getChangedFiles()) : null;
+      const markChanged = (path: string): boolean | undefined => (changed ? changed.has(path) : undefined);
 
-      const unstagedFiles: GitFileEntry[] = [
-        ...statusResult.modified.map((p) => ({ path: p, staged: false })),
-        ...statusResult.deleted.map((p) => ({ path: p, staged: false })),
-        ...statusResult.not_added.map((p) => ({ path: p, staged: false })),
-        ...statusResult.conflicted.map((p) => ({ path: p, staged: false })),
-      ];
+      // Classify from the raw per-file porcelain columns (index/working_dir)
+      // rather than simple-git's `modified`/`staged` convenience arrays: those
+      // arrays both include a file that is staged with no further edits (index
+      // 'M', working_dir ' '), which would otherwise show it as both staged
+      // AND unstaged and make 's'/'u' land on the wrong (phantom) row.
+      const stagedFiles: GitFileEntry[] = [];
+      const unstagedFiles: GitFileEntry[] = [];
+      for (const f of statusResult.files) {
+        const sessionChanged = markChanged(f.path);
+        if (f.index === '?' && f.working_dir === '?') {
+          unstagedFiles.push({ path: f.path, staged: false, sessionChanged }); // untracked
+          continue;
+        }
+        if (f.index !== ' ') stagedFiles.push({ path: f.path, staged: true, sessionChanged });
+        if (f.working_dir !== ' ') unstagedFiles.push({ path: f.path, staged: false, sessionChanged });
+      }
 
       this.data = {
         branch: branchResult.current || 'HEAD',
@@ -178,28 +211,19 @@ export class GitPanel extends BasePanel {
 
       this.loading = false;
       this.error = null;
+      this.notGitRepo = false;
       this.rebuildItems();
       // Do not clear expandedDiff during auto-refresh — only clear on explicit user action
       this._markDirtyAndRender();
     } catch (err) {
       const msg = summarizeError(err);
-      // If the failure is because this directory isn't a git repo, auto-initialise
-      // and retry once so the panel becomes functional immediately.
       if (/not a git\b/i.test(msg)) {
-        const cwd = this.workingDirectory;
-        const initResult = GitService.initRepo(cwd);
-        if (initResult.success) {
-          logger.debug('GitPanel: auto-initialised git repo', { cwd });
-          if (!isRetry) {
-            // Retry refresh now that the repo exists (once only)
-            void this.refresh(true);
-            return;
-          }
-          this.error = 'Not a git repository. Auto-init succeeded but refresh failed.';
-        } else {
-          this.error = `Not a git repository. Auto-init failed: ${initResult.error ?? 'unknown error'}`;
-        }
+        // I4: no more auto `git init` side effect — surface the state and let
+        // the user explicitly confirm initialisation with 'i'.
+        this.notGitRepo = true;
+        this.error = 'Not a git repository here. Press i to initialize one (explicit confirm).';
       } else {
+        this.notGitRepo = false;
         this.error = msg;
       }
       this.loading = false;
@@ -208,56 +232,77 @@ export class GitPanel extends BasePanel {
     }
   }
 
+  /** Push a labeled section (with count) plus its rows, or an empty-row placeholder. */
+  private pushSection<T>(items: ViewItem[], label: string, entries: readonly T[], emptyLabel: string, toItem: (entry: T) => ViewItem): void {
+    items.push({ kind: 'section', label: `${label} (${entries.length})` });
+    if (entries.length === 0) items.push({ kind: 'empty', label: emptyLabel });
+    else for (const entry of entries) items.push(toItem(entry));
+  }
+
   /** Rebuild the flat navigable item list from current data. */
   private rebuildItems(): void {
-    const items: ViewItem[] = [];
-
-    // Branch / status header row
-    items.push({ kind: 'header' });
-
-    // Staged files
-    items.push({ kind: 'section', label: `Staged (${this.data.stagedFiles.length})` });
-    if (this.data.stagedFiles.length === 0) {
-      items.push({ kind: 'empty', label: '  (no staged files)' });
-    } else {
-      for (const entry of this.data.stagedFiles) {
-        items.push({ kind: 'file', entry });
-      }
-    }
-
-    // Unstaged files
-    items.push({ kind: 'section', label: `Unstaged (${this.data.unstagedFiles.length})` });
-    if (this.data.unstagedFiles.length === 0) {
-      items.push({ kind: 'empty', label: '  (no unstaged files)' });
-    } else {
-      for (const entry of this.data.unstagedFiles) {
-        items.push({ kind: 'file', entry });
-      }
-    }
-
-    // Recent commits
-    items.push({ kind: 'section', label: `Recent Commits (${this.data.recentCommits.length})` });
-    if (this.data.recentCommits.length === 0) {
-      items.push({ kind: 'empty', label: '  (no commits)' });
-    } else {
-      for (const entry of this.data.recentCommits) {
-        items.push({ kind: 'commit', entry });
-      }
-    }
-
+    const items: ViewItem[] = [{ kind: 'header' }];
+    this.pushSection(items, 'Staged', this.data.stagedFiles, '  (no staged files)', (entry) => ({ kind: 'file', entry }));
+    this.pushSection(items, 'Unstaged', this.data.unstagedFiles, '  (no unstaged files)', (entry) => ({ kind: 'file', entry }));
+    this.pushSection(items, 'Recent Commits', this.data.recentCommits, '  (no commits)', (entry) => ({ kind: 'commit', entry }));
     this.items = items;
 
-    // Keep selection in bounds
+    // Keep selection in bounds and off header/section/empty filler rows (I5).
     if (this.selectedIndex >= this.items.length) {
       this.selectedIndex = Math.max(0, this.items.length - 1);
     }
+    if (!this.isSelectable(this.items[this.selectedIndex])) {
+      const firstSelectable = this.items.findIndex((it) => this.isSelectable(it));
+      if (firstSelectable >= 0) this.selectedIndex = firstSelectable;
+    }
   }
 
-  // ---------------------------------------------------------------------------
+  /** True for rows the cursor is allowed to rest on (file or commit rows). */
+  private isSelectable(item: ViewItem | undefined): boolean {
+    return item?.kind === 'file' || item?.kind === 'commit';
+  }
+
+  /** Move the selection to the next/previous selectable row, skipping filler rows. */
+  private moveSelection(direction: 1 | -1): void {
+    let idx = this.selectedIndex;
+    for (let i = 0; i < this.items.length; i++) {
+      idx += direction;
+      if (idx < 0 || idx >= this.items.length) return;
+      if (this.isSelectable(this.items[idx])) {
+        this.selectedIndex = idx;
+        this.markDirty();
+        return;
+      }
+    }
+  }
+
   // Input handling
-  // ---------------------------------------------------------------------------
 
   handleInput(key: string): boolean {
+    // Confirm (init repo / commit) takes priority over everything else.
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      const subject = this.confirm!.subject;
+      this.confirm = null;
+      if (subject.kind === 'init') {
+        void this.performInit();
+      } else {
+        void this.performCommit(subject.message);
+      }
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
+    if (this.commitMessage !== null) {
+      return this.handleCommitMessageInput(key);
+    }
+
     if (this.expandedDiff !== null) {
       return this.handleDiffInput(key);
     }
@@ -268,18 +313,12 @@ export class GitPanel extends BasePanel {
     switch (key) {
       case 'up':
       case 'k': {
-        if (this.selectedIndex > 0) {
-          this.selectedIndex--;
-          this.markDirty();
-        }
+        this.moveSelection(-1);
         return true;
       }
       case 'down':
       case 'j': {
-        if (this.selectedIndex < this.items.length - 1) {
-          this.selectedIndex++;
-          this.markDirty();
-        }
+        this.moveSelection(1);
         return true;
       }
       case 'return': {
@@ -290,9 +329,56 @@ export class GitPanel extends BasePanel {
         void this.refresh();
         return true;
       }
+      case 's': {
+        void this.setStaged(true);
+        return true;
+      }
+      case 'u': {
+        void this.setStaged(false);
+        return true;
+      }
+      case 'c': {
+        this.commitMessage = '';
+        this.markDirty();
+        return true;
+      }
+      case 'i': {
+        if (this.notGitRepo) {
+          this.confirm = { subject: { kind: 'init' }, label: this.workingDirectory, verb: 'Init' };
+          this.markDirty();
+        }
+        return true;
+      }
       default:
         return false;
     }
+  }
+
+  private handleCommitMessageInput(key: string): boolean {
+    if (isPanelSearchCancel(key)) {
+      this.commitMessage = null;
+      this.markDirty();
+      return true;
+    }
+    if (isPanelSearchCommit(key)) {
+      const message = (this.commitMessage ?? '').trim();
+      if (!message) return true; // absorb — require a non-empty message before confirming
+      this.confirm = { subject: { kind: 'commit', message }, label: message, verb: 'Commit' };
+      this.commitMessage = null;
+      this.markDirty();
+      return true;
+    }
+    if (isPanelSearchBackspace(key)) {
+      this.commitMessage = (this.commitMessage ?? '').slice(0, -1);
+      this.markDirty();
+      return true;
+    }
+    if (isPanelSearchPrintable(key)) {
+      this.commitMessage = (this.commitMessage ?? '') + key;
+      this.markDirty();
+      return true;
+    }
+    return true; // absorb every other key while composing
   }
 
   private handleDiffInput(key: string): boolean {
@@ -324,38 +410,106 @@ export class GitPanel extends BasePanel {
     }
   }
 
+  /** Commit the given lines as the new expanded diff and reset scroll/dirty state. */
+  private finishDiff(lines: string[]): void {
+    this.expandedDiff = lines;
+    this.scrollOffset = 0;
+    this.markDirty();
+  }
+
+  // I3: withLoading guarantees the spinner is cleared even if the fetch throws.
   private async openDiff(): Promise<void> {
     const item = this.items[this.selectedIndex];
-    if (!item || item.kind !== 'file') return;
+    if (!item) return;
 
-    // I3: withLoading guarantees spinner is cleared even if diffFile throws
-    try {
-      const raw = await this.withLoading('Loading diff…', async () => {
-        const git = new GitService(this.workingDirectory);
-        return git.diffFile(item.entry.path, item.entry.staged);
-      });
-      this.expandedDiff = raw ? raw.split('\n') : ['(no diff available)'];
-      this.scrollOffset = 0;
-      this.markDirty();
-    } catch (err) {
-      this.expandedDiff = [`Error: ${summarizeError(err)}`];
-      this.scrollOffset = 0;
-      this.markDirty();
+    if (item.kind === 'file') {
+      try {
+        const raw = await this.withLoading('Loading diff…', async () => this.git.diffFile(item.entry.path, item.entry.staged));
+        this.finishDiff(raw ? raw.split('\n') : ['(no diff available)']);
+      } catch (err) {
+        this.finishDiff([`Error: ${summarizeError(err)}`]);
+      }
+      return;
+    }
+
+    if (item.kind === 'commit') {
+      // Root commits have no parent (`<hash>^` is invalid) — the catch below
+      // surfaces that instead of pretending a diff exists.
+      const before = `${item.entry.hash}^`;
+      const after = item.entry.hash;
+      try {
+        const [patch, stat] = await this.withLoading('Loading commit…', async () => Promise.all([
+          this.git.diffBetween(before, after),
+          this.git.diffStat(before, after),
+        ]));
+        const statLines = stat.split('\n').filter((l) => l.trim().length > 0);
+        const patchLines = patch ? patch.split('\n') : [];
+        this.finishDiff(statLines.length > 0 ? [...statLines, '', ...patchLines] : (patchLines.length > 0 ? patchLines : ['(no diff available)']));
+      } catch (err) {
+        this.finishDiff([`Error: ${summarizeError(err)}`]);
+      }
     }
   }
 
-  // ---------------------------------------------------------------------------
+  // -- Mutating actions: stage / unstage / commit / init ----------------------
+
+  /** Stage (target=true) or unstage (target=false) the selected file row. */
+  private async setStaged(target: boolean): Promise<void> {
+    const item = this.items[this.selectedIndex];
+    if (!item || item.kind !== 'file' || item.entry.staged === target) return;
+    try {
+      if (target) await this.git.add(item.entry.path);
+      else await this.git.reset(item.entry.path);
+      await this.refresh();
+    } catch (err) {
+      this.error = `${target ? 'Stage' : 'Unstage'} failed: ${summarizeError(err)}`;
+      this._markDirtyAndRender();
+    }
+  }
+
+  private async performCommit(message: string): Promise<void> {
+    try {
+      await this.withLoading('Committing…', async () => this.git.commit(message));
+      await this.refresh();
+    } catch (err) {
+      this.error = `Commit failed: ${summarizeError(err)}`;
+      this._markDirtyAndRender();
+    }
+  }
+
+  private async performInit(): Promise<void> {
+    const result = GitService.initRepo(this.workingDirectory);
+    if (result.success) {
+      logger.debug('GitPanel: repo initialised via explicit confirm', { cwd: this.workingDirectory });
+      this.notGitRepo = false;
+      this.error = null;
+      await this.refresh();
+    } else {
+      this.error = `Git init failed: ${result.error ?? 'unknown error'}`;
+      this._markDirtyAndRender();
+    }
+  }
+
   // Rendering
-  // ---------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
+    if (this.confirm) {
+      return buildPanelWorkspace(width, height, {
+        title: ' Git',
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirm) }],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
+    }
+    if (this.commitMessage !== null) {
+      return this.renderCommitCompose(width, height);
+    }
     if (this.loading) {
       return this.renderMessage(width, height, 'Loading git status...', C.branch);
     }
     if (this.error) {
-      return this.renderMessage(width, height, `Git error: ${this.error}`, C.bad);
+      return this.renderMessage(width, height, this.error, this.notGitRepo ? C.warn : C.bad);
     }
-    // I3: spinner during openDiff() async fetch
+    // I3: spinner during openDiff()/performCommit() async fetch
     if (this.loadingState === 'loading') {
       return this.renderMessage(width, height, 'Loading diff...', C.branch);
     }
@@ -371,6 +525,25 @@ export class GitPanel extends BasePanel {
     const lines: Line[] = [buildStyledPanelLine(width, [{ text: msg, fg }])];
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines;
+  }
+
+  private renderCommitCompose(width: number, height: number): Line[] {
+    const inputLine = buildSearchInputLine(
+      width,
+      'Commit message: ',
+      `${this.commitMessage ?? ''}_`,
+      DEFAULT_PANEL_PALETTE,
+      { active: true, bg: DEFAULT_PANEL_PALETTE.inputBg, valueColor: DEFAULT_PANEL_PALETTE.info },
+    );
+    const footerLines = [
+      buildKeyboardHints(width, [{ keys: 'Enter', label: 'review & confirm' }, { keys: 'Esc', label: 'cancel' }], DEFAULT_PANEL_PALETTE),
+    ];
+    return buildPanelWorkspace(width, height, {
+      title: ' Git — Commit',
+      sections: [{ title: 'Message', lines: [inputLine] }],
+      footerLines,
+      palette: DEFAULT_PANEL_PALETTE,
+    });
   }
 
   /** Paint a single text string into a new Line at x=startX. */
@@ -419,9 +592,11 @@ export class GitPanel extends BasePanel {
     const fg = entry.staged ? C.good : C.bad;
     // Single-char status marker: + staged (ready to commit), M modified/unstaged.
     const statusGlyph = entry.staged ? '+' : 'M';
-    const path = truncateDisplay(entry.path, Math.max(0, width - 6));
+    const sessionMarker = entry.sessionChanged ? '● ' : '  ';
+    const path = truncateDisplay(entry.path, Math.max(0, width - 8));
     return buildSelectablePanelLine(width, [
       { text: ` ${statusGlyph} `, fg, bg: selected ? C.selected : undefined, bold: true },
+      { text: sessionMarker, fg: selected ? C.selectedFg : C.sessionChanged, bg: selected ? C.selected : undefined },
       { text: path, fg: selected ? C.selectedFg : fg, bg: selected ? C.selected : undefined, bold: selected },
     ], { selected, selectedBg: C.selected, fillFg: selected ? C.selectedFg : '', leadingMarker: '▸' });
   }
@@ -437,6 +612,17 @@ export class GitPanel extends BasePanel {
   }
 
   private renderList(width: number, height: number): Line[] {
+    const intro = 'Review branch status, staged and unstaged files, and recent commits. Open a file or commit row to inspect its diff.';
+    const footerHints = [
+      buildKeyboardHints(width, [
+        { keys: '↑/↓', label: 'navigate' },
+        { keys: 'Enter', label: 'open diff →' },
+        { keys: 's/u', label: 'stage/unstage' },
+        { keys: 'c', label: 'commit' },
+        { keys: 'r', label: 'refresh' },
+      ], DEFAULT_PANEL_PALETTE),
+    ];
+    const emptyStateLines = buildEmptyState(width, ' No git rows', 'This repository has no staged or unstaged changes and no commits to display yet.', [{ command: '/git status', summary: 'refresh working-tree status, or stage changes to populate this view' }], DEFAULT_PANEL_PALETTE);
     const rows: Line[] = [];
     for (let i = 0; i < this.items.length; i++) {
       const item = this.items[i];
@@ -506,10 +692,8 @@ export class GitPanel extends BasePanel {
       } as const;
       const selectedSection = { title: 'Selected', lines: selectedLines } as const;
       const workspaceSection = resolveScrollablePanelSection(width, height, {
-        intro: 'Review branch status, staged and unstaged files, and recent commits. Open a file row to inspect its diff.',
-        footerLines: [
-          buildKeyboardHints(width, [{ keys: '↑/↓', label: 'navigate' }, { keys: 'Enter', label: 'open diff →' }, { keys: 'r', label: 'refresh' }], DEFAULT_PANEL_PALETTE),
-        ],
+        intro,
+        footerLines: footerHints,
         palette: DEFAULT_PANEL_PALETTE,
         beforeSections: [summarySection],
         section: {
@@ -525,26 +709,20 @@ export class GitPanel extends BasePanel {
 
       return buildPanelWorkspace(width, height, {
         title: ' Git',
-        intro: 'Review branch status, staged and unstaged files, and recent commits. Open a file row to inspect its diff.',
+        intro,
         sections: [
           summarySection,
-          workspaceSection.section.lines.length > 0 ? workspaceSection.section : { title: 'Workspace', lines: buildEmptyState(width, ' No git rows', 'This repository has no staged or unstaged changes and no commits to display yet.', [{ command: '/git status', summary: 'refresh working-tree status, or stage changes to populate this view' }], DEFAULT_PANEL_PALETTE) },
+          workspaceSection.section.lines.length > 0 ? workspaceSection.section : { title: 'Workspace', lines: emptyStateLines },
           selectedSection,
         ],
-        footerLines: [
-          buildKeyboardHints(width, [{ keys: '↑/↓', label: 'navigate' }, { keys: 'Enter', label: 'open diff →' }, { keys: 'r', label: 'refresh' }], DEFAULT_PANEL_PALETTE),
-        ],
+        footerLines: footerHints,
         palette: DEFAULT_PANEL_PALETTE,
       });
     }
     return buildPanelWorkspace(width, height, {
       title: ' Git',
-      intro: 'Review branch status, staged and unstaged files, and recent commits. Open a file row to inspect its diff.',
-      sections: [
-        {
-          lines: buildEmptyState(width, ' No git rows', 'This repository has no staged or unstaged changes and no commits to display yet.', [{ command: '/git status', summary: 'refresh working-tree status, or stage changes to populate this view' }], DEFAULT_PANEL_PALETTE),
-        },
-      ],
+      intro,
+      sections: [{ lines: emptyStateLines }],
       palette: DEFAULT_PANEL_PALETTE,
     });
   }
@@ -578,7 +756,9 @@ export class GitPanel extends BasePanel {
     const title =
       item?.kind === 'file'
         ? `Diff: ${item.entry.path}  +${added} -${removed}`
-        : 'Diff';
+        : item?.kind === 'commit'
+          ? `Commit ${item.entry.hash}: ${item.entry.message}  +${added} -${removed}`
+          : 'Diff';
     const renderedLines = diffLines.map((rawLine) => {
       const dLine = createEmptyLine(width);
       let fg: string;

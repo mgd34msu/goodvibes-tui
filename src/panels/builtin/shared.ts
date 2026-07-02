@@ -29,6 +29,7 @@ import type { OpsApi, PlanRuntimeService } from '@/runtime/index.ts';
 import type { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import type { RuntimeStore } from '../../runtime/store/index.ts';
 import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
+import type { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
 
 export interface BuiltinPanelDeps {
   /** Config manager for settings-sync and other config-backed panels. */
@@ -128,6 +129,8 @@ export interface BuiltinPanelDeps {
   runtimeStore?: RuntimeStore;
   /** Knowledge API surface (graph nodes/sources/issues, search, schedules) for the Knowledge panel. */
   knowledgeApi?: KnowledgeApi;
+  /** Optional session change tracker for the Git panel's session-changed file highlights. */
+  sessionChangeTracker?: Pick<SessionChangeTracker, 'getChangedFiles'>;
   /**
    * Open (or focus) a panel by id, wrapping `PanelManager.open`. Use for direct
    * cross-panel navigation instead of printing a "/panel open …" signpost
