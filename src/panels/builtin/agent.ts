@@ -1,6 +1,5 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { AgentInspectorPanel } from '../agent-inspector-panel.ts';
-import { ContextVisualizerPanel } from '../context-visualizer-panel.ts';
 import { ThinkingPanel } from '../thinking-panel.ts';
 import { ToolInspectorPanel } from '../tool-inspector-panel.ts';
 import { WrfcPanel } from '../wrfc-panel.ts';
@@ -33,28 +32,12 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     },
   });
 
-  manager.registerType({
-    id: 'context',
-    name: 'Context',
-    icon: 'C',
-    category: 'ai',
-    description: 'Context window visualizer: stacked bar showing token usage per section',
-    preload: true,
-    factory: () => new ContextVisualizerPanel(
-      requireUiServices(deps).events.turns,
-      deps.sessionMemoryStore,
-      deps.configManager,
-      deps.getOrchestratorUsage,
-      deps.getCtxWindow ?? deps.contextWindow,
-      requireUiServices(deps).readModels.session,
-      () => deps.orchestrator?.lastInputTokens ?? 0,
-    ),
-  });
-
   // WO-110: agent-logs merged into inspector — one deep agent console with
   // the correct JSONL parser + cancel, plus agent-logs' follow/pause/filter
   // ergonomics. Registration moved here (category 'agent') from
-  // builtin/development.ts.
+  // builtin/development.ts. (WO-113 retired the 'context' registration that
+  // previously lived here: ContextVisualizerPanel merged into TokenBudgetPanel,
+  // aliased in builtin/session.ts.)
   manager.registerType({
     id: 'inspector',
     name: 'Inspector',

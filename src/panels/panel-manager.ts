@@ -581,7 +581,8 @@ export class PanelManager {
   }
 
   private _getRegistration(panelId: string): PanelRegistration | undefined {
-    return this.registry.find((registration) => registration.id === panelId);
+    const resolvedId = this._resolveId(panelId);
+    return this.registry.find((registration) => registration.id === resolvedId);
   }
 
   private _shouldRetain(panelId: string): boolean {
