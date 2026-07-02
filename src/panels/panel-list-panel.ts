@@ -51,13 +51,32 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   paneBottom:  '#a78bfa',   // bottom-pane placement marker (distinct from top/info cyan)
 } as const);
 
-const CATEGORY_ORDER: PanelCategory[] = ['development', 'agent', 'monitoring', 'session', 'ai'];
+// WO-152: the former single 'monitoring' bucket is split into five operator
+// domains (see PanelCategory in types.ts). Order groups related domains
+// together in the picker: build/dev surfaces, agent-facing surfaces, then
+// the five former-monitoring domains (providers -> security -> automation ->
+// incidents -> live runtime consoles), then session/AI utility surfaces.
+const CATEGORY_ORDER: PanelCategory[] = [
+  'development',
+  'agent',
+  'providers',
+  'security-policy',
+  'automation-control',
+  'incidents-diagnostics',
+  'runtime-ops',
+  'session',
+  'ai',
+];
 const CATEGORY_LABELS: Record<PanelCategory, string> = {
-  development: 'Development',
-  agent:       'Agent',
-  monitoring:  'Monitoring',
-  session:     'Session',
-  ai:          'AI',
+  development:            'Development',
+  agent:                  'Agent',
+  providers:               'Providers',
+  'security-policy':       'Security & Policy',
+  'automation-control':    'Automation Control',
+  'incidents-diagnostics': 'Incidents & Diagnostics',
+  'runtime-ops':           'Runtime Ops',
+  session:                 'Session',
+  ai:                      'AI',
 };
 
 // ── Layout constants ──────────────────────────────────────────────────────────

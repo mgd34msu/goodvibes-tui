@@ -126,7 +126,7 @@ export class EvalPanel extends BasePanel {
   private _baselineLoading = false;
 
   public constructor(registry: EvalRegistry, projectRoot = '.') {
-    super('eval', 'Eval', 'V', 'monitoring');
+    super('eval', 'Eval', '▮', 'incidents-diagnostics');
     this._registry = registry;
     this._projectRoot = projectRoot;
   }

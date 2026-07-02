@@ -78,7 +78,7 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
   private confirmClear: ConfirmState<'clear'> | null = null;
 
   constructor(configManager: ConfigManager, componentHealthMonitor?: ComponentHealthMonitor) {
-    super('system-messages', 'System Messages', 'J', 'monitoring', componentHealthMonitor);
+    super('system-messages', 'System Messages', '▥', 'runtime-ops', componentHealthMonitor);
     this.configManager = configManager;
     this.filterEnabled = true;
     this.filterLabel = 'Filter messages';

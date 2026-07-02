@@ -31,7 +31,7 @@ class FooteredListPanel extends ScrollableListPanel<string> {
   private _items: string[];
 
   constructor(count: number) {
-    super('footered', 'Footered', 'F', 'monitoring');
+    super('footered', 'Footered', 'F', 'runtime-ops');
     this._items = Array.from({ length: count }, (_, i) => `item-${i}`);
   }
 

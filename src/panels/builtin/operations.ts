@@ -31,9 +31,23 @@ import { createProviderRuntimeInspectionQuery } from '../../runtime/ui-service-q
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
 import { selectModel } from '../../runtime/store/selectors/index.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
-import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requirePluginManager, requireUiServices } from './shared.ts';
+import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requirePluginManager, requireUiServices, withUnconfiguredFallback } from './shared.ts';
 import { createCockpitRosterReadModel } from '../cockpit-read-model.ts';
 
+// WO-152: the former single 'monitoring' category (33 panels pre-merge) is
+// split into five operator domains, applied per-registration below. Kept in
+// this file's original registration order (rather than physically regrouped
+// by category) because several registrations below close over shared local
+// state — `ui`, `providerRuntime`, `runtimeStore`, `rosterReadModel` — defined
+// once near the top of this function. Domain membership registered here:
+//   providers:              services, subscription, remote, provider-health
+//   security-policy:        approval, local-auth, settings-sync, security, sandbox, policy
+//   automation-control:     plugins, skills, automation, worktrees, hooks, marketplace
+//   incidents-diagnostics:  debug, incident, eval
+//   runtime-ops:            cockpit, routes, control-plane, tasks, orchestration,
+//                           ops, ops-control, communication (plus system-messages
+//                           and tokens/cost, registered in builtin/session.ts
+//                           and builtin/development.ts respectively)
 export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   const ui = requireUiServices(deps);
   const providerRuntime = createProviderRuntimeInspectionQuery(createRuntimeProviderApi({
@@ -60,7 +74,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'cockpit',
     name: 'Cockpit',
     icon: 'O',
-    category: 'monitoring',
+    category: 'runtime-ops',
     description: 'Unified operator summary for orchestration, permissions, communication, MCP, plugins, and integrations',
     factory: () => new CockpitPanel(
       ui.readModels.cockpit,
@@ -83,7 +97,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'approval',
     name: 'Approval',
     icon: 'A',
-    category: 'monitoring',
+    category: 'security-policy',
     description: 'Action-specific approval workspace for why-prompted, why-denied, and what-if review',
     factory: () => new ApprovalPanel(deps.policyRuntimeState),
   });
@@ -91,8 +105,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'plugins',
     name: 'Plugins',
-    icon: 'P',
-    category: 'monitoring',
+    // WO-152: was 'P' (collided with project-planning and preview).
+    icon: '◐',
+    category: 'automation-control',
     description: 'Plugin trust, quarantine, capability, and activation status',
     factory: () => new PluginsPanel(requirePluginManager(deps)),
   });
@@ -100,8 +115,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'skills',
     name: 'Skills',
-    icon: 'K',
-    category: 'monitoring',
+    // WO-152: was 'K' (collided with knowledge and tokens).
+    icon: '▩',
+    category: 'automation-control',
     description: 'Project-local and global skill discovery with origin and dependency details',
     factory: () => new SkillsPanel({
       componentHealthMonitor: deps.componentHealthMonitor,
@@ -119,7 +135,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'services',
     name: 'Services',
     icon: 'V',
-    category: 'monitoring',
+    category: 'providers',
     description: 'Configured external services, credential presence, and connection health tests',
     factory: () => new ServicesPanel(deps.serviceRegistry, deps.subscriptionManager),
   });
@@ -127,8 +143,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'automation',
     name: 'Automation',
-    icon: 'M',
-    category: 'monitoring',
+    // WO-152: was 'M' (collided with memory and marketplace).
+    icon: '◨',
+    category: 'automation-control',
     description: 'Automation jobs, runs, deliveries, and watcher-fed sources across the control plane, with real enable/disable and run-now controls',
     factory: () => new AutomationControlPanel(ui.readModels.automation, ui.readModels.watchers, {
       automationManager: requireAutomationManager(deps),
@@ -140,7 +157,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'routes',
     name: 'Routes',
     icon: 'R',
-    category: 'monitoring',
+    category: 'runtime-ops',
     description: 'Cross-surface route bindings and shared session attachment state',
     factory: () => new RoutesPanel(ui.readModels.routes),
   });
@@ -149,7 +166,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'control-plane',
     name: 'Control Plane',
     icon: 'C',
-    category: 'monitoring',
+    category: 'runtime-ops',
     description: 'Daemon control-plane state, clients, approvals, and recent operator activity',
     factory: () => new ControlPlanePanel(ui.readModels.controlPlane, requireControlPlanePanelDeps(deps)),
   });
@@ -158,7 +175,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'subscription',
     name: 'Subscriptions',
     icon: 'B',
-    category: 'monitoring',
+    category: 'providers',
     description: 'OAuth-backed provider subscriptions and supported provider override posture',
     factory: () => new SubscriptionPanel(deps.serviceRegistry, deps.subscriptionManager),
   });
@@ -167,7 +184,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'local-auth',
     name: 'Local Auth',
     icon: 'U',
-    category: 'monitoring',
+    category: 'security-policy',
     description: 'Local daemon/listener auth users, bootstrap posture, and active sessions',
     factory: () => new LocalAuthPanel(deps.localUserAuthManager),
   });
@@ -175,8 +192,12 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'settings-sync',
     name: 'Settings Sync',
-    icon: 'Y',
-    category: 'monitoring',
+    // WO-152: registry previously said 'Y' while the live panel's own
+    // super() call used 'S' — a pre-existing registry/instance mismatch as
+    // well as a collision ('Y' with communication/eval, 'S' with symbols).
+    // Unified to a single unique glyph in both places.
+    icon: '▱',
+    category: 'security-policy',
     description: 'Local, synced, and managed settings posture with recent sync events and active locks',
     factory: () => new SettingsSyncPanel(deps.configManager),
   });
@@ -184,8 +205,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'worktrees',
     name: 'Worktrees',
-    icon: 'W',
-    category: 'monitoring',
+    // WO-152: was 'W' (collided with wrfc).
+    icon: '▯',
+    category: 'automation-control',
     description: 'Orchestrator-owned git worktree lifecycle, attachments, and cleanup state',
     factory: () => new WorktreePanel(deps.worktreeRegistry, deps.requestRender),
   });
@@ -193,8 +215,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'hooks',
     name: 'Hooks',
-    icon: 'H',
-    category: 'monitoring',
+    // WO-152: was 'H' (collided with sessions).
+    icon: '▨',
+    category: 'automation-control',
     description: 'Registered hooks, chains, contracts, and execution policy details',
     factory: () => {
       const hookDeps = requireHookPanelDeps(deps);
@@ -205,8 +228,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'security',
     name: 'Security',
-    icon: 'U',
-    category: 'monitoring',
+    // WO-152: was 'U' (collided with local-auth and policy).
+    icon: '▬',
+    category: 'security-policy',
     description: 'Security review workspace for token audit, policy posture, MCP quarantine, and incident pressure',
     factory: () => new SecurityPanel(ui.readModels.security),
   });
@@ -214,8 +238,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'marketplace',
     name: 'Marketplace',
-    icon: 'M',
-    category: 'monitoring',
+    // WO-152: was 'M' (collided with memory and automation).
+    icon: '◩',
+    category: 'automation-control',
     description: 'Curated plugin and skill marketplace with provenance, compatibility, and install posture',
     factory: () => {
       return new MarketplacePanel(ui.readModels.marketplace, {
@@ -230,8 +255,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'sandbox',
     name: 'Sandbox',
-    icon: 'X',
-    category: 'monitoring',
+    // WO-152: was 'X' (collided with tools).
+    icon: '▪',
+    category: 'security-policy',
     description: 'VM isolation posture for MCP servers and evaluation runtimes',
     factory: () => new SandboxPanel(deps.configManager, deps.sandboxSessionRegistry, deps.requestRender),
   });
@@ -239,8 +265,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'tasks',
     name: 'Tasks',
-    icon: 'J',
-    category: 'monitoring',
+    // WO-152: was 'J' (collided with intelligence and system-messages).
+    icon: '▦',
+    category: 'runtime-ops',
     description: 'Queued, running, blocked, failed, and completed task summaries from the runtime store',
     factory: () => new TasksPanel(ui.readModels.tasks, ui.readModels.worktrees, deps.opsApi),
   });
@@ -248,8 +275,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'orchestration',
     name: 'Orchestration',
-    icon: 'Q',
-    category: 'monitoring',
+    // WO-152: was 'Q' (collided with qr-code and ops-control).
+    icon: '◒',
+    category: 'runtime-ops',
     description: 'Task-graph status, node roles, and bounded recursion guard activity',
     factory: () => new OrchestrationPanel(ui.readModels.orchestration),
   });
@@ -257,8 +285,11 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'ops',
     name: 'Ops',
-    icon: 'O',
-    category: 'monitoring',
+    // WO-152: was 'O' (collided with cockpit). Also unifies a pre-existing
+    // registry ('monitoring') / live-instance (ops-strategy-panel.ts said
+    // 'agent') category mismatch onto a single 'runtime-ops' value.
+    icon: '◫',
+    category: 'runtime-ops',
     description: 'Adaptive planner strategy timeline, override posture, and recent execution-mode decisions',
     factory: () => new OpsStrategyPanel(ui.events.planner, deps.adaptivePlanner, deps.planRuntime),
   });
@@ -271,8 +302,11 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'ops-control',
     name: 'Ops Control',
-    icon: 'Q',
-    category: 'monitoring',
+    // WO-152: was 'Q' (collided with qr-code and orchestration). Also unifies
+    // a pre-existing registry ('monitoring') / live-instance (ops-control-panel.ts
+    // said 'agent') category mismatch onto a single 'runtime-ops' value.
+    icon: '◓',
+    category: 'runtime-ops',
     description: 'Operator intervention console: audit log plus cancel/pause/resume/retry on tasks and cancel on agents',
     factory: () => new OpsControlPanel(ui.events.ops, deps.opsApi),
   });
@@ -281,9 +315,10 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'communication',
     name: 'Communication',
     icon: 'Y',
-    category: 'monitoring',
+    category: 'runtime-ops',
     description: 'Structured agent communication, blocked routes, and delivery status',
     preload: true,
+    retainOnClose: true,
     factory: () => new CommunicationPanel(
       ui.readModels.communication,
       (agentId: string) => deps.openAgentDetail?.(agentId),
@@ -293,8 +328,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'remote',
     name: 'Remote',
-    icon: 'R',
-    category: 'monitoring',
+    // WO-152: was 'R' (collided with routes).
+    icon: '▰',
+    category: 'providers',
     description: 'Self-hosted daemon and ACP transport state with active remote connections',
     factory: () => new RemotePanel(ui.readModels.remote),
   });
@@ -303,9 +339,10 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     id: 'provider-health',
     name: 'Health',
     icon: 'N',
-    category: 'monitoring',
+    category: 'providers',
     description: 'Provider console: status, latency timelines, error attribution, auth routes, fallback chain, and repair actions',
     preload: true,
+    retainOnClose: true,
     factory: () => new ProviderHealthPanel(
       providerRuntime,
       {
@@ -344,8 +381,9 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   manager.registerType({
     id: 'debug',
     name: 'Debug',
-    icon: 'B',
-    category: 'monitoring',
+    // WO-152: was 'B' (collided with subscription).
+    icon: '▧',
+    category: 'incidents-diagnostics',
     description: 'API debug panel: per-call log with model, provider, tokens, latency, status, and error history',
     factory: () => {
       const panel = new DebugPanel(ui.events.turns, deps.requestRender);
@@ -354,42 +392,59 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     },
   });
 
-  if (deps.forensicsRegistry) {
-    const { forensicsRegistry } = deps;
-    const incidentFactory = () => new IncidentReviewPanel(forensicsRegistry);
-    manager.registerType({
-      id: 'incident',
-      name: 'Incident',
-      icon: 'N',
-      category: 'monitoring',
-      description: 'Incident workspace with root cause, permission, budget, replay, causal-chain, phase-timing, and jump-link evidence',
-      factory: incidentFactory,
-    });
-    // WO-114 compat (Forensics merged into Incident): the retired 'forensics'
-    // panel id still resolves — redirected to the merged Incident workspace so
-    // pre-existing openForensicsPanel()/`/forensics` callers land on the same
-    // Incident instance instead of stacking a duplicate registration.
-    manager.registerAlias('forensics', 'incident');
-  }
+  // WO-152: always registered (was gated behind `if (deps.forensicsRegistry)`,
+  // so `/panel open incident` reported "Unknown panel" on builds without a
+  // forensics registry wired). IncidentReviewPanel already accepts an
+  // optional registry and renders its own "not configured" empty state when
+  // it is absent, so no fallback wrapper is needed here — only the
+  // conditional registration itself is removed.
+  manager.registerType({
+    id: 'incident',
+    name: 'Incident',
+    // WO-152: was 'N' (collided with provider-health).
+    icon: '◪',
+    category: 'incidents-diagnostics',
+    description: 'Incident workspace with root cause, permission, budget, replay, causal-chain, phase-timing, and jump-link evidence',
+    factory: () => new IncidentReviewPanel(deps.forensicsRegistry),
+  });
+  // WO-114 compat (Forensics merged into Incident): the retired 'forensics'
+  // panel id still resolves — redirected to the merged Incident workspace so
+  // pre-existing openForensicsPanel()/`/forensics` callers land on the same
+  // Incident instance instead of stacking a duplicate registration.
+  manager.registerAlias('forensics', 'incident');
 
   manager.registerType({
     id: 'policy',
     name: 'Policy',
-    icon: 'U',
-    category: 'monitoring',
+    // WO-152: was 'U' (collided with local-auth and security).
+    icon: '▭',
+    category: 'security-policy',
     description: 'Policy governance: active/candidate bundles, divergence gate, rollout history, and simulation evidence',
     factory: () => new PolicyPanel(deps.policyRuntimeState),
   });
 
-  if (deps.evalRegistry) {
+  // WO-152: always registered (was gated behind `if (deps.evalRegistry)`, so
+  // `/panel open eval` reported "Unknown panel" on builds without an eval
+  // registry wired). Falls back to a "dependency not configured" empty state.
+  {
     const { evalRegistry } = deps;
     manager.registerType({
       id: 'eval',
       name: 'Eval',
-      icon: 'Y',
-      category: 'monitoring',
+      // WO-152: registry previously said 'Y' while the live panel's own
+      // super() call used 'V' — a pre-existing registry/instance mismatch as
+      // well as a collision ('Y' with communication/settings-sync, 'V' with
+      // services). Unified to a single unique glyph in both places.
+      icon: '▮',
+      category: 'incidents-diagnostics',
       description: 'Evaluation harness: benchmark suite results, scorecards, and regression gates',
-      factory: () => new EvalPanel(evalRegistry, ui.environment.shellPaths.workingDirectory),
+      factory: withUnconfiguredFallback(
+        evalRegistry !== undefined,
+        'eval', 'Eval', '▮', 'incidents-diagnostics',
+        ' Eval registry not configured for this session.',
+        'This runtime was not wired with an evaluation harness registry at bootstrap, so no eval data is available.',
+        () => new EvalPanel(evalRegistry!, ui.environment.shellPaths.workingDirectory),
+      ),
     });
   }
 }

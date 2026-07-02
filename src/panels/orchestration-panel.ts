@@ -88,7 +88,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
   private _pendingNodeJump: OrchestrationNodeJump | null = null;
 
   public constructor(readModel?: UiReadModel<UiOrchestrationSnapshot>) {
-    super('orchestration', 'Orchestration', 'Q', 'monitoring');
+    super('orchestration', 'Orchestration', '◒', 'runtime-ops');
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }

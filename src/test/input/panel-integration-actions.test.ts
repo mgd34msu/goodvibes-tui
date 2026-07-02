@@ -457,7 +457,7 @@ describe('panel integration actions', () => {
       id: 'tasks',
       name: 'Tasks',
       icon: 'J',
-      category: 'monitoring',
+      category: 'runtime-ops',
       description: 'tasks',
       factory: () => new TasksPanel(createTasksReadModel(createRuntimeStore())),
     });

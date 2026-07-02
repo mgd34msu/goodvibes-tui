@@ -41,7 +41,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
   private pendingAction: PendingRouteAction | null = null;
 
   public constructor(readModel?: UiReadModel<UiRoutesSnapshot>) {
-    super('routes', 'Routes', 'R', 'monitoring');
+    super('routes', 'Routes', 'R', 'runtime-ops');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter routes';

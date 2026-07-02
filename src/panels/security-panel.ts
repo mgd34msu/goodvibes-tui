@@ -92,7 +92,7 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
   private pendingIncidentJump = false;
 
   public constructor(private readonly readModel: UiReadModel<UiSecuritySnapshot>) {
-    super('security', 'Security', 'U', 'monitoring');
+    super('security', 'Security', '▬', 'security-policy');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter tokens';

@@ -83,7 +83,7 @@ export class FilePreviewPanel extends BasePanel {
   private watcher: FSWatcher | null = null;
 
   constructor() {
-    super('preview', 'Preview', 'P', 'development');
+    super('preview', 'Preview', '◑', 'development');
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────────

@@ -81,7 +81,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
     serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>,
     subscriptionManager: SubscriptionAccessQuery,
   ) {
-    super('subscription', 'Subscriptions', 'B', 'monitoring');
+    super('subscription', 'Subscriptions', 'B', 'providers');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.serviceRegistry = serviceRegistry;
     this.subscriptionManager = subscriptionManager;

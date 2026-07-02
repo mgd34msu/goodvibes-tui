@@ -30,6 +30,10 @@ import type { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import type { RuntimeStore } from '../../runtime/store/index.ts';
 import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
 import type { SessionChangeTracker } from '@pellux/goodvibes-sdk/platform/sessions';
+import type { Line } from '../../types/grid.ts';
+import type { Panel, PanelCategory } from '../types.ts';
+import { BasePanel } from '../base-panel.ts';
+import { buildEmptyState, buildPanelWorkspace, DEFAULT_PANEL_PALETTE } from '../polish.ts';
 
 export interface BuiltinPanelDeps {
   /** Config manager for settings-sync and other config-backed panels. */
@@ -308,4 +312,62 @@ export function requireKnowledgeApi(deps: BuiltinPanelDeps): KnowledgeApi {
     throw new Error('Knowledge API must be wired at bootstrap for the Knowledge panel.');
   }
   return deps.knowledgeApi;
+}
+
+// ---------------------------------------------------------------------------
+// WO-152: always-register conditional panels with a "dependency not
+// configured" empty state instead of skipping registration entirely.
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal placeholder Panel used when a builtin panel's runtime dependency
+ * (e.g. an orchestrator usage getter, a memory registry, an eval registry)
+ * was not wired at bootstrap for this build/session. Renders a single
+ * "dependency not configured" empty state via `buildEmptyState` so opening
+ * the panel id (`/panel open <id>`, a saved layout, a cross-panel jump)
+ * always resolves to a real panel instead of "Unknown panel" — the panel
+ * type is always registered; only its data source is sometimes absent.
+ */
+class UnconfiguredDependencyPanel extends BasePanel {
+  constructor(
+    id: string,
+    name: string,
+    icon: string,
+    category: PanelCategory,
+    private readonly emptyTitle: string,
+    private readonly emptyBody: string,
+  ) {
+    super(id, name, icon, category);
+  }
+
+  render(width: number, height: number): Line[] {
+    if (width <= 0 || height <= 0) return [];
+    return buildPanelWorkspace(width, height, {
+      title: `${this.name} Workspace`,
+      sections: [{
+        lines: buildEmptyState(width, this.emptyTitle, this.emptyBody, [], DEFAULT_PANEL_PALETTE),
+      }],
+      palette: DEFAULT_PANEL_PALETTE,
+    });
+  }
+}
+
+/**
+ * Build a factory that instantiates `configured()` when `dependencyPresent`
+ * is true, otherwise a placeholder Panel rendering `emptyTitle`/`emptyBody`
+ * via `buildEmptyState`. Use for builtin panels whose registration used to
+ * be gated behind an `if (deps.xyz)` check (cost/memory/incident/eval).
+ */
+export function withUnconfiguredFallback(
+  dependencyPresent: boolean,
+  id: string,
+  name: string,
+  icon: string,
+  category: PanelCategory,
+  emptyTitle: string,
+  emptyBody: string,
+  configured: () => Panel,
+): () => Panel {
+  if (dependencyPresent) return configured;
+  return () => new UnconfiguredDependencyPanel(id, name, icon, category, emptyTitle, emptyBody);
 }

@@ -179,7 +179,7 @@ export class DebugPanel extends ScrollableListPanel<ApiCallEntry> {
     private readonly turnEvents: UiEventFeed<TurnEvent>,
     private readonly requestRender: () => void = () => {},
   ) {
-    super('debug', 'Debug', 'B', 'monitoring');
+    super('debug', 'Debug', '▧', 'incidents-diagnostics');
     this.filterEnabled = true;
     this.filterLabel = 'Filter calls';
     this._subscribe();

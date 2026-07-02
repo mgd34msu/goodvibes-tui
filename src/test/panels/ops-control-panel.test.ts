@@ -102,7 +102,7 @@ describe('OpsControlPanel', () => {
       id: 'ops-control',
       name: 'Ops Control',
       icon: 'Q',
-      category: 'monitoring',
+      category: 'runtime-ops',
       description: 'Operator intervention console',
       factory: () => new OpsControlPanel(EMPTY_OPS_EVENT_FEED),
     });

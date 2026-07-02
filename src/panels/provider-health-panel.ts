@@ -137,7 +137,7 @@ export class ProviderHealthPanel extends BasePanel {
     private readonly deps: ProviderHealthPanelDeps,
     private readonly requestRender: () => void = () => {},
   ) {
-    super('provider-health', 'Health', 'N', 'monitoring');
+    super('provider-health', 'Health', 'N', 'providers');
     this._modelState = deps.modelState?.get() ?? this._syntheticModelState();
     this._dataProvider = new ProviderHealthDataProvider(this._buildHealthState(), this._modelState);
     this._subscribe();
