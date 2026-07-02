@@ -137,6 +137,10 @@ The WRFC panel surfaces constraint state at every level of a running chain:
 
 The `/wrfc` command opens the chain-status view directly. Constraint counts are also visible in the orchestration panel and in `/wrfc` output without opening the full panel.
 
+Each chain row and the selected-chain summary also show elapsed time (active chains, since `createdAt`) or total duration (terminal chains, `createdAt` to `completedAt`). Press `a` on a selected chain to jump straight to its owner agent in the Inspector panel. When an expanded chain's detail exceeds the panel's per-chain line cap, the truncated tail is replaced with a `+N more` indicator instead of being silently dropped.
+
+The panel's empty state points at the actual chain producer, `/teamwork create-mode <mode> <title>` (modes with `reviewMode: wrfc` — see `/teamwork modes`), rather than a `/wrfc run` command that does not exist.
+
 ## Live TTS commands
 
 `/tts <prompt>` submits a normal chat turn and adds live spoken output for that one turn. Text still renders normally in the transcript. Assistant deltas are chunked at sentence or phrase boundaries and streamed through the configured TTS provider.
