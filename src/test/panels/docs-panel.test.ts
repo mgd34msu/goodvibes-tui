@@ -152,16 +152,17 @@ describe('DocsPanel', () => {
     expect(text.split('\n').find((l) => l.includes('Claude A'))).not.toContain('ACTIVE');
   });
 
-  test('up at top focuses search before section hotkeys apply', () => {
+  test('/ activates the filter before section hotkeys apply; Esc clears it', () => {
     const panel = new DocsPanel();
     panel.onActivate();
-    panel.handleInput('up');
+    panel.handleInput('/');
     panel.handleInput('m');
     let text = linesText(panel.render(80, 18));
-    expect(text).toContain('Search: m');
+    // WO-153: converged modal filter — pinned '[Filter] ' + literal '_' cursor contract.
+    expect(text).toContain('[Filter] m_');
     expect(text).toContain('Docs / Tools');
 
-    panel.handleInput('down');
+    panel.handleInput('escape');
     panel.handleInput('m');
     text = linesText(panel.render(80, 18));
     expect(text).toContain('Docs / Models');
