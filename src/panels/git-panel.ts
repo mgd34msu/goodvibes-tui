@@ -343,10 +343,11 @@ export class GitPanel extends BasePanel {
         return true;
       }
       case 'i': {
-        if (this.notGitRepo) {
-          this.confirm = { subject: { kind: 'init' }, label: this.workingDirectory, verb: 'Init' };
-          this.markDirty();
-        }
+        // Only meaningful when no repo is loaded — otherwise leave the key
+        // unconsumed instead of absorbing it as a silent no-op.
+        if (!this.notGitRepo) return false;
+        this.confirm = { subject: { kind: 'init' }, label: this.workingDirectory, verb: 'Init' };
+        this.markDirty();
         return true;
       }
       default:

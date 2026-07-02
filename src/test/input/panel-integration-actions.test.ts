@@ -250,6 +250,17 @@ describe('panel integration actions', () => {
     expect(executeCommand).toHaveBeenCalledWith('worktree', ['task', 'exec-task-1']);
   });
 
+  test('Tasks w dispatches the advertised /teamwork review via ctx.executeCommand', () => {
+    panelManager = createTestManagers().panelManager;
+    const executeCommand = mock(async () => true);
+
+    const panel = new TasksPanel(createTasksReadModel(createRuntimeStore()));
+    expect(panel.handleInput('w')).toBe(true); // queues the teamwork-review follow-up
+
+    expect(handlePanelIntegrationAction(panelManager, panel, 'w', { executeCommand } as never)).toBe(true);
+    expect(executeCommand).toHaveBeenCalledWith('teamwork', ['review']);
+  });
+
   test('WO-131: Orchestration Enter on a node-focused, agent-backed node jumps to the Inspector', () => {
     panelManager = createTestManagers().panelManager;
     registerInspectorPanel(panelManager);

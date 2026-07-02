@@ -32,7 +32,8 @@ const STATUS_ORDER: TaskLifecycleState[] = ['queued', 'running', 'blocked', 'fai
 /** The follow-up action Enter dispatches once the panel-integration router runs, per WO-131. */
 type TaskFollowUp =
   | { readonly kind: 'agent-jump'; readonly agentId: string }
-  | { readonly kind: 'worktree-review'; readonly taskId: string };
+  | { readonly kind: 'worktree-review'; readonly taskId: string }
+  | { readonly kind: 'teamwork-review' };
 
 function formatWhen(value?: number): string {
   return value ? new Date(value).toLocaleString() : 'n/a';
@@ -306,6 +307,13 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       return true;
     }
 
+    // The task-family posture surface is bound for real: w stages a follow-up
+    // the integration router dispatches as '/teamwork review' via executeCommand.
+    if (key === 'w' && !this.filterActive) {
+      this._pendingFollowUp = { kind: 'teamwork-review' };
+      return true;
+    }
+
     // Enter commits the filter query while actively typing (ScrollableListPanel
     // contract) — only treated as detail-mode/agent-jump once filtering isn't active.
     if ((key === 'enter' || key === 'return') && !this.filterActive) {
@@ -376,6 +384,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       { keys: '↑/↓', label: 'move' },
       { keys: 'Home/End', label: 'jump' },
       { keys: '/', label: 'filter' },
+      { keys: 'w', label: 'teamwork review' },
     ];
     if (selected) {
       browseHints.push({ keys: 'Enter', label: selected.kind === 'agent' ? 'agent detail' : 'task detail' });
@@ -449,7 +458,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
       ]));
     }
     postureLines.push(
-      buildGuidanceLine(width, '/teamwork review', 'inspect task-family posture, archetype metadata, and recovery options for active work', C),
+      buildGuidanceLine(width, '/teamwork review', 'inspect task-family posture, archetype metadata, and recovery options for active work — press w to run it', C),
     );
 
     const headerLines: Line[] = buildSummaryBlock(width, 'Task posture', postureLines, C);
