@@ -1,8 +1,9 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { fitDisplay } from '../utils/terminal-width.ts';
+import { formatElapsed } from '../utils/format-elapsed.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import type { KeyName } from './types.ts';
+import type { KeyName, PanelIntegrationContext } from './types.ts';
 import type { ProviderSubscription, PendingSubscriptionLogin } from '@pellux/goodvibes-sdk/platform/config';
 import { listBuiltinSubscriptionProviders } from '@pellux/goodvibes-sdk/platform/config';
 import { type ConfirmState, handleConfirmInput } from './confirm-state.ts';
@@ -49,12 +50,32 @@ function statusColor(status: ReturnType<typeof statusOf>): string {
   }
 }
 
+// Highlight window for "expiring soon" — mirrors the provider-console
+// convention of flagging tokens inside their last day of validity so the
+// operator can refresh/re-login before the subscription actually lapses.
+const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
+
+function isExpiringSoon(subscription: ProviderSubscription | null): boolean {
+  if (!subscription?.expiresAt) return false;
+  const remaining = subscription.expiresAt - Date.now();
+  return remaining > 0 && remaining <= EXPIRING_SOON_MS;
+}
+
 export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
   private readonly serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>;
   private readonly subscriptionManager: SubscriptionAccessQuery;
   private rows: SubscriptionRow[] = [];
   /** Pending logout confirmation — uses project-standard ConfirmState contract. */
   private confirm: ConfirmState<string> | null = null;
+  // Set by handleInput (Enter on an 'available' row) and consumed on the very
+  // next handlePanelIntegrationAction dispatch of that same key — handleInput
+  // has no ctx.executeCommand, so the actual login-start dispatch happens via
+  // the bridge (remote-panel.ts / token-budget-panel.ts pattern).
+  private pendingCommand: { name: string; args: string[] } | null = null;
+  // Background posture refresh while the panel is visible, so a login/logout
+  // that completes elsewhere (e.g. the browser OAuth handshake finishing)
+  // shows up without requiring an explicit 'r'.
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   public constructor(
     serviceRegistry: Pick<ServiceInspectionQuery, 'getAll'>,
@@ -69,6 +90,28 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
   public override onActivate(): void {
     super.onActivate();
     this.refresh();
+    if (this.refreshTimer === null) {
+      this.refreshTimer = this.registerTimer(setInterval(() => {
+        this.refresh();
+        this.markDirty();
+      }, 5_000));
+    }
+  }
+
+  public override onDeactivate(): void {
+    if (this.refreshTimer !== null) {
+      this.clearTimer(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
+
+  /** Consumes the login-start command queued by handleInput's Enter-on-'available' branch. */
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingCommand) return false;
+    const { name, args } = this.pendingCommand;
+    this.pendingCommand = null;
+    void ctx.executeCommand?.(name, args);
+    return true;
   }
 
   protected override getPalette() { return C; }
@@ -87,11 +130,16 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
 
   protected renderItem(row: SubscriptionRow, index: number, selected: boolean, width: number): Line {
     const status = statusOf(row);
+    // Expiring-soon highlight: the STATUS text stays 'ACTIVE' (the row is
+    // still active), but it's colored as a warning and gets a trailing
+    // marker so an about-to-lapse token stands out from the list.
+    const expiringSoon = isExpiringSoon(row.subscription);
     return buildPanelListRow(width, [
       { text: fitDisplay(row.provider, 16), fg: C.value },
-      { text: ` ${status.toUpperCase().padEnd(12)}`, fg: statusColor(status) },
+      { text: ` ${status.toUpperCase().padEnd(12)}`, fg: expiringSoon ? C.warn : statusColor(status) },
       { text: ` oauth=${row.hasOAuthConfig ? 'yes' : 'no'} `, fg: row.hasOAuthConfig ? C.info : C.dim },
       { text: ` override=${row.subscription ? 'active' : 'off'}`, fg: row.subscription ? C.good : C.dim },
+      ...(expiringSoon ? [{ text: ' expiring soon', fg: C.warn }] : []),
     ], C, { selected, selectedBg: C.selectBg });
   }
 
@@ -128,10 +176,18 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
       return true;
     }
     if (key === 'enter' || key === 'return') {
-      if (!selected?.subscription) return false;
-      this.confirm = { subject: selected.provider, label: selected.provider };
-      this.markDirty();
-      return true;
+      if (selected?.subscription) {
+        this.confirm = { subject: selected.provider, label: selected.provider };
+        this.markDirty();
+        return true;
+      }
+      // Enter on an 'available' row starts the real login flow via the
+      // bridge instead of leaving it as a printed signpost.
+      if (selected && statusOf(selected) === 'available') {
+        this.pendingCommand = { name: 'subscription', args: ['login', selected.provider, 'start'] };
+        return true;
+      }
+      return false;
     }
     if (key === 'r') {
       this.refresh();
@@ -182,13 +238,16 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
     const selected = this.rows[this.selectedIndex];
     const hints: Array<{ keys: string; label: string }> = [{ keys: 'Up/Down', label: 'select' }];
     if (selected?.subscription) hints.push({ keys: 'Enter', label: 'sign out' });
-    else if (selected?.hasOAuthConfig) hints.push({ keys: '/subscription login <p> start', label: 'sign in' });
+    else if (selected?.hasOAuthConfig) hints.push({ keys: 'Enter', label: 'sign in' });
     hints.push({ keys: 'r', label: 'refresh' });
     return buildKeyboardHints(width, hints, C);
   }
 
+  // WO-139: refresh() moved out of render() (hooks-panel.ts:109 pattern) — it
+  // now runs on onActivate(), on 'r', and on the 5s background timer above,
+  // instead of rebuilding the row set (service registry scan + builtin
+  // provider list + subscription-manager reads) on every single frame.
   public render(width: number, height: number): Line[] {
-    this.refresh();
     this.clampSelection();
     const intro = 'Review provider login state, subscription-backed routing, and pending browser auth handshakes.';
 
@@ -241,12 +300,13 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
         { label: 'oauth config', value: selectedRow.hasOAuthConfig ? 'present' : 'missing', valueColor: selectedRow.hasOAuthConfig ? C.good : C.bad },
       ], C));
       if (selectedRow.subscription) {
+        const expiringSoon = isExpiringSoon(selectedRow.subscription);
         const expires = selectedRow.subscription.expiresAt
           ? new Date(selectedRow.subscription.expiresAt).toISOString()
           : 'n/a';
         detailRows.push(buildKeyValueLine(width, [
           { label: 'token type', value: selectedRow.subscription.tokenType, valueColor: C.info },
-          { label: 'expires', value: expires, valueColor: C.dim },
+          { label: 'expires', value: expiringSoon ? `${expires} (expiring soon)` : expires, valueColor: expiringSoon ? C.warn : C.dim },
         ], C));
         detailRows.push(buildPanelLine(width, [[
           ` ${selectedRow.subscription.overrideAmbientApiKeys
@@ -254,13 +314,17 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
             : 'Stored for subscription-backed flows. Ambient API-key resolution remains unchanged.'}`,
           C.dim,
         ]]));
+        if (expiringSoon) {
+          detailRows.push(buildPanelLine(width, [[' Token expires within 24h — sign out and re-login (Enter) to refresh it before it lapses.', C.warn]]));
+        }
         if (this.confirm?.subject === selectedRow.provider) {
           detailRows.push(buildPanelLine(width, [[` Sign out ${selectedRow.provider}? Press y or Enter to confirm, n or Esc to cancel.`, C.warn]]));
         }
       } else if (selectedRow.pending) {
-        detailRows.push(buildPanelLine(width, [[' Login is pending. Finish with /subscription login <provider> finish <code>.', C.warn]]));
+        const age = formatElapsed(Date.now() - selectedRow.pending.createdAt);
+        detailRows.push(buildPanelLine(width, [[` Login is pending (started ${age} ago). Finish with /subscription login <provider> finish <code>.`, C.warn]]));
       } else if (selectedRow.hasOAuthConfig) {
-        detailRows.push(buildPanelLine(width, [[' Ready for login. Start with /subscription login <provider> start.', C.dim]]));
+        detailRows.push(buildPanelLine(width, [[' Ready for login. Press Enter to start it here, or /subscription login <provider> start.', C.dim]]));
       } else {
         detailRows.push(buildPanelLine(width, [[' Add a provider-specific OAuth config or enable a built-in subscription provider to use subscription login.', C.bad]]));
       }

@@ -56,6 +56,7 @@ import { registerOnboardingRuntimeCommands } from './commands/onboarding-runtime
 import { registerTtsRuntimeCommands } from './commands/tts-runtime.ts';
 import { registerCloudflareRuntimeCommands } from './commands/cloudflare-runtime.ts';
 import { registerWorkPlanRuntimeCommands } from './commands/work-plan-runtime.ts';
+import { registerCostRuntimeCommands } from './commands/cost-runtime.ts';
 
 /**
  * registerBuiltinCommands - Register all built-in slash commands into the registry.
@@ -107,6 +108,7 @@ export function registerBuiltinCommands(registry: CommandRegistry): void {
   registerTtsRuntimeCommands(registry);
   registerCloudflareRuntimeCommands(registry);
   registerWorkPlanRuntimeCommands(registry);
+  registerCostRuntimeCommands(registry);
   registerLocalRuntimeCommands(registry);
   registerDiscoveryRuntimeCommands(registry);
   registerPlanningRuntimeCommands(registry);
