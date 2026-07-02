@@ -429,6 +429,18 @@ export class ToolInspectorPanel extends BasePanel {
     this.markDirty();
   }
 
+  /**
+   * Public counterpart to the 'f' cycle — sets the filter directly to a named
+   * tool. Used by cross-panel jumps (WO-136: DocsPanel Enter on a tool row)
+   * so the inspector opens already scoped to the tool the operator picked.
+   */
+  public filterByTool(tool: string): void {
+    this.filterMode = tool;
+    this.cursorIndex = 0;
+    this.autoScroll = false;
+    this.markDirty();
+  }
+
   private _move(delta: number): void {
     const flat = this._getFlat();
     if (flat.length === 0) return;
