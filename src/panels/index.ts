@@ -20,7 +20,6 @@ export { DebugPanel } from './debug-panel.ts';
 export type { ApiCallEntry, ApiCallStatus } from './debug-panel.ts';
 export { registerBuiltinPanels } from './builtin-panels.ts';
 export type { BuiltinPanelDeps } from './builtin-panels.ts';
-export { ForensicsPanel } from './forensics-panel.ts';
 export { IncidentReviewPanel } from './incident-review-panel.ts';
 export { PolicyPanel } from './policy-panel.ts';
 export { PluginsPanel } from './plugins-panel.ts';
