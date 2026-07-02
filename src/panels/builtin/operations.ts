@@ -372,7 +372,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       icon: 'Y',
       category: 'monitoring',
       description: 'Evaluation harness: benchmark suite results, scorecards, and regression gates',
-      factory: () => new EvalPanel(evalRegistry),
+      factory: () => new EvalPanel(evalRegistry, ui.environment.shellPaths.workingDirectory),
     });
   }
 }
