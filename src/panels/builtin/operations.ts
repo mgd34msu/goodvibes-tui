@@ -1,5 +1,6 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { CockpitPanel } from '../cockpit-panel.ts';
+import { AgentInspectorPanel } from '../agent-inspector-panel.ts';
 import { ApprovalPanel } from '../approval-panel.ts';
 import { PluginsPanel } from '../plugins-panel.ts';
 import { SkillsPanel } from '../skills-panel.ts';
@@ -67,6 +68,13 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       {
         openAgentDetail: (agentId: string) => deps.openAgentDetail?.(agentId),
         cancelAgent: (agentId: string) => ui.agents.agentManager.cancel(agentId),
+        // WO-130: roster Enter jumps to the Inspector console (WO-110's
+        // inspectAgent deep-link target) instead of only the quick-peek modal.
+        inspectAgent: (agentId: string) => {
+          const panel = manager.open('inspector');
+          if (panel instanceof AgentInspectorPanel) panel.inspectAgent(agentId);
+        },
+        openPanel: (panelId: string) => deps.openPanel?.(panelId),
       },
     ),
   });
