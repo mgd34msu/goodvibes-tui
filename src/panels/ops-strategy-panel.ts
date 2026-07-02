@@ -75,7 +75,7 @@ export class OpsStrategyPanel extends BasePanel {
     adaptivePlanner: OpsStrategyQuery,
     planRuntime?: PlanRuntimeService,
   ) {
-    super('ops', 'Ops', 'O', 'agent');
+    super('ops', 'Ops', '◫', 'runtime-ops');
     this.adaptivePlanner = adaptivePlanner;
     this.planRuntime = planRuntime;
   }

@@ -102,7 +102,7 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
   private unsubscribe: (() => void) | null = null;
 
   public constructor(worktreeRegistry: WorktreeRegistryLike, requestRender: () => void = () => {}) {
-    super('worktrees', 'Worktrees', 'W', 'monitoring');
+    super('worktrees', 'Worktrees', '▯', 'automation-control');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.worktreeRegistry = worktreeRegistry;
     this.requestRender = requestRender;

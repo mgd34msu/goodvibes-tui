@@ -55,7 +55,7 @@ export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord>
     readModel?: UiReadModel<UiCommunicationSnapshot>,
     openAgentDetail?: (agentId: string) => void,
   ) {
-    super('communication', 'Communication', 'Y', 'monitoring');
+    super('communication', 'Communication', 'Y', 'runtime-ops');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter messages';

@@ -138,7 +138,7 @@ export class CostTrackerPanel extends BasePanel {
     getOrchestratorUsage: () => UsageSnapshot & { model?: string },
     opts: { budgetThreshold?: number; getAgentStatus?: (agentId: string) => AgentRecord | null } = {},
   ) {
-    super('cost', 'Cost', '$', 'monitoring');
+    super('cost', 'Cost', '$', 'providers');
     this.getOrchestratorUsage = getOrchestratorUsage;
     this.getAgentStatus = opts.getAgentStatus;
     this.budgetThreshold = opts.budgetThreshold ?? 0;

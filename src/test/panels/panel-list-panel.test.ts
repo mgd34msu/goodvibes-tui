@@ -33,18 +33,35 @@ function countLinesContaining(lines: Line[], needle: string): number {
   ).length;
 }
 
+// PanelManager.registerType now asserts icon uniqueness across its registry
+// (WO-152), so this file's fixtures — which register dozens of panels
+// against one shared `mgr` per test — need a default icon that is unique
+// per id rather than one constant literal. Cached so re-registering the
+// same id (e.g. the beforeEach block's fixed panels) is stable.
+const ICON_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.split('');
+const _iconsByRegId = new Map<string, string>();
+function defaultIconForId(id: string): string {
+  let icon = _iconsByRegId.get(id);
+  if (!icon) {
+    icon = ICON_POOL[_iconsByRegId.size % ICON_POOL.length]!;
+    _iconsByRegId.set(id, icon);
+  }
+  return icon;
+}
+
 /** Make a minimal PanelRegistration for tests. */
 function makeReg(overrides: Partial<PanelRegistration> & { id: string }): PanelRegistration {
+  const icon = overrides.icon ?? defaultIconForId(overrides.id);
   return {
     id: overrides.id,
     name: overrides.name ?? `Panel ${overrides.id}`,
-    icon: overrides.icon ?? 'X',
+    icon,
     category: overrides.category ?? 'session',
     description: overrides.description ?? `Desc for ${overrides.id}`,
     factory: overrides.factory ?? (() => ({
       id: overrides.id,
       name: overrides.name ?? `Panel ${overrides.id}`,
-      icon: overrides.icon ?? 'X',
+      icon,
       category: overrides.category ?? 'session',
       isTransient: false,
       isPinned: false,
@@ -392,7 +409,7 @@ describe('PanelListPanel', () => {
         mgr.registerType(makeReg({
           id: `bulk-${i}`,
           name: `Bulk ${i}`,
-          category: i % 2 === 0 ? 'monitoring' : 'ai',
+          category: i % 2 === 0 ? 'runtime-ops' : 'ai',
           description: `Bulk panel ${i}`,
         }));
       }

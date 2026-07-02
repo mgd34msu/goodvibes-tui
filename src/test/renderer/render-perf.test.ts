@@ -129,7 +129,7 @@ function makeMockPanel(id: string): Panel & { renderCallCount: number } {
     id,
     name: id,
     icon: 'X',
-    category: 'monitoring',
+    category: 'runtime-ops',
     isTransient: false,
     isPinned: false,
     needsRender: true,

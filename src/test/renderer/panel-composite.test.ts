@@ -19,7 +19,7 @@ function makeMockPanel(
     id,
     name: id,
     icon: id[0]?.toUpperCase() ?? 'P',
-    category: 'monitoring',
+    category: 'runtime-ops',
     isTransient: false,
     isPinned: false,
     get needsRender() { return _needsRender; },

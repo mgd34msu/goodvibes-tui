@@ -95,7 +95,7 @@ export class PolicyPanel extends BasePanel {
   private _pendingAction: PolicyDispatchAction | null = null;
 
   public constructor(state: PolicyRuntimeState) {
-    super('policy', 'Policy', 'U', 'monitoring');
+    super('policy', 'Policy', '▭', 'security-policy');
     this._state = state;
     this._unsub = state.subscribe(() => this.markDirty());
   }

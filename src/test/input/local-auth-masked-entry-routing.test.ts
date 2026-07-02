@@ -61,7 +61,7 @@ function makePanelManager(): PanelManager {
     id: 'local-auth',
     name: 'Local Auth',
     icon: 'U',
-    category: 'monitoring',
+    category: 'runtime-ops',
     description: 'Local user auth management panel',
     factory: () => new LocalAuthPanel(EMPTY_INSPECTION),
   });

@@ -14,7 +14,7 @@ import { BasePanel } from '../../panels/base-panel.ts';
 
 class TestPanel extends BasePanel {
   public constructor() {
-    super('test', 'Test', 'T', 'monitoring');
+    super('test', 'Test', 'T', 'runtime-ops');
   }
 
   // Expose protected methods
@@ -165,7 +165,7 @@ describe('BasePanel loading spinner (I3)', () => {
 class NavPanel extends BasePanel {
   public cursor = 0;
   public received: string[] = [];
-  public constructor() { super('nav', 'Nav', 'N', 'monitoring'); }
+  public constructor() { super('nav', 'Nav', 'N', 'runtime-ops'); }
   public handleInput(key: string): boolean {
     this.received.push(key);
     if (key === 'down') { this.cursor++; return true; }

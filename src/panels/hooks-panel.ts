@@ -81,7 +81,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
     hookActivityTracker: Pick<HookActivityTracker, 'listRecent'>,
     dataSource: HooksPanelDataSource = createDefaultDataSource(hookDispatcher, hookWorkbench, hookActivityTracker),
   ) {
-    super('hooks', 'Hooks', 'H', 'monitoring');
+    super('hooks', 'Hooks', '▨', 'automation-control');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter hooks';

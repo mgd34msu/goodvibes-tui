@@ -233,8 +233,8 @@ describe('IncidentReviewPanel', () => {
     manager.registerType({
       id: 'incident',
       name: 'Incident',
-      icon: 'N',
-      category: 'monitoring',
+      icon: '◪',
+      category: 'incidents-diagnostics',
       description: 'Incident workspace',
       factory: () => new IncidentReviewPanel(registry),
     });

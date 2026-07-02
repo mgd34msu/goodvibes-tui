@@ -270,7 +270,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   private pendingOpenPreview = false;
 
   public constructor(options: SkillsPanelOptions) {
-    super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
+    super('skills', 'Skills', '▩', 'automation-control', options.componentHealthMonitor);
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.shellPaths = options.shellPaths;
     this.ecosystemPaths = options.ecosystemPaths;

@@ -93,7 +93,7 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   private _confirm: ConfirmState<OpsActionSubject> | null = null;
 
   public constructor(eventFeed: UiEventFeed<OpsEvent>, opsApi?: OpsApi) {
-    super('ops-control', 'Ops Control', 'Q', 'agent');
+    super('ops-control', 'Ops Control', '◓', 'runtime-ops');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter audit';
