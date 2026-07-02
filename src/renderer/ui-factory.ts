@@ -9,6 +9,7 @@ import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
 import { calcSessionCost } from '../export/cost-utils.ts';
+import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
@@ -352,7 +353,9 @@ export class UIFactory {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;
       lines.push(this.stringToLine(fitDisplay(notice, width), width, { fg: '196', bold: true }));
     } else {
-      const help = `   /help for commands  -  Ctrl+C to quit `;
+      // Persistent discoverability tip. Rotates by context (agent-aware): the
+      // process-monitor tip leads while a turn is in flight. See footer-tips.ts.
+      const help = `   ${buildFooterTip({ agentActive: isAgentActive(composerStatus) })} `;
       const dangerWarn = dangerMode ? `! DANGER MODE - ALL CHANGES AUTO-APPROVED ` : '';
       const helpW = getDisplayWidth(help);
       const dangerW = getDisplayWidth(dangerWarn);

@@ -273,8 +273,8 @@ describe('renderSettingsModal', () => {
     // W=120 must render both reset affordances in compact form.
     const lines = renderSettingsModal(modal, W);
     const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('⇧R reset cat');
-    expect(footer).toContain('^⇧R reset all');
+    expect(footer).toContain('[⇧R] reset cat');
+    expect(footer).toContain('[^⇧R] reset all');
   });
 
   test('footer degrades gracefully at W=80 with at least R reset', () => {
@@ -282,7 +282,7 @@ describe('renderSettingsModal', () => {
     modal.focusPane = 'settings';
     const lines = renderSettingsModal(modal, 80);
     const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('R reset');
+    expect(footer).toContain('[⇧R] reset cat');
   });
 
   test('footer shows confirm prompt when resetCategoryConfirm is armed', () => {
@@ -292,8 +292,8 @@ describe('renderSettingsModal', () => {
     // Armed footer is short; W=120 is sufficient.
     const lines = renderSettingsModal(modal, W);
     const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('Enter/y confirm');
-    expect(footer).toContain('Esc/n cancel');
+    expect(footer).toContain('[Enter/y] confirm');
+    expect(footer).toContain('[Esc/n] cancel');
     // Cleanup
     modal.resetCategoryConfirm = null;
   });
@@ -304,8 +304,8 @@ describe('renderSettingsModal', () => {
     // Armed footer is short; W=120 is sufficient.
     const lines = renderSettingsModal(modal, W);
     const footer = lineToString(lines[lines.length - 2]);
-    expect(footer).toContain('Enter/y confirm');
-    expect(footer).toContain('Esc/n cancel');
+    expect(footer).toContain('[Enter/y] confirm');
+    expect(footer).toContain('[Esc/n] cancel');
     // Cleanup
     modal.resetAllConfirm = null;
   });
