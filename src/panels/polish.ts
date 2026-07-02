@@ -447,16 +447,26 @@ export function resolveScrollablePanelSection(
     afterSections: options.afterSections,
     minRows: options.section.minRows ?? 1,
   });
+  // When a window-summary row will render (list longer than the budget can
+  // show), it occupies one of the section's rows. Reserve that row up front so
+  // the summary is accounted INSIDE the budget; otherwise the appended summary
+  // pushes total output one line past the panel's exact-height contract and the
+  // tail line (typically the footer's keyboard-hints row) is silently dropped.
+  const summaryReserved = options.section.appendWindowSummary
+    && options.section.scrollableLines.length > budget
+    ? 1
+    : 0;
+  const windowBudget = Math.max(0, budget - summaryReserved);
   const window = options.section.selectedIndex === undefined
     ? getVisibleWindow(
         options.section.scrollableLines.length,
         options.section.scrollOffset,
-        budget,
+        windowBudget,
       )
     : getTrackedVisibleWindow(
         options.section.scrollableLines.length,
         options.section.selectedIndex,
-        budget,
+        windowBudget,
         options.section.scrollOffset,
         options.section.guardRows ?? 1,
       );
