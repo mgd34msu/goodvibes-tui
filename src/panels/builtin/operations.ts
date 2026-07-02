@@ -278,7 +278,10 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     category: 'monitoring',
     description: 'Structured agent communication, blocked routes, and delivery status',
     preload: true,
-    factory: () => new CommunicationPanel(ui.readModels.communication),
+    factory: () => new CommunicationPanel(
+      ui.readModels.communication,
+      (agentId: string) => deps.openAgentDetail?.(agentId),
+    ),
   });
 
   manager.registerType({

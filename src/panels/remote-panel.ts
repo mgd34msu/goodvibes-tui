@@ -1,11 +1,11 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import type { UiReadModel, UiRemoteSnapshot } from '../runtime/ui-read-models.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
-  buildGuidanceLine,
   buildPanelListRow,
   buildPanelLine,
   buildSummaryBlock,
@@ -46,12 +46,36 @@ function truncate(text: string, width: number): string {
   return truncateDisplay(text, width);
 }
 
+// Splits a machine-generated slash-command string (e.g. `/remote show foo`)
+// into the { name, args } shape ctx.executeCommand expects — the same
+// leading-slash-stripping approach panel-integration-actions.ts uses for
+// ApprovalPanel's dispatched command.
+function parseCommand(command: string): { name: string; args: string[] } | null {
+  const parts = command.replace(/^\//, '').split(/\s+/).filter(Boolean);
+  const [name, ...args] = parts;
+  return name ? { name, args } : null;
+}
+
+// Mirrors RemoteSupervisor's own stateIsDegraded()/degradedConnections
+// definition (sdk/platform/runtime/remote/supervisor.js) so "degraded/stale"
+// means the same thing here as it does in the posture summary above.
+function isSupervisorEntryDegraded(entry: { transportState: string; heartbeat: { status: string } }): boolean {
+  const degradedTransport = entry.transportState === 'degraded'
+    || entry.transportState === 'reconnecting'
+    || entry.transportState === 'terminal_failure';
+  return degradedTransport || entry.heartbeat.status !== 'fresh';
+}
+
 export class RemotePanel extends BasePanel {
   private readonly readModel?: UiReadModel<UiRemoteSnapshot>;
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
   private scrollOffset = 0;
   private browseMode: 'connections' | 'contracts' = 'connections';
+  // Set by handleInput (enter/r) and consumed on the very next
+  // handlePanelIntegrationAction dispatch of that same key, mirroring the
+  // token-budget-panel pattern — handleInput has no ctx.executeCommand.
+  private pendingCommand: { name: string; args: string[] } | null = null;
 
   public constructor(readModel?: UiReadModel<UiRemoteSnapshot>) {
     super('remote', 'Remote', 'R', 'monitoring');
@@ -64,6 +88,29 @@ export class RemotePanel extends BasePanel {
   }
 
   public handleInput(key: string): boolean {
+    // r = dispatch /remote recover for whatever is currently selected (or
+    // the runtime's first non-fresh session when nothing is selected).
+    if (this.readModel && key === 'r') {
+      const runnerId = this.getSelectedRunnerId();
+      const parsed = parseCommand(runnerId ? `/remote recover ${runnerId}` : '/remote recover');
+      if (parsed) {
+        this.pendingCommand = parsed;
+        return true;
+      }
+    }
+    // Enter on a degraded/stale supervisor selection dispatches its
+    // top recovery action (already machine-readable via .recovery[0].command)
+    // instead of requiring the operator to retype it.
+    if (this.readModel && (key === 'enter' || key === 'return')) {
+      const entry = this.getSelectedSupervisorEntry();
+      if (entry && isSupervisorEntryDegraded(entry) && entry.recovery.length > 0) {
+        const parsed = parseCommand(entry.recovery[0].command);
+        if (parsed) {
+          this.pendingCommand = parsed;
+          return true;
+        }
+      }
+    }
     const activeConnections = this.getActiveConnections();
     const contracts = this.readModel?.getSnapshot().contracts ?? [];
     const browseCount = this.browseMode === 'connections' && activeConnections.length > 0
@@ -101,6 +148,37 @@ export class RemotePanel extends BasePanel {
 
   private getActiveConnections() {
     return this.readModel?.getSnapshot().acp.activeConnections ?? [];
+  }
+
+  // Runner id backing the currently browsed row, whichever browse mode is
+  // active — shared by the Enter/r dispatch logic and render()'s own
+  // selection lookups so they never drift apart.
+  private getSelectedRunnerId(): string | null {
+    const snapshot = this.readModel?.getSnapshot();
+    if (!snapshot) return null;
+    const activeConnections = this.getActiveConnections();
+    const contracts = snapshot.contracts;
+    const viewingConnections = this.browseMode === 'connections' && activeConnections.length > 0;
+    if (viewingConnections) {
+      return activeConnections[this.selectedIndex]?.agentId ?? null;
+    }
+    return contracts[this.selectedIndex]?.runnerId ?? null;
+  }
+
+  private getSelectedSupervisorEntry() {
+    const snapshot = this.readModel?.getSnapshot();
+    if (!snapshot) return null;
+    const runnerId = this.getSelectedRunnerId();
+    if (!runnerId) return null;
+    return snapshot.supervisor.sessions.find((entry) => entry.runnerId === runnerId) ?? null;
+  }
+
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingCommand) return false;
+    const { name, args } = this.pendingCommand;
+    this.pendingCommand = null;
+    void ctx.executeCommand?.(name, args);
+    return true;
   }
 
   public render(width: number, height: number): Line[] {
@@ -197,20 +275,14 @@ export class RemotePanel extends BasePanel {
         [truncateDisplay(daemon.lastError, Math.max(0, width - 14)), C.bad],
       ]));
     }
-    postureLines.push(
-      buildGuidanceLine(width, '/remote recover', 'resume remote state with runner, capability, and disconnect recovery hints', C),
-      buildGuidanceLine(width, '/remote capabilities', 'inspect transport support before routing remote work or reattaching a session', C),
-    );
-
     const canBrowse = activeConnections.length > 0 || contracts.length > 0;
     const canSwitch = contracts.length > 0 && activeConnections.length > 0;
     const navHint = !canBrowse
       ? `  focus=${this.browseMode}  idle - no connections or contracts to browse`
       : canSwitch
-        ? `  focus=${this.browseMode}  Up/Down move  Tab switch connections/contracts`
-        : `  focus=${this.browseMode}  Up/Down move`;
+        ? `  focus=${this.browseMode}  Up/Down move  Tab switch connections/contracts  r=recover  Enter=recover selection`
+        : `  focus=${this.browseMode}  Up/Down move  r=recover  Enter=recover selection`;
     const footerLines = [
-      buildGuidanceLine(width, '/remote setup', 'review bridge, tunnel, env, and bootstrap flows for self-hosted remote work', C),
       buildPanelLine(width, [[navHint, C.dim]]),
     ] as const;
 
@@ -320,6 +392,12 @@ export class RemotePanel extends BasePanel {
           [supervisorEntry.negotiation.reviewMode, supervisorEntry.negotiation.reviewMode === 'wrfc' ? C.good : C.dim],
         ]));
         detailRows.push(buildPanelLine(width, [[truncateDisplay(`  ${supervisorEntry.heartbeat.detail}`, width), C.dim]]));
+        if (isSupervisorEntryDegraded(supervisorEntry) && supervisorEntry.recovery.length > 0) {
+          detailRows.push(buildPanelLine(width, [
+            ['  Enter recovers: ', C.label],
+            [supervisorEntry.recovery[0].reason, C.warn],
+          ]));
+        }
       }
 
       const recentArtifact = snapshot.artifacts.find((artifact) => artifact.runnerId === selected.agentId);
@@ -375,8 +453,11 @@ export class RemotePanel extends BasePanel {
           ['  Lane: ', C.label],
           [supervisorEntry.negotiation.communicationLane, C.info],
         ]));
-        for (const action of supervisorEntry.recovery.slice(0, 2)) {
-          detailRows.push(buildGuidanceLine(width, action.command, action.reason, C));
+        if (isSupervisorEntryDegraded(supervisorEntry) && supervisorEntry.recovery.length > 0) {
+          detailRows.push(buildPanelLine(width, [
+            ['  Enter recovers: ', C.label],
+            [supervisorEntry.recovery[0].reason, C.warn],
+          ]));
         }
       }
       const recentArtifact = snapshot.artifacts.find((artifact) => artifact.runnerId === selectedContract.runnerId);
