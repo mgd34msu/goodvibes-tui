@@ -94,7 +94,8 @@ export function handlePanelIntegrationAction(
   // Inspector (which owns the deep per-agent timeline); everything else's
   // advertised worktree follow-up is dispatched for real via ctx.executeCommand
   // instead of being printed as a static "/worktree task <task-id>" signpost.
-  if ((key === 'enter' || key === 'return') && activePanel instanceof TasksPanel) {
+  // w dispatches the task-family posture review the header line advertises.
+  if ((key === 'enter' || key === 'return' || key === 'w') && activePanel instanceof TasksPanel) {
     const followUp = activePanel.consumePendingFollowUp();
     if (!followUp) return false;
     if (followUp.kind === 'agent-jump') {
@@ -104,6 +105,12 @@ export function handlePanelIntegrationAction(
       return true;
     }
     if (!commandContext?.executeCommand) return false;
+    if (followUp.kind === 'teamwork-review') {
+      void commandContext.executeCommand('teamwork', ['review']).catch((err) => {
+        logger.debug('tasks panel teamwork review dispatch failed', { err });
+      });
+      return true;
+    }
     void commandContext.executeCommand('worktree', ['task', followUp.taskId]).catch((err) => {
       logger.debug('tasks panel worktree review dispatch failed', { err });
     });

@@ -343,6 +343,21 @@ describe('GitPanel — no more auto `git init`; explicit i confirm instead', () 
 
     panel.onDestroy();
   });
+
+  test('i is left unconsumed when a repo is already loaded (no silent key swallow)', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+
+    const panel = new GitPanel(dir);
+    panel.onActivate();
+    await waitFor(() => !linesText(panel.render(W, H)).includes('Not a git repository'));
+
+    expect(panel.handleInput('i')).toBe(false);
+    expect(linesText(panel.render(W, H))).not.toContain('Init');
+
+    panel.onDestroy();
+  });
 });
 
 // ── SymbolOutlinePanel — tree icons ──────────────────────────────────────────
