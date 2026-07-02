@@ -24,6 +24,9 @@ function createPanel(params: {
   authoring?: HookAuthoringAction[];
   simulation?: HookSimulationResult | null;
   hooksFilePath?: string;
+  toggleManagedHook?: (name: string, enabled: boolean) => boolean;
+  removeManagedEntry?: (name: string) => boolean;
+  simulateFn?: (eventPath: string) => HookSimulationResult;
 } = {}): HooksPanel {
   const hookWorkbench = createHookWorkbench({
     hookDispatcher: {
@@ -56,6 +59,14 @@ function createPanel(params: {
         listRecentActions: (limit = 8) => (params.authoring ?? []).slice(0, limit),
         getLastSimulation: () => params.simulation ?? null,
         getHooksFilePath: () => params.hooksFilePath ?? '/tmp/hooks.json',
+        toggleManagedHook: params.toggleManagedHook ?? (() => false),
+        removeManagedEntry: params.removeManagedEntry ?? (() => false),
+        simulate: params.simulateFn ?? ((eventPath: string) => ({
+          eventPath,
+          matchedHooks: [],
+          matchedChains: [],
+          capturedAt: Date.now(),
+        })),
       }),
     },
   );
@@ -194,5 +205,115 @@ describe('HooksPanel', () => {
     expect(text).toContain('managed-edit');
     expect(text).toContain('Last Simulation');
     expect(text).toContain('Pre:tool:edit');
+  });
+
+  // WO-134: t=toggle, x=remove (ConfirmState), s=simulate, plus expandable
+  // activity and dropped signposts.
+  describe('WO-134 control-room actions', () => {
+    const hook: HookDefinition = {
+      name: 'guard-edit',
+      match: 'Pre:tool:*',
+      type: 'command',
+      matcher: 'edit',
+      command: 'echo guard',
+      enabled: true,
+    };
+
+    test('t toggles the selected managed hook via workbench.toggleManagedHook', () => {
+      const calls: Array<[string, boolean]> = [];
+      const panel = createPanel({
+        hooks: [{ pattern: 'Pre:tool:*', hook }],
+        toggleManagedHook: (name, enabled) => {
+          calls.push([name, enabled]);
+          return true;
+        },
+      });
+      panel.render(120, 16);
+      const consumed = panel.handleInput('t');
+      expect(consumed).toBe(true);
+      expect(calls).toEqual([['guard-edit', false]]);
+    });
+
+    test('t surfaces an error when the hook has no managed entry', () => {
+      const panel = createPanel({
+        hooks: [{ pattern: 'Pre:tool:*', hook }],
+        toggleManagedHook: () => false,
+      });
+      panel.render(120, 16);
+      panel.handleInput('t');
+      const text = linesText(panel.render(120, 16));
+      expect(text).toContain("No managed hook named 'guard-edit'");
+    });
+
+    test('x requests confirmation, then removes on y', () => {
+      const removed: string[] = [];
+      const panel = createPanel({
+        hooks: [{ pattern: 'Pre:tool:*', hook }],
+        removeManagedEntry: (name) => { removed.push(name); return true; },
+      });
+      panel.render(120, 16);
+      panel.handleInput('x');
+      const confirmText = linesText(panel.render(120, 16));
+      expect(confirmText).toContain('Remove');
+      expect(confirmText).toContain('guard-edit');
+      expect(removed).toEqual([]);
+
+      panel.handleInput('y');
+      expect(removed).toEqual(['guard-edit']);
+    });
+
+    test('x confirmation cancels on n without removing', () => {
+      const removed: string[] = [];
+      const panel = createPanel({
+        hooks: [{ pattern: 'Pre:tool:*', hook }],
+        removeManagedEntry: (name) => { removed.push(name); return true; },
+      });
+      panel.render(120, 16);
+      panel.handleInput('x');
+      panel.handleInput('n');
+      expect(removed).toEqual([]);
+    });
+
+    test('s simulates the selected hook\'s own pattern', () => {
+      const simulated: string[] = [];
+      const panel = createPanel({
+        hooks: [{ pattern: 'Pre:tool:edit', hook }],
+        simulateFn: (eventPath) => {
+          simulated.push(eventPath);
+          return { eventPath, matchedHooks: [], matchedChains: [], capturedAt: Date.now() };
+        },
+      });
+      panel.render(120, 16);
+      panel.handleInput('s');
+      expect(simulated).toEqual(['Pre:tool:edit']);
+    });
+
+    test('a expands the recent-activity window beyond the default 3-row glance', () => {
+      const activity: HookActivityRecord[] = Array.from({ length: 6 }, (_, i) => ({
+        timestamp: Date.now() - i * 1000,
+        path: `Pre:tool:edit-${i}`,
+        specific: 'edit',
+        pattern: 'Pre:tool:*',
+        hookName: `hook-${i}`,
+        hookType: 'command',
+        ok: true,
+        decision: 'allow',
+        durationMs: 1,
+        async: false,
+      }));
+      const panel = createPanel({ hooks: [{ pattern: 'Pre:tool:*', hook }], activity });
+      const collapsedText = linesText(panel.render(120, 30));
+      expect(collapsedText).not.toContain('hook-4');
+
+      panel.handleInput('a');
+      const expandedText = linesText(panel.render(120, 30));
+      expect(expandedText).toContain('hook-4');
+    });
+
+    test('zero signposts — no "/hooks full listing" hint in the footer', () => {
+      const panel = createPanel({ hooks: [{ pattern: 'Pre:tool:*', hook }] });
+      const text = linesText(panel.render(120, 16));
+      expect(text).not.toContain('full listing');
+    });
   });
 });
