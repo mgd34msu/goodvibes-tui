@@ -4,7 +4,7 @@ import type { FailureReport } from '@/runtime/index.ts';
 import { IncidentReviewPanel } from '../../panels/incident-review-panel.ts';
 import type { Line } from '../../types/grid.ts';
 import type { ReplaySnapshotInput } from '@/runtime/index.ts';
-import type { PanelManager } from '../../panels/panel-manager.ts';
+import { PanelManager } from '../../panels/panel-manager.ts';
 import type { PanelIntegrationContext } from '../../panels/types.ts';
 
 function linesText(lines: Line[]): string {
@@ -222,5 +222,34 @@ describe('IncidentReviewPanel', () => {
     registry.push(makeReport('incident-no-jump'));
     const panel = new IncidentReviewPanel(registry);
     expect(panel.handleInput('j')).toBe(false);
+  });
+
+  test('forensics resolves as an alias to the same incident panel instance (WO-114), not a duplicate registration', () => {
+    const registry = new ForensicsRegistry();
+    registry.push(makeReport('incident-alias'));
+    const manager = new PanelManager();
+    // Mirrors registerOperationsPanels(): one 'incident' registration plus a
+    // 'forensics' compat alias — never a second registerType for 'forensics'.
+    manager.registerType({
+      id: 'incident',
+      name: 'Incident',
+      icon: 'N',
+      category: 'monitoring',
+      description: 'Incident workspace',
+      factory: () => new IncidentReviewPanel(registry),
+    });
+    manager.registerAlias('forensics', 'incident');
+
+    const viaIncident = manager.open('incident');
+    const viaForensics = manager.open('forensics');
+
+    // Same instance: repeated /forensics opens must not stack duplicates.
+    expect(viaForensics).toBe(viaIncident);
+    // The alias id resolves for lookups too (close/activateById/getPanel paths).
+    expect(manager.getPanel('forensics')).toBe(viaIncident);
+    // The type registry lists Incident exactly once — no phantom 'forensics' type.
+    const incidentEntries = manager.getRegisteredTypes().filter((r) => r.id === 'incident' || r.id === 'forensics');
+    expect(incidentEntries).toHaveLength(1);
+    expect(incidentEntries[0]!.id).toBe('incident');
   });
 });
