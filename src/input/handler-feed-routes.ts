@@ -78,14 +78,14 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       return { handled: true, panelFocused };
     }
     const kb = state.keybindingsManager;
-    if (kb.matches('panel-tab-next', token)) {
-      state.cyclePanelTab('next');
-      return { handled: true, panelFocused };
-    }
-    if (kb.matches('panel-tab-prev', token)) {
-      state.cyclePanelTab('prev');
-      return { handled: true, panelFocused };
-    }
+    // NOTE: panel-tab-next/prev, panel-close, and panel-close-all are handled
+    // globally in handleGlobalShortcutToken, which runs earlier in the feed
+    // loop and consumes those tokens before they ever reach this focused-panel
+    // route. Their old copies lived here too and had drifted (this route never
+    // called pm.hide() on close-all); they were unreachable, so they are gone
+    // and close/close-all semantics now live in exactly one place. Only
+    // panel-focus-toggle stays here, because it is meaningful only while the
+    // panel workspace already owns focus (it swaps between the two panes).
     if (kb.matches('panel-focus-toggle', token)) {
       // Switch keyboard focus between the top and bottom panes (no-op when
       // there is no visible, non-empty bottom pane).
@@ -100,23 +100,6 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
     if (token.meta && !token.ctrl && /^[1-9]$/.test(token.logicalName ?? '')) {
       const index = Number(token.logicalName) - 1;
       state.panelManager.activateWorkspaceIndex(index);
-      state.requestRender();
-      return { handled: true, panelFocused };
-    }
-    if (kb.matches('panel-close-all', token)) {
-      const pm = state.panelManager;
-      for (const p of pm.getAllOpen()) pm.close(p.id);
-      panelFocused = false;
-      state.requestRender();
-      return { handled: true, panelFocused };
-    }
-    if (kb.matches('panel-close', token)) {
-      const pm = state.panelManager;
-      const active = pm.getActivePanel();
-      if (active) {
-        pm.close(active.id);
-      }
-      panelFocused = false;
       state.requestRender();
       return { handled: true, panelFocused };
     }

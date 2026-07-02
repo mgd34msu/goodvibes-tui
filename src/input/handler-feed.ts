@@ -251,14 +251,10 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
     }
 
     if (token.type === 'key') {
-      if (
-        context.panelFocused
-        && (!context.panelManager.isVisible()
-          || context.panelManager.getAllOpen().length === 0
-          || context.panelManager.getActivePanel() === null)
-      ) {
-        context.panelFocused = false;
-      }
+      // Focus can never disagree with workspace visibility: PanelManager owns
+      // focusTarget and self-heals it, and context.panelFocused was seeded from
+      // it at feed entry — so no manual "unfocus if panels vanished" patch is
+      // needed here anymore.
       const shortcutState = {
         panelFocused: context.panelFocused,
         prompt: context.prompt,

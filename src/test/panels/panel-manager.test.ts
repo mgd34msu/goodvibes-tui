@@ -143,6 +143,75 @@ describe('PanelManager', () => {
     expect(tabCAfter.focused).toBe(true);
   });
 
+  test('focus ownership: workspace focus can never disagree with visibility', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'panel-a', name: 'A', icon: 'A', category: 'monitoring', description: '', factory: () => makePanel('panel-a', 'A') });
+    manager.registerType({ id: 'panel-b', name: 'B', icon: 'B', category: 'monitoring', description: '', factory: () => makePanel('panel-b', 'B') });
+
+    // The invariant: focus may only rest on the panel workspace while the
+    // workspace is actually on screen with an active panel.
+    const assertInvariant = () => {
+      if (manager.getFocusTarget() === 'panel') {
+        expect(manager.isVisible()).toBe(true);
+        expect(manager.getAllOpen().length).toBeGreaterThan(0);
+        expect(manager.getActivePanel()).not.toBeNull();
+      }
+    };
+
+    // Fresh manager: focus is on the prompt.
+    expect(manager.getFocusTarget()).toBe('prompt');
+
+    // focusPanels with nothing open cannot steal focus.
+    manager.focusPanels();
+    expect(manager.getFocusTarget()).toBe('prompt');
+    assertInvariant();
+
+    // Open a panel and focus the workspace.
+    manager.open('panel-a', 'top');
+    manager.focusPanels();
+    expect(manager.getFocusTarget()).toBe('panel');
+    assertInvariant();
+
+    // Closing the last panel must drop focus back to the prompt automatically.
+    manager.close('panel-a');
+    expect(manager.getFocusTarget()).toBe('prompt');
+    assertInvariant();
+
+    // Two panels across both panes, focused, then close-all.
+    manager.open('panel-a', 'top');
+    manager.open('panel-b', 'bottom');
+    manager.focusPanels();
+    expect(manager.getFocusTarget()).toBe('panel');
+    assertInvariant();
+    for (const p of manager.getAllOpen()) manager.close(p.id);
+    expect(manager.getFocusTarget()).toBe('prompt');
+    assertInvariant();
+
+    // Hiding the workspace while a panel is retained also heals focus.
+    manager.open('panel-a', 'top');
+    manager.focusPanels();
+    expect(manager.getFocusTarget()).toBe('panel');
+    manager.hide();
+    expect(manager.getFocusTarget()).toBe('prompt');
+    assertInvariant();
+  });
+
+  test('open(id, pane) honors the requested pane by relocating an already-open panel', () => {
+    const manager = new PanelManager();
+    manager.registerType({ id: 'panel-a', name: 'A', icon: 'A', category: 'monitoring', description: '', factory: () => makePanel('panel-a', 'A') });
+
+    manager.open('panel-a', 'top');
+    expect(manager.getPaneOf('panel-a')).toBe('top');
+
+    // Re-opening with an explicit different pane must actually move it there,
+    // not silently keep it where it was (the '/panel open <id> top' lie).
+    const relocated = manager.open('panel-a', 'bottom');
+    expect(relocated.id).toBe('panel-a');
+    expect(manager.getPaneOf('panel-a')).toBe('bottom');
+    expect(manager.getBottomPane().panels.some((p) => p.id === 'panel-a')).toBe(true);
+    expect(manager.getTopPane().panels.some((p) => p.id === 'panel-a')).toBe(false);
+  });
+
   test('getWorkspaceTabs renderer: both panes show selected tab with active indicator after focus switch', () => {
     // Snapshot-style: after switching focus, both active tabs show their indicator
     // (active=true) so the renderer can distinguish them from non-selected tabs.

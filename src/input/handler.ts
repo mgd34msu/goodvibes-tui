@@ -140,8 +140,33 @@ export class InputHandler implements InputHandlerLike {
   public commandMode = false;
   /** True when the process indicator bar has keyboard focus. */
   public indicatorFocused = false;
-  /** True when keyboard focus is on the active panel (arrow/enter go to panel, not prompt). */
-  public panelFocused = false;
+  /**
+   * Fallback focus store used only when the panel manager does not implement
+   * focus ownership (lightweight test stubs). Production always delegates to
+   * PanelManager, which is the single source of truth.
+   */
+  private _panelFocusedFallback = false;
+  /**
+   * True when keyboard focus is on the active panel (arrow/enter go to panel,
+   * not prompt). Ownership lives in PanelManager (focusTarget); this reads and
+   * writes through to it so handler focus can never disagree with what the
+   * panel workspace actually shows.
+   */
+  public get panelFocused(): boolean {
+    const pm = this.uiServices.shell.panelManager;
+    return typeof pm.getFocusTarget === 'function'
+      ? pm.getFocusTarget() === 'panel'
+      : this._panelFocusedFallback;
+  }
+  public set panelFocused(value: boolean) {
+    const pm = this.uiServices.shell.panelManager;
+    if (typeof pm.focusPanels === 'function' && typeof pm.focusPrompt === 'function') {
+      if (value) pm.focusPanels();
+      else pm.focusPrompt();
+    } else {
+      this._panelFocusedFallback = value;
+    }
+  }
 
   public tokenizer = new InputTokenizer();
   public pasteRegistry = new Map<string, string>();
