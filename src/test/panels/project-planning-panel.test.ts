@@ -237,6 +237,108 @@ describe('ProjectPlanningPanel', () => {
     expect(rendered).not.toContain('Use recommended answer');
     expect(rendered).not.toContain('Define the first-pass scope');
   });
+
+  test('renders live SDK artifact counts instead of static filler prose', async () => {
+    const panel = new ProjectPlanningPanel({
+      service: makeService(makeState()),
+      projectId: 'proj',
+    });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    const rendered = text(panel.render(100, 42));
+    expect(rendered).toContain('states');
+    expect(rendered).toContain('decisions');
+    expect(rendered).toContain('language');
+    expect(rendered).not.toContain('Planning never starts from daemon');
+  });
+
+  test('shows answered-question history once questions are answered', async () => {
+    const panel = new ProjectPlanningPanel({
+      service: makeService(makeState({
+        answeredQuestions: [{
+          id: 'q1',
+          prompt: 'What is the primary goal?',
+          answer: 'Ship the planning panel polish work order.',
+          status: 'answered',
+          answeredAt: Date.now(),
+        }],
+      })),
+      projectId: 'proj',
+    });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    const rendered = text(panel.render(100, 60));
+    expect(rendered).toContain('Answered Questions');
+    expect(rendered).toContain('What is the primary goal?');
+    expect(rendered).toContain('Ship the planning panel polish work order.');
+  });
+
+  test('answered-question history section reports none when nothing is answered yet', async () => {
+    const panel = new ProjectPlanningPanel({
+      service: makeService(makeState()),
+      projectId: 'proj',
+    });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    const rendered = text(panel.render(100, 60));
+    expect(rendered).toContain('No questions answered yet.');
+  });
+
+  test('de-duplicates a canned answer that also matches the recommendedAnswer text verbatim', async () => {
+    const service = makeService(makeState({
+      openQuestions: [{
+        id: 'scope',
+        prompt: 'What is in or out of scope?',
+        // Matches the 'scope-focused-first-pass' canned answer text exactly.
+        recommendedAnswer: 'Use a focused first-pass scope for this goal.',
+        status: 'open',
+      }],
+    }));
+    const panel = new ProjectPlanningPanel({ service, projectId: 'proj' });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    const rendered = text(panel.render(120, 40));
+    // The informational "Recommendation:"/"Recommended answer:" lines always
+    // echo question.recommendedAnswer regardless of action de-duplication —
+    // what must be de-duplicated is the ANSWER-ACTION list itself: only one
+    // of the two rows whose answer text is identical may survive.
+    expect(rendered).toContain('Use focused first-pass scope');
+    expect(rendered).not.toContain('Use recommended answer');
+  });
+
+  test('Ctrl+R refreshes and Ctrl+A approves while a question is active', async () => {
+    const service = makeService(makeState({
+      tasks: [{ id: 't1', title: 'Patch TUI planning panel', verification: ['bun run tsc'] }],
+      verificationGates: [{ id: 'tsc', description: 'TypeScript passes', command: 'bun run tsc' }],
+      openQuestions: [{
+        id: 'scope',
+        prompt: 'What is in or out of scope?',
+        status: 'open',
+      }],
+    }));
+    const panel = new ProjectPlanningPanel({ service, projectId: 'proj' });
+    panel.onActivate();
+    await flushPanelAsync();
+    await flushPanelAsync();
+
+    // A question is active — plain 'r'/'a' would type into the draft instead.
+    expect(text(panel.render(120, 32))).toContain('Answer Current Question');
+
+    expect(panel.handleInput('ctrl+a')).toBe(true);
+    await flushPanelAsync();
+    await flushPanelAsync();
+    expect(text(panel.render(120, 32))).toContain('approved yes');
+
+    expect(panel.handleInput('ctrl+r')).toBe(true);
+  });
 });
 
 describe('clear-draft confirm contract', () => {

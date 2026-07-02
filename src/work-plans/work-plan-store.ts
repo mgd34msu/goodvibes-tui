@@ -267,6 +267,19 @@ export class WorkPlanStore {
     return removed;
   }
 
+  /**
+   * Writes the current plan's `toMarkdown()` output to a sibling `.md` file
+   * next to the JSON store file, so the checklist can be opened outside the
+   * TUI. Returns the written path alongside the markdown that was written.
+   */
+  exportMarkdown(): { readonly path: string; readonly markdown: string } {
+    const plan = this.readPlan();
+    const markdown = this.toMarkdown(plan);
+    const path = this.filePath.replace(/\.json$/, '.md');
+    atomicWriteFileSync(path, `${markdown}\n`, { mkdirp: true });
+    return { path, markdown };
+  }
+
   toMarkdown(plan: WorkPlan = this.readPlan()): string {
     const lines = [
       `# ${plan.title}`,
