@@ -163,6 +163,61 @@ describe('handleGlobalShortcutToken', () => {
     expect(state.panelFocused).toBe(false);
   });
 
+  test('panel-tab-N (Alt+digit) jumps to the Nth workspace tab, routed globally', () => {
+    let jumpedTo = -1;
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => ({ id: 'a' }),
+        activateWorkspaceIndex: (i: number) => { jumpedTo = i; },
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        // Real Alt tokens carry `meta`; the manager maps that onto the alt combo.
+        lookup: (token: { logicalName?: string; meta?: boolean }) =>
+          token.meta && token.logicalName === '3' ? 'panel-tab-3' : null,
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '3', logicalName: '3', ctrl: false, shift: false, meta: true },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(jumpedTo).toBe(2); // Alt+3 → index 2
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('panel-tab-N is consumed but a no-op when the workspace is hidden', () => {
+    let jumped = false;
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => false,
+        getAllOpen: () => [],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => null,
+        activateWorkspaceIndex: () => { jumped = true; },
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-tab-1',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '1', logicalName: '1', ctrl: false, shift: false, meta: true },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(jumped).toBe(false);
+  });
+
   test('escape does not bypass panel focus handling', () => {
     const state = buildState({ panelFocused: true });
     const handled = handleGlobalShortcutToken(

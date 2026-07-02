@@ -93,16 +93,10 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
       state.requestRender();
       return { handled: true, panelFocused };
     }
-    // Alt+1..9 — jump directly to the Nth workspace tab (across both panes).
-    // The tokenizer maps the Alt modifier onto `meta`, so an Alt-held digit
-    // arrives as { logicalName: '1'..'9', meta: true }. Gating on the modifier
-    // keeps plain digits reaching the focused panel.
-    if (token.meta && !token.ctrl && /^[1-9]$/.test(token.logicalName ?? '')) {
-      const index = Number(token.logicalName) - 1;
-      state.panelManager.activateWorkspaceIndex(index);
-      state.requestRender();
-      return { handled: true, panelFocused };
-    }
+    // Alt+1..9 (panel-tab-1..9) is a global KeyAction consumed earlier by
+    // handleGlobalShortcutToken, so those meta+digit tokens never reach here.
+    // Any other ctrl/meta combo this route does not own falls through so the
+    // global handler (which ran first) or the prompt routes can act on it.
     if (token.ctrl || token.meta) {
       return { handled: false, panelFocused };
     }
