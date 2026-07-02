@@ -25,18 +25,39 @@ export function renderSearchOverlay(
   const locked = manager.locked;
   const cursor = locked ? '' : '█';
   const queryDisplay = manager.query + cursor;
-  const hints = locked
+  const label = ' Find: ';
+  const fullHints = locked
     ? '  [n/N] next/prev  [jk] navigate  [Bksp] edit  [Esc] close'
     : '  [Enter/Tab] lock  [Esc] close';
-  const label = ' Find: ';
-  const matchStr = matchCount ? ` ${matchCount}` : '';
+  const shortHints = locked ? '  [n/N]  [Esc]' : '  [Esc]';
 
   // Build left portion: label + query (no match count — that gets separate styling)
   const leftPart = label + queryDisplay;
-  const hintsW = getDisplayWidth(hints);
+
+  // Tiered degradation: as the terminal narrows, first shorten the hints, then
+  // drop them, then drop the match-count segment — so the query area (leftWidth)
+  // never collapses to zero or negative and the overlay never renders garbage.
+  const minLeft = getDisplayWidth(label) + 4; // label + a few query cells
+  let hints = fullHints;
+  let matchStr = matchCount ? ` ${matchCount}` : '';
+  const leftFor = (h: string, m: string) => width - getDisplayWidth(h) - getDisplayWidth(m) - 2;
+  let leftWidth = leftFor(hints, matchStr);
+  if (leftWidth < minLeft) {
+    hints = shortHints;
+    leftWidth = leftFor(hints, matchStr);
+  }
+  if (leftWidth < minLeft) {
+    hints = '';
+    leftWidth = leftFor(hints, matchStr);
+  }
+  if (leftWidth < minLeft && matchStr.length > 0) {
+    matchStr = '';
+    leftWidth = leftFor(hints, matchStr);
+  }
+  // Final clamp: at least one cell, never wider than the bar.
+  leftWidth = Math.max(1, Math.min(width, leftWidth));
+
   const matchStrW = getDisplayWidth(matchStr);
-  // Available width for left content (query area)
-  const leftWidth = width - hintsW - matchStrW - 2;
   const truncatedLeft = fitDisplay(
     getDisplayWidth(leftPart) > leftWidth ? truncateDisplay(leftPart, leftWidth) : leftPart,
     leftWidth,

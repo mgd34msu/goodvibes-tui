@@ -8,6 +8,7 @@ import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
+import { calcSessionCost } from '../export/cost-utils.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
@@ -33,6 +34,14 @@ function buildGitSegment(gitInfo: GitHeaderInfo): { text: string; width: number 
 /** Format a number: up to 999, then 1.0k, 1.0M, 1.0B, 1.0T */
 function fmtNum(n: number): string {
   return abbreviateCount(n, { bSuffix: true });
+}
+
+/** Format a running USD cost estimate with a precision that suits its magnitude. */
+function fmtCost(usd: number): string {
+  if (!(usd > 0)) return '0.00';
+  if (usd < 0.01) return usd.toFixed(4);
+  if (usd < 1) return usd.toFixed(3);
+  return usd.toFixed(2);
 }
 
 /**
@@ -148,6 +157,7 @@ export class UIFactory {
     composerStatus?: string,
     composerFlags?: readonly string[],
     composerPendingRisk?: 'none' | 'approval-wait' | 'shell' | 'command' | 'remote',
+    compact: boolean = false,
   ): Line[] {
     const lines: Line[] = [];
     const promptLines = prompt.split('\n');
@@ -253,7 +263,9 @@ export class UIFactory {
       }
     }
     lines.push(bottomLine);
-    lines.push(createBaseLine());
+    // --- Composer posture block (mode / risk / status / flags) ------------
+    // Suppressed in compact mode; the ctx-info line no longer duplicates these
+    // tokens, so this block is the single home for mode/status/flags.
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
     if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: '#38bdf8', bold: true });
     if (composerPendingRisk && composerPendingRisk !== 'none') {
@@ -268,7 +280,7 @@ export class UIFactory {
     }
     if (composerStatus && composerStatus !== 'idle') composerTokens.push({ text: ` state:${composerStatus} `, fg: '244', dim: true });
     if (composerFlags && composerFlags.length > 0) composerTokens.push({ text: ` flags:${composerFlags.join(',')} `, fg: '244', dim: true });
-    if (composerTokens.length > 0) {
+    if (!compact && composerTokens.length > 0) {
       const postureLine = createBaseLine();
       let px = 2;
       for (const token of composerTokens) {
@@ -289,10 +301,10 @@ export class UIFactory {
         if (px >= width) break;
       }
       lines.push(postureLine);
-      lines.push(createBaseLine());
     }
     const isRecentlyCopied = Date.now() - lastCopyTime < 2000;
-    // Token usage line
+    // Token usage line + running ~$ cost estimate (derived from the usage
+    // object and the active model via cost-utils).
     const u = usage as { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; up?: number; down?: number };
     const inp = u.input ?? u.up ?? 0;
     const out = u.output ?? u.down ?? 0;
@@ -300,12 +312,13 @@ export class UIFactory {
     const cw = u.cacheWrite ?? 0;
     const total = inp + out + cr + cw;
     const tokenSep = ` ${GLYPHS.navigation.pipeSeparator} `;
-    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)} ]`;
+    const costSegment = model ? `${tokenSep}~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}` : '';
+    const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)}${costSegment} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
     lines.push(this.stringToLine(statsLine, width, { fg: isRecentlyCopied ? '81' : '244', bold: isRecentlyCopied }));
-    // Context usage progress bar
-    if (contextWindow && contextWindow > 0) {
+    // Context usage progress bar — suppressed in compact mode.
+    if (!compact && contextWindow && contextWindow > 0) {
       const ctxTokens = lastInputTokens ?? 0;
       const label = '   Context Usage: ';
       const suffix = ` [ ${fmtNum(ctxTokens)} / ${fmtNum(contextWindow)} ]`;
@@ -315,11 +328,12 @@ export class UIFactory {
       const thresholdFraction = (compactThreshold !== undefined && compactThreshold > 0)
         ? Math.min(1, compactThreshold)
         : undefined;
-      lines.push(createBaseLine());
       lines.push(this.createProgressBarLine(label, ctxPct, barWidth, width, suffix, thresholdFraction));
     }
-    // Context info line (working dir, model+provider, tools)
-    if (workingDir || model) {
+    // Context info line (working dir, model+provider, tools, hitl).
+    // Suppressed in compact mode. mode/status/flags are intentionally omitted —
+    // the posture block above owns them, so they are not duplicated here.
+    if (!compact && (workingDir || model)) {
       const home = typeof process !== 'undefined' ? process.env.HOME ?? '' : '';
       const displayDir = workingDir && home && workingDir.startsWith(home)
         ? '~' + workingDir.slice(home.length)
@@ -331,13 +345,8 @@ export class UIFactory {
       }
       if (toolCount) ctxParts.push(`${toolCount} tools`);
       if (hitlMode) ctxParts.push(`hitl:${hitlMode}`);
-      if (composerMode) ctxParts.push(`mode:${composerMode}`);
-      if (composerStatus && composerStatus !== 'idle') ctxParts.push(`status:${composerStatus}`);
-      if (composerFlags && composerFlags.length > 0) ctxParts.push(composerFlags.join(','));
       const ctxLine = '   ' + ctxParts.join(`  ${GLYPHS.navigation.pipeSeparator}  `);
-      lines.push(createBaseLine());
       lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
-      lines.push(createBaseLine());
     }
     if (showExitNotice) {
       const notice = `   !!! Press Ctrl+C again to exit !!! `;
@@ -363,7 +372,6 @@ export class UIFactory {
       }
       lines.push(line);
     }
-    lines.push(createBaseLine());
     return lines;
   }
 
