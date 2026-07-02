@@ -106,6 +106,12 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     factory: () => new SkillsPanel({
       componentHealthMonitor: deps.componentHealthMonitor,
       shellPaths: ui.environment.shellPaths,
+      ecosystemPaths: {
+        cwd: ui.environment.shellPaths.workingDirectory,
+        homeDir: ui.environment.shellPaths.homeDirectory,
+        projectCatalogRoot: ui.environment.shellPaths.resolveProjectPath('tui', 'ecosystem'),
+        userCatalogRoot: ui.environment.shellPaths.resolveUserPath('tui', 'ecosystem'),
+      },
     }),
   });
 
