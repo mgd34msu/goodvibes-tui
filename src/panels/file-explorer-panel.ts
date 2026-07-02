@@ -18,13 +18,7 @@ import {
   DEFAULT_PANEL_PALETTE,
   extendPalette,
 } from './polish.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchBackspace,
-  isPanelSearchCancel,
-  isPanelSearchCommit,
-  isPanelSearchPrintable,
-} from './search-focus.ts';
+import { isPanelSearchBackspace, isPanelSearchPrintable } from './search-focus.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 
@@ -176,14 +170,54 @@ export class FileExplorerPanel extends BasePanel {
 
   // ── Input ──────────────────────────────────────────────────────────────────
 
-  handleInput(key: string): boolean {
-    if (this.searchMode) return this._handleSearchInput(key);
-
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursor, itemCount: this.flat.length });
-    if (transition === 'focus-search') {
+  /**
+   * WO-153: converged modal '/' filter (mirrors ScrollableListPanel's
+   * _handleFilterKey). Returns `true`/`false` when consumed/ignored in
+   * filter context, or `null` to fall through to navigation/action keys.
+   */
+  private _handleFilterKey(key: string): boolean | null {
+    if (this.searchMode) {
+      if (key === 'escape') {
+        this.searchMode = false;
+        this.searchQuery = '';
+        this._rebuildFlat();
+        this.markDirty();
+        return true;
+      }
+      if (key === 'return' || key === 'enter') {
+        this.searchMode = false; // commit; keep the query applied
+        this.markDirty();
+        return true;
+      }
+      if (isPanelSearchBackspace(key)) {
+        this.searchQuery = this.searchQuery.slice(0, -1);
+        this._rebuildFlat();
+        this.markDirty();
+        return true;
+      }
+      // Arrow/paging keys navigate the filtered tree — fall through.
+      if (key === 'up' || key === 'down' || key === 'pageup' || key === 'pagedown' || key === 'home' || key === 'end') {
+        return null;
+      }
+      // Any printable character (including single-letter action keys like r/d) extends the query.
+      if (isPanelSearchPrintable(key)) {
+        this.searchQuery += key;
+        this._rebuildFlat();
+        this.markDirty();
+        return true;
+      }
+      return false;
+    }
+    if (key === '/') {
       this._enterSearch();
       return true;
     }
+    return null;
+  }
+
+  handleInput(key: string): boolean {
+    const filterResult = this._handleFilterKey(key);
+    if (filterResult !== null) return filterResult;
 
     switch (key) {
       case 'up':    case 'k': this._moveCursor(-1); return true;
@@ -195,7 +229,6 @@ export class FileExplorerPanel extends BasePanel {
       case 'return': case 'enter': this._activateNode(); return true;
       case 'right': this._expandNode(); return true;
       case 'left':  this._collapseNode(); return true;
-      case '/':     this._enterSearch(); return true;
       case 'r':     this.refresh(); return true;
       case 'd':     return this.getFocusedFilePath() !== null;
       default:      return false;
@@ -214,11 +247,6 @@ export class FileExplorerPanel extends BasePanel {
 
   render(width: number, height: number): Line[] {
     this.needsRender = false;
-    const searchLine = this.searchMode
-      ? `/ ${this.searchQuery}_`
-      : this.searchQuery
-        ? `Filter: ${this.searchQuery}  (/ or up at top to edit)`
-        : `Root: ${relative(this.workingDirectory, this.rootPath) || '.'}  (/ or up at top to search)`;
 
     // Context-aware hints: only surface keys that act in the current mode.
     const hintsLine = this.searchMode
@@ -232,7 +260,7 @@ export class FileExplorerPanel extends BasePanel {
           { keys: '↑/↓', label: 'navigate' },
           { keys: 'Enter/→', label: 'expand' },
           { keys: '←', label: 'collapse' },
-          { keys: '/', label: 'search' },
+          { keys: '/', label: 'filter' },
           { keys: 'r', label: 'refresh' },
           { keys: 'd', label: 'diff' },
         ], C);
@@ -247,10 +275,7 @@ export class FileExplorerPanel extends BasePanel {
           },
         ],
         footerLines: [
-          buildSearchInputLine(width, '', searchLine, DEFAULT_PANEL_PALETTE, {
-            active: this.searchMode,
-            valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
-          }),
+          this._buildFilterLine(width),
           hintsLine,
         ],
         palette: DEFAULT_PANEL_PALETTE,
@@ -261,7 +286,9 @@ export class FileExplorerPanel extends BasePanel {
       title: 'Summary',
       lines: [
         buildPanelLine(width, [
-          [' Visible ', DEFAULT_PANEL_PALETTE.label],
+          [' Root ', DEFAULT_PANEL_PALETTE.label],
+          [relative(this.workingDirectory, this.rootPath) || '.', DEFAULT_PANEL_PALETTE.value],
+          ['   Visible ', DEFAULT_PANEL_PALETTE.label],
           [String(this.flat.length), DEFAULT_PANEL_PALETTE.value],
           ['   Search ', DEFAULT_PANEL_PALETTE.label],
           [this.searchQuery || 'none', this.searchQuery ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim],
@@ -289,10 +316,7 @@ export class FileExplorerPanel extends BasePanel {
     const treeSection = resolveScrollablePanelSection(width, height, {
       intro: 'Browse the project tree, expand directories, and search for paths.',
       footerLines: [
-        buildSearchInputLine(width, '', searchLine, DEFAULT_PANEL_PALETTE, {
-          active: this.searchMode,
-          valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
-        }),
+        this._buildFilterLine(width),
         hintsLine,
       ],
       palette: DEFAULT_PANEL_PALETTE,
@@ -327,10 +351,7 @@ export class FileExplorerPanel extends BasePanel {
         selectedSection,
       ],
       footerLines: [
-        buildSearchInputLine(width, '', searchLine, DEFAULT_PANEL_PALETTE, {
-          active: this.searchMode,
-          valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : DEFAULT_PANEL_PALETTE.dim,
-        }),
+        this._buildFilterLine(width),
         hintsLine,
       ],
       palette: DEFAULT_PANEL_PALETTE,
@@ -614,53 +635,30 @@ export class FileExplorerPanel extends BasePanel {
   // ── Private: search ───────────────────────────────────────────────────────
 
   private _enterSearch(): void {
-    // Re-entering search (e.g. pressing '/' again, or 'up' at the top of the
-    // list) must EDIT the existing query, not silently clear it — the bug
-    // this fixes unconditionally reset searchQuery to '' on every entry,
-    // discarding whatever filter was already active.
+    // Re-entering search (e.g. pressing '/' again) must EDIT the existing
+    // query, not silently clear it — the bug this fixes unconditionally
+    // reset searchQuery to '' on every entry, discarding whatever filter
+    // was already active.
     this.searchMode = true;
     this._rebuildFlat();
     this.markDirty();
   }
 
-  private _handleSearchInput(key: string): boolean {
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursor, itemCount: this.flat.length });
-    if (transition === 'focus-list') {
-      this.searchMode = false;
-      this.cursor = 0;
-      this.scrollTop = 0;
-      this.markDirty();
-      return true;
-    }
-    if (isPanelSearchCancel(key)) {
-      this.searchMode = false;
-      this.searchQuery = '';
-      this._rebuildFlat();
-      this.markDirty();
-      return true;
-    }
-    if (isPanelSearchCommit(key)) {
-      // Confirm search, stay in results, exit search-input mode
-      this.searchMode = false;
-      this.markDirty();
-      return true;
-    }
-    if (isPanelSearchBackspace(key)) {
-      this.searchQuery = this.searchQuery.slice(0, -1);
-      this._rebuildFlat();
-      this.markDirty();
-      return true;
-    }
-    // Printable single characters
-    if (isPanelSearchPrintable(key)) {
-      this.searchQuery += key;
-      this._rebuildFlat();
-      this.markDirty();
-      return true;
-    }
-    // Navigation still works during search
-    if (key === 'up' || key === 'k') { this._moveCursor(-1); return true; }
-    if (key === 'down' || key === 'j') { this._moveCursor(1); return true; }
-    return false;
+  /**
+   * The filter input line — pinned rendering contract shared with
+   * ScrollableListPanel.buildFilterLine: 'Filter: ' unfocused / '[Filter] '
+   * focused, literal trailing '_' cursor while active (active:false is
+   * passed to buildSearchInputLine to suppress its block-glyph cursor
+   * substitution).
+   */
+  private _buildFilterLine(width: number): Line {
+    const label = this.searchMode ? '[Filter] ' : 'Filter: ';
+    const value = this.searchMode ? `${this.searchQuery}_` : this.searchQuery;
+    return buildSearchInputLine(width, label, value, DEFAULT_PANEL_PALETTE, {
+      active: false,
+      bg: this.searchMode ? DEFAULT_PANEL_PALETTE.inputBg : DEFAULT_PANEL_PALETTE.sectionBg,
+      emptyLabel: '(/ to filter)',
+      valueColor: this.searchMode ? DEFAULT_PANEL_PALETTE.info : (this.searchQuery ? DEFAULT_PANEL_PALETTE.value : DEFAULT_PANEL_PALETTE.dim),
+    });
   }
 }

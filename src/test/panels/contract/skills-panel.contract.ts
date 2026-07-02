@@ -9,29 +9,28 @@ runBasePanelContractSuite({
 });
 
 // ---------------------------------------------------------------------------
-// SkillsPanel — SearchableListPanel contract
+// SkillsPanel — ScrollableListPanel modal filter contract (WO-153)
 // ---------------------------------------------------------------------------
 
-describe('SkillsPanel — SearchableListPanel contract', () => {
+describe('SkillsPanel — ScrollableListPanel modal filter contract', () => {
   const makePanel = () => new SkillsPanel({ shellPaths: { workingDirectory: '/tmp', homeDirectory: '/tmp' } });
 
-  test('initial searchQuery is empty string', () => {
+  test('initial filterQuery is empty string', () => {
     const panel = makePanel();
-    expect((panel as unknown as { searchQuery: string }).searchQuery).toBe('');
+    expect((panel as unknown as { filterQuery: string }).filterQuery).toBe('');
   });
 
-  test('printable keypress updates searchQuery and marks dirty', () => {
+  test('"/" activates the filter and marks dirty', () => {
     const panel = makePanel();
     panel.needsRender = false;
     panel.handleInput('/');
-    // '/' triggers filter focus transition, not search directly — check state
-    // After '/', filterFocused becomes true; panel should mark dirty
+    expect((panel as unknown as { filterActive: boolean }).filterActive).toBe(true);
     expect(panel.needsRender).toBe(true);
   });
 
-  test('render with search query does not throw and returns H lines', () => {
+  test('render with filter query does not throw and returns H lines', () => {
     const panel = makePanel();
-    (panel as unknown as { searchQuery: string }).searchQuery = 'gather-plan';
+    (panel as unknown as { filterQuery: string }).filterQuery = 'gather-plan';
     const lines = panel.render(W, H);
     expect(lines).toHaveLength(H);
   });

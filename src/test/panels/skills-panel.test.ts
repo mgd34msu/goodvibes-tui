@@ -183,7 +183,7 @@ describe('SkillsPanel', () => {
     expect(second).toContain('Up/Down navigate');
   });
 
-  test('up at top focuses filter and down returns to list navigation', async () => {
+  test('/ activates the filter; Esc deactivates and down navigates normally', async () => {
     writeSkill(
       cwd,
       '.goodvibes/tui/skills/alpha/SKILL.md',
@@ -198,13 +198,13 @@ describe('SkillsPanel', () => {
     const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
     panel.onActivate();
     await panel.awaitReady();
-    panel.handleInput('up');
+    panel.handleInput('/');
     panel.handleInput('b');
     let text = linesText(panel.render(120, 16));
-    // SearchableListPanel renders focused filter as '[Filter] {query}_' (not old 'query: {q}█' format)
+    // WO-153: converged modal filter — pinned '[Filter] ' + literal '_' cursor contract.
     expect(text).toContain('[Filter] b');
 
-    panel.handleInput('down');
+    panel.handleInput('escape');
     panel.handleInput('down');
     text = linesText(panel.render(120, 16));
     expect(text).toContain('Selected: beta');
