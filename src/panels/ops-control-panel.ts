@@ -9,11 +9,13 @@
  */
 import type { Line } from '../types/grid.ts';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
-import type { OpsEvent } from '@/runtime/index.ts';
+import type { OpsApi, OpsEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsAuditEntry } from '../runtime/diagnostics/panels/ops.ts';
 import { OpsPanel } from '../runtime/diagnostics/panels/ops.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import {
   buildKeyValueLine,
   buildKeyboardHints,
@@ -62,18 +64,41 @@ function targetColor(kind: OpsAuditEntry['targetKind']): string {
   return kind === 'task' ? C.taskColor : C.agentColor;
 }
 
+// ── Operator intervention actions ───────────────────────────────────────────
+// Target-entry mode: c/p/u/y act on the currently *selected* audit row's
+// target (task or agent) rather than requiring a typed id, mirroring the
+// `/ops task <action> <id>` / `/ops agent cancel <id>` slash commands.
+
+type OpsAction = 'cancel' | 'pause' | 'resume' | 'retry';
+
+interface OpsActionSubject {
+  readonly action: OpsAction;
+  readonly targetKind: OpsAuditEntry['targetKind'];
+  readonly targetId: string;
+}
+
+const ACTION_VERB: Record<OpsAction, string> = {
+  cancel: 'Cancel',
+  pause: 'Pause',
+  resume: 'Resume',
+  retry: 'Retry',
+};
+
 // ── OpsControlPanel ──────────────────────────────────────────────────────────
 
 export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   private readonly _opsPanel: OpsPanel;
+  private readonly _opsApi: OpsApi | undefined;
   private _unsub: (() => void) | null = null;
+  private _confirm: ConfirmState<OpsActionSubject> | null = null;
 
-  public constructor(eventFeed: UiEventFeed<OpsEvent>) {
+  public constructor(eventFeed: UiEventFeed<OpsEvent>, opsApi?: OpsApi) {
     super('ops-control', 'Ops Control', 'Q', 'agent');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter audit';
     this._opsPanel = new OpsPanel(eventFeed);
+    this._opsApi = opsApi;
     this._unsub = this._opsPanel.subscribe(() => this.markDirty());
   }
 
@@ -106,6 +131,94 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
       || entry.outcome.toLowerCase().includes(q);
   }
 
+  // -------------------------------------------------------------------------
+  // Input — target-entry mode dispatch (acts on the selected audit row)
+  // -------------------------------------------------------------------------
+
+  public override handleInput(key: string): boolean {
+    if (this.lastError !== null) this.clearError();
+
+    if (this._confirm) {
+      const result = handleConfirmInput(this._confirm, key);
+      if (result === 'confirmed') {
+        this._executeConfirmed(this._confirm.subject);
+        this._confirm = null;
+        this.markDirty();
+        return true;
+      }
+      if (result === 'cancelled') {
+        this._confirm = null;
+        this.markDirty();
+      }
+      return true;
+    }
+
+    if (!this.filterActive) {
+      switch (key) {
+        case 'c': this._requestAction('cancel'); return true;
+        case 'p': this._requestAction('pause'); return true;
+        case 'u': this._requestAction('resume'); return true;
+        case 'y': this._requestAction('retry'); return true;
+        default: break;
+      }
+    }
+
+    return super.handleInput(key);
+  }
+
+  private _requestAction(action: OpsAction): void {
+    const selected = this.getVisibleItems()[this.selectedIndex];
+    if (!selected) return;
+    if (action !== 'cancel' && selected.targetKind === 'agent') {
+      this.setError(`Only cancel is supported for agent targets ("${action}" is task-only).`);
+      return;
+    }
+    this._confirm = {
+      subject: { action, targetKind: selected.targetKind, targetId: selected.targetId },
+      label: `${selected.targetKind} ${selected.targetId}`,
+      verb: ACTION_VERB[action],
+    };
+    this.markDirty();
+  }
+
+  private _executeConfirmed(subject: OpsActionSubject): void {
+    if (!this._opsApi) {
+      this.setError('Ops API is not wired for this runtime.');
+      return;
+    }
+    try {
+      if (subject.targetKind === 'agent') {
+        this._opsApi.agents.cancel(subject.targetId);
+      } else {
+        switch (subject.action) {
+          case 'cancel': this._opsApi.tasks.cancel(subject.targetId); break;
+          case 'pause':  this._opsApi.tasks.pause(subject.targetId); break;
+          case 'resume': this._opsApi.tasks.resume(subject.targetId); break;
+          case 'retry':  this._opsApi.tasks.retry(subject.targetId); break;
+        }
+      }
+    } catch (err) {
+      // Dispatched actions re-appear as OPS_AUDIT rows regardless of legality
+      // (OpsControlPlane audits rejections too); this surfaces the rare case
+      // where the target vanished before the audit event was emitted.
+      this.setError(summarizeError(err));
+    }
+  }
+
+  /** Live posture: tasks currently eligible for intervention, independent of the audit log. */
+  private _postureCounts(): { running: number; blocked: number; retryable: number } {
+    const tasks = this._opsApi?.tasks.snapshot().tasks ?? [];
+    let running = 0;
+    let blocked = 0;
+    let retryable = 0;
+    for (const task of tasks) {
+      if (task.status === 'running') running++;
+      else if (task.status === 'blocked') blocked++;
+      else if (task.status === 'failed' || task.status === 'cancelled') retryable++;
+    }
+    return { running, blocked, retryable };
+  }
+
   protected renderItem(entry: OpsAuditEntry, _index: number, _selected: boolean, width: number): Line {
     const seqStr   = String(entry.seq).padStart(4, ' ');
     const timeStr  = fmtTime(entry.ts);
@@ -133,7 +246,9 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   }
 
   protected override getEmptyStateActions(): Array<{ command: string; summary: string }> {
-    return [{ command: '/cockpit', summary: 'open the cockpit and drive runtime interventions from the control rooms' }];
+    // No signpost — the live posture row in the header (running/blocked/retryable
+    // task counts) already tells the operator whether there is anything to act on.
+    return [];
   }
 
   public render(width: number, height: number): Line[] {
@@ -150,12 +265,19 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
       else errored++;
     }
 
+    const posture = this._postureCounts();
+
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'logged', value: String(entries.length), valueColor: entries.length > 0 ? C.value : C.dim },
         { label: 'ok', value: String(ok), valueColor: ok > 0 ? C.good : C.dim },
         { label: 'rejected', value: String(rejected), valueColor: rejected > 0 ? C.rejected : C.dim },
         { label: 'errors', value: String(errored), valueColor: errored > 0 ? C.bad : C.dim },
+      ], C),
+      buildKeyValueLine(width, [
+        { label: 'running', value: String(posture.running), valueColor: posture.running > 0 ? C.warn : C.dim },
+        { label: 'blocked', value: String(posture.blocked), valueColor: posture.blocked > 0 ? C.warn : C.dim },
+        { label: 'retryable', value: String(posture.retryable), valueColor: posture.retryable > 0 ? C.info : C.dim },
       ], C),
       buildPanelLine(width, [['  SEQ  TIME      ACTION          TARGET             OUT    NOTE', C.label]]),
     ];
@@ -181,6 +303,9 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
         ]),
       );
     }
+    if (this._confirm) {
+      footerLines.push(...renderConfirmLines(width, this._confirm));
+    }
     footerLines.push(
       this.filterActive
         ? buildKeyboardHints(width, [
@@ -190,6 +315,7 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
           ], C)
         : buildKeyboardHints(width, [
             { keys: 'Up/Down', label: 'browse log' },
+            { keys: 'c/p/u/y', label: 'cancel/pause/resume/retry selected' },
             { keys: '/', label: 'filter' },
           ], C),
     );
