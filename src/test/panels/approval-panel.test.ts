@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 import { ApprovalPanel } from '../../panels/approval-panel.ts';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
 import type { PermissionAuditEntry } from '@/runtime/index.ts';
+import type { PanelIntegrationContext } from '../../panels/types.ts';
 
 type PolicyDep = ConstructorParameters<typeof ApprovalPanel>[0];
 
@@ -71,5 +72,38 @@ describe('ApprovalPanel', () => {
     // No selectable request => no review key advertised in the hints row.
     expect(emptyText).toContain('select');
     expect(emptyText).not.toContain('Enter review');
+  });
+
+  // ---------------------------------------------------------------------------
+  // WO-141: rule suggestions dispatchable via 1/2/3; '/policy simulate' via 'p'
+  // ---------------------------------------------------------------------------
+
+  test('p dispatches /policy simulate via the bridge when no request is pending', () => {
+    const panel = new ApprovalPanel(new PolicyRuntimeState());
+    expect(textOf(panel)).toContain('/policy simulate');
+    expect(panel.handleInput('p')).toBe(true);
+    const executeCommand = mock((_name: string, _args: string[]) => Promise.resolve());
+    const ctx = { panelManager: {}, executeCommand } as unknown as PanelIntegrationContext;
+    expect(panel.handlePanelIntegrationAction?.('p', ctx)).toBe(true);
+    expect(executeCommand).toHaveBeenCalledWith('policy', ['simulate']);
+  });
+
+  test('1 dispatches a repeated-denial rule suggestion command via the bridge', () => {
+    const panel = new ApprovalPanel(makeAudit([
+      { tool: 'Bash', approved: false, target: 'rm -rf', summary: 'destructive delete' },
+      { tool: 'Bash', approved: false, target: 'rm -rf', summary: 'destructive delete' },
+    ]));
+    const text = textOf(panel);
+    expect(text).toContain('Suggested durable rules');
+    expect(panel.handleInput('1')).toBe(true);
+    const executeCommand = mock((_name: string, _args: string[]) => Promise.resolve());
+    const ctx = { panelManager: {}, executeCommand } as unknown as PanelIntegrationContext;
+    expect(panel.handlePanelIntegrationAction?.('1', ctx)).toBe(true);
+    expect(executeCommand).toHaveBeenCalledWith('policy', expect.arrayContaining(['simulate', 'Bash']));
+  });
+
+  test('digit key with no matching suggestion is not consumed', () => {
+    const panel = new ApprovalPanel(new PolicyRuntimeState());
+    expect(panel.handleInput('1')).toBe(false);
   });
 });

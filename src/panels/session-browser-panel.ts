@@ -4,6 +4,7 @@
 
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import type { SessionInfo } from '@pellux/goodvibes-sdk/platform/sessions';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { SessionBrowserQuery } from '../runtime/ui-service-queries.ts';
@@ -39,6 +40,15 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   modelFg:  '#99aacc',
   countFg:  '#88bbcc',
 });
+
+// Splits a computed '/command arg1 arg2' string into the { name, args } shape
+// ctx.executeCommand expects — same leading-slash-stripping approach used by
+// remote-panel.ts for its own dispatched command.
+function parseCommand(command: string): { name: string; args: string[] } | null {
+  const parts = command.replace(/^\//, '').split(/\s+/).filter(Boolean);
+  const [name, ...args] = parts;
+  return name ? { name, args } : null;
+}
 
 function shortDate(ts: number): string {
   const d = new Date(ts);
@@ -87,6 +97,12 @@ export class SessionBrowserPanel extends BasePanel {
   private loadError = '';
   private hasLoaded = false;
   private refreshTimerId: ReturnType<typeof setInterval> | null = null;
+  // x = dispatch the computed next-step command ('/remote recover <runner>'
+  // or '/session resume <name>') via the same handleInput -> handlePanelIntegrationAction
+  // bridge remote-panel.ts uses — handleInput has no ctx.executeCommand.
+  private pendingCommand: { name: string; args: string[] } | null = null;
+  // On resume, restore any panels the session had open when it was saved.
+  private pendingOpenPanels: string[] | null = null;
 
   constructor(
     private readonly sessionManager: SessionBrowserQuery,
@@ -178,8 +194,32 @@ export class SessionBrowserPanel extends BasePanel {
       case 'return':   this._resume();      return true;
       case 'd':        this._promptDelete(); return true;
       case 'r':        this._load();        return true;
+      case 'x':        this._dispatchNextStep(); return true;
       default:         return false;
     }
+  }
+
+  /**
+   * Drains `pendingCommand` (set by the 'x' key) and `pendingOpenPanels`
+   * (set by `_resume()`) via the ctx.executeCommand / PanelManager bridge.
+   * Called by the input router immediately after handleInput() consumes the
+   * same key (panel-integration-actions.ts's onPanelInputConsumed).
+   */
+  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    let consumed = false;
+    if (this.pendingCommand) {
+      const { name, args } = this.pendingCommand;
+      this.pendingCommand = null;
+      void ctx.executeCommand?.(name, args);
+      consumed = true;
+    }
+    if (this.pendingOpenPanels) {
+      const openPanels = this.pendingOpenPanels;
+      this.pendingOpenPanels = null;
+      for (const panelId of openPanels) ctx.panelManager.open(panelId);
+      consumed = true;
+    }
+    return consumed;
   }
 
   render(width: number, height: number): Line[] {
@@ -211,7 +251,7 @@ export class SessionBrowserPanel extends BasePanel {
       hints.push({ keys: 'type', label: 'filter' }, { keys: 'Esc/Enter', label: 'apply' });
     } else {
       hints.push({ keys: '/', label: this.searchQuery ? 'edit search' : 'search' });
-      if (hasSelection) hints.push({ keys: 'Enter', label: 'resume' }, { keys: 'd', label: 'delete' });
+      if (hasSelection) hints.push({ keys: 'Enter', label: 'resume' }, { keys: 'x', label: 'run next step' }, { keys: 'd', label: 'delete' });
       hints.push({ keys: 'r', label: 'refresh' });
     }
     const footerLines = [
@@ -300,7 +340,7 @@ export class SessionBrowserPanel extends BasePanel {
             ...formatReturnContextLines(selected.returnContext).map((line) =>
               buildPanelLine(width, [[' ', DEFAULT_PANEL_PALETTE.dim], [truncateDisplay(line, Math.max(0, width - 2)), DEFAULT_PANEL_PALETTE.dim]])
             ),
-            buildPanelLine(width, [[' Next ', DEFAULT_PANEL_PALETTE.label], [selected.returnContext?.remoteRunners?.length ? `/remote recover ${selected.returnContext.remoteRunners[0]}` : '/session resume', DEFAULT_PANEL_PALETTE.dim]]),
+            buildPanelLine(width, [[' Next ', DEFAULT_PANEL_PALETTE.label], [this._computeNextStepCommand(selected), DEFAULT_PANEL_PALETTE.dim], ['   (x to run)', DEFAULT_PANEL_PALETTE.dim]]),
           ],
         }
       : { title: 'Selected', lines: [] };
@@ -404,7 +444,23 @@ export class SessionBrowserPanel extends BasePanel {
   private _resume(): void {
     const sess = this.filtered[this.cursorIndex];
     if (!sess) return;
+    if (sess.returnContext?.openPanels?.length) {
+      this.pendingOpenPanels = [...sess.returnContext.openPanels];
+    }
     this.resumeSession?.(sess.name);
+  }
+
+  /** The next-step command shown in the 'Selected' section and dispatched by 'x'. */
+  private _computeNextStepCommand(sess: SessionInfo): string {
+    const runner = sess.returnContext?.remoteRunners?.[0];
+    return runner ? `/remote recover ${runner}` : `/session resume ${sess.name}`;
+  }
+
+  private _dispatchNextStep(): void {
+    const sess = this.filtered[this.cursorIndex];
+    if (!sess) return;
+    const parsed = parseCommand(this._computeNextStepCommand(sess));
+    if (parsed) this.pendingCommand = parsed;
   }
 
   private _promptDelete(): void {
