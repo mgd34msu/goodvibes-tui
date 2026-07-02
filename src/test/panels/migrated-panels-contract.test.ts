@@ -33,7 +33,6 @@ import './contract/communication-panel.contract.ts';
 import './contract/agent-logs-panel.contract.ts';
 import './contract/worktree-panel.contract.ts';
 import './contract/control-plane-panel.contract.ts';
-import './contract/provider-accounts-panel.contract.ts';
 import './contract/git-panel.contract.ts';
 import './contract/diff-panel.contract.ts';
 import './contract/wrfc-panel.contract.ts';
@@ -52,7 +51,7 @@ import './contract/tasks-panel.contract.ts';
 // explicit count (rather than trusting a bare directory listing on its own)
 // so a stray file left in contract/ without being wired up above still fails
 // the parity check below instead of silently losing coverage.
-const CONTRACT_MODULE_COUNT = 32;
+const CONTRACT_MODULE_COUNT = 31;
 
 describe('migrated panels — contract module registry parity', () => {
   test('one contract module exists per registered panel', () => {

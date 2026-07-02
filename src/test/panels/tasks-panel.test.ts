@@ -10,12 +10,7 @@ import type { Line } from '../../types/grid.ts';
 import type { UiWorktreeSnapshot } from '../../runtime/ui-read-models.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
-import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 import { createStaticUiReadModel, createTasksReadModel } from '../helpers/ui-read-models.ts';
-import { buildProviderAccountSnapshot } from '../../panels/provider-account-snapshot.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -235,35 +230,9 @@ describe('TasksPanel', () => {
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'tasks')).toBe(true);
   });
 
-  test('provider accounts, local auth, and settings sync panels render posture-first summaries', async () => {
-    const { ProviderAccountsPanel } = await import('../../panels/provider-accounts-panel.ts');
+  test('local auth and settings sync panels render posture-first summaries', async () => {
     const { LocalAuthPanel } = await import('../../panels/local-auth-panel.ts');
     const { SettingsSyncPanel } = await import('../../panels/settings-sync-panel.ts');
-
-    const accountsPanel = new ProviderAccountsPanel({
-      providerAccounts: {
-        loadSnapshot: () => {
-          const secretsManager = new SecretsManager({ projectRoot: root, globalHome: root });
-          const subscriptionManager = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
-          const serviceRegistry = new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
-            secretsManager,
-            subscriptionManager,
-          });
-          return buildProviderAccountSnapshot({
-            providerModels: createTestProviderRegistry(),
-            services: serviceRegistry,
-            subscriptions: subscriptionManager,
-            environment: {
-              hasEnvironmentVariable: (name: string) => Boolean(process.env[name]),
-            },
-          });
-        },
-      },
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const accountsText = linesText(accountsPanel.render(120, 18));
-    expect(accountsText).toContain('Provider posture');
-    expect(accountsText).toContain('/accounts repair <provider>');
 
     const authText = linesText(new LocalAuthPanel(new UserAuthManager({
       bootstrapFilePath: join(root, '.goodvibes', 'tui', 'auth-users.json'),

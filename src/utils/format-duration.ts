@@ -10,7 +10,7 @@
 /**
  * Format a latency value in milliseconds with sub-second precision.
  *
- * Used by: debug-panel, provider-health-panel, provider-stats-panel
+ * Used by: debug-panel, provider-health-panel
  *
  *   ms <= 0     → 'n/a'
  *   ms >= 10000 → '12.3s'    (one decimal)
