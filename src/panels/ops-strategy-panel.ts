@@ -11,7 +11,7 @@ import { BasePanel } from './base-panel.ts';
 import type { Line } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import type { PlannerDecision, ExecutionStrategy } from '@pellux/goodvibes-sdk/platform/core';
-import type { PlannerEvent } from '@/runtime/index.ts';
+import type { PlannerEvent, PlanRuntimeService } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { OpsStrategyQuery } from '../runtime/ui-service-queries.ts';
 import {
@@ -50,6 +50,15 @@ const STRATEGY_ICON: Record<ExecutionStrategy, string> = {
   remote:     '▸',
 };
 
+// Cycle order for the o (override) and m (mode) keys — mirrors /plan's
+// documented strategy list (planner-command-handler.ts VALID_STRATEGIES).
+const STRATEGY_CYCLE: readonly ExecutionStrategy[] = ['auto', 'single', 'cohort', 'background', 'remote'];
+
+function nextStrategy(current: ExecutionStrategy): ExecutionStrategy {
+  const idx = STRATEGY_CYCLE.indexOf(current);
+  return STRATEGY_CYCLE[(idx + 1) % STRATEGY_CYCLE.length]!;
+}
+
 // ---------------------------------------------------------------------------
 // OpsStrategyPanel
 // ---------------------------------------------------------------------------
@@ -59,13 +68,16 @@ export class OpsStrategyPanel extends BasePanel {
   private scrollOffset = 0;
   private history: PlannerDecision[] = [];
   private readonly adaptivePlanner: OpsStrategyQuery;
+  private readonly planRuntime: PlanRuntimeService | undefined;
 
   constructor(
     private readonly plannerEvents: UiEventFeed<PlannerEvent>,
     adaptivePlanner: OpsStrategyQuery,
+    planRuntime?: PlanRuntimeService,
   ) {
     super('ops', 'Ops', 'O', 'agent');
     this.adaptivePlanner = adaptivePlanner;
+    this.planRuntime = planRuntime;
   }
 
   override onActivate(): void {
@@ -89,6 +101,8 @@ export class OpsStrategyPanel extends BasePanel {
   }
 
   handleInput(key: string): boolean {
+    if (this.lastError !== null) this.clearError();
+
     if (key === 'up' || key === 'k') {
       this.scrollOffset = Math.max(0, this.scrollOffset - 1);
       this.markDirty();
@@ -109,7 +123,56 @@ export class OpsStrategyPanel extends BasePanel {
       this.markDirty();
       return true;
     }
+    if (key === 'o') {
+      this._cycleOverride();
+      return true;
+    }
+    if (key === 'c') {
+      this._clearOverride();
+      return true;
+    }
+    if (key === 'm') {
+      this._cycleMode();
+      return true;
+    }
     return false;
+  }
+
+  // -------------------------------------------------------------------------
+  // Override verbs — o=cycle override, c=clear, m=cycle mode, all dispatched
+  // through the same /plan subcommand bridge the slash command uses
+  // (planning-runtime.ts), so panel and slash-command behavior stay identical.
+  // -------------------------------------------------------------------------
+
+  private _cycleOverride(): void {
+    if (!this.planRuntime) {
+      this.setError('Plan runtime is not wired for this runtime.');
+      return;
+    }
+    const current = this.adaptivePlanner.getOverride() ?? this.adaptivePlanner.getMode();
+    const result = this.planRuntime('override', [nextStrategy(current)]);
+    if (!result.ok) this.setError(result.output);
+    this.markDirty();
+  }
+
+  private _clearOverride(): void {
+    if (!this.planRuntime) {
+      this.setError('Plan runtime is not wired for this runtime.');
+      return;
+    }
+    const result = this.planRuntime('clear', []);
+    if (!result.ok) this.setError(result.output);
+    this.markDirty();
+  }
+
+  private _cycleMode(): void {
+    if (!this.planRuntime) {
+      this.setError('Plan runtime is not wired for this runtime.');
+      return;
+    }
+    const result = this.planRuntime('mode', [nextStrategy(this.adaptivePlanner.getMode())]);
+    if (!result.ok) this.setError(result.output);
+    this.markDirty();
   }
 
   render(width: number, height: number): Line[] {
@@ -117,10 +180,15 @@ export class OpsStrategyPanel extends BasePanel {
     const mode     = this.adaptivePlanner.getMode();
     const override = this.adaptivePlanner.getOverride();
     const intro = 'Review adaptive execution planner decisions, overrides, and recent strategy history.';
+    const errorLine = this.renderErrorLine(width);
     const footerLines = [
+      ...(errorLine ? [errorLine] : []),
       buildKeyboardHints(width, [
         { keys: 'Up/Down', label: 'scroll history' },
         { keys: 'g/G', label: 'top/bottom' },
+        { keys: 'o', label: 'cycle override' },
+        { keys: 'c', label: 'clear override' },
+        { keys: 'm', label: 'cycle mode' },
       ], C),
     ];
     const statusLines: Line[] = [
@@ -153,8 +221,8 @@ export class OpsStrategyPanel extends BasePanel {
             lines: buildEmptyState(
               width,
               ' No decisions recorded yet',
-              'Adaptive planner decisions appear here once the planner begins selecting strategies. Run agents or use /ops to drive runtime activity.',
-              [{ command: '/ops', summary: 'open the operator control room to drive planner activity' }],
+              'Adaptive planner decisions appear here once the planner begins selecting strategies. Seed or inspect an execution plan to drive runtime activity.',
+              [{ command: '/plan', summary: 'seed or inspect an execution plan; strategy decisions start appearing here once it runs' }],
               C,
             ),
           },

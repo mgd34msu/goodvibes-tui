@@ -18,6 +18,7 @@ import { SandboxPanel } from '../sandbox-panel.ts';
 import { TasksPanel } from '../tasks-panel.ts';
 import { OrchestrationPanel } from '../orchestration-panel.ts';
 import { OpsStrategyPanel } from '../ops-strategy-panel.ts';
+import { OpsControlPanel } from '../ops-control-panel.ts';
 import { CommunicationPanel } from '../communication-panel.ts';
 import { RemotePanel } from '../remote-panel.ts';
 import { ProviderHealthPanel } from '../provider-health-panel.ts';
@@ -248,7 +249,21 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'O',
     category: 'monitoring',
     description: 'Adaptive planner strategy timeline, override posture, and recent execution-mode decisions',
-    factory: () => new OpsStrategyPanel(ui.events.planner, deps.adaptivePlanner),
+    factory: () => new OpsStrategyPanel(ui.events.planner, deps.adaptivePlanner, deps.planRuntime),
+  });
+
+  // WO-120: the operator intervention console behind the operator-control-plane
+  // feature flag. Registration is unconditional (matching the ControlPlanePanel
+  // pattern above) — the flag itself gates whether bootstrap.ts wires the
+  // openOpsPanel command-context callback and the Ctrl+O / `/ops view` route,
+  // not whether the panel type resolves for direct `/panel open ops-control`.
+  manager.registerType({
+    id: 'ops-control',
+    name: 'Ops Control',
+    icon: 'Q',
+    category: 'monitoring',
+    description: 'Operator intervention console: audit log plus cancel/pause/resume/retry on tasks and cancel on agents',
+    factory: () => new OpsControlPanel(ui.events.ops, deps.opsApi),
   });
 
   manager.registerType({
