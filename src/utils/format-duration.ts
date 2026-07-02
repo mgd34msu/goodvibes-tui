@@ -42,7 +42,7 @@ export function formatDuration(ms: number): string {
 /**
  * Format a short eval/forensics duration; treats undefined as '?ms'.
  *
- * Used by: forensics-panel, eval-panel
+ * Used by: incident-review-panel, eval-panel
  *
  *   undefined → '?ms'
  *   ms < 1000 → '500ms'
