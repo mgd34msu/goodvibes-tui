@@ -3,11 +3,39 @@ import { createEmptyLine } from '../types/grid.ts';
 import { basename } from 'node:path';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { buildAlignedRow, buildKeyValueLine, buildKeyboardHints, buildPanelLine, buildPanelWorkspace, DEFAULT_PANEL_PALETTE, resolvePrimaryScrollableSection, type ColumnSpec, type PanelWorkspaceSection } from './polish.ts';
-import { summarizeWorktreeOwnership, type WorktreeRegistry, type WorktreeStatusRecord } from '@/runtime/index.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
+import { summarizeWorktreeOwnership, type WorktreeStatusRecord } from '@/runtime/index.ts';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import type { PanelIntegrationContext } from './types.ts';
 
 // Base chrome only — state colors and text tokens come straight from
 // DEFAULT_PANEL_PALETTE (WO-002).
 const C = DEFAULT_PANEL_PALETTE;
+
+/**
+ * Structural shape the panel actually needs from a worktree registry. The
+ * real `WorktreeRegistry` (from the SDK) satisfies this directly; it has no
+ * `subscribe()` method today, so the panel falls back to polling when one
+ * isn't provided (see constructor). Kept narrow and `Like`-suffixed per the
+ * project's duck-typing convention (see `agent-inspector-shared.ts`).
+ */
+export interface WorktreeRegistryLike {
+  list(): Promise<WorktreeStatusRecord[]>;
+  attach(path: string, target: { sessionId?: string; taskId?: string }): void;
+  setState(path: string, state: WorktreeStatusRecord['state']): void;
+  cleanup(path: string): Promise<void>;
+  /** Optional live-update hook; when present the panel prefers it over polling. */
+  subscribe?(listener: () => void): () => void;
+}
+
+/** What a pending destructive confirm will do once the user confirms. */
+interface WorktreeConfirmSubject {
+  readonly path: string;
+  readonly action: 'discard' | 'cleanup';
+}
+
+/** Poll cadence used only when the registry has no `subscribe()` method. */
+const POLL_INTERVAL_MS = 5_000;
 
 function stateColor(state: WorktreeStatusRecord['state']): string {
   switch (state) {
@@ -56,16 +84,37 @@ function buildWorktreeRow(width: number, row: WorktreeStatusRecord, selected: bo
   );
 }
 
+const WORKTREE_HINTS = [
+  { keys: '↑/↓', label: 'select' },
+  { keys: 'p/u/k', label: 'pause/resume/keep' },
+  { keys: 'd/c', label: 'discard/cleanup' },
+  { keys: 'enter', label: 'jump to session/task' },
+  { keys: 'r', label: 'refresh' },
+] as const;
+
 export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
   private rows: WorktreeStatusRecord[] = [];
   private loading = false;
-  private readonly worktreeRegistry: WorktreeRegistry;
+  private confirm: ConfirmState<WorktreeConfirmSubject> | null = null;
+  private pendingJump: { targetPanel: 'sessions' | 'tasks' } | null = null;
+  private readonly worktreeRegistry: WorktreeRegistryLike;
+  private readonly requestRender: () => void;
+  private unsubscribe: (() => void) | null = null;
 
-  public constructor(worktreeRegistry: WorktreeRegistry) {
+  public constructor(worktreeRegistry: WorktreeRegistryLike, requestRender: () => void = () => {}) {
     super('worktrees', 'Worktrees', 'W', 'monitoring');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.worktreeRegistry = worktreeRegistry;
+    this.requestRender = requestRender;
     void this.refresh();
+    // Live state: prefer a registry subscription when the caller provides one
+    // (matches the mock shape used by contract tests); otherwise poll, so the
+    // real SDK WorktreeRegistry (which has no subscribe() today) still stays live.
+    if (typeof this.worktreeRegistry.subscribe === 'function') {
+      this.unsubscribe = this.worktreeRegistry.subscribe(() => { void this.refresh(); });
+    } else {
+      this.registerTimer(setInterval(() => { void this.refresh(); }, POLL_INTERVAL_MS));
+    }
   }
 
   public override onActivate(): void {
@@ -73,12 +122,100 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
     if (!this.loading) void this.refresh();
   }
 
-  public handleInput(key: string): boolean {
+  public override onDestroy(): void {
+    super.onDestroy();
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
+    }
+  }
+
+  public override handleInput(key: string): boolean {
+    if (this.lastError !== null) this.clearError();
+
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      const subject = this.confirm!.subject;
+      this.confirm = null;
+      if (subject.action === 'discard') {
+        this.worktreeRegistry.setState(subject.path, 'discard');
+        void this.refresh();
+      } else {
+        void this._cleanup(subject.path);
+      }
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
     if (key === 'r') {
       void this.refresh();
       return true;
     }
+
+    const selected = this.rows[this.selectedIndex];
+
+    if (key === 'p' && selected && selected.state !== 'paused') {
+      this.worktreeRegistry.setState(selected.path, 'paused');
+      void this.refresh();
+      return true;
+    }
+    if (key === 'u' && selected && selected.state !== 'active') {
+      this.worktreeRegistry.setState(selected.path, 'active');
+      void this.refresh();
+      return true;
+    }
+    if (key === 'k' && selected && selected.state !== 'kept') {
+      this.worktreeRegistry.setState(selected.path, 'kept');
+      void this.refresh();
+      return true;
+    }
+    if (key === 'd' && selected && selected.state !== 'discard') {
+      this.confirm = {
+        subject: { path: selected.path, action: 'discard' },
+        label: `worktree ${basename(selected.path)} (${selected.branch})`,
+        verb: 'Discard',
+      };
+      this.markDirty();
+      return true;
+    }
+    if (key === 'c' && selected) {
+      this.confirm = {
+        subject: { path: selected.path, action: 'cleanup' },
+        label: `worktree ${basename(selected.path)} (${selected.branch})`,
+        verb: 'Clean up',
+      };
+      this.markDirty();
+      return true;
+    }
+    if ((key === 'enter' || key === 'return') && selected && (selected.sessionId || selected.taskId)) {
+      this.pendingJump = { targetPanel: selected.sessionId ? 'sessions' : 'tasks' };
+      return true;
+    }
+
     return super.handleInput(key);
+  }
+
+  /**
+   * Enter on an attached worktree row jumps to the owning session/task panel.
+   * The actual `PanelManager.open()` call requires the integration context,
+   * which is only available here (invoked right after `handleInput` returns
+   * `true` for the same key) — same staged-pending-action pattern as
+   * `incident-review-panel.ts`.
+   */
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (this.pendingJump) {
+      const jump = this.pendingJump;
+      this.pendingJump = null;
+      ctx.panelManager.open(jump.targetPanel);
+      return true;
+    }
+    return false;
   }
 
   protected getItems(): readonly WorktreeStatusRecord[] {
@@ -98,11 +235,33 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
     } finally {
       this.loading = false;
       this.markDirty();
+      this.requestRender();
+    }
+  }
+
+  private async _cleanup(path: string): Promise<void> {
+    try {
+      await this.worktreeRegistry.cleanup(path);
+    } catch (err) {
+      this.setError(summarizeError(err));
+    } finally {
+      await this.refresh();
     }
   }
 
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
+
+    if (this.confirm) {
+      const lines = buildPanelWorkspace(width, height, {
+        title: 'Worktree Control Room',
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirm) }],
+        palette: C,
+      });
+      while (lines.length < height) lines.push(createEmptyLine(width));
+      return lines.slice(0, height);
+    }
+
     const sections: PanelWorkspaceSection[] = [];
 
     if (this.loading && this.rows.length === 0) {
@@ -134,18 +293,6 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
           ], C),
         ],
       });
-      sections.push({
-        title: 'Next Actions',
-        lines: [
-          buildPanelLine(width, [[
-            summary.pendingCleanup > 0 || summary.discard > 0
-              ? ' Review pending-cleanup and discard-marked worktrees before they drift from orchestrator ownership.'
-              : ' Worktree ownership is healthy. Use the task and session links below for restore, merge, or cleanup review.',
-            summary.pendingCleanup > 0 || summary.discard > 0 ? C.warn : C.dim,
-          ]]),
-          buildPanelLine(width, [['  /worktree task <task-id>  /worktree session <session-id>  /worktree inspect <path>', C.info]]),
-        ],
-      });
       const selected = this.rows[this.selectedIndex]!;
       const detailSection: PanelWorkspaceSection = {
         title: 'Details',
@@ -160,23 +307,11 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
               : ' Unattached worktree detected. Review whether it should be attached, kept, discarded, or cleaned up.',
             selected.sessionId || selected.taskId ? C.info : C.warn,
           ]]),
-          buildPanelLine(width, [[
-            selected.state === 'paused'
-              ? ` Next: /worktree resume ${selected.path}`
-              : selected.state === 'discard' || selected.state === 'pending-cleanup'
-                ? ` Next: /worktree cleanup ${selected.path}`
-                : selected.taskId
-                  ? ` Next: /worktree task ${selected.taskId}`
-                  : selected.sessionId
-                    ? ` Next: /worktree session ${selected.sessionId}`
-                    : ` Next: /worktree inspect ${selected.path}`,
-            C.dim,
-          ]]),
         ],
       };
       const resolvedWorktreesSection = resolvePrimaryScrollableSection(width, height, {
         intro: 'Orchestrator-owned worktree lifecycle, attachments, pause/resume posture, and cleanup state.',
-        footerLines: [buildKeyboardHints(width, [{ keys: '↑/↓', label: 'select' }, { keys: 'r', label: 'refresh' }, { keys: '/worktree inspect', label: '<path>' }, { keys: 'attach·pause·resume·keep·discard·cleanup', label: '' }], C)],
+        footerLines: [buildKeyboardHints(width, WORKTREE_HINTS, C)],
         palette: C,
         beforeSections: sections,
         section: {
@@ -209,11 +344,14 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
       sections.push(detailSection);
     }
 
+    const errorLine = this.renderErrorLine(width);
+    if (errorLine) sections.push({ title: 'Error', lines: [errorLine] });
+
     const lines = buildPanelWorkspace(width, height, {
       title: 'Worktree Control Room',
       intro: 'Orchestrator-owned worktree lifecycle, attachments, pause/resume posture, and cleanup state.',
       sections,
-      footerLines: [buildKeyboardHints(width, [{ keys: '↑/↓', label: 'select' }, { keys: 'r', label: 'refresh' }, { keys: '/worktree inspect', label: '<path>' }, { keys: 'attach·pause·resume·keep·discard·cleanup', label: '' }], C)],
+      footerLines: [buildKeyboardHints(width, WORKTREE_HINTS, C)],
       palette: C,
     });
     while (lines.length < height) lines.push(createEmptyLine(width));
