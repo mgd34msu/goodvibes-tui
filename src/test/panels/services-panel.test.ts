@@ -187,4 +187,33 @@ describe('ServicesPanel', () => {
     expect(panel.handlePanelIntegrationAction?.('s', ctx)).toBe(true);
     expect(open).toHaveBeenCalledWith('subscription');
   });
+
+  test('t under an applied filter tests the highlighted (filtered) service, not the raw entry index', async () => {
+    const tested: string[] = [];
+    const stubRegistry: ServiceInspectionQuery = {
+      getAll: () => ({ alpha: {}, beta: {}, gamma: {} }) as ReturnType<ServiceRegistry['getAll']>,
+      inspect: async (_name: string) => null,
+      testConnection: async (name: string) => {
+        tested.push(name);
+        return { ok: true, status: 200, testedAt: Date.now() } as Awaited<ReturnType<ServiceRegistry['testConnection']>>;
+      },
+    };
+    const panel = new ServicesPanel(stubRegistry, subscriptionManager);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Apply a '/' filter isolating 'gamma' (entries sort alpha/beta/gamma, so
+    // a raw this.entries[0] read would wrongly test 'alpha').
+    expect(panel.handleInput('/')).toBe(true);
+    for (const ch of 'gamma') panel.handleInput(ch);
+    expect(panel.handleInput('enter')).toBe(true); // commit filter, keep query
+
+    expect(panel.handleInput('t')).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(tested).toEqual(['gamma']);
+
+    // The detail block describes the filtered selection too.
+    const text = linesText(panel.render(120, 14));
+    expect(text).toContain('Service: gamma');
+    expect(text).not.toContain('Service: alpha');
+  });
 });
