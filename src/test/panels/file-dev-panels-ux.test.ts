@@ -64,15 +64,33 @@ describe('GitPanel — loading + geometry', () => {
   });
 });
 
-// ── SymbolOutlinePanel — tree icons ──────────────────────────────────────────
+// ── SymbolOutlinePanel — tree-sitter outline ─────────────────────────────────
+//
+// loadFile() parses via a real tree-sitter query (background WASM parse), so
+// tests that need parsed symbols poll render() output until it settles
+// rather than asserting synchronously right after loadFile().
+
+async function waitForSymbolText(
+  panel: SymbolOutlinePanel,
+  needle: string,
+  timeoutMs = 2000,
+): Promise<string> {
+  const start = Date.now();
+  let text = linesText(panel.render(80, H));
+  while (!text.includes(needle) && Date.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 10));
+    text = linesText(panel.render(80, H));
+  }
+  return text;
+}
 
 describe('SymbolOutlinePanel — tree icons and footer', () => {
   const src = 'export class Foo {\n  bar() {}\n}\nexport function baz() {}\n';
 
-  test('renders a per-kind type icon for classes and functions', () => {
+  test('renders a per-kind type icon for classes and functions', async () => {
     const panel = new SymbolOutlinePanel();
     panel.loadFile('a.ts', src);
-    const text = linesText(panel.render(80, H));
+    const text = await waitForSymbolText(panel, 'baz');
     expect(text).toContain('Foo');
     expect(text).toContain('baz');
     // Container icon (class) and function icon are present.
@@ -80,9 +98,10 @@ describe('SymbolOutlinePanel — tree icons and footer', () => {
     expect(text).toContain('ƒ');
   });
 
-  test('footer hints reference jump-to-source', () => {
+  test('footer hints reference jump-to-source', async () => {
     const panel = new SymbolOutlinePanel();
     panel.loadFile('a.ts', src);
+    await waitForSymbolText(panel, 'baz');
     const text = linesText(panel.render(80, H));
     expect(text).toContain('jump to source');
   });
@@ -91,7 +110,47 @@ describe('SymbolOutlinePanel — tree icons and footer', () => {
     const panel = new SymbolOutlinePanel();
     const text = linesText(panel.render(80, H));
     expect(text).toContain('No file loaded');
-    expect(text).toContain('/explorer');
+    expect(text).toContain('/panel open explorer');
+  });
+
+  test('arrow-function class fields, getters, and decorated members appear in the outline', async () => {
+    const tsSrc = [
+      'export class Widget {',
+      '  @observable',
+      '  onClick = () => {',
+      '    return 1;',
+      '  };',
+      '',
+      '  get label() {',
+      '    return this._label;',
+      '  }',
+      '',
+      '  @bound()',
+      '  render() {',
+      '    return null;',
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+
+    const panel = new SymbolOutlinePanel();
+    panel.loadFile('widget.ts', tsSrc);
+    const text = await waitForSymbolText(panel, 'onClick');
+    // Arrow-function class field.
+    expect(text).toContain('onClick');
+    // Getter.
+    expect(text).toContain('label');
+    // Decorated method.
+    expect(text).toContain('render');
+    // All three are nested under the class header.
+    expect(text).toContain('Widget');
+  });
+
+  test('Enter returns false when there is no selected location to jump to', () => {
+    const panel = new SymbolOutlinePanel();
+    // No file loaded — nothing to select — Enter must not swallow the key.
+    expect(panel.handleInput('enter')).toBe(false);
+    expect(panel.getSelectedLocation()).toBeNull();
   });
 });
 

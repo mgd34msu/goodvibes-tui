@@ -24,7 +24,10 @@ function ensurePreviewPanel(panelManager: PanelManager): FilePreviewPanel | null
   return opened instanceof FilePreviewPanel ? opened : null;
 }
 
-function syncSymbolOutlineFromPreview(panelManager: PanelManager, previewPanel: FilePreviewPanel): void {
+// Exported so a future preview-reload action (e.g. an explicit "r" reload
+// key) can re-sync the outline against the same file without duplicating
+// this lookup — the panel-integration wiring for that key lands separately.
+export function syncSymbolOutlineFromPreview(panelManager: PanelManager, previewPanel: FilePreviewPanel): void {
   const symbols = panelManager.getPanel('symbols');
   const filePath = previewPanel.getCurrentFilePath();
   const source = previewPanel.getSource();

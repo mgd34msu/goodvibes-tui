@@ -1,5 +1,4 @@
 import { BasePanel } from './base-panel.ts';
-import { createEmptyLine } from '../types/grid.ts';
 import type { Line } from '../types/grid.ts';
 import {
   buildEmptyState,
@@ -11,6 +10,9 @@ import {
   DEFAULT_PANEL_PALETTE,
   extendPalette,
 } from './polish.ts';
+import { TreeSitterService } from '@pellux/goodvibes-sdk/platform/intelligence';
+import type { Node, Tree, Language } from 'web-tree-sitter';
+import { logger, summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ── Symbol types ────────────────────────────────────────────────────────────
 
@@ -52,32 +54,198 @@ const KIND_ICONS: Record<SymbolKind, string> = {
   const:     'k',
 };
 
-/** Regex patterns to extract symbols. Each produces named groups: kind, name, line. */
-const SYMBOL_PATTERNS: Array<{ re: RegExp; kind: SymbolKind; isContainer?: boolean }> = [
-  // export class Foo / abstract class Foo
-  { re: /^(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/,          kind: 'class',     isContainer: true },
-  // export namespace Foo
-  { re: /^(?:export\s+)?namespace\s+(\w+)/,                       kind: 'namespace', isContainer: true },
-  // export interface Foo
-  { re: /^(?:export\s+)?interface\s+(\w+)/,                       kind: 'interface' },
-  // export type Foo =
-  { re: /^(?:export\s+)?type\s+(\w+)\s*[=<{]/,                   kind: 'type' },
-  // export function foo / export async function foo
-  { re: /^(?:export\s+)?(?:async\s+)?function\s+(\w+)/,          kind: 'function' },
-  // export const foo = ... (function expressions / arrow fns / values)
-  { re: /^(?:export\s+)?const\s+(\w+)\s*(?::[^=]*)?=\s*(?:async\s+)?(?:function|\(|\w+\s*=>)/, kind: 'function' },
-  // export const foo = <non-function>
-  { re: /^(?:export\s+)?const\s+(\w+)\s*(?::[^=]*)?=/,            kind: 'const' },
-  // methods inside class: indented  methodName(...)
-  { re: /^\s{2,}(?:(?:public|private|protected|static|async|override|readonly|abstract)\s+)*(\w+)\s*\(/, kind: 'method' },
-];
+// ── Tree-sitter symbol extraction ────────────────────────────────────────────
+
+type LangId = 'typescript' | 'tsx' | 'javascript';
+
+/** Map a file extension to the tree-sitter grammar id used to parse it. */
+function detectLangId(filePath: string): LangId | null {
+  const dot = filePath.lastIndexOf('.');
+  const ext = dot >= 0 ? filePath.slice(dot + 1).toLowerCase() : '';
+  if (ext === 'ts' || ext === 'mts' || ext === 'cts') return 'typescript';
+  if (ext === 'tsx') return 'tsx';
+  if (ext === 'js' || ext === 'mjs' || ext === 'cjs' || ext === 'jsx') return 'javascript';
+  return null;
+}
+
+// Tree-sitter queries capturing the declaration shapes the outline surfaces.
+// Class members (methods, getters/setters, decorated members, and
+// arrow-function class fields) are captured structurally rather than by
+// indentation, so decorators and modifiers never throw off matching.
+const TS_QUERY = `
+(class_declaration name: (type_identifier) @class.name) @class.def
+(abstract_class_declaration name: (type_identifier) @class.name) @class.def
+(interface_declaration name: (type_identifier) @interface.name) @interface.def
+(type_alias_declaration name: (type_identifier) @type.name) @type.def
+(internal_module name: (identifier) @namespace.name) @namespace.def
+(function_declaration name: (identifier) @function.name) @function.def
+(method_definition name: (property_identifier) @method.name) @method.def
+(public_field_definition
+  name: (property_identifier) @field.name
+  value: (arrow_function)) @field.def
+(lexical_declaration
+  (variable_declarator name: (identifier) @const.name) @const.declarator) @const.def
+`;
+
+const JS_QUERY = `
+(class_declaration name: (identifier) @class.name) @class.def
+(function_declaration name: (identifier) @function.name) @function.def
+(method_definition name: (property_identifier) @method.name) @method.def
+(field_definition
+  property: (property_identifier) @field.name
+  value: (arrow_function)) @field.def
+(lexical_declaration
+  (variable_declarator name: (identifier) @const.name) @const.declarator) @const.def
+`;
+
+const QUERY_BY_LANG: Record<LangId, string> = {
+  typescript: TS_QUERY,
+  tsx: TS_QUERY,
+  javascript: JS_QUERY,
+};
+
+const CLASS_NODE_TYPES = new Set(['class_declaration', 'abstract_class_declaration', 'class_expression']);
+
+/** True when `node` sits directly at module scope (optionally wrapped in `export`). */
+function isTopLevelDeclaration(node: Node): boolean {
+  const parent = node.parent;
+  if (!parent) return true;
+  if (parent.type === 'program') return true;
+  if (parent.type === 'export_statement') return parent.parent?.type === 'program';
+  return false;
+}
+
+/**
+ * Walk up from a class member to its nearest enclosing class. Returns the
+ * class name only when that class is itself a top-level declaration — this
+ * keeps the outline to a class + its direct members (no deep nesting), the
+ * same depth the previous regex-based parser supported.
+ */
+function findEnclosingClassName(node: Node): string | null {
+  let cursor: Node | null = node.parent;
+  while (cursor) {
+    if (CLASS_NODE_TYPES.has(cursor.type)) {
+      if (!isTopLevelDeclaration(cursor)) return null;
+      const nameNode = cursor.childForFieldName('name');
+      return nameNode ? nameNode.text : null;
+    }
+    cursor = cursor.parent;
+  }
+  return null;
+}
+
+/**
+ * Extract a flat, line-ordered list of symbols from a parsed tree using a
+ * tree-sitter query over the real AST (no regex heuristics). Class members
+ * (methods, getters/setters, decorated members, arrow-function fields) carry
+ * `parentName` so the renderer can group them under their class header.
+ */
+function extractSymbolsFromTree(tree: Tree, language: Language, langId: LangId, service: TreeSitterService): SymbolEntry[] {
+  const query = QUERY_BY_LANG[langId];
+  const matches = service.query(tree, language, query);
+  const result: SymbolEntry[] = [];
+
+  for (const match of matches) {
+    const captures = new Map<string, Node>(match.captures.map((c) => [c.name, c.node]));
+
+    const classDef = captures.get('class.def');
+    if (classDef) {
+      const nameNode = captures.get('class.name');
+      if (nameNode && isTopLevelDeclaration(classDef)) {
+        result.push({ kind: 'class', name: nameNode.text, line: classDef.startPosition.row + 1 });
+      }
+      continue;
+    }
+
+    const interfaceDef = captures.get('interface.def');
+    if (interfaceDef) {
+      const nameNode = captures.get('interface.name');
+      if (nameNode && isTopLevelDeclaration(interfaceDef)) {
+        result.push({ kind: 'interface', name: nameNode.text, line: interfaceDef.startPosition.row + 1 });
+      }
+      continue;
+    }
+
+    const typeDef = captures.get('type.def');
+    if (typeDef) {
+      const nameNode = captures.get('type.name');
+      if (nameNode && isTopLevelDeclaration(typeDef)) {
+        result.push({ kind: 'type', name: nameNode.text, line: typeDef.startPosition.row + 1 });
+      }
+      continue;
+    }
+
+    const namespaceDef = captures.get('namespace.def');
+    if (namespaceDef) {
+      const nameNode = captures.get('namespace.name');
+      if (nameNode && isTopLevelDeclaration(namespaceDef)) {
+        result.push({ kind: 'namespace', name: nameNode.text, line: namespaceDef.startPosition.row + 1 });
+      }
+      continue;
+    }
+
+    const functionDef = captures.get('function.def');
+    if (functionDef) {
+      const nameNode = captures.get('function.name');
+      if (nameNode && isTopLevelDeclaration(functionDef)) {
+        result.push({ kind: 'function', name: nameNode.text, line: functionDef.startPosition.row + 1 });
+      }
+      continue;
+    }
+
+    // Methods, getters/setters, and constructors — all `method_definition`
+    // regardless of decorators (decorators are preceding siblings, not
+    // wrappers, so they never block the match).
+    const methodDef = captures.get('method.def');
+    if (methodDef) {
+      const nameNode = captures.get('method.name');
+      const parentName = findEnclosingClassName(methodDef);
+      if (nameNode && parentName) {
+        result.push({ kind: 'method', name: nameNode.text, line: methodDef.startPosition.row + 1, parentName });
+      }
+      continue;
+    }
+
+    // Arrow-function class fields (`onClick = () => {...}`), decorated or not.
+    const fieldDef = captures.get('field.def');
+    if (fieldDef) {
+      const nameNode = captures.get('field.name');
+      const parentName = findEnclosingClassName(fieldDef);
+      if (nameNode && parentName) {
+        result.push({ kind: 'method', name: nameNode.text, line: fieldDef.startPosition.row + 1, parentName });
+      }
+      continue;
+    }
+
+    const constDef = captures.get('const.def');
+    if (constDef) {
+      const nameNode = captures.get('const.name');
+      const declarator = captures.get('const.declarator');
+      if (nameNode && isTopLevelDeclaration(constDef)) {
+        const valueNode = declarator?.childForFieldName('value') ?? null;
+        const isFunctionValued = valueNode?.type === 'arrow_function' || valueNode?.type === 'function_expression';
+        result.push({
+          kind: isFunctionValued ? 'function' : 'const',
+          name: nameNode.text,
+          line: constDef.startPosition.row + 1,
+        });
+      }
+      continue;
+    }
+  }
+
+  result.sort((a, b) => a.line - b.line);
+  return result;
+}
 
 // ── Panel ────────────────────────────────────────────────────────────────────
 
 /**
  * SymbolOutlinePanel — renders a hierarchical symbol outline of the current
- * file. Symbols are parsed from source text using lightweight regex heuristics
- * (no tree-sitter or LSP required).
+ * file. Symbols are parsed from the real AST via a tree-sitter query (the
+ * same parser infrastructure syntax-highlighter.ts uses), not regex
+ * heuristics — so class fields assigned arrow functions, getters/setters,
+ * and decorated members all appear correctly.
  */
 export class SymbolOutlinePanel extends BasePanel {
   /** Flat list of parsed symbols (methods nested after their parent class). */
@@ -95,23 +263,40 @@ export class SymbolOutlinePanel extends BasePanel {
   /** Path of the file currently loaded. */
   private currentPath: string = '';
 
+  /** Shared tree-sitter service for this panel instance (mirrors syntax-highlighter.ts). */
+  private readonly treeSitter = new TreeSitterService();
+
+  /** Bumped on every loadFile() call so a superseded async parse is discarded. */
+  private parseGeneration: number = 0;
+
   constructor() {
     super('symbols', 'Symbols', 'S', 'development');
+    this.treeSitter.initialize().catch((err: unknown) => {
+      logger.warn('SymbolOutlinePanel: tree-sitter init failed', { error: summarizeError(err) });
+    });
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
   /**
-   * Load and parse symbols from the given file source text.
-   * Call this when the active file changes in the file-preview panel.
+   * Load and parse symbols from the given file source text via tree-sitter.
+   * Call this when the active file changes in the file-preview panel, and
+   * again whenever the preview reloads the same file so the outline re-syncs
+   * with on-disk edits.
    */
   loadFile(path: string, source: string): void {
     this.currentPath = path;
-    this.symbols = parseSymbols(source);
+    this.symbols = [];
     this.selectedIndex = 0;
     this.scrollOffset = 0;
     this.collapsed.clear();
     this.markDirty();
+
+    const generation = ++this.parseGeneration;
+    const langId = detectLangId(path);
+    if (!langId) return; // unsupported language — honest "no symbols" empty state
+
+    void this._parseAndSync(path, source, langId, generation);
   }
 
   /**
@@ -149,8 +334,9 @@ export class SymbolOutlinePanel extends BasePanel {
     }
 
     if (key === 'return' || key === 'enter') {
-      // Caller should call getSelectedLocation() after this returns true.
-      return true;
+      // Only consume Enter when there is a real symbol to jump to — otherwise
+      // let the key fall through instead of swallowing it for nothing.
+      return this.getSelectedLocation() !== null;
     }
 
     if (key === 'space' || key === 'right' || key === 'left') {
@@ -191,11 +377,11 @@ export class SymbolOutlinePanel extends BasePanel {
               width,
               this.currentPath ? ' No symbols found' : ' No file loaded',
               this.currentPath
-                ? 'The current file did not produce outline entries with the lightweight parser heuristics.'
+                ? 'The current file did not produce outline entries from the tree-sitter parse.'
                 : 'Load a file in the preview panel to populate its outline here.',
               this.currentPath
                 ? []
-                : [{ command: '/explorer', summary: 'pick a file in the explorer, then Enter to preview and outline it' }],
+                : [{ command: '/panel open explorer', summary: 'pick a file in the explorer, then Enter to preview and outline it' }],
               C,
             ),
           },
@@ -306,6 +492,24 @@ export class SymbolOutlinePanel extends BasePanel {
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
+  private async _parseAndSync(path: string, source: string, langId: LangId, generation: number): Promise<void> {
+    try {
+      await this.treeSitter.initialize();
+      const language = await this.treeSitter.loadLanguage(langId);
+      if (!language) return;
+      const tree = await this.treeSitter.parse(path, source, langId);
+      if (!tree) return;
+      // A newer loadFile() call superseded this one — discard the stale result.
+      if (generation !== this.parseGeneration) return;
+      this.symbols = extractSymbolsFromTree(tree, language, langId, this.treeSitter);
+      this.selectedIndex = 0;
+      this.scrollOffset = 0;
+      this.markDirty();
+    } catch (err) {
+      logger.warn('SymbolOutlinePanel: tree-sitter parse failed', { path, error: summarizeError(err) });
+    }
+  }
+
   private _clampScroll(totalRows: number): void {
     // Ensure selected is within scroll view (assumes last known height ~ 20)
     // We keep a conservative viewport window; render() uses this.scrollOffset.
@@ -328,80 +532,6 @@ type VisibleRow =
   | { kind: 'symbol'; symbol: SymbolEntry; depth: number };
 
 // ── Pure helpers ─────────────────────────────────────────────────────────────
-
-/**
- * Parse symbols from source text. Returns a flat list ordered by line number.
- * Methods are tagged with their parent class name so the renderer can group them.
- */
-function parseSymbols(source: string): SymbolEntry[] {
-  const lines = source.split('\n');
-  const result: SymbolEntry[] = [];
-  let currentContainer: string | undefined;
-  let containerKind: SymbolKind | undefined;
-  let containerBraceDepth = 0;
-  let braceDepth = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    const trimmed = raw.trimStart();
-    const lineNo = i + 1; // 1-based
-
-    // Strip string literals before counting braces to avoid false positives
-    const rawNoBraceStrings = raw.replace(/("|\'|\`)(?:(?!\1|\\).|\\[\s\S])*\1/g, '');
-
-    // Track brace depth for container scoping
-    for (const ch of rawNoBraceStrings) {
-      if (ch === '{') braceDepth++;
-      else if (ch === '}') {
-        braceDepth--;
-        if (currentContainer !== undefined && braceDepth <= containerBraceDepth) {
-          currentContainer = undefined;
-          containerKind = undefined;
-          containerBraceDepth = 0;
-        }
-      }
-    }
-
-    // Skip comment lines and blank lines
-    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*') || trimmed === '') continue;
-
-    // Check container-level patterns first (class/namespace)
-    let matched = false;
-    for (const { re, kind, isContainer } of SYMBOL_PATTERNS) {
-      const m = trimmed.match(re);
-      if (!m) continue;
-      const name = m[1];
-      if (!name) continue;
-
-      const entry: SymbolEntry = { kind, name, line: lineNo };
-
-      if (currentContainer && kind === 'method') {
-        entry.parentName = currentContainer;
-      }
-
-      // Don't add methods as top-level if they're inside a container
-      if (kind === 'method' && !currentContainer) {
-        // standalone function-like at wrong indent — skip
-        matched = true;
-        break;
-      }
-
-      result.push(entry);
-
-      if (isContainer) {
-        currentContainer = name;
-        containerKind = kind;
-        // Opening brace may be on this line or a subsequent line — track from current depth
-        containerBraceDepth = braceDepth - (raw.includes('{') ? 1 : 0);
-      }
-
-      matched = true;
-      break;
-    }
-  }
-
-  return result;
-}
 
 /**
  * Build the flat list of rows to render, respecting collapse state.
