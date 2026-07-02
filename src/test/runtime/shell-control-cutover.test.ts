@@ -195,7 +195,7 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const violations: string[] = [];
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      'src/panels/agent-logs-panel.ts',
+      'src/panels/agent-inspector-panel.ts',
       'src/panels/cost-tracker-panel.ts',
     ];
 

@@ -29,6 +29,8 @@ export interface WorkspaceTab {
 export class PanelManager {
   private registry: PanelRegistration[] = [];
   private retainedPanels = new Map<string, Panel>();
+  /** Old/absorbed panel id -> merged target id (WO-1xx console merges). */
+  private aliases = new Map<string, string>();
   private _visible: boolean = false;
   private _splitRatio: number = 0.6;
 
@@ -71,6 +73,19 @@ export class PanelManager {
     }
   }
 
+  /**
+   * Register a compat redirect so an absorbed panel's old id still resolves
+   * after a console merge (docs, saved layouts, and muscle memory do not
+   * break). Resolved by open/close/activateById/getPanel/getPaneOf.
+   */
+  registerAlias(aliasId: string, targetId: string): void {
+    this.aliases.set(aliasId, targetId);
+  }
+
+  private _resolveId(panelId: string): string {
+    return this.aliases.get(panelId) ?? panelId;
+  }
+
   getRegisteredTypes(): PanelRegistration[] {
     return [...this.registry];
   }
@@ -103,7 +118,8 @@ export class PanelManager {
     this._cachedWorkspaceTabs = null;
   }
 
-  open(panelId: string, pane?: 'top' | 'bottom'): Panel {
+  open(panelIdOrAlias: string, pane?: 'top' | 'bottom'): Panel {
+    const panelId = this._resolveId(panelIdOrAlias);
     this._recordRecent(panelId);
     const existingPane = this._findPaneOf(panelId);
     if (existingPane) {
@@ -136,7 +152,8 @@ export class PanelManager {
     return panel;
   }
 
-  close(panelId: string): void {
+  close(panelIdOrAlias: string): void {
+    const panelId = this._resolveId(panelIdOrAlias);
     // Search both panes
     for (const which of ['top', 'bottom'] as const) {
       const p = this._getPane(which);
@@ -248,7 +265,8 @@ export class PanelManager {
     this._invalidateWorkspaceTabs();
   }
 
-  activateById(panelId: string): void {
+  activateById(panelIdOrAlias: string): void {
+    const panelId = this._resolveId(panelIdOrAlias);
     const which = this._findPaneOf(panelId);
     if (!which) return;
     this._activateByIdInPane(panelId, which);
@@ -353,14 +371,15 @@ export class PanelManager {
     return p.panels[p.activeIndex] ?? null;
   }
 
-  getPanel(panelId: string): Panel | null {
+  getPanel(panelIdOrAlias: string): Panel | null {
+    const panelId = this._resolveId(panelIdOrAlias);
     return this.topPane.panels.find((panel) => panel.id === panelId)
       ?? this.bottomPane.panels.find((panel) => panel.id === panelId)
       ?? null;
   }
 
-  getPaneOf(panelId: string): 'top' | 'bottom' | null {
-    return this._findPaneOf(panelId);
+  getPaneOf(panelIdOrAlias: string): 'top' | 'bottom' | null {
+    return this._findPaneOf(this._resolveId(panelIdOrAlias));
   }
 
   getWorkspaceTabs(): readonly WorkspaceTab[] {

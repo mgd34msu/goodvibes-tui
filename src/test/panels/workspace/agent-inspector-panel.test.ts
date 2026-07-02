@@ -2,6 +2,12 @@ import { describe, expect, test } from 'bun:test';
 import { AgentInspectorPanel } from '../../../panels/agent-inspector-panel.ts';
 import { linesText } from './_shared.ts';
 
+const STUB_AGENT_EVENTS = {
+  on: () => () => {},
+  onEnvelope: () => () => {},
+  emit: () => {},
+} as unknown as import('../../../runtime/ui-events.ts').UiEventFeed<import('@/runtime/index.ts').AgentEvent>;
+
 function createAgentInspectorPanel(): AgentInspectorPanel {
   return new AgentInspectorPanel({
     agentManager: {
@@ -12,6 +18,7 @@ function createAgentInspectorPanel(): AgentInspectorPanel {
       getMessages: () => [],
     },
     workingDirectory: '/tmp/goodvibes-test',
+    agentEvents: STUB_AGENT_EVENTS,
   });
 }
 
