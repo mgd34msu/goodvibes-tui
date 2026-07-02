@@ -12,6 +12,7 @@ import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { CATEGORY_LABELS, describeUiRouting, formatValue, getSettingLabel, inferSubscriptionRouteReason, valueColor } from './settings-modal-helpers.ts';
 import { isSecretConfigKey } from '../config/secret-config.ts';
 import { GLYPHS } from './ui-primitives.ts';
+import { formatHints, joinHints } from './hint-grammar.ts';
 import {
   clamp,
   getFullscreenWorkspaceMetrics,
@@ -540,24 +541,83 @@ function rowColorForSetting(modal: SettingsModal, rowText: string): string {
 }
 
 function footerText(modal: SettingsModal, width: number): string {
+  // Every branch speaks the shared hint grammar: bracketed [Key] Verb segments
+  // joined by the middle dot, with Esc sorted last. Leading words like
+  // "Focus settings" are state labels appended verbatim, not key hints.
   // Armed reset gate takes priority over all other footer states.
   if (modal.resetCategoryConfirm !== null || modal.resetAllConfirm !== null)
-    return 'Reset armed · Enter/y confirm · Esc/n cancel';
-  if (modal.searchFocused) return 'Search · type to filter · Up/Down navigate results · Enter select · Esc exit search';
-  if (modal.editingMode) return 'Enter Confirm edit · Esc Cancel edit · text keys edit the selected field';
-  if (modal.focusPane === 'categories') return 'Focus categories · Up/Down choose · Right/Enter settings · Tab pane · / search · Esc close';
-  if (modal.currentCategory === 'subscriptions') return 'Focus settings · Up/Down provider · Left categories · Tab pane · / search · Enter review/sign out · Esc close';
-  if (modal.currentCategory === 'mcp') return 'Focus settings · Up/Down server · Left categories · Tab pane · / search · Enter edit trust · Esc close';
-  if (modal.currentCategory === 'flags') return 'Focus feature flags · Up/Down flag · Left categories · Tab pane · / search · Enter/Space toggle · Esc close';
+    return joinHints('Reset armed', formatHints([
+      { key: 'Enter/y', verb: 'confirm' },
+      { key: 'Esc/n', verb: 'cancel' },
+    ]));
+  if (modal.searchFocused)
+    return joinHints('Search', 'type to filter', formatHints([
+      { key: 'Up/Down', verb: 'Navigate' },
+      { key: 'Enter', verb: 'Select' },
+      { key: 'Esc', verb: 'Exit search' },
+    ]));
+  if (modal.editingMode)
+    return formatHints([
+      { key: 'Enter', verb: 'Confirm edit' },
+      { key: 'Esc', verb: 'Cancel edit' },
+    ]);
+  if (modal.focusPane === 'categories')
+    return joinHints('Focus categories', formatHints([
+      { key: 'Up/Down', verb: 'Choose' },
+      { key: 'Right/Enter', verb: 'Settings' },
+      { key: 'Tab', verb: 'Pane' },
+      { key: '/', verb: 'Search' },
+      { key: 'Esc', verb: 'Close' },
+    ]));
+  if (modal.currentCategory === 'subscriptions')
+    return joinHints('Focus settings', formatHints([
+      { key: 'Up/Down', verb: 'Provider' },
+      { key: 'Left', verb: 'Categories' },
+      { key: 'Tab', verb: 'Pane' },
+      { key: '/', verb: 'Search' },
+      { key: 'Enter', verb: 'Review/sign out' },
+      { key: 'Esc', verb: 'Close' },
+    ]));
+  if (modal.currentCategory === 'mcp')
+    return joinHints('Focus settings', formatHints([
+      { key: 'Up/Down', verb: 'Server' },
+      { key: 'Left', verb: 'Categories' },
+      { key: 'Tab', verb: 'Pane' },
+      { key: '/', verb: 'Search' },
+      { key: 'Enter', verb: 'Edit trust' },
+      { key: 'Esc', verb: 'Close' },
+    ]));
+  if (modal.currentCategory === 'flags')
+    return joinHints('Focus feature flags', formatHints([
+      { key: 'Up/Down', verb: 'Flag' },
+      { key: 'Left', verb: 'Categories' },
+      { key: 'Tab', verb: 'Pane' },
+      { key: '/', verb: 'Search' },
+      { key: 'Enter/Space', verb: 'Toggle' },
+      { key: 'Esc', verb: 'Close' },
+    ]));
   // Default settings pane: tier the reset affordances by available width.
   // W<80:  minimal — only the most critical action survives.
   // W<160: compact but still shows both reset affordances.
   // W≥160: standard with all navigation tokens.
   if (width < 80)
-    return 'R reset · Esc';
+    return formatHints([{ key: 'R', verb: 'reset' }, { key: 'Esc', verb: 'Close' }]);
   if (width < 160)
-    return 'Up/Down · Enter/Space edit · ⇧R reset cat · ^⇧R reset all · Esc';
-  return 'Focus settings · Up/Down setting · Left · Enter/Space edit/toggle · ⇧R reset cat · ^⇧R reset all · Esc close';
+    return formatHints([
+      { key: 'Up/Down', verb: 'Move' },
+      { key: 'Enter/Space', verb: 'Edit' },
+      { key: '⇧R', verb: 'reset cat' },
+      { key: '^⇧R', verb: 'reset all' },
+      { key: 'Esc', verb: 'Close' },
+    ]);
+  return joinHints('Focus settings', formatHints([
+    { key: 'Up/Down', verb: 'Setting' },
+    { key: 'Left', verb: 'Categories' },
+    { key: 'Enter/Space', verb: 'Edit/toggle' },
+    { key: '⇧R', verb: 'reset cat' },
+    { key: '^⇧R', verb: 'reset all' },
+    { key: 'Esc', verb: 'Close' },
+  ]));
 }
 
 export function renderSettingsModal(

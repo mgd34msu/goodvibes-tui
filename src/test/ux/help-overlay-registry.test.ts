@@ -12,6 +12,8 @@ import type { SlashCommand } from '../../input/command-registry.ts';
 
 const KEYBINDINGS_STUB = {
   getComboLabel: (_action: string) => 'Ctrl+?',
+  // WO-151: the overlay now enumerates workspace bindings from getAll().
+  getAll: () => [],
 } as never;
 
 function makeCmd(name: string): SlashCommand {

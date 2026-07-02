@@ -138,6 +138,27 @@ export function handleGlobalShortcutToken(
       state.cyclePanelTab('prev');
       return true;
 
+    case 'panel-tab-1':
+    case 'panel-tab-2':
+    case 'panel-tab-3':
+    case 'panel-tab-4':
+    case 'panel-tab-5':
+    case 'panel-tab-6':
+    case 'panel-tab-7':
+    case 'panel-tab-8':
+    case 'panel-tab-9': {
+      // Alt+1..9: jump directly to the Nth workspace tab. Routed globally (like
+      // panel-tab-next/prev) so the jump works whether focus is on the prompt or
+      // the workspace; gated on visibility, matching cyclePanelTab semantics.
+      const pm = state.panelManager;
+      if (pm.isVisible()) {
+        const index = Number(action.slice('panel-tab-'.length)) - 1;
+        pm.activateWorkspaceIndex(index);
+        state.requestRender();
+      }
+      return true;
+    }
+
     case 'history-search':
       state.historySearch.open(state.prompt);
       state.requestRender();

@@ -38,6 +38,15 @@ export type KeyAction =
   | 'panel-close-all'
   | 'panel-tab-next'
   | 'panel-tab-prev'
+  | 'panel-tab-1'
+  | 'panel-tab-2'
+  | 'panel-tab-3'
+  | 'panel-tab-4'
+  | 'panel-tab-5'
+  | 'panel-tab-6'
+  | 'panel-tab-7'
+  | 'panel-tab-8'
+  | 'panel-tab-9'
   | 'panel-focus-toggle'
   | 'history-search'
   | 'search'
@@ -69,6 +78,15 @@ export const ACTION_DESCRIPTIONS: Record<KeyAction, string> = {
   'panel-close-all':         'Close all open panels',
   'panel-tab-next':        'Next workspace panel tab',
   'panel-tab-prev':        'Previous workspace panel tab',
+  'panel-tab-1':           'Jump to workspace panel tab 1',
+  'panel-tab-2':           'Jump to workspace panel tab 2',
+  'panel-tab-3':           'Jump to workspace panel tab 3',
+  'panel-tab-4':           'Jump to workspace panel tab 4',
+  'panel-tab-5':           'Jump to workspace panel tab 5',
+  'panel-tab-6':           'Jump to workspace panel tab 6',
+  'panel-tab-7':           'Jump to workspace panel tab 7',
+  'panel-tab-8':           'Jump to workspace panel tab 8',
+  'panel-tab-9':           'Jump to workspace panel tab 9',
   'panel-focus-toggle':    'Switch keyboard focus between top and bottom pane',
   'history-search':        'Reverse input history search',
   'search':                'Toggle conversation search',
@@ -101,6 +119,19 @@ export const DEFAULT_KEYBINDINGS: Record<KeyAction, KeyCombo[]> = {
   'panel-close-all':         [{ key: 'x', ctrl: true, shift: true }],
   'panel-tab-next':        [{ key: ']', ctrl: true }],
   'panel-tab-prev':        [{ key: '[', ctrl: true }],
+  // Alt+1..9: jump directly to the Nth workspace panel tab (across both panes).
+  // The tokenizer delivers Alt as the token's `meta` modifier; comboMatches /
+  // lookup treat `meta` as an alias for `alt`, so these alt-combos route through
+  // the same rebindable path as every other action.
+  'panel-tab-1':           [{ key: '1', alt: true }],
+  'panel-tab-2':           [{ key: '2', alt: true }],
+  'panel-tab-3':           [{ key: '3', alt: true }],
+  'panel-tab-4':           [{ key: '4', alt: true }],
+  'panel-tab-5':           [{ key: '5', alt: true }],
+  'panel-tab-6':           [{ key: '6', alt: true }],
+  'panel-tab-7':           [{ key: '7', alt: true }],
+  'panel-tab-8':           [{ key: '8', alt: true }],
+  'panel-tab-9':           [{ key: '9', alt: true }],
   // Ctrl+G: toggle keyboard focus between the top and bottom panes. Ctrl+G is
   // otherwise unbound in the default table.
   'panel-focus-toggle':    [{ key: 'g', ctrl: true }],
@@ -242,9 +273,13 @@ export class KeybindingsManager {
    * lookup — O(1) keybinding lookup by token.
    * Returns the matching KeyAction, or null if no binding matches.
    */
-  lookup(token: { logicalName?: string; ctrl?: boolean; shift?: boolean; alt?: boolean }): KeyAction | null {
+  lookup(token: { logicalName?: string; ctrl?: boolean; shift?: boolean; alt?: boolean; meta?: boolean }): KeyAction | null {
     if (!token.logicalName) return null;
-    const key = `${token.logicalName}:${token.ctrl ? 1 : 0}:${token.shift ? 1 : 0}:${token.alt ? 1 : 0}`;
+    // The tokenizer delivers the Alt modifier as `meta`; the binding table stores
+    // it as `alt`. Treat the two as one modifier at the matching boundary so
+    // Alt-based combos (word-nav, kill-ring, panel-tab-1..9) resolve at runtime.
+    const alt = token.alt ?? token.meta;
+    const key = `${token.logicalName}:${token.ctrl ? 1 : 0}:${token.shift ? 1 : 0}:${alt ? 1 : 0}`;
     return this.lookupMap.get(key) ?? null;
   }
 
@@ -265,7 +300,7 @@ export class KeybindingsManager {
    */
   matches(
     action: KeyAction,
-    token: { logicalName?: string; ctrl?: boolean; shift?: boolean; alt?: boolean },
+    token: { logicalName?: string; ctrl?: boolean; shift?: boolean; alt?: boolean; meta?: boolean },
   ): boolean {
     const combos = this.bindings[action];
     if (!combos) return false;
@@ -274,12 +309,13 @@ export class KeybindingsManager {
 
   private comboMatches(
     combo: KeyCombo,
-    token: { logicalName?: string; ctrl?: boolean; shift?: boolean; alt?: boolean },
+    token: { logicalName?: string; ctrl?: boolean; shift?: boolean; alt?: boolean; meta?: boolean },
   ): boolean {
     if (token.logicalName !== combo.key) return false;
     if (!!combo.ctrl !== !!token.ctrl) return false;
     if (!!combo.shift !== !!token.shift) return false;
-    if (!!combo.alt !== !!token.alt) return false;
+    // Alt arrives as `meta` from the tokenizer; accept either as the Alt modifier.
+    if (!!combo.alt !== !!(token.alt ?? token.meta)) return false;
     return true;
   }
 

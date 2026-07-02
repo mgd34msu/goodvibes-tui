@@ -10,6 +10,7 @@ import {
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
 import { GLYPHS } from './ui-primitives.ts';
 import { resolveUiTones } from './theme.ts';
+import { HINT_SEPARATOR } from './hint-grammar.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -188,9 +189,10 @@ export class ModalFactory {
       }
     }
 
-    // Footer / hint bar
+    // Footer / hint bar. Hint segments join with the shared middle-dot grammar
+    // separator (WO-151) so every modal footer reads as one dialect.
     const hintStr = config.hints
-      ? config.hints.join('  ')
+      ? config.hints.join(HINT_SEPARATOR)
       : (config.footer ?? '');
     lines.push(ModalFactory.renderHints(boxW, margin, hintStr, terminalWidth, style));
 
