@@ -155,7 +155,9 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const violations: string[] = [];
     const restrictedFiles = [
       'src/panels/thinking-panel.ts',
-      'src/panels/context-visualizer-panel.ts',
+      // WO-113: context-visualizer-panel.ts merged into token-budget-panel.ts;
+      // the successor inherits the legacy-turn-bus ban.
+      'src/panels/token-budget-panel.ts',
       'src/panels/debug-panel.ts',
       'src/panels/provider-health-panel.ts',
       'src/panels/cost-tracker-panel.ts',
