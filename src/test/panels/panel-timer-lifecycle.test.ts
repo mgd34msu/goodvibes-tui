@@ -1,18 +1,23 @@
 // ---------------------------------------------------------------------------
 // panel-timer-lifecycle.test.ts — Regression tests for panel refresh/poll timers.
-// TokenBudgetPanel STOPS its refresh timer while off-screen (onDeactivate) and
-// RESTARTS it when re-shown (onActivate). AgentLogsPanel takes the other valid
-// approach: one always-on poll timer from ctor to onDestroy, with repaints gated
-// on `_active` (markDirty) — so it is inherently immune to a "dead interval".
+// Both TokenBudgetPanel and AgentInspectorPanel STOP their refresh timer while
+// off-screen (onDeactivate) and RESTART it when re-shown (onActivate), so
+// neither leaks an interval nor polls a hidden panel.
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, afterEach } from 'bun:test';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { SessionMemoryStore } from '@pellux/goodvibes-sdk/platform/core';
-import { RuntimeEventBus } from '@/runtime/index.ts';
-import { createUiRuntimeEvents } from '../../runtime/ui-events.ts';
+import type { AgentEvent } from '@/runtime/index.ts';
+import type { UiEventFeed } from '../../runtime/ui-events.ts';
 import { TokenBudgetPanel } from '../../panels/token-budget-panel.ts';
-import { AgentLogsPanel } from '../../panels/agent-logs-panel.ts';
+import { AgentInspectorPanel } from '../../panels/agent-inspector-panel.ts';
+
+const STUB_AGENT_EVENTS = {
+  on: () => () => {},
+  onEnvelope: () => () => {},
+  emit: () => {},
+} as unknown as UiEventFeed<AgentEvent>;
 
 const TEST_ROOT = '/tmp/goodvibes-test';
 
@@ -57,22 +62,23 @@ describe('panel timer lifecycle (#26: no polling while off-screen)', () => {
     expect(active.size).toBe(baseline);
   });
 
-  test('AgentLogsPanel keeps one poll timer alive across activate/deactivate and clears it on destroy', () => {
+  test('AgentInspectorPanel (WO-110: merged agent-logs console) stops its refresh timer on deactivate and restarts on activate', () => {
     installTimerSpy();
-    const bus = new RuntimeEventBus();
-    const panel = new AgentLogsPanel(createUiRuntimeEvents(bus).agents, {
-      agentManager: { list: () => [] },
+    const panel = new AgentInspectorPanel({
+      agentManager: { list: () => [], getStatus: () => null, cancel: () => true },
+      agentMessageBus: { getMessages: () => [] },
       workingDirectory: TEST_ROOT,
+      cancelAgent: () => true,
+      agentEvents: STUB_AGENT_EVENTS,
     });
-    const baseline = active.size; // constructor starts the always-on poll timer
-    expect(baseline).toBeGreaterThanOrEqual(1);
+    const baseline = active.size; // constructor does not start the refresh timer
     panel.onActivate();
-    expect(active.size).toBe(baseline); // no new interval — onActivate only flips _active + polls once
+    expect(active.size).toBe(baseline + 1);
     panel.onDeactivate();
-    expect(active.size).toBe(baseline); // timer stays alive off-screen; markDirty() gates repaints on _active
+    expect(active.size).toBe(baseline); // timer stopped while off-screen
     panel.onActivate();
-    expect(active.size).toBe(baseline); // still exactly one timer (immune to the "dead interval" bug)
+    expect(active.size).toBe(baseline + 1); // restarts on re-show
     panel.onDestroy();
-    expect(active.size).toBe(baseline - 1); // poll timer cleared on destroy
+    expect(active.size).toBe(baseline);
   });
 });

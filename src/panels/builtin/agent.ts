@@ -1,5 +1,5 @@
 import type { PanelManager } from '../panel-manager.ts';
-import { AgentLogsPanel } from '../agent-logs-panel.ts';
+import { AgentInspectorPanel } from '../agent-inspector-panel.ts';
 import { ContextVisualizerPanel } from '../context-visualizer-panel.ts';
 import { ThinkingPanel } from '../thinking-panel.ts';
 import { ToolInspectorPanel } from '../tool-inspector-panel.ts';
@@ -52,22 +52,33 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     ),
   });
 
+  // WO-110: agent-logs merged into inspector — one deep agent console with
+  // the correct JSONL parser + cancel, plus agent-logs' follow/pause/filter
+  // ergonomics. Registration moved here (category 'agent') from
+  // builtin/development.ts.
   manager.registerType({
-    id: 'agent-logs',
-    name: 'Agents',
-    icon: 'A',
+    id: 'inspector',
+    name: 'Inspector',
+    icon: 'I',
     category: 'agent',
-    description: 'View-only live session stream from running agents with per-agent switching',
+    description: 'Live per-agent console: timeline, tool calls, WRFC/cost badges, pause/filter/follow, and cancel',
     preload: true,
     factory: () => {
       const ui = requireUiServices(deps);
-      return new AgentLogsPanel(ui.events.agents, {
+      return new AgentInspectorPanel({
         agentManager: ui.agents.agentManager,
+        agentMessageBus: ui.agents.agentMessageBus,
+        agentEvents: ui.events.agents,
         workingDirectory: ui.environment.workingDirectory,
+        cancelAgent: (agentId: string) => ui.agents.agentManager.cancel(agentId),
         requestRender: deps.requestRender,
       });
     },
   });
+
+  // Compat: '/panel open agent-logs' (and any saved layout/muscle memory)
+  // still resolves — redirected to the merged inspector console.
+  manager.registerAlias('agent-logs', 'inspector');
 
   manager.registerType({
     id: 'wrfc',
