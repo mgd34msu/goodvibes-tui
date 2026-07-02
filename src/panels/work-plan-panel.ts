@@ -16,6 +16,12 @@ import {
 } from './polish.ts';
 import type { WorkPlanItem, WorkPlanItemStatus, WorkPlanStore } from '../work-plans/work-plan-store.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { isTextBackspace } from '../input/delete-key-policy.ts';
+import { AgentInspectorPanel } from './agent-inspector-panel.ts';
+import { WrfcPanel } from './wrfc-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
+
+type WorkPlanDraftField = 'title' | 'owner' | 'notes';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   pending: '#94a3b8',
@@ -59,6 +65,18 @@ function statusName(status: WorkPlanItemStatus): string {
 export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
   private items: readonly WorkPlanItem[] = [];
   private lastPlanUpdatedAt = 0;
+  private lastStatus: string | null = null;
+
+  // Draft-input state for 'a' (add) / 'e' (edit): a small modal-like field
+  // editor inline in the header, following the same draft-buffer pattern as
+  // ProjectPlanningPanel's typed-answer draft (Tab cycles fields, Enter
+  // saves, Esc cancels, Backspace edits the active field).
+  private draftMode: 'add' | 'edit' | null = null;
+  private draftField: WorkPlanDraftField = 'title';
+  private draftTitle = '';
+  private draftOwner = '';
+  private draftNotes = '';
+  private draftEditingItemId: string | null = null;
 
   constructor(private readonly store: WorkPlanStore) {
     super('work-plan', 'Work Plan', 'L', 'agent');
@@ -85,6 +103,11 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
 
   handleInput(key: string): boolean {
     if (this.lastError !== null) this.clearError();
+
+    if (this.draftMode) {
+      return this.handleDraftInput(key);
+    }
+
     const item = this.items[this.selectedIndex];
     try {
       switch (key) {
@@ -120,12 +143,189 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
         case 'r':
           this.refresh(true);
           return true;
+        case 'a':
+          this.beginAddDraft();
+          return true;
+        case 'e':
+          if (!item) return false;
+          this.beginEditDraft(item);
+          return true;
+        case 'x':
+          this.exportMarkdown();
+          return true;
+        // 'i'/'w' jump to the selected item's linked agent/WRFC chain. The
+        // actual navigation happens in handlePanelIntegrationAction (it
+        // needs the PanelManager); consuming the key here just requires the
+        // linked target to exist so the router below fires next.
+        case 'i':
+          return item?.linked?.agentId !== undefined;
+        case 'w':
+          return item?.linked?.wrfcId !== undefined;
         default:
           return super.handleInput(key);
       }
     } catch (error) {
       this.setError(summarizeError(error));
       return true;
+    }
+  }
+
+  /**
+   * Cross-panel jumps: 'i' opens the Inspector focused on the selected
+   * item's linked agent; 'w' opens the WRFC panel focused on its linked
+   * chain.
+   */
+  handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
+    const item = this.items[this.selectedIndex];
+    if (!item) return false;
+    if (key === 'i') {
+      const agentId = item.linked?.agentId;
+      if (!agentId) return false;
+      const inspector = ctx.panelManager.open('inspector');
+      if (inspector instanceof AgentInspectorPanel) {
+        inspector.inspectAgent(agentId);
+        return true;
+      }
+      return false;
+    }
+    if (key === 'w') {
+      const wrfcId = item.linked?.wrfcId;
+      if (!wrfcId) return false;
+      const wrfc = ctx.panelManager.open('wrfc');
+      if (wrfc instanceof WrfcPanel) {
+        wrfc.selectChain(wrfcId);
+        return true;
+      }
+      return false;
+    }
+    return false;
+  }
+
+  // -------------------------------------------------------------------------
+  // Draft-input (add/edit)
+  // -------------------------------------------------------------------------
+
+  private handleDraftInput(key: string): boolean {
+    if (key === 'escape') {
+      this.cancelDraft();
+      return true;
+    }
+    if (key === 'tab') {
+      this.cycleDraftField();
+      return true;
+    }
+    if (key === 'enter' || key === 'return') {
+      this.commitDraft();
+      return true;
+    }
+    if (isTextBackspace(key)) {
+      this.setDraftFieldValue(this.getDraftFieldValue().slice(0, -1));
+      return true;
+    }
+    if (key === 'space') {
+      this.setDraftFieldValue(`${this.getDraftFieldValue()} `);
+      return true;
+    }
+    if (this.isPrintableKey(key)) {
+      this.setDraftFieldValue(`${this.getDraftFieldValue()}${key}`);
+      return true;
+    }
+    // Absorb everything else (up/down/pageup/etc.) while drafting.
+    return true;
+  }
+
+  private beginAddDraft(): void {
+    this.draftMode = 'add';
+    this.draftField = 'title';
+    this.draftTitle = '';
+    this.draftOwner = '';
+    this.draftNotes = '';
+    this.draftEditingItemId = null;
+    this.lastStatus = null;
+    this.needsRender = true;
+  }
+
+  private beginEditDraft(item: WorkPlanItem): void {
+    this.draftMode = 'edit';
+    this.draftField = 'title';
+    this.draftTitle = item.title;
+    this.draftOwner = item.owner ?? '';
+    this.draftNotes = item.notes ?? '';
+    this.draftEditingItemId = item.id;
+    this.lastStatus = null;
+    this.needsRender = true;
+  }
+
+  private cancelDraft(): void {
+    this.draftMode = null;
+    this.draftEditingItemId = null;
+    this.needsRender = true;
+  }
+
+  private cycleDraftField(): void {
+    const order: WorkPlanDraftField[] = ['title', 'owner', 'notes'];
+    const next = order[(order.indexOf(this.draftField) + 1) % order.length];
+    if (next) this.draftField = next;
+    this.needsRender = true;
+  }
+
+  private getDraftFieldValue(): string {
+    switch (this.draftField) {
+      case 'title': return this.draftTitle;
+      case 'owner': return this.draftOwner;
+      case 'notes': return this.draftNotes;
+    }
+  }
+
+  private setDraftFieldValue(value: string): void {
+    switch (this.draftField) {
+      case 'title': this.draftTitle = value; break;
+      case 'owner': this.draftOwner = value; break;
+      case 'notes': this.draftNotes = value; break;
+    }
+    this.needsRender = true;
+  }
+
+  private commitDraft(): void {
+    const title = this.draftTitle.trim();
+    if (!title) {
+      this.setError('Work plan item title is required.');
+      return;
+    }
+    try {
+      if (this.draftMode === 'add') {
+        this.store.addItem(title, {
+          owner: this.draftOwner.trim() || undefined,
+          notes: this.draftNotes.trim() || undefined,
+          source: 'tui-panel',
+        });
+        this.lastStatus = 'Item added.';
+      } else if (this.draftMode === 'edit' && this.draftEditingItemId) {
+        this.store.updateItem(this.draftEditingItemId, {
+          title,
+          owner: this.draftOwner.trim() || null,
+          notes: this.draftNotes.trim() || null,
+        });
+        this.lastStatus = 'Item updated.';
+      }
+      this.draftMode = null;
+      this.draftEditingItemId = null;
+      this.refresh(true);
+    } catch (error) {
+      this.setError(summarizeError(error));
+    }
+  }
+
+  private isPrintableKey(key: string): boolean {
+    return key.length === 1 && key >= ' ';
+  }
+
+  private exportMarkdown(): void {
+    try {
+      const { path } = this.store.exportMarkdown();
+      this.lastStatus = `Exported to ${path}`;
+    } catch (error) {
+      this.setError(summarizeError(error));
     }
   }
 
@@ -168,7 +368,10 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
 
   private refresh(force = false): void {
     const plan = this.store.getActivePlan();
-    if (!force && plan.updatedAt === this.lastPlanUpdatedAt && this.items.length === plan.items.length) return;
+    // updatedAt is bumped by every store mutation (addItem/updateItem/
+    // removeItem/clearCompleted), so it alone is a sufficient staleness
+    // check — no need to also compare item counts.
+    if (!force && plan.updatedAt === this.lastPlanUpdatedAt) return;
     this.items = plan.items;
     this.lastPlanUpdatedAt = plan.updatedAt;
     this.clampSelection();
@@ -176,6 +379,7 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
   }
 
   private renderHeader(width: number): Line[] {
+    if (this.draftMode) return this.renderDraftForm(width);
     const plan = this.store.getActivePlan();
     const counts = new Map<WorkPlanItemStatus, number>();
     for (const status of STATUS_ORDER) counts.set(status, 0);
@@ -231,29 +435,80 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
           [truncateDisplay(active.notes, Math.max(8, width - 8)), C.value],
         ]));
       }
+      const linkedSegments = this.buildLinkedSegments(active);
+      if (linkedSegments.length > 0) {
+        detailRows.push(buildPanelLine(width, [[' linked ', C.label], ...linkedSegments]));
+      }
       header.push(...buildDetailBlock(width, 'Selected item', detailRows, C));
     }
     return header;
   }
 
+  /** Renders item.linked (agentId/wrfcId/taskId/sessionId) with their jump keys. */
+  private buildLinkedSegments(item: WorkPlanItem): Array<[string, string]> {
+    const linked = item.linked;
+    if (!linked) return [];
+    const segments: Array<[string, string]> = [];
+    if (linked.agentId) segments.push([`agent:${linked.agentId} (i) `, C.info]);
+    if (linked.wrfcId) segments.push([`wrfc:${linked.wrfcId} (w) `, C.info]);
+    if (linked.taskId) segments.push([`task:${linked.taskId} `, C.dim]);
+    if (linked.sessionId) segments.push([`session:${linked.sessionId} `, C.dim]);
+    return segments;
+  }
+
+  private renderDraftForm(width: number): Line[] {
+    const title = this.draftMode === 'add' ? 'Add Work Plan Item' : 'Edit Work Plan Item';
+    const field = (label: string, value: string, key: WorkPlanDraftField): Line => {
+      const active = key === this.draftField;
+      const text = active ? `${value}▏` : (value || '(empty)');
+      return buildPanelLine(width, [
+        [` ${label.padEnd(6)} `, C.label],
+        [truncateDisplay(text, Math.max(8, width - 10)), active ? C.value : C.dim],
+      ]);
+    };
+    return buildSummaryBlock(width, title, [
+      buildPanelLine(width, [[' Tab next field  Enter save  Esc cancel', C.dim]]),
+      field('Title', this.draftTitle, 'title'),
+      field('Owner', this.draftOwner, 'owner'),
+      field('Notes', this.draftNotes, 'notes'),
+    ], C);
+  }
+
   private renderFooter(width: number): Line[] {
+    if (this.draftMode) {
+      return [
+        buildKeyboardHints(width, [
+          { keys: 'Tab', label: 'next field' },
+          { keys: 'Enter', label: 'save' },
+          { keys: 'Esc', label: 'cancel' },
+        ], C),
+      ];
+    }
     const hasItem = this.items.length > 0;
     if (!hasItem) {
       return [
         buildKeyboardHints(width, [
           { keys: '↑/↓', label: 'navigate' },
+          { keys: 'a', label: 'add' },
         ], C),
       ];
     }
-    return [
-      buildKeyboardHints(width, [
-        { keys: this.items.length > 0 ? `${this.selectedIndex + 1}/${this.items.length}` : '0/0', label: 'item' },
-        { keys: 'Enter', label: 'cycle status' },
-        { keys: '1-6', label: 'set status' },
-        { keys: 'd', label: 'delete' },
-        { keys: 'c', label: 'clear done' },
-        { keys: 'r', label: 'refresh' },
-      ], C),
+    const active = this.items[this.selectedIndex];
+    const hints: Array<{ keys: string; label: string }> = [
+      { keys: this.items.length > 0 ? `${this.selectedIndex + 1}/${this.items.length}` : '0/0', label: 'item' },
+      { keys: 'Enter', label: 'cycle status' },
+      { keys: '1-6', label: 'set status' },
+      { keys: 'a', label: 'add' },
+      { keys: 'e', label: 'edit' },
+      { keys: 'd', label: 'delete' },
+      { keys: 'c', label: 'clear done' },
+      { keys: 'x', label: 'export' },
+      { keys: 'r', label: 'refresh' },
+    ];
+    if (active?.linked?.agentId) hints.push({ keys: 'i', label: 'jump agent' });
+    if (active?.linked?.wrfcId) hints.push({ keys: 'w', label: 'jump wrfc' });
+    const lines: Line[] = [
+      buildKeyboardHints(width, hints, C),
       buildPanelLine(width, [
         [' 1', C.info], [' pending  ', C.dim],
         ['2', C.info], [' active  ', C.dim],
@@ -263,5 +518,9 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
         ['6', C.info], [' cancelled', C.dim],
       ]),
     ];
+    if (this.lastStatus) {
+      lines.push(buildPanelLine(width, [[` ${this.lastStatus}`, C.good]]));
+    }
+    return lines;
   }
 }

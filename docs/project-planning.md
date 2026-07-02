@@ -44,12 +44,13 @@ Open the panel through the panel picker or with `/plan panel`.
 
 The panel shows:
 
-- workspace project id and knowledge space
+- workspace project id and knowledge space, and live SDK artifact counts (states/decisions/language) from the planning status route
 - readiness and approval state
 - goal, scope, known context, and current next question
 - blocking/advisory readiness gaps
 - task graph and verification gates
 - agent handoff candidates
+- answered questions (prompt + recorded answer, most recent first)
 - durable decisions
 - project language and ambiguity resolutions
 
@@ -57,10 +58,12 @@ Panel keys:
 
 - `r` refreshes SDK-backed planning artifacts.
 - `a` marks the current structurally ready plan as approved for execution.
+- `Ctrl+R` / `Ctrl+A` are alternate bindings for refresh/approve that stay reachable while a question is active — plain `r`/`a` type into the draft answer in that mode instead.
 - Up/Down chooses available answer actions when a question is active, or scrolls panel content when there is no active answer list.
 - Type while the panel is focused to draft a custom answer.
 - `Enter` submits the selected or drafted answer through the normal planning chat path.
 - The answer list includes a dismiss action that pauses planning for the workspace and returns focus to normal chat.
+- Keyword-matched canned answer suggestions (scope/task/verification/recommended) are de-duplicated by answer text, so a question that matches more than one category never shows the same suggested answer twice.
 
 ## `/plan`
 
@@ -89,6 +92,14 @@ Commands:
 - `/work-plan clear-done`
 
 The TUI stores work-plan state under `~/.goodvibes/tui/work-plans/` and renders it in the `Work Plan` panel.
+
+Panel keys:
+
+- Up/Down navigates items; `Enter`/`Space` cycles status; `1`-`6` set status directly (pending/active/blocked/done/failed/cancelled).
+- `a` opens an inline add form (title/owner/notes fields); `e` opens the same form pre-filled to edit the selected item. `Tab` cycles fields, `Enter` saves, `Esc` cancels.
+- `d`/`Delete` removes the selected item; `c` clears completed (done/cancelled) items; `r` refreshes from disk.
+- `x` exports the current plan to a Markdown file next to the JSON store (`<store-file>.md`) using the same rendering `/work-plan list` and `toMarkdown()` share.
+- When the selected item has linked ids (`item.linked`: `agentId`/`wrfcId`/`taskId`/`sessionId`), the detail block shows them with their jump key: `i` opens the Inspector on the linked agent, `w` opens the WRFC panel on the linked chain.
 
 ## SDK Routes And Operator Methods
 

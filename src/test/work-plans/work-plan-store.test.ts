@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
@@ -60,5 +60,17 @@ describe('WorkPlanStore', () => {
     expect(markdown).toContain('Write handoff (blocked)');
     expect(markdown).toContain('Owner: sdk');
     expect(markdown).toContain('Source: coordination');
+  });
+
+  test('exportMarkdown writes toMarkdown() output to a sibling .md file', () => {
+    const store = makeStore();
+    store.addItem('Export this item', { owner: 'tui' });
+
+    const { path, markdown } = store.exportMarkdown();
+    expect(path).toBe(store.filePath.replace(/\.json$/, '.md'));
+    expect(markdown).toContain('Export this item');
+
+    const onDisk = readFileSync(path, 'utf8');
+    expect(onDisk.trim()).toBe(markdown);
   });
 });
