@@ -70,7 +70,9 @@ describe('MarketplacePanel', () => {
     expect(text).toContain('Deploy Audit');
     expect(text).toContain('Guard Pack');
     expect(text).toContain('curated-local');
-    expect(text).toContain('/marketplace open');
+    // The self-referential '/marketplace open' signpost is gone (binding
+    // principle 2 — the operator is already inside this panel).
+    expect(text).not.toContain('/marketplace open');
     // Curated (not-installed) selection surfaces a real 'i' install key hint,
     // not a printed slash-command signpost.
     expect(text).toContain('install');
@@ -122,6 +124,33 @@ describe('MarketplacePanel', () => {
     expect(panel.handleInput('enter')).toBe(true);
     text = panel.render(90, 16).flat().map((cell) => cell.char).join('');
     expect(text).toContain('CURATED');
+  });
+
+  test('i under an applied filter acts on the highlighted (filtered) row, not the raw catalog index', () => {
+    const panel = new MarketplacePanel(undefined, makePaths());
+    panel.onActivate();
+
+    // Apply a '/' filter matching only 'Guard Pack' (rows sort Deploy Audit
+    // first, so a raw this.rows[0] read would wrongly target Deploy Audit).
+    expect(panel.handleInput('/')).toBe(true);
+    for (const ch of 'guard') panel.handleInput(ch);
+    expect(panel.handleInput('enter')).toBe(true); // commit filter, keep query
+
+    expect(panel.handleInput('i')).toBe(true);
+    const confirmText = panel.render(90, 16).flat().map((cell) => cell.char).join('');
+    expect(confirmText).toContain('Install');
+    expect(confirmText).toContain('Guard Pack');
+    expect(confirmText).not.toContain('Install plugin Deploy Audit');
+
+    // Confirming installs the filtered row for real: clear the filter and
+    // exactly one row (Guard Pack) is INSTALLED while the other (Deploy
+    // Audit — the row a desynced index would have hit) remains CURATED.
+    expect(panel.handleInput('enter')).toBe(true);
+    panel.handleInput('/');
+    panel.handleInput('escape'); // clear the filter query
+    const text = panel.render(90, 16).flat().map((cell) => cell.char).join('');
+    expect(text.match(/INSTALLED/g)?.length).toBe(1);
+    expect(text.match(/CURATED/g)?.length).toBe(1);
   });
 
   test('Enter expands full review detail for the selected entry', () => {

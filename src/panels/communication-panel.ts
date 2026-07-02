@@ -195,7 +195,7 @@ export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord>
       ]),
       snapshot.totalBlocked > 0
         ? buildPanelLine(width, [[`  ${snapshot.totalBlocked} message${snapshot.totalBlocked !== 1 ? 's' : ''} blocked by routing policy — press b to isolate blocked lanes.`, C.warn]])
-        : buildGuidanceLine(width, '/orchestration', 'inspect recursive routing, message handoff, and broadcast posture', C),
+        : buildPanelLine(width, [['  No blocked lanes — press Enter on a record to inspect routing in the orchestration console.', C.dim]]),
     ];
 
     if (records.length === 0) {
