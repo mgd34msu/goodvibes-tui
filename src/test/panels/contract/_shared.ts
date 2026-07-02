@@ -127,6 +127,19 @@ export const EMPTY_MEMORY_REGISTRY = {
   review: (_id: string, _opts: unknown) => {},
 } as unknown as import('@pellux/goodvibes-sdk/platform/state').MemoryRegistry;
 
+export const EMPTY_KNOWLEDGE_API = {
+  sources: { list: (_limit?: number) => [] },
+  graph: {
+    nodes: { list: (_limit?: number) => [] },
+    issues: {
+      list: (_limit?: number) => [],
+      review: async (_input: unknown) => { throw new Error('not implemented in EMPTY_KNOWLEDGE_API'); },
+    },
+    items: { search: (_query: string, _limit?: number) => [] },
+  },
+  jobs: { schedules: { list: (_limit?: number) => [] } },
+} as unknown as import('@pellux/goodvibes-sdk/platform/knowledge').KnowledgeApi;
+
 export const EMPTY_HOOKS_WORKBENCH = {
   listManagedHooks: () => [],
   listManagedChains: () => [],
