@@ -18,7 +18,6 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import {
   buildBodyText,
-  buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
@@ -107,8 +106,8 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   private filterFocused = false;
   private unsubscribe?: () => void;
 
-  // Review-mode confirm state (for destructive stale/contradict actions)
-  private confirm: ConfirmState<{ id: string; action: 'stale' | 'contradicted' }> | null = null;
+  // Confirm state (for destructive stale/contradict/delete actions)
+  private confirm: ConfirmState<{ id: string; action: 'stale' | 'contradicted' | 'delete' }> | null = null;
 
   // Cached records for review-mode (reviewQueue-first, same as former KnowledgePanel)
   private reviewRecords: MemoryRecord[] = [];
@@ -227,6 +226,12 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
     this.clampSelection();
   }
 
+  /** Count of records beyond the 100-record fetch cap in getAllItems(). */
+  private getHiddenCount(): number {
+    const total = this.registry.search({}).length;
+    return Math.max(0, total - 100);
+  }
+
   private cycleFilter(): void {
     const modes: FilterMode[] = ['all', 'review'];
     const next = modes[(modes.indexOf(this.filterMode) + 1) % modes.length];
@@ -247,6 +252,17 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       if (result === 'confirmed') {
         const { id, action } = this.confirm.subject;
         this.confirm = null;
+        if (action === 'delete') {
+          try {
+            this.registry.delete(id);
+          } catch (e) {
+            this.setError(`Delete failed: ${summarizeError(e)}`);
+          }
+          this.invalidateFilter();
+          this.refreshReviewRecords();
+          this.markDirty();
+          return true;
+        }
         const record = this.reviewRecords.find((r) => r.id === id);
         if (record) {
           try {
@@ -325,6 +341,12 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
         this.markDirty();
         return true;
       }
+      if (key === 'd') {
+        if (!selected) return false;
+        this.confirm = { subject: { id: selected.id, action: 'delete' }, label: truncateDisplay(selected.summary, 40) };
+        this.markDirty();
+        return true;
+      }
     }
 
     // All-mode: search filter focus
@@ -354,6 +376,14 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
 
       if (key === 'r') {
         this.invalidateFilter();
+        this.markDirty();
+        return true;
+      }
+
+      if (key === 'd') {
+        const selected = items[this.selectedIndex];
+        if (!selected) return false;
+        this.confirm = { subject: { id: selected.id, action: 'delete' }, label: truncateDisplay(selected.summary, 40) };
         this.markDirty();
         return true;
       }
@@ -407,6 +437,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
     }
 
     const filterInputLine = this.buildFilterInputLine(width, 'Search', this.filterFocused);
+    const hiddenCount = this.getHiddenCount();
 
     const summaryLines: Line[] = [
       buildKeyValueLine(width, [
@@ -418,7 +449,9 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       ], C),
       filterToggleLine,
       filterInputLine,
-      buildGuidanceLine(width, '/recall review', 'review durable knowledge and queue posture from the command surface', C),
+      ...(hiddenCount > 0
+        ? [buildPanelLine(width, [[`  +${hiddenCount} hidden (100-record cap)`, C.dim]])]
+        : []),
     ];
 
     const selected = records[this.selectedIndex];
@@ -447,7 +480,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       header: summaryLines,
       footer: [
         ...selectedLines,
-        buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload  Tab: Review Queue  Esc clear search', C.dim]]),
+        buildPanelLine(width, [['  / search  j/k or Up/Down move  r reload  d delete  Tab: Review Queue  Esc clear search', C.dim]]),
       ],
     });
   }
@@ -497,7 +530,6 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
         ['  team ', C.label], [String(byScope.get('team') ?? 0), C.good],
       ]),
       filterToggleLine,
-      buildGuidanceLine(width, '/recall review', 'work the stale and contradicted queue from the command surface', C),
     ];
 
     const selectedRecord = this.reviewRecords[this.selectedIndex];
@@ -547,7 +579,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       header: [...classLines, ...reviewLines],
       footer: [
         ...(selectedLines.length > 0 ? selectedLines : []),
-        buildPanelLine(width, [['  Tab: All Records  Up/Down move  r/Enter reviewed  s stale  c contradicted  f fresh', C.dim]]),
+        buildPanelLine(width, [['  Tab: All Records  Up/Down move  r/Enter reviewed  s stale  c contradicted  f fresh  d delete', C.dim]]),
       ],
     });
   }

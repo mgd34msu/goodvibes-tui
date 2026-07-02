@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 import { SessionBrowserPanel } from '../../panels/session-browser-panel.ts';
 import type { SessionBrowserQuery } from '../../runtime/ui-service-queries.ts';
 import type { SessionInfo } from '@pellux/goodvibes-sdk/platform/sessions';
+import type { PanelIntegrationContext } from '../../panels/types.ts';
 
 function makeSession(name: string, over: Partial<SessionInfo> = {}): SessionInfo {
   return {
@@ -85,5 +86,44 @@ describe('SessionBrowserPanel', () => {
   test('focusSession on an unknown id clears the filter without crashing', () => {
     const panel = new SessionBrowserPanel(makeQuery([makeSession('s1')]));
     expect(() => panel.focusSession('does-not-exist')).not.toThrow();
+  });
+
+  // ---------------------------------------------------------------------------
+  // WO-141: x = execute the computed next-step command via the bridge
+  // ---------------------------------------------------------------------------
+
+  test('x dispatches /session resume <name> via the bridge when no remote runner is present', () => {
+    const panel = new SessionBrowserPanel(makeQuery([makeSession('s1')]));
+    textOf(panel); // lazy-loads sessions on first render
+    expect(panel.handleInput('x')).toBe(true);
+    const executeCommand = mock((_name: string, _args: string[]) => Promise.resolve());
+    const ctx = { panelManager: { open: mock(() => null) }, executeCommand } as unknown as PanelIntegrationContext;
+    expect(panel.handlePanelIntegrationAction?.('x', ctx)).toBe(true);
+    expect(executeCommand).toHaveBeenCalledWith('session', ['resume', 's1']);
+  });
+
+  test('x dispatches /remote recover <runner> via the bridge when a remote runner is present', () => {
+    const panel = new SessionBrowserPanel(makeQuery([
+      makeSession('s1', { returnContext: { remoteRunners: ['runner-42'] } }),
+    ]));
+    textOf(panel); // lazy-loads sessions on first render
+    expect(panel.handleInput('x')).toBe(true);
+    const executeCommand = mock((_name: string, _args: string[]) => Promise.resolve());
+    const ctx = { panelManager: { open: mock(() => null) }, executeCommand } as unknown as PanelIntegrationContext;
+    expect(panel.handlePanelIntegrationAction?.('x', ctx)).toBe(true);
+    expect(executeCommand).toHaveBeenCalledWith('remote', ['recover', 'runner-42']);
+  });
+
+  test('resuming a session with saved returnContext.openPanels re-opens them via PanelManager', () => {
+    const panel = new SessionBrowserPanel(makeQuery([
+      makeSession('s1', { returnContext: { openPanels: ['tasks', 'inspector'] } }),
+    ]));
+    textOf(panel); // lazy-loads sessions on first render
+    expect(panel.handleInput('return')).toBe(true);
+    const open = mock((_id: string) => null);
+    const ctx = { panelManager: { open }, executeCommand: mock(() => Promise.resolve()) } as unknown as PanelIntegrationContext;
+    expect(panel.handlePanelIntegrationAction?.('return', ctx)).toBe(true);
+    expect(open).toHaveBeenCalledWith('tasks');
+    expect(open).toHaveBeenCalledWith('inspector');
   });
 });
