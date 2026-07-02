@@ -29,10 +29,15 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
   manager.registerType({
     id: 'plan',
     name: 'Plan',
-    icon: 'P',
+    // Distinct from Planning's 'P' (builtin/agent.ts) — interim glyph per
+    // WO-128; WO-152 owns the registry-wide icon-uniqueness assertion.
+    icon: '▤',
     category: 'agent',
     description: 'Active execution plan with phase progress and item status',
-    factory: () => new PlanDashboardPanel(deps.planManager),
+    factory: () => {
+      const ui = requireUiServices(deps);
+      return new PlanDashboardPanel(ui.events.workflows, { planManager: deps.planManager });
+    },
   });
 
   manager.registerType({
