@@ -7,7 +7,7 @@
  */
 
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
-import type { Line } from '../types/grid.ts';
+import { createEmptyLine, type Line } from '../types/grid.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import {
   buildBodyText,
@@ -26,9 +26,20 @@ import {
   type PanelPalette,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 
 const MAX_MESSAGES = 500;
+
+// UI message-routing targets (ui.systemMessages / ui.operationalMessages /
+// ui.wrfcMessages) all share the same enum. Cycled in-panel by s/o/w and
+// persisted via ConfigManager.set (WO-137).
+type RouteTarget = 'panel' | 'conversation' | 'both';
+const ROUTE_CYCLE: readonly RouteTarget[] = ['panel', 'conversation', 'both'];
+function nextRoute(current: string): RouteTarget {
+  const idx = ROUTE_CYCLE.indexOf(current as RouteTarget);
+  return ROUTE_CYCLE[(idx + 1 + ROUTE_CYCLE.length) % ROUTE_CYCLE.length]!;
+}
 
 // Domain accents only; the title band comes straight from
 // DEFAULT_PANEL_PALETTE (WO-002).
@@ -46,6 +57,10 @@ export interface SystemMessageEntry {
   priority: SystemMessagePriority;
 }
 
+// One-key priority cycle (all -> high -> low -> all), applied on top of the
+// existing text filter rather than replacing it.
+const PRIORITY_CYCLE: ReadonlyArray<'' | SystemMessagePriority> = ['', 'high', 'low'];
+
 function fmtTime(ts: number): string {
   const d = new Date(ts);
   const hh = String(d.getHours()).padStart(2, '0');
@@ -57,6 +72,10 @@ function fmtTime(ts: number): string {
 export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry> {
   private _messages: SystemMessageEntry[] = [];
   private readonly configManager: ConfigManager;
+  /** '' = all priorities; set via the one-key priority cycle ('p'). */
+  private priorityFilter: '' | SystemMessagePriority = '';
+  /** c=clear backlog confirmation. */
+  private confirmClear: ConfirmState<'clear'> | null = null;
 
   constructor(configManager: ConfigManager, componentHealthMonitor?: ComponentHealthMonitor) {
     super('system-messages', 'System Messages', 'J', 'monitoring', componentHealthMonitor);
@@ -67,6 +86,13 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
 
   protected override filterMatches(entry: SystemMessageEntry, q: string): boolean {
     return entry.text.toLowerCase().includes(q) || entry.priority.toLowerCase().includes(q);
+  }
+
+  /** Text filter (base class) combined with the priority cycle filter. */
+  protected override getVisibleItems(): readonly SystemMessageEntry[] {
+    const base = super.getVisibleItems();
+    if (!this.priorityFilter) return base;
+    return base.filter((entry) => entry.priority === this.priorityFilter);
   }
 
   // ---------------------------------------------------------------------------
@@ -111,13 +137,21 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
   // ---------------------------------------------------------------------------
 
   push(text: string, priority: SystemMessagePriority): void {
+    // Follow-mode: only auto-jump to the new message when the selection was
+    // already at the tail of what's currently visible. Otherwise the user is
+    // reviewing history and a new low-priority message shouldn't yank the
+    // cursor out from under them.
+    const visibleBefore = this.getVisibleItems();
+    const wasAtTail = visibleBefore.length === 0 || this.selectedIndex >= visibleBefore.length - 1;
     this._messages.push({ ts: Date.now(), text, priority });
     if (this._messages.length > MAX_MESSAGES) {
       this._messages.shift();
       if (this.selectedIndex > 0) this.selectedIndex--;
     }
-    // Auto-follow: jump to latest message
-    this.selectedIndex = Math.max(0, this._messages.length - 1);
+    if (wasAtTail) {
+      const visibleAfter = this.getVisibleItems();
+      this.selectedIndex = Math.max(0, visibleAfter.length - 1);
+    }
     this.markDirty();
   }
 
@@ -130,8 +164,59 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
   }
 
   // ---------------------------------------------------------------------------
-  // Input — base class handles all navigation; nothing custom here
+  // Input
   // ---------------------------------------------------------------------------
+
+  override handleInput(key: string): boolean {
+    const confirmResult = handleConfirmInput(this.confirmClear, key);
+    if (confirmResult === 'confirmed') {
+      this.confirmClear = null;
+      this._messages = [];
+      this.selectedIndex = 0;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirmClear = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
+    if (!this.filterActive && key === 'p') {
+      const idx = PRIORITY_CYCLE.indexOf(this.priorityFilter);
+      this.priorityFilter = PRIORITY_CYCLE[(idx + 1) % PRIORITY_CYCLE.length]!;
+      this.selectedIndex = 0;
+      this.markDirty();
+      return true;
+    }
+    if (!this.filterActive && key === 's') {
+      const ui = this.configManager.getRaw().ui;
+      this.configManager.set('ui.systemMessages', nextRoute(ui.systemMessages));
+      this.markDirty();
+      return true;
+    }
+    if (!this.filterActive && key === 'o') {
+      const ui = this.configManager.getRaw().ui;
+      this.configManager.set('ui.operationalMessages', nextRoute(ui.operationalMessages));
+      this.markDirty();
+      return true;
+    }
+    if (!this.filterActive && key === 'w') {
+      const ui = this.configManager.getRaw().ui;
+      this.configManager.set('ui.wrfcMessages', nextRoute(ui.wrfcMessages));
+      this.markDirty();
+      return true;
+    }
+    if (!this.filterActive && key === 'c') {
+      if (this._messages.length === 0) return false;
+      this.confirmClear = { subject: 'clear', label: `${this._messages.length} system message(s)`, verb: 'Clear' };
+      this.markDirty();
+      return true;
+    }
+
+    return super.handleInput(key);
+  }
 
   // ---------------------------------------------------------------------------
   // Render — multi-section layout (posture + list + detail)
@@ -143,6 +228,7 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
     const hints: Array<{ keys: string; label: string }> = [
       { keys: 'j/k', label: 'scroll' },
       { keys: 'g/G', label: 'jump' },
+      { keys: 'p', label: 'priority' },
     ];
     if (this.filterActive) {
       hints.push({ keys: 'Esc', label: 'clear filter' });
@@ -150,12 +236,24 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
       hints.push({ keys: '/', label: 'edit filter' }, { keys: 'Esc', label: 'clear filter' });
     } else {
       hints.push({ keys: '/', label: 'filter' });
+      if (this._messages.length > 0) hints.push({ keys: 'c', label: 'clear' });
     }
     return hints;
   }
 
   override render(width: number, height: number): Line[] {
     return this.trackedRender(() => {
+      if (this.confirmClear) {
+        this.needsRender = false;
+        const lines = buildPanelWorkspace(width, height, {
+          title: 'System Messages',
+          sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirmClear) }],
+          palette: C,
+        });
+        while (lines.length < height) lines.push(createEmptyLine(width));
+        return lines.slice(0, height);
+      }
+
       const intro = 'Operational system traffic routed out of the main conversation to reduce noise and keep runtime status reviewable.';
 
       if (this._messages.length === 0) {
@@ -198,19 +296,22 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
           ...(latest ? ([['    newest ', C.label], [`${fmtTime(latest.ts)}`, C.value]] as Array<[string, string]>) : []),
         ]),
         buildKeyValueLine(width, [
-          { label: 'system route', value: ui.systemMessages, valueColor: C.info },
-          { label: 'ops route', value: ui.operationalMessages, valueColor: C.info },
-          { label: 'wrfc route', value: ui.wrfcMessages, valueColor: C.info },
+          { label: 'system route (s)', value: ui.systemMessages, valueColor: C.info },
+          { label: 'ops route (o)', value: ui.operationalMessages, valueColor: C.info },
+          { label: 'wrfc route (w)', value: ui.wrfcMessages, valueColor: C.info },
         ], C),
-        buildGuidanceLine(width, '/settings', 'adjust where operational and WRFC messages render across panels and conversation', C),
+        buildGuidanceLine(width, '/settings', 'review the full settings surface (routing is also toggleable in-panel with s/o/w)', C),
       ];
 
       const visible = this.getVisibleItems();
       this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, visible.length - 1));
       const selected = visible[this.selectedIndex];
+      const noMatchReason = this.filterQuery.trim()
+        ? `"${this.filterQuery.trim()}"${this.priorityFilter ? ` + priority:${this.priorityFilter}` : ''}`
+        : `priority:${this.priorityFilter}`;
       const messageRows: Line[] = visible.length > 0
         ? visible.map((entry, index) => this.renderItem(entry, index, index === this.selectedIndex, width))
-        : [buildPanelLine(width, [[`  No messages match "${this.filterQuery.trim()}"  (Esc to clear)`, C.dim]])];
+        : [buildPanelLine(width, [[`  No messages match ${noMatchReason}  (Esc to clear filter, p to reset priority)`, C.dim]])];
 
       const filterSection: PanelWorkspaceSection = { lines: [this.buildFilterLine(width)] };
       const postureSection: PanelWorkspaceSection = { lines: buildSummaryBlock(width, 'System posture', postureLines, C) };
