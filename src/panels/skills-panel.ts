@@ -1,12 +1,14 @@
 import { promises as fsPromises } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
 import { SearchableListPanel } from './scrollable-list-panel.ts';
+import { FilePreviewPanel } from './file-preview-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
-import type { ShellPathService } from '@/runtime/index.ts';
+import { listInstalledEcosystemEntries, type EcosystemCatalogPathOptions, type ShellPathService } from '@/runtime/index.ts';
 import {
   buildPanelLine,
   buildPanelWorkspace,
@@ -36,11 +38,20 @@ export interface SkillRecord {
   dependencies: string[];
   includes: string[];
   frontmatter: Record<string, string>;
+  /**
+   * Set when this skill's file lives under an installed ecosystem-marketplace
+   * receipt's targetPath — the receipt's provenance summary (e.g. curated
+   * source / signature info), so marketplace-installed skills read as such
+   * instead of looking identical to hand-authored ones.
+   */
+  marketplaceProvenance?: string;
 }
 
 export interface SkillsPanelOptions {
   shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
   componentHealthMonitor?: ComponentHealthMonitor;
+  /** When provided, installed skill entries are tagged with marketplace provenance. */
+  ecosystemPaths?: EcosystemCatalogPathOptions;
 }
 
 function parseFrontmatter(content: string): Record<string, string> {
@@ -122,7 +133,31 @@ async function scanSkillDirectory(root: string, origin: SkillOrigin): Promise<Sk
   return records;
 }
 
-export async function discoverSkills(shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>): Promise<SkillRecord[]> {
+/**
+ * Tags records whose file lives under an installed ecosystem-marketplace
+ * receipt's targetPath with that receipt's provenance summary. Best-effort:
+ * a lookup failure (e.g. no ecosystem catalogs configured) leaves records
+ * untagged rather than failing skill discovery.
+ */
+function applyMarketplaceProvenance(records: SkillRecord[], ecosystemPaths: EcosystemCatalogPathOptions): SkillRecord[] {
+  let receipts: ReturnType<typeof listInstalledEcosystemEntries>;
+  try {
+    receipts = listInstalledEcosystemEntries('skill', ecosystemPaths);
+  } catch {
+    return records;
+  }
+  if (receipts.length === 0) return records;
+  return records.map((record) => {
+    const receipt = receipts.find((candidate) => record.path === candidate.targetPath || record.path.startsWith(`${candidate.targetPath}${sep}`));
+    if (!receipt) return record;
+    return { ...record, marketplaceProvenance: receipt.provenanceSummary };
+  });
+}
+
+export async function discoverSkills(
+  shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>,
+  ecosystemPaths?: EcosystemCatalogPathOptions,
+): Promise<SkillRecord[]> {
   const cwd = shellPaths.workingDirectory;
   const homeDir = shellPaths.homeDirectory;
   const seen = new Set<string>();
@@ -136,7 +171,9 @@ export async function discoverSkills(shellPaths: Pick<ShellPathService, 'working
     }
   }
 
-  return records.sort((a, b) => {
+  const tagged = ecosystemPaths ? applyMarketplaceProvenance(records, ecosystemPaths) : records;
+
+  return tagged.sort((a, b) => {
     const originRank = a.origin === b.origin
       ? 0
       : a.origin === 'project-local'
@@ -218,6 +255,7 @@ function originColor(origin: SkillOrigin): string {
 
 export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   private readonly shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
+  private readonly ecosystemPaths: EcosystemCatalogPathOptions | undefined;
   /** Whether the filter input row is focused for typing (vs. list navigation). */
   private filterFocused = false;
   private cached: SkillRecord[] | null = null;
@@ -225,11 +263,17 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   // I1: confirm state for destructive delete
   private confirm: ConfirmState | null = null;
   private readyPromise: Promise<void> | null = null;
+  // Staged pending action consumed by handlePanelIntegrationAction (same
+  // pattern as diff-panel.ts's pendingOpenPreview): Enter marks the intent
+  // here, the actual PanelManager/preview wiring happens once the
+  // integration context is available.
+  private pendingOpenPreview = false;
 
   public constructor(options: SkillsPanelOptions) {
     super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.shellPaths = options.shellPaths;
+    this.ecosystemPaths = options.ecosystemPaths;
   }
 
   // -------------------------------------------------------------------------
@@ -244,7 +288,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     const p = (async () => {
       try {
         await this.withLoading('Scanning skills\u2026', async () => {
-          this.cached = await discoverSkills(this.shellPaths);
+          this.cached = await discoverSkills(this.shellPaths, this.ecosystemPaths);
           this.cacheDirty = false;
           this.invalidateFilter();
         });
@@ -262,6 +306,23 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     return this.readyPromise ?? Promise.resolve();
   }
 
+  /**
+   * REAL delete: removes the confirmed skill's markdown file from disk, then
+   * rescans so the list reflects the change immediately. Replaces the old
+   * setError('Delete via shell: rm …') signpost, which never actually
+   * deleted anything.
+   */
+  private async _deleteSkill(path: string): Promise<void> {
+    try {
+      await fsPromises.rm(path);
+      this.cacheDirty = true;
+      await this._loadSkillsAsync();
+    } catch (err) {
+      this.setError(summarizeError(err));
+      this.markDirty();
+    }
+  }
+
   protected matchesSearch(skill: SkillRecord, query: string): boolean {
     const q = query.trim().toLowerCase();
     if (!q) return true;
@@ -270,6 +331,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
       skill.description,
       skill.path,
       skill.origin,
+      skill.marketplaceProvenance ?? '',
       skill.dependencies.join(' '),
       skill.includes.join(' '),
     ].join(' ').toLowerCase();
@@ -279,13 +341,18 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   protected renderItem(skill: SkillRecord, index: number, selected: boolean, width: number): Line {
     const bg = selected ? C.selectBg : undefined;
     const dot = skill.origin === 'project-local' ? '\u25c6' : '\u2022';
+    // Marketplace-installed skills get a badge glyph; unbadged column stays a
+    // single blank cell so rows stay aligned either way.
+    const marketplaceBadge = skill.marketplaceProvenance ? '\u2605' : ' ';
     const desc = skill.description || 'No description provided.';
-    const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
+    const descWidth = Math.max(1, width - 6 - skill.name.length - 6);
     const descLines = wordWrap(desc, descWidth);
     return buildPanelLine(width, [
       [selected ? '\u25b8' : ' ', C.value, bg],
       [' ', C.dim, bg],
       [dot, originColor(skill.origin), bg],
+      [' ', C.dim, bg],
+      [marketplaceBadge, C.info, bg],
       [' ', C.dim, bg],
       [skill.name, selected ? C.value : C.value, bg],
       ['  ', C.dim, bg],
@@ -313,15 +380,57 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
 
   public override onDestroy(): void {}
 
+  protected override onSelect(_skill: SkillRecord): void {
+    // Enter opens the skill's markdown source in the preview panel — see
+    // handlePanelIntegrationAction for the actual PanelManager wiring
+    // (needs the integration context, not available here). Selection itself
+    // is read back from getItems() in that hook.
+    if (this.filterFocused) return;
+    this.pendingOpenPreview = true;
+  }
+
+  /**
+   * Cross-panel integration hook — Enter opens the selected skill's markdown
+   * source in the preview panel via the same open/focus bridge DiffPanel
+   * uses (src/input/panel-integration-actions.ts), without this panel
+   * needing to know about PanelManager pane/focus mechanics beyond what ctx
+   * exposes.
+   */
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingOpenPreview) return false;
+    this.pendingOpenPreview = false;
+    const skill = this.getItems()[this.selectedIndex];
+    if (!skill) return false;
+
+    const pm = ctx.panelManager;
+    let previewPanel = pm.getPanel('preview');
+    if (previewPanel instanceof FilePreviewPanel) {
+      const pane = pm.getPaneOf('preview');
+      pm.activateById('preview');
+      if (pane) pm.focusPane(pane);
+    } else {
+      const targetPane: 'top' | 'bottom' = pm.isBottomPaneVisible()
+        ? (pm.getFocusedPane() === 'top' ? 'bottom' : 'top')
+        : 'bottom';
+      const opened = pm.open('preview', targetPane);
+      pm.show();
+      pm.focusPane(targetPane);
+      previewPanel = opened instanceof FilePreviewPanel ? opened : null;
+    }
+    if (previewPanel instanceof FilePreviewPanel) {
+      previewPanel.openFile(skill.path);
+      return true;
+    }
+    return false;
+  }
+
   public handleInput(key: string): boolean {
     // I1: y/n confirmation dialog for delete
     const confirmResult = handleConfirmInput(this.confirm, key);
     if (confirmResult === 'confirmed') {
       const toDelete = this.confirm!.subject;
       this.confirm = null;
-      // Skills are read from the filesystem — deletion requires a shell command.
-      // Surface an error directing the user to remove the file manually.
-      this.setError(`Delete via shell: rm "${toDelete}"`);
+      void this._deleteSkill(toDelete);
       this.markDirty();
       return true;
     }
@@ -405,9 +514,14 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
         buildPanelLine(width, [['  Desc: ', C.label], [selected.description || 'No description provided.', C.value]]),
         buildPanelLine(width, [['  Depends: ', C.label], [selected.dependencies.length > 0 ? selected.dependencies.join(', ') : 'none', C.dim]]),
         buildPanelLine(width, [['  Includes: ', C.label], [selected.includes.length > 0 ? selected.includes.join(', ') : 'none', C.dim]]),
+        buildPanelLine(width, [
+          ['  Provenance: ', C.label],
+          [selected.marketplaceProvenance ?? 'not installed via marketplace', selected.marketplaceProvenance ? C.info : C.dim],
+        ]),
       );
     }
     detailLines.push(buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.dim]]));
+    detailLines.push(buildPanelLine(width, [['  Enter open in preview  d delete (confirm)', C.dim]]));
 
     const lines = this.renderList(width, height, {
       title: 'Skills - discover project-local and global skill packs',
