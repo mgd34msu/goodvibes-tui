@@ -5,7 +5,11 @@
 import type { Line } from '../types/grid.ts';
 import { BasePanel } from './base-panel.ts';
 import { buildKeyboardHints, buildPanelLine, buildPanelWorkspace, buildSearchInputLine, resolveScrollablePanelSection, extendPalette, DEFAULT_PANEL_PALETTE } from './polish.ts';
-import type { ProviderModelCatalogQuery, ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
+import type { ToolCatalogQuery } from '../runtime/ui-service-queries.ts';
+import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
+import type { KeybindingsManager } from '../input/keybindings.ts';
+import type { PanelIntegrationContext } from './types.ts';
+import { ToolInspectorPanel } from './tool-inspector-panel.ts';
 import {
   getPanelSearchFocusTransition,
   isPanelSearchBackspace,
@@ -21,31 +25,17 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   selected:  '#00ffff',
 });
 
-// ---------------------------------------------------------------------------
-// Hardcoded keyboard shortcut reference
-// ---------------------------------------------------------------------------
-const SHORTCUTS: Array<{ key: string; desc: string }> = [
-  { key: 'Ctrl+C',      desc: 'Cancel generation / exit (double)' },
-  { key: 'Ctrl+P',      desc: 'Open panel picker' },
-  { key: 'Ctrl+F',      desc: 'Search conversation' },
-  { key: 'Ctrl+K',      desc: 'Copy last response to clipboard' },
-  { key: 'Ctrl+L',      desc: 'Clear screen' },
-  { key: 'Ctrl+Z',      desc: 'Undo input' },
-  { key: 'Alt+Enter',   desc: 'Insert newline in prompt' },
-  { key: 'PageUp/Down', desc: 'Scroll conversation' },
-  { key: 'Alt+PgUp/Dn', desc: 'Scroll panel' },
-  { key: 'Tab',         desc: 'Path completion / tab panels' },
-  { key: '/',           desc: 'Start slash command' },
-  { key: 'Enter',       desc: 'Submit prompt' },
-  { key: 'Esc',         desc: 'Close overlay / cancel search' },
-  { key: 'Up/Down',      desc: 'Scroll history / navigate list' },
-  { key: 'Alt+Up/Down',  desc: 'Move cursor in multi-line input' },
-  { key: 'Ctrl+A/E',    desc: 'Jump to start/end of line' },
-  { key: 'Ctrl+W',      desc: 'Delete word backward' },
-  { key: 'Ctrl+U',      desc: 'Clear line' },
-  { key: 'F1',          desc: 'Toggle help overlay' },
-  { key: 'F2',          desc: 'Toggle shortcuts overlay' },
-];
+/**
+ * Minimal provider-registry surface DocsPanel needs: list models, read the
+ * live active model (to mark it in the list), and switch models (Enter on a
+ * model row is a real in-panel action, not a printed signpost). Structurally
+ * satisfied by the full ProviderRegistry passed in from bootstrap.
+ */
+interface DocsProviderRegistry {
+  listModels(): ModelDefinition[];
+  getCurrentModel?(): ModelDefinition | undefined;
+  setCurrentModel?(registryKey: string): void;
+}
 
 type DocSection = 'tools' | 'models' | 'shortcuts';
 
@@ -55,6 +45,12 @@ interface FlatRow {
   fg: string;
   bg: string;
   bold?: boolean;
+  /** Present on tool 'item' rows — the tool name Enter should filter the inspector to. */
+  toolName?: string;
+  /** Present on model 'item' rows — the model's registryKey (provider:id) for setCurrentModel. */
+  modelKey?: string;
+  /** Present on model 'item' rows — whether Enter is allowed to switch to this model. */
+  modelSelectable?: boolean;
 }
 
 function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
@@ -67,18 +63,22 @@ function renderRow(width: number, row: FlatRow, isCursor: boolean): Line {
 
 export class DocsPanel extends BasePanel {
   private toolRegistry: ToolCatalogQuery | null = null;
-  private providerRegistry: ProviderModelCatalogQuery | null = null;
+  private providerRegistry: DocsProviderRegistry | null = null;
+  private keybindingsManager: KeybindingsManager | null = null;
   private section: DocSection = 'tools';
   private searchQuery = '';
   private searching = false;
   private rows: FlatRow[] = [];
   private cursorIndex = 0;
   private scrollOffset = 0;
+  /** Set by handleInput('enter') on a tool row; consumed by handlePanelIntegrationAction, which has the PanelManager reference needed to open the sibling inspector. */
+  private _pendingToolJump: string | null = null;
 
-  constructor(toolRegistry?: ToolCatalogQuery, providerRegistry?: ProviderModelCatalogQuery) {
+  constructor(toolRegistry?: ToolCatalogQuery, providerRegistry?: DocsProviderRegistry, keybindingsManager?: KeybindingsManager) {
     super('docs', 'Docs', '?', 'session');
     this.toolRegistry = toolRegistry ?? null;
     this.providerRegistry = providerRegistry ?? null;
+    this.keybindingsManager = keybindingsManager ?? null;
   }
 
   override onActivate(): void {
@@ -127,8 +127,49 @@ export class DocsPanel extends BasePanel {
       case 't':        this._setSection('tools');     return true;
       case 'm':        this._setSection('models');    return true;
       case 'k':        this._setSection('shortcuts'); return true;
+      case 'enter':
+      case 'return':   return this._activateSelected();
       default:         return false;
     }
+  }
+
+  /**
+   * Enter on the cursor row. Tool rows can't act directly — opening the tool
+   * inspector needs the PanelManager, which only handlePanelIntegrationAction
+   * has — so this just records intent and lets that hook finish the jump.
+   * Model rows need no cross-panel access: switching the active model is a
+   * direct providerRegistry call, so it happens right here.
+   */
+  private _activateSelected(): boolean {
+    const row = this.rows[this.cursorIndex];
+    if (!row || row.kind !== 'item') return false;
+    if (this.section === 'tools' && row.toolName) {
+      this._pendingToolJump = row.toolName;
+      return true;
+    }
+    if (this.section === 'models' && row.modelKey) {
+      if (row.modelSelectable && this.providerRegistry?.setCurrentModel) {
+        this.providerRegistry.setCurrentModel(row.modelKey);
+        this._buildRows();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Cross-panel integration hook — opens ToolInspectorPanel filtered to the
+   * tool selected on Enter (session.ts:102 sibling-open pattern), consuming
+   * the intent recorded by _activateSelected.
+   */
+  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this._pendingToolJump) return false;
+    const tool = this._pendingToolJump;
+    this._pendingToolJump = null;
+    const inspector = ctx.panelManager.open('tools');
+    if (!(inspector instanceof ToolInspectorPanel)) return false;
+    inspector.filterByTool(tool);
+    return true;
   }
 
   render(width: number, height: number): Line[] {
@@ -163,6 +204,8 @@ export class DocsPanel extends BasePanel {
       : buildKeyboardHints(width, [
           { keys: 't/m/k', label: 'tools / models / shortcuts' },
           { keys: '↑/↓', label: 'navigate' },
+          ...(this.section === 'tools' ? [{ keys: 'Enter', label: 'open in tool inspector' }] : []),
+          ...(this.section === 'models' ? [{ keys: 'Enter', label: 'set active model' }] : []),
           { keys: '/', label: 'search' },
         ], DEFAULT_PANEL_PALETTE)];
 
@@ -227,7 +270,7 @@ export class DocsPanel extends BasePanel {
       } else {
         rows.push({ kind: 'header', text: ` Tools (${filtered.length})`, fg: C.sectionFg, bg: C.sectionBg, bold: true });
         for (const tool of filtered) {
-          rows.push({ kind: 'item', text: `  ${tool.definition.name}`, fg: C.toolFg, bg: '', bold: true });
+          rows.push({ kind: 'item', text: `  ${tool.definition.name}`, fg: C.toolFg, bg: '', bold: true, toolName: tool.definition.name });
           if (tool.definition.description) {
             rows.push({ kind: 'detail', text: `    ${tool.definition.description}`, fg: C.label, bg: '' });
           }
@@ -262,23 +305,46 @@ export class DocsPanel extends BasePanel {
           if (!arr) { arr = []; byProvider.set(m.provider, arr); }
           arr.push(m);
         }
+        // Live active-model marker (WO-136): Enter on a selectable row calls
+        // providerRegistry.setCurrentModel, so re-derive this on every build
+        // instead of caching it — it can change without this panel's input.
+        const activeKey = this.providerRegistry?.getCurrentModel?.()?.registryKey;
         for (const [provider, pModels] of byProvider) {
           rows.push({ kind: 'header', text: ` ${provider} (${pModels.length})`, fg: C.sectionFg, bg: C.sectionBg, bold: true });
           for (const m of pModels) {
             const ctxK = m.contextWindow > 0 ? `${(m.contextWindow / 1000).toFixed(0)}k` : '?';
             const caps = [m.contextWindow > 0 ? `ctx:${ctxK}` : ''].filter(Boolean).join(' ');
-            rows.push({ kind: 'item', text: `  ${m.displayName}  ${caps}`, fg: C.toolFg, bg: '' });
-            rows.push({ kind: 'detail', text: `    ${m.id}`, fg: C.label, bg: '' });
+            const isActive = m.registryKey === activeKey;
+            const activeTag = isActive ? '  ACTIVE' : '';
+            rows.push({
+              kind: 'item',
+              text: `  ${m.displayName}  ${caps}${activeTag}`,
+              fg: isActive ? C.good : C.toolFg,
+              bg: '',
+              modelKey: m.registryKey,
+              modelSelectable: m.selectable,
+            });
+            rows.push({ kind: 'detail', text: `    ${m.id}${m.selectable ? '' : '  (not selectable)'}`, fg: C.label, bg: '' });
           }
         }
       }
     } else {
-      // Shortcuts
-      const filtered = q ? SHORTCUTS.filter(s => s.key.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q)) : SHORTCUTS;
-      rows.push({ kind: 'header', text: ' Keyboard Shortcuts', fg: C.sectionFg, bg: C.sectionBg, bold: true });
-      for (const s of filtered) {
-        const key = s.key.padEnd(16);
-        rows.push({ kind: 'item', text: `  ${key} ${s.desc}`, fg: C.value, bg: '' });
+      // Shortcuts — live bindings from KeybindingsManager.getAll() (WO-136),
+      // including any user overrides from ~/.goodvibes/tui/keybindings.json.
+      const km = this.keybindingsManager;
+      const shortcuts = (km?.getAll() ?? []).map((entry) => ({
+        key: entry.combos.length > 0 ? entry.combos.map((combo) => km!.formatCombo(combo)).join(', ') : '(unbound)',
+        desc: entry.description,
+      }));
+      const filtered = q ? shortcuts.filter(s => s.key.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q)) : shortcuts;
+      if (shortcuts.length === 0) {
+        rows.push({ kind: 'empty', text: ' Keybindings manager not wired into this session.', fg: C.dim, bg: '' });
+      } else {
+        rows.push({ kind: 'header', text: ' Keyboard Shortcuts', fg: C.sectionFg, bg: C.sectionBg, bold: true });
+        for (const s of filtered) {
+          const key = s.key.padEnd(20);
+          rows.push({ kind: 'item', text: `  ${key} ${s.desc}`, fg: C.value, bg: '' });
+        }
       }
     }
 

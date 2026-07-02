@@ -1,11 +1,47 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { IntelligencePanel } from '../../panels/intelligence-panel.ts';
 import { KnowledgeGraphPanel } from '../../panels/knowledge-graph-panel.ts';
+import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
+import { SymbolOutlinePanel } from '../../panels/symbol-outline-panel.ts';
+import type { PanelIntegrationContext } from '../../panels/types.ts';
 import type { UiIntelligenceSnapshot, UiReadModel } from '../../runtime/ui-read-models.ts';
 import type { Line } from '../../types/grid.ts';
 
+/** A real, readable multi-line file — FilePreviewPanel.goToLine() clamps to fileLines.length, so a fake nonexistent path (1-line "(cannot open: ...)" placeholder) can't exercise a non-zero scroll offset. */
+function makeReadableFile(lineCount = 20): string {
+  const dir = mkdtempSync(join(tmpdir(), 'goodvibes-intelligence-panel-'));
+  const path = join(dir, 'sample.ts');
+  writeFileSync(path, Array.from({ length: lineCount }, (_, i) => `line ${i}`).join('\n'));
+  return path;
+}
+
 function linesText(lines: Line[]): string {
   return lines.map((line) => line.map((cell) => cell.char ?? ' ').join('').trimEnd()).join('\n');
+}
+
+/** Fake PanelManager exposing just the surface IntelligencePanel's cross-panel hook uses, backed by real FilePreviewPanel/SymbolOutlinePanel instances so `instanceof` checks pass. */
+function makeFakePanelManager(): {
+  panelManager: PanelIntegrationContext['panelManager'];
+  preview: FilePreviewPanel;
+  symbols: SymbolOutlinePanel;
+} {
+  const preview = new FilePreviewPanel();
+  const symbols = new SymbolOutlinePanel();
+  const panels: Record<string, FilePreviewPanel | SymbolOutlinePanel> = { preview, symbols };
+  const panelManager = {
+    getPanel: (id: string) => panels[id] ?? null,
+    getPaneOf: (_id: string) => 'top' as const,
+    activateById: (_id: string) => {},
+    focusPane: (_pane: string) => {},
+    isBottomPaneVisible: () => false,
+    getFocusedPane: () => 'top' as const,
+    open: (id: string) => panels[id] ?? null,
+    show: () => {},
+  } as unknown as PanelIntegrationContext['panelManager'];
+  return { panelManager, preview, symbols };
 }
 
 function makeIntelligenceModel(diagnostics: Map<string, unknown[]> = new Map(), overrides: Partial<UiIntelligenceSnapshot> = {}): UiReadModel<UiIntelligenceSnapshot> {
@@ -70,11 +106,23 @@ describe('IntelligencePanel', () => {
     expect(text).toContain('beta error');
   });
 
-  test('degraded posture surfaces recovery guidance', () => {
+  test('degraded posture surfaces a single-line contextual Recovery guidance (WO-136 collapse)', () => {
     const panel = new IntelligencePanel(makeIntelligenceModel(new Map(), { symbolSearchStatus: 'degraded' }));
     const text = linesText(panel.render(W, H));
     expect(text).toContain('Recovery');
     expect(text).toContain('/intelligence repair');
+    const recoveryIdx = text.split('\n').findIndex((l) => l.includes('Recovery'));
+    expect(recoveryIdx).toBeGreaterThan(-1);
+    // Exactly one body line under the 'Recovery' section header, not the old 3-line wall.
+    expect(text.split('\n')[recoveryIdx + 1]).toContain('/intelligence repair');
+  });
+
+  test('healthy posture surfaces a single-line contextual Workflows guidance (WO-136 collapse)', () => {
+    const panel = new IntelligencePanel(makeIntelligenceModel());
+    const text = linesText(panel.render(W, H));
+    expect(text).toContain('Workflows');
+    const workflowsIdx = text.split('\n').findIndex((l) => l.includes('Workflows'));
+    expect(text.split('\n')[workflowsIdx + 1]).toContain('/intelligence symbols');
   });
 
   test('render returns exactly H lines of W cells', () => {
@@ -82,6 +130,84 @@ describe('IntelligencePanel', () => {
     const lines = panel.render(W, H);
     expect(lines).toHaveLength(H);
     for (const line of lines) expect(line).toHaveLength(W);
+  });
+
+  test('selection stays on-screen at End even with a small viewport (kills the old slice(0,6) cap)', () => {
+    const diagnostics = new Map<string, unknown[]>();
+    for (let i = 0; i < 12; i++) {
+      const path = `src/file${String(i).padStart(2, '0')}.ts`;
+      diagnostics.set(path, [{ filePath: path, line: 0, column: 0, severity: 'error', message: `error in ${path}`, source: 'typescript' }]);
+    }
+    const panel = new IntelligencePanel(makeIntelligenceModel(diagnostics, { errorCount: 12 }));
+    const smallHeight = 14;
+    panel.render(W, smallHeight);
+    expect(panel.handleInput('end')).toBe(true);
+    const text = linesText(panel.render(W, smallHeight));
+    // Last file, sorted alphabetically after the equal-severity tiebreak, must
+    // be visible — a flat slice(0,6) would strand the cursor off-screen.
+    expect(text).toContain('src/file11.ts');
+  });
+
+  test('Enter opens the selected file in the preview panel at its first (error-first) finding line', () => {
+    const filePath = makeReadableFile();
+    const diagnostics = new Map<string, unknown[]>([
+      [filePath, [
+        { filePath, line: 9, column: 4, severity: 'warning', message: 'warn finding', source: 'eslint' },
+        { filePath, line: 2, column: 0, severity: 'error', message: 'error finding', source: 'typescript' },
+      ]],
+    ]);
+    const panel = new IntelligencePanel(makeIntelligenceModel(diagnostics, { errorCount: 1, warningCount: 1 }));
+    panel.render(W, H);
+    expect(panel.handleInput('enter')).toBe(true);
+
+    const { panelManager, preview } = makeFakePanelManager();
+    expect(panel.handlePanelIntegrationAction?.('enter', { panelManager })).toBe(true);
+    expect(preview.getCurrentFilePath()).toBe(filePath);
+    // Error-first: the error (0-indexed line 2) wins over the warning (line 9)
+    // -> goToLine(3) -> scrollOffset = 3 - 1 = 2.
+    expect(preview.getScrollOffset()).toBe(2);
+  });
+
+  test('s pivots to the Symbols panel, opening preview and loading the selected file source', () => {
+    const filePath = makeReadableFile();
+    const diagnostics = new Map<string, unknown[]>([
+      [filePath, [{ filePath, line: 4, column: 0, severity: 'error', message: 'err', source: 'typescript' }]],
+    ]);
+    const panel = new IntelligencePanel(makeIntelligenceModel(diagnostics, { errorCount: 1 }));
+    panel.render(W, H);
+    expect(panel.handleInput('s')).toBe(true);
+
+    const { panelManager, preview, symbols } = makeFakePanelManager();
+    const loadFileSpy = { called: false, path: '', source: null as string | null };
+    symbols.loadFile = ((path: string, source: string) => {
+      loadFileSpy.called = true;
+      loadFileSpy.path = path;
+      loadFileSpy.source = source;
+    }) as typeof symbols.loadFile;
+
+    expect(panel.handlePanelIntegrationAction?.('s', { panelManager })).toBe(true);
+    expect(preview.getCurrentFilePath()).toBe(filePath);
+    expect(loadFileSpy.called).toBe(true);
+    expect(loadFileSpy.path).toBe(filePath);
+    expect(loadFileSpy.source).toBe(preview.getSource());
+  });
+
+  test('findings are fully scrollable — no hardcoded 3-cap', () => {
+    const findings = Array.from({ length: 6 }, (_, i) => ({
+      filePath: 'src/a.ts',
+      line: i,
+      column: 0,
+      severity: 'error',
+      message: `finding number ${i}`,
+      source: 'typescript',
+    }));
+    const diagnostics = new Map<string, unknown[]>([['src/a.ts', findings]]);
+    const panel = new IntelligencePanel(makeIntelligenceModel(diagnostics, { errorCount: 6 }));
+    const text = linesText(panel.render(W, 40));
+    // All 6 findings fit in a tall viewport — a 3-cap would drop findings 4-6.
+    for (let i = 0; i < 6; i++) {
+      expect(text).toContain(`finding number ${i}`);
+    }
   });
 });
 

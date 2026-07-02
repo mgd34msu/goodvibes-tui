@@ -90,7 +90,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     icon: '?',
     category: 'session',
     description: 'Tool list, model capabilities, and keyboard shortcut reference',
-    factory: () => new DocsPanel(deps.toolRegistry, deps.providerRegistry),
+    factory: () => new DocsPanel(deps.toolRegistry, deps.providerRegistry, requireUiServices(deps).shell.keybindingsManager),
   });
 
   manager.registerType({
