@@ -491,7 +491,6 @@ const rules: readonly Rule[] = [
       'src/runtime/bootstrap-command-context.ts',
       'src/runtime/bootstrap-runtime-events.ts',
       'src/panels/control-plane-panel.ts',
-      'src/panels/schedule-panel.ts',
       'src/channels/builtin-runtime.ts',
       'src/channels/builtin/rendering.ts',
     ]),

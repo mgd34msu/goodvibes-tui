@@ -16,7 +16,6 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import './contract/incident-review-panel.contract.ts';
-import './contract/watchers-panel.contract.ts';
 import './contract/routes-panel.contract.ts';
 import './contract/skills-panel.contract.ts';
 import './contract/hooks-panel.contract.ts';
