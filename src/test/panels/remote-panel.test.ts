@@ -163,7 +163,75 @@ describe('RemotePanel', () => {
     expect(text).toContain('agent-2');
     expect(text).toContain('remote reviewer');
     expect(text).toContain('connection lost');
-    expect(text).toContain('/remote recover');
+    expect(text).toContain('r=recover');
+  });
+
+  test('Enter on a degraded/stale supervisor selection dispatches its recovery command', async () => {
+    const store = createRuntimeStore();
+    store.setState((state) => ({
+      ...state,
+      acp: {
+        ...state.acp,
+        activeConnectionIds: ['agent-stale'],
+        connections: new Map([
+          ['agent-stale', {
+            agentId: 'agent-stale',
+            label: 'remote implementer',
+            transportState: 'connected',
+            connectedAt: Date.now() - 10 * 60_000, // stale heartbeat (>5m old)
+            completing: false,
+            messageCount: 3,
+            errorCount: 0,
+          }],
+        ]),
+      },
+    }));
+
+    const panel = createRemotePanel(store);
+    // Selection defaults to index 0, which is the (only, stale) connection.
+    expect(panel.handleInput('enter')).toBe(true);
+
+    const calls: Array<{ name: string; args: string[] }> = [];
+    const consumed = panel.handlePanelIntegrationAction?.('enter', {
+      panelManager: undefined as never,
+      executeCommand: async (name: string, args: string[]) => { calls.push({ name, args }); },
+    });
+    expect(consumed).toBe(true);
+    expect(calls.length).toBe(1);
+    expect(calls[0]?.name).toBe('remote');
+  });
+
+  test('r dispatches /remote recover for the current selection', () => {
+    const store = createRuntimeStore();
+    store.setState((state) => ({
+      ...state,
+      acp: {
+        ...state.acp,
+        activeConnectionIds: ['agent-1'],
+        connections: new Map([
+          ['agent-1', {
+            agentId: 'agent-1',
+            label: 'remote implementer',
+            transportState: 'connected',
+            connectedAt: Date.now(),
+            completing: false,
+            messageCount: 3,
+            errorCount: 0,
+          }],
+        ]),
+      },
+    }));
+
+    const panel = createRemotePanel(store);
+    expect(panel.handleInput('r')).toBe(true);
+
+    const calls: Array<{ name: string; args: string[] }> = [];
+    const consumed = panel.handlePanelIntegrationAction?.('r', {
+      panelManager: undefined as never,
+      executeCommand: async (name: string, args: string[]) => { calls.push({ name, args }); },
+    });
+    expect(consumed).toBe(true);
+    expect(calls).toEqual([{ name: 'remote', args: ['recover', 'agent-1'] }]);
   });
 
   test('can switch to contract browsing when no active connection is selected', () => {

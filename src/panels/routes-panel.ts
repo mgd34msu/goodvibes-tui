@@ -1,12 +1,13 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
+import { SessionBrowserPanel } from './session-browser-panel.ts';
 import type { UiReadModel, UiRoutesSnapshot } from '../runtime/ui-read-models.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import {
   buildDetailBlock,
   buildEmptyState,
-  buildGuidanceLine,
   buildKeyValueLine,
   buildKeyboardHints,
   buildPanelLine,
@@ -27,9 +28,17 @@ function formatTime(value?: number): string {
 
 type RouteBinding = UiRoutesSnapshot['bindings'][number];
 
+// Set by handleInput (enter/c) and consumed on the very next
+// handlePanelIntegrationAction dispatch of that same key — handleInput has
+// no access to the panelManager.
+type PendingRouteAction =
+  | { readonly kind: 'open-session'; readonly sessionId: string }
+  | { readonly kind: 'open-communication' };
+
 export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
   private readonly readModel?: UiReadModel<UiRoutesSnapshot>;
   private readonly unsub: (() => void) | null;
+  private pendingAction: PendingRouteAction | null = null;
 
   public constructor(readModel?: UiReadModel<UiRoutesSnapshot>) {
     super('routes', 'Routes', 'R', 'monitoring');
@@ -38,6 +47,43 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
     this.filterLabel = 'Filter routes';
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  public override handleInput(key: string): boolean {
+    if (!this.filterActive) {
+      // Enter jumps to the session browser focused on this binding's session
+      // — a direct panel jump instead of a printed slash-command signpost.
+      if (key === 'enter' || key === 'return') {
+        const bindings = this.getVisibleItems();
+        const selected = bindings[this.selectedIndex];
+        if (selected?.sessionId) {
+          this.pendingAction = { kind: 'open-session', sessionId: selected.sessionId };
+          return true;
+        }
+        return false;
+      }
+      // c opens the communication panel to inspect routed message flow.
+      if (key === 'c') {
+        this.pendingAction = { kind: 'open-communication' };
+        return true;
+      }
+    }
+    return super.handleInput(key);
+  }
+
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingAction) return false;
+    const action = this.pendingAction;
+    this.pendingAction = null;
+    if (action.kind === 'open-communication') {
+      ctx.panelManager.open('communication');
+      return true;
+    }
+    const panel = ctx.panelManager.open('sessions');
+    if (panel instanceof SessionBrowserPanel) {
+      panel.focusSession(action.sessionId);
+    }
+    return true;
   }
 
   protected override filterMatches(binding: RouteBinding, q: string): boolean {
@@ -118,7 +164,6 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
         { label: 'resolved', value: String(snapshot.totalResolved), valueColor: snapshot.totalResolved > 0 ? C.good : C.dim },
         { label: 'failures', value: String(snapshot.totalFailures), valueColor: snapshot.totalFailures > 0 ? C.bad : C.dim },
       ], C),
-      buildGuidanceLine(width, '/communication', 'inspect routed message flow and delivery behavior across bound surfaces', C),
     ];
 
     if (bindings.length === 0) {
@@ -177,7 +222,8 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
       ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
       : [
           { keys: 'Up/Down', label: 'move' },
-          { keys: '/communication', label: 'inspect flow' },
+          ...(selected.sessionId ? [{ keys: 'Enter', label: 'open session' }] : []),
+          { keys: 'c', label: 'communication' },
           { keys: '/', label: 'filter' },
         ];
 
