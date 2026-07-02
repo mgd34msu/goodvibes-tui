@@ -59,12 +59,16 @@ describe('UI roadmap gate', () => {
       sessionPickerModal: { open: () => {} },
     } as unknown as Parameters<typeof wireShellUiOpeners>[0]['input'];
     let visible = false;
+    let focused = false;
     const panelManager = {
       isVisible: () => visible,
       getAllOpen: () => ['docs'],
+      getFocusTarget: () => (focused ? 'panel' : 'prompt'),
       open: () => {},
       show: () => { visible = true; },
-      hide: () => { visible = false; },
+      hide: () => { visible = false; focused = false; },
+      focusPanels: () => { focused = true; },
+      focusPrompt: () => { focused = false; },
     } as never;
     const conversation = {
       setSplashSuppressed: () => {},
@@ -90,7 +94,9 @@ describe('UI roadmap gate', () => {
     });
 
     (commandContext as { showPanel?: (panelId: string, pane?: 'top' | 'bottom') => void }).showPanel?.('docs');
-    expect(input.panelFocused).toBe(true);
+    // Focus ownership lives in PanelManager now: showPanel drives focusPanels()
+    // rather than mutating a parallel input.panelFocused flag.
+    expect(panelManager.getFocusTarget()).toBe('panel');
     expect(visible).toBe(true);
   });
 

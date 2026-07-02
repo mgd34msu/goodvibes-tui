@@ -115,6 +115,21 @@ export function handleGlobalShortcutToken(
       state.requestRender();
       return true;
 
+    case 'panel-focus-toggle': {
+      // Global entry point for the focus-toggle key (Ctrl+G): from the prompt
+      // it grabs focus for the panel workspace. Once the workspace already has
+      // focus we let it fall through (return false) so handlePanelFocusToken
+      // can do the top/bottom pane swap — keeping that behavior in one place.
+      if (state.panelFocused) return false;
+      const pm = state.panelManager;
+      if (pm.isVisible() && pm.getAllOpen().length > 0) {
+        state.panelFocused = true;
+        state.requestRender();
+        return true;
+      }
+      return false;
+    }
+
     case 'panel-tab-next':
       state.cyclePanelTab('next');
       return true;

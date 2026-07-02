@@ -90,6 +90,79 @@ describe('handleGlobalShortcutToken', () => {
     expect(closed).toEqual(['system-messages']);
   });
 
+  test('panel-focus-toggle (Ctrl+G) grabs workspace focus from the prompt', () => {
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'system-messages' }],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => ({ id: 'system-messages' }),
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-focus-toggle',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x07', logicalName: 'g', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(state.panelFocused).toBe(true);
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('panel-focus-toggle falls through when the workspace already has focus (pane swap handled elsewhere)', () => {
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'system-messages' }],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => ({ id: 'system-messages' }),
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-focus-toggle',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x07', logicalName: 'g', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(false);
+    expect(state.panelFocused).toBe(true);
+  });
+
+  test('panel-focus-toggle from the prompt is a no-op when no workspace is open', () => {
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => false,
+        getAllOpen: () => [],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => null,
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-focus-toggle',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x07', logicalName: 'g', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(false);
+    expect(state.panelFocused).toBe(false);
+  });
+
   test('escape does not bypass panel focus handling', () => {
     const state = buildState({ panelFocused: true });
     const handled = handleGlobalShortcutToken(

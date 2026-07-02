@@ -41,6 +41,12 @@ export class PanelManager {
   private _verticalSplitRatio: number = 0.5; // top gets 50% of panel height
   private _bottomPaneVisible: boolean = false;
 
+  // Single source of truth for prompt-vs-panel keyboard focus. Previously this
+  // lived as a `panelFocused` boolean scattered across InputHandler and the
+  // input-routing seams; centralizing it here is what makes it impossible for
+  // panel focus to disagree with workspace visibility (see getFocusTarget).
+  private _focusTarget: 'prompt' | 'panel' = 'prompt';
+
   // Cache for getWorkspaceTabs() — invalidated on every panel lifecycle event
   private _cachedWorkspaceTabs: readonly WorkspaceTab[] | null = null;
 
@@ -123,8 +129,15 @@ export class PanelManager {
     this._recordRecent(panelId);
     const existingPane = this._findPaneOf(panelId);
     if (existingPane) {
-      this._activateByIdInPane(panelId, existingPane);
       this._visible = true;
+      // Honor an explicitly requested pane so open(id, pane) never lies about
+      // where the panel lands: relocate it if it currently lives in the other
+      // pane (fixes `/panel open <id> top` and the panel-list T/B move keys).
+      if (pane && pane !== existingPane) {
+        this._moveBetweenPanes(existingPane, pane, panelId);
+        return this.getPanel(panelId)!;
+      }
+      this._activateByIdInPane(panelId, existingPane);
       this._focusedPane = existingPane;
       if (existingPane === 'bottom') this._bottomPaneVisible = true;
       return this._getPane(existingPane).panels[this._getPane(existingPane).activeIndex]!;
@@ -296,6 +309,49 @@ export class PanelManager {
     if (!this._bottomPaneVisible || this.bottomPane.panels.length === 0) return;
     this._focusedPane = this._focusedPane === 'top' ? 'bottom' : 'top';
     this._invalidateWorkspaceTabs();
+  }
+
+  // -------------------------------------------------------------------------
+  // Keyboard focus ownership (prompt vs. panel workspace)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Which surface owns keyboard focus. Self-healing: focus can only rest on the
+   * panel workspace while it is visible, non-empty, and has an active panel, so
+   * panel focus can never disagree with workspace visibility. Any code that
+   * asks for the focus target therefore reads a value that is always consistent
+   * with what is actually on screen.
+   */
+  getFocusTarget(): 'prompt' | 'panel' {
+    if (this._focusTarget === 'panel' && !this._workspaceIsFocusable()) {
+      this._focusTarget = 'prompt';
+    }
+    return this._focusTarget;
+  }
+
+  /** True when the panel workspace currently owns keyboard focus. */
+  isPanelFocused(): boolean {
+    return this.getFocusTarget() === 'panel';
+  }
+
+  /**
+   * Give keyboard focus to the panel workspace. No-op when there is nothing
+   * focusable (no visible, non-empty pane with an active panel) — this is the
+   * guard that upholds the focus/visibility invariant on the write path.
+   */
+  focusPanels(): void {
+    if (this._workspaceIsFocusable()) {
+      this._focusTarget = 'panel';
+    }
+  }
+
+  /** Return keyboard focus to the prompt. */
+  focusPrompt(): void {
+    this._focusTarget = 'prompt';
+  }
+
+  private _workspaceIsFocusable(): boolean {
+    return this._visible && this.getAllOpen().length > 0 && this.getActivePanel() !== null;
   }
 
   // -------------------------------------------------------------------------
@@ -499,6 +555,7 @@ export class PanelManager {
     this.registry = [];
     this._recentlyOpened = [];
     this._focusedPane = 'top';
+    this._focusTarget = 'prompt';
     this._bottomPaneVisible = false;
     this._visible = false;
     this._invalidateWorkspaceTabs();
