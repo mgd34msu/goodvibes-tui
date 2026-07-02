@@ -292,47 +292,38 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   };
 
   commandContext.openPanelPicker = () => {
-    if (!panelManager.isVisible()) {
-      if (panelManager.getAllOpen().length === 0) {
-        try {
-          panelManager.open('panel-list');
-        } catch {
-          // non-fatal
-        }
-      }
-      panelManager.show();
-      input.panelFocused = true;
-      conversation.setSplashSuppressed(true);
-      conversation.rebuildHistory();
-    } else if (!input.panelFocused) {
-      if (panelManager.getAllOpen().length === 0) {
-        try {
-          panelManager.open('panel-list');
-        } catch {
-          // non-fatal
-        }
-      }
-      panelManager.show();
-      input.panelFocused = true;
-      conversation.setSplashSuppressed(true);
+    // Focus ownership lives in PanelManager (focusTarget); read it there rather
+    // than tracking a parallel input.panelFocused flag. Toggle semantics: if the
+    // workspace is visible AND already focused, hide it; otherwise reveal and
+    // focus it (opening the panel list when nothing is open yet).
+    if (panelManager.isVisible() && panelManager.getFocusTarget() === 'panel') {
+      panelManager.hide();
+      panelManager.focusPrompt();
+      conversation.setSplashSuppressed(false);
       conversation.rebuildHistory();
     } else {
-      panelManager.hide();
-      input.panelFocused = false;
-      conversation.setSplashSuppressed(false);
+      if (panelManager.getAllOpen().length === 0) {
+        try {
+          panelManager.open('panel-list');
+        } catch {
+          // non-fatal
+        }
+      }
+      panelManager.show();
+      panelManager.focusPanels();
+      conversation.setSplashSuppressed(true);
       conversation.rebuildHistory();
     }
     render();
   };
 
   commandContext.focusPanels = () => {
-    if (!panelManager.isVisible() || panelManager.getAllOpen().length === 0) return;
-    input.panelFocused = true;
+    panelManager.focusPanels();
     render();
   };
 
   commandContext.focusPrompt = () => {
-    input.panelFocused = false;
+    panelManager.focusPrompt();
     input.indicatorFocused = false;
     render();
   };
@@ -340,7 +331,7 @@ export function wireShellUiOpeners(options: WireShellUiOpenersOptions): void {
   commandContext.showPanel = (panelId, pane) => {
     panelManager.open(panelId, pane);
     panelManager.show();
-    input.panelFocused = true;
+    panelManager.focusPanels();
     conversation.setSplashSuppressed(true);
     conversation.rebuildHistory();
     render();

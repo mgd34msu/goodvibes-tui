@@ -145,7 +145,12 @@ describe('handlePanelFocusToken', () => {
     expect(state.requestRender).toHaveBeenCalled();
   });
 
-  test('panel close hotkey always returns focus to prompt even when another panel remains open', () => {
+  test('panel-close is NOT owned by this route (delegated to the global shortcut handler)', () => {
+    // panel-close / panel-close-all / panel-tab-next / panel-tab-prev used to be
+    // duplicated here but are consumed earlier by handleGlobalShortcutToken, so
+    // the copies were unreachable and have been removed. A ctrl-combo that this
+    // route does not own must fall through (handled:false) so the global handler
+    // can act — and it must NOT close panels or flip focus from here.
     const closed: string[] = [];
     const state = buildState({
       panelFocused: true,
@@ -169,9 +174,8 @@ describe('handlePanelFocusToken', () => {
       meta: false,
     });
 
-    expect(result.handled).toBe(true);
-    expect(result.panelFocused).toBe(false);
-    expect(closed).toEqual(['system-messages']);
-    expect(state.requestRender).toHaveBeenCalled();
+    expect(result.handled).toBe(false);
+    expect(result.panelFocused).toBe(true);
+    expect(closed).toEqual([]);
   });
 });
