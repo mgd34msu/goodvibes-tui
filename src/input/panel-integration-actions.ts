@@ -9,6 +9,7 @@ import { ApprovalPanel } from '../panels/approval-panel.ts';
 import { TasksPanel } from '../panels/tasks-panel.ts';
 import { OrchestrationPanel } from '../panels/orchestration-panel.ts';
 import { AgentInspectorPanel } from '../panels/agent-inspector-panel.ts';
+import { DiffPanel } from '../panels/diff-panel.ts';
 
 function ensurePreviewPanel(panelManager: PanelManager): FilePreviewPanel | null {
   const existing = panelManager.getPanel('preview');
@@ -25,6 +26,25 @@ function ensurePreviewPanel(panelManager: PanelManager): FilePreviewPanel | null
   panelManager.show();
   panelManager.focusPane(targetPane);
   return opened instanceof FilePreviewPanel ? opened : null;
+}
+
+// WO-133: shared by explorer's and preview's 'd' (diff) key — same
+// open/focus bridge as ensurePreviewPanel above.
+function ensureDiffPanel(panelManager: PanelManager): DiffPanel | null {
+  const existing = panelManager.getPanel('diff');
+  if (existing instanceof DiffPanel) {
+    const pane = panelManager.getPaneOf('diff');
+    panelManager.activateById('diff');
+    if (pane) panelManager.focusPane(pane);
+    return existing;
+  }
+  const targetPane: 'top' | 'bottom' = panelManager.isBottomPaneVisible()
+    ? (panelManager.getFocusedPane() === 'top' ? 'bottom' : 'top')
+    : 'bottom';
+  const opened = panelManager.open('diff', targetPane);
+  panelManager.show();
+  panelManager.focusPane(targetPane);
+  return opened instanceof DiffPanel ? opened : null;
 }
 
 // Exported so a future preview-reload action (e.g. an explicit "r" reload
@@ -64,6 +84,44 @@ export function handlePanelIntegrationAction(
     if (!previewPanel) return false;
     previewPanel.openFile(filePath);
     syncSymbolOutlineFromPreview(panelManager, previewPanel);
+    return true;
+  }
+
+  // WO-133: 'd' on the explorer diffs the currently focused file, and 'd' on
+  // the preview diffs whatever file is currently open — both against HEAD,
+  // both via the same DiffPanel.showFileDiffs entry point.
+  if (key === 'd' && activePanel instanceof FileExplorerPanel) {
+    const filePath = activePanel.getFocusedFilePath();
+    if (!filePath) return false;
+    const diffPanel = ensureDiffPanel(panelManager);
+    if (!diffPanel) return false;
+    void diffPanel.showFileDiffs([filePath], 'HEAD').catch((err) => {
+      logger.debug('explorer diff dispatch failed', { err });
+    });
+    return true;
+  }
+
+  if (key === 'd' && activePanel instanceof FilePreviewPanel) {
+    const filePath = activePanel.getCurrentFilePath();
+    if (!filePath) return false;
+    const diffPanel = ensureDiffPanel(panelManager);
+    if (!diffPanel) return false;
+    void diffPanel.showFileDiffs([filePath], 'HEAD').catch((err) => {
+      logger.debug('preview diff dispatch failed', { err });
+    });
+    return true;
+  }
+
+  // WO-133: 'r' on the preview reloads the open file from disk, then
+  // re-syncs the symbol outline against the refreshed content (WO-126's
+  // async tree-sitter loadFile via syncSymbolOutlineFromPreview above) once
+  // the reload actually settles.
+  if (key === 'r' && activePanel instanceof FilePreviewPanel) {
+    const reloaded = activePanel.consumePendingReload();
+    if (!reloaded) return false;
+    void reloaded.then(() => syncSymbolOutlineFromPreview(panelManager, activePanel)).catch((err) => {
+      logger.debug('preview reload dispatch failed', { err });
+    });
     return true;
   }
 
