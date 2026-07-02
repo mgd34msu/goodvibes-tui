@@ -165,7 +165,10 @@ export const EMPTY_SESSION_MEMORY_QUERY = {
 
 export const EMPTY_PLAN_DASHBOARD_QUERY = {
   getActive: () => null,
-} as unknown as import('../../../runtime/ui-service-queries.ts').PlanDashboardQuery;
+  list: () => [],
+  getSummary: () => '',
+  toMarkdown: () => '',
+} as unknown as import('../../../panels/plan-dashboard-panel.ts').PlanDashboardPanelDeps['planManager'];
 
 export const EMPTY_PROJECT_PLANNING_SERVICE = {
   status: async () => ({
@@ -215,7 +218,7 @@ export const EMPTY_WORKFLOW_EVENT_FEED = {
   on: (_event: string, _cb: unknown) => () => {},
   onEnvelope: (_event: string, _cb: unknown) => () => {},
   emit: () => {},
-} as unknown as import('../../../runtime/ui-events.ts').UiEventFeed<never>;
+} as unknown as import('../../../runtime/ui-events.ts').UiEventFeed<import('@/runtime/index.ts').WorkflowEvent>;
 
 export const EMPTY_TURN_EVENT_FEED = {
   on: (_event: string, _cb: unknown) => () => {},
