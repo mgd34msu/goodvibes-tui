@@ -6,12 +6,19 @@
 // glyphs, context-aware footer hints, and tree icons — not just geometry.
 // ---------------------------------------------------------------------------
 
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, afterEach } from 'bun:test';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { Line } from '../../types/grid.ts';
 import { DiffPanel } from '../../panels/diff-panel.ts';
 import { GitPanel } from '../../panels/git-panel.ts';
+import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { SymbolOutlinePanel } from '../../panels/symbol-outline-panel.ts';
 import { WorktreePanel } from '../../panels/worktree-panel.ts';
+import { createTestManagers } from '../helpers/test-managers.ts';
+import type { PanelIntegrationContext } from '../../panels/types.ts';
 
 function linesText(lines: Line[]): string {
   return lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
@@ -19,6 +26,41 @@ function linesText(lines: Line[]): string {
 
 const W = 120;
 const H = 24;
+
+// ── Shared git fixture helpers (mirrors src/test/git/service.test.ts) ──────────
+
+/** Create an isolated temp git repo and return its path. */
+function makeTempRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'gv-git-panel-'));
+  execSync('git init', { cwd: dir });
+  execSync('git config user.email "test@test.com"', { cwd: dir });
+  execSync('git config user.name "Test"', { cwd: dir });
+  return dir;
+}
+
+/** Write a file into the repo and stage + commit it. */
+function addCommit(dir: string, filename: string, content: string, message: string): void {
+  writeFileSync(join(dir, filename), content);
+  execSync(`git add ${filename}`, { cwd: dir });
+  execSync(`git commit -m "${message}"`, { cwd: dir });
+}
+
+/** Poll `predicate` until it returns true or `timeoutMs` elapses. */
+async function waitFor(predicate: () => boolean, timeoutMs = 4000): Promise<void> {
+  const start = Date.now();
+  while (!predicate()) {
+    if (Date.now() - start > timeoutMs) throw new Error('waitFor: timed out');
+    await new Promise((r) => setTimeout(r, 15));
+  }
+}
+
+const tempDirs: string[] = [];
+afterEach(() => {
+  while (tempDirs.length > 0) {
+    const dir = tempDirs.pop()!;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 // ── DiffPanel ────────────────────────────────────────────────────────────────
 
@@ -51,6 +93,95 @@ describe('DiffPanel — at-a-glance change counts', () => {
     const text = linesText(panel.render(W, H));
     expect(text).toContain('▸ b.ts');
   });
+
+  test('empty state points at /diff, not the retired /git diff command', () => {
+    const panel = new DiffPanel('/tmp');
+    const text = linesText(panel.render(W, H));
+    expect(text).toContain('/diff');
+    expect(text).not.toContain('/git diff');
+  });
+
+  test('shift-tab (backtab escape sequence) moves to the previous file', () => {
+    const panel = new DiffPanel('/tmp');
+    panel.showDiff('a.ts', '@@ -1,1 +1,1 @@\n-a\n+b');
+    panel.showDiff('b.ts', '@@ -1,1 +1,1 @@\n-b\n+c');
+    panel.showDiff('c.ts', '@@ -1,1 +1,1 @@\n-c\n+d');
+    // showDiff() leaves the newest file selected (c.ts).
+    expect(linesText(panel.render(W, H))).toContain('▸ c.ts');
+    expect(panel.handleInput('\x1b[Z')).toBe(true);
+    expect(linesText(panel.render(W, H))).toContain('▸ b.ts');
+    expect(panel.handleInput('\x1b[Z')).toBe(true);
+    expect(linesText(panel.render(W, H))).toContain('▸ a.ts');
+  });
+});
+
+describe('DiffPanel — o opens the current file in preview via the bridge', () => {
+  let pm: ReturnType<typeof createTestManagers>['panelManager'] | undefined;
+  afterEach(() => { pm?.destroyAll(); });
+
+  test('handlePanelIntegrationAction opens/focuses preview with the selected file', () => {
+    const { panelManager } = createTestManagers();
+    pm = panelManager;
+    panelManager.registerType({
+      id: 'preview',
+      name: 'Preview',
+      icon: 'P',
+      category: 'development',
+      description: 'preview',
+      factory: () => new FilePreviewPanel(),
+    });
+
+    const panel = new DiffPanel('/tmp');
+    panel.showDiff('src/foo.ts', '@@ -1,1 +1,1 @@\n-a\n+b');
+
+    expect(panel.handleInput('o')).toBe(true);
+    const ctx = { panelManager } as unknown as PanelIntegrationContext;
+    expect(panel.handlePanelIntegrationAction?.('o', ctx)).toBe(true);
+
+    const preview = panelManager.getPanel('preview');
+    expect(preview).toBeInstanceOf(FilePreviewPanel);
+    expect((preview as FilePreviewPanel).getCurrentFilePath()).toBe('src/foo.ts');
+  });
+});
+
+describe('DiffPanel — self-load via its own diff plumbing (w/h/s)', () => {
+  test('w loads the working-tree diff (unstaged only)', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+    writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
+
+    const panel = new DiffPanel(dir);
+    expect(panel.handleInput('w')).toBe(true);
+    await waitFor(() => linesText(panel.render(W, H)).includes('a.txt'));
+    expect(linesText(panel.render(W, H))).toContain('a.txt');
+  });
+
+  test('s loads the staged diff via its own git plumbing (not the /diff command)', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+    writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
+    execSync('git add a.txt', { cwd: dir });
+
+    const panel = new DiffPanel(dir);
+    expect(panel.handleInput('s')).toBe(true);
+    await waitFor(() => linesText(panel.render(W, H)).includes('a.txt'));
+    expect(linesText(panel.render(W, H))).toContain('a.txt');
+  });
+
+  test('h loads the diff vs HEAD (staged + unstaged)', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+    writeFileSync(join(dir, 'b.txt'), 'new file\n');
+    execSync('git add b.txt', { cwd: dir });
+
+    const panel = new DiffPanel(dir);
+    expect(panel.handleInput('h')).toBe(true);
+    await waitFor(() => linesText(panel.render(W, H)).includes('b.txt'));
+    expect(linesText(panel.render(W, H))).toContain('b.txt');
+  });
 });
 
 // ── GitPanel ─────────────────────────────────────────────────────────────────
@@ -61,6 +192,136 @@ describe('GitPanel — loading + geometry', () => {
     const lines = panel.render(W, H);
     expect(lines).toHaveLength(H);
     for (const line of lines) expect(line).toHaveLength(W);
+  });
+});
+
+describe('GitPanel — selection skips header/section/empty filler rows', () => {
+  test('initial selection and down both land on file/commit rows, never filler', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+    writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
+
+    const panel = new GitPanel(dir);
+    panel.onActivate();
+    await waitFor(() => !linesText(panel.render(W, H)).includes('Loading git status'));
+
+    // I5: the initial selection must never rest on the branch header, a
+    // section label, or an "(no ... files)" empty-row placeholder — the
+    // "Selected" detail panel resolves what's actually selected.
+    const initial = linesText(panel.render(W, H));
+    expect(initial).toContain(' File ');
+    expect(initial).toContain('a.txt');
+
+    // Only the unstaged file and the "initial" commit are selectable rows;
+    // 'down' must skip straight over the "Recent Commits" section label.
+    expect(panel.handleInput('down')).toBe(true);
+    const afterDown = linesText(panel.render(W, H));
+    expect(afterDown).toContain(' Commit ');
+    expect(afterDown).toContain('initial');
+
+    panel.onDestroy();
+  });
+});
+
+describe('GitPanel — stage/unstage/commit round trip', () => {
+  test('s stages, u unstages the selected file via GitService add/reset', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+    writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
+
+    const panel = new GitPanel(dir);
+    panel.onActivate();
+    await waitFor(() => !linesText(panel.render(W, H)).includes('Loading git status'));
+    await waitFor(() => linesText(panel.render(W, H)).includes('1 unstaged'));
+
+    expect(panel.handleInput('s')).toBe(true);
+    await waitFor(() => linesText(panel.render(W, H)).includes('1 staged'));
+    expect(execSync('git diff --cached --name-only', { cwd: dir }).toString().trim()).toBe('a.txt');
+
+    expect(panel.handleInput('u')).toBe(true);
+    await waitFor(() => linesText(panel.render(W, H)).includes('1 unstaged'));
+    expect(execSync('git diff --cached --name-only', { cwd: dir }).toString().trim()).toBe('');
+
+    panel.onDestroy();
+  });
+
+  test('c composes a message, Enter opens a Commit confirm, y commits via GitService.commit', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+    writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
+    execSync('git add a.txt', { cwd: dir });
+
+    const panel = new GitPanel(dir);
+    panel.onActivate();
+    await waitFor(() => linesText(panel.render(W, H)).includes('1 staged'));
+
+    expect(panel.handleInput('c')).toBe(true);
+    for (const ch of 'second commit') panel.handleInput(ch);
+    expect(panel.handleInput('enter')).toBe(true);
+    const confirmText = linesText(panel.render(W, H));
+    expect(confirmText).toContain('Commit');
+    expect(confirmText).toContain('second commit');
+
+    expect(panel.handleInput('y')).toBe(true);
+    await waitFor(() => execSync('git log --oneline', { cwd: dir }).toString().trim().split('\n').length === 2);
+    expect(execSync('git log -1 --pretty=%s', { cwd: dir }).toString().trim()).toBe('second commit');
+
+    panel.onDestroy();
+  });
+});
+
+describe('GitPanel — Enter on a commit row shows diffBetween/diffStat', () => {
+  test('opens the patch and stat for the selected commit', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+    addCommit(dir, 'a.txt', 'one\ntwo\n', 'second commit');
+
+    const panel = new GitPanel(dir);
+    panel.onActivate();
+    await waitFor(() => linesText(panel.render(W, H)).includes('second commit'));
+
+    // Both file sections are empty, so the initial selection (I5: never a
+    // header/section/empty filler row) already rests on the newest commit row.
+    expect(panel.handleInput('return')).toBe(true);
+    await waitFor(() => !linesText(panel.render(W, H)).includes('Loading diff'));
+    const diffText = linesText(panel.render(W, H));
+    expect(diffText).toContain('a.txt');
+
+    panel.onDestroy();
+  });
+});
+
+describe('GitPanel — no more auto `git init`; explicit i confirm instead', () => {
+  test('a non-git directory does not get auto-initialised, but i + y does it explicitly', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gv-git-panel-nonrepo-'));
+    tempDirs.push(dir);
+
+    const panel = new GitPanel(dir);
+    panel.onActivate();
+    await waitFor(() => linesText(panel.render(W, H)).includes('Not a git repository'));
+
+    // I4: refresh() must not have run `git init` as a side effect.
+    expect(() => execSync('git rev-parse --is-inside-work-tree', { cwd: dir, stdio: 'pipe' })).toThrow();
+
+    expect(panel.handleInput('i')).toBe(true);
+    const confirmText = linesText(panel.render(W, H));
+    expect(confirmText).toContain('Init');
+
+    expect(panel.handleInput('y')).toBe(true);
+    await waitFor(() => {
+      try {
+        execSync('git rev-parse --is-inside-work-tree', { cwd: dir, stdio: 'pipe' });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+
+    panel.onDestroy();
   });
 });
 

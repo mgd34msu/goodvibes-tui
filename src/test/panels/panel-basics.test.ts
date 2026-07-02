@@ -462,6 +462,36 @@ describe('GitPanel', () => {
     });
   });
 
+  describe('commit-compose and confirm render states', () => {
+    test('c opens the commit-message compose UI at exact W×H', () => {
+      expect(panel.handleInput('c')).toBe(true);
+      const lines = panel.render(80, 20);
+      expect(lines).toHaveLength(20);
+      for (const line of lines) expect(line).toHaveLength(80);
+      expect(linesText(lines)).toContain('Commit message');
+    });
+
+    test('typing then Enter opens a Commit confirm at exact W×H', () => {
+      panel.handleInput('c');
+      for (const ch of 'wip') panel.handleInput(ch);
+      expect(panel.handleInput('enter')).toBe(true);
+      const lines = panel.render(80, 20);
+      expect(lines).toHaveLength(20);
+      for (const line of lines) expect(line).toHaveLength(80);
+      const text = linesText(lines);
+      expect(text).toContain('Commit');
+      expect(text).toContain('wip');
+    });
+
+    test('Esc cancels compose without opening a confirm', () => {
+      panel.handleInput('c');
+      panel.handleInput('a');
+      expect(panel.handleInput('escape')).toBe(true);
+      const text = linesText(panel.render(80, 20));
+      expect(text).not.toContain('Commit message');
+    });
+  });
+
   describe('render geometry', () => {
     test('every line has exactly width cells', () => {
       const W = 70;
