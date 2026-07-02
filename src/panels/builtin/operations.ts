@@ -336,18 +336,11 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
       description: 'Incident workspace with root cause, permission, budget, replay, causal-chain, phase-timing, and jump-link evidence',
       factory: incidentFactory,
     });
-    // Legacy alias (WO-114 merge): the standalone Forensics panel was absorbed
-    // into Incident. Keep the 'forensics' id resolvable so pre-existing
-    // openForensicsPanel()/`/forensics` callers still land on the merged
-    // workspace instead of a dead panel id.
-    manager.registerType({
-      id: 'forensics',
-      name: 'Incident',
-      icon: 'N',
-      category: 'monitoring',
-      description: 'Alias for the Incident workspace (Forensics panel merged into Incident in WO-114).',
-      factory: incidentFactory,
-    });
+    // WO-114 compat (Forensics merged into Incident): the retired 'forensics'
+    // panel id still resolves — redirected to the merged Incident workspace so
+    // pre-existing openForensicsPanel()/`/forensics` callers land on the same
+    // Incident instance instead of stacking a duplicate registration.
+    manager.registerAlias('forensics', 'incident');
   }
 
   manager.registerType({
