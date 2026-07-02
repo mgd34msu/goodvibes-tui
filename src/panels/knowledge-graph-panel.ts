@@ -29,7 +29,6 @@ import { truncateDisplay } from '../utils/terminal-width.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import {
   buildBodyText,
-  buildGuidanceLine,
   buildKeyValueLine,
   buildPanelLine,
   buildPanelWorkspace,
@@ -479,7 +478,6 @@ export class KnowledgeGraphPanel extends ScrollableListPanel<BrowseRow> {
         { label: 'open issues', value: String(this.reviewRows.length), valueColor: this.reviewRows.length > 0 ? C.warn : C.good },
       ], C),
       this.modeToggleLine(width),
-      buildGuidanceLine(width, '/knowledge review-issue <id> <action>', 'the same review action from the command surface', C),
     ];
 
     const selectedRow = this.reviewRows[this.selectedIndex];
