@@ -24,6 +24,7 @@ import {
   type PanelWorkspaceSection,
 } from './polish.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { buildAnswerActions, isGenericRecommendation, type PlanningAnswerAction } from './project-planning-answer-actions.ts';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   planning: '#38bdf8',
@@ -46,15 +47,6 @@ export interface ProjectPlanningPanelOptions {
   readonly requestRender?: () => void;
   readonly submitAnswer?: (answer: string) => void;
   readonly dismissPlanning?: () => void;
-}
-
-interface PlanningAnswerAction {
-  readonly id: string;
-  readonly label: string;
-  readonly detail: string;
-  readonly answer: string;
-  readonly kind?: 'answer' | 'approve' | 'dismiss';
-  readonly disabled?: boolean;
 }
 
 interface RenderedPlanningSection extends PanelWorkspaceSection {
@@ -111,9 +103,32 @@ export class ProjectPlanningPanel extends BasePanel {
     }
     // confirmResult === 'inactive': proceed with normal dispatch.
 
+    // Ctrl+R (refresh) / Ctrl+A (approve) are alternate bindings for 'r'/'a'
+    // that stay reachable while a question is active, where plain 'r'/'a'
+    // are swallowed into the draft-answer text below instead. They are
+    // checked before the question gate so they work in both modes.
+    //
+    // NOTE: the input-routing layer (src/input/handler-feed-routes.ts, owned
+    // by WO-150 in this wave) does not yet forward ctrl-modified keys to the
+    // active panel — it currently intercepts all `token.ctrl` input before
+    // panel.handleInput is ever called, and a bare Ctrl+R is already bound
+    // globally to 'history-search'. This handler recognizes the logical key
+    // strings 'ctrl+r'/'ctrl+a' so the panel-side behavior is correct and
+    // testable now; wiring a real Ctrl+R/Ctrl+A keypress through to these
+    // strings is an input-handler change outside this work order's file
+    // scope.
+    if (key === 'ctrl+r') {
+      this.refresh(true);
+      return true;
+    }
+    if (key === 'ctrl+a') {
+      this.approveExecution();
+      return true;
+    }
+
     const question = this.getCurrentQuestion();
     if (question) {
-      const actions = this.getAnswerActions(question);
+      const actions = buildAnswerActions(question, this.draftAnswer);
       this.selectedActionIndex = this.clampActionIndex(actions.length);
       if (key === 'up') {
         this.selectedActionIndex = Math.max(0, this.selectedActionIndex - 1);
@@ -204,9 +219,15 @@ export class ProjectPlanningPanel extends BasePanel {
             { label: 'space', value: status?.knowledgeSpaceId ?? `project:${this.projectId}`, valueColor: C.value },
             { label: 'mode', value: 'TUI-owned passive backing store', valueColor: C.info },
           ], C),
-          buildPanelLine(width, [
-            [' Planning never starts from daemon, webhooks, ntfy, Home Assistant, or companion surfaces.', C.dim],
-          ]),
+          // Live artifact counts from the SDK status route (same counts /plan
+          // prints at planning-runtime.ts:90) instead of static filler prose.
+          status
+            ? buildKeyValueLine(width, [
+                { label: 'states', value: String(status.counts.states), valueColor: status.counts.states > 0 ? C.value : C.dim },
+                { label: 'decisions', value: String(status.counts.decisions), valueColor: status.counts.decisions > 0 ? C.value : C.dim },
+                { label: 'language', value: String(status.counts.languageArtifacts), valueColor: status.counts.languageArtifacts > 0 ? C.value : C.dim },
+              ], C)
+            : buildPanelLine(width, [[' Artifact counts unavailable — refreshing…', C.dim]]),
         ],
       });
 
@@ -227,6 +248,7 @@ export class ProjectPlanningPanel extends BasePanel {
         if (question) sections.push(this.buildQuestionSection(width, question));
         sections.push(this.buildGapsSection(width, evaluation));
         sections.push(this.buildTasksSection(width, state));
+        sections.push(this.buildAnsweredHistorySection(width, state));
         sections.push(this.buildDecisionsSection(width, state, decisions));
         sections.push(this.buildLanguageSection(width, language));
       }
@@ -278,6 +300,12 @@ export class ProjectPlanningPanel extends BasePanel {
           ['Enter', C.info],
           [' submit  Esc prompt focus  Ctrl+X close panel', C.dim],
         ]),
+        buildPanelLine(width, [
+          [' Ctrl+R', C.info],
+          [' refresh  ', C.dim],
+          ['Ctrl+A', C.info],
+          [' approve  (r/a type into the draft while a question is active)', C.dim],
+        ]),
       ];
     }
     return [
@@ -311,7 +339,7 @@ export class ProjectPlanningPanel extends BasePanel {
   }
 
   private buildQuestionSection(width: number, question: ProjectPlanningQuestion): RenderedPlanningSection {
-    const actions = this.getAnswerActions(question);
+    const actions = buildAnswerActions(question, this.draftAnswer);
     this.selectedActionIndex = this.clampActionIndex(actions.length);
     // When a clear-draft confirmation is pending, show the confirm prompt
     // inline above the draft line instead of the normal content.
@@ -329,7 +357,7 @@ export class ProjectPlanningPanel extends BasePanel {
     if (question.whyItMatters) {
       lines.push(...buildBodyText(width, `Why this matters: ${question.whyItMatters}`, C, C.dim));
     }
-    if (question.recommendedAnswer && !this.isGenericRecommendation(question.recommendedAnswer)) {
+    if (question.recommendedAnswer && !isGenericRecommendation(question.recommendedAnswer)) {
       lines.push(...buildBodyText(width, `Recommendation: ${question.recommendedAnswer}`, C, C.good));
     }
     lines.push(...buildBodyText(
@@ -406,7 +434,7 @@ export class ProjectPlanningPanel extends BasePanel {
       if (evaluation.nextQuestion.whyItMatters) {
         lines.push(...buildBodyText(width, `Why it matters: ${evaluation.nextQuestion.whyItMatters}`, C, C.dim));
       }
-      if (evaluation.nextQuestion.recommendedAnswer && !this.isGenericRecommendation(evaluation.nextQuestion.recommendedAnswer)) {
+      if (evaluation.nextQuestion.recommendedAnswer && !isGenericRecommendation(evaluation.nextQuestion.recommendedAnswer)) {
         lines.push(...buildBodyText(width, `Recommended answer: ${evaluation.nextQuestion.recommendedAnswer}`, C, C.good));
       }
     }
@@ -467,6 +495,24 @@ export class ProjectPlanningPanel extends BasePanel {
       }
     }
     return { title: 'Task Graph', lines };
+  }
+
+  private buildAnsweredHistorySection(width: number, state: ProjectPlanningState): PanelWorkspaceSection {
+    const answered = state.answeredQuestions;
+    if (answered.length === 0) {
+      return {
+        title: 'Answered Questions',
+        lines: [buildPanelLine(width, [[' No questions answered yet.', C.dim]])],
+      };
+    }
+    const ordered = [...answered].sort((a, b) => (b.answeredAt ?? 0) - (a.answeredAt ?? 0));
+    return {
+      title: 'Answered Questions',
+      lines: ordered.slice(0, 12).flatMap((entry) => [
+        ...buildBodyText(width, `Q: ${entry.prompt}`, C, C.value),
+        ...buildBodyText(width, `A: ${entry.answer?.trim() || '(no answer recorded)'}`, C, entry.answer?.trim() ? C.good : C.dim),
+      ]),
+    };
   }
 
   private buildDecisionsSection(
@@ -548,98 +594,6 @@ export class ProjectPlanningPanel extends BasePanel {
     const state = this.snapshot?.state;
     const open = state?.openQuestions.find((question) => (question.status ?? 'open') === 'open');
     return open ?? this.snapshot?.evaluation?.nextQuestion ?? null;
-  }
-
-  private getAnswerActions(question: ProjectPlanningQuestion): PlanningAnswerAction[] {
-    const actions: PlanningAnswerAction[] = [];
-    const prompt = question.prompt.toLowerCase();
-    const isScopeQuestion = prompt.includes('scope') || prompt.includes('in or out');
-    const isTaskQuestion = prompt.includes('task') || prompt.includes('dependency') || prompt.includes('work breakdown');
-    const isVerificationQuestion = prompt.includes('verification') || prompt.includes('test') || prompt.includes('prove');
-    const isApprovalQuestion = prompt.includes('approved') || prompt.includes('approve') || prompt.includes('execution');
-    if (isApprovalQuestion) {
-      actions.push({
-        id: 'approve-execution',
-        label: 'Approve execution',
-        detail: 'Mark this plan approved so execution may proceed.',
-        answer: 'Approve this planning state for execution.',
-        kind: 'approve',
-      });
-    }
-    if (isScopeQuestion) {
-      actions.push({
-        id: 'scope-focused-first-pass',
-        label: 'Use focused first-pass scope',
-        detail: 'Fill a concrete end-to-end scope for this goal and keep unrelated work out.',
-        answer: 'Use a focused first-pass scope for this goal.',
-      });
-    }
-    if (isTaskQuestion) {
-      actions.push({
-        id: 'tasks-default-breakdown',
-        label: 'Create default task breakdown',
-        detail: 'Create inspect, implement, wire, and verify tasks with dependencies.',
-        answer: 'Create the default task breakdown for this goal.',
-      });
-    }
-    if (isVerificationQuestion) {
-      actions.push({
-        id: 'verification-default-gates',
-        label: 'Use standard verification gates',
-        detail: 'Require focused regression coverage, typecheck/build validation, and a runtime smoke where feasible.',
-        answer: 'Use standard verification gates for this goal.',
-      });
-    }
-    if (question.recommendedAnswer?.trim() && !this.isGenericRecommendation(question.recommendedAnswer)) {
-      actions.push({
-        id: 'recommended',
-        label: 'Use recommended answer',
-        detail: this.compact(question.recommendedAnswer),
-        answer: question.recommendedAnswer,
-      });
-    }
-    if (isScopeQuestion) {
-      actions.push({
-        id: 'scope-end-to-end',
-        label: 'End-to-end required scope',
-        detail: 'Let the plan include every component needed to make this work, but avoid unrelated cleanup.',
-        answer: 'Scope is everything required to make the requested outcome work end-to-end. Include TUI, daemon composition, configuration, docs, and tests if they are required. Do not include unrelated cleanup or broad refactors unless they are necessary for this task.',
-      });
-      actions.push({
-        id: 'scope-tui-first',
-        label: 'TUI-first scope',
-        detail: 'Fix TUI behavior here; report SDK blockers instead of patching around SDK-owned bugs.',
-        answer: 'Scope is TUI-owned behavior first. If a blocker is SDK-owned, report the exact SDK contract/runtime issue instead of patching around it in the TUI. Include daemon composition only where the TUI owns the wiring.',
-      });
-    }
-    actions.push({
-      id: 'ask-narrower',
-      label: 'I am not sure yet',
-      detail: 'Break this into smaller concrete choices with examples and a recommended default.',
-      answer: `I do not know enough to answer "${question.prompt}" as asked. Break it into smaller concrete questions with 2-4 specific choices, explain the tradeoffs, recommend a default, and ask me the first one.`,
-    });
-    actions.push({
-      id: 'custom',
-      label: 'Submit typed answer',
-      detail: this.draftAnswer ? this.compact(this.draftAnswer) : 'Type an answer first; this row becomes the custom answer.',
-      answer: this.draftAnswer.trim(),
-      disabled: !this.draftAnswer.trim(),
-    });
-    actions.push({
-      id: 'dismiss-planning',
-      label: 'Close planning and continue without it',
-      detail: 'Pause project planning for this workspace. Normal chat continues; /plan can reopen it later.',
-      answer: 'Pause project planning for this workspace and continue without the planning panel.',
-      kind: 'dismiss',
-    });
-    return actions;
-  }
-
-  private isGenericRecommendation(value: string): boolean {
-    return /\bdefine the first-pass scope\b/i.test(value)
-      || /\bcreate task records\b/i.test(value)
-      || /\brecord concrete tests\b/i.test(value)
-      || /\bseparate out-of-scope work\b/i.test(value);
   }
 
   private submitSelectedAction(question: ProjectPlanningQuestion, actions: readonly PlanningAnswerAction[]): void {
@@ -734,11 +688,6 @@ export class ProjectPlanningPanel extends BasePanel {
 
   private isPrintableKey(key: string): boolean {
     return key.length === 1 && key >= ' ';
-  }
-
-  private compact(text: string): string {
-    const normalized = text.replace(/\s+/g, ' ').trim();
-    return normalized.length > 86 ? `${normalized.slice(0, 83)}...` : normalized;
   }
 
   private approveExecution(): void {
