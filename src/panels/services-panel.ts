@@ -186,7 +186,9 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
   }
 
   private async testSelected(): Promise<void> {
-    const selected = this.entries[this.selectedIndex];
+    // selectedIndex tracks the filtered view, so the acted-on entry must come
+    // from getVisibleItems() — this.entries would desync under a '/' filter.
+    const selected = this.getVisibleItems()[this.selectedIndex];
     if (!selected) return;
     try {
       const result = await this.registry.testConnection(selected.name);
@@ -247,7 +249,8 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
       ], C),
     ];
 
-    const selected = this.entries[this.selectedIndex];
+    // Detail must describe the row the (possibly filtered) list highlights.
+    const selected = this.getVisibleItems()[this.selectedIndex];
     const detailRows: Line[] = [];
     if (selected) {
       const inspect = selected.inspection;
