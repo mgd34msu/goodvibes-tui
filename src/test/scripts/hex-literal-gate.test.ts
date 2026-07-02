@@ -14,8 +14,14 @@ describe('countHexLiterals', () => {
     expect(countHexLiterals('const C = { a: UI_TONES.state.info };')).toBe(0);
   });
 
-  test('does not match ANSI-256 index strings or short hex', () => {
-    expect(countHexLiterals("const C = { a: '244', b: '#fff' };")).toBe(0);
+  test('does not match ANSI-256 index strings', () => {
+    expect(countHexLiterals("const C = { a: '244' };")).toBe(0);
+  });
+
+  test('counts 3-digit and 8-digit hex color literals too', () => {
+    expect(
+      countHexLiterals("const C = { a: '#fff', b: '#38bdf8', c: '#ef444480' };"),
+    ).toBe(3);
   });
 });
 

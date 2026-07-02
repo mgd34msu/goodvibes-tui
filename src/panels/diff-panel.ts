@@ -6,6 +6,7 @@ import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
+import { UI_TONES } from '../renderer/ui-primitives.ts';
 import {
   buildBodyText,
   buildEmptyState,
@@ -27,7 +28,9 @@ import {
 // ---------------------------------------------------------------------------
 
 const HUNK_BLUE = '#88aaff';
-const CONTEXT_GRAY = '#888888';
+// Context rows and line-number gutter use the shared theme's muted/dim
+// foreground tones rather than dedicated gray hex literals.
+const CONTEXT_GRAY = UI_TONES.fg.muted;
 const FILENAME_WHITE = '#ffffff';
 const ADD_GREEN = '#00ff88';
 const ADD_BG = '#001a0d';
@@ -35,7 +38,7 @@ const DEL_RED = '#ff4444';
 const DEL_BG = '#1a0000';
 const HUNK_BG = '#0a0a1a';
 const MARKER_GRAY = '#aaaaaa';
-const LINE_NUM_GRAY = '#555555';
+const LINE_NUM_GRAY = UI_TONES.fg.dim;
 const LINE_NUM_ADD = '#00aa55';
 const LINE_NUM_DEL = '#aa2222';
 const TAB_ACTIVE_BG = '#333333';
