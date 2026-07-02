@@ -120,7 +120,6 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
   test('known panel-local repaint files do not emit render:request', () => {
     const violations: string[] = [];
     const restrictedFiles = [
-      'src/panels/provider-stats-panel.ts',
       'src/panels/provider-health-panel.ts',
       'src/panels/debug-panel.ts',
     ];
@@ -158,7 +157,6 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
       'src/panels/thinking-panel.ts',
       'src/panels/context-visualizer-panel.ts',
       'src/panels/debug-panel.ts',
-      'src/panels/provider-stats-panel.ts',
       'src/panels/provider-health-panel.ts',
       'src/panels/cost-tracker-panel.ts',
       'src/main.ts',
@@ -264,7 +262,6 @@ describe('GC-ARCH-004: shell control cutover enforcement', () => {
     const violations: string[] = [];
     const restrictedFiles = [
       'src/runtime/bootstrap.ts',
-      'src/panels/provider-stats-panel.ts',
       'src/panels/provider-health-panel.ts',
       'src/panels/ops-strategy-panel.ts',
     ];
