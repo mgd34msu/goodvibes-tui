@@ -5,14 +5,14 @@
  * indicators. Wired with an EvalRegistry that holds the latest run results.
  */
 
+import { join } from 'node:path';
 import { BasePanel } from './base-panel.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import type { Line } from '../types/grid.ts';
-import type { KeyName } from './types.ts';
+import type { KeyName, PanelIntegrationContext } from './types.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import {
   buildAlignedRow,
-  buildEmptyState,
   buildKeyboardHints,
   buildMeterLine,
   buildPanelLine,
@@ -30,8 +30,13 @@ import type {
   EvalResult,
   EvalGateResult,
   EvalDimension,
+  EvalBaseline,
+  RegressionEntry,
 } from '@/runtime/index.ts';
+import { loadBaseline } from '@/runtime/index.ts';
 import { formatShortDuration } from '../utils/format-duration.ts';
+
+const BASELINE_PATH = '.goodvibes/eval/baseline.json';
 
 /**
  * Holds the latest eval run state for display in EvalPanel.
@@ -111,25 +116,89 @@ const DIMENSION_ORDER: EvalDimension[] = ['safety', 'quality', 'latency', 'cost'
 
 export class EvalPanel extends BasePanel {
   private readonly _registry: EvalRegistry;
+  private readonly _projectRoot: string;
   private _mode: 'list' | 'detail' = 'list';
   private _selectedSuiteIdx = 0;
   private _selectedScenarioIdx = 0;
   private _scrollOffset = 0;
   private _unsub: (() => void) | null = null;
+  private _baseline: EvalBaseline | null = null;
+  private _baselineLoading = false;
 
-  public constructor(registry: EvalRegistry) {
+  public constructor(registry: EvalRegistry, projectRoot = '.') {
     super('eval', 'Eval', 'V', 'monitoring');
     this._registry = registry;
+    this._projectRoot = projectRoot;
   }
 
   public override onActivate(): void {
     this._unsub = this._registry.subscribe(() => this.markDirty());
+    this._loadBaselineIfNeeded();
     this.markDirty();
   }
 
   public override onDestroy(): void {
     this._unsub?.();
     this._unsub = null;
+  }
+
+  /**
+   * Seed the panel with last-known scores from the on-disk baseline so a
+   * fresh session shows real data instead of a "run a suite" signpost.
+   * Only loaded once per activation; a live suite run supersedes it.
+   *
+   * Resolved as an absolute path under _projectRoot before handing it to
+   * loadBaseline() — the SDK helper resolves a relative path against the
+   * process cwd (not the projectRoot argument), so joining here is what
+   * actually makes the constructor's projectRoot meaningful.
+   */
+  private _loadBaselineIfNeeded(): void {
+    if (this._baseline || this._baselineLoading) return;
+    this._baselineLoading = true;
+    void loadBaseline(join(this._projectRoot, BASELINE_PATH), this._projectRoot)
+      .then((baseline) => {
+        this._baseline = baseline ?? null;
+      })
+      .catch(() => {
+        this._baseline = null;
+      })
+      .finally(() => {
+        this._baselineLoading = false;
+        this.markDirty();
+      });
+  }
+
+  /** Number of selectable rows in list mode: live suite results, or baseline suites when none have run yet. */
+  private _listLength(suites: EvalSuiteResult[]): number {
+    if (suites.length > 0) return suites.length;
+    return this._baseline ? Object.keys(this._baseline.suites).length : 0;
+  }
+
+  /** Name of the suite currently selected in list mode, from live results or the baseline. */
+  private _selectedSuiteName(suites: EvalSuiteResult[]): string | undefined {
+    if (suites.length > 0) return suites[this._selectedSuiteIdx]?.suite;
+    if (!this._baseline) return undefined;
+    return Object.keys(this._baseline.suites)[this._selectedSuiteIdx];
+  }
+
+  /** Total scenario/detail line count for the given suite, used to clamp pagedown scrolling. */
+  private _detailLineCount(suite: EvalSuiteResult): number {
+    const gates = this._registry.getGateResults();
+    const gate = gates.find((g) => g.suite === suite.suite);
+    const regressedIds = new Set((gate?.regressions ?? []).map((r) => r.scenarioId));
+
+    let count = 0;
+    suite.results.forEach((result, idx) => {
+      count += 1;
+      if (idx === this._selectedScenarioIdx) {
+        count += DIMENSION_ORDER.filter((dim) =>
+          result.scorecard.dimensions.some((d) => d.dimension === dim),
+        ).length;
+        if (regressedIds.has(result.scenario.id)) count += 1;
+        count += result.scorecard.notes?.length ?? 0;
+      }
+    });
+    return count;
   }
 
   public handleInput(key: KeyName): boolean {
@@ -142,7 +211,8 @@ export class EvalPanel extends BasePanel {
         return true;
       }
       if (key === 'down' || key === 'j') {
-        this._selectedSuiteIdx = Math.min(suites.length - 1, this._selectedSuiteIdx + 1);
+        const len = this._listLength(suites);
+        this._selectedSuiteIdx = Math.min(Math.max(0, len - 1), this._selectedSuiteIdx + 1);
         this.markDirty();
         return true;
       }
@@ -189,11 +259,35 @@ export class EvalPanel extends BasePanel {
       return true;
     }
     if (key === 'pagedown') {
-      this._scrollOffset += 5;
+      const suite = suites[this._selectedSuiteIdx];
+      const maxOffset = suite ? Math.max(0, this._detailLineCount(suite) - 1) : 0;
+      this._scrollOffset = Math.min(maxOffset, this._scrollOffset + 5);
       this.markDirty();
       return true;
     }
     return false;
+  }
+
+  /**
+   * Cross-panel integration hook: r runs the selected suite, R runs all
+   * suites, both dispatched through the real /eval command executor rather
+   * than a printed signpost. registry.setRunning()/push() (already wired in
+   * src/input/commands/eval.ts) animate the in-panel state as the run proceeds.
+   */
+  public handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
+    if (key !== 'r' && key !== 'R') return false;
+    if (!ctx.executeCommand) return false;
+
+    if (key === 'R') {
+      void ctx.executeCommand('eval', ['run', 'all']).catch(() => {});
+      return true;
+    }
+
+    const suites = this._registry.getSuiteResults();
+    const suiteName = this._selectedSuiteName(suites);
+    if (!suiteName) return false;
+    void ctx.executeCommand('eval', ['run', suiteName]).catch(() => {});
+    return true;
   }
 
   public render(width: number, height: number): Line[] {
@@ -203,6 +297,12 @@ export class EvalPanel extends BasePanel {
     const intro = 'Evaluation harness runs, gates, scenario scorecards, and regression indicators for model and product validation.';
 
     if (suites.length === 0) {
+      if (this._baseline && Object.keys(this._baseline.suites).length > 0) {
+        const workspace = this._renderBaselineList(this._baseline, width, height, intro);
+        while (workspace.length < height) workspace.push(createEmptyLine(width));
+        return workspace;
+      }
+
       const workspace = buildPanelWorkspace(width, height, {
         title: 'Eval Harness',
         intro,
@@ -210,15 +310,13 @@ export class EvalPanel extends BasePanel {
           title: 'Status',
           lines: [
             this._statusLine(width),
-            ...buildEmptyState(
-              width,
-              ' No results yet.',
-              'Run an eval suite to populate this workspace with suite scores, gate results, and per-scenario detail.',
-              [{ command: '/eval run <suite>', summary: 'start a suite such as core-performance, safety-baseline, or cost-tokens' }],
-              C,
-            ),
+            buildPanelLine(width, [[' No results yet — no baseline on disk.', C.dim]]),
           ],
         }],
+        footerLines: [buildKeyboardHints(width, [
+          { keys: 'r', label: 'run selected suite' },
+          { keys: 'R', label: 'run all suites' },
+        ], C)],
         palette: C,
       });
       while (workspace.length < height) workspace.push(createEmptyLine(width));
@@ -231,7 +329,7 @@ export class EvalPanel extends BasePanel {
     } else {
       const suite = suites[this._selectedSuiteIdx];
       if (suite) {
-        this._renderDetail(lines, suite, width, height, intro);
+        this._renderDetail(lines, suite, gates, width, height, intro);
       }
     }
 
@@ -312,12 +410,27 @@ export class EvalPanel extends BasePanel {
         empty: C.empty,
         label: C.label,
       }, { prefix: ' mean ', suffix: ` ${selectedSuite.meanScore.toFixed(1)}/100 ` }));
+
+      const gate = gateMap.get(selectedSuite.suite);
+      if (gate && gate.regressions.length > 0) {
+        const worst = [...gate.regressions].sort((a, b) => a.delta - b.delta)[0];
+        const segments: Array<[string, string]> = [
+          [' regressions ', C.label],
+          [`${gate.regressions.length}`, C.bad],
+        ];
+        if (worst) {
+          segments.push(['  worst ', C.label], [`${worst.scenarioName} ${worst.delta.toFixed(1)}`, C.bad]);
+        }
+        detailLines.push(buildPanelLine(width, segments));
+      }
     }
 
     const footer = buildKeyboardHints(width, [
       { keys: `${this._selectedSuiteIdx + 1}/${suites.length}`, label: 'suite' },
       { keys: '↑/↓', label: 'navigate' },
       { keys: 'Enter', label: 'open detail' },
+      { keys: 'r', label: 'run selected' },
+      { keys: 'R', label: 'run all' },
     ], C);
 
     lines.push(...buildPanelWorkspace(width, height, {
@@ -338,11 +451,15 @@ export class EvalPanel extends BasePanel {
   private _renderDetail(
     lines: Line[],
     suite: EvalSuiteResult,
+    gates: EvalGateResult[],
     width: number,
     height: number,
     intro: string,
   ): void {
     const passCount = suite.results.filter((r) => r.scorecard.passed).length;
+    const gate = gates.find((g) => g.suite === suite.suite);
+    const regressionMap = new Map((gate?.regressions ?? []).map((r) => [r.scenarioId, r]));
+
     const headerLines: Line[] = [
       this._statusLine(width),
       buildPanelLine(width, [
@@ -356,11 +473,17 @@ export class EvalPanel extends BasePanel {
         [`${passCount}/${suite.results.length} passed`, passCount === suite.results.length ? C.good : C.warn],
       ]),
     ];
+    if (gate && gate.regressions.length > 0) {
+      headerLines.push(buildPanelLine(width, [
+        [' regressions ', C.label],
+        [`${gate.regressions.length} scenario(s) below baseline`, C.bad],
+      ]));
+    }
 
     const allDetailLines: Line[] = [];
     suite.results.forEach((result, idx) => {
       const selected = idx === this._selectedScenarioIdx;
-      this._renderScenarioBlock(allDetailLines, result, selected, width);
+      this._renderScenarioBlock(allDetailLines, result, selected, width, regressionMap.get(result.scenario.id));
     });
 
     const footer = buildKeyboardHints(width, [
@@ -398,15 +521,18 @@ export class EvalPanel extends BasePanel {
     result: EvalResult,
     selected: boolean,
     width: number,
+    regression: RegressionEntry | undefined,
   ): void {
     const sc = result.scorecard;
     const scoreC = scoreColor(sc.compositeScore);
     const passC = sc.passed ? C.good : C.bad;
+    const nameText = regression ? `▼ ${result.scenario.name}` : result.scenario.name;
+    const nameColor = selected ? C.selected : (regression ? C.bad : C.value);
 
     lines.push(buildAlignedRow(
       width,
       [
-        { text: result.scenario.name, fg: selected ? C.selected : C.value, bold: selected },
+        { text: nameText, fg: nameColor, bold: selected },
         { text: sc.compositeScore.toFixed(1), fg: scoreC },
         { text: sc.passed ? 'PASS' : 'FAIL', fg: passC },
       ],
@@ -430,6 +556,13 @@ export class EvalPanel extends BasePanel {
         }, { prefix: `    ${dim.padEnd(9)} `, suffix: ` ${d.score.toFixed(0).padStart(3)}/100 ` }));
       }
 
+      if (regression) {
+        lines.push(buildPanelLine(width, [
+          ['    ▼ regression vs baseline ', C.bad],
+          [`${regression.baselineScore.toFixed(1)} -> ${regression.freshScore.toFixed(1)} (${regression.delta >= 0 ? '+' : ''}${regression.delta.toFixed(1)})`, C.bad],
+        ]));
+      }
+
       if (sc.notes && sc.notes.length > 0) {
         for (const note of sc.notes) {
           lines.push(buildPanelLine(width, [
@@ -439,5 +572,56 @@ export class EvalPanel extends BasePanel {
         }
       }
     }
+  }
+
+  // ── Baseline-seeded list (no live suite results yet) ─────────────────────────
+
+  private _renderBaselineList(
+    baseline: EvalBaseline,
+    width: number,
+    height: number,
+    intro: string,
+  ): Line[] {
+    const entries = Object.entries(baseline.suites);
+
+    const tableRows = entries.map(([name, summary], idx) => {
+      const selected = idx === this._selectedSuiteIdx;
+      const scenarioCount = Object.keys(summary.scenarioScores).length;
+      return {
+        selected,
+        cells: [
+          { text: name, fg: selected ? C.selected : C.value, bold: selected },
+          { text: summary.meanScore.toFixed(1), fg: scoreColor(summary.meanScore) },
+          { text: `${scenarioCount}`, fg: C.dim },
+        ],
+      };
+    });
+
+    const tableLines = buildTable(width, [
+      { label: 'Suite' },
+      { label: 'Score', width: 7, align: 'right' },
+      { label: 'Scenarios', width: 10, align: 'right' },
+    ], tableRows, C, { selectedBg: C.selectBg });
+
+    const footer = buildKeyboardHints(width, [
+      { keys: `${entries.length > 0 ? this._selectedSuiteIdx + 1 : 0}/${entries.length}`, label: 'suite' },
+      { keys: '↑/↓', label: 'navigate' },
+      { keys: 'r', label: 'run selected' },
+      { keys: 'R', label: 'run all' },
+    ], C);
+
+    return buildPanelWorkspace(width, height, {
+      title: 'Eval Harness',
+      intro,
+      sections: [
+        { lines: [this._statusLine(width)] },
+        {
+          title: `Baseline · ${baseline.label} (captured ${new Date(baseline.capturedAt).toLocaleString()})`,
+          lines: tableLines,
+        },
+      ],
+      footerLines: [footer],
+      palette: C,
+    });
   }
 }
