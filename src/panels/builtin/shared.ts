@@ -8,7 +8,7 @@ import type { ApprovalBroker, SharedSessionBroker } from '@pellux/goodvibes-sdk/
 import type { AutomationManager } from '@pellux/goodvibes-sdk/platform/automation';
 import type { ControlPlaneRecentEvent } from '@pellux/goodvibes-sdk/platform/control-plane';
 import type { UiRuntimeServices } from '../../runtime/ui-services.ts';
-import type { PluginManagerObserver } from '@pellux/goodvibes-sdk/platform/plugins';
+import type { PluginManagerControls } from '../plugins-panel.ts';
 import type { HookWorkbench } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { HookDispatcher } from '@pellux/goodvibes-sdk/platform/hooks';
 import type { HookActivityTracker } from '@pellux/goodvibes-sdk/platform/hooks';
@@ -109,8 +109,8 @@ export interface BuiltinPanelDeps {
   systemMessagesPanel?: import('../system-messages-panel.ts').SystemMessagesPanel;
   /** Explicit UI-facing runtime services for agent/process/WRFC/remote panels and modals. */
   uiServices?: UiRuntimeServices;
-  /** Shared plugin manager observer for plugin and security panels. */
-  pluginManager?: PluginManagerObserver;
+  /** Shared plugin manager for plugin and security panels (widened past the read-only observer surface — WO-134 — so PluginsPanel can drive enable/disable/verify/lift-quarantine). */
+  pluginManager?: PluginManagerControls;
   /** Shared hook dispatcher for the hooks control-room panel. */
   hookDispatcher?: Pick<HookDispatcher, 'listHooks' | 'getChains'>;
   /** Shared hook workbench for the hooks control-room panel. */
@@ -274,7 +274,7 @@ export function requireUiServices(deps: BuiltinPanelDeps): UiRuntimeServices {
   return deps.uiServices;
 }
 
-export function requirePluginManager(deps: BuiltinPanelDeps): PluginManagerObserver {
+export function requirePluginManager(deps: BuiltinPanelDeps): PluginManagerControls {
   if (!deps.pluginManager) {
     throw new Error('Plugin manager must be wired at bootstrap for plugin and security panels.');
   }
