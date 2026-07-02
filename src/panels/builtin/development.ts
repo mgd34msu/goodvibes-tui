@@ -17,7 +17,13 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'G',
     category: 'development',
     description: 'Git status, staged/unstaged changes, and recent commits',
-    factory: () => new GitPanel(requireUiServices(deps).environment.workingDirectory, deps.requestRender),
+    // sessionChangeTracker is optional: when a caller wires it into
+    // BuiltinPanelDeps, the Git panel highlights files touched this session.
+    factory: () => new GitPanel(
+      requireUiServices(deps).environment.workingDirectory,
+      deps.requestRender,
+      deps.sessionChangeTracker ? () => deps.sessionChangeTracker!.getChangedFiles() : undefined,
+    ),
   });
 
   manager.registerType({
