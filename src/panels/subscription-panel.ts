@@ -10,7 +10,6 @@ import { type ConfirmState, handleConfirmInput } from './confirm-state.ts';
 import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildEmptyState,
-  buildGuidanceLine,
   buildKeyboardHints,
   buildKeyValueLine,
   buildPanelListRow,
@@ -264,7 +263,6 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
         { label: 'selected', value: (this.rows[this.selectedIndex]?.provider ?? 'none'), valueColor: this.rows[this.selectedIndex] ? C.value : C.dim },
         { label: 'status', value: this.rows[this.selectedIndex] ? statusOf(this.rows[this.selectedIndex]!) : 'n/a', valueColor: this.rows[this.selectedIndex] ? statusColor(statusOf(this.rows[this.selectedIndex]!)) : C.dim },
       ], C),
-      buildGuidanceLine(width, '/subscription login <provider> start', 'start or repair browser login for the selected provider route', C),
     ];
 
     // Empty state: render posture + base empty state
@@ -282,7 +280,6 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
         intro,
         sections: [{ lines: [...summaryLines, ...emptyLines] }],
         footerLines: [
-          buildGuidanceLine(width, '/subscription login <provider> start', 'start browser-based provider login from the packaged subscription surface', C),
           this.buildFooterHint(width),
         ],
         palette: C,
@@ -324,7 +321,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
         const age = formatElapsed(Date.now() - selectedRow.pending.createdAt);
         detailRows.push(buildPanelLine(width, [[` Login is pending (started ${age} ago). Finish with /subscription login <provider> finish <code>.`, C.warn]]));
       } else if (selectedRow.hasOAuthConfig) {
-        detailRows.push(buildPanelLine(width, [[' Ready for login. Press Enter to start it here, or /subscription login <provider> start.', C.dim]]));
+        detailRows.push(buildPanelLine(width, [[' Ready for login. Press Enter to start it here.', C.dim]]));
       } else {
         detailRows.push(buildPanelLine(width, [[' Add a provider-specific OAuth config or enable a built-in subscription provider to use subscription login.', C.bad]]));
       }
@@ -337,7 +334,6 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
       header: headerLines,
       footer: [
         ...detailRows,
-        buildGuidanceLine(width, '/subscription login <provider> start', 'start browser-based provider login from the packaged subscription surface', C),
         this.buildFooterHint(width),
       ],
     });

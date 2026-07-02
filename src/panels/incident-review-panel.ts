@@ -202,7 +202,9 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
       return true; // absorbed — keep the confirm dialog pending
     }
 
-    const reports = this.getItems();
+    // Actions must target the filtered view the list highlights — raw
+    // getItems() desyncs selectedIndex under an applied '/' filter.
+    const reports = this.getVisibleItems();
     if (reports.length > 0 && (key === 'x' || key === 'c' || key === 'j')) {
       this.clampSelection();
       const selected = reports[this.selectedIndex];
@@ -297,13 +299,19 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
     }
 
     this.clampSelection();
-    const selected = reports[this.selectedIndex]!;
+    // Header/detail must describe the row the (possibly filtered) list
+    // highlights; a filter matching nothing leaves no selection at all.
+    const visible = this.getVisibleItems();
+    const selected = visible[this.selectedIndex];
+    if (!selected) {
+      return this.renderList(width, height, { title: 'Incident Review Workspace' });
+    }
     const bundle = this.getBundle(selected.id);
 
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'incidents', value: String(reports.length), valueColor: C.value },
-        { label: 'selected', value: `${this.selectedIndex + 1}/${reports.length}`, valueColor: C.info },
+        { label: 'selected', value: `${this.selectedIndex + 1}/${visible.length}`, valueColor: C.info },
         { label: 'classification', value: selected.classification, valueColor: classificationColor(selected.classification) },
       ], C),
     ];

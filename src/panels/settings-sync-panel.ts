@@ -311,7 +311,9 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
     const headerLines = this._buildPostureHeader(width, snapshot);
 
     this.clampSelection();
-    const selectedEntry = snapshot.resolvedEntries[this.selectedIndex];
+    // Detail must describe the row the (possibly filtered) list highlights —
+    // raw resolvedEntries desyncs selectedIndex under an applied '/' filter.
+    const selectedEntry = this.getVisibleItems()[this.selectedIndex];
     const detailLines: Line[] = this._resolvePrompt
       ? this._buildResolvePromptLines(width, this._resolvePrompt.key)
       : (selectedEntry

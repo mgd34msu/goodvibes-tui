@@ -160,6 +160,33 @@ describe('IncidentReviewPanel', () => {
     expect(call[1][2]).toContain('goodvibes-exports');
   });
 
+  test('x under an applied filter exports the highlighted (filtered) incident, not the raw index', () => {
+    const registry = new ForensicsRegistry();
+    const panel = new IncidentReviewPanel(registry);
+    registry.push(makeReport('incident-alpha'));
+    registry.push(makeReport('incident-beta'));
+    registry.push(makeReport('incident-gamma'));
+
+    // getAll() is newest-first, so the raw list is [gamma, beta, alpha];
+    // filtering to alpha leaves visible index 0 while raw index 0 is gamma.
+    expect(panel.handleInput('/')).toBe(true);
+    for (const ch of 'alpha') panel.handleInput(ch);
+    expect(panel.handleInput('enter')).toBe(true); // commit filter, keep query
+
+    expect(panel.handleInput('x')).toBe(true);
+    const ctx = makeCtx();
+    expect(panel.handlePanelIntegrationAction('x', ctx)).toBe(true);
+    expect(ctx.executeCommand).toHaveBeenCalledTimes(1);
+    const call = ctx.executeCommand.mock.calls[0]!;
+    expect(call[1][0]).toBe('export');
+    expect(call[1][1]).toBe('incident-alpha');
+
+    // The render header/detail describes the filtered selection too.
+    const text = linesText(panel.render(120, 24));
+    expect(text).toContain('incident-alpha');
+    expect(text).not.toContain('incident-gamma');
+  });
+
   test('c opens a capture confirmation, and confirming dispatches capture via executeCommand', () => {
     const registry = new ForensicsRegistry();
     registry.push(makeReport('incident-capture'));
