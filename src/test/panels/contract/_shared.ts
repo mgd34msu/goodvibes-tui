@@ -90,7 +90,11 @@ export const EMPTY_PLUGIN_MANAGER = {
   list: () => [],
   getAll: () => [],
   subscribe: (_cb: () => void) => () => {},
-} as unknown as import('@pellux/goodvibes-sdk/platform/plugins').PluginManagerObserver;
+  enable: async (_name: string) => ({ ok: false, error: 'not available in test fixture' }),
+  disable: async (_name: string) => ({ ok: false, error: 'not available in test fixture' }),
+  verify: (_name: string) => ({ ok: false, valid: false, reason: 'not available in test fixture' }),
+  liftQuarantine: (_name: string) => ({ ok: false, error: 'not available in test fixture' }),
+} as unknown as import('../../../panels/plugins-panel.ts').PluginManagerControls;
 
 export const EMPTY_LOCAL_AUTH_MANAGER = {
   inspect: () => ({
@@ -147,6 +151,9 @@ export const EMPTY_HOOKS_WORKBENCH = {
   listSimulationResults: () => [],
   getLastSimulation: () => null,
   getHooksFilePath: () => '/tmp/hooks.json',
+  toggleManagedHook: (_name: string, _enabled: boolean) => false,
+  removeManagedEntry: (_name: string) => false,
+  simulate: (_eventPath: string) => ({ eventPath: _eventPath, matchedHooks: [], matchedChains: [], capturedAt: Date.now() }),
 } as unknown as import('../../../panels/hooks-panel.ts').HooksPanelWorkbenchView;
 
 export const EMPTY_TASKS_READ_MODEL = makeReadModelMock({
