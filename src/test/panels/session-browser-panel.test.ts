@@ -66,4 +66,24 @@ describe('SessionBrowserPanel', () => {
     const panel = new SessionBrowserPanel(makeQuery([makeSession('s1')]));
     for (const line of panel.render(100, 24)) expect(line.length).toBe(100);
   });
+
+  test('focusSession moves the cursor to the matching session (WO-138 routes-panel jump target)', () => {
+    // Give s2 a returnContext.activityLabel — this only ever renders inside
+    // the "Selected" detail block (never in the plain list rows), so its
+    // presence proves the cursor actually moved onto s2 rather than merely
+    // that s2's title happens to be visible somewhere in the list.
+    const panel = new SessionBrowserPanel(makeQuery([
+      makeSession('s1', { title: 'First' }),
+      makeSession('s2', { title: 'Second', returnContext: { activityLabel: 'reviewing PR 42' } }),
+      makeSession('s3', { title: 'Third' }),
+    ]));
+    expect(textOf(panel)).not.toContain('reviewing PR 42'); // cursor starts on s1
+    panel.focusSession('s2');
+    expect(textOf(panel)).toContain('reviewing PR 42');
+  });
+
+  test('focusSession on an unknown id clears the filter without crashing', () => {
+    const panel = new SessionBrowserPanel(makeQuery([makeSession('s1')]));
+    expect(() => panel.focusSession('does-not-exist')).not.toThrow();
+  });
 });

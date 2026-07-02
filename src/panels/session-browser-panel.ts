@@ -101,6 +101,21 @@ export class SessionBrowserPanel extends BasePanel {
     this.refreshTimerId = this.registerTimer(setInterval(() => { this._load(); }, 5000));
   }
 
+  /**
+   * Clears any active search/filter and moves the cursor to the session
+   * matching `sessionId` (SessionInfo.name) so a sibling panel (e.g.
+   * RoutesPanel's Enter-on-binding jump) can land directly on it. No-ops
+   * (beyond clearing the filter) if the session isn't found.
+   */
+  focusSession(sessionId: string): void {
+    this.searching = false;
+    this.searchQuery = '';
+    this._filter();
+    const index = this.filtered.findIndex((session) => session.name === sessionId);
+    if (index >= 0) this.cursorIndex = index;
+    this.markDirty();
+  }
+
   override onDeactivate(): void {
     if (this.refreshTimerId !== null) { this.clearTimer(this.refreshTimerId); this.refreshTimerId = null; }
     this.searching = false;
