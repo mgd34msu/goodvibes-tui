@@ -199,7 +199,10 @@ describe('operator surfaces gate', () => {
     expect(ids).toContain('remote');
     expect(ids).toContain('incident');
     expect(ids).toContain('orchestration');
-    expect(ids).toContain('forensics');
+    // WO-114: the 'forensics' panel merged into the incident console; the
+    // retired id survives only as a PanelManager alias, so it must resolve
+    // to the same instance instead of appearing as a standalone type.
+    expect(manager.open('forensics')).toBe(manager.open('incident'));
     // WO-112: the 'providers' stats panel merged into the provider-health
     // console; the retired id survives only as a PanelManager alias.
     expect(ids).toContain('provider-health');
