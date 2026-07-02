@@ -539,12 +539,21 @@ export function resolveStackedScrollableSections(
 
   return options.sections.map((section, index) => {
     const fixedLines = [...(section.fixedLines ?? [])];
+    // Same reservation as resolveScrollablePanelSection: a window-summary row
+    // occupies one of this section's allocated rows, so shrink the visible
+    // window rather than overflowing the stack's exact-height budget.
+    const budget = budgets[index]!;
+    const summaryReserved = section.appendWindowSummary
+      && section.scrollableLines.length > budget
+      ? 1
+      : 0;
+    const windowBudget = Math.max(0, budget - summaryReserved);
     const window = section.selectedIndex === undefined
-      ? getVisibleWindow(section.scrollableLines.length, section.scrollOffset, budgets[index]!)
+      ? getVisibleWindow(section.scrollableLines.length, section.scrollOffset, windowBudget)
       : getTrackedVisibleWindow(
           section.scrollableLines.length,
           section.selectedIndex,
-          budgets[index]!,
+          windowBudget,
           section.scrollOffset,
           section.guardRows ?? 1,
         );
