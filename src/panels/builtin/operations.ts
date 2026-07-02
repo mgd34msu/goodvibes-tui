@@ -136,10 +136,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'C',
     category: 'monitoring',
     description: 'Daemon control-plane state, clients, approvals, and recent operator activity',
-    factory: () => {
-      requireControlPlanePanelDeps(deps);
-      return new ControlPlanePanel(ui.readModels.controlPlane);
-    },
+    factory: () => new ControlPlanePanel(ui.readModels.controlPlane, requireControlPlanePanelDeps(deps)),
   });
 
   manager.registerType({
