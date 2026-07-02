@@ -20,9 +20,6 @@ import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 const MAX_FILE_SIZE = 100 * 1024; // 100 KB
 const BG = '#0d0d0d';
-const HEADER_BG = '#1e1e1e';
-const HEADER_FG = '#d4d4d4';
-const HEADER_ACCENT = '#4ec9b0';
 const LINE_NUM_FG = '238';
 
 // ─── Language Detection (from file extension) ─────────────────────────────────

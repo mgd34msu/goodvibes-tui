@@ -175,9 +175,12 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
     }
 
     this.clampSelection();
-    const selected = bindings[this.selectedIndex]!;
+    // Detail must describe the row the (possibly filtered) list highlights —
+    // getItems() would desync under an applied filter, and a filter that
+    // matches nothing leaves no selection at all.
+    const selected = this.getVisibleItems()[this.selectedIndex];
 
-    const detailRows: Line[] = [
+    const detailRows: Line[] = selected ? [
       buildPanelLine(width, [
         ['  Binding: ', C.label],
         [selected.id, C.value],
@@ -206,9 +209,9 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
         ['  Last seen: ', C.label],
         [formatTime(selected.lastSeenAt), C.dim],
       ]),
-    ];
+    ] : [];
 
-    if (surfaceEntries.length > 0) {
+    if (selected && surfaceEntries.length > 0) {
       detailRows.push(
         ...surfaceEntries.slice(0, 4).map(([surface, ids]) => buildPanelLine(width, [
           [' ', C.label],
@@ -222,7 +225,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
       ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
       : [
           { keys: 'Up/Down', label: 'move' },
-          ...(selected.sessionId ? [{ keys: 'Enter', label: 'open session' }] : []),
+          ...(selected?.sessionId ? [{ keys: 'Enter', label: 'open session' }] : []),
           { keys: 'c', label: 'communication' },
           { keys: '/', label: 'filter' },
         ];
@@ -231,7 +234,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
       title: 'Route Bindings',
       header: headerLines,
       footer: [
-        ...buildDetailBlock(width, `Binding · ${selected.surfaceKind}`, detailRows, C),
+        ...(selected ? buildDetailBlock(width, `Binding · ${selected.surfaceKind}`, detailRows, C) : []),
         buildKeyboardHints(width, hints, C),
       ],
     });

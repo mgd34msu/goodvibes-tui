@@ -347,7 +347,9 @@ export class SecurityPanel extends ScrollableListPanel<TokenAuditResult> {
       ),
     ];
 
-    const selected = view.results[this.selectedIndex];
+    // Detail must track the filtered view the list highlights, not the raw
+    // audit results — under an applied token filter they diverge.
+    const selected = this.getVisibleItems()[this.selectedIndex];
     const detailLines: Line[] = [];
     if (selected) {
       detailLines.push(buildPanelLine(width, [

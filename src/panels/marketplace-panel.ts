@@ -154,7 +154,9 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
         return true;
       }
 
-      const selectedRow = this.rows[this.selectedIndex];
+      // selectedIndex is relative to the filtered view, so the acted-on row
+      // must come from getVisibleItems() — this.rows would desync under '/'.
+      const selectedRow = this.getVisibleItems()[this.selectedIndex];
       if (key === 'i' && selectedRow && !selectedRow.installed && this.ecosystemPaths) {
         this.confirm = {
           subject: { kind: selectedRow.kind, entryId: selectedRow.entry.id, action: 'install' },
@@ -181,7 +183,9 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
         const recommendations = this.readModel?.getSnapshot()?.recommendations ?? [];
         const recommendation = recommendations[Number(key) - 1];
         if (recommendation) {
-          const targetIndex = this.rows.findIndex((row) => row.kind === recommendation.kind && row.entry.id === recommendation.entry.id);
+          // Search the visible (possibly filtered) list: selectedIndex is
+          // visible-relative, so a this.rows index would land on the wrong row.
+          const targetIndex = this.getVisibleItems().findIndex((row) => row.kind === recommendation.kind && row.entry.id === recommendation.entry.id);
           if (targetIndex >= 0) {
             this.selectedIndex = targetIndex;
             this.expandedEntryId = recommendation.entry.id;
@@ -299,7 +303,6 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
         { label: 'hooks', value: String(this.rows.filter((row) => row.kind === 'hook-pack').length), valueColor: C.info },
         { label: 'policies', value: String(this.rows.filter((row) => row.kind === 'policy-pack').length), valueColor: C.info },
       ], C),
-      buildGuidanceLine(width, '/marketplace open', 'browse curated entries and inspect compatibility, provenance, and receipts', C),
     ];
 
     // Recommendations become actionable jumps: each row is numbered and the
@@ -317,7 +320,7 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
       ? startupIssues.slice(0, 4).map((issue) => buildPanelLine(width, [['  ', C.label], [truncateDisplay(issue, Math.max(0, width - 2)), C.warn]]))
       : [buildPanelLine(width, [['  No startup or lifecycle issues are currently pushing marketplace repair recommendations.', C.dim]])];
 
-    const selectedRow = this.rows[this.selectedIndex];
+    const selectedRow = this.getVisibleItems()[this.selectedIndex];
     const selectedLines: Line[] = [];
     if (selectedRow) {
       // review is computed once in refresh() (not here) so render() never
