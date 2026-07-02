@@ -4,7 +4,7 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
-import { SearchableListPanel } from './scrollable-list-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { FilePreviewPanel } from './file-preview-panel.ts';
 import type { PanelIntegrationContext } from './types.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
@@ -15,10 +15,6 @@ import {
   DEFAULT_PANEL_PALETTE,
   extendPalette,
 } from './polish.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchCancel,
-} from './search-focus.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // Domain accents only; base chrome (header/headerBg/label/value/dim/empty/
@@ -253,11 +249,9 @@ function originColor(origin: SkillOrigin): string {
   }
 }
 
-export class SkillsPanel extends SearchableListPanel<SkillRecord> {
+export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
   private readonly shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
   private readonly ecosystemPaths: EcosystemCatalogPathOptions | undefined;
-  /** Whether the filter input row is focused for typing (vs. list navigation). */
-  private filterFocused = false;
   private cached: SkillRecord[] | null = null;
   private cacheDirty = true;
   // I1: confirm state for destructive delete
@@ -272,15 +266,17 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   public constructor(options: SkillsPanelOptions) {
     super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true; // WO-153: converged modal '/' filter
+    this.filterLabel = 'Filter';
     this.shellPaths = options.shellPaths;
     this.ecosystemPaths = options.ecosystemPaths;
   }
 
   // -------------------------------------------------------------------------
-  // SearchableListPanel implementation
+  // ScrollableListPanel implementation
   // -------------------------------------------------------------------------
 
-  protected getAllItems(): readonly SkillRecord[] {
+  protected getItems(): readonly SkillRecord[] {
     return this.cached ?? [];
   }
 
@@ -290,7 +286,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
         await this.withLoading('Scanning skills\u2026', async () => {
           this.cached = await discoverSkills(this.shellPaths, this.ecosystemPaths);
           this.cacheDirty = false;
-          this.invalidateFilter();
+          this.markDirty();
         });
       } catch (err) {
         this.setError(summarizeError(err));
@@ -323,9 +319,8 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     }
   }
 
-  protected matchesSearch(skill: SkillRecord, query: string): boolean {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
+  /** `q` arrives already trimmed + lower-cased from ScrollableListPanel.getVisibleItems(). */
+  protected override filterMatches(skill: SkillRecord, q: string): boolean {
     const haystack = [
       skill.name,
       skill.description,
@@ -371,9 +366,8 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
 
   public override onActivate(): void {
     super.onActivate();
-    this.searchQuery = '';
-    this.invalidateFilter();
-    this.filterFocused = false;
+    this.filterQuery = '';
+    this.filterActive = false;
     this.cacheDirty = true;
     void this._loadSkillsAsync();
   }
@@ -384,8 +378,9 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     // Enter opens the skill's markdown source in the preview panel — see
     // handlePanelIntegrationAction for the actual PanelManager wiring
     // (needs the integration context, not available here). Selection itself
-    // is read back from getItems() in that hook.
-    if (this.filterFocused) return;
+    // is read back from getVisibleItems() in that hook. onSelect is only
+    // invoked by ScrollableListPanel's navigation handler when the filter is
+    // not active, so no manual guard is needed here.
     this.pendingOpenPreview = true;
   }
 
@@ -399,7 +394,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
     if (!this.pendingOpenPreview) return false;
     this.pendingOpenPreview = false;
-    const skill = this.getItems()[this.selectedIndex];
+    const skill = this.getVisibleItems()[this.selectedIndex];
     if (!skill) return false;
 
     const pm = ctx.panelManager;
@@ -441,38 +436,11 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     }
     if (confirmResult === 'absorbed') return true;
 
-    const items = this.getItems();
-
-    // Filter-focus mode: typing goes into the search query
-    if (this.filterFocused) {
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
-      if (transition === 'focus-list') {
-        this.filterFocused = false;
-        this.markDirty();
-        return true;
-      }
-      // Escape: also blur filter focus (clear + return to list navigation)
-      if (isPanelSearchCancel(key)) {
-        this.filterFocused = false;
-        // Delegate to super to clear the query. If the query is empty, super
-        // returns false and escape propagates to the panel dismissal handler —
-        // this is the intentional double-escape UX (blur filter, then close).
-        return super.handleInput(key);
-      }
-      // Delegate backspace/printable to SearchableListPanel.handleInput
-      return super.handleInput(key);
-    }
-
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
-    if (transition === 'focus-search') {
-      this.filterFocused = true;
-      this.markDirty();
-      return true;
-    }
-
-    // I1: 'd' prompts delete confirmation
-    if (key === 'd') {
-      const skill = items[this.selectedIndex];
+    // I1: 'd' prompts delete confirmation — only outside filter mode, so 'd'
+    // remains typeable into the filter query while it is active (WO-153:
+    // converged modal '/' filter coexists with single-letter action keys).
+    if (!this.filterActive && key === 'd') {
+      const skill = this.getVisibleItems()[this.selectedIndex];
       if (skill) {
         this.confirm = { subject: skill.path, label: skill.name };
         this.markDirty();
@@ -480,7 +448,8 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
       return true;
     }
 
-    // Navigation + search: delegate to SearchableListPanel (up/down/g/G/page/enter + backspace/escape)
+    // Navigation + filter: delegate to ScrollableListPanel ('/' enters
+    // filter, typing narrows, Esc clears, up/down/g/G/page/enter navigate).
     return super.handleInput(key);
   }
 
@@ -500,11 +469,8 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
       return lines.slice(0, height);
     }
 
-    // Build filter input line (provided by SearchableListPanel base)
-    const filterLine = this.buildFilterInputLine(width, 'Filter', this.filterFocused);
-
     // Build detail footer for the currently selected skill
-    const items = this.getItems();
+    const items = this.getVisibleItems();
     const selected = items[this.selectedIndex];
     const detailLines: Line[] = [];
     if (selected) {
@@ -520,12 +486,12 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
         ]),
       );
     }
-    detailLines.push(buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.dim]]));
+    detailLines.push(buildPanelLine(width, [['  Up/Down navigate  / filter  Esc clear  Backspace edit', C.dim]]));
     detailLines.push(buildPanelLine(width, [['  Enter open in preview  d delete (confirm)', C.dim]]));
 
+    // Filter input line is auto-injected by renderList() (filterEnabled=true).
     const lines = this.renderList(width, height, {
       title: 'Skills - discover project-local and global skill packs',
-      header: [filterLine],
       footer: detailLines,
     });
     return lines;

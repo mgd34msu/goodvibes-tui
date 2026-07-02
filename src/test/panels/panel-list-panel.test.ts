@@ -236,13 +236,14 @@ describe('PanelListPanel', () => {
   // ── search input ─────────────────────────────────────────────────────────
 
   describe('search input', () => {
-    test('up at top focuses filter; down returns focus to list', () => {
-      panel.handleInput('up');
+    test('/ activates the filter; Esc deactivates and B works as an action key again', () => {
+      panel.handleInput('/');
       panel.handleInput('a');
       let text = linesText(panel.render(80, 20));
-      expect(text).toContain('Filter: a█');
+      // WO-153: converged modal filter — pinned '[Filter] ' + literal '_' cursor contract.
+      expect(text).toContain('[Filter] a_');
 
-      panel.handleInput('down');
+      panel.handleInput('escape');
       panel.handleInput('B');
       expect(mgr.isBottomPaneVisible()).toBe(true);
     });
@@ -516,16 +517,17 @@ describe('PanelListPanel', () => {
     });
   });
 
-  // ── printable-chars doc/behavior fix (WO-141) ────────────────────────────
+  // ── modal '/' filter convergence (WO-153) ────────────────────────────────
 
   describe('typing a printable character without pressing / first', () => {
-    test('directly focuses the filter and appends the character (matches the class-doc "Search/filter by typing" promise)', () => {
+    test('is a no-op — the modal filter requires / to enter (single filter interaction everywhere)', () => {
       panel.handleInput('g');
       panel.handleInput('a');
       const text = linesText(panel.render(80, 20));
-      expect(text).toContain('Filter: ga');
+      expect(text).toContain('Filter: (/ to filter)');
+      // No filter query was typed, so every panel is still visible.
+      expect(text).toContain('Alpha');
       expect(text).toContain('Gamma');
-      expect(countLinesContaining(panel.render(80, 20), 'Alpha')).toBe(0);
     });
   });
 

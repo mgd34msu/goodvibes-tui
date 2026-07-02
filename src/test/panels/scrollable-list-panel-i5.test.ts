@@ -1,21 +1,19 @@
 // ---------------------------------------------------------------------------
 // scrollable-list-panel-i5.test.ts — I5: selection gutter + filter input line
 //
-// Tests the opt-in showSelectionGutter flag on ScrollableListPanel and the
-// buildFilterInputLine helper on SearchableListPanel.
+// Tests the opt-in showSelectionGutter flag and the buildFilterLine helper
+// on ScrollableListPanel (WO-153: SearchableListPanel was deleted once its
+// last subclasses — skills, memory — converged onto ScrollableListPanel's
+// modal '/' filter; this file now exercises that shared contract directly).
 // ---------------------------------------------------------------------------
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 import type { Line } from '../../types/grid.ts';
 import { createEmptyLine } from '../../types/grid.ts';
-import {
-  ScrollableListPanel,
-  SearchableListPanel,
-} from '../../panels/scrollable-list-panel.ts';
-import { DEFAULT_PANEL_PALETTE } from '../../panels/polish.ts';
+import { ScrollableListPanel } from '../../panels/scrollable-list-panel.ts';
 
 // ---------------------------------------------------------------------------
-// Minimal concrete subclass of ScrollableListPanel for gutter tests
+// Minimal concrete subclass of ScrollableListPanel for gutter + filter tests
 // ---------------------------------------------------------------------------
 
 class TestScrollablePanel extends ScrollableListPanel<string> {
@@ -29,6 +27,10 @@ class TestScrollablePanel extends ScrollableListPanel<string> {
 
   protected getItems(): readonly string[] {
     return this._items;
+  }
+
+  protected filterMatches(item: string, q: string): boolean {
+    return item.toLowerCase().includes(q);
   }
 
   protected renderItem(item: string, _index: number, _selected: boolean, width: number): Line {
@@ -45,47 +47,26 @@ class TestScrollablePanel extends ScrollableListPanel<string> {
     this.selectedIndex = i;
   }
 
-  public render(width: number, height: number): Line[] {
-    return this.renderList(width, height);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Minimal concrete subclass of SearchableListPanel for filter line tests
-// ---------------------------------------------------------------------------
-
-class TestSearchablePanel extends SearchableListPanel<string> {
-  private _allItems: string[];
-
-  constructor(items: string[]) {
-    super('test-s', 'TestS', 'S', 'monitoring');
-    this._allItems = items;
+  // Expose the opt-in filter fields for direct manipulation in tests.
+  public setFilterEnabled(enabled: boolean): void {
+    this.filterEnabled = enabled;
   }
 
-  protected getAllItems(): readonly string[] {
-    return this._allItems;
+  public setFilterLabel(label: string): void {
+    this.filterLabel = label;
   }
 
-  protected matchesSearch(item: string, query: string): boolean {
-    return item.toLowerCase().includes(query.toLowerCase());
+  public setFilterActive(active: boolean): void {
+    this.filterActive = active;
   }
 
-  protected renderItem(item: string, _index: number, _selected: boolean, width: number): Line {
-    const line = createEmptyLine(width);
-    for (let i = 0; i < item.length && i < width; i++) {
-      line[i] = { char: item[i]!, fg: '#fff', bg: '', bold: false, dim: false, underline: false, italic: false, strikethrough: false };
-    }
-    return line;
+  public setFilterQuery(q: string): void {
+    this.filterQuery = q;
   }
 
-  // Expose buildFilterInputLine for testing
-  public exposeBuildFilterInputLine(width: number, label: string, focused: boolean): Line {
-    return this.buildFilterInputLine(width, label, focused);
-  }
-
-  // Set searchQuery directly for tests
-  public setSearchQuery(q: string): void {
-    this.searchQuery = q;
+  // Expose buildFilterLine for testing (pinned rendering contract).
+  public exposeBuildFilterLine(width: number): Line {
+    return this.buildFilterLine(width);
   }
 
   public render(width: number, height: number): Line[] {
@@ -174,67 +155,82 @@ describe('ScrollableListPanel — showSelectionGutter (I5)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// SearchableListPanel — buildFilterInputLine
+// ScrollableListPanel — buildFilterLine (I5, WO-153 converged modal filter)
+//
+// This is the single pinned rendering contract every filterable list panel
+// shares: 'Filter: ' unfocused / '[Filter] ' focused, literal trailing '_'
+// cursor while active.
 // ---------------------------------------------------------------------------
 
-describe('SearchableListPanel — buildFilterInputLine (I5)', () => {
+describe('ScrollableListPanel — buildFilterLine (I5)', () => {
   const WIDTH = 40;
-  let panel: TestSearchablePanel;
+  let panel: TestScrollablePanel;
 
   beforeEach(() => {
-    panel = new TestSearchablePanel(['apple', 'banana', 'cherry']);
+    panel = new TestScrollablePanel(['apple', 'banana', 'cherry']);
+    panel.setFilterEnabled(true);
+    panel.setFilterLabel('Filter');
   });
 
   test('unfocused: label is "Filter: "', () => {
-    const line = panel.exposeBuildFilterInputLine(WIDTH, 'Filter', false);
+    const line = panel.exposeBuildFilterLine(WIDTH);
     const text = lineText(line);
     expect(text).toContain('Filter: ');
     expect(text).not.toContain('[Filter]');
   });
 
   test('focused: label is "[Filter] "', () => {
-    const line = panel.exposeBuildFilterInputLine(WIDTH, 'Filter', true);
+    panel.setFilterActive(true);
+    const line = panel.exposeBuildFilterLine(WIDTH);
     const text = lineText(line);
     expect(text).toContain('[Filter] ');
     expect(text).not.toContain('Filter: ');
   });
 
   test('focused: appends _ cursor to query', () => {
-    panel.setSearchQuery('ap');
-    const line = panel.exposeBuildFilterInputLine(WIDTH, 'Filter', true);
+    panel.setFilterActive(true);
+    panel.setFilterQuery('ap');
+    const line = panel.exposeBuildFilterLine(WIDTH);
     const text = lineText(line);
     expect(text).toContain('ap_');
   });
 
   test('unfocused: no _ cursor appended', () => {
-    panel.setSearchQuery('ap');
-    const line = panel.exposeBuildFilterInputLine(WIDTH, 'Filter', false);
+    panel.setFilterQuery('ap');
+    const line = panel.exposeBuildFilterLine(WIDTH);
     const text = lineText(line);
     expect(text).not.toContain('ap_');
     expect(text).toContain('ap');
   });
 
-  test('empty query unfocused: shows (none) or empty', () => {
-    panel.setSearchQuery('');
-    const line = panel.exposeBuildFilterInputLine(WIDTH, 'Filter', false);
+  test('empty query unfocused: shows the "/ to filter" placeholder', () => {
+    panel.setFilterQuery('');
+    const line = panel.exposeBuildFilterLine(WIDTH);
+    const text = lineText(line);
+    expect(text).toContain('/ to filter');
     expect(line.length).toBe(WIDTH);
   });
 
   test('custom label used in unfocused', () => {
-    const line = panel.exposeBuildFilterInputLine(WIDTH, 'Search', false);
+    panel.setFilterLabel('Search');
+    const line = panel.exposeBuildFilterLine(WIDTH);
     const text = lineText(line);
     expect(text).toContain('Search: ');
   });
 
   test('custom label used in focused', () => {
-    const line = panel.exposeBuildFilterInputLine(WIDTH, 'Search', true);
+    panel.setFilterLabel('Search');
+    panel.setFilterActive(true);
+    const line = panel.exposeBuildFilterLine(WIDTH);
     const text = lineText(line);
     expect(text).toContain('[Search] ');
   });
 
   test('line is always exactly WIDTH cells', () => {
-    const focusedLine = panel.exposeBuildFilterInputLine(WIDTH, 'Filter', true);
-    const unfocusedLine = panel.exposeBuildFilterInputLine(WIDTH, 'Filter', false);
+    panel.setFilterActive(true);
+    const focusedLine = panel.exposeBuildFilterLine(WIDTH);
+    panel.setFilterActive(false);
+    const unfocusedLine = panel.exposeBuildFilterLine(WIDTH);
     expect(focusedLine.length).toBe(WIDTH);
     expect(unfocusedLine.length).toBe(WIDTH);
   });

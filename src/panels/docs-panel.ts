@@ -10,13 +10,7 @@ import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import type { KeybindingsManager } from '../input/keybindings.ts';
 import type { PanelIntegrationContext } from './types.ts';
 import { ToolInspectorPanel } from './tool-inspector-panel.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchBackspace,
-  isPanelSearchCancel,
-  isPanelSearchCommit,
-  isPanelSearchPrintable,
-} from './search-focus.ts';
+import { isPanelSearchBackspace, isPanelSearchPrintable } from './search-focus.ts';
 
 const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   // Panel-specific domain colors with no clean shared equivalent.
@@ -86,17 +80,21 @@ export class DocsPanel extends BasePanel {
     this._buildRows();
   }
 
-  handleInput(key: string): boolean {
+  /**
+   * WO-153: converged modal '/' filter (mirrors ScrollableListPanel's
+   * _handleFilterKey). Returns `true`/`false` when consumed/ignored in
+   * filter context, or `null` to fall through to section hotkeys/navigation.
+   */
+  private _handleSearchKey(key: string): boolean | null {
     if (this.searching) {
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursorIndex, itemCount: this.rows.length });
-      if (transition === 'focus-list') {
+      if (key === 'escape') {
         this.searching = false;
-        this.cursorIndex = 0;
-        this.markDirty();
+        this.searchQuery = '';
+        this._buildRows();
         return true;
       }
-      if (isPanelSearchCancel(key) || isPanelSearchCommit(key)) {
-        this.searching = false;
+      if (key === 'return' || key === 'enter') {
+        this.searching = false; // commit; keep the query applied
         this._buildRows();
         return true;
       }
@@ -105,6 +103,11 @@ export class DocsPanel extends BasePanel {
         this._buildRows();
         return true;
       }
+      // Arrow/paging keys navigate the filtered rows — fall through.
+      if (key === 'up' || key === 'down' || key === 'pageup' || key === 'pagedown') {
+        return null;
+      }
+      // Any printable character (including section hotkeys like t/m/k) extends the query.
       if (isPanelSearchPrintable(key)) {
         this.searchQuery += key;
         this._buildRows();
@@ -112,12 +115,16 @@ export class DocsPanel extends BasePanel {
       }
       return false;
     }
-
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.cursorIndex, itemCount: this.rows.length });
-    if (transition === 'focus-search') {
+    if (key === '/') {
       this._startSearch();
       return true;
     }
+    return null;
+  }
+
+  handleInput(key: string): boolean {
+    const searchResult = this._handleSearchKey(key);
+    if (searchResult !== null) return searchResult;
 
     switch (key) {
       case 'up':       this._move(-1);         return true;
@@ -175,11 +182,6 @@ export class DocsPanel extends BasePanel {
   render(width: number, height: number): Line[] {
     if (height <= 0 || width <= 0) return [];
     const sectionLabel = this.section === 'tools' ? 'Tools' : this.section === 'models' ? 'Models' : 'Shortcuts';
-    const searchLine = this.searching
-      ? ` Search: ${this.searchQuery}\u258a`
-      : this.searchQuery
-      ? ` Filter: ${this.searchQuery}  (/ or up at top to edit)`
-      : ` / or up at top to search`;
     this.cursorIndex = Math.max(0, Math.min(this.cursorIndex, Math.max(0, this.rows.length - 1)));
     const controlsSection = {
       title: 'Controls',
@@ -188,25 +190,25 @@ export class DocsPanel extends BasePanel {
           [' t', DEFAULT_PANEL_PALETTE.info], [' tools', DEFAULT_PANEL_PALETTE.dim],
           ['   m', DEFAULT_PANEL_PALETTE.info], [' models', DEFAULT_PANEL_PALETTE.dim],
           ['   k', DEFAULT_PANEL_PALETTE.info], [' shortcuts', DEFAULT_PANEL_PALETTE.dim],
-          ['   /', DEFAULT_PANEL_PALETTE.info], [' search', DEFAULT_PANEL_PALETTE.dim],
+          ['   /', DEFAULT_PANEL_PALETTE.info], [' filter', DEFAULT_PANEL_PALETTE.dim],
         ]),
-        buildSearchInputLine(width, '', searchLine.trimStart(), DEFAULT_PANEL_PALETTE, { active: this.searching }),
+        this._buildFilterLine(width),
       ],
     } as const;
-    // Context-aware footer: while searching, surface only the keys that work in
-    // the search field; otherwise surface section + navigation keys.
+    // Context-aware footer: while filtering, surface only the keys that work in
+    // the filter field; otherwise surface section + navigation keys.
     const footerLines = [this.searching
       ? buildKeyboardHints(width, [
           { keys: 'type', label: 'filter' },
-          { keys: 'Enter/Esc', label: 'apply / exit search' },
-          { keys: '↓', label: 'back to list' },
+          { keys: 'Enter', label: 'apply' },
+          { keys: 'Esc', label: 'clear' },
         ], DEFAULT_PANEL_PALETTE)
       : buildKeyboardHints(width, [
           { keys: 't/m/k', label: 'tools / models / shortcuts' },
           { keys: '↑/↓', label: 'navigate' },
           ...(this.section === 'tools' ? [{ keys: 'Enter', label: 'open in tool inspector' }] : []),
           ...(this.section === 'models' ? [{ keys: 'Enter', label: 'set active model' }] : []),
-          { keys: '/', label: 'search' },
+          { keys: '/', label: 'filter' },
         ], DEFAULT_PANEL_PALETTE)];
 
     const sectionWindow = resolveScrollablePanelSection(width, height, {
@@ -250,6 +252,24 @@ export class DocsPanel extends BasePanel {
   private _startSearch(): void {
     this.searching = true;
     this.markDirty();
+  }
+
+  /**
+   * The filter input line — pinned rendering contract shared with
+   * ScrollableListPanel.buildFilterLine: 'Filter: ' unfocused / '[Filter] '
+   * focused, literal trailing '_' cursor while active (active:false is
+   * passed to buildSearchInputLine to suppress its block-glyph cursor
+   * substitution).
+   */
+  private _buildFilterLine(width: number): Line {
+    const label = this.searching ? '[Filter] ' : 'Filter: ';
+    const value = this.searching ? `${this.searchQuery}_` : this.searchQuery;
+    return buildSearchInputLine(width, label, value, DEFAULT_PANEL_PALETTE, {
+      active: false,
+      bg: this.searching ? DEFAULT_PANEL_PALETTE.inputBg : DEFAULT_PANEL_PALETTE.sectionBg,
+      emptyLabel: '(/ to filter)',
+      valueColor: this.searching ? DEFAULT_PANEL_PALETTE.info : (this.searchQuery ? DEFAULT_PANEL_PALETTE.value : DEFAULT_PANEL_PALETTE.dim),
+    });
   }
 
   private _move(delta: number): void {
