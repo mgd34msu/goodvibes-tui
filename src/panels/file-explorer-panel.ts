@@ -26,12 +26,11 @@ import {
   isPanelSearchPrintable,
 } from './search-focus.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const MAX_DEPTH = 5;
 
 /** Directories / files to skip (gitignore-style). */
 const SKIP_NAMES = new Set([
@@ -121,6 +120,12 @@ export class FileExplorerPanel extends BasePanel {
   private cacheValid: boolean = false;
   private readyPromise: Promise<void> | null = null;
 
+  // --- git status decorations ---
+  // Reuse one GitService instance across refreshes (I2 pattern, git-panel.ts).
+  private readonly git: GitService;
+  /** absolute file path -> single-char status code (git-panel.ts:146-151 classification). */
+  private gitStatus: Map<string, { code: string; tone: 'good' | 'warn' | 'bad' | 'dim' }> = new Map();
+
   // --- navigation ---
   private cursor: number = 0;
   private scrollTop: number = 0;
@@ -133,6 +138,7 @@ export class FileExplorerPanel extends BasePanel {
     super('explorer', 'Explorer', 'E', 'development');
     this.workingDirectory = workingDirectory;
     this.rootPath = rootPath ?? workingDirectory;
+    this.git = new GitService(this.workingDirectory);
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -191,6 +197,7 @@ export class FileExplorerPanel extends BasePanel {
       case 'left':  this._collapseNode(); return true;
       case '/':     this._enterSearch(); return true;
       case 'r':     this.refresh(); return true;
+      case 'd':     return this.getFocusedFilePath() !== null;
       default:      return false;
     }
   }
@@ -227,6 +234,7 @@ export class FileExplorerPanel extends BasePanel {
           { keys: '←', label: 'collapse' },
           { keys: '/', label: 'search' },
           { keys: 'r', label: 'refresh' },
+          { keys: 'd', label: 'diff' },
         ], C);
 
     if (this.flat.length === 0) {
@@ -300,9 +308,7 @@ export class FileExplorerPanel extends BasePanel {
             expandable: node.isDir,
             expanded: node.expanded,
             labelColor: node.isDir ? C.dirColor : C.fileColor,
-            metadata: (!node.isDir && node.size > 0)
-              ? [{ text: formatSize(node.size), fg: C.sizeColor }]
-              : undefined,
+            metadata: this._buildRowMetadata(node),
           }, C, { selected: isCursor, selectedBg: C.cursorBg });
         }),
         selectedIndex: this.cursor,
@@ -333,14 +339,35 @@ export class FileExplorerPanel extends BasePanel {
 
   // ── Private: tree building ─────────────────────────────────────────────────
 
+  /**
+   * Build (or rebuild) the tree root and load ONLY its immediate children.
+   * Deeper directories stay unloaded (`loaded: false`, empty `children`)
+   * until the user actually expands them via _expandNode()/_activateNode() \u2014
+   * this replaces the old eager depth-5 recursive scan, which walked (and
+   * silently truncated at a hardcoded depth cutoff) the entire visible tree
+   * up front and blocked opening the panel on large repos.
+   */
   private _buildTreeAsync(): Promise<void> {
     const p = (async () => {
       try {
         await this.withLoading('Scanning directory\u2026', async () => {
-          this.root = await this._scanDirAsync(this.rootPath, 0);
+          const root: TreeNode = {
+            path: this.rootPath,
+            name: basename(this.rootPath) || this.rootPath,
+            isDir: true,
+            depth: 0,
+            size: 0,
+            expanded: true,
+            children: [],
+            loaded: false,
+          };
+          await this._loadChildren(root);
+          this.root = root;
           this._rebuildFlat();
           this.cacheValid = true;
         });
+        // Best-effort \u2014 a missing/failed git status just means no decorations.
+        await this._loadGitStatus();
       } catch (err) {
         this.setError(summarizeError(err));
       }
@@ -355,36 +382,27 @@ export class FileExplorerPanel extends BasePanel {
     return this.readyPromise ?? Promise.resolve();
   }
 
-  private async _scanDirAsync(dirPath: string, depth: number): Promise<TreeNode> {
-    const name = basename(dirPath);
-    const node: TreeNode = {
-      path: dirPath,
-      name,
-      isDir: true,
-      depth,
-      size: 0,
-      expanded: depth === 0,
-      children: [],
-      loaded: false,
-    };
-
-    if (depth >= MAX_DEPTH) return node;
+  /**
+   * Read one directory's immediate entries and populate `node.children` with
+   * fully-resolved file nodes and unloaded directory stubs. Idempotent and
+   * safe to call on an already-loaded node (no-ops).
+   */
+  private async _loadChildren(node: TreeNode): Promise<void> {
+    if (node.loaded || !node.isDir) return;
 
     let entries: string[];
     try {
-      entries = await fsPromises.readdir(dirPath);
+      entries = await fsPromises.readdir(node.path);
     } catch {
-      return node;
+      node.loaded = true;
+      return;
     }
 
-    node.loaded = true;
-
-    // Sort: dirs first, then files, alphabetically within each group
     const filtered = entries.filter(e => !shouldSkip(e));
     const statResults = await Promise.all(
       filtered.map(async (e) => {
         try {
-          const s = await fsPromises.stat(join(dirPath, e));
+          const s = await fsPromises.stat(join(node.path, e));
           return { name: e, isDir: s.isDirectory(), size: s.size, stat: s };
         } catch {
           return { name: e, isDir: false, size: 0, stat: null };
@@ -397,26 +415,81 @@ export class FileExplorerPanel extends BasePanel {
       return a.name.localeCompare(b.name);
     });
 
+    const children: TreeNode[] = [];
     for (const entry of sorted) {
       if (entry.stat === null) continue;
-      const fullPath = join(dirPath, entry.name);
-      if (entry.isDir) {
-        node.children.push(await this._scanDirAsync(fullPath, depth + 1));
-      } else {
-        node.children.push({
-          path: fullPath,
-          name: entry.name,
-          isDir: false,
-          depth: depth + 1,
-          size: entry.size,
-          expanded: false,
-          children: [],
-          loaded: true,
-        });
-      }
+      const fullPath = join(node.path, entry.name);
+      children.push(entry.isDir
+        ? {
+            path: fullPath,
+            name: entry.name,
+            isDir: true,
+            depth: node.depth + 1,
+            size: 0,
+            expanded: false,
+            children: [],
+            loaded: false,
+          }
+        : {
+            path: fullPath,
+            name: entry.name,
+            isDir: false,
+            depth: node.depth + 1,
+            size: entry.size,
+            expanded: false,
+            children: [],
+            loaded: true,
+          });
     }
+    node.children = children;
+    node.loaded = true;
+  }
 
-    return node;
+  /**
+   * Fetch git status for the working directory and index it by absolute
+   * path for O(1) lookup from the tree renderer. Classification mirrors
+   * git-panel's staged/unstaged split from the raw porcelain index/
+   * working_dir columns (git-panel.ts:146-151), collapsed to a single
+   * decoration badge per file: working-tree changes take priority over
+   * staged-only changes, since that's the state most relevant while
+   * browsing the tree.
+   */
+  private async _loadGitStatus(): Promise<void> {
+    try {
+      const status = await this.git.status();
+      const next = new Map<string, { code: string; tone: 'good' | 'warn' | 'bad' | 'dim' }>();
+      for (const f of status.files) {
+        const fullPath = join(this.workingDirectory, f.path);
+        if (f.index === '?' && f.working_dir === '?') {
+          next.set(fullPath, { code: '?', tone: 'dim' }); // untracked
+          continue;
+        }
+        const code = f.working_dir !== ' ' ? f.working_dir : f.index;
+        if (!code || code === ' ') continue;
+        const tone = code === 'D' ? 'bad' : code === 'A' ? 'good' : 'warn';
+        next.set(fullPath, { code, tone });
+      }
+      this.gitStatus = next;
+    } catch {
+      // Not a git repo (or git unavailable) \u2014 decorations are optional.
+      this.gitStatus = new Map();
+    }
+  }
+
+  /** Right-aligned row metadata: git status badge (files only) + file size. */
+  private _buildRowMetadata(node: TreeNode): Array<{ text: string; fg: string }> | undefined {
+    if (node.isDir) return undefined;
+    const meta: Array<{ text: string; fg: string }> = [];
+    const status = this.gitStatus.get(node.path);
+    if (status) {
+      const fg = status.tone === 'good' ? DEFAULT_PANEL_PALETTE.good
+        : status.tone === 'bad' ? DEFAULT_PANEL_PALETTE.bad
+        : status.tone === 'warn' ? DEFAULT_PANEL_PALETTE.warn
+        : DEFAULT_PANEL_PALETTE.dim;
+      meta.push({ text: status.code, fg });
+    }
+    if (node.size > 0) meta.push({ text: formatSize(node.size), fg: C.sizeColor });
+    return meta.length > 0 ? meta : undefined;
   }
 
   /**
@@ -480,6 +553,7 @@ export class FileExplorerPanel extends BasePanel {
       node.expanded = !node.expanded;
       this._rebuildFlat();
       this.markDirty();
+      if (node.expanded) this._loadNodeChildrenAndRefresh(node);
     }
     // For files: callers can read getFocusedNode() after the input returns true
   }
@@ -490,6 +564,20 @@ export class FileExplorerPanel extends BasePanel {
     node.expanded = true;
     this._rebuildFlat();
     this.markDirty();
+    this._loadNodeChildrenAndRefresh(node);
+  }
+
+  /**
+   * Lazily populate a directory's children (if not already loaded) and
+   * refresh the flattened view once they arrive, without blocking the
+   * expand keystroke itself.
+   */
+  private _loadNodeChildrenAndRefresh(node: TreeNode): void {
+    if (node.loaded) return;
+    void this._loadChildren(node).then(() => {
+      this._rebuildFlat();
+      this.markDirty();
+    });
   }
 
   private _collapseNode(): void {
@@ -526,8 +614,11 @@ export class FileExplorerPanel extends BasePanel {
   // ── Private: search ───────────────────────────────────────────────────────
 
   private _enterSearch(): void {
+    // Re-entering search (e.g. pressing '/' again, or 'up' at the top of the
+    // list) must EDIT the existing query, not silently clear it — the bug
+    // this fixes unconditionally reset searchQuery to '' on every entry,
+    // discarding whatever filter was already active.
     this.searchMode = true;
-    this.searchQuery = '';
     this._rebuildFlat();
     this.markDirty();
   }
