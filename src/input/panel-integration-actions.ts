@@ -6,6 +6,9 @@ import { FileExplorerPanel } from '../panels/file-explorer-panel.ts';
 import { FilePreviewPanel } from '../panels/file-preview-panel.ts';
 import { SymbolOutlinePanel } from '../panels/symbol-outline-panel.ts';
 import { ApprovalPanel } from '../panels/approval-panel.ts';
+import { TasksPanel } from '../panels/tasks-panel.ts';
+import { OrchestrationPanel } from '../panels/orchestration-panel.ts';
+import { AgentInspectorPanel } from '../panels/agent-inspector-panel.ts';
 
 function ensurePreviewPanel(panelManager: PanelManager): FilePreviewPanel | null {
   const existing = panelManager.getPanel('preview');
@@ -84,6 +87,41 @@ export function handlePanelIntegrationAction(
     const [name, ...args] = parts;
     if (!name) return false;
     void commandContext.executeCommand(name, args).catch((err) => { logger.debug('approval panel command dispatch failed', { err }); });
+    return true;
+  }
+
+  // WO-131: Enter on a Tasks row — agent-kind tasks jump straight to the Agent
+  // Inspector (which owns the deep per-agent timeline); everything else's
+  // advertised worktree follow-up is dispatched for real via ctx.executeCommand
+  // instead of being printed as a static "/worktree task <task-id>" signpost.
+  if ((key === 'enter' || key === 'return') && activePanel instanceof TasksPanel) {
+    const followUp = activePanel.consumePendingFollowUp();
+    if (!followUp) return false;
+    if (followUp.kind === 'agent-jump') {
+      const inspector = panelManager.open('inspector');
+      if (!(inspector instanceof AgentInspectorPanel)) return false;
+      inspector.inspectAgent(followUp.agentId);
+      return true;
+    }
+    if (!commandContext?.executeCommand) return false;
+    void commandContext.executeCommand('worktree', ['task', followUp.taskId]).catch((err) => {
+      logger.debug('tasks panel worktree review dispatch failed', { err });
+    });
+    return true;
+  }
+
+  // WO-131: Enter on a node-focused Orchestration row jumps to the Agent
+  // Inspector (agent-backed nodes) or the Tasks panel (task-backed nodes).
+  if ((key === 'enter' || key === 'return') && activePanel instanceof OrchestrationPanel) {
+    const jump = activePanel.consumePendingNodeJump();
+    if (!jump) return false;
+    if (jump.kind === 'agent-jump') {
+      const inspector = panelManager.open('inspector');
+      if (!(inspector instanceof AgentInspectorPanel)) return false;
+      inspector.inspectAgent(jump.id);
+      return true;
+    }
+    panelManager.open('tasks');
     return true;
   }
 
