@@ -228,7 +228,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'J',
     category: 'monitoring',
     description: 'Queued, running, blocked, failed, and completed task summaries from the runtime store',
-    factory: () => new TasksPanel(ui.readModels.tasks, ui.readModels.worktrees),
+    factory: () => new TasksPanel(ui.readModels.tasks, ui.readModels.worktrees, deps.opsApi),
   });
 
   manager.registerType({

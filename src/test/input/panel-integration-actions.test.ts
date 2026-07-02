@@ -7,7 +7,42 @@ import { FileExplorerPanel } from '../../panels/file-explorer-panel.ts';
 import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
 import { SymbolOutlinePanel } from '../../panels/symbol-outline-panel.ts';
 import { ApprovalPanel } from '../../panels/approval-panel.ts';
+import { TasksPanel } from '../../panels/tasks-panel.ts';
+import { OrchestrationPanel } from '../../panels/orchestration-panel.ts';
+import { AgentInspectorPanel } from '../../panels/agent-inspector-panel.ts';
+import { createRuntimeStore } from '../../runtime/store/index.ts';
+import { createInitialTasksState, createInitialOrchestrationState } from '@/runtime/index.ts';
+import { createTasksReadModel, createOrchestrationReadModel } from '../helpers/ui-read-models.ts';
 import { createTestManagers } from '../helpers/test-managers.ts';
+
+function registerInspectorPanel(panelManager: ReturnType<typeof createTestManagers>['panelManager']) {
+  const agentManager = {
+    list: mock(() => []),
+    getStatus: mock(() => null),
+    cancel: mock(() => true),
+  };
+  const agentMessageBus = { getMessages: mock(() => []) };
+  const agentEvents = {
+    on: () => () => {},
+    onEnvelope: () => () => {},
+    emit: () => {},
+  } as unknown as import('../../runtime/ui-events.ts').UiEventFeed<import('@/runtime/index.ts').AgentEvent>;
+
+  panelManager.registerType({
+    id: 'inspector',
+    name: 'Inspector',
+    icon: 'I',
+    category: 'agent',
+    description: 'inspector',
+    factory: () => new AgentInspectorPanel({
+      agentManager,
+      agentMessageBus,
+      workingDirectory: '/tmp/test',
+      cancelAgent: () => true,
+      agentEvents,
+    }),
+  });
+}
 
 let panelManager = createTestManagers().panelManager;
 
@@ -114,5 +149,176 @@ describe('panel integration actions', () => {
 
     expect(handlePanelIntegrationAction(panelManager, panel, 'enter', { executeCommand } as never)).toBe(true);
     expect(executeCommand).toHaveBeenCalledWith('approval', ['review', 'file']);
+  });
+
+  test('WO-131: Tasks Enter on an agent-kind task jumps to the Inspector and inspects that agent', () => {
+    panelManager = createTestManagers().panelManager;
+    registerInspectorPanel(panelManager);
+
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      tasks: {
+        ...createInitialTasksState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        tasks: new Map([['agent-task-1', {
+          id: 'agent-task-1',
+          kind: 'agent',
+          title: 'Delegated agent task',
+          status: 'running',
+          owner: 'agent-77',
+          cancellable: true,
+          childTaskIds: [],
+          queuedAt: now - 1_000,
+        }]]),
+        runningIds: ['agent-task-1'],
+        totalCreated: 1,
+      },
+    }));
+    const panel = new TasksPanel(createTasksReadModel(store));
+    panel.handleInput('enter'); // queues the agent-jump follow-up
+
+    // Open the Inspector once up front and patch inspectAgent so we can
+    // assert the call without needing a fully live AgentManager status lookup.
+    const inspector = panelManager.open('inspector', 'top') as AgentInspectorPanel;
+    const inspectSpy = mock(() => {});
+    inspector.inspectAgent = inspectSpy as never;
+
+    expect(handlePanelIntegrationAction(panelManager, panel, 'enter')).toBe(true);
+    expect(inspectSpy).toHaveBeenCalledWith('agent-77');
+  });
+
+  test('WO-131: Tasks Enter (in detail mode, second press) dispatches the worktree-review follow-up via ctx.executeCommand', () => {
+    panelManager = createTestManagers().panelManager;
+    const executeCommand = mock(async () => true);
+
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      tasks: {
+        ...createInitialTasksState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        tasks: new Map([['exec-task-1', {
+          id: 'exec-task-1',
+          kind: 'exec',
+          title: 'Exec task',
+          status: 'running',
+          owner: 'shell',
+          cancellable: true,
+          childTaskIds: [],
+          queuedAt: now - 1_000,
+        }]]),
+        runningIds: ['exec-task-1'],
+        totalCreated: 1,
+      },
+    }));
+    const panel = new TasksPanel(createTasksReadModel(store));
+    panel.handleInput('enter'); // opens detail mode — no follow-up queued yet
+    panel.handleInput('enter'); // second press, already expanded — queues the follow-up
+
+    expect(handlePanelIntegrationAction(panelManager, panel, 'enter', { executeCommand } as never)).toBe(true);
+    expect(executeCommand).toHaveBeenCalledWith('worktree', ['task', 'exec-task-1']);
+  });
+
+  test('WO-131: Orchestration Enter on a node-focused, agent-backed node jumps to the Inspector', () => {
+    panelManager = createTestManagers().panelManager;
+    registerInspectorPanel(panelManager);
+    const inspector = panelManager.open('inspector', 'top') as AgentInspectorPanel;
+    const inspectSpy = mock(() => {});
+    inspector.inspectAgent = inspectSpy as never;
+
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      orchestration: {
+        ...createInitialOrchestrationState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        graphs: new Map([['graph-a', {
+          id: 'graph-a',
+          title: 'Graph A',
+          mode: 'single-worker',
+          status: 'running',
+          nodeOrder: ['node-1'],
+          nodes: new Map([['node-1', {
+            id: 'node-1',
+            title: 'Engineer node',
+            role: 'engineer',
+            status: 'running',
+            childNodeIds: [],
+            dependencyNodeIds: [],
+            agentId: 'agent-node-1',
+          }]]),
+          createdAt: now,
+        }]]),
+        activeGraphIds: ['graph-a'],
+        totalGraphs: 1,
+      },
+    }));
+    const panel = new OrchestrationPanel(createOrchestrationReadModel(store));
+    panel.render(140, 20); // establish selection
+    panel.handleInput('tab'); // graph focus -> node focus
+    panel.handleInput('enter'); // queues the agent-jump
+
+    expect(handlePanelIntegrationAction(panelManager, panel, 'enter')).toBe(true);
+    expect(inspectSpy).toHaveBeenCalledWith('agent-node-1');
+  });
+
+  test('WO-131: Orchestration Enter on a node-focused, task-backed (non-agent) node jumps to Tasks', () => {
+    panelManager = createTestManagers().panelManager;
+    panelManager.registerType({
+      id: 'tasks',
+      name: 'Tasks',
+      icon: 'J',
+      category: 'monitoring',
+      description: 'tasks',
+      factory: () => new TasksPanel(createTasksReadModel(createRuntimeStore())),
+    });
+
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      orchestration: {
+        ...createInitialOrchestrationState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        graphs: new Map([['graph-b', {
+          id: 'graph-b',
+          title: 'Graph B',
+          mode: 'single-worker',
+          status: 'running',
+          nodeOrder: ['node-1'],
+          nodes: new Map([['node-1', {
+            id: 'node-1',
+            title: 'Exec node',
+            role: 'engineer',
+            status: 'running',
+            childNodeIds: [],
+            dependencyNodeIds: [],
+            taskId: 'task-abc',
+          }]]),
+          createdAt: now,
+        }]]),
+        activeGraphIds: ['graph-b'],
+        totalGraphs: 1,
+      },
+    }));
+    const panel = new OrchestrationPanel(createOrchestrationReadModel(store));
+    panel.render(140, 20);
+    panel.handleInput('tab');
+    panel.handleInput('enter');
+
+    expect(handlePanelIntegrationAction(panelManager, panel, 'enter')).toBe(true);
+    expect(panelManager.getPanel('tasks')).toBeInstanceOf(TasksPanel);
   });
 });
