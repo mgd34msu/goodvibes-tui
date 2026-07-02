@@ -177,6 +177,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     watcherRegistry: services.watcherRegistry,
     runtimeStore,
     openPanel: (panelId: string) => { services.panelManager.open(panelId); },
+    knowledgeApi,
   });
   services.panelManager.prewarmRegistered();
 

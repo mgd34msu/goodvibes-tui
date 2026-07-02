@@ -28,6 +28,7 @@ import type { SandboxSessionRegistry } from '@/runtime/index.ts';
 import type { OpsApi, PlanRuntimeService } from '@/runtime/index.ts';
 import type { WatcherRegistry } from '@pellux/goodvibes-sdk/platform/watchers';
 import type { RuntimeStore } from '../../runtime/store/index.ts';
+import type { KnowledgeApi } from '@pellux/goodvibes-sdk/platform/knowledge';
 
 export interface BuiltinPanelDeps {
   /** Config manager for settings-sync and other config-backed panels. */
@@ -125,6 +126,8 @@ export interface BuiltinPanelDeps {
   watcherRegistry?: WatcherRegistry;
   /** Root runtime store for panels that need direct selector access to runtime state (see `src/runtime/store/selectors/index.ts`). */
   runtimeStore?: RuntimeStore;
+  /** Knowledge API surface (graph nodes/sources/issues, search, schedules) for the Knowledge panel. */
+  knowledgeApi?: KnowledgeApi;
   /**
    * Open (or focus) a panel by id, wrapping `PanelManager.open`. Use for direct
    * cross-panel navigation instead of printing a "/panel open …" signpost
@@ -295,4 +298,11 @@ export function requireMcpRegistry(deps: BuiltinPanelDeps): McpRegistry {
     throw new Error('MCP registry must be wired at bootstrap for security panels and MCP workspace commands.');
   }
   return deps.mcpRegistry;
+}
+
+export function requireKnowledgeApi(deps: BuiltinPanelDeps): KnowledgeApi {
+  if (!deps.knowledgeApi) {
+    throw new Error('Knowledge API must be wired at bootstrap for the Knowledge panel.');
+  }
+  return deps.knowledgeApi;
 }
