@@ -11,6 +11,22 @@ import { createTestManagers } from '../helpers/test-managers.ts';
 
 let panelManager = createTestManagers().panelManager;
 
+// SymbolOutlinePanel.loadFile() parses via a background tree-sitter query
+// (WASM), so tests that need parsed symbols poll until getSelectedLocation()
+// resolves rather than asserting synchronously right after loadFile().
+async function waitForSymbolLocation(
+  panel: SymbolOutlinePanel,
+  timeoutMs = 2000,
+): Promise<{ path: string; line: number } | null> {
+  const start = Date.now();
+  let location = panel.getSelectedLocation();
+  while (location === null && Date.now() - start < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 10));
+    location = panel.getSelectedLocation();
+  }
+  return location;
+}
+
 describe('panel integration actions', () => {
   afterEach(() => {
     panelManager.destroyAll();
@@ -55,12 +71,13 @@ describe('panel integration actions', () => {
 
     const symbols = panelManager.getPanel('symbols');
     expect(symbols).toBeInstanceOf(SymbolOutlinePanel);
-    expect((symbols as SymbolOutlinePanel).getSelectedLocation()).toEqual({ path: filePath, line: 1 });
+    const location = await waitForSymbolLocation(symbols as SymbolOutlinePanel);
+    expect(location).toEqual({ path: filePath, line: 1 });
 
     rmSync(root, { recursive: true, force: true });
   });
 
-  test('symbol enter jumps preview to the selected location', () => {
+  test('symbol enter jumps preview to the selected location', async () => {
     const root = mkdtempSync(join(tmpdir(), 'gv-panel-bridge-'));
     const filePath = join(root, 'demo.ts');
     writeFileSync(filePath, 'export function alpha() {}\nexport function beta() {}\n');
@@ -80,6 +97,7 @@ describe('panel integration actions', () => {
 
     const symbols = new SymbolOutlinePanel();
     symbols.loadFile(filePath, 'export function alpha() {}\nexport function beta() {}\n');
+    await waitForSymbolLocation(symbols); // wait for the background parse to populate rows
     symbols.handleInput('down');
 
     expect(handlePanelIntegrationAction(panelManager, symbols, 'enter')).toBe(true);
@@ -87,6 +105,12 @@ describe('panel integration actions', () => {
     expect(preview.getScrollOffset()).toBe(1);
 
     rmSync(root, { recursive: true, force: true });
+  });
+
+  test('symbol enter is not swallowed when there is no symbol selected', () => {
+    const symbols = new SymbolOutlinePanel(); // no file loaded — nothing to select
+    expect(symbols.handleInput('enter')).toBe(false);
+    expect(handlePanelIntegrationAction(panelManager, symbols, 'enter')).toBe(false);
   });
 
   test('approval enter executes the selected review command', async () => {
