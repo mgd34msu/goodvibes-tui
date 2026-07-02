@@ -7,6 +7,8 @@ import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
 import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { ServicesPanel } from '../../panels/services-panel.ts';
 import type { Line } from '../../types/grid.ts';
+import type { PanelIntegrationContext } from '../../panels/types.ts';
+import type { ServiceInspectionQuery } from '../../runtime/ui-service-queries.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -128,5 +130,61 @@ describe('ServicesPanel', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const text = linesText(panel.render(120, 14));
     expect(text).toContain('oauth(active)');
+  });
+
+  // ---------------------------------------------------------------------------
+  // WO-141: inspect(name) crash path, refresh() try/catch, T=test all, s=subscription bridge
+  // ---------------------------------------------------------------------------
+
+  test('a null inspect() result renders as a flagged row instead of crashing', async () => {
+    const flakyRegistry: ServiceInspectionQuery = {
+      getAll: () => registry.getAll(),
+      inspect: async (_name: string) => null,
+      testConnection: (name: string) => registry.testConnection(name),
+    };
+    const panel = new ServicesPanel(flakyRegistry, subscriptionManager);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const text = linesText(panel.render(120, 14));
+    expect(text).toContain('INSPECT FAILED');
+    expect(text).not.toContain('Loading configured services');
+  });
+
+  test('a getAll() throw is caught by refresh() so loading never sticks', async () => {
+    const throwingRegistry: ServiceInspectionQuery = {
+      getAll: () => { throw new Error('registry unavailable'); },
+      inspect: async (_name: string) => null,
+      testConnection: (name: string) => registry.testConnection(name),
+    };
+    const panel = new ServicesPanel(throwingRegistry, subscriptionManager);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const text = linesText(panel.render(120, 14));
+    expect(text).not.toContain('Loading configured services');
+  });
+
+  test('T tests every configured service', async () => {
+    const fetchMock = mock(async () => new Response('{}', { status: 200 }));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const panel = new ServicesPanel(registry, subscriptionManager);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(panel.handleInput('T')).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const text = linesText(panel.render(120, 14));
+      expect(text).toContain('HEALTHY');
+      expect(fetchMock).toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test('s opens the Subscription panel via the ctx.panelManager bridge', async () => {
+    const panel = new ServicesPanel(registry, subscriptionManager);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(panel.handleInput('s')).toBe(true);
+    const open = mock((_id: string) => null);
+    const ctx = { panelManager: { open }, executeCommand: mock(() => Promise.resolve()) } as unknown as PanelIntegrationContext;
+    expect(panel.handlePanelIntegrationAction?.('s', ctx)).toBe(true);
+    expect(open).toHaveBeenCalledWith('subscription');
   });
 });

@@ -13,6 +13,7 @@ import type { Line } from '../../types/grid.ts';
 import { PanelListPanel } from '../../panels/panel-list-panel.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import type { Panel, PanelRegistration } from '../../panels/types.ts';
+import { ComponentHealthMonitor } from '../../runtime/perf/panel-health-monitor.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -352,7 +353,9 @@ describe('PanelListPanel', () => {
       panel.handleInput('T');
       const text = linesText(panel.render(80, 20));
       expect(text).not.toContain('T*Panel List');
-      expect(text).toContain('▸ ●▲ Alpha Panel');
+      // WO-141: a health-flag column (blank when no ComponentHealthMonitor is
+      // injected, as here) now sits between the placement marker and the name.
+      expect(text).toContain('▸ ●▲  Alpha Panel');
     });
   });
 
@@ -493,6 +496,64 @@ describe('PanelListPanel', () => {
       for (const ch of 'beta') panel.handleInput(ch);
       const text = linesText(panel.render(95, 40));
       expect(text).not.toContain('Recent');
+    });
+  });
+
+  // ── w = close open panel (WO-141) ────────────────────────────────────────
+
+  describe('w closes the selected panel', () => {
+    test('w closes an open panel via PanelManager.close', () => {
+      panel.handleInput('T'); // opens alpha in the top pane
+      expect(mgr.getTopPane().panels.map((p: Panel) => p.id)).toContain('alpha');
+      expect(panel.handleInput('w')).toBe(true);
+      expect(mgr.getTopPane().panels.map((p: Panel) => p.id)).not.toContain('alpha');
+    });
+
+    test('w on a panel that is not open is a no-op that still returns true', () => {
+      expect(mgr.getAllOpen().map((p: Panel) => p.id)).not.toContain('alpha');
+      expect(panel.handleInput('w')).toBe(true);
+      expect(mgr.getAllOpen().map((p: Panel) => p.id)).not.toContain('alpha');
+    });
+  });
+
+  // ── printable-chars doc/behavior fix (WO-141) ────────────────────────────
+
+  describe('typing a printable character without pressing / first', () => {
+    test('directly focuses the filter and appends the character (matches the class-doc "Search/filter by typing" promise)', () => {
+      panel.handleInput('g');
+      panel.handleInput('a');
+      const text = linesText(panel.render(80, 20));
+      expect(text).toContain('Filter: ga');
+      expect(text).toContain('Gamma');
+      expect(countLinesContaining(panel.render(80, 20), 'Alpha')).toBe(0);
+    });
+  });
+
+  // ── optional health flags (WO-141, fills WO-004 panel-resources gap) ────
+
+  describe('health flags from the injected ComponentHealthMonitor', () => {
+    test('a panel with no health record renders no flag glyph', () => {
+      const monitor = new ComponentHealthMonitor();
+      const withMonitor = new PanelListPanel(mgr, monitor);
+      withMonitor.onActivate();
+      const text = linesText(withMonitor.render(80, 20));
+      expect(text).toContain('Alpha Panel');
+      expect(monitor.getHealth('alpha')).toBeUndefined();
+    });
+
+    test('an overloaded panel surfaces a visible health flag', () => {
+      const monitor = new ComponentHealthMonitor();
+      monitor.register('alpha', 'development');
+      // development's contract caps render cost at 20ms and degrades after 5
+      // consecutive violations — 10s renders blow through both immediately.
+      for (let i = 0; i < 20; i++) {
+        monitor.recordRender('alpha', 10_000, Date.now());
+      }
+      expect(monitor.getHealth('alpha')?.healthStatus).toBe('overloaded');
+      const withMonitor = new PanelListPanel(mgr, monitor);
+      withMonitor.onActivate();
+      const text = linesText(withMonitor.render(80, 20));
+      expect(text).toMatch(/![ ]*Alpha Panel/);
     });
   });
 

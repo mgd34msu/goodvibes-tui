@@ -28,17 +28,33 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
 });
 
 interface ReasoningBlock {
-  turnId: number;
+  // Real turn id from the TURN_*/STREAM_* event envelope — joins this block
+  // to the same turn's rows in TasksPanel and the tool inspector, which key
+  // off the identical turnId string.
+  turnId: string;
+  // Distributed-tracing correlation id (EventEnvelope.traceId), when the
+  // originating event carried one — same field RuntimeTask.correlationId
+  // joins against.
+  correlationId?: string;
   content: string;
   active: boolean;  // true = currently streaming
   collapsed: boolean;
+  startedAt: number;
+  updatedAt: number;
+}
+
+function fmtClock(ts: number): string {
+  const d = new Date(ts);
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const s = String(d.getSeconds()).padStart(2, '0');
+  return `${h}:${m}:${s}`;
 }
 
 type FlatRow = { kind: 'header'; blockIndex: number; text: string } | { kind: 'content'; text: string };
 
 export class ThinkingPanel extends BasePanel {
   private blocks: ReasoningBlock[] = [];
-  private nextTurnId = 1;
   private unsubs: Array<() => void> = [];
   private cursorIndex = 0;
   private scrollOffset = 0;
@@ -149,13 +165,21 @@ export class ThinkingPanel extends BasePanel {
         ? [
             buildPanelLine(width, [
               [' Turn ', DEFAULT_PANEL_PALETTE.label],
-              [String(selectedBlock.turnId), DEFAULT_PANEL_PALETTE.value],
+              [selectedBlock.turnId, DEFAULT_PANEL_PALETTE.value],
               ['   State ', DEFAULT_PANEL_PALETTE.label],
               [selectedBlock.active ? 'streaming' : 'complete', selectedBlock.active ? DEFAULT_PANEL_PALETTE.warn : DEFAULT_PANEL_PALETTE.good],
               ['   View ', DEFAULT_PANEL_PALETTE.label],
               [selectedBlock.collapsed ? 'collapsed' : 'expanded', DEFAULT_PANEL_PALETTE.info],
               ['   Chars ', DEFAULT_PANEL_PALETTE.label],
               [String(selectedBlock.content.length), DEFAULT_PANEL_PALETTE.dim],
+            ]),
+            buildPanelLine(width, [
+              [' Correlation ', DEFAULT_PANEL_PALETTE.label],
+              [selectedBlock.correlationId ?? 'n/a', DEFAULT_PANEL_PALETTE.dim],
+              ['   Started ', DEFAULT_PANEL_PALETTE.label],
+              [fmtClock(selectedBlock.startedAt), DEFAULT_PANEL_PALETTE.dim],
+              ['   Updated ', DEFAULT_PANEL_PALETTE.label],
+              [fmtClock(selectedBlock.updatedAt), DEFAULT_PANEL_PALETTE.dim],
             ]),
           ]
         : [buildPanelLine(width, [[' No block selected', DEFAULT_PANEL_PALETTE.dim]])],
@@ -210,7 +234,7 @@ export class ThinkingPanel extends BasePanel {
     const rows: FlatRow[] = [];
     for (let i = 0; i < this.blocks.length; i++) {
       const block = this.blocks[i]!;
-      const turnLabel = `Turn ${block.turnId}${block.active ? ' (streaming)' : ''}`;
+      const turnLabel = `Turn ${block.turnId} ${fmtClock(block.startedAt)}${block.active ? ' (streaming)' : ''}`;
       rows.push({ kind: 'header', blockIndex: i, text: turnLabel });
       if (!block.collapsed) {
         const wrapped = wrapText(block.content || '(empty)', Math.max(1, width - 2));
@@ -250,12 +274,18 @@ export class ThinkingPanel extends BasePanel {
 
     let currentBlock: ReasoningBlock | null = null;
 
-    this.unsubs.push(this.turnEvents.on('STREAM_START', () => {
+    // onEnvelope (not on) so real turnId/traceId/timestamp — the same fields
+    // TasksPanel and the tool inspector join their own rows on — stamp each
+    // block instead of a locally-incrementing counter.
+    this.unsubs.push(this.turnEvents.onEnvelope('STREAM_START', (envelope) => {
       const block: ReasoningBlock = {
-        turnId: this.nextTurnId++,
+        turnId: envelope.turnId ?? envelope.payload.turnId,
+        correlationId: envelope.traceId,
         content: '',
         active: true,
         collapsed: false,
+        startedAt: envelope.ts,
+        updatedAt: envelope.ts,
       };
       // Cap block count to prevent unbounded growth
       if (this.blocks.length >= ThinkingPanel.MAX_BLOCKS) {
@@ -267,26 +297,29 @@ export class ThinkingPanel extends BasePanel {
       this.markDirty();
     }));
 
-    this.unsubs.push(this.turnEvents.on('STREAM_DELTA', (env) => {
-      const reasoning = env.reasoning;
+    this.unsubs.push(this.turnEvents.onEnvelope('STREAM_DELTA', (envelope) => {
+      const reasoning = envelope.payload.reasoning;
       if (reasoning && currentBlock) {
         currentBlock.content += reasoning;
+        currentBlock.updatedAt = envelope.ts;
         this.autoScroll = true;
         this.markDirty();
       }
     }));
 
-    this.unsubs.push(this.turnEvents.on('STREAM_END', () => {
+    this.unsubs.push(this.turnEvents.onEnvelope('STREAM_END', (envelope) => {
       if (currentBlock) {
         currentBlock.active = false;
+        currentBlock.updatedAt = envelope.ts;
         currentBlock = null;
         this.markDirty();
       }
     }));
 
-    this.unsubs.push(this.turnEvents.on('TURN_COMPLETED', () => {
+    this.unsubs.push(this.turnEvents.onEnvelope('TURN_COMPLETED', (envelope) => {
       if (currentBlock) {
         currentBlock.active = false;
+        currentBlock.updatedAt = envelope.ts;
         currentBlock = null;
         this.markDirty();
       }

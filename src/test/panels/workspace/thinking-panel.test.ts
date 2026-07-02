@@ -48,4 +48,37 @@ describe('workspace panel migrations', () => {
     const text = linesText(panel.render(80, 20));
     expect(text).toContain('reasoning after blur');
   });
+
+  // ---------------------------------------------------------------------------
+  // WO-141: real turn/correlation ids from TURN_*/STREAM_* envelopes + block timestamps
+  // ---------------------------------------------------------------------------
+
+  test('block header/detail stamp the real turnId and traceId from the event envelope', async () => {
+    const panel = new ThinkingPanel(createUiRuntimeEvents(runtimeBus).turns);
+    panel.onActivate();
+    runtimeBus.emit(
+      'turn',
+      createEventEnvelope('STREAM_START', { type: 'STREAM_START', turnId: 'turn-xyz' }, {
+        sessionId: 'sess-1',
+        source: 'test',
+        turnId: 'turn-xyz',
+        traceId: 'trace-abc',
+      }),
+    );
+    runtimeBus.emit(
+      'turn',
+      createEventEnvelope(
+        'STREAM_DELTA',
+        { type: 'STREAM_DELTA', turnId: 'turn-xyz', content: '', accumulated: '', reasoning: 'stamped block' },
+        { sessionId: 'sess-1', source: 'test', turnId: 'turn-xyz', traceId: 'trace-abc' },
+      ),
+    );
+    await flushMicrotasks();
+    const text = linesText(panel.render(100, 24));
+    expect(text).toContain('turn-xyz');
+    expect(text).toContain('trace-abc');
+    // Real timestamp stamped instead of a bare incrementing counter — an
+    // HH:MM:SS clock string appears in the block header.
+    expect(text).toMatch(/\d{2}:\d{2}:\d{2}/);
+  });
 });

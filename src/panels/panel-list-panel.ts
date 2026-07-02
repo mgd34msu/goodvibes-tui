@@ -9,6 +9,7 @@
  * - `T` / `B` to place a panel in the top/bottom pane
  * - `M` to move an open panel to the other pane
  * - `S` to toggle the split and Tab to switch pane focus
+ * - `w` to close the selected panel if it is currently open (either pane)
  *
  * Open via /panel list.
  */
@@ -61,7 +62,7 @@ const CATEGORY_LABELS: Record<PanelCategory, string> = {
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const NAME_COL_WIDTH = 22;
-const PREFIX_WIDTH = 4; // arrow + dot + space + space
+const PREFIX_WIDTH = 5; // arrow + dot + health-flag + space + space
 
 /** A flat entry in the navigable list — either a section header or a panel row. */
 type ListEntry =
@@ -80,6 +81,20 @@ function panelPlacementMarker(options: {
   if (isTopOpen && isBottomOpen) return { text: '◆', color: C.value };
   if (isTopOpen) return { text: focusedPane === 'top' ? '▲' : '△', color: C.info };
   if (isBottomOpen) return { text: focusedPane === 'bottom' ? '▼' : '▽', color: C.paneBottom };
+  return { text: ' ', color: C.dim };
+}
+
+/**
+ * Optional per-row resource-health flag, sourced straight from the injected
+ * ComponentHealthMonitor (fills the gap left by WO-004's panel-resources
+ * panel removal — health is still readable, just from here instead of a
+ * dedicated panel). Blank for panels with no health record yet (never
+ * rendered) or currently healthy.
+ */
+function panelHealthMarker(health: { healthStatus: 'healthy' | 'warning' | 'overloaded' } | undefined): { text: string; color: string } {
+  if (!health) return { text: ' ', color: C.dim };
+  if (health.healthStatus === 'overloaded') return { text: '!', color: C.bad };
+  if (health.healthStatus === 'warning') return { text: '~', color: C.warn };
   return { text: ' ', color: C.dim };
 }
 
@@ -236,6 +251,21 @@ export class PanelListPanel extends BasePanel {
       return true;
     }
 
+    if (key === 'w') {
+      const selectedPanel = this._getSelectedPanelEntry(entries);
+      if (selectedPanel) {
+        try {
+          // Existing public PanelManager.close() API only — panel-manager.ts
+          // itself is WO-150's surface this wave.
+          this.panelManager.close(selectedPanel.reg.id);
+        } catch (err) {
+          logger.warn(`[panel-list] failed to close panel: ${err}`);
+        }
+        this.markDirty();
+      }
+      return true;
+    }
+
     if (key === 'tab') {
       this.panelManager.togglePaneFocus();
       this.markDirty();
@@ -264,7 +294,17 @@ export class PanelListPanel extends BasePanel {
       return false;
     }
 
-    // Printable character: append to search query
+    // Printable character: focus the filter and append it — the class-doc
+    // promise ("Search/filter by typing") previously had no matching
+    // behavior here; typing anything but '/' while list-focused was a no-op.
+    if (isPanelSearchPrintable(key)) {
+      this._filterFocused = true;
+      this._query += key;
+      this._selectedIndex = 0;
+      this._scrollOffset = 0;
+      this.markDirty();
+      return true;
+    }
     return false;
   }
 
@@ -311,13 +351,21 @@ export class PanelListPanel extends BasePanel {
     const topIds = new Set(pm.getTopPane().panels.map(p => p.id));
     const bottomIds = new Set(pm.getBottomPane().panels.map(p => p.id));
     const focusedPane = pm.getFocusedPane();
-    const footerLines = [buildPanelLine(width, [[truncateDisplay(` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  T/B place  M move  S split  Tab focus`, width), C.dim]])];
+    const footerLines = [buildPanelLine(width, [[truncateDisplay(` [${this._selectedIndex + 1}/${panelEntries.length}] ↑/↓ nav  Enter open  w close  T/B place  M move  S split  Tab focus`, width), C.dim]])];
+    // Optional health rollup — only present when a ComponentHealthMonitor was
+    // injected (fills the gap left by WO-004's panel-resources panel removal).
+    const allHealth = this.componentHealthMonitor?.getAllHealth() ?? [];
+    const unhealthyCount = allHealth.filter((h) => h.healthStatus !== 'healthy').length;
+
     const postureLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'visible panels', value: String(pm.getAllOpen().length), valueColor: pm.getAllOpen().length > 0 ? C.value : C.dim },
         { label: 'focused pane', value: focusedPane, valueColor: focusedPane === 'top' ? C.info : C.paneBottom },
         { label: 'split', value: pm.isBottomPaneVisible() ? 'dual' : 'single', valueColor: pm.isBottomPaneVisible() ? C.info : C.dim },
         { label: 'results', value: String(panelEntries.length), valueColor: C.value },
+        ...(this.componentHealthMonitor
+          ? [{ label: 'flagged', value: String(unhealthyCount), valueColor: unhealthyCount > 0 ? C.warn : C.good }]
+          : []),
       ], C),
       buildPanelLine(width, [[` Filter owns input only when selected. Open and switch operations should land directly in focused panel state.`, C.header]]),
     ];
@@ -351,6 +399,7 @@ export class PanelListPanel extends BasePanel {
         const descWidth = Math.max(1, width - descStartCol);
         const descLines = wrapPanelDescription(entry.reg.description, descWidth, 2);
         const placement = panelPlacementMarker({ isTopOpen, isBottomOpen, focusedPane });
+        const health = panelHealthMarker(this.componentHealthMonitor?.getHealth(entry.reg.id));
         // When searching, the flat result list loses its category grouping — so
         // tag each result with a dim [Category] so the origin stays discoverable.
         const categoryTag = this._query
@@ -360,6 +409,7 @@ export class PanelListPanel extends BasePanel {
           buildPanelListRow(width, [
             { text: dot, fg: dotColor },
             { text: placement.text, fg: placement.color },
+            { text: health.text, fg: health.color },
             { text: ' ', fg: C.dim },
             { text: `${nameStr} `, fg: nameColor },
             { text: categoryTag, fg: C.label },
