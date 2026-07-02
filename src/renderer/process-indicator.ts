@@ -87,8 +87,10 @@ export function renderProcessIndicator(
    */
   const PROGRESS_RESERVED_CHARS = 43;
   const progressMaxLen = Math.max(0, width - PROGRESS_RESERVED_CHARS); // reserve space for count + hint
+  // Truncate by display width (not JS string length) so wide/CJK glyphs in the
+  // agent progress text don't overflow the reserved budget.
   const progressSuffix = agentProgress && progressMaxLen > 10
-    ? ` | ${agentProgress.length > progressMaxLen ? agentProgress.slice(0, Math.max(0, progressMaxLen - 3)) + '...' : agentProgress}`
+    ? ` | ${getDisplayWidth(agentProgress) > progressMaxLen ? truncateToWidth(agentProgress, Math.max(0, progressMaxLen - 3)) + '...' : agentProgress}`
     : '';
   const label = `${parts.join(` ${GLYPHS.navigation.pipeSeparator} `)}${progressSuffix}`;
   const hint = `  ${GLYPHS.status.pending}  Enter to view`;

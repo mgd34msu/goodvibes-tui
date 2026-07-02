@@ -40,12 +40,21 @@ export function applyConversationOverlays(
   let next = viewport;
   const bottomDockInset = 1 + (input.searchManager.active || input.historySearch.active ? 1 : 0);
 
+  // Overlay posture rule: workspaces (onboarding, model, settings, mcp, help,
+  // shortcuts) claim the full viewport and are mutually exclusive with docked
+  // pickers/modals. Once a fullscreen workspace claims the screen, no docked
+  // overlay is drawn on top of it — enforcing a single visible overlay even if
+  // stray state survives the handler's clearModalStack. The input layer keeps
+  // the modal stack to one entry; this is the renderer-side backstop.
+  let fullscreenClaimed = false;
+
   if (input.onboardingWizard.active) {
     const lines = renderOnboardingWizard(input.onboardingWizard, conversationWidth, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
+    fullscreenClaimed = true;
   }
 
-  if (input.filePicker.active) {
+  if (!fullscreenClaimed && input.filePicker.active) {
     const lines = renderFilePickerOverlay(input.filePicker, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
@@ -53,9 +62,10 @@ export function applyConversationOverlays(
   if (input.modelPicker.active) {
     const lines = renderModelWorkspace(input.modelPicker, conversationWidth, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
+    fullscreenClaimed = true;
   }
 
-  if (input.selectionModal.active) {
+  if (!fullscreenClaimed && input.selectionModal.active) {
     const lines = renderSelectionModalOverlay(input.selectionModal, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
@@ -68,22 +78,22 @@ export function applyConversationOverlays(
     next.push(...renderHistorySearchOverlay(input.historySearch, conversationWidth));
   }
 
-  if (input.processModal.active) {
+  if (!fullscreenClaimed && input.processModal.active) {
     const lines = renderProcessModal(input.processModal, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
-  if (input.agentDetailModal.active) {
+  if (!fullscreenClaimed && input.agentDetailModal.active) {
     const lines = renderAgentDetailModal(input.agentDetailModal, conversationWidth);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
-  if (input.liveTailModal.active) {
+  if (!fullscreenClaimed && input.liveTailModal.active) {
     const lines = renderLiveTailModal(input.liveTailModal, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
-  if (input.contextInspectorModal.active) {
+  if (!fullscreenClaimed && input.contextInspectorModal.active) {
     const lines = renderContextInspector(conversation, conversationWidth, viewportHeight, contextWindow);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
@@ -91,24 +101,26 @@ export function applyConversationOverlays(
   if (input.settingsModal.active) {
     const lines = renderSettingsModal(input.settingsModal, conversationWidth, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
+    fullscreenClaimed = true;
   }
 
   if (input.mcpWorkspace.active) {
     const lines = renderMcpWorkspace(input.mcpWorkspace, conversationWidth, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
+    fullscreenClaimed = true;
   }
 
-  if (input.sessionPickerModal.active) {
+  if (!fullscreenClaimed && input.sessionPickerModal.active) {
     const lines = renderSessionPickerModal(input.sessionPickerModal, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
-  if (input.profilePickerModal.active) {
+  if (!fullscreenClaimed && input.profilePickerModal.active) {
     const lines = renderProfilePickerModal(input.profilePickerModal, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
-  if (input.bookmarkModal.active) {
+  if (!fullscreenClaimed && input.bookmarkModal.active) {
     const lines = renderBookmarkModal(input.bookmarkModal, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
@@ -116,14 +128,16 @@ export function applyConversationOverlays(
   if (input.helpOverlayActive) {
     const lines = renderHelpOverlay(conversationWidth, keybindingsManager, commandRegistry.getAll(), input.helpScrollOffset, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
+    fullscreenClaimed = true;
   }
 
   if (input.shortcutsOverlayActive) {
     const lines = renderShortcutsOverlay(conversationWidth, keybindingsManager, input.shortcutsScrollOffset, viewportHeight);
     next = replaceViewportWithOverlay(lines, conversationWidth, viewportHeight);
+    fullscreenClaimed = true;
   }
 
-  if (input.commandMode && input.autocomplete?.isActive) {
+  if (!fullscreenClaimed && input.commandMode && input.autocomplete?.isActive) {
     const lines = renderAutocompleteOverlay(input.autocomplete, conversationWidth, viewportHeight);
     if (lines.length > 0) {
       next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);

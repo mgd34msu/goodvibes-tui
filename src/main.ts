@@ -36,6 +36,7 @@ import {
   checkRecoveryFile,
   deleteRecoveryFile,
   loadRecoveryConversation,
+  readLastSessionPointer,
   writeRecoveryFile,
 } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
@@ -428,6 +429,7 @@ async function main() {
     model: runtime.model,
     provider: runtime.provider,
     toolCount,
+    lastSessionId: readLastSessionPointer({ workingDirectory: workingDir, homeDirectory, surfaceRoot: 'tui' }) ?? undefined,
   };
 
   const render = () => {
@@ -490,6 +492,8 @@ async function main() {
       provider: runtime.provider,
       contextWindow,
       contextStatusHint,
+      // Compact footer posture on short terminals so the shell stays usable.
+      compact: height < 30,
       // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
       // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
       compactThreshold: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),
