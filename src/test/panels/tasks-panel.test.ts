@@ -246,7 +246,11 @@ describe('TasksPanel', () => {
 
     const settingsText = linesText(new SettingsSyncPanel(createConfigManager()).render(120, 20));
     expect(settingsText).toContain('Settings posture');
-    expect(settingsText).toContain('/settings-sync conflicts');
-    expect(settingsText).toContain('/managed review');
+    // WO-124: conflict resolution and managed review are now bound to real
+    // keys (Enter / m), not printed as slash-command signposts.
+    expect(settingsText).not.toContain('/settings-sync conflicts');
+    expect(settingsText).not.toContain('/managed review');
+    expect(settingsText).toContain('resolve conflict');
+    expect(settingsText).toContain('managed review');
   });
 });
