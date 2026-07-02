@@ -13,7 +13,12 @@ import { describe, test, expect } from 'bun:test';
 import type { Line } from '../../types/grid.ts';
 import { createEmptyLine } from '../../types/grid.ts';
 import { ScrollableListPanel } from '../../panels/scrollable-list-panel.ts';
-import { buildPanelLine } from '../../panels/polish.ts';
+import {
+  buildPanelLine,
+  buildPanelWorkspace,
+  DEFAULT_PANEL_PALETTE,
+  resolveStackedScrollableSections,
+} from '../../panels/polish.ts';
 
 function lineText(line: Line): string {
   return line.map((cell) => cell.char).join('').replace(/\s+$/, '');
@@ -75,6 +80,51 @@ describe('resolveScrollablePanelSection — window-summary row stays inside the 
     expect(texts.some((t) => t.includes(HINTS_MARKER))).toBe(true);
 
     // The hints row is the last non-empty line of the frame.
+    const lastNonEmptyIdx = [...texts].map((t, i) => [t, i] as const)
+      .filter(([t]) => t.length > 0)
+      .map(([, i]) => i)
+      .pop();
+    expect(lastNonEmptyIdx).toBeDefined();
+    expect(texts[lastNonEmptyIdx!]).toContain(HINTS_MARKER);
+  });
+});
+
+describe('resolveStackedScrollableSections — per-section summaries stay inside the stack budget', () => {
+  const WIDTH = 40;
+  const HEIGHT = 14;
+  const C = DEFAULT_PANEL_PALETTE;
+
+  test('two truncated sections + footer keep the tail hints row', () => {
+    const mkLines = (label: string, count: number): Line[] =>
+      Array.from({ length: count }, (_, i) => buildPanelLine(WIDTH, [[` ${label}-${i}`, C.value]]));
+
+    // Mirrors the sandbox-panel wiring: stacked sections resolved with the
+    // footer declared, then the same footer passed to buildPanelWorkspace.
+    const footer: Line[] = [buildPanelLine(WIDTH, [[` ${HINTS_MARKER}`, C.dim]])];
+    const resolved = resolveStackedScrollableSections(WIDTH, HEIGHT, {
+      palette: C,
+      footerLines: footer,
+      sections: [
+        { title: 'Alpha', scrollableLines: mkLines('alpha', 30), scrollOffset: 0, minRows: 2, appendWindowSummary: { dimColor: C.dim } },
+        { title: 'Beta', scrollableLines: mkLines('beta', 30), scrollOffset: 0, minRows: 2, appendWindowSummary: { dimColor: C.dim } },
+      ],
+    });
+
+    const lines = buildPanelWorkspace(WIDTH, HEIGHT, {
+      title: 'Stacked',
+      sections: resolved.map((entry) => entry.section),
+      footerLines: footer,
+      palette: C,
+    });
+
+    // Contract: exactly HEIGHT lines.
+    expect(lines.length).toBe(HEIGHT);
+    const texts = lines.map(lineText);
+
+    // Both sections are truncated, so both summary rows must be present...
+    expect(texts.filter((t) => /showing \d+-\d+ of \d+/.test(t)).length).toBe(2);
+
+    // ...AND the tail keyboard-hints row must survive as the last non-empty line.
     const lastNonEmptyIdx = [...texts].map((t, i) => [t, i] as const)
       .filter(([t]) => t.length > 0)
       .map(([, i]) => i)
