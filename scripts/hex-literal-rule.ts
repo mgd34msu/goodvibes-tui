@@ -1,8 +1,9 @@
 /**
  * hex-literal-rule.ts — WO-001 architecture-gate rule.
  *
- * Bans raw `#RRGGBB` colour literals in src/panels/**\/*.ts and
- * src/renderer/**\/*.ts. UI_TONES (src/renderer/ui-primitives.ts) and the
+ * Bans raw `#RGB`, `#RRGGBB`, and `#RRGGBBAA` colour literals in
+ * src/panels/**\/*.ts and src/renderer/**\/*.ts. UI_TONES
+ * (src/renderer/ui-primitives.ts) and the
  * mode-resolved theme layer (src/renderer/theme.ts) are the single colour
  * token source; syntax-highlighter.ts owns its own colour table for syntax
  * themes. All three are exempt from the ban.
@@ -17,7 +18,8 @@
  * individual files to tokens — this rule does not block on that sweep.
  */
 
-export const HEX_LITERAL_RE = /#[0-9a-fA-F]{6}(?![0-9a-fA-F])/g;
+export const HEX_LITERAL_RE =
+  /#[0-9a-fA-F]{8}(?![0-9a-fA-F])|#[0-9a-fA-F]{6}(?![0-9a-fA-F])|#[0-9a-fA-F]{3}(?![0-9a-fA-F])/g;
 
 /** Files that own their own colour source and are exempt from the ban. */
 export const HEX_LITERAL_BAN_EXEMPT: ReadonlySet<string> = new Set([
@@ -26,7 +28,7 @@ export const HEX_LITERAL_BAN_EXEMPT: ReadonlySet<string> = new Set([
   'src/renderer/syntax-highlighter.ts',
 ]);
 
-/** Count raw 6-digit hex colour literals in a file's source text. */
+/** Count raw 3-, 6-, or 8-digit hex colour literals in a file's source text. */
 export function countHexLiterals(text: string): number {
   const matches = text.match(HEX_LITERAL_RE);
   return matches ? matches.length : 0;
