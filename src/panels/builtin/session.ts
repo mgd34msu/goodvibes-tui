@@ -42,6 +42,7 @@ function readBootstrapPassword(credentialPath: string): string | undefined {
 }
 
 export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
+  const ui = requireUiServices(deps);
   manager.registerType({
     id: 'qr-code',
     name: 'QR Code',
@@ -71,7 +72,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
           surface: 'tui',
         });
       };
-      return new QrPanel(connectionInfo, regenerate, copyToClipboard);
+      return new QrPanel(connectionInfo, regenerate, copyToClipboard, ui.readModels.controlPlane, deps.localUserAuthManager);
     },
   });
 
