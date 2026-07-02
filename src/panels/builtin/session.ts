@@ -117,13 +117,31 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     name: 'Tokens',
     icon: 'K',
     category: 'monitoring',
-    description: 'Token budget tracker: per-turn and cumulative usage with context window gauge',
+    description: 'Token + context console: gauge, true composition, per-turn history, inline cost, and one-key compact',
+    // Preloaded (absorbed from the retired ContextVisualizerPanel) so turn
+    // history and pressure accumulate in the background even before the user
+    // opens the tab.
+    preload: true,
     factory: () => {
-      const panel = new TokenBudgetPanel(deps.sessionMemoryStore, deps.configManager, deps.requestRender);
+      const panel = new TokenBudgetPanel(
+        deps.sessionMemoryStore,
+        deps.configManager,
+        deps.requestRender,
+        requireUiServices(deps).events.turns,
+      );
       if (deps.orchestrator && deps.getCtxWindow) {
-        panel.wire(deps.orchestrator, deps.getCtxWindow, requireUiServices(deps).readModels.session);
+        panel.wire(
+          deps.orchestrator,
+          deps.getCtxWindow,
+          requireUiServices(deps).readModels.session,
+          () => deps.providerRegistry.getCurrentModel().id,
+        );
       }
       return panel;
     },
   });
+
+  // WO-113 compat: the retired 'context' panel id still resolves — redirected
+  // to the merged tokens console ('/panel open context', saved layouts).
+  manager.registerAlias('context', 'tokens');
 }
