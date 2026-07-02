@@ -1,13 +1,10 @@
 /**
  * Tests for ProviderHealthTracker — verifies it uses SDK ProviderStatus values
- * (healthy / rate_limited / degraded / unknown) after the type convergence in E11-7.
- *
- * Covers:
- *   - onLlmResponse sets status to 'healthy' (not the old 'online')
- *   - onTurnError with rate-limit message sets status to 'rate_limited' (not 'rate-limited')
- *   - onTurnError with generic error sets status to 'degraded' (not 'error')
- *   - Initial status for a new record is 'unknown'
- *   - onProvidersChanged registers unknown providers without throwing
+ * (healthy / rate_limited / degraded / unknown) after the type convergence in E11-7,
+ * and the WO-112 console-merge extensions:
+ *   - onTurnError requires a concrete provider (no phantom 'unknown' rows)
+ *   - per-provider session stats (requests, errors, tokens, cost)
+ *   - buildHealthDomainState() projection into the SDK domain-state shape
  */
 
 import { describe, expect, test } from 'bun:test';
@@ -94,5 +91,65 @@ describe('ProviderHealthTracker — SDK ProviderStatus values', () => {
     for (const health of tracker.getAll()) {
       expect(health.status).toBe('unknown');
     }
+  });
+});
+
+describe('ProviderHealthTracker — WO-112 console merge extensions', () => {
+  test('errors are attributed only to the named provider (no phantom unknown row)', () => {
+    const tracker = new ProviderHealthTracker();
+    tracker.onTurnError('connection reset', 'openai');
+
+    expect(tracker.get('unknown')).toBeUndefined();
+    expect(tracker.getAll().map((health) => health.name)).toEqual(['openai']);
+  });
+
+  test('accumulates per-provider session stats (requests, errors, tokens, cost)', () => {
+    const tracker = new ProviderHealthTracker();
+    tracker.onLlmResponse('openai', { model: 'gpt-5.4', inputTokens: 100, outputTokens: 50, cacheReadTokens: 10 });
+    tracker.onLlmResponse('openai', { model: 'gpt-5.4', inputTokens: 200, outputTokens: 100 });
+    tracker.onTurnError('boom', 'openai');
+
+    const health = tracker.get('openai')!;
+    expect(health.requests).toBe(3);
+    expect(health.errors).toBe(1);
+    expect(health.inputTokens).toBe(300);
+    expect(health.outputTokens).toBe(150);
+    expect(health.cacheReadTokens).toBe(10);
+    expect(health.totalTokens).toBe(460);
+    expect(health.lastModelId).toBe('gpt-5.4');
+    expect(health.totalCostUsd).toBeGreaterThan(0);
+  });
+
+  test('buildHealthDomainState projects records into the SDK domain shape', () => {
+    const tracker = new ProviderHealthTracker();
+    tracker.onLlmResponse('openai', { model: 'gpt-5.4', inputTokens: 10, outputTokens: 5 });
+    tracker.onTurnError('connection reset', 'anthropic');
+
+    const state = tracker.buildHealthDomainState([
+      { providerId: 'openai', isActive: true, isConfigured: true },
+      { providerId: 'anthropic', isActive: false, isConfigured: true },
+      { providerId: 'gemini', isActive: false, isConfigured: false },
+    ]);
+
+    expect(state.providers.size).toBe(3);
+    expect(state.providers.get('openai')!.status).toBe('healthy');
+    expect(state.providers.get('openai')!.isActive).toBe(true);
+    expect(state.providers.get('openai')!.stats.successCalls).toBe(1);
+    expect(state.providers.get('anthropic')!.status).toBe('degraded');
+    expect(state.providers.get('anthropic')!.stats.errorCalls).toBe(1);
+    expect(state.providers.get('gemini')!.status).toBe('unknown');
+    expect(state.providers.get('gemini')!.isConfigured).toBe(false);
+    expect(state.degradedCount).toBe(1);
+    expect(state.unavailableCount).toBe(0);
+    expect(state.compositeStatus).toBe('degraded');
+  });
+
+  test('tracked providers missing from meta are still projected (attribution survivability)', () => {
+    const tracker = new ProviderHealthTracker();
+    tracker.onTurnError('boom', 'openai');
+
+    const state = tracker.buildHealthDomainState([]);
+    expect(state.providers.get('openai')).toBeDefined();
+    expect(state.providers.get('openai')!.status).toBe('degraded');
   });
 });

@@ -12,7 +12,6 @@ export type { ProviderHealth, ProviderStatus } from './provider-health-tracker.t
 export { GitPanel } from './git-panel.ts';
 export { SymbolOutlinePanel } from './symbol-outline-panel.ts';
 export type { SymbolEntry, SymbolKind } from './symbol-outline-panel.ts';
-export { ProviderStatsPanel } from './provider-stats-panel.ts';
 export { SessionBrowserPanel } from './session-browser-panel.ts';
 export { DocsPanel } from './docs-panel.ts';
 export { ThinkingPanel } from './thinking-panel.ts';

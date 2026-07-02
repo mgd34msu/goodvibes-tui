@@ -120,12 +120,6 @@ export const EMPTY_POLICY_RUNTIME_STATE = {
   getSnapshot: () => ({ recentPermissionAudit: [] }),
 } as unknown as import('@/runtime/index.ts').PolicyRuntimeState;
 
-export const EMPTY_PROVIDER_ACCOUNTS_DEPS = {
-  providerAccounts: {
-    loadSnapshot: async () => ({ providers: [] }),
-  },
-} as unknown as import('../../../panels/provider-accounts-panel.ts').ProviderAccountsPanelDeps;
-
 export const EMPTY_MEMORY_REGISTRY = {
   search: (_opts?: unknown) => [],
   subscribe: (_cb: () => void) => () => {},

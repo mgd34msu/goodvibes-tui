@@ -9,7 +9,6 @@ import { RoutesPanel } from '../routes-panel.ts';
 import { ControlPlanePanel } from '../control-plane-panel.ts';
 import { SubscriptionPanel } from '../subscription-panel.ts';
 import { LocalAuthPanel } from '../local-auth-panel.ts';
-import { ProviderAccountsPanel } from '../provider-accounts-panel.ts';
 import { SettingsSyncPanel } from '../settings-sync-panel.ts';
 import { WorktreePanel } from '../worktree-panel.ts';
 import { HooksPanel } from '../hooks-panel.ts';
@@ -21,19 +20,15 @@ import { OrchestrationPanel } from '../orchestration-panel.ts';
 import { OpsStrategyPanel } from '../ops-strategy-panel.ts';
 import { CommunicationPanel } from '../communication-panel.ts';
 import { RemotePanel } from '../remote-panel.ts';
-import { ProviderStatsPanel } from '../provider-stats-panel.ts';
 import { ProviderHealthPanel } from '../provider-health-panel.ts';
 import { DebugPanel } from '../debug-panel.ts';
 import { IncidentReviewPanel } from '../incident-review-panel.ts';
 import { ForensicsPanel } from '../forensics-panel.ts';
 import { PolicyPanel } from '../policy-panel.ts';
 import { EvalPanel } from '../eval-panel.ts';
-import { createProviderAccountSnapshotQuery } from '../provider-account-snapshot.ts';
-import {
-  createEnvironmentVariableQuery,
-  createProviderRuntimeInspectionQuery,
-} from '../../runtime/ui-service-queries.ts';
+import { createProviderRuntimeInspectionQuery } from '../../runtime/ui-service-queries.ts';
 import { createRuntimeProviderApi } from '@/runtime/index.ts';
+import { selectModel } from '../../runtime/store/selectors/index.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
 import { requireAutomationManager, requireControlPlanePanelDeps, requireHookPanelDeps, requirePluginManager, requireUiServices } from './shared.ts';
 import { createCockpitRosterReadModel } from '../cockpit-read-model.ts';
@@ -45,12 +40,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     favoritesStore: ui.providers.favoritesStore,
     providerRegistry: ui.providers.providerRegistry,
   }));
-  const providerAccounts = createProviderAccountSnapshotQuery({
-    providerModels: deps.providerRegistry,
-    services: deps.serviceRegistry,
-    subscriptions: deps.subscriptionManager,
-    environment: createEnvironmentVariableQuery(process.env),
-  });
+  const runtimeStore = deps.runtimeStore;
 
   const rosterReadModel = createCockpitRosterReadModel(ui.agents.agentManager);
   // Subscribe to agent lifecycle events so the roster re-renders on state changes.
@@ -172,15 +162,6 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   });
 
   manager.registerType({
-    id: 'accounts',
-    name: 'Accounts',
-    icon: 'Q',
-    category: 'monitoring',
-    description: 'Provider auth routes, subscription quota-window hints, and billing-path safety notes',
-    factory: () => new ProviderAccountsPanel({ providerAccounts }),
-  });
-
-  manager.registerType({
     id: 'settings-sync',
     name: 'Settings Sync',
     icon: 'Y',
@@ -291,20 +272,11 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
   });
 
   manager.registerType({
-    id: 'providers',
-    name: 'Providers',
-    icon: 'R',
-    category: 'monitoring',
-    description: 'Per-provider performance metrics: latency, error rate, request count, sparkline trends',
-    factory: () => new ProviderStatsPanel(ui.events.turns, ui.events.providers, deps.requestRender, ui.readModels.providers),
-  });
-
-  manager.registerType({
     id: 'provider-health',
     name: 'Health',
     icon: 'N',
     category: 'monitoring',
-    description: 'Provider health dashboard: real-time status, latency, errors, and rate-limit cooldowns',
+    description: 'Provider console: status, latency timelines, error attribution, auth routes, fallback chain, and repair actions',
     preload: true,
     factory: () => new ProviderHealthPanel(
       providerRuntime,
@@ -321,10 +293,25 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
         intelligence: ui.readModels.intelligence,
         continuity: ui.readModels.continuity,
         worktrees: ui.readModels.worktrees,
+        ...(runtimeStore
+          ? {
+            modelState: {
+              get: () => selectModel(runtimeStore.getState()),
+              subscribe: (listener: () => void) => runtimeStore.subscribe(listener),
+            },
+          }
+          : {}),
       },
       deps.requestRender,
     ),
   });
+
+  // WO-112 compat (wired at integration): the retired 'providers' and
+  // 'accounts' panel ids still resolve — redirected to the merged
+  // provider-health console. '/accounts panel|open' depends on the
+  // 'accounts' alias.
+  manager.registerAlias('providers', 'provider-health');
+  manager.registerAlias('accounts', 'provider-health');
 
   manager.registerType({
     id: 'debug',
