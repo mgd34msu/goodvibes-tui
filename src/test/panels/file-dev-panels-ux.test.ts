@@ -124,4 +124,106 @@ describe('WorktreePanel — status glyph and column header', () => {
     const text = linesText(panel.render(100, H));
     expect(text).toContain('/worktree attach');
   });
+
+  test('the Next Actions section and per-row Next: strings are gone', async () => {
+    const panel = new WorktreePanel(makeRegistry());
+    await new Promise((r) => setTimeout(r, 30));
+    const text = linesText(panel.render(100, H));
+    expect(text).not.toContain('Next Actions');
+    expect(text).not.toContain('Next:');
+  });
+
+  test('footer hints show the real bound keys, not slash-command signposts', async () => {
+    const panel = new WorktreePanel(makeRegistry());
+    await new Promise((r) => setTimeout(r, 30));
+    const text = linesText(panel.render(100, H));
+    expect(text).toContain('pause/resume/keep');
+    expect(text).toContain('discard/cleanup');
+    expect(text).toContain('jump to session/task');
+    expect(text).not.toContain('/worktree inspect');
+  });
+
+  function makeMutableRegistry() {
+    const rows: Array<{ path: string; kind: string; state: string; branch: string; head: string; updatedAt: number; sessionId?: string; taskId?: string }> = [
+      { path: '/repo/wt-a', kind: 'agent', state: 'active', branch: 'feature/x', head: 'abc123def456', updatedAt: Date.now(), sessionId: 's1' },
+    ];
+    const setStateCalls: Array<[string, string]> = [];
+    const cleanupCalls: string[] = [];
+    const registry = {
+      list: async () => rows.map((r) => ({ ...r })),
+      attach: () => {},
+      setState: (path: string, state: string) => {
+        setStateCalls.push([path, state]);
+        const row = rows.find((r) => r.path === path);
+        if (row) row.state = state;
+      },
+      cleanup: async (path: string) => {
+        cleanupCalls.push(path);
+      },
+      subscribe: () => () => {},
+    } as unknown as ConstructorParameters<typeof WorktreePanel>[0];
+    return { registry, setStateCalls, cleanupCalls };
+  }
+
+  test('p/u/k dispatch setState on the same registry the /worktree command mutates', async () => {
+    const { registry, setStateCalls } = makeMutableRegistry();
+    const panel = new WorktreePanel(registry);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(panel.handleInput('p')).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(setStateCalls).toContainEqual(['/repo/wt-a', 'paused']);
+
+    expect(panel.handleInput('u')).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(setStateCalls).toContainEqual(['/repo/wt-a', 'active']);
+
+    expect(panel.handleInput('k')).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(setStateCalls).toContainEqual(['/repo/wt-a', 'kept']);
+  });
+
+  test('d opens a ConfirmState before discarding; y confirms, n cancels', async () => {
+    const { registry, setStateCalls } = makeMutableRegistry();
+    const panel = new WorktreePanel(registry);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(panel.handleInput('d')).toBe(true);
+    const confirmText = linesText(panel.render(100, H));
+    expect(confirmText).toContain('Discard');
+    expect(setStateCalls.some(([, state]) => state === 'discard')).toBe(false);
+
+    expect(panel.handleInput('n')).toBe(true); // cancel
+    expect(setStateCalls.some(([, state]) => state === 'discard')).toBe(false);
+
+    expect(panel.handleInput('d')).toBe(true);
+    expect(panel.handleInput('y')).toBe(true); // confirm
+    await new Promise((r) => setTimeout(r, 10));
+    expect(setStateCalls).toContainEqual(['/repo/wt-a', 'discard']);
+  });
+
+  test('c opens a ConfirmState before cleanup; confirming calls registry.cleanup', async () => {
+    const { registry, cleanupCalls } = makeMutableRegistry();
+    const panel = new WorktreePanel(registry);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(panel.handleInput('c')).toBe(true);
+    const confirmText = linesText(panel.render(100, H));
+    expect(confirmText).toContain('Clean up');
+    expect(panel.handleInput('enter')).toBe(true); // confirm via Enter
+    await new Promise((r) => setTimeout(r, 10));
+    expect(cleanupCalls).toContain('/repo/wt-a');
+  });
+
+  test('Enter on an attached row stages a jump to the session panel via handlePanelIntegrationAction', async () => {
+    const { registry } = makeMutableRegistry();
+    const panel = new WorktreePanel(registry);
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(panel.handleInput('enter')).toBe(true);
+    const opened: string[] = [];
+    const ctx = { panelManager: { open: (id: string) => opened.push(id) } } as unknown as import('../../panels/types.ts').PanelIntegrationContext;
+    expect(panel.handlePanelIntegrationAction?.('enter', ctx)).toBe(true);
+    expect(opened).toEqual(['sessions']);
+  });
 });

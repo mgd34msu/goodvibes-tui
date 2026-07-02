@@ -173,7 +173,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'W',
     category: 'monitoring',
     description: 'Orchestrator-owned git worktree lifecycle, attachments, and cleanup state',
-    factory: () => new WorktreePanel(deps.worktreeRegistry),
+    factory: () => new WorktreePanel(deps.worktreeRegistry, deps.requestRender),
   });
 
   manager.registerType({
@@ -219,7 +219,7 @@ export function registerOperationsPanels(manager: PanelManager, deps: ResolvedBu
     icon: 'X',
     category: 'monitoring',
     description: 'VM isolation posture for MCP servers and evaluation runtimes',
-    factory: () => new SandboxPanel(deps.configManager, deps.sandboxSessionRegistry),
+    factory: () => new SandboxPanel(deps.configManager, deps.sandboxSessionRegistry, deps.requestRender),
   });
 
   manager.registerType({
