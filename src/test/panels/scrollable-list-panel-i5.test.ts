@@ -22,7 +22,7 @@ class TestScrollablePanel extends ScrollableListPanel<string> {
   private _items: string[];
 
   constructor(items: string[], gutter = false) {
-    super('test', 'Test', 'T', 'monitoring');
+    super('test', 'Test', 'T', 'runtime-ops');
     this._items = items;
     this.showSelectionGutter = gutter;
   }
@@ -58,7 +58,7 @@ class TestSearchablePanel extends SearchableListPanel<string> {
   private _allItems: string[];
 
   constructor(items: string[]) {
-    super('test-s', 'TestS', 'S', 'monitoring');
+    super('test-s', 'TestS', 'S', 'runtime-ops');
     this._allItems = items;
   }
 

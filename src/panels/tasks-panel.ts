@@ -167,7 +167,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
     worktrees?: UiReadModel<UiWorktreeSnapshot>,
     opsApi?: OpsApi,
   ) {
-    super('tasks', 'Tasks', 'J', 'monitoring');
+    super('tasks', 'Tasks', '▦', 'runtime-ops');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter tasks';

@@ -135,7 +135,7 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationItem> 
     watchersReadModel?: UiReadModel<UiWatchersSnapshot>,
     deps: AutomationControlPanelDeps = {},
   ) {
-    super('automation', 'Automation', 'M', 'monitoring');
+    super('automation', 'Automation', '◨', 'automation-control');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter';

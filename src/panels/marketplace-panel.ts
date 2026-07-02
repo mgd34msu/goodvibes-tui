@@ -65,7 +65,7 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
     private readonly readModel?: UiReadModel<UiMarketplaceSnapshot>,
     private readonly ecosystemPaths?: EcosystemCatalogPathOptions,
   ) {
-    super('marketplace', 'Marketplace', 'M', 'monitoring');
+    super('marketplace', 'Marketplace', '◩', 'automation-control');
     this.filterEnabled = true;
     this.filterLabel = 'Filter marketplace';
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;

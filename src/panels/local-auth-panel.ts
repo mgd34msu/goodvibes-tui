@@ -63,7 +63,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
   private cachedSnapshot: LocalAuthSnapshot | null = null;
 
   public constructor(authManager: LocalAuthInspectionQuery) {
-    super('local-auth', 'Local Auth', 'U', 'monitoring');
+    super('local-auth', 'Local Auth', 'U', 'security-policy');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.authManager = authManager;
   }

@@ -1,7 +1,7 @@
 import type { PanelManager } from '../panel-manager.ts';
 import { MemoryPanel } from '../memory-panel.ts';
 import { KnowledgeGraphPanel } from '../knowledge-graph-panel.ts';
-import { requireKnowledgeApi, type ResolvedBuiltinPanelDeps } from './shared.ts';
+import { requireKnowledgeApi, withUnconfiguredFallback, type ResolvedBuiltinPanelDeps } from './shared.ts';
 
 export function registerKnowledgePanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   manager.registerType({
@@ -12,7 +12,11 @@ export function registerKnowledgePanels(manager: PanelManager, deps: ResolvedBui
     description: 'Live SDK knowledge graph: nodes, sources, issue review queue, and search',
     factory: () => new KnowledgeGraphPanel(requireKnowledgeApi(deps), () => manager.open('memory')),
   });
-  if (deps.memoryRegistry) {
+  // WO-152: always registered (was gated behind `if (deps.memoryRegistry)`,
+  // so `/panel open memory` reported "Unknown panel" on builds without a
+  // memory registry wired). Falls back to a "dependency not configured"
+  // empty state.
+  {
     const { memoryRegistry } = deps;
     manager.registerType({
       id: 'memory',
@@ -20,7 +24,13 @@ export function registerKnowledgePanels(manager: PanelManager, deps: ResolvedBui
       icon: 'M',
       category: 'agent',
       description: 'Project memory: decisions, constraints, incidents, and patterns with provenance links',
-      factory: () => new MemoryPanel(memoryRegistry),
+      factory: withUnconfiguredFallback(
+        memoryRegistry !== undefined,
+        'memory', 'Memory', 'M', 'agent',
+        ' Memory registry not configured for this session.',
+        'This runtime was not wired with a project memory registry at bootstrap, so no memory data is available.',
+        () => new MemoryPanel(memoryRegistry!),
+      ),
     });
   }
 }

@@ -72,6 +72,17 @@ export class PanelManager {
 
   registerType(registration: PanelRegistration): void {
     const existing = this.registry.findIndex(r => r.id === registration.id);
+    // WO-152: registry-time icon-uniqueness assertion. Tab-bar icons are a
+    // single glyph; two panels sharing one silently made the workspace tab
+    // strip ambiguous (the historical W/R/U/K/M/Q/Y/J/P collisions). Compare
+    // against every OTHER registration (excluding a re-registration of the
+    // same id, which is a legitimate update, e.g. tests replacing a factory).
+    const iconOwner = this.registry.find(r => r.id !== registration.id && r.icon === registration.icon);
+    if (iconOwner) {
+      throw new Error(
+        `Panel icon '${registration.icon}' for '${registration.id}' collides with already-registered panel '${iconOwner.id}'. Panel icons must be unique across the registry.`,
+      );
+    }
     if (existing >= 0) {
       this.registry[existing] = registration;
     } else {
@@ -643,7 +654,7 @@ export class PanelManager {
   }
 
   private _shouldRetain(panelId: string): boolean {
-    return this._getRegistration(panelId)?.preload === true;
+    return this._getRegistration(panelId)?.retainOnClose === true;
   }
 
   private _activateByIdInPane(panelId: string, which: 'top' | 'bottom'): void {

@@ -73,7 +73,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
   private _verifyResult: { name: string; valid: boolean; fingerprint?: string | undefined; reason?: string | undefined } | null = null;
 
   public constructor(manager: PluginManagerControls) {
-    super('plugins', 'Plugins', 'P', 'monitoring');
+    super('plugins', 'Plugins', '◐', 'automation-control');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter plugins';

@@ -77,7 +77,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
   private _bundleCache: { readonly id: string; readonly bundle: ForensicsBundle | undefined } | null = null;
 
   public constructor(registry?: ForensicsRegistry) {
-    super('incident', 'Incident Review', 'N', 'monitoring');
+    super('incident', 'Incident Review', '◪', 'incidents-diagnostics');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter incidents';

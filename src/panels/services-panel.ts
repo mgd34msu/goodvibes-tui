@@ -80,7 +80,7 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
     registry: ServiceInspectionQuery,
     subscriptionManager: SubscriptionAccessQuery,
   ) {
-    super('services', 'Services', 'V', 'monitoring');
+    super('services', 'Services', 'V', 'providers');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter services';

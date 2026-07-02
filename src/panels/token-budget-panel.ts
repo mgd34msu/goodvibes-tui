@@ -136,7 +136,7 @@ export class TokenBudgetPanel extends BasePanel {
     requestRender: () => void = () => {},
     turnEvents?: UiEventFeed<TurnEvent>,
   ) {
-    super('tokens', 'Tokens', 'T', 'monitoring');
+    super('tokens', 'Tokens', '▢', 'providers');
     this.sessionMemoryStore = sessionMemoryStore;
     this.configManager = configManager;
     this.requestRender = requestRender;

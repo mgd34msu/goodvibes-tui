@@ -106,23 +106,30 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
   manager.registerType({
     id: 'system-messages',
     name: 'System Messages',
-    icon: 'J',
-    category: 'monitoring',
+    // WO-152: was 'J' (collided with intelligence + tasks).
+    icon: '▥',
+    category: 'runtime-ops',
     description: 'Operational system messages routed away from the main conversation (scans, discovery, plugin events, tool status)',
     preload: true,
+    retainOnClose: true,
     factory: () => deps.systemMessagesPanel,
   });
 
   manager.registerType({
     id: 'tokens',
     name: 'Tokens',
-    icon: 'K',
-    category: 'monitoring',
+    // WO-152: registry previously said 'K' while the live panel's own
+    // super() call used 'T' — a pre-existing registry/instance mismatch as
+    // well as a collision ('K' with knowledge/skills, 'T' with thinking).
+    // Unified to a single unique glyph in both places.
+    icon: '▢',
+    category: 'providers',
     description: 'Token + context console: gauge, true composition, per-turn history, inline cost, and one-key compact',
     // Preloaded (absorbed from the retired ContextVisualizerPanel) so turn
     // history and pressure accumulate in the background even before the user
     // opens the tab.
     preload: true,
+    retainOnClose: true,
     factory: () => {
       const panel = new TokenBudgetPanel(
         deps.sessionMemoryStore,

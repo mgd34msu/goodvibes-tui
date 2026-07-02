@@ -76,7 +76,7 @@ export class SandboxPanel extends BasePanel {
     sessions: SandboxSessionRegistry,
     requestRender: () => void = () => {},
   ) {
-    super('sandbox', 'Sandbox', 'X', 'monitoring');
+    super('sandbox', 'Sandbox', '▪', 'security-policy');
     this.config = config;
     this.sessions = sessions;
     this.requestRender = requestRender;

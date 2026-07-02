@@ -138,7 +138,7 @@ export class CockpitPanel extends BasePanel {
     private readonly rosterReadModel?: CockpitRosterReadModel,
     actionCallbacks?: Partial<CockpitPanelActionCallbacks>,
   ) {
-    super('cockpit', 'Cockpit', 'O', 'monitoring');
+    super('cockpit', 'Cockpit', 'O', 'runtime-ops');
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
     this.rosterUnsub = rosterReadModel ? rosterReadModel.subscribe(() => this.markDirty()) : null;
     this.actionCallbacks = {
