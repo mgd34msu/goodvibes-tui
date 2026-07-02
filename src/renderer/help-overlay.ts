@@ -10,6 +10,7 @@ import type { SlashCommand } from '../input/command-registry.ts';
 import type { KeybindingsManager } from '../input/keybindings.ts';
 import { getOverlaySurfaceMetrics } from './overlay-viewport.ts';
 import { getVisibleWindow } from './surface-layout.ts';
+import { formatHints } from './hint-grammar.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 function toModalSections(rows: readonly string[]): import('./modal-factory.ts').ModalSection[] {
@@ -40,7 +41,28 @@ export function renderHelpOverlay(
 ): Line[] {
   const kb = (action: Parameters<typeof keybindingsManager.getComboLabel>[0]) => keybindingsManager.getComboLabel(action);
 
-  const hasCommand = (name: string): boolean => Boolean(commands?.some((command) => command.name === name || (command.aliases ?? []).includes(name)));
+  const hasCommand = (name: string): boolean => {
+    if (!commands) return false;
+    for (const command of commands) {
+      // A broken plugin may expose a throwing `aliases` getter; skip it rather
+      // than crash the overlay (mirrors the Quick Start traversal guard below).
+      try {
+        if (command.name === name || (command.aliases ?? []).includes(name)) return true;
+      } catch { /* skip this command */ }
+    }
+    return false;
+  };
+
+  const shortcutLine = (label: string, desc: string): string => `  ${label.padEnd(20)}  ${desc}`;
+
+  // Enumerate EVERY workspace/panel binding straight from the live keybindings
+  // table so each rebindable action (including user overrides) is discoverable
+  // here and stays in lockstep with /keybindings. Any action id prefixed
+  // `panel-` is a workspace affordance.
+  const panelBindingRows: string[] = keybindingsManager
+    .getAll()
+    .filter((entry) => entry.action.startsWith('panel-'))
+    .map((entry) => shortcutLine(keybindingsManager.getComboLabel(entry.action), entry.description));
 
   // Keyboard shortcut sections
   const shortcutRows: string[] = [
@@ -59,9 +81,20 @@ export function renderHelpOverlay(
     '',
     '  Overlays And Panels',
     '  ' + '\u2500'.repeat(40),
-    `  ${'?'.padEnd(20)}  Toggle help`,
-    `  ${'/shortcuts'.padEnd(20)}  Full keyboard shortcuts`,
-    `  ${kb('panel-picker').padEnd(20)}  Open or focus the panel workspace`,
+    shortcutLine('?', 'Toggle help'),
+    shortcutLine('/shortcuts', 'Full keyboard shortcuts'),
+    shortcutLine('Tab', 'Swap focus between input and workspace'),
+    ...panelBindingRows,
+    '',
+    // The shared in-panel contract every workspace panel honors. These are not
+    // rebindable global actions \u2014 they are the common controls a focused panel
+    // interprets \u2014 so they are documented here rather than pulled from getAll().
+    '  In-Panel Controls',
+    '  ' + '\u2500'.repeat(40),
+    shortcutLine('j / k', 'Move selection down / up'),
+    shortcutLine('g / G', 'Jump to top / bottom'),
+    shortcutLine('Enter / Esc', 'Activate / dismiss or leave panel'),
+    shortcutLine('/', 'Filter the list'),
     '',
   ];
 
@@ -109,7 +142,33 @@ export function renderHelpOverlay(
     }
   }
 
+  // Essentials \u2014 the handful of commands worth memorizing, listed first and
+  // filtered to what the live registry actually exposes.
+  const ESSENTIAL_COMMANDS: Array<[name: string, desc: string]> = [
+    ['model',       'Select provider or model'],
+    ['sessions',    'Browse and resume saved sessions'],
+    ['save',        'Save the current session'],
+    ['compact',     'Compact the conversation history'],
+    ['clear',       'Clear the conversation'],
+    ['keybindings', 'List and customize key bindings'],
+    ['panel',       'Open, focus, or manage panels'],
+  ];
+
   const commandRows: string[] = [];
+  // Track command names already surfaced in a curated group so the exhaustive
+  // list below does not repeat them.
+  const seen = new Set<string>();
+
+  const essentialRows: string[] = [];
+  for (const [name, desc] of ESSENTIAL_COMMANDS) {
+    if (!hasCommand(name)) continue;
+    seen.add(name);
+    essentialRows.push(`  ${`/${name}`.padEnd(18)}  ${desc}`);
+  }
+  if (essentialRows.length > 0) {
+    commandRows.push('  Essentials', '  ' + '\u2500'.repeat(40), ...essentialRows, '');
+  }
+
   if (quickStartRows.length > 0) {
     commandRows.push('  Quick Start', '  ' + '\u2500'.repeat(40), ...quickStartRows, '');
   }
@@ -117,18 +176,18 @@ export function renderHelpOverlay(
   if (commands && commands.length > 0) {
     commandRows.push('', '  Available Slash Commands', '  ' + '\u2500'.repeat(40));
     const preferred = ['setup', 'cockpit', 'settings', 'provider', 'subscription', 'marketplace', 'remote', 'sandbox', 'security', 'policy', 'incident', 'knowledge', 'hooks', 'orchestration', 'communication', 'tasks'];
-    const seen = new Set<string>();
     for (const name of preferred) {
       const cmd = commands.find((entry) => entry.name === name);
-      if (!cmd) continue;
+      if (!cmd || seen.has(cmd.name)) continue;
       seen.add(cmd.name);
       const nameCol = `/${cmd.name}`.padEnd(18);
       commandRows.push(`  ${nameCol}  ${cmd.description}`);
     }
+    // No command cap: the overlay windows and scrolls (getVisibleWindow below),
+    // so the full remaining registry is listed rather than truncated at 24.
     const remainder = [...commands]
       .filter((cmd) => !seen.has(cmd.name))
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, 24);
+      .sort((a, b) => a.name.localeCompare(b.name));
     if (remainder.length > 0) {
       commandRows.push('', '  More Commands', '  ' + '\u2500'.repeat(40));
       for (const cmd of remainder) {
@@ -163,15 +222,19 @@ export function renderHelpOverlay(
       width: metrics.boxWidth,
       margin: metrics.margin,
       targetContentRows: metrics.contentRows,
-      tabs: [
-        { label: 'Overview', active: true },
-        { label: 'Commands' },
-      ],
+      // Single tab: the old second 'Commands' tab had no switch handler (Left/
+      // Right did nothing), so it was a dead affordance. The overlay is one
+      // scrolling surface, so it advertises exactly one tab.
+      tabs: [{ label: 'Overview', active: true }],
       sections: toModalSections(visibleRows),
       helpers: allRows.length > maxVisible
         ? [{ content: `[${window.start + 1}-${Math.min(allRows.length, clampedOffset + visibleRows.length)} of ${allRows.length}]` }]
         : undefined,
-      hints: ['? or Esc Close', 'Up/Down Scroll'],
+      hints: [formatHints([
+        { key: 'Up/Down', verb: 'Scroll' },
+        { key: '?', verb: 'Help' },
+        { key: 'Esc', verb: 'Close' },
+      ])],
     },
     width,
   );
@@ -236,6 +299,16 @@ export function renderShortcutsOverlay(
     row(kb('panel-picker'), 'Open / focus / hide panel workspace'),
     row(kb('panel-tab-next'), 'Next workspace panel tab'),
     row(kb('panel-tab-prev'), 'Previous workspace panel tab'),
+    row(`${kb('panel-tab-1')}\u2026${kb('panel-tab-9')}`, 'Jump to workspace tab 1-9'),
+    row(kb('panel-focus-toggle'), 'Swap focus between top / bottom pane'),
+    row(kb('panel-close'), 'Close active panel'),
+    row(kb('panel-close-all'), 'Close all panels'),
+    '',
+    '  In-Panel Controls',
+    '  ' + '\u2500'.repeat(40),
+    row('j / k', 'Move selection down / up'),
+    row('g / G', 'Jump to top / bottom'),
+    row('/', 'Filter the list'),
     '',
     `  Config: /keybindings to list and customize`,
   ];
@@ -261,7 +334,10 @@ export function renderShortcutsOverlay(
       helpers: allRows.length > maxVisible
         ? [{ content: `[${window.start + 1}-${Math.min(allRows.length, clampedOffset + visibleRows.length)} of ${allRows.length}]` }]
         : undefined,
-      hints: ['Esc Close', 'Up/Down Scroll'],
+      hints: [formatHints([
+        { key: 'Up/Down', verb: 'Scroll' },
+        { key: 'Esc', verb: 'Close' },
+      ])],
     },
     width,
   );

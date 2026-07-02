@@ -78,8 +78,13 @@ describe('handlePanelFocusToken', () => {
     expect(state.requestRender).toHaveBeenCalled();
   });
 
-  test('Alt+digit jumps directly to the Nth workspace tab', () => {
-    let jumpedTo = -1;
+  test('Alt+digit is NOT owned by this route (delegated to the global panel-tab-N action)', () => {
+    // WO-151 promoted Alt+1..9 to real, rebindable KeyActions (panel-tab-1..9)
+    // routed by handleGlobalShortcutToken, which runs earlier in the feed loop.
+    // By the time a meta+digit token reaches this focused-panel route it has
+    // already been consumed globally, so here it must fall through (handled:false)
+    // via the ctrl/meta guard and must NOT jump tabs from this route.
+    let jumped = false;
     const state = buildState({
       panelFocused: true,
       panelManager: {
@@ -88,16 +93,16 @@ describe('handlePanelFocusToken', () => {
         getActive: () => ({ id: 'a', handleInput: () => false }),
         getActivePanel: () => ({ id: 'a' }),
         close: () => {},
-        activateWorkspaceIndex: (i: number) => { jumpedTo = i; },
+        activateWorkspaceIndex: () => { jumped = true; },
       } as unknown as PanelFocusRouteState['panelManager'],
     });
     // The tokenizer delivers the Alt modifier as `meta`.
     const result = handlePanelFocusToken(state, {
       type: 'key', name: '3', logicalName: '3', ctrl: false, shift: false, meta: true,
     } as never);
-    expect(result.handled).toBe(true);
-    expect(jumpedTo).toBe(2); // Alt+3 → index 2
-    expect(state.requestRender).toHaveBeenCalled();
+    expect(result.handled).toBe(false);
+    expect(result.panelFocused).toBe(true);
+    expect(jumped).toBe(false);
   });
 
   test('plain digit is forwarded to the panel, not treated as a tab jump', () => {
