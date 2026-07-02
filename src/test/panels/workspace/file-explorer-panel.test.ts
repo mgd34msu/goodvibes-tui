@@ -11,11 +11,12 @@ describe('workspace panel migrations', () => {
     expect(linesText(lines)).toContain('Explorer');
   });
 
-  test('FileExplorerPanel supports explicit search focus from top navigation', async () => {
+  test('FileExplorerPanel converges on the modal / filter (WO-153)', async () => {
     const panel = new FileExplorerPanel('/definitely/not/a/real/path', '/tmp/goodvibes-test');
-    panel.handleInput('up');
+    panel.handleInput('/');
     panel.handleInput('r');
     const text = linesText(panel.render(80, 20));
-    expect(text).toContain('/ r█');
+    // Pinned rendering contract: '[Filter] ' + literal '_' cursor while active.
+    expect(text).toContain('[Filter] r_');
   });
 });

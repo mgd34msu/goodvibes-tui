@@ -13,7 +13,7 @@
 import type { Line } from '../types/grid.ts';
 import type { MemoryRegistry } from '@pellux/goodvibes-sdk/platform/state';
 import type { MemoryClass, MemoryRecord, MemoryReviewState } from '@pellux/goodvibes-sdk/platform/state';
-import { ScrollableListPanel, SearchableListPanel } from './scrollable-list-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import {
@@ -24,10 +24,6 @@ import {
   extendPalette,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchCancel,
-} from './search-focus.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ---------------------------------------------------------------------------
@@ -100,10 +96,9 @@ function formatConfidence(confidence: number): string {
 // MemoryPanel
 // ---------------------------------------------------------------------------
 
-export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
+export class MemoryPanel extends ScrollableListPanel<MemoryRecord> {
   private readonly registry: MemoryRegistry;
   private filterMode: FilterMode = 'all';
-  private filterFocused = false;
   private unsubscribe?: () => void;
 
   // Confirm state (for destructive stale/contradict/delete actions)
@@ -115,6 +110,10 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   constructor(registry: MemoryRegistry) {
     super('memory', 'Memory', 'M', 'agent');
     this.registry = registry;
+    // WO-153: converged modal '/' filter — only active in 'all' mode; review
+    // mode uses r/s/c/f/d single-letter actions instead of text filtering.
+    this.filterEnabled = true;
+    this.filterLabel = 'Search';
   }
 
   // ---------------------------------------------------------------------------
@@ -123,13 +122,11 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
 
   override onActivate(): void {
     super.onActivate();
-    this.searchQuery = '';
-    this.invalidateFilter();
-    this.filterFocused = false;
+    this.filterQuery = '';
+    this.filterActive = false;
     this.confirm = null;
     this.refreshReviewRecords();
     this.unsubscribe = this.registry.subscribe(() => {
-      this.invalidateFilter();
       this.refreshReviewRecords();
       this.markDirty();
     });
@@ -145,16 +142,11 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   }
 
   // ---------------------------------------------------------------------------
-  // SearchableListPanel implementation (used in 'all' filter mode)
+  // ScrollableListPanel implementation (filter is only enabled in 'all' mode)
   // ---------------------------------------------------------------------------
 
-  protected getAllItems(): readonly MemoryRecord[] {
-    return this.registry.search({ limit: 100 });
-  }
-
-  protected matchesSearch(record: MemoryRecord, query: string): boolean {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
+  /** `q` arrives already trimmed + lower-cased from ScrollableListPanel.getVisibleItems(). */
+  protected override filterMatches(record: MemoryRecord, q: string): boolean {
     const haystack = [
       record.summary,
       record.detail ?? '',
@@ -193,9 +185,9 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
 
   protected override getEmptyStateMessage() {
     if (this.filterMode === 'review') return 'No records in the review queue.';
-    return this.searchQuery
-      ? ` No records matching "${this.searchQuery}"`
-      : ' No memory records. Use /recall add <class> <summary> to create one.';
+    // The filter-narrowed-to-empty case is handled by ScrollableListPanel's
+    // own 'No matches for "..."' message (renderList) before this is reached.
+    return ' No memory records. Use /recall add <class> <summary> to create one.';
   }
 
   protected override getEmptyStateActions() {
@@ -211,14 +203,15 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   // ---------------------------------------------------------------------------
 
   /**
-   * Override getItems() so that ScrollableListPanel infrastructure (renderList,
-   * clampSelection, navigation bounds) all operate on reviewRecords in review
-   * mode — preventing the render/action index desync where rendered list index N
-   * did not correspond to reviewRecords[N] when the two lists differ.
+   * getItems() so that ScrollableListPanel infrastructure (renderList,
+   * clampSelection, navigation bounds, and — in 'all' mode — the modal '/'
+   * filter) all operate on the right data set per mode — preventing the
+   * render/action index desync where rendered list index N did not
+   * correspond to reviewRecords[N] when the two lists differ.
    */
-  protected override getItems(): readonly MemoryRecord[] {
+  protected getItems(): readonly MemoryRecord[] {
     if (this.filterMode === 'review') return this.reviewRecords;
-    return super.getItems();
+    return this.registry.search({ limit: 100 });
   }
 
   private refreshReviewRecords(): void {
@@ -226,7 +219,7 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
     this.clampSelection();
   }
 
-  /** Count of records beyond the 100-record fetch cap in getAllItems(). */
+  /** Count of records beyond the 100-record fetch cap in getItems(). */
   private getHiddenCount(): number {
     const total = this.registry.search({}).length;
     return Math.max(0, total - 100);
@@ -236,7 +229,9 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
     const modes: FilterMode[] = ['all', 'review'];
     const next = modes[(modes.indexOf(this.filterMode) + 1) % modes.length];
     this.filterMode = next;
-    this.invalidateFilter();
+    // The modal '/' filter only applies in 'all' mode — review mode uses
+    // r/s/c/f/d single-letter actions instead of text filtering.
+    this.filterEnabled = next === 'all';
     this.refreshReviewRecords();
     this.markDirty();
   }
@@ -258,7 +253,6 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
           } catch (e) {
             this.setError(`Delete failed: ${summarizeError(e)}`);
           }
-          this.invalidateFilter();
           this.refreshReviewRecords();
           this.markDirty();
           return true;
@@ -349,39 +343,17 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       }
     }
 
-    // All-mode: search filter focus
-    if (this.filterMode === 'all') {
-      if (this.filterFocused) {
-        const items = this.getItems();
-        const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
-        if (transition === 'focus-list') {
-          this.filterFocused = false;
-          this.markDirty();
-          return true;
-        }
-        if (isPanelSearchCancel(key)) {
-          this.filterFocused = false;
-          return super.handleInput(key);
-        }
-        return super.handleInput(key);
-      }
-
-      const items = this.getItems();
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
-      if (transition === 'focus-search') {
-        this.filterFocused = true;
-        this.markDirty();
-        return true;
-      }
-
+    // All-mode: 'r' reload and 'd' delete are single-letter actions that
+    // coexist with the modal '/' filter — they only fire outside filter
+    // mode, so they remain typeable into the filter query while it's active.
+    if (this.filterMode === 'all' && !this.filterActive) {
       if (key === 'r') {
-        this.invalidateFilter();
         this.markDirty();
         return true;
       }
 
       if (key === 'd') {
-        const selected = items[this.selectedIndex];
+        const selected = this.getVisibleItems()[this.selectedIndex];
         if (!selected) return false;
         this.confirm = { subject: { id: selected.id, action: 'delete' }, label: truncateDisplay(selected.summary, 40) };
         this.markDirty();
@@ -389,12 +361,9 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
       }
     }
 
-    // In review mode, navigation keys (j/k/up/down/etc.) must bypass
-    // SearchableListPanel's printable-character interception, which would
-    // otherwise swallow single-char keys like 'j' and 'k' as search input.
-    if (this.filterMode === 'review') {
-      return ScrollableListPanel.prototype.handleInput.call(this, key);
-    }
+    // Navigation + (in 'all' mode) the modal '/' filter: delegate to
+    // ScrollableListPanel. filterEnabled is false in review mode, so '/' is
+    // inert there and single-char keys like 'j'/'k' navigate normally.
     return super.handleInput(key);
   }
 
@@ -430,13 +399,15 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
   }
 
   private renderAllMode(width: number, height: number, filterToggleLine: Line): Line[] {
-    const records = this.getItems();
+    // getVisibleItems() applies the modal '/' filter (getItems() is the
+    // unfiltered 100-cap fetch); the filter input line itself is
+    // auto-injected by renderList() below (filterEnabled=true in 'all' mode).
+    const records = this.getVisibleItems();
     const byClass = new Map<MemoryClass, number>();
     for (const record of records) {
       byClass.set(record.cls, (byClass.get(record.cls) ?? 0) + 1);
     }
 
-    const filterInputLine = this.buildFilterInputLine(width, 'Search', this.filterFocused);
     const hiddenCount = this.getHiddenCount();
 
     const summaryLines: Line[] = [
@@ -448,7 +419,6 @@ export class MemoryPanel extends SearchableListPanel<MemoryRecord> {
         { label: 'runbooks', value: String(byClass.get('runbook') ?? 0), valueColor: C.runbook },
       ], C),
       filterToggleLine,
-      filterInputLine,
       ...(hiddenCount > 0
         ? [buildPanelLine(width, [[`  +${hiddenCount} hidden (100-record cap)`, C.dim]])]
         : []),

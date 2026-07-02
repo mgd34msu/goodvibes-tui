@@ -4,7 +4,7 @@
  * Features:
  * - Arrow keys to navigate, Enter to open the selected panel
  * - Open/closed indicator (● open, ○ closed)
- * - Search/filter by typing
+ * - Press `/` to filter; typing narrows, Esc clears, action keys work outside filter mode
  * - Grouped by category
  * - `T` / `B` to place a panel in the top/bottom pane
  * - `M` to move an open panel to the other pane
@@ -34,13 +34,7 @@ import {
 } from './polish.ts';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { wrapWithHangingIndent } from '../renderer/text-layout.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchBackspace,
-  isPanelSearchCancel,
-  isPanelSearchCommit,
-  isPanelSearchPrintable,
-} from './search-focus.ts';
+import { isPanelSearchPrintable } from './search-focus.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 
 // ── Colour palette ────────────────────────────────────────────────────────────
@@ -129,7 +123,8 @@ export class PanelListPanel extends BasePanel {
   private _selectedIndex  = 0;
   private _scrollOffset   = 0;
   private _query          = '';
-  private _filterFocused  = false;
+  /** WO-153: converged modal '/' filter — mirrors ScrollableListPanel's _handleFilterKey contract. */
+  private _filterActive   = false;
   private _cachedEntries: ListEntry[] | null = null;
   private _entriesDirty   = true;
 
@@ -145,7 +140,7 @@ export class PanelListPanel extends BasePanel {
     this._selectedIndex  = 0;
     this._scrollOffset   = 0;
     this._query          = '';
-    this._filterFocused  = false;
+    this._filterActive   = false;
     this._entriesDirty   = true;
   }
 
@@ -154,33 +149,24 @@ export class PanelListPanel extends BasePanel {
     this._entriesDirty = true;
   }
 
-  public handleInput(key: string): boolean {
-    const entries = this._buildEntries();
-    const panelCount = entries.filter(e => e.kind === 'panel').length;
-
-    if (this._filterFocused) {
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this._selectedIndex, itemCount: panelCount });
-      if (transition === 'focus-list') {
-        this._filterFocused = false;
+  /**
+   * Filter-mode key handling (WO-153: converged modal '/' filter, mirrors
+   * ScrollableListPanel's private _handleFilterKey). Returns `true`/`false`
+   * when consumed/ignored in filter context, or `null` to fall through to
+   * normal navigation and single-letter action keys (T/B/M/S/w/tab).
+   */
+  private _handleFilterKey(key: string): boolean | null {
+    if (this._filterActive) {
+      if (key === 'escape') {
+        this._filterActive = false;
+        this._query = '';
         this._selectedIndex = 0;
         this._scrollOffset = 0;
         this.markDirty();
         return true;
       }
-      if (isPanelSearchBackspace(key)) {
-        if (this._query.length === 0) return true;
-        this._query = this._query.slice(0, -1);
-        this._clampSelection(entries);
-        this.markDirty();
-        return true;
-      }
-      if (isPanelSearchCancel(key)) {
-        this._filterFocused = false;
-        this.markDirty();
-        return true;
-      }
-      if (isPanelSearchCommit(key)) {
-        this._filterFocused = false;
+      if (key === 'return' || key === 'enter') {
+        this._filterActive = false; // commit; keep the query applied
         const selectedPanel = this._getSelectedPanelEntry(this._buildEntries());
         if (selectedPanel) {
           try {
@@ -192,6 +178,17 @@ export class PanelListPanel extends BasePanel {
         this.markDirty();
         return true;
       }
+      if (key === 'backspace' || key === 'delete') {
+        this._query = this._query.slice(0, -1);
+        this._clampSelection(this._buildEntries());
+        this.markDirty();
+        return true;
+      }
+      // Arrow/paging keys navigate the filtered list — fall through.
+      if (key === 'up' || key === 'down' || key === 'pageup' || key === 'pagedown' || key === 'home' || key === 'end') {
+        return null;
+      }
+      // Any printable character (including single-letter action keys like T/B) extends the query.
       if (isPanelSearchPrintable(key)) {
         this._query += key;
         this._selectedIndex = 0;
@@ -201,13 +198,37 @@ export class PanelListPanel extends BasePanel {
       }
       return false;
     }
-
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this._selectedIndex, itemCount: panelCount });
-    if (transition === 'focus-search') {
-      this._filterFocused = true;
+    if (key === '/') {
+      this._filterActive = true;
       this.markDirty();
       return true;
     }
+    return null;
+  }
+
+  /**
+   * The filter input line — pinned rendering contract shared with
+   * ScrollableListPanel.buildFilterLine: 'Filter: ' unfocused / '[Filter] '
+   * focused, literal trailing '_' cursor while active (active:false is
+   * passed to buildSearchInputLine to suppress its block-glyph cursor
+   * substitution).
+   */
+  private _buildFilterLine(width: number): Line {
+    const label = this._filterActive ? '[Filter] ' : 'Filter: ';
+    const value = this._filterActive ? `${this._query}_` : this._query;
+    return buildSearchInputLine(width, label, value, C, {
+      active: false,
+      bg: this._filterActive ? C.headerBg : C.sectionBg,
+      emptyLabel: '(/ to filter)',
+      valueColor: this._filterActive ? C.search : (this._query ? C.value : C.dim),
+    });
+  }
+
+  public handleInput(key: string): boolean {
+    const filterResult = this._handleFilterKey(key);
+    if (filterResult !== null) return filterResult;
+
+    const entries = this._buildEntries();
 
     // Navigation
     if (key === 'up' || key === 'k') {
@@ -291,39 +312,6 @@ export class PanelListPanel extends BasePanel {
       return true;
     }
 
-    // Search: backspace
-    if (isPanelSearchBackspace(key)) {
-      if (this._query.length > 0) {
-        this._query = this._query.slice(0, -1);
-        this._clampSelection(entries);
-        this.markDirty();
-        return true;
-      }
-      return false;
-    }
-
-    // Escape: clear search
-    if (isPanelSearchCancel(key)) {
-      if (this._query.length > 0) {
-        this._query = '';
-        this._clampSelection(entries);
-        this.markDirty();
-        return true;
-      }
-      return false;
-    }
-
-    // Printable character: focus the filter and append it — the class-doc
-    // promise ("Search/filter by typing") previously had no matching
-    // behavior here; typing anything but '/' while list-focused was a no-op.
-    if (isPanelSearchPrintable(key)) {
-      this._filterFocused = true;
-      this._query += key;
-      this._selectedIndex = 0;
-      this._scrollOffset = 0;
-      this.markDirty();
-      return true;
-    }
     return false;
   }
 
@@ -342,12 +330,7 @@ export class PanelListPanel extends BasePanel {
         intro,
         sections: [{
           title: 'Filter',
-          lines: [buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
-            active: this._filterFocused,
-            bg: C.headerBg,
-            emptyLabel: this._filterFocused ? '(type to filter)' : '(/ or up at top)',
-            valueColor: C.search,
-          })],
+          lines: [this._buildFilterLine(width)],
         }, {
           lines: buildEmptyState(
             width,
@@ -388,14 +371,7 @@ export class PanelListPanel extends BasePanel {
       ], C),
       buildPanelLine(width, [[` Filter owns input only when selected. Open and switch operations should land directly in focused panel state.`, C.header]]),
     ];
-    const entryLines: Line[] = [
-      buildSearchInputLine(width, 'Filter: ', `${this._query}${this._filterFocused ? '_' : ''}`, C, {
-        active: this._filterFocused,
-        bg: C.headerBg,
-        emptyLabel: this._filterFocused ? '(type to filter)' : '(/ or up at top)',
-        valueColor: C.search,
-      }),
-    ];
+    const entryLines: Line[] = [this._buildFilterLine(width)];
     const renderedBlocks: Array<{ entry: ListEntry; lines: Line[]; panelFlatIndex?: number }> = [];
     let flatPanelIndex = 0;
     for (const entry of entries) {
