@@ -200,7 +200,9 @@ describe('operator surfaces gate', () => {
     expect(ids).toContain('incident');
     expect(ids).toContain('orchestration');
     expect(ids).toContain('forensics');
-    expect(ids).toContain('providers');
+    // WO-112: the 'providers' stats panel merged into the provider-health
+    // console; the retired id survives only as a PanelManager alias.
+    expect(ids).toContain('provider-health');
     expect(ids).toContain('sessions');
     expect(ids).toContain('ops');
   });
