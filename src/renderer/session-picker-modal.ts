@@ -55,10 +55,12 @@ export function renderSessionPickerModal(
       style: { fg: '240', dim: true },
     });
   } else {
-    // Column widths: name(24) | timestamp(16) | messages(remaining)
-    const nameW = 24;
-    const tsW = 16;
-    const msgW = Math.max(4, contentW - nameW - tsW - 4); // 4 = separators/spaces
+    // Proportional column widths that adapt to the modal's content width:
+    // timestamp ~22% (clamped 10..16), messages ~12% (clamped 4..8), and the
+    // name column absorbs the remainder so the row always fills contentW.
+    const tsW = Math.min(16, Math.max(10, Math.floor(contentW * 0.22)));
+    const msgW = Math.min(8, Math.max(4, Math.floor(contentW * 0.12)));
+    const nameW = Math.max(8, contentW - tsW - msgW - 4); // 4 = separators/spaces
 
     // Column header
     const nameHdr = fitDisplay('Name', nameW);
