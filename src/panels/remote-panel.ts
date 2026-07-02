@@ -78,7 +78,7 @@ export class RemotePanel extends BasePanel {
   private pendingCommand: { name: string; args: string[] } | null = null;
 
   public constructor(readModel?: UiReadModel<UiRemoteSnapshot>) {
-    super('remote', 'Remote', 'R', 'monitoring');
+    super('remote', 'Remote', '▰', 'providers');
     this.readModel = readModel;
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
   }

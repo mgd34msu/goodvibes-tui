@@ -8,7 +8,7 @@ import { FileExplorerPanel } from '../file-explorer-panel.ts';
 import { FilePreviewPanel } from '../file-preview-panel.ts';
 import { SymbolOutlinePanel } from '../symbol-outline-panel.ts';
 import type { ResolvedBuiltinPanelDeps } from './shared.ts';
-import { requireUiServices } from './shared.ts';
+import { requireUiServices, withUnconfiguredFallback } from './shared.ts';
 
 export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
   manager.registerType({
@@ -52,21 +52,30 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
   // WO-110: 'inspector' registration moved to builtin/agent.ts (category
   // 'agent') — it now absorbs the merged agent-logs capabilities.
 
-  if (deps.getOrchestratorUsage) {
+  // WO-152: always registered (was gated behind `if (deps.getOrchestratorUsage)`,
+  // so `/panel open cost` reported "Unknown panel" on builds without usage
+  // tracking wired). Falls back to a "dependency not configured" empty state.
+  {
     const { getOrchestratorUsage, budgetThreshold } = deps;
     manager.registerType({
       id: 'cost',
       name: 'Cost',
       icon: '$',
-      category: 'monitoring',
+      category: 'providers',
       description: 'Estimated costs per session, agent, and plan with budget alerts',
-      factory: () => {
-        const ui = requireUiServices(deps);
-        return new CostTrackerPanel(ui.events.turns, ui.events.agents, getOrchestratorUsage, {
-          budgetThreshold,
-          getAgentStatus: (id) => ui.agents.agentManager.getStatus(id),
-        });
-      },
+      factory: withUnconfiguredFallback(
+        getOrchestratorUsage !== undefined,
+        'cost', 'Cost', '$', 'providers',
+        ' Cost tracking not configured for this session.',
+        'This runtime was not wired with orchestrator usage tracking at bootstrap, so no cost data is available.',
+        () => {
+          const ui = requireUiServices(deps);
+          return new CostTrackerPanel(ui.events.turns, ui.events.agents, getOrchestratorUsage!, {
+            budgetThreshold,
+            getAgentStatus: (id) => ui.agents.agentManager.getStatus(id),
+          });
+        },
+      ),
     });
   }
 
@@ -94,7 +103,11 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
   manager.registerType({
     id: 'preview',
     name: 'Preview',
-    icon: 'V',
+    // WO-152: was 'V' in the registry vs the live panel's own 'P' (base-panel
+    // super() call) — a pre-existing registry/instance icon mismatch as well
+    // as a collision (project-planning and plugins both also used 'P').
+    // Unified to a single unique glyph in both places.
+    icon: '◑',
     category: 'development',
     description: 'Syntax-highlighted file preview',
     factory: () => new FilePreviewPanel(),

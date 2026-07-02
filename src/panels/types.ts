@@ -43,7 +43,28 @@ export type NamedKey =
  */
 export type KeyName = NamedKey | (string & {});
 
-export type PanelCategory = 'development' | 'agent' | 'monitoring' | 'session' | 'ai';
+/**
+ * WO-152: the former single 'monitoring' bucket held 33 panels pre-merge —
+ * too coarse for the picker to be useful and too large for any one operator
+ * mental model. Split into named operator domains so each category holds a
+ * bounded, coherent set (no category may exceed 10 registrations):
+ *   - providers:              provider/model connectivity, cost, and token usage
+ *   - security-policy:        auth, policy governance, and isolation posture
+ *   - automation-control:     hooks, plugins, marketplace, automation jobs, worktrees
+ *   - incidents-diagnostics:  failure review, eval gates, API call debugging
+ *   - runtime-ops:            live operator consoles (cockpit, tasks, orchestration, comms)
+ * 'development' | 'agent' | 'session' | 'ai' are unchanged from before the split.
+ */
+export type PanelCategory =
+  | 'development'
+  | 'agent'
+  | 'session'
+  | 'ai'
+  | 'providers'
+  | 'security-policy'
+  | 'automation-control'
+  | 'incidents-diagnostics'
+  | 'runtime-ops';
 
 export interface Panel {
   id: string;
@@ -98,9 +119,24 @@ export interface PanelRegistration extends Pick<Panel, 'id' | 'name' | 'icon' | 
   factory: () => Panel;
   description: string;
   /**
-   * Instantiate this panel during bootstrap and retain the instance when it is
-   * closed so its background data continues to accumulate before the user
-   * actively opens the workspace.
+   * WO-152 lifecycle flags. `preload` and `retainOnClose` are independent —
+   * a panel can eagerly instantiate without being kept alive on close, or be
+   * kept alive on close without eager bootstrap instantiation. They happened
+   * to be identical for all builtin panels before this split (both driven by
+   * a single `preload: true`); that existing 10-panel retained set is
+   * preserved unchanged by giving each of those 10 registrations both flags.
+   *
+   * - `preload` — instantiate this panel during `PanelManager.prewarmRegistered()`
+   *   (called once at bootstrap) so its factory runs and it starts
+   *   accumulating background data (subscriptions, timers) before the user
+   *   ever opens the workspace. Panels without `preload` are instantiated
+   *   lazily on first `open()`.
+   * - `retainOnClose` — when this panel is closed, keep the live instance in
+   *   `PanelManager`'s retained-panel map (background subscriptions/timers
+   *   keep running) instead of calling `onDestroy()`. Reopening returns the
+   *   same instance with its accumulated state intact. Panels without
+   *   `retainOnClose` are destroyed on close and rebuilt fresh next open.
    */
   preload?: boolean;
+  retainOnClose?: boolean;
 }

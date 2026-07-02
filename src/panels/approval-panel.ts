@@ -86,7 +86,7 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
   private pendingCommand: { name: string; args: string[] } | null = null;
 
   public constructor(policyRuntimeState: Pick<PolicyRuntimeState, 'getSnapshot'>) {
-    super('approval', 'Approval', 'A', 'monitoring');
+    super('approval', 'Approval', 'A', 'security-policy');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.policyRuntimeState = policyRuntimeState;
   }

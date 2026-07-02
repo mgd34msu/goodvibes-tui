@@ -16,6 +16,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     category: 'ai',
     description: 'Stream model reasoning tokens in real-time with collapsible blocks per turn',
     preload: true,
+    retainOnClose: true,
     factory: () => new ThinkingPanel(requireUiServices(deps).events.turns),
   });
 
@@ -26,6 +27,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     category: 'ai',
     description: 'Chronological tool call inspector with expandable args/results and filtering',
     preload: true,
+    retainOnClose: true,
     factory: () => {
       const ui = requireUiServices(deps);
       return new ToolInspectorPanel(ui.events.tools, ui.events.turns);
@@ -45,6 +47,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     category: 'agent',
     description: 'Live per-agent console: timeline, tool calls, WRFC/cost badges, pause/filter/follow, and cancel',
     preload: true,
+    retainOnClose: true,
     factory: () => {
       const ui = requireUiServices(deps);
       return new AgentInspectorPanel({
@@ -69,6 +72,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     category: 'agent',
     description: 'WRFC chain view: write, review, fix, and confirm cycle status',
     preload: true,
+    retainOnClose: true,
     factory: () => {
       const ui = requireUiServices(deps);
       return new WrfcPanel(ui.events.workflows, {
@@ -81,10 +85,12 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
   manager.registerType({
     id: 'work-plan',
     name: 'Work Plan',
-    icon: 'L',
+    // WO-152: was 'L' (collided with panel-list).
+    icon: '◧',
     category: 'agent',
     description: 'Persistent workspace checklist for multi-step work and cross-session task tracking',
     preload: true,
+    retainOnClose: true,
     factory: () => new WorkPlanPanel(deps.workPlanStore),
   });
 
@@ -95,6 +101,7 @@ export function registerAgentPanels(manager: PanelManager, deps: ResolvedBuiltin
     category: 'agent',
     description: 'Passive project planning artifacts: readiness, questions, decisions, language, task graph, and agent handoff metadata',
     preload: true,
+    retainOnClose: true,
     factory: () => new ProjectPlanningPanel({
       service: deps.projectPlanningService,
       projectId: deps.projectPlanningProjectId,

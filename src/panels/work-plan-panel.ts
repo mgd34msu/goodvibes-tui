@@ -79,7 +79,7 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
   private draftEditingItemId: string | null = null;
 
   constructor(private readonly store: WorkPlanStore) {
-    super('work-plan', 'Work Plan', 'L', 'agent');
+    super('work-plan', 'Work Plan', '◧', 'agent');
     this.showSelectionGutter = true;
   }
 

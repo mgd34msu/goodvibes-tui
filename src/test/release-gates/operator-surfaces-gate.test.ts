@@ -210,6 +210,38 @@ describe('operator surfaces gate', () => {
     expect(ids).toContain('ops');
   });
 
+  test('WO-152: cost/memory/incident/eval are always registered and open to a "not configured" state without their optional dependency', () => {
+    const manager = new PanelManager();
+    const uiServices = createUiRuntimeServices(runtimeServices);
+    // Deliberately omit forensicsRegistry, memoryRegistry, evalRegistry, and
+    // getOrchestratorUsage — the exact conditions that used to skip
+    // registration entirely and make `/panel open <id>` report "Unknown panel".
+    registerBuiltinPanels(manager, {
+      providerRegistry: runtimeServices.providerRegistry,
+      uiServices,
+      policyRuntimeState,
+      tokenAuditor: runtimeServices.tokenAuditor,
+      componentHealthMonitor: runtimeServices.componentHealthMonitor,
+      worktreeRegistry: runtimeServices.worktreeRegistry,
+      sandboxSessionRegistry: runtimeServices.sandboxSessionRegistry,
+      systemMessagesPanel: new SystemMessagesPanel(runtimeServices.configManager, runtimeServices.componentHealthMonitor),
+    });
+    const ids = manager.getRegisteredTypes().map((entry) => entry.id);
+    expect(ids).toContain('cost');
+    expect(ids).toContain('memory');
+    expect(ids).toContain('incident');
+    expect(ids).toContain('eval');
+
+    for (const id of ['cost', 'memory', 'incident', 'eval']) {
+      // Must not throw "Unknown panel" — the registration always exists now.
+      const panel = manager.open(id);
+      expect(panel.id).toBe(id);
+      const text = panel.render(80, 24).map((line) => line.map((c) => c.char ?? ' ').join('')).join('\n');
+      expect(text.toLowerCase()).toContain('not configured');
+      manager.close(id);
+    }
+  });
+
   test('command registry exposes the provider, policy, and session control surfaces', () => {
     const registry = new CommandRegistry();
     registerBuiltinCommands(registry);

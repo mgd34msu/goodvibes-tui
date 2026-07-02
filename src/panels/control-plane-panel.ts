@@ -89,7 +89,7 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneItem> {
     readModel?: UiReadModel<UiControlPlaneSnapshot>,
     deps: ControlPlanePanelDeps = {},
   ) {
-    super('control-plane', 'Control Plane', 'C', 'monitoring');
+    super('control-plane', 'Control Plane', 'C', 'runtime-ops');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter approvals';

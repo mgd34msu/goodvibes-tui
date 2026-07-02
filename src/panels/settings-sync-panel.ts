@@ -53,7 +53,7 @@ export class SettingsSyncPanel extends ScrollableListPanel<ResolvedEntry> {
   private _pendingManagedReview = false;
 
   public constructor(private readonly configManager: ConfigManager) {
-    super('settings-sync', 'Settings Sync', 'S', 'monitoring');
+    super('settings-sync', 'Settings Sync', '▱', 'security-policy');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter settings';
