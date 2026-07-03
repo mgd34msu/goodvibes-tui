@@ -4,6 +4,38 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.0.0] — 2026-07-03
+
+### Changes
+- d26fc23f ci: drop temporary renderer-excellence branch trigger after merge
+- 532c900b integrate renderer-excellence: renderer performance and correctness effort (v1.0.0 scope)
+- cdf5931d fix(input): normalize CR line endings from bracketed pastes
+- 1318959f chore(perf): re-capture baseline reference medians on a quiet box
+- 946a2c83 integrate WO-210 into renderer-excellence
+- 209ade5f perf(budgets): ratchet transcript.append_one 20ms->6ms; streaming tail proven non-material (WO-210)
+- c7e445c2 integrate WO-209 into renderer-excellence
+- df4d8d03 integrate WO-208 into renderer-excellence
+- f5476715 perf(conversation): per-message Line[] cache — append-one 45ms→0.9ms (WO-209)
+- 76539cd8 perf(renderer): WO-208 coalesce main.ts render() fan-out into one same-tick composite
+- 204342c4 refactor(renderer): delete the six dead exports parked during the R2 literal-ownership split
+- 9c1dbdae integrate WO-207 into renderer-excellence
+- ae660b2a integrate WO-206 into renderer-excellence
+- 6acd74f6 integrate WO-205 into renderer-excellence
+- c6eb004c feat(architecture): WO-206 no-unused-exports rule for src/renderer
+- 8997719b feat(renderer): WO-207 — palette unification across the renderer layer
+- 3ec18bb1 refactor(renderer): WO-205 dedup + dead code + honest picker
+- 43eb8165 ci: run full CI on renderer-excellence pushes for the v1.0.0 effort
+- 6e483f55 fix(renderer): diff panel keeps its shipped colors — the panels are the reference, not diff-view
+- 50755108 integrate WO-204 into renderer-excellence
+- 17425f6a integrate WO-203 into renderer-excellence
+- 68bc13c3 fix(renderer): WO-203 verified correctness fixes
+- 721f4d91 feat(renderer): WO-204 — restore conversation diff rendering, align diff surface colors
+- c5aff410 integrate WO-202 into renderer-excellence
+- 0f03a124 integrate WO-201 into renderer-excellence
+- e5ba2978 test(renderer): WO-201 golden contract expansion — splash, transcript scenes, all overlays
+- 210d5814 perf(scripts): WO-202 line-production benchmarks above the compositor
+- bf6459af fix(tests): skills delete test polls the rescanned state, not just file removal
+
 ## [0.29.0] — 2026-07-03
 
 ### Changes
