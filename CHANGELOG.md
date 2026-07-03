@@ -4,6 +4,30 @@ All notable changes to GoodVibes TUI.
 
 ---
 
+## [1.1.0] — 2026-07-03
+
+### Changes
+- e3d20840 chore(artifacts): regenerate foundation artifacts against SDK 0.36.0
+- 2dab222b integrate wave0: trust repairs (v1.1.0 scope)
+- d3116e0a chore(deps): bump @pellux/goodvibes-sdk to 0.36.0 (Wave-0 trust repairs)
+- 08caa3a3 test(tools): pin the SDK 0.36 tail-preserving truncation contract
+- e1e124b7 chore: trim stall-gate comment to keep main.ts under the 800-line cap
+- 57a9c5bd fix(stream): suppress stall indicator false-positive during tool execution
+- 96225275 fix(test-runner): fence git discovery at the per-file temp root
+- efbfc8de chore(wave0): trim main.ts/git-panel.ts back to the 800-line cap after wave merges
+- e7d166e4 integrate WO-315 (W0.10 cost-truth unpriced markers) into wave0
+- 83d77e50 integrate WO-314 (W0.9 per-agent stats + footer usage hydration) into wave0
+- 5801ced8 integrate WO-313 (W0.7 stream stall honesty, TUI half) into wave0
+- 5abfed54 integrate WO-312 (W0.4/5/6/11/12 diff+slash+ctrlc cluster) into wave0
+- 40fdee43 integrate WO-311 (W0.8 panel focus/burst/indicator) into wave0
+- 8e61b248 fix(wo312): Wave 0 TUI trust-repair cluster (W0.4/W0.5/W0.6/W0.11/W0.12)
+- 210b4b80 fix(W0.9): honest per-agent usage display + footer token hydration after resume
+- b791dbd2 fix(cost): catalog-backed pricing with honest unpriced state (WO-315/W0.10)
+- 1af7105e fix(input,renderer): panel entry points reachable + burst guard + focus indicator (W0.8)
+- 000250a1 fix(streaming): honest stall indicator + mid-stream watchdog re-arm (W0.7)
+- 74141d53 feat(dev): local SDK overlay for rapid iteration, with release-blocking gates
+- 69c282a1 docs: reconcile documentation with the shipped 0.29.0 and 1.0.0 releases
+
 ## [1.0.0] — 2026-07-03
 
 The renderer milestone: the full rendering pipeline measured, cached, gated, and visually pinned — plus a fix for a long-shipped multi-line paste defect. 1.0.0 marks the stability posture promised since early development: semver, with incompatible changes landing only in major releases.
