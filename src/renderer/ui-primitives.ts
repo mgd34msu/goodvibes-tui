@@ -121,6 +121,12 @@ export const UI_TONES = {
  * on all three surfaces already converge on UI_TONES.state.good/bad).
  */
 export const DIFF_TONES = {
+  // add/del carry diff-panel.ts's shipped colors: the diff panel is the only
+  // diff surface users have ever seen (diff-view.ts was unwired from v0.9.6
+  // until WO-204), so its look is the reference — the conversation surface
+  // adopts it, never the other way around.
+  add: '#00ff88',
+  del: '#ff4444',
   hunk: '#88aaff',
 } as const;
 

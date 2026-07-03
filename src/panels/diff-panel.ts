@@ -37,13 +37,13 @@ const HUNK_BLUE: string = DIFF_TONES.hunk;
 // foreground tones rather than dedicated gray hex literals.
 const CONTEXT_GRAY = UI_TONES.fg.muted;
 const FILENAME_WHITE = '#ffffff';
-// Add/del text colors are UI_TONES.state.good/bad (WO-204) — converged with
-// diff-view.ts (conversation) and git-panel.ts's inline diff, which already
-// matched these tokens byte-for-byte; this file's prior brighter-green and
-// brighter-red literals moved to match the other two surfaces.
-const ADD_GREEN: string = UI_TONES.state.good;
+// Add/del text colors are the shared DIFF_TONES tokens, whose values ARE this
+// panel's shipped colors — this panel is the reference diff look (diff-view
+// was unwired dead code until WO-204, so "majority of surfaces" was a mirage);
+// the conversation surface converges onto these, not the reverse.
+const ADD_GREEN: string = DIFF_TONES.add;
 const ADD_BG = '#001a0d';
-const DEL_RED: string = UI_TONES.state.bad;
+const DEL_RED: string = DIFF_TONES.del;
 const DEL_BG = '#1a0000';
 const HUNK_BG = '#0a0a1a';
 const MARKER_GRAY = '#aaaaaa';
