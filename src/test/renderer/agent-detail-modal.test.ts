@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { AgentDetailModal, renderAgentDetailModal } from '../../renderer/agent-detail-modal.ts';
+import { AgentDetailModal, renderAgentDetailModal, formatStalledLabel } from '../../renderer/agent-detail-modal.ts';
+import { AGENT_STALL_THRESHOLD_MS } from '../../panels/agent-inspector-shared.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
 import { linesToText } from '../setup.ts';
 import { getTestAgentManager, getTestAgentMessageBus, resetTestRuntimeServices } from '../helpers/runtime-services.ts';
@@ -237,5 +238,33 @@ describe('renderAgentDetailModal', () => {
     const lines = renderAgentDetailModal(modal, W);
     const text = linesToText(lines).join('\n');
     expect(text).toContain('Esc');
+  });
+
+  test('renders the stalled label using the real stall threshold', () => {
+    const id = seedAgent('Stalled task', 'running');
+    const am = getTestAgentManager();
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
+    rec.startedAt = Date.now() - AGENT_STALL_THRESHOLD_MS - 1000;
+    const modal = createAgentDetailModal();
+    modal.open(id);
+    const lines = renderAgentDetailModal(modal, W);
+    const text = linesToText(lines).join('\n');
+    expect(text).toContain('STALLED');
+    expect(text).toContain(formatStalledLabel(AGENT_STALL_THRESHOLD_MS).trim());
+  });
+});
+
+describe('formatStalledLabel', () => {
+  // formatStalledLabel derives its minute count from the threshold argument
+  // instead of a hardcoded "5+ min" — these values prove the derivation by
+  // using thresholds that are NOT 5 minutes.
+  test('derives the minute count from the threshold instead of hardcoding it', () => {
+    expect(formatStalledLabel(2 * 60 * 1000)).toBe('  [STALLED — 2+ min no activity]');
+    expect(formatStalledLabel(12 * 60 * 1000)).toBe('  [STALLED — 12+ min no activity]');
+  });
+
+  test('floors partial minutes', () => {
+    expect(formatStalledLabel(90 * 1000)).toBe('  [STALLED — 1+ min no activity]');
   });
 });

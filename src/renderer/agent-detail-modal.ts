@@ -19,6 +19,17 @@ const AGENT_ID_DISPLAY_LENGTH = 16;
 // MODAL_TERMINAL_STATUSES and MODAL_STALL_THRESHOLD_MS are re-exported aliases
 // from agent-inspector-shared.ts (imported above alongside ConfirmState).
 
+/**
+ * formatStalledLabel — the "[STALLED — N+ min no activity]" suffix appended
+ * to the Status line for a stalled agent. The minute count is derived from
+ * the stall threshold (in ms) rather than hardcoded, so the label can never
+ * drift out of sync with the actual threshold that decided isStalled.
+ */
+export function formatStalledLabel(thresholdMs: number): string {
+  const minutes = Math.floor(thresholdMs / 60000);
+  return `  [STALLED — ${minutes}+ min no activity]`;
+}
+
 export interface AgentDetailModalDeps {
   readonly agentManager: Pick<AgentManager, 'getStatus' | 'list'>;
   readonly agentMessageBus: Pick<AgentMessageBus, 'getMessages'>;
@@ -248,7 +259,7 @@ export function renderAgentDetailModal(
   sections.push({ type: 'text', content: `Template : ${rec.template}` });
   sections.push({ type: 'text', content: `Model    : ${modelStr}` });
   const isStalled = !MODAL_TERMINAL_STATUSES.has(rec.status) && (now - rec.startedAt) >= MODAL_STALL_THRESHOLD_MS;
-  sections.push({ type: 'text', content: `Status   : ${rec.status}${isStalled ? '  [STALLED — 5+ min no activity]' : ''}` });
+  sections.push({ type: 'text', content: `Status   : ${rec.status}${isStalled ? formatStalledLabel(MODAL_STALL_THRESHOLD_MS) : ''}` });
   sections.push({ type: 'text', content: `Duration : ${formatElapsed(elapsedMs)}` });
   sections.push({ type: 'separator' });
 

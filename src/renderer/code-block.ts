@@ -362,7 +362,11 @@ export function renderCodeBlock(
           continue;
         }
         line[cx] = createStyledCell(ch, { fg: token.fg, bg: BG, bold: token.bold, italic: token.italic });
-        if (cw === 2 && cx + 1 < width) line[cx + 1] = { ...line[cx], char: '' };
+        // Bound the wide-glyph placeholder against the body's own right edge
+        // (effectiveWidth), not the full line width — otherwise a 2-column
+        // glyph landing on the last body column spills its placeholder cell
+        // into the reserved right-margin band the header/footer stop at.
+        if (cw === 2 && cx + 1 < effectiveWidth) line[cx + 1] = { ...line[cx], char: '' };
         cx += cw;
       }
     }

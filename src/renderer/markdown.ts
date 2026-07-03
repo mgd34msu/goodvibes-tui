@@ -310,7 +310,15 @@ function renderTable(rows: string[], width: number, indent: number): Line[] {
       for (const ch of text) {
         const cw = getDisplayWidth(ch);
         if (w + cw > maxW) {
-          // Truncate with ellipsis
+          // Truncate with ellipsis. If the last cell pushed is a wide-glyph
+          // placeholder (the empty second column of a 2-wide character),
+          // overwriting it in place would leave the wide glyph's first
+          // column dangling next to the ellipsis with no placeholder cell \u2014
+          // step back one more cell so the ellipsis replaces the actual
+          // glyph, not its placeholder.
+          if (cells.length > 0 && cells[cells.length - 1].char === '' && cells.length > 1) {
+            cells.pop();
+          }
           if (cells.length > 0) cells[cells.length - 1] = createStyledCell('\u2026', cells[cells.length - 1]);
           return cells;
         }
