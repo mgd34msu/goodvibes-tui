@@ -54,6 +54,7 @@ import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
 import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
+import { createRenderScheduler } from './runtime/render-scheduler.ts';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
@@ -224,7 +225,7 @@ async function main() {
     noAltScreen: cli.flags.noAltScreen,
     ansi: { CLEAR_SCREEN, ALT_SCREEN_EXIT, PASTE_DISABLE, KEYBOARD_EXT_DISABLE, MOUSE_DISABLE, CURSOR_SHOW },
     getInput: () => input,
-    render: () => render(),
+    render: () => renderScheduler.flushNow(), // resize: synchronous immediate path
     getPromptContentWidth,
     getTerminalOutputGuard: () => terminalOutputGuard,
     buildSessionContinuityHints,
@@ -433,7 +434,7 @@ async function main() {
     lastSessionId: readLastSessionPointer({ workingDirectory: workingDir, homeDirectory, surfaceRoot: 'tui' }) ?? undefined,
   };
 
-  const render = () => {
+  const renderNow = () => {
     const width = stdout.columns || 80;
     const height = stdout.rows || 24;
 
@@ -649,9 +650,11 @@ async function main() {
       panelWidth: panelComposite.panelWidth,
     });
   };
+  const renderScheduler = createRenderScheduler(renderNow); // WO-208 same-tick coalescer
+  const render = (): void => renderScheduler.schedule();
   const terminalOutputGuard = installTuiTerminalOutputGuard({ stdout, stderr: process.stderr, notify: (message) => { systemMessageRouter.low(message); render(); } });
 
-  setRenderRequest(render);
+  setRenderRequest(renderNow); // bootstrap's 16ms coalescer calls the composite directly
   orchestratorRefs.requestRender = render;
   commandContext.renderRequest = render;
   wireShellUiOpeners({
