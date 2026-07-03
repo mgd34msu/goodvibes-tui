@@ -4,24 +4,53 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { createInitialTasksState } from '@/runtime/index.ts';
+import type { OpsApi } from '@/runtime/index.ts';
 import { TasksPanel } from '../../panels/tasks-panel.ts';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import type { Line } from '../../types/grid.ts';
 import type { UiWorktreeSnapshot } from '../../runtime/ui-read-models.ts';
 import { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
-import { SecretsManager } from '../../config/secrets.ts';
-import { ServiceRegistry } from '@pellux/goodvibes-sdk/platform/config';
-import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
-import { createTestProviderRegistry } from '../helpers/test-managers.ts';
 import { createStaticUiReadModel, createTasksReadModel } from '../helpers/ui-read-models.ts';
-import { buildProviderAccountSnapshot } from '../../panels/provider-account-snapshot.ts';
 
 function linesText(lines: Line[]): string {
   return lines
     .map((line) => line.map((cell) => cell.char ?? ' ').join('').trimEnd())
     .filter(Boolean)
     .join('\n');
+}
+
+// Seam-stubbed OpsApi — records every dispatched call (mirrors the stub in
+// ops-control-panel.test.ts) so tests can assert TasksPanel drives the real
+// cancel interface rather than mutating local state.
+interface RecordedOpsCall {
+  readonly method: string;
+  readonly args: readonly unknown[];
+}
+
+function makeStubOpsApi(): OpsApi & { readonly calls: RecordedOpsCall[] } {
+  const calls: RecordedOpsCall[] = [];
+  const notImplemented = () => { throw new Error('not implemented in stub'); };
+  return {
+    calls,
+    tasks: {
+      snapshot: () => ({ tasks: [] }),
+      list: () => [],
+      get: () => null,
+      running: () => [],
+      create: notImplemented,
+      update: notImplemented,
+      complete: notImplemented,
+      fail: notImplemented,
+      cancel: (taskId: string, note?: string) => { calls.push({ method: 'tasks.cancel', args: [taskId, note] }); },
+      pause: notImplemented,
+      resume: notImplemented,
+      retry: notImplemented,
+    },
+    agents: {
+      cancel: notImplemented,
+    },
+  } as unknown as OpsApi & { readonly calls: RecordedOpsCall[] };
 }
 
 describe('TasksPanel', () => {
@@ -67,7 +96,7 @@ describe('TasksPanel', () => {
         kind: 'agent',
         state: 'paused',
         ownerId: 'agent-running',
-        taskId: 'running-1',
+        taskId: 'queued-1',
         sessionId: 'sess-1',
         updatedAt: now,
       }],
@@ -87,8 +116,9 @@ describe('TasksPanel', () => {
             status: 'queued',
             owner: 'shell',
             cancellable: true,
-            childTaskIds: [],
+            childTaskIds: ['blocked-1'],
             queuedAt: now - 5_000,
+            correlationId: 'corr-1',
           }],
           ['running-1', {
             id: 'running-1',
@@ -97,10 +127,9 @@ describe('TasksPanel', () => {
             status: 'running',
             owner: 'agent-orchestrator',
             cancellable: true,
-            childTaskIds: ['blocked-1'],
+            childTaskIds: [],
             queuedAt: now - 20_000,
             startedAt: now - 15_000,
-            correlationId: 'corr-1',
           }],
           ['blocked-1', {
             id: 'blocked-1',
@@ -163,22 +192,182 @@ describe('TasksPanel', () => {
     expect(initial).toContain('completed 1');
     expect(initial).toContain('/teamwork review');
     expect(initial).toContain('Queued task');
-    expect(initial).toContain('Status: queued');
+    // WO-131: the deep per-task field dump no longer renders inline in list
+    // mode — it moves behind an Enter-toggled detail view so the list itself
+    // keeps full viewport.
+    expect(initial).not.toContain('Status: queued');
 
+    // Enter on the selected (non-agent) task opens the detail view — this is
+    // where the deep fields (children/correlation/worktrees) now live.
+    panel.handleInput('enter');
+    const detail = linesText(panel.render(120, 24));
+    expect(detail).toContain('Status: queued');
+    expect(detail).toContain('Children: blocked-1');
+    expect(detail).toContain('Correlation:');
+    expect(detail).toContain('Worktrees:');
+    expect(detail).toContain('review worktree ownership');
+
+    // Esc collapses back to the list, which keeps the posture summary.
+    panel.handleInput('escape');
+    const backToList = linesText(panel.render(120, 24));
+    expect(backToList).toContain('Task posture');
+    expect(backToList).not.toContain('Status: queued');
+
+    // Down selects the agent-kind task — Enter does NOT open a local detail
+    // view for it (subagent detail lives in the Inspector panel); it queues
+    // an agent-jump follow-up instead.
     panel.handleInput('down');
-    const second = linesText(panel.render(120, 24));
-    expect(second).toContain('Running agent task');
-    expect(second).toContain('Owner: agent-orchestrator');
-    expect(second).toContain('Children: blocked-1');
-    expect(second).toContain('Correlation:');
-    expect(second).toContain('Worktrees:');
-    expect(second).toContain('/worktree recover task running-1');
-    expect(second).toContain('running');
+    expect(panel.consumePendingFollowUp()).toBeNull(); // nothing queued yet
+    panel.handleInput('enter');
+    expect(panel.consumePendingFollowUp()).toEqual({ kind: 'agent-jump', agentId: 'agent-orchestrator' });
+    // Re-render still shows the list, not a local detail dump for the agent task.
+    const afterAgentEnter = linesText(panel.render(120, 24));
+    expect(afterAgentEnter).not.toContain('Correlation:');
 
     panel.handleInput('end');
+    panel.handleInput('enter');
     const last = linesText(panel.render(120, 24));
     expect(last).toContain('Completed scheduler task');
     expect(last).toContain('Result:');
+  });
+
+  test('Enter on a non-agent task detail view queues the worktree-review follow-up, dispatched via ctx.executeCommand', () => {
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      tasks: {
+        ...createInitialTasksState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        tasks: new Map([
+          ['exec-1', {
+            id: 'exec-1',
+            kind: 'exec',
+            title: 'Exec task',
+            status: 'running',
+            owner: 'shell',
+            cancellable: true,
+            childTaskIds: [],
+            queuedAt: now - 5_000,
+            startedAt: now - 4_000,
+          }],
+        ]),
+        queuedIds: [],
+        runningIds: ['exec-1'],
+        totalCreated: 1,
+      },
+    }));
+    const panel = new TasksPanel(createTasksReadModel(store));
+
+    panel.handleInput('enter'); // open detail view
+    expect(panel.consumePendingFollowUp()).toBeNull(); // opening detail queues nothing
+    panel.handleInput('enter'); // second Enter, already in detail mode
+    expect(panel.consumePendingFollowUp()).toEqual({ kind: 'worktree-review', taskId: 'exec-1' });
+    // consuming clears it — a third read returns null
+    expect(panel.consumePendingFollowUp()).toBeNull();
+  });
+
+  test('c cancels a cancellable task via OpsApi.tasks.cancel behind the confirm contract', () => {
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      tasks: {
+        ...createInitialTasksState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        tasks: new Map([
+          ['cancellable-1', {
+            id: 'cancellable-1',
+            kind: 'exec',
+            title: 'Cancellable task',
+            status: 'running',
+            owner: 'shell',
+            cancellable: true,
+            childTaskIds: [],
+            queuedAt: now - 5_000,
+            startedAt: now - 4_000,
+          }],
+        ]),
+        runningIds: ['cancellable-1'],
+        totalCreated: 1,
+      },
+    }));
+    const opsApi = makeStubOpsApi();
+    const panel = new TasksPanel(createTasksReadModel(store), undefined, opsApi);
+
+    panel.handleInput('c');
+    expect(opsApi.calls).toHaveLength(0); // confirm pending, not yet dispatched
+    const confirming = linesText(panel.render(120, 20));
+    expect(confirming).toContain('Cancel');
+
+    panel.handleInput('y');
+    expect(opsApi.calls).toEqual([{ method: 'tasks.cancel', args: ['cancellable-1', undefined] }]);
+  });
+
+  test('c is a no-op for a non-cancellable task', () => {
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      tasks: {
+        ...createInitialTasksState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        tasks: new Map([
+          ['locked-1', {
+            id: 'locked-1',
+            kind: 'scheduler',
+            title: 'Non-cancellable task',
+            status: 'completed',
+            owner: 'scheduler',
+            cancellable: false,
+            childTaskIds: [],
+            queuedAt: now - 5_000,
+          }],
+        ]),
+        totalCreated: 1,
+      },
+    }));
+    const opsApi = makeStubOpsApi();
+    const panel = new TasksPanel(createTasksReadModel(store), undefined, opsApi);
+
+    const consumed = panel.handleInput('c');
+    expect(consumed).toBe(false);
+    expect(opsApi.calls).toHaveLength(0);
+  });
+
+  test('selection is preserved across onActivate (WO-131)', () => {
+    const store = createRuntimeStore();
+    const now = Date.now();
+    store.setState((state) => ({
+      ...state,
+      tasks: {
+        ...createInitialTasksState(),
+        revision: 1,
+        lastUpdatedAt: now,
+        source: 'test',
+        tasks: new Map([
+          ['t1', { id: 't1', kind: 'exec', title: 'Task one', status: 'queued', owner: 'shell', cancellable: true, childTaskIds: [], queuedAt: now - 3_000 }],
+          ['t2', { id: 't2', kind: 'exec', title: 'Task two', status: 'queued', owner: 'shell', cancellable: true, childTaskIds: [], queuedAt: now - 2_000 }],
+        ]),
+        queuedIds: ['t1', 't2'],
+        totalCreated: 2,
+      },
+    }));
+    const panel = new TasksPanel(createTasksReadModel(store));
+    panel.render(120, 20);
+    panel.handleInput('down');
+    const selectedBefore = (panel as unknown as { selectedIndex: number }).selectedIndex;
+    expect(selectedBefore).toBe(1);
+
+    panel.onActivate();
+    const selectedAfter = (panel as unknown as { selectedIndex: number }).selectedIndex;
+    expect(selectedAfter).toBe(selectedBefore);
   });
 
   test('context-aware footer reflects browse vs filter state', () => {
@@ -235,49 +424,29 @@ describe('TasksPanel', () => {
     expect(manager.getRegisteredTypes().some((entry) => entry.id === 'tasks')).toBe(true);
   });
 
-  test('provider accounts, local auth, and settings sync panels render posture-first summaries', async () => {
-    const { ProviderAccountsPanel } = await import('../../panels/provider-accounts-panel.ts');
+  test('local auth and settings sync panels render posture-first summaries', async () => {
     const { LocalAuthPanel } = await import('../../panels/local-auth-panel.ts');
     const { SettingsSyncPanel } = await import('../../panels/settings-sync-panel.ts');
-
-    const accountsPanel = new ProviderAccountsPanel({
-      providerAccounts: {
-        loadSnapshot: () => {
-          const secretsManager = new SecretsManager({ projectRoot: root, globalHome: root });
-          const subscriptionManager = new SubscriptionManager(join(root, '.goodvibes', 'tui', 'subscriptions.json'));
-          const serviceRegistry = new ServiceRegistry(join(root, '.goodvibes', 'tui', 'services.json'), {
-            secretsManager,
-            subscriptionManager,
-          });
-          return buildProviderAccountSnapshot({
-            providerModels: createTestProviderRegistry(),
-            services: serviceRegistry,
-            subscriptions: subscriptionManager,
-            environment: {
-              hasEnvironmentVariable: (name: string) => Boolean(process.env[name]),
-            },
-          });
-        },
-      },
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const accountsText = linesText(accountsPanel.render(120, 18));
-    expect(accountsText).toContain('Provider posture');
-    expect(accountsText).toContain('/accounts repair <provider>');
 
     const authText = linesText(new LocalAuthPanel(new UserAuthManager({
       bootstrapFilePath: join(root, '.goodvibes', 'tui', 'auth-users.json'),
       bootstrapCredentialPath: join(root, '.goodvibes', 'tui', 'auth-bootstrap.txt'),
     })).render(120, 18));
     expect(authText).toContain('Local auth posture');
-    expect(authText).toContain('/auth local rotate-password <user>');
+    // WO-139: p/a/d are now real in-panel keys (rotate/add/delete), not a
+    // printed "/auth local rotate-password <user>" signpost.
+    expect(authText).toContain('rotate password');
+    expect(authText).toContain('masked in-panel entry');
     // Masked-entry guidance replaced the argv-password form; the old string must never return.
     expect(authText).not.toContain('<user> <password>');
-    expect(authText).toContain('omit password for masked entry');
 
     const settingsText = linesText(new SettingsSyncPanel(createConfigManager()).render(120, 20));
     expect(settingsText).toContain('Settings posture');
-    expect(settingsText).toContain('/settings-sync conflicts');
-    expect(settingsText).toContain('/managed review');
+    // WO-124: conflict resolution and managed review are now bound to real
+    // keys (Enter / m), not printed as slash-command signposts.
+    expect(settingsText).not.toContain('/settings-sync conflicts');
+    expect(settingsText).not.toContain('/managed review');
+    expect(settingsText).toContain('resolve conflict');
+    expect(settingsText).toContain('managed review');
   });
 });

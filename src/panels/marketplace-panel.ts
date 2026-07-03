@@ -1,6 +1,8 @@
 import type { Line } from '../types/grid.ts';
+import { createEmptyLine } from '../types/grid.ts';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
@@ -12,26 +14,40 @@ import {
 } from './polish.ts';
 import {
   type EcosystemCatalogPathOptions,
+  installEcosystemCatalogEntry,
   listInstalledEcosystemEntries,
   loadEcosystemCatalog,
   reviewEcosystemCatalogEntry,
+  uninstallEcosystemCatalogEntry,
   type EcosystemCatalogEntry,
   type EcosystemEntryKind,
 } from '@/runtime/index.ts';
 import type { UiMarketplaceSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#e2e8f0',
-  headerBg: '#1f2937',
-} as const;
+// Base chrome only — title band and text tokens come straight from
+// DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
+
+type MarketplaceReview = ReturnType<typeof reviewEcosystemCatalogEntry>;
 
 type MarketplaceRow = {
   kind: EcosystemEntryKind;
   entry: EcosystemCatalogEntry;
   installed: boolean;
+  /**
+   * Computed once per refresh() (not per render()) so that render() never
+   * touches disk — see the class-level note on the render()/refresh() split.
+   */
+  review: MarketplaceReview;
 };
+
+/** What a pending install/uninstall confirm will do once the user confirms. */
+interface MarketplaceConfirmSubject {
+  readonly kind: EcosystemEntryKind;
+  readonly entryId: string;
+  readonly action: 'install' | 'uninstall';
+}
 
 function statusColor(installed: boolean): string {
   return installed ? C.good : C.dim;
@@ -40,12 +56,16 @@ function statusColor(installed: boolean): string {
 export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
   private rows: MarketplaceRow[] = [];
   private readonly unsub: (() => void) | null;
+  // I1: confirm state for install/uninstall (destructive-adjacent — mutates disk)
+  private confirm: ConfirmState<MarketplaceConfirmSubject> | null = null;
+  // Entry id whose full review detail is expanded (Enter toggles); cleared on refresh.
+  private expandedEntryId: string | null = null;
 
   public constructor(
     private readonly readModel?: UiReadModel<UiMarketplaceSnapshot>,
     private readonly ecosystemPaths?: EcosystemCatalogPathOptions,
   ) {
-    super('marketplace', 'Marketplace', 'M', 'monitoring');
+    super('marketplace', 'Marketplace', '◩', 'automation-control');
     this.filterEnabled = true;
     this.filterLabel = 'Filter marketplace';
     this.unsub = readModel ? readModel.subscribe(() => this.markDirty()) : null;
@@ -61,9 +81,17 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
     this.unsub?.();
   }
 
+  // Disk reload happens here (activate) and on explicit 'r' refresh — never
+  // inside render(), which used to reload all four catalogs every frame.
   public override onActivate(): void {
     super.onActivate();
     this.refresh();
+  }
+
+  protected override onSelect(row: MarketplaceRow): void {
+    // Enter toggles the full review-detail block for the selected entry.
+    this.expandedEntryId = this.expandedEntryId === row.entry.id ? null : row.entry.id;
+    this.markDirty();
   }
 
   // ---------------------------------------------------------------------------
@@ -101,22 +129,118 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
     ];
   }
 
+  public override handleInput(key: string): boolean {
+    if (this.lastError !== null) this.clearError();
+
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      const subject = this.confirm!.subject;
+      this.confirm = null;
+      this._applyConfirmedAction(subject);
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
+    if (!this.filterActive) {
+      if (key === 'r') {
+        this.refresh();
+        this.markDirty();
+        return true;
+      }
+
+      // selectedIndex is relative to the filtered view, so the acted-on row
+      // must come from getVisibleItems() — this.rows would desync under '/'.
+      const selectedRow = this.getSelectedItem();
+      if (key === 'i' && selectedRow && !selectedRow.installed && this.ecosystemPaths) {
+        this.confirm = {
+          subject: { kind: selectedRow.kind, entryId: selectedRow.entry.id, action: 'install' },
+          label: `${selectedRow.kind} ${selectedRow.entry.name}`,
+          verb: 'Install',
+        };
+        this.markDirty();
+        return true;
+      }
+      if (key === 'u' && selectedRow && selectedRow.installed && this.ecosystemPaths) {
+        this.confirm = {
+          subject: { kind: selectedRow.kind, entryId: selectedRow.entry.id, action: 'uninstall' },
+          label: `${selectedRow.kind} ${selectedRow.entry.name}`,
+          verb: 'Uninstall',
+        };
+        this.markDirty();
+        return true;
+      }
+
+      // Recommendations become actionable jumps: pressing the digit shown next
+      // to a recommendation row jumps the selection to (and expands) that
+      // catalog entry, rather than only printing a static suggestion.
+      if (/^[1-9]$/.test(key)) {
+        const recommendations = this.readModel?.getSnapshot()?.recommendations ?? [];
+        const recommendation = recommendations[Number(key) - 1];
+        if (recommendation) {
+          // Search the visible (possibly filtered) list: selectedIndex is
+          // visible-relative, so a this.rows index would land on the wrong row.
+          const targetIndex = this.getVisibleItems().findIndex((row) => row.kind === recommendation.kind && row.entry.id === recommendation.entry.id);
+          if (targetIndex >= 0) {
+            this.selectedIndex = targetIndex;
+            this.expandedEntryId = recommendation.entry.id;
+            this.markDirty();
+            return true;
+          }
+        }
+      }
+    }
+
+    return super.handleInput(key);
+  }
+
+  private _applyConfirmedAction(subject: MarketplaceConfirmSubject): void {
+    if (!this.ecosystemPaths) return;
+    const verb = subject.action === 'install' ? 'Install' : 'Uninstall';
+    try {
+      const result = subject.action === 'install'
+        ? installEcosystemCatalogEntry(subject.kind, subject.entryId, this.ecosystemPaths)
+        : uninstallEcosystemCatalogEntry(subject.kind, subject.entryId, this.ecosystemPaths);
+      if (!result.ok) {
+        this.setError(`${verb} failed: ${result.error}`);
+        return;
+      }
+      this.clearError();
+      this.refresh();
+    } catch (e) {
+      this.setError(`${verb} failed: ${summarizeError(e)}`);
+    }
+  }
+
   private refresh(): void {
     if (!this.ecosystemPaths) {
       this.rows = [];
       this.clampSelection();
       return;
     }
+    const ecosystemPaths = this.ecosystemPaths;
     try {
-      const installedPlugins = new Set(listInstalledEcosystemEntries('plugin', this.ecosystemPaths).map((receipt) => receipt.entry.id));
-      const installedSkills = new Set(listInstalledEcosystemEntries('skill', this.ecosystemPaths).map((receipt) => receipt.entry.id));
-      const installedHookPacks = new Set(listInstalledEcosystemEntries('hook-pack', this.ecosystemPaths).map((receipt) => receipt.entry.id));
-      const installedPolicyPacks = new Set(listInstalledEcosystemEntries('policy-pack', this.ecosystemPaths).map((receipt) => receipt.entry.id));
+      const installedPlugins = new Set(listInstalledEcosystemEntries('plugin', ecosystemPaths).map((receipt) => receipt.entry.id));
+      const installedSkills = new Set(listInstalledEcosystemEntries('skill', ecosystemPaths).map((receipt) => receipt.entry.id));
+      const installedHookPacks = new Set(listInstalledEcosystemEntries('hook-pack', ecosystemPaths).map((receipt) => receipt.entry.id));
+      const installedPolicyPacks = new Set(listInstalledEcosystemEntries('policy-pack', ecosystemPaths).map((receipt) => receipt.entry.id));
+      const build = (kind: EcosystemEntryKind, installed: Set<string>): MarketplaceRow[] =>
+        loadEcosystemCatalog(kind, ecosystemPaths).map((entry) => ({
+          kind,
+          entry,
+          installed: installed.has(entry.id),
+          review: reviewEcosystemCatalogEntry(entry, ecosystemPaths),
+        }));
       const rows: MarketplaceRow[] = [
-        ...loadEcosystemCatalog('plugin', this.ecosystemPaths).map((entry) => ({ kind: 'plugin' as const, entry, installed: installedPlugins.has(entry.id) })),
-        ...loadEcosystemCatalog('skill', this.ecosystemPaths).map((entry) => ({ kind: 'skill' as const, entry, installed: installedSkills.has(entry.id) })),
-        ...loadEcosystemCatalog('hook-pack', this.ecosystemPaths).map((entry) => ({ kind: 'hook-pack' as const, entry, installed: installedHookPacks.has(entry.id) })),
-        ...loadEcosystemCatalog('policy-pack', this.ecosystemPaths).map((entry) => ({ kind: 'policy-pack' as const, entry, installed: installedPolicyPacks.has(entry.id) })),
+        ...build('plugin', installedPlugins),
+        ...build('skill', installedSkills),
+        ...build('hook-pack', installedHookPacks),
+        ...build('policy-pack', installedPolicyPacks),
       ];
       this.rows = rows.sort((a, b) => a.entry.name.localeCompare(b.entry.name));
       this.clampSelection();
@@ -130,7 +254,16 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
 
   public render(width: number, height: number): Line[] {
     this.clampSelection();
-    this.refresh();
+
+    if (this.confirm) {
+      const lines = buildPanelWorkspace(width, height, {
+        title: 'Marketplace Control Room',
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirm) }],
+        palette: C,
+      });
+      while (lines.length < height) lines.push(createEmptyLine(width));
+      return lines.slice(0, height);
+    }
 
     const intro = 'Curated local-first ecosystem with provenance, compatibility, rollback history, and receipt-aware lifecycle review.';
     const installedCount = this.rows.filter((row) => row.installed).length;
@@ -170,14 +303,16 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
         { label: 'hooks', value: String(this.rows.filter((row) => row.kind === 'hook-pack').length), valueColor: C.info },
         { label: 'policies', value: String(this.rows.filter((row) => row.kind === 'policy-pack').length), valueColor: C.info },
       ], C),
-      buildGuidanceLine(width, '/marketplace open', 'browse curated entries and inspect compatibility, provenance, and receipts', C),
     ];
 
+    // Recommendations become actionable jumps: each row is numbered and the
+    // matching digit key jumps the main selection straight to that entry
+    // (see handleInput) instead of only printing a static suggestion.
     const recommendationLines = recommendations.length > 0
-      ? recommendations.slice(0, 4).map((recommendation) => buildPanelLine(width, [
-          ['  ', C.label],
-          [fitDisplay(`${recommendation.kind} ${recommendation.entry.id}`, 28), C.info],
-          [truncateDisplay(` ${recommendation.title}`, Math.max(0, width - 31)), C.dim],
+      ? recommendations.slice(0, 4).map((recommendation, index) => buildPanelLine(width, [
+          [`  [${index + 1}] `, C.info],
+          [fitDisplay(`${recommendation.kind} ${recommendation.entry.id}`, 26), C.info],
+          [truncateDisplay(` ${recommendation.title}`, Math.max(0, width - 33)), C.dim],
         ]))
       : [buildPanelLine(width, [['  No contextual marketplace recommendations right now.', C.dim]])];
 
@@ -185,10 +320,12 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
       ? startupIssues.slice(0, 4).map((issue) => buildPanelLine(width, [['  ', C.label], [truncateDisplay(issue, Math.max(0, width - 2)), C.warn]]))
       : [buildPanelLine(width, [['  No startup or lifecycle issues are currently pushing marketplace repair recommendations.', C.dim]])];
 
-    const selectedRow = this.rows[this.selectedIndex];
+    const selectedRow = this.getSelectedItem();
     const selectedLines: Line[] = [];
     if (selectedRow) {
-      const review = reviewEcosystemCatalogEntry(selectedRow.entry, this.ecosystemPaths!);
+      // review is computed once in refresh() (not here) so render() never
+      // touches disk.
+      const review = selectedRow.review;
       selectedLines.push(buildPanelLine(width, [
         ['  Provenance: ', C.label],
         [truncateDisplay(selectedRow.entry.provenance ?? '(none)', Math.max(0, width - 15)), selectedRow.entry.provenance ? C.info : C.dim],
@@ -202,16 +339,46 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
         { label: 'Risk', value: review.riskLevel, valueColor: review.riskLevel === 'low' ? C.good : C.warn },
         { label: 'State', value: selectedRow.installed ? 'installed' : 'curated', valueColor: statusColor(selectedRow.installed) },
       ], C));
-      selectedLines.push(buildGuidanceLine(width, '/marketplace review <id>', 'inspect full compatibility and receipt detail for the selected entry', C));
+
+      if (this.expandedEntryId === selectedRow.entry.id) {
+        // Enter = full review detail: every field reviewEcosystemCatalogEntry
+        // returns, not just the compact compatibility/risk/state summary above.
+        selectedLines.push(buildPanelLine(width, [
+          ['  Source path: ', C.label],
+          [truncateDisplay(review.sourcePath, Math.max(0, width - 16)), review.sourceExists ? C.good : C.warn],
+        ]));
+        selectedLines.push(buildKeyValueLine(width, [
+          { label: 'Source kind', value: review.sourceKind, valueColor: C.info },
+          { label: 'Source exists', value: review.sourceExists ? 'yes' : 'no', valueColor: review.sourceExists ? C.good : C.warn },
+          { label: 'Recommended scope', value: review.recommendedScope, valueColor: C.info },
+        ], C));
+        selectedLines.push(buildPanelLine(width, [
+          ['  Runtime fit: ', C.label],
+          [review.runtimeFit.status, review.runtimeFit.status === 'supported' ? C.good : C.warn],
+          [review.runtimeFit.reasons.length > 0 ? ` (${review.runtimeFit.reasons.join('; ')})` : '', C.dim],
+        ]));
+        if (review.compatibility.reasons.length > 0) {
+          selectedLines.push(buildPanelLine(width, [
+            ['  Compatibility notes: ', C.label],
+            [truncateDisplay(review.compatibility.reasons.join('; '), Math.max(0, width - 24)), C.warn],
+          ]));
+        }
+      } else {
+        selectedLines.push(buildGuidanceLine(width, 'Enter', 'expand full compatibility, receipt, and runtime-fit detail for the selected entry', C));
+      }
     }
 
-    // Context-aware hints: filter mode vs. browse mode (install only makes sense
-    // when a curated, not-yet-installed entry is selected).
+    // Context-aware hints: filter mode vs. browse mode (install/uninstall only
+    // make sense given the selected entry's current install state).
     const hints = this.filterActive
       ? [{ keys: 'type', label: 'filter' }, { keys: 'Enter', label: 'apply' }, { keys: 'Esc', label: 'clear' }]
       : [
           { keys: 'Up/Down', label: 'move' },
-          ...(selectedRow && !selectedRow.installed ? [{ keys: '/marketplace install', label: 'add' }] : []),
+          { keys: 'Enter', label: 'detail' },
+          ...(selectedRow && !selectedRow.installed ? [{ keys: 'i', label: 'install' }] : []),
+          ...(selectedRow && selectedRow.installed ? [{ keys: 'u', label: 'uninstall' }] : []),
+          ...(recommendations.length > 0 ? [{ keys: '1-9', label: 'jump to recommendation' }] : []),
+          { keys: 'r', label: 'refresh' },
           { keys: '/', label: 'filter' },
         ];
 

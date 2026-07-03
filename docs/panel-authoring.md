@@ -35,8 +35,14 @@ Panels live in `src/panels/`. The panel manager (`src/panels/panel-manager.ts`) 
 ```
 BasePanel  (src/panels/base-panel.ts)
   └── ScrollableListPanel<T>  (src/panels/scrollable-list-panel.ts)
-        └── SearchableListPanel<T>  (src/panels/scrollable-list-panel.ts)
 ```
+
+`ScrollableListPanel<T>` has an opt-in `'/'`-to-filter affordance (`filterEnabled`,
+`filterMatches()`) that coexists with single-letter action keys — see
+[Opt-in filter](#opt-in-filter) below. There is no separate always-on-search base class;
+WO-153 converged the former `SearchableListPanel<T>` (which intercepted every printable
+keystroke as search input, with no modal on/off state) onto this same modal `'/'` filter so
+every list panel shares one filter interaction.
 
 ### `BasePanel`
 
@@ -135,22 +141,56 @@ After data changes, call `this.clampSelection()` to keep `selectedIndex` in boun
 
 ---
 
-### `SearchableListPanel<T>`
+### Opt-in filter
 
-Extends `ScrollableListPanel<T>` with inline filter support. Printable characters build a `searchQuery`; `getItems()` returns the filtered subset automatically.
-
-**Additional required abstracts:**
+Set `this.filterEnabled = true` in the constructor and override `filterMatches()` to give a
+list panel a `'/'`-to-filter affordance that coexists with single-letter action keys —
+filtering is modal: action keys work until you press `/`; while the filter is active,
+every printable character (including ones that are action keys outside filter mode) extends
+the query instead.
 
 ```ts
-protected abstract getAllItems(): readonly T[];
-protected abstract matchesSearch(item: T, query: string): boolean;
+protected filterMatches(item: T, q: string): boolean;
 ```
 
-**Do NOT override `getItems()`** — override `getAllItems()` instead. The base class implements the cache and calls `clampSelection()` after each filter pass.
+`q` arrives already trimmed and lower-cased. `getItems()` stays the **unfiltered** list — do
+not filter inside it. `getVisibleItems()` (inherited, not overridable) applies `filterMatches()`
+against `getItems()` and is what `renderList()` and navigation actually read; anywhere your own
+code previously read a filtered list (e.g. computing counts, or looking up "the selected item"
+for an action key), call `this.getVisibleItems()[this.selectedIndex]`, not `getItems()[...]`.
 
-**Cache invalidation:** Call `this.invalidateFilter()` whenever the underlying data changes.
+A filter input line is auto-rendered at the top of `renderList()`'s header for free — you do
+not need to build or pass it yourself. Set `this.filterLabel` (default `'Filter'`) for a
+domain-specific noun, e.g. `'Filter tasks'`.
 
-**Filter input line:** Call `this.buildFilterInputLine(width, label, focused)` in your header builder. Pass `focused = true` when the filter row has keyboard focus.
+**Key contract** (implemented once, in `ScrollableListPanel`, shared by every filterable panel):
+
+| State | Key | Effect |
+|-------|-----|--------|
+| inactive | `/` | Activate the filter |
+| active | printable char | Append to `filterQuery`, reset `selectedIndex` to `0` |
+| active | `backspace` / `delete` | Remove last character |
+| active | `escape` | Deactivate and clear `filterQuery` |
+| active | `return` / `enter` | Deactivate, **keep** `filterQuery` (commit) |
+| active | `up` / `down` / `pageup` / `pagedown` / `home` / `end` | Fall through to normal navigation |
+
+Single-letter action keys (`d` for delete, `r` for reload, etc.) must guard on
+`!this.filterActive` so they keep working outside filter mode but get typed into the query
+while it's active:
+
+```ts
+if (!this.filterActive && key === 'd') {
+  const item = this.getVisibleItems()[this.selectedIndex];
+  // ...
+}
+```
+
+**Pinned rendering contract:** `Filter: query` when inactive, `[Filter] query_` when active
+(literal trailing `_`, not a block-glyph cursor substitution). This is `buildFilterLine()` —
+call it directly only if you need the line somewhere other than the auto-injected header slot
+(e.g. `PanelListPanel`, `DocsPanel`, and `FileExplorerPanel` build their own equivalent because
+they don't extend `ScrollableListPanel`; see those files for the pattern to mirror in a
+non-list-panel class).
 
 ---
 
@@ -183,7 +223,7 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
 ### Step 2 — type and class declaration
 
 ```ts
-import { SearchableListPanel } from './scrollable-list-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
 
 export interface SkillRecord {
   name: string;
@@ -193,14 +233,15 @@ export interface SkillRecord {
   // ...
 }
 
-export class SkillsPanel extends SearchableListPanel<SkillRecord> {
-  private filterFocused = false;
+export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
   private cached: SkillRecord[] | null = null;
   private cacheDirty = true;
 
   constructor(options: SkillsPanelOptions) {
-    super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
+    super('skills', 'Skills', '▩', 'automation-control', options.componentHealthMonitor);
     this.showSelectionGutter = true; // non-color selection affordance
+    this.filterEnabled = true;       // opt-in modal '/' filter
+    this.filterLabel = 'Filter';
   }
 
   // ...
@@ -212,7 +253,7 @@ The four positional arguments to `super()` are `id`, `name`, `icon` (single char
 ### Step 3 — implement required abstracts
 
 ```ts
-protected getAllItems(): readonly SkillRecord[] {
+protected getItems(): readonly SkillRecord[] {
   if (this.cached === null || this.cacheDirty) {
     this.cached = discoverSkills(this.shellPaths);
     this.cacheDirty = false;
@@ -220,9 +261,8 @@ protected getAllItems(): readonly SkillRecord[] {
   return this.cached;
 }
 
-protected matchesSearch(skill: SkillRecord, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
+// q arrives already trimmed + lower-cased from getVisibleItems().
+protected override filterMatches(skill: SkillRecord, q: string): boolean {
   return [skill.name, skill.description, skill.origin]
     .join(' ').toLowerCase().includes(q);
 }
@@ -257,8 +297,8 @@ protected override getEmptyStateActions() {
 
 public override onActivate(): void {
   super.onActivate(); // sets needsRender = true
-  this.searchQuery = '';
-  this.invalidateFilter();
+  this.filterQuery = '';
+  this.filterActive = false;
   this.cacheDirty = true;
 }
 ```
@@ -270,11 +310,9 @@ public render(width: number, height: number): Line[] {
   return this.trackedRender(() => {
     this.needsRender = false;
 
-    // Filter input row (provided by SearchableListPanel)
-    const filterLine = this.buildFilterInputLine(width, 'Filter', this.filterFocused);
-
-    // Detail footer for currently selected item
-    const items = this.getItems();
+    // Detail footer for currently selected item. getVisibleItems() applies
+    // the active filter — getItems() above stays the unfiltered full list.
+    const items = this.getVisibleItems();
     const selected = items[this.selectedIndex];
     const footerLines: Line[] = [];
     if (selected) {
@@ -283,12 +321,12 @@ public render(width: number, height: number): Line[] {
       );
     }
     footerLines.push(
-      buildPanelLine(width, [['  Up/Down navigate  /  focus filter  Esc blur', C.hint]]),
+      buildPanelLine(width, [['  Up/Down navigate  / filter  Esc clear', C.hint]]),
     );
 
+    // Filter input line is auto-injected by renderList() (filterEnabled=true).
     return this.renderList(width, height, {
       title: 'Skills',
-      header: [filterLine],
       footer: footerLines,
     });
   });
@@ -301,30 +339,17 @@ public render(width: number, height: number): Line[] {
 
 ```ts
 public handleInput(key: string): boolean {
-  // Panel-specific key first
-  if (key === 'r') {
+  // Panel-specific action key — guarded so it still types into the filter
+  // query while the filter is active (WO-153: modal '/' filter coexists
+  // with single-letter action keys).
+  if (!this.filterActive && key === 'r') {
     this.cacheDirty = true;
-    this.invalidateFilter();
-    return true;
-  }
-
-  // Filter focus transitions
-  if (this.filterFocused) {
-    if (isPanelSearchCancel(key)) {
-      this.filterFocused = false;
-      return super.handleInput(key); // clears searchQuery if non-empty
-    }
-    return super.handleInput(key); // backspace / printable go to base
-  }
-
-  // Activate filter focus
-  if (key === '/') {
-    this.filterFocused = true;
     this.markDirty();
     return true;
   }
 
-  // Fallback: navigation, enter, search escape
+  // Navigation + filter: delegate to ScrollableListPanel ('/' activates the
+  // filter, typing narrows, Esc clears, up/down/g/G/page/enter navigate).
   return super.handleInput(key);
 }
 ```
@@ -399,17 +424,16 @@ buildPanelLine(width, [...pill, ['  ', C.dim], [item.name, C.value]]);
 
 Valid `state` values: `'good'` | `'warn'` | `'bad'` | `'idle'` | `'loading'`.
 
-### `buildFilterInputLine(width, label, focused)` (SearchableListPanel method)
+### `buildFilterLine(width)` (`ScrollableListPanel` method)
 
-Renders the search input row. Call from your header builder:
+Renders the filter input row from `this.filterLabel` / `this.filterActive` / `this.filterQuery`.
+`renderList()` calls this automatically and prepends it to the header when
+`this.filterEnabled = true` — you normally never call it directly. Panels that don't extend
+`ScrollableListPanel` (`PanelListPanel`, `DocsPanel`, `FileExplorerPanel`) build the equivalent
+line by hand; copy their `_buildFilterLine` private helper rather than reinventing the format.
 
-```ts
-const header = [this.buildFilterInputLine(width, 'Filter', this.filterFocused)];
-return this.renderList(width, height, { header });
-```
-
-- Focused: `[Filter] query_` — active, bracketed, cursor visible.
-- Unfocused: `Filter: query` — dim, no cursor.
+- Active: `[Filter] query_` — bracketed, literal trailing `_` cursor.
+- Inactive: `Filter: query` — dim, no cursor.
 
 ### `renderConfirmLines(width, state)` (`src/panels/confirm-state.ts`)
 
@@ -435,6 +459,17 @@ if (this.confirm) {
   return lines.slice(0, height);
 }
 ```
+
+By default the prompt reads `Delete "<label>"?`. Non-destructive confirms (cancel, regenerate,
+promote) should set `verb` to the honest action word instead of borrowing "Delete" copy:
+
+```ts
+this.confirm = { subject: agentId, label: agentName, verb: 'Cancel' };
+// renders: Cancel "agentName"?
+```
+
+`verb` is optional and defaults to `'Delete'`; the confirm/cancel keybinding contract
+(`y`/`enter`/`return` confirms, `n`/`escape` cancels, all other keys absorbed) is unchanged.
 
 ---
 
@@ -496,39 +531,90 @@ public render(width: number, height: number): Line[] {
 | `end` / `G` | Jump to last item |
 | `return` / `enter` | Call `onSelect(item)` |
 
-`SearchableListPanel.handleInput()` additionally handles:
+When `this.filterEnabled = true`, `ScrollableListPanel.handleInput()` additionally handles the
+modal filter (see [Opt-in filter](#opt-in-filter) for the full key contract):
 
-| Key | Action |
-|-----|-------|
-| printable char | Append to `searchQuery` |
-| backspace / delete | Remove last char from `searchQuery` |
-| escape | Clear `searchQuery` |
+| State | Key | Action |
+|-------|-----|-------|
+| inactive | `/` | Activate the filter |
+| active | printable char | Append to `filterQuery` |
+| active | backspace / delete | Remove last char from `filterQuery` |
+| active | escape | Deactivate and clear `filterQuery` |
+| active | return / enter | Deactivate, keep `filterQuery` |
 
-**Override pattern:** Handle panel-specific keys first, then call `super.handleInput(key)` for the rest:
+**Override pattern:** Handle panel-specific action keys first (guarded on `!this.filterActive`
+if the panel has a filter), then call `super.handleInput(key)` for the rest:
 
 ```ts
 public handleInput(key: string): boolean {
-  // Panel-specific keys FIRST
-  if (key === 'r') { this.refresh(); return true; }
-  if (key === 'd') { this.confirmDelete(); return true; }
+  // Panel-specific keys FIRST — guard on !this.filterActive if this panel
+  // has an opt-in filter, so the key still types into the query while active.
+  if (!this.filterActive && key === 'r') { this.refresh(); return true; }
+  if (!this.filterActive && key === 'd') { this.confirmDelete(); return true; }
 
-  // Base class handles navigation and search
+  // Base class handles navigation and (if filterEnabled) the modal filter.
   return super.handleInput(key);
 }
 ```
 
 **Auto-clear error contract:** `ScrollableListPanel.handleInput()` calls `this.clearError()` at the top of every invocation. If you override `handleInput()` without calling `super.handleInput()`, call `this.clearError()` manually at the top of your handler to maintain this contract.
 
-**Escape handling:** Use `isPanelSearchCancel(key)` from `src/panels/search-focus.ts` rather than comparing `key === 'escape'` directly — this ensures consistent escape semantics across panels.
+**Panels that don't extend `ScrollableListPanel`:** if you need the same modal filter contract
+in a `BasePanel` subclass, mirror the private `_handleFilterKey(key): boolean | null` helper in
+`PanelListPanel` / `DocsPanel` / `FileExplorerPanel` — it returns `true`/`false` when the key is
+consumed/ignored in filter context, or `null` to fall through to your panel's own navigation and
+action keys.
 
-```ts
-import { isPanelSearchCancel } from './search-focus.ts';
+### Action-callback plumbing pattern
 
-if (isPanelSearchCancel(key)) {
-  this.filterFocused = false;
-  return super.handleInput(key);
-}
-```
+Panels get real services (not just read-only snapshots) through `ResolvedBuiltinPanelDeps`
+(`src/panels/builtin/shared.ts`). Bootstrap wires the already-constructed runtime singletons —
+`opsApi`, `planRuntime`, `watcherRegistry`, `runtimeStore`, `approvalBroker`, `sessionBroker`,
+`automationManager`, `openAgentDetail`, `openPanel`, etc. — onto this single deps object, and
+each `registerXPanels(manager, deps)` factory forwards exactly the slice a panel needs into its
+constructor (see `CockpitPanel`'s `openAgentDetail` forwarding in
+`src/panels/builtin/operations.ts` for the established shape).
+
+**Rule: no signpost where an action is possible.** If a real service reachable from `deps` can
+perform the action, bind a key to it directly. Never render a panel line like
+`Run: /automation run <id>` when `deps.opsApi`/`deps.automationManager` (or the panel-specific
+manager method) is already available in the factory closure.
+
+Two dispatch paths cover nearly every case:
+
+1. **Direct service call** — call the bound service method straight from `handleInput()`:
+
+   ```ts
+   public handleInput(key: string): boolean {
+     if (key === 'c') { this.deps.opsApi?.cancel(this.selectedId); return true; }
+     return super.handleInput(key);
+   }
+   ```
+
+2. **`handlePanelIntegrationAction(key, ctx)`** — for cross-panel navigation or dispatching a
+   command through the shared command pipeline. Implement this optional `Panel` hook
+   (`src/panels/types.ts`); the router in `src/input/panel-integration-actions.ts` calls it
+   BEFORE its own `instanceof` fallback chain, so new panels never need an `instanceof` addition
+   there:
+
+   ```ts
+   public handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
+     if (key === 'enter') {
+       ctx.panelManager.open('agent-inspector'); // direct panel jump — never print "/panel open …"
+       return true;
+     }
+     if (key === 'r' && ctx.executeCommand) {
+       void ctx.executeCommand('automation', ['run', this.selectedJobId]);
+       return true;
+     }
+     return false;
+   }
+   ```
+
+   `ctx.executeCommand(name, args)` dispatches through the same `CommandRegistry` path the
+   prompt uses; `ctx.panelManager.open(id)` (or the equivalent `deps.openPanel(id)` callback)
+   performs a direct panel jump. Both are always preferable to printing a command string for the
+   user to retype.
 
 ---
 
@@ -586,19 +672,21 @@ const EMPTY_SOME_SERVICE = {
 | Calling `render()` directly from `handleInput()` | Never — set `this.needsRender = true` (or call `this.markDirty()`) and let the compositor schedule the render. |
 | Not wrapping expensive renders with `trackedRender` | Panels that read large data structures on every render will be throttled aggressively without health instrumentation. |
 | Subscribing to registry events in the constructor | Subscribe in `onActivate()` and unsubscribe in `onDeactivate()` to avoid zombie listeners. |
-| Overriding `getItems()` in a `SearchableListPanel` subclass | Override `getAllItems()` instead — `getItems()` is the filter cache and must not be replaced. |
+| Reading `getItems()` where you want the filtered list | `getItems()` is always the unfiltered full list. Read `getVisibleItems()` for the filtered/displayed set (used by `renderList()`, navigation, and any "selected item" lookup for an action key). |
 | Forgetting to add the panel to the contract test | All panels in `src/panels/` must have a corresponding entry in `migrated-panels-contract.test.ts`. |
+| Rendering an action as printed text (e.g. `Run: /automation run <id>`) instead of binding a key to the real service already in `deps` | Bind the key directly, or implement `handlePanelIntegrationAction` to dispatch via `ctx.executeCommand` / `ctx.panelManager.open`. See "Action-callback plumbing pattern" under Input handling. |
 
 ---
 
 ## See also
 
 - `src/panels/base-panel.ts` — `BasePanel` source with inline JSDoc for all lifecycle and render helpers.
-- `src/panels/scrollable-list-panel.ts` — `ScrollableListPanel<T>` and `SearchableListPanel<T>` source.
+- `src/panels/scrollable-list-panel.ts` — `ScrollableListPanel<T>` source, including the opt-in modal filter (`filterEnabled`, `_handleFilterKey`, `buildFilterLine`).
 - `src/panels/polish.ts` — All rendering utility functions and `PanelPalette` type definition.
-- `src/panels/skills-panel.ts` — Canonical `SearchableListPanel` implementation used throughout this guide.
-- `src/panels/memory-panel.ts` — Another clean `SearchableListPanel` example with a read-model subscription pattern.
+- `src/panels/skills-panel.ts` — Canonical `ScrollableListPanel` + opt-in filter implementation used throughout this guide.
+- `src/panels/memory-panel.ts` — A `ScrollableListPanel` example where the filter is only enabled in one of two view modes (`filterEnabled` toggled per mode).
+- `src/panels/panel-list-panel.ts`, `src/panels/docs-panel.ts`, `src/panels/file-explorer-panel.ts` — Panels that mirror the same modal filter contract without extending `ScrollableListPanel` (each has its own private `_handleFilterKey` / `_buildFilterLine`).
 - `src/panels/confirm-state.ts` — `ConfirmState`, `handleConfirmInput`, `renderConfirmLines`.
-- `src/panels/search-focus.ts` — `isPanelSearchCancel`, `isPanelSearchBackspace`, `isPanelSearchPrintable`, `getPanelSearchFocusTransition`.
+- `src/panels/search-focus.ts` — `isPanelSearchBackspace`, `isPanelSearchPrintable`, plus `isPanelSearchCancel`/`isPanelSearchCommit`/`getPanelSearchFocusTransition` (retained for panels outside the WO-153 filter convergence, e.g. `knowledge-graph-panel.ts`, `session-browser-panel.ts`, `git-panel.ts`).
 - `src/panels/builtin-panels.ts` — How built-in panels are grouped into categories and registered with the `PanelManager`.
 - `src/test/panels/migrated-panels-contract.test.ts` — Contract test suite; add a `PanelEntry` here for every new panel.

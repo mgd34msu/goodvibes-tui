@@ -2,11 +2,13 @@ import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import {
   type ServiceConfig,
   type ServiceInspection,
   type ServiceConnectionTestResult,
 } from '@pellux/goodvibes-sdk/platform/config';
+import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import type { ServiceInspectionQuery, SubscriptionAccessQuery } from '../runtime/ui-service-queries.ts';
 import {
   buildDetailBlock,
@@ -18,28 +20,21 @@ import {
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#475569',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  selectBg: '#0f172a',
-  empty: '#334155',
-} as const;
+// Base chrome only — title band, state colors, and text tokens all come
+// straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 interface ServicePanelEntry {
   readonly name: string;
-  readonly inspection: ServiceInspection;
+  // null when registry.inspect(name) resolved null (e.g. a config entry that
+  // disappeared or failed to resolve between getAll() and inspect()) — the
+  // row still renders, flagged, instead of crashing the whole refresh.
+  readonly inspection: ServiceInspection | null;
   readonly lastTest?: ServiceConnectionTestResult;
 }
 
 function statusLabel(entry: ServicePanelEntry): string {
+  if (!entry.inspection) return 'INSPECT FAILED';
   if (!entry.inspection.hasPrimaryCredential) return 'UNCONFIGURED';
   if (entry.lastTest?.ok) return 'HEALTHY';
   if (entry.lastTest && !entry.lastTest.ok) return 'ERROR';
@@ -48,8 +43,8 @@ function statusLabel(entry: ServicePanelEntry): string {
 
 function statusColor(entry: ServicePanelEntry): string {
   const label = statusLabel(entry);
-  if (label === 'HEALTHY') return C.ok;
-  if (label === 'ERROR') return C.error;
+  if (label === 'HEALTHY') return C.good;
+  if (label === 'ERROR' || label === 'INSPECT FAILED') return C.bad;
   if (label === 'CONFIGURED') return C.warn;
   return C.dim;
 }
@@ -76,12 +71,16 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
   private readonly subscriptionManager: SubscriptionAccessQuery;
   private entries: ServicePanelEntry[] = [];
   private loading = false;
+  // s = open the Subscription panel via the handleInput -> handlePanelIntegrationAction
+  // bridge (handleInput has no ctx.panelManager — same pattern used elsewhere in
+  // this wave, e.g. session-browser-panel.ts's pendingOpenPanels).
+  private pendingOpenSubscription = false;
 
   public constructor(
     registry: ServiceInspectionQuery,
     subscriptionManager: SubscriptionAccessQuery,
   ) {
-    super('services', 'Services', 'V', 'monitoring');
+    super('services', 'Services', 'V', 'providers');
     this.showSelectionGutter = true; // I5: non-color selection affordance
     this.filterEnabled = true;
     this.filterLabel = 'Filter services';
@@ -92,7 +91,7 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
 
   protected override filterMatches(entry: ServicePanelEntry, q: string): boolean {
     return entry.name.toLowerCase().includes(q)
-      || (entry.inspection.config.baseUrl ?? '').toLowerCase().includes(q);
+      || (entry.inspection?.config.baseUrl ?? '').toLowerCase().includes(q);
   }
 
   public override onActivate(): void {
@@ -107,7 +106,7 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
   protected override getEmptyStateActions() {
     return [
       { command: '/services auth-review', summary: 'inspect service auth posture and registry config' },
-      { command: '/subscription', summary: 'review provider login state and override posture' },
+      { command: 's', summary: 'open the Subscription panel — review provider login state and override posture' },
     ];
   }
 
@@ -117,12 +116,14 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
 
   protected renderItem(entry: ServicePanelEntry, index: number, selected: boolean, width: number): Line {
     const bg = selected ? C.selectBg : undefined;
+    const authText = entry.inspection ? authSummary(entry.inspection.config, this.subscriptionManager) : 'n/a';
+    const baseUrlText = entry.inspection ? (entry.inspection.config.baseUrl ?? '(no baseUrl)') : '(inspection failed)';
     return buildPanelLine(width, [
       [' ', C.label, bg],
       [entry.name.padEnd(16), C.value, bg],
       [` ${statusLabel(entry).padEnd(12)}`, statusColor(entry), bg],
-      [` ${authSummary(entry.inspection.config, this.subscriptionManager).padEnd(18)}`, C.info, bg],
-      [` ${truncateDisplay(entry.inspection.config.baseUrl ?? '(no baseUrl)', Math.max(0, width - 48))}`, C.dim, bg],
+      [` ${authText.padEnd(18)}`, C.info, bg],
+      [` ${truncateDisplay(baseUrlText, Math.max(0, width - 48))}`, C.dim, bg],
     ]);
   }
 
@@ -136,41 +137,83 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
         void this.testSelected();
         return true;
       }
+      if (key === 'T') {
+        void this.testAll();
+        return true;
+      }
+      if (key === 's') {
+        this.pendingOpenSubscription = true;
+        return true;
+      }
     }
     return super.handleInput(key);
+  }
+
+  /** Drains the 's' key's pending open request via the ctx.panelManager bridge. */
+  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingOpenSubscription) return false;
+    this.pendingOpenSubscription = false;
+    ctx.panelManager.open('subscription');
+    return true;
   }
 
   private async refresh(): Promise<void> {
     this.loading = true;
     this.markDirty();
-    const configs = this.registry.getAll();
-    const names = Object.keys(configs).sort((a, b) => a.localeCompare(b));
-    const inspections = await Promise.all(
-      names.map(async (name) => ({
-        name,
-        inspection: (await this.registry.inspect(name))!,
-      })),
-    );
-    const previousTests = new Map(this.entries.map((entry) => [entry.name, entry.lastTest] as const));
-    this.entries = inspections.map((entry) => ({
-      ...entry,
-      ...(previousTests.get(entry.name) ? { lastTest: previousTests.get(entry.name) } : {}),
-    }));
-    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.entries.length - 1));
-    this.loading = false;
-    this.markDirty();
+    try {
+      const configs = this.registry.getAll();
+      const names = Object.keys(configs).sort((a, b) => a.localeCompare(b));
+      const inspections = await Promise.all(
+        names.map(async (name) => ({
+          name,
+          inspection: await this.registry.inspect(name),
+        })),
+      );
+      const previousTests = new Map(this.entries.map((entry) => [entry.name, entry.lastTest] as const));
+      this.entries = inspections.map((entry) => ({
+        ...entry,
+        ...(previousTests.get(entry.name) ? { lastTest: previousTests.get(entry.name) } : {}),
+      }));
+      this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.entries.length - 1));
+    } catch (e) {
+      this.setError(`Refresh failed: ${summarizeError(e)}`);
+    } finally {
+      // Always clear the loading flag — a thrown getAll()/inspect() must
+      // never leave the panel stuck on the "Loading configured services..." screen.
+      this.loading = false;
+      this.markDirty();
+    }
   }
 
   private async testSelected(): Promise<void> {
-    const selected = this.entries[this.selectedIndex];
+    // selectedIndex tracks the filtered view, so the acted-on entry must come
+    // from getVisibleItems() — this.entries would desync under a '/' filter.
+    const selected = this.getSelectedItem();
     if (!selected) return;
-    const result = await this.registry.testConnection(selected.name);
-    this.entries = this.entries.map((entry) => (
-      entry.name === selected.name
-        ? { ...entry, lastTest: result }
-        : entry
-    ));
+    try {
+      const result = await this.registry.testConnection(selected.name);
+      this.entries = this.entries.map((entry) => (
+        entry.name === selected.name
+          ? { ...entry, lastTest: result }
+          : entry
+      ));
+    } catch (e) {
+      this.setError(`Test failed: ${summarizeError(e)}`);
+    }
     this.markDirty();
+  }
+
+  /** T = test every configured service's connection, one call per row (services-runtime.ts's single-service test pattern, looped). */
+  private async testAll(): Promise<void> {
+    for (const entry of this.entries) {
+      try {
+        const result = await this.registry.testConnection(entry.name);
+        this.entries = this.entries.map((e) => (e.name === entry.name ? { ...e, lastTest: result } : e));
+      } catch (e) {
+        this.setError(`Test failed for ${entry.name}: ${summarizeError(e)}`);
+      }
+      this.markDirty();
+    }
   }
 
   public render(width: number, height: number): Line[] {
@@ -200,13 +243,14 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
     const headerLines: Line[] = [
       buildKeyValueLine(width, [
         { label: 'services', value: String(this.entries.length), valueColor: this.entries.length > 0 ? C.info : C.dim },
-        { label: 'healthy', value: String(counts.healthy), valueColor: counts.healthy > 0 ? C.ok : C.dim },
-        { label: 'errors', value: String(counts.error), valueColor: counts.error > 0 ? C.error : C.dim },
+        { label: 'healthy', value: String(counts.healthy), valueColor: counts.healthy > 0 ? C.good : C.dim },
+        { label: 'errors', value: String(counts.error), valueColor: counts.error > 0 ? C.bad : C.dim },
         { label: 'unconfigured', value: String(counts.unconfigured), valueColor: counts.unconfigured > 0 ? C.warn : C.dim },
       ], C),
     ];
 
-    const selected = this.entries[this.selectedIndex];
+    // Detail must describe the row the (possibly filtered) list highlights.
+    const selected = this.getSelectedItem();
     const detailRows: Line[] = [];
     if (selected) {
       const inspect = selected.inspection;
@@ -216,22 +260,28 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
         ['  State: ', C.label],
         [statusLabel(selected), statusColor(selected)],
         ['  Auth: ', C.label],
-        [authSummary(inspect.config, this.subscriptionManager), C.info],
+        [inspect ? authSummary(inspect.config, this.subscriptionManager) : 'n/a', C.info],
       ]));
-      detailRows.push(buildPanelLine(width, [
-        ['  Base URL: ', C.label],
-        [truncateDisplay(inspect.config.baseUrl ?? '(no baseUrl)', Math.max(0, width - 13)), C.dim],
-      ]));
-      detailRows.push(buildPanelLine(width, [
-        ['  Primary credential: ', C.label],
-        ...buildStatusPill(inspect.hasPrimaryCredential ? 'good' : 'bad', inspect.hasPrimaryCredential ? 'present' : 'missing'),
-        ['  Webhook URL: ', C.label],
-        ...buildStatusPill(inspect.hasWebhookUrl ? 'good' : 'info', inspect.hasWebhookUrl ? 'present' : 'missing'),
-        ['  Signing secret: ', C.label],
-        ...buildStatusPill(inspect.hasSigningSecret ? 'good' : 'info', inspect.hasSigningSecret ? 'present' : 'missing'),
-        ['  App token: ', C.label],
-        ...buildStatusPill(inspect.hasAppToken ? 'good' : 'info', inspect.hasAppToken ? 'present' : 'missing'),
-      ]));
+      if (!inspect) {
+        detailRows.push(buildPanelLine(width, [
+          ['  Inspection failed — the registry could not resolve this service\'s config. Press r to retry.', C.bad],
+        ]));
+      } else {
+        detailRows.push(buildPanelLine(width, [
+          ['  Base URL: ', C.label],
+          [truncateDisplay(inspect.config.baseUrl ?? '(no baseUrl)', Math.max(0, width - 13)), C.dim],
+        ]));
+        detailRows.push(buildPanelLine(width, [
+          ['  Primary credential: ', C.label],
+          ...buildStatusPill(inspect.hasPrimaryCredential ? 'good' : 'bad', inspect.hasPrimaryCredential ? 'present' : 'missing'),
+          ['  Webhook URL: ', C.label],
+          ...buildStatusPill(inspect.hasWebhookUrl ? 'good' : 'info', inspect.hasWebhookUrl ? 'present' : 'missing'),
+          ['  Signing secret: ', C.label],
+          ...buildStatusPill(inspect.hasSigningSecret ? 'good' : 'info', inspect.hasSigningSecret ? 'present' : 'missing'),
+          ['  App token: ', C.label],
+          ...buildStatusPill(inspect.hasAppToken ? 'good' : 'info', inspect.hasAppToken ? 'present' : 'missing'),
+        ]));
+      }
       if (selected.lastTest) {
         detailRows.push(buildPanelLine(width, [
           ['  Last test: ', C.label],
@@ -244,7 +294,7 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
         if (selected.lastTest.error) {
           detailRows.push(buildPanelLine(width, [
             ['  Error: ', C.label],
-            [truncateDisplay(selected.lastTest.error, Math.max(0, width - 10)), C.error],
+            [truncateDisplay(selected.lastTest.error, Math.max(0, width - 10)), C.bad],
           ]));
         }
       } else {
@@ -259,8 +309,10 @@ export class ServicesPanel extends ScrollableListPanel<ServicePanelEntry> {
       : [
           { keys: 'Up/Down', label: 'move' },
           ...(selected ? [{ keys: 't', label: 'test selected' }] : []),
+          ...(this.entries.length > 0 ? [{ keys: 'T', label: 'test all' }] : []),
           { keys: 'r', label: 'refresh' },
           { keys: '/', label: 'filter' },
+          { keys: 's', label: 'subscription panel' },
         ];
 
     const footer: Line[] = selected

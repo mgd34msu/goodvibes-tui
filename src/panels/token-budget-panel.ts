@@ -3,13 +3,19 @@ import { BasePanel } from './base-panel.ts';
 import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
 import type { Orchestrator } from '../core/orchestrator';
 import { evaluateSessionMaintenance } from '@/runtime/index.ts';
+import type { TurnEvent } from '@/runtime/index.ts';
+import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
 import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
+import { calcSessionCost } from '../export/cost-utils.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import {
   buildEmptyState,
   buildGuidanceLine,
   buildKeyboardHints,
   buildMeterLine,
+  buildStatusPill,
   buildStyledPanelLine,
   buildTable,
   buildPanelWorkspace,
@@ -54,6 +60,9 @@ const WARN_RED = 0.90;
 // Maximum turns to keep in per-turn history
 const MAX_TURN_HISTORY = 10;
 
+// Rows scrolled per pageup/pagedown key press through the Recent Turns history.
+const PAGE_SCROLL_ROWS = 5;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -74,10 +83,15 @@ function fmtTok(n: number): string {
  *
  * Displays:
  *  - Stacked bar: input / output / cache-read / cache-write
- *  - Context window fill percentage with progress bar
- *  - Per-turn token usage (last 10 turns)
- *  - Cumulative session totals
+ *  - Context window fill percentage with progress bar + pressure pill
+ *  - Per-turn token usage (last 10 turns), scrollable
+ *  - Cumulative session totals + inline cost estimate
  *  - Warning threshold indicators (yellow at 70%, red at 90%)
+ *
+ * Absorbs the former ContextVisualizerPanel ('context'): the pressure pill,
+ * TURN_SUBMITTED/TURN_COMPLETED-driven refresh, and the compact-now action
+ * all live here now. `PanelManager` aliases the retired `context` id to
+ * `tokens` so old `/panel open context` calls keep working.
  */
 export class TokenBudgetPanel extends BasePanel {
   /** Snapshot of cumulative usage from the Orchestrator after each turn. */
@@ -95,19 +109,38 @@ export class TokenBudgetPanel extends BasePanel {
   private orchestrator: Orchestrator | null = null;
   private getContextWindow: (() => number) | null = null;
   private sessionReadModel: UiReadModel<UiSessionSnapshot> | null = null;
+  /** Resolver for the active model id, for inline cost display. */
+  private getCurrentModelId: (() => string) | null = null;
   private readonly sessionMemoryStore: SessionMemoryQuery;
   private readonly configManager: Pick<ConfigManager, 'get'>;
   private readonly requestRender: () => void;
+
+  /** Turn-event bus subscriptions — absorbed from ContextVisualizerPanel. */
+  private unsubs: Array<() => void> = [];
+
+  /** Manual scroll cursor into turnHistory; -1 = auto-follow the latest turn. */
+  private turnScrollIndex = -1;
+
+  /** Pending confirm dialog (currently only used for the compact-now action). */
+  private confirm: ConfirmState<'compact'> | null = null;
+  /**
+   * Set when a confirm resolves to 'confirmed'; consumed by
+   * handlePanelIntegrationAction on the very next dispatch of that same key
+   * so it can reach the ctx.executeCommand bridge (handleInput has no ctx).
+   */
+  private compactConfirmedPending = false;
 
   constructor(
     sessionMemoryStore: SessionMemoryQuery,
     configManager: Pick<ConfigManager, 'get'>,
     requestRender: () => void = () => {},
+    turnEvents?: UiEventFeed<TurnEvent>,
   ) {
-    super('tokens', 'Tokens', 'T', 'monitoring');
+    super('tokens', 'Tokens', '▢', 'providers');
     this.sessionMemoryStore = sessionMemoryStore;
     this.configManager = configManager;
     this.requestRender = requestRender;
+    if (turnEvents) this._attachBus(turnEvents);
   }
 
   // ---------------------------------------------------------------------------
@@ -117,17 +150,21 @@ export class TokenBudgetPanel extends BasePanel {
   /**
    * Wire the panel to live data sources. Call once after construction.
    *
-   * @param orchestrator  The main Orchestrator instance (for usage + lastInputTokens).
-   * @param getCtxWindow  Callback returning the current model's contextWindow value.
+   * @param orchestrator      The main Orchestrator instance (for usage + lastInputTokens).
+   * @param getCtxWindow      Callback returning the current model's contextWindow value.
+   * @param sessionReadModel  Session read model (for the Maintenance status line).
+   * @param getCurrentModelId Callback returning the active model id, for the inline cost line.
    */
   wire(
     orchestrator: Orchestrator,
     getCtxWindow: () => number,
     sessionReadModel?: UiReadModel<UiSessionSnapshot>,
+    getCurrentModelId?: () => string,
   ): void {
     this.orchestrator = orchestrator;
     this.getContextWindow = getCtxWindow;
     this.sessionReadModel = sessionReadModel ?? null;
+    this.getCurrentModelId = getCurrentModelId ?? null;
   }
 
   /**
@@ -152,8 +189,25 @@ export class TokenBudgetPanel extends BasePanel {
     if (this.turnHistory.length > MAX_TURN_HISTORY) {
       this.turnHistory.shift();
     }
+    // A freshly completed turn always pulls the view back to the latest entry.
+    this.turnScrollIndex = -1;
 
     this._refreshAndRender();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Turn-event bus (absorbed from ContextVisualizerPanel)
+  // ---------------------------------------------------------------------------
+
+  private _attachBus(turnEvents: UiEventFeed<TurnEvent>): void {
+    if (this.unsubs.length > 0) return;
+    this.unsubs.push(turnEvents.on('TURN_COMPLETED', () => this.recordTurn()));
+    this.unsubs.push(turnEvents.on('TURN_SUBMITTED', () => this._refreshAndRender()));
+  }
+
+  private _detachBus(): void {
+    for (const unsub of this.unsubs) unsub();
+    this.unsubs = [];
   }
 
   // ---------------------------------------------------------------------------
@@ -170,6 +224,7 @@ export class TokenBudgetPanel extends BasePanel {
 
   override onDeactivate(): void {
     super.onDeactivate();
+    this.confirm = null;
     // Stop the off-screen poll so a backgrounded Tokens tab does not keep
     // refreshing (and, once requestRender is wired, force a repaint) every 2 s.
     if (this.refreshTimer !== null) {
@@ -183,6 +238,78 @@ export class TokenBudgetPanel extends BasePanel {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
+    this._detachBus();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Input
+  // ---------------------------------------------------------------------------
+
+  private _pressureRatio(): number {
+    return this.contextWindow > 0 ? this.lastInputTokens / this.contextWindow : 0;
+  }
+
+  private _pressureElevated(): boolean {
+    return this.contextWindow > 0 && this._pressureRatio() >= WARN_YELLOW;
+  }
+
+  private _scrollTurns(delta: number): void {
+    const current = this.turnScrollIndex === -1 ? this.turnHistory.length : this.turnScrollIndex;
+    const next = current + delta;
+    this.turnScrollIndex = Math.max(0, Math.min(this.turnHistory.length, next));
+    this.markDirty();
+  }
+
+  handleInput(key: string): boolean {
+    // Confirmation dialog — use the shared handleConfirmInput for y/n/Esc UX
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      this.confirm = null;
+      this.compactConfirmedPending = true;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
+    if (key === 'C' && this._pressureElevated()) {
+      this.confirm = { subject: 'compact', label: 'Compact context now', verb: 'Compact' };
+      this.markDirty();
+      return true;
+    }
+
+    if (this.turnHistory.length > 0) {
+      switch (key) {
+        case 'up':       this._scrollTurns(-1); return true;
+        case 'down':     this._scrollTurns(1); return true;
+        case 'pageup':   this._scrollTurns(-PAGE_SCROLL_ROWS); return true;
+        case 'pagedown': this._scrollTurns(PAGE_SCROLL_ROWS); return true;
+      }
+    }
+
+    if (key === 'r') {
+      this._refreshAndRender();
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Executes the compact-now action once the confirm dialog resolves. This
+   * lives in the integration hook (rather than inline in handleInput)
+   * because only this hook carries the `ctx.executeCommand` bridge into the
+   * real `/compact` command.
+   */
+  handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.compactConfirmedPending) return false;
+    this.compactConfirmedPending = false;
+    void ctx.executeCommand?.('compact', []);
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -219,6 +346,17 @@ export class TokenBudgetPanel extends BasePanel {
 
   override render(width: number, height: number): Line[] {
     return this.trackedRender(() => {
+    if (this.confirm) {
+      return buildPanelWorkspace(width, height, {
+        title: ' Token Budget',
+        sections: [{
+          title: 'Confirmation',
+          lines: renderConfirmLines(width, this.confirm),
+        }],
+        palette: DEFAULT_PANEL_PALETTE,
+      });
+    }
+
     const sections: PanelWorkspaceSection[] = [];
 
     if (this.contextWindow > 0) {
@@ -236,22 +374,33 @@ export class TokenBudgetPanel extends BasePanel {
       ],
     });
 
+    const elevated = this._pressureElevated();
+    const footerHints = elevated
+      ? [
+          { keys: 'C', label: 'compact now' },
+          { keys: 'up/down', label: 'scroll turns' },
+          { keys: 'r', label: 'refresh' },
+        ]
+      : [
+          { keys: 'up/down', label: 'scroll turns' },
+          { keys: 'r', label: 'refresh' },
+          { keys: '/compact', label: 'compress context' },
+        ];
+
     if (this.turnHistory.length > 0) {
       const priorSections = [...sections];
+      const scrollIndex = this.turnScrollIndex === -1 ? this.turnHistory.length : this.turnScrollIndex;
       const turnsSection = resolveScrollablePanelSection(width, height, {
         intro: 'Live context pressure, session token composition, cache usage, and recent turn deltas.',
         footerLines: [
-          buildKeyboardHints(width, [
-            { keys: '/compact', label: 'compress context' },
-            { keys: '/clear', label: 'reset session' },
-          ], DEFAULT_PANEL_PALETTE),
+          buildKeyboardHints(width, footerHints, DEFAULT_PANEL_PALETTE),
         ],
         palette: DEFAULT_PANEL_PALETTE,
         beforeSections: priorSections,
         section: {
           title: 'Recent Turns',
           scrollableLines: this.renderTurnHistory(width, this.turnHistory.length + 1),
-          scrollOffset: Math.max(0, this.turnHistory.length),
+          scrollOffset: scrollIndex,
           minRows: 6,
         },
         afterSections: [{
@@ -283,10 +432,7 @@ export class TokenBudgetPanel extends BasePanel {
       intro: 'Live context pressure, session token composition, cache usage, and recent turn deltas.',
       sections,
       footerLines: [
-        buildKeyboardHints(width, [
-          { keys: '/compact', label: 'compress context' },
-          { keys: '/clear', label: 'reset session' },
-        ], DEFAULT_PANEL_PALETTE),
+        buildKeyboardHints(width, footerHints, DEFAULT_PANEL_PALETTE),
       ],
       palette: DEFAULT_PANEL_PALETTE,
     });
@@ -313,7 +459,17 @@ export class TokenBudgetPanel extends BasePanel {
     }
 
     if (status.guidanceMode !== 'off' && status.nextSteps.length > 0) {
-      lines.push(buildGuidanceLine(width, status.nextSteps[0]!, 'open the next maintenance action directly', DEFAULT_PANEL_PALETTE));
+      const nextStep = status.nextSteps[0]!;
+      // WO-160: when the recommended next step is /compact and C is armed
+      // (see handleInput's elevated-only C branch and the footer hint),
+      // advertise the key instead of the command — pressing C already
+      // dispatches it for real, so printing '/compact' here was a redundant
+      // action substitute.
+      if (nextStep === '/compact' && this._pressureElevated()) {
+        lines.push(buildGuidanceLine(width, 'C', 'compact context now — the recommended next maintenance action', DEFAULT_PANEL_PALETTE));
+      } else {
+        lines.push(buildGuidanceLine(width, nextStep, 'open the next maintenance action directly', DEFAULT_PANEL_PALETTE));
+      }
     }
 
     return lines;
@@ -388,7 +544,7 @@ export class TokenBudgetPanel extends BasePanel {
     return lines;
   }
 
-  /** Renders a full-width progress bar for context window fill. */
+  /** Renders a full-width progress bar for context window fill, plus a pressure pill (absorbed from ContextVisualizerPanel). */
   private renderContextBar(width: number): Line[] {
     const lines: Line[] = [];
     const pct = this.contextWindow > 0
@@ -419,10 +575,20 @@ export class TokenBudgetPanel extends BasePanel {
       { filled: barColor, empty: C.barBg, label: C.label },
       { prefix: label, suffix },
     ));
+
+    // Pressure pill — absorbed from ContextVisualizerPanel's headline indicator.
+    const overLimit = this.contextWindow > 0 && this.lastInputTokens > this.contextWindow;
+    const pressureState = overLimit || pct >= WARN_RED ? 'bad' : pct >= WARN_YELLOW ? 'warn' : 'good';
+    const pressureLabel = overLimit ? 'over limit' : pct >= WARN_RED ? 'critical' : pct >= WARN_YELLOW ? 'elevated' : 'healthy';
+    lines.push(buildStyledPanelLine(width, [
+      { text: ' ', fg: C.dim },
+      ...buildStatusPill(pressureState, pressureLabel),
+    ]));
+
     return lines;
   }
 
-  /** Session cumulative totals with color-coded labels. */
+  /** Session cumulative totals with color-coded labels, plus an inline cost estimate. */
   private renderTotals(width: number): Line[] {
     const lines: Line[] = [];
     lines.push(this.paintTextLine(' Session Totals:', width, C.label));
@@ -443,6 +609,16 @@ export class TokenBudgetPanel extends BasePanel {
       lines.push(buildStyledPanelLine(width, [
         { text: lbl, fg: C.label },
         { text: fmtTok(val), fg: color, bold: lbl.includes('Total') },
+      ]));
+    }
+
+    // Inline cost estimate — absorbed pricing wiring (cost-utils.ts), shown
+    // whenever the active model id is known.
+    if (this.getCurrentModelId) {
+      const cost = calcSessionCost(u.input, u.output, u.cacheRead, u.cacheWrite, this.getCurrentModelId());
+      lines.push(buildStyledPanelLine(width, [
+        { text: '  Cost:       ', fg: C.label },
+        { text: `$${cost.toFixed(4)}`, fg: C.value, bold: true },
       ]));
     }
 

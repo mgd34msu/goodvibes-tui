@@ -13,6 +13,38 @@ function linesText(lines: Line[]): string {
     .join('\n');
 }
 
+// All-zero cockpit snapshot shared by tests that only care about workspace
+// navigation/rendering mechanics, not specific stat values.
+const EMPTY_SNAPSHOT = {
+  runningTasks: 0,
+  blockedTasks: 0,
+  failedTasks: 0,
+  activeGraphs: 0,
+  guardTrips: 0,
+  blockedMessages: 0,
+  pendingPermissions: 0,
+  deniedPermissions: 0,
+  preflightStatus: 'n/a' as const,
+  preflightIssueCount: 0,
+  lintFindingCount: 0,
+  tokenBlockedCount: 0,
+  tokenRotationOverdueCount: 0,
+  tokenScopeViolationCount: 0,
+  tokenRotationWarningCount: 0,
+  incidentCount: 0,
+  latestIncident: undefined,
+  elevatedMcp: 0,
+  unhealthyMcp: 0,
+  erroredPlugins: 0,
+  failingIntegrations: 0,
+  taskCount: 0,
+  agentCount: 0,
+  totalGraphs: 0,
+  communicationCount: 0,
+  mcpServerCount: 0,
+  pluginCount: 0,
+};
+
 describe('CockpitPanel', () => {
   test('renders policy preflight posture when policy runtime is wired', () => {
     const text = linesText(new CockpitPanel(createCockpitReadModel({
@@ -115,7 +147,9 @@ describe('CockpitPanel', () => {
     expect(text).toContain('latest incident');
     expect(text).toContain('plugins');
     expect(text).toContain('Workspace · flow');
-    expect(text).toContain('/orchestration');
+    // Live domain mini-summary cards replace the old '/orchestration' signpost.
+    expect(text).toContain('Orchestration');
+    expect(text).not.toContain('/orchestration');
   });
 
   // ---------------------------------------------------------------------------
@@ -145,12 +179,112 @@ describe('CockpitPanel', () => {
     };
   }
 
-  test('inspect handler fires for both enter and return keys', () => {
+  function makeEmptyRosterReadModel(): CockpitRosterReadModel {
+    const snapshot: CockpitRosterSnapshot = {
+      roster: [],
+      stalledAgentCount: 0,
+      totalInputTokens: null,
+      totalOutputTokens: null,
+      totalCost: null,
+    };
+    return {
+      getSnapshot: () => snapshot,
+      markDirty: () => { /* noop */ },
+      subscribe: (_listener: () => void) => () => { /* noop */ },
+    };
+  }
+
+  function makeTerminalRosterReadModel(agentId: string, status: 'completed' | 'failed' | 'cancelled'): CockpitRosterReadModel {
+    const snapshot: CockpitRosterSnapshot = {
+      roster: [{
+        id: agentId,
+        task: 'test task',
+        model: 'claude-sonnet',
+        status,
+        stalled: false,
+        inputTokens: null,
+        outputTokens: null,
+        cost: null,
+      }],
+      stalledAgentCount: 0,
+      totalInputTokens: null,
+      totalOutputTokens: null,
+      totalCost: null,
+    };
+    return {
+      getSnapshot: () => snapshot,
+      markDirty: () => { /* noop */ },
+      subscribe: (_listener: () => void) => () => { /* noop */ },
+    };
+  }
+
+  function toAgentsWorkspace(panel: CockpitPanel): void {
+    panel.handleInput('right'); // governance
+    panel.handleInput('right'); // health
+    panel.handleInput('right'); // domains
+    panel.handleInput('right'); // agents
+  }
+
+  test('c on an absent roster entry (empty roster) is left unconsumed', () => {
+    const cancelledIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeEmptyRosterReadModel(),
+      { cancelAgent: (id) => { cancelledIds.push(id); return true; } },
+    );
+    toAgentsWorkspace(panel);
+
+    expect(panel.handleInput('c')).toBe(false);
+    expect(cancelledIds).toEqual([]);
+  });
+
+  test('c on a terminal roster entry is left unconsumed (no confirm bar, no cancel dispatched)', () => {
+    const cancelledIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeTerminalRosterReadModel('agent-done', 'completed'),
+      { cancelAgent: (id) => { cancelledIds.push(id); return true; } },
+    );
+    toAgentsWorkspace(panel);
+
+    expect(panel.handleInput('c')).toBe(false);
+    expect(cancelledIds).toEqual([]);
+    const text = linesText(panel.render(140, 18));
+    expect(text).not.toContain('y / Enter confirm');
+  });
+
+  test('i on an absent roster entry (empty roster) is left unconsumed', () => {
     const openedIds: string[] = [];
     const panel = new CockpitPanel(
       undefined,
-      makeRosterReadModel('agent-abc'),
+      makeEmptyRosterReadModel(),
       { openAgentDetail: (id) => { openedIds.push(id); } },
+    );
+    toAgentsWorkspace(panel);
+
+    expect(panel.handleInput('i')).toBe(false);
+    expect(openedIds).toEqual([]);
+  });
+
+  test('i on a terminal roster entry still opens the quick-peek (inspecting is always applicable)', () => {
+    const openedIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeTerminalRosterReadModel('agent-done', 'failed'),
+      { openAgentDetail: (id) => { openedIds.push(id); } },
+    );
+    toAgentsWorkspace(panel);
+
+    expect(panel.handleInput('i')).toBe(true);
+    expect(openedIds).toEqual(['agent-done']);
+  });
+
+  test('roster enter/return jumps to inspector.inspectAgent for both keys', () => {
+    const inspectedIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeRosterReadModel('agent-abc'),
+      { inspectAgent: (id) => { inspectedIds.push(id); } },
     );
     // Navigate to agents workspace (4 rights from default 'flow')
     panel.handleInput('right'); // governance
@@ -158,13 +292,34 @@ describe('CockpitPanel', () => {
     panel.handleInput('right'); // domains
     panel.handleInput('right'); // agents
 
-    // 'enter' should trigger inspect
+    // 'enter' should deep-link into the inspector
     panel.handleInput('enter');
-    expect(openedIds).toEqual(['agent-abc']);
+    expect(inspectedIds).toEqual(['agent-abc']);
 
-    // 'return' should also trigger inspect
+    // 'return' should also deep-link into the inspector
     panel.handleInput('return');
-    expect(openedIds).toEqual(['agent-abc', 'agent-abc']);
+    expect(inspectedIds).toEqual(['agent-abc', 'agent-abc']);
+  });
+
+  test('i key still opens the quick-peek agent detail modal (distinct from enter)', () => {
+    const openedIds: string[] = [];
+    const inspectedIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeRosterReadModel('agent-abc'),
+      {
+        openAgentDetail: (id) => { openedIds.push(id); },
+        inspectAgent: (id) => { inspectedIds.push(id); },
+      },
+    );
+    panel.handleInput('right');
+    panel.handleInput('right');
+    panel.handleInput('right');
+    panel.handleInput('right');
+
+    panel.handleInput('i');
+    expect(openedIds).toEqual(['agent-abc']);
+    expect(inspectedIds).toEqual([]);
   });
 
   test('cancel-confirm handler accepts both enter and return as confirmation', () => {
@@ -194,39 +349,93 @@ describe('CockpitPanel', () => {
   });
 
   test('supports workspace focus changes with targeted action rails', () => {
-    const panel = new CockpitPanel(createCockpitReadModel({
-      runningTasks: 0,
-      blockedTasks: 0,
-      failedTasks: 0,
-      activeGraphs: 0,
-      guardTrips: 0,
-      blockedMessages: 0,
-      pendingPermissions: 0,
-      deniedPermissions: 0,
-      preflightStatus: 'n/a',
-      preflightIssueCount: 0,
-      lintFindingCount: 0,
-      tokenBlockedCount: 0,
-      tokenRotationOverdueCount: 0,
-      tokenScopeViolationCount: 0,
-      tokenRotationWarningCount: 0,
-      incidentCount: 0,
-      latestIncident: undefined,
-      elevatedMcp: 0,
-      unhealthyMcp: 0,
-      erroredPlugins: 0,
-      failingIntegrations: 0,
-      taskCount: 0,
-      agentCount: 0,
-      totalGraphs: 0,
-      communicationCount: 0,
-      mcpServerCount: 0,
-      pluginCount: 0,
-    }));
+    const panel = new CockpitPanel(createCockpitReadModel(EMPTY_SNAPSHOT));
     expect(panel.handleInput('right')).toBe(true);
     expect(panel.handleInput('right')).toBe(true);
     const text = linesText(panel.render(140, 18));
     expect(text).toContain('Workspace · health');
-    expect(text).toContain('/incident latest');
+    // Live domain mini-summary card replaces the old '/incident latest' signpost.
+    expect(text).toContain('Incidents');
+    expect(text).not.toContain('/incident latest');
+  });
+
+  test('pressing c on a selected agent renders a visible confirm bar (the visible-confirm UX fix)', () => {
+    // Short id (<= 8 chars) so the roster's shortId truncation is a no-op and
+    // the id appears verbatim in the confirm label.
+    const panel = new CockpitPanel(
+      createCockpitReadModel(EMPTY_SNAPSHOT),
+      makeRosterReadModel('agent-01'),
+    );
+    panel.handleInput('right');
+    panel.handleInput('right');
+    panel.handleInput('right');
+    panel.handleInput('right'); // agents workspace
+
+    panel.handleInput('c');
+    const text = linesText(panel.render(140, 18));
+    expect(text).toContain('Cancel');
+    expect(text).toContain('agent-01');
+    expect(text).toContain('confirm');
+    expect(text).toContain('cancel');
+  });
+
+  test('roster rows show per-agent model and cost columns', () => {
+    const panel = new CockpitPanel(
+      createCockpitReadModel(EMPTY_SNAPSHOT),
+      makeRosterReadModel('agent-abc'),
+    );
+    panel.handleInput('right');
+    panel.handleInput('right');
+    panel.handleInput('right');
+    panel.handleInput('right'); // agents workspace
+
+    const text = linesText(panel.render(140, 18));
+    expect(text).toContain('claude-sonnet');
+    expect(text).toContain('n/a'); // no usage data → cost/tokens are honestly 'n/a'
+  });
+
+  test('domain-card Enter jumps to the target panel via deps.openPanel (flow workspace)', () => {
+    const openedPanels: string[] = [];
+    const panel = new CockpitPanel(createCockpitReadModel(EMPTY_SNAPSHOT), undefined, { openPanel: (id) => { openedPanels.push(id); } });
+
+    // Default workspace is 'flow'; its first card targets 'orchestration'.
+    panel.handleInput('enter');
+    expect(openedPanels).toEqual(['orchestration']);
+
+    // Move the card cursor down to the second card ('tasks') and jump again.
+    panel.handleInput('down');
+    panel.handleInput('enter');
+    expect(openedPanels).toEqual(['orchestration', 'tasks']);
+  });
+
+  test('periodic tick: onActivate starts a refresh timer that stops on onDeactivate', () => {
+    const realSet = globalThis.setInterval;
+    const realClear = globalThis.clearInterval;
+    const active = new Set<ReturnType<typeof setInterval>>();
+    globalThis.setInterval = ((handler: () => void, timeout?: number, ...args: unknown[]) => {
+      const id = realSet(handler, timeout, ...args);
+      active.add(id);
+      return id;
+    }) as typeof setInterval;
+    globalThis.clearInterval = ((id?: ReturnType<typeof setInterval>) => {
+      if (id !== undefined) active.delete(id);
+      realClear(id);
+    }) as typeof clearInterval;
+
+    try {
+      const panel = new CockpitPanel();
+      const baseline = active.size; // constructor does not start the timer
+      panel.onActivate();
+      expect(active.size).toBe(baseline + 1);
+      panel.onDeactivate();
+      expect(active.size).toBe(baseline);
+      panel.onActivate();
+      expect(active.size).toBe(baseline + 1);
+      panel.onDestroy();
+      expect(active.size).toBe(baseline);
+    } finally {
+      globalThis.setInterval = realSet;
+      globalThis.clearInterval = realClear;
+    }
   });
 });

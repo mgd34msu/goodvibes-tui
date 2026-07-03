@@ -1,24 +1,30 @@
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine, createStyledCell } from '../types/grid.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
-import { GLYPHS, UI_TONES } from './ui-primitives.ts';
+import { GLYPHS } from './ui-primitives.ts';
+import { resolveUiTones } from './theme.ts';
+
+// FULLSCREEN_PALETTE is built from the mode-resolved chrome tones
+// (resolveUiTones) rather than the static UI_TONES constant — WO-001 single
+// read path. Mode is fixed to 'dark' until the terminal-bg-probe lands.
+const TONES = resolveUiTones('dark');
 
 export const FULLSCREEN_PALETTE = {
-  border: '#64748b',
-  title: '#67e8f9',
-  subtitle: '#93c5fd',
-  text: '#e2e8f0',
-  muted: '#94a3b8',
-  dim: '#64748b',
-  selectedBg: '#223049',
-  categoryBg: '#141b25',
-  contextBg: '#121923',
-  controlsBg: '#0f141d',
-  footerBg: '#111827',
-  good: UI_TONES.state.good,
-  warn: UI_TONES.state.warn,
-  bad: UI_TONES.state.bad,
-  info: UI_TONES.state.info,
+  border: TONES.border,
+  title: TONES.accent.browser,
+  subtitle: TONES.accent.conversation,
+  text: TONES.fg.primary,
+  muted: TONES.fg.muted,
+  dim: TONES.border,
+  selectedBg: TONES.bg.selected,
+  categoryBg: TONES.bg.section,
+  contextBg: TONES.bg.surface,
+  controlsBg: TONES.bg.base,
+  footerBg: TONES.bg.footer,
+  good: TONES.state.good,
+  warn: TONES.state.warn,
+  bad: TONES.state.bad,
+  info: TONES.state.info,
 } as const;
 
 export type FullscreenTextStyle = Partial<Omit<Line[number], 'char'>>;

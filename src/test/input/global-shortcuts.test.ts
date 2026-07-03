@@ -90,6 +90,193 @@ describe('handleGlobalShortcutToken', () => {
     expect(closed).toEqual(['system-messages']);
   });
 
+  test('panel-focus-toggle (Ctrl+G) grabs workspace focus from the prompt', () => {
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'system-messages' }],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => ({ id: 'system-messages' }),
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-focus-toggle',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x07', logicalName: 'g', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(state.panelFocused).toBe(true);
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('panel-focus-toggle falls through when the workspace already has focus (pane swap handled elsewhere)', () => {
+    const state = buildState({
+      panelFocused: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'system-messages' }],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => ({ id: 'system-messages' }),
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-focus-toggle',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x07', logicalName: 'g', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(false);
+    expect(state.panelFocused).toBe(true);
+  });
+
+  test('panel-focus-toggle from the prompt is a no-op when no workspace is open', () => {
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => false,
+        getAllOpen: () => [],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => null,
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-focus-toggle',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x07', logicalName: 'g', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(false);
+    expect(state.panelFocused).toBe(false);
+  });
+
+  test('panel-tab-N (Alt+digit) jumps to the Nth workspace tab, routed globally', () => {
+    let jumpedTo = -1;
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => ({ id: 'a' }),
+        activateWorkspaceIndex: (i: number) => { jumpedTo = i; },
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        // Real Alt tokens carry `meta`; the manager maps that onto the alt combo.
+        lookup: (token: { logicalName?: string; meta?: boolean }) =>
+          token.meta && token.logicalName === '3' ? 'panel-tab-3' : null,
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '3', logicalName: '3', ctrl: false, shift: false, meta: true },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(jumpedTo).toBe(2); // Alt+3 → index 2
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('panel-tab-N is consumed but a no-op when the workspace is hidden', () => {
+    let jumped = false;
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => false,
+        getAllOpen: () => [],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => null,
+        activateWorkspaceIndex: () => { jumped = true; },
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: () => 'panel-tab-1',
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '1', logicalName: '1', ctrl: false, shift: false, meta: true },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(jumped).toBe(false);
+  });
+
+  test('panel-ops (Ctrl+O) prefers commandContext.openOpsPanel when wired', () => {
+    const openOpsPanel = mock(() => {});
+    const opened: string[] = [];
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => null,
+        open: (id: string) => { opened.push(id); },
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: (token: { logicalName?: string; ctrl?: boolean }) =>
+          token.logicalName === 'o' && !!token.ctrl ? 'panel-ops' : null,
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+      commandContext: { openOpsPanel } as unknown as NonNullable<GlobalShortcutRouteState['commandContext']>,
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x0f', logicalName: 'o', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(openOpsPanel).toHaveBeenCalled();
+    expect(opened).toEqual([]);
+  });
+
+  test('panel-ops (Ctrl+O) falls back to opening the ops-control panel directly when no callback is wired', () => {
+    const opened: string[] = [];
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => null,
+        open: (id: string) => { opened.push(id); },
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: (token: { logicalName?: string; ctrl?: boolean }) =>
+          token.logicalName === 'o' && !!token.ctrl ? 'panel-ops' : null,
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+      commandContext: {} as unknown as NonNullable<GlobalShortcutRouteState['commandContext']>,
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x0f', logicalName: 'o', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(opened).toEqual(['ops-control']);
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
   test('escape does not bypass panel focus handling', () => {
     const state = buildState({ panelFocused: true });
     const handled = handleGlobalShortcutToken(

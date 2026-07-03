@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PanelManager } from '../../panels/panel-manager.ts';
 import { registerBuiltinPanels } from '../../panels/builtin-panels.ts';
 import { SkillsPanel, discoverSkills } from '../../panels/skills-panel.ts';
-import { RuntimeEventBus } from '@/runtime/index.ts';
+import { FilePreviewPanel } from '../../panels/file-preview-panel.ts';
+import { RuntimeEventBus, installEcosystemCatalogEntry } from '@/runtime/index.ts';
 import { createRuntimeServices } from '../../runtime/services.ts';
 import { createUiRuntimeServices } from '../../runtime/ui-services.ts';
 import { createRuntimeStore } from '../../runtime/store/index.ts';
@@ -182,7 +183,7 @@ describe('SkillsPanel', () => {
     expect(second).toContain('Up/Down navigate');
   });
 
-  test('up at top focuses filter and down returns to list navigation', async () => {
+  test('/ activates the filter; Esc deactivates and down navigates normally', async () => {
     writeSkill(
       cwd,
       '.goodvibes/tui/skills/alpha/SKILL.md',
@@ -197,15 +198,119 @@ describe('SkillsPanel', () => {
     const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
     panel.onActivate();
     await panel.awaitReady();
-    panel.handleInput('up');
+    panel.handleInput('/');
     panel.handleInput('b');
     let text = linesText(panel.render(120, 16));
-    // SearchableListPanel renders focused filter as '[Filter] {query}_' (not old 'query: {q}█' format)
+    // WO-153: converged modal filter — pinned '[Filter] ' + literal '_' cursor contract.
     expect(text).toContain('[Filter] b');
 
-    panel.handleInput('down');
+    panel.handleInput('escape');
     panel.handleInput('down');
     text = linesText(panel.render(120, 16));
     expect(text).toContain('Selected: beta');
+  });
+
+  test('d then Enter/y actually deletes the skill file from disk (no more "delete via shell" signpost)', async () => {
+    const filePath = writeSkill(
+      cwd,
+      '.goodvibes/skills/alpha.md',
+      ['---', 'name: alpha', 'description: Alpha skill', '---', ''].join('\n'),
+    );
+
+    const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir) });
+    panel.onActivate();
+    await panel.awaitReady();
+
+    expect(panel.handleInput('d')).toBe(true);
+    const confirmText = linesText(panel.render(120, 16));
+    expect(confirmText).toContain('Delete');
+    expect(confirmText).not.toContain('rm "');
+
+    expect(panel.handleInput('enter')).toBe(true);
+    // Deletion + rescan happen asynchronously off the confirmed keypress.
+    for (let attempt = 0; attempt < 50 && existsSync(filePath); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    expect(existsSync(filePath)).toBe(false);
+
+    const text = linesText(panel.render(120, 16));
+    expect(text).toContain('No skills discovered');
+  });
+
+  test('Enter opens the selected skill markdown in the preview panel', async () => {
+    writeSkill(
+      cwd,
+      '.goodvibes/tui/skills/alpha/SKILL.md',
+      ['---', 'name: alpha', 'description: Alpha skill', '---', ''].join('\n'),
+    );
+    const manager = new PanelManager();
+    const services = createRuntimeServices({
+      configManager: new ConfigManager({ surfaceRoot: 'tui',
+        workingDir: cwd,
+        homeDir,
+        configDir: join(homeDir, '.goodvibes', 'test-skills-preview'),
+      }),
+      runtimeBus: new RuntimeEventBus(),
+      runtimeStore: createRuntimeStore(),
+      workingDir: cwd,
+      homeDirectory: homeDir,
+    });
+    const uiServices = createUiRuntimeServices(services);
+    registerBuiltinPanels(manager, {
+      providerRegistry: services.providerRegistry,
+      uiServices,
+      tokenAuditor: services.tokenAuditor,
+      componentHealthMonitor: services.componentHealthMonitor,
+      worktreeRegistry: services.worktreeRegistry,
+      sandboxSessionRegistry: services.sandboxSessionRegistry,
+      systemMessagesPanel: new SystemMessagesPanel(services.configManager, services.componentHealthMonitor),
+    });
+
+    const skillsPanel = manager.open('skills') as SkillsPanel;
+    skillsPanel.onActivate();
+    await skillsPanel.awaitReady();
+    expect(skillsPanel.handleInput('enter')).toBe(true);
+    expect(skillsPanel.handlePanelIntegrationAction('enter', { panelManager: manager })).toBe(true);
+
+    const previewPanel = manager.getPanel('preview');
+    expect(previewPanel).toBeInstanceOf(FilePreviewPanel);
+    expect((previewPanel as FilePreviewPanel).getCurrentFilePath()).toContain('alpha');
+  });
+
+  test('tags marketplace-installed skills with provenance from the install receipt', async () => {
+    const ecosystemPaths = {
+      cwd,
+      homeDir,
+      projectCatalogRoot: join(cwd, '.goodvibes', 'ecosystem'),
+      userCatalogRoot: join(homeDir, '.goodvibes', 'ecosystem'),
+    };
+    mkdirSync(ecosystemPaths.projectCatalogRoot, { recursive: true });
+    writeFileSync(join(ecosystemPaths.projectCatalogRoot, 'skills.json'), JSON.stringify({
+      version: 1,
+      entries: [{
+        id: 'curated-alpha',
+        kind: 'skill',
+        name: 'curated-alpha',
+        summary: 'A curated skill',
+        source: './catalog/skills/curated-alpha',
+        tags: [],
+        provenance: 'curated-local',
+      }],
+    }, null, 2));
+    writeSkill(
+      cwd,
+      'catalog/skills/curated-alpha/SKILL.md',
+      ['---', 'name: curated-alpha', 'description: Curated alpha skill', '---', ''].join('\n'),
+    );
+
+    const installResult = installEcosystemCatalogEntry('skill', 'curated-alpha', ecosystemPaths);
+    expect(installResult.ok).toBe(true);
+
+    const panel = new SkillsPanel({ shellPaths: makeShellPaths(cwd, homeDir), ecosystemPaths });
+    panel.onActivate();
+    await panel.awaitReady();
+    const text = linesText(panel.render(120, 16));
+    expect(text).toContain('curated-alpha');
+    expect(text).toContain('curated-local');
   });
 });

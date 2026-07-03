@@ -6,19 +6,27 @@ import {
   buildPanelLine,
   buildPanelTitle,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { renderQrMatrix, generateQrMatrix } from '../renderer/qr-renderer.ts';
 import { encodeConnectionPayload } from '@pellux/goodvibes-sdk/platform/pairing';
+import type { UserAuthManager } from '@pellux/goodvibes-sdk/platform/security';
+import type { UiControlPlaneSnapshot, UiReadModel } from '../runtime/ui-read-models.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  url: '#38bdf8',
+// Fixed-width placeholder — deliberately NOT derived from the real secret's
+// length, so masking doesn't leak how long the token/password is.
+const SECRET_MASK = '••••••••••••';
+
+// Domain accents only; base chrome (header/headerBg/label/info) comes from
+// DEFAULT_PANEL_PALETTE. qrFg/qrBg stay pure black/white — scanner contrast
+// requirements override theming.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   token: '#a78bfa',
-  hint: '#64748b',
-  qrFg: '#000000',
-  qrBg: '#ffffff',
-} as const;
+  qrFg:  '#000000',
+  qrBg:  '#ffffff',
+} as const);
 
 /**
  * Connection info passed to the QR panel.
@@ -62,27 +70,82 @@ export class QrPanel extends BasePanel {
   private connectionInfo: QrPanelConnectionInfo;
   private readonly regenerateToken: RegenerateTokenFn | undefined;
   private readonly copyToClipboard: CopyToClipboardFn | undefined;
+  private readonly controlPlaneReadModel: UiReadModel<UiControlPlaneSnapshot> | undefined;
+  private readonly localUserAuthManager: Pick<UserAuthManager, 'inspect'> | undefined;
+  private readonly unsub: (() => void) | null;
   private lastStatus = '';
+  /** v toggles whether the token/password render in the clear. */
+  private revealed = false;
+  /** Set when r is pressed while a companion session is live — confirmed with y/Enter, cancelled with n/Esc. */
+  private confirmRegenerate: ConfirmState<null> | null = null;
 
   public constructor(
     connectionInfo: QrPanelConnectionInfo,
     regenerateToken?: RegenerateTokenFn,
     copyToClipboard?: CopyToClipboardFn,
+    controlPlaneReadModel?: UiReadModel<UiControlPlaneSnapshot>,
+    localUserAuthManager?: Pick<UserAuthManager, 'inspect'>,
   ) {
     super('qr-code', 'QR Code', 'Q', 'session');
     this.connectionInfo = connectionInfo;
     this.regenerateToken = regenerateToken;
     this.copyToClipboard = copyToClipboard;
+    this.controlPlaneReadModel = controlPlaneReadModel;
+    this.localUserAuthManager = localUserAuthManager;
+    this.unsub = controlPlaneReadModel ? controlPlaneReadModel.subscribe(() => this.markDirty()) : null;
+  }
+
+  public override onDestroy(): void {
+    this.unsub?.();
+  }
+
+  private hasLiveCompanionSession(): boolean {
+    return (this.localUserAuthManager?.inspect().sessionCount ?? 0) > 0;
+  }
+
+  private doRegenerate(): void {
+    if (!this.regenerateToken) return;
+    this.connectionInfo = this.regenerateToken();
+    this.lastStatus = 'Token regenerated.';
+    this.markDirty();
   }
 
   public handleInput(key: string): boolean {
-    if (key === 'r') {
-      if (this.regenerateToken) {
-        this.connectionInfo = this.regenerateToken();
-        this.lastStatus = 'Token regenerated.';
-      } else {
-        this.lastStatus = 'Regeneration not available.';
+    if (this.confirmRegenerate) {
+      const result = handleConfirmInput(this.confirmRegenerate, key);
+      if (result === 'confirmed') {
+        this.confirmRegenerate = null;
+        this.doRegenerate();
+        return true;
       }
+      if (result === 'cancelled') {
+        this.confirmRegenerate = null;
+        this.lastStatus = 'Regeneration cancelled.';
+        this.markDirty();
+        return true;
+      }
+      return true; // absorbed
+    }
+    if (key === 'r') {
+      if (!this.regenerateToken) {
+        this.lastStatus = 'Regeneration not available.';
+        this.markDirty();
+        return true;
+      }
+      if (this.hasLiveCompanionSession()) {
+        this.confirmRegenerate = {
+          subject: null,
+          label: 'pairing token — a companion session is live and will be disconnected',
+          verb: 'Regenerate',
+        };
+        this.markDirty();
+        return true;
+      }
+      this.doRegenerate();
+      return true;
+    }
+    if (key === 'v') {
+      this.revealed = !this.revealed;
       this.markDirty();
       return true;
     }
@@ -105,27 +168,32 @@ export class QrPanel extends BasePanel {
 
     const { url, token, username, password } = this.connectionInfo;
     const valueWidth = Math.max(0, width - 12);
+    const displayToken = this.revealed ? token : SECRET_MASK;
+    const displayPassword = password !== undefined ? (this.revealed ? password : SECRET_MASK) : undefined;
 
     // ── Title + purpose: tell the operator exactly what this code is for ────
     lines.push(buildPanelTitle(width, 'Companion Pairing', C));
     lines.push(
       buildPanelLine(width, [
-        [' Scan with the GoodVibes companion app to pair this session.', C.hint],
+        [' Scan with the GoodVibes companion app to pair this session.', C.label],
       ]),
     );
 
     // ── Connection info header ─────────────────────────────────────────────
+    // Token and (if present) bootstrap password are masked by default — they
+    // are credentials, not display text — and only render in the clear while
+    // `revealed` is toggled on via v.
     lines.push(createEmptyLine(width));
     lines.push(
       buildPanelLine(width, [
         [' URL      ', C.label],
-        [truncateDisplay(url, valueWidth), C.url],
+        [truncateDisplay(url, valueWidth), C.info],
       ]),
     );
     lines.push(
       buildPanelLine(width, [
         [' Token    ', C.label],
-        [truncateDisplay(token, valueWidth), C.token],
+        [truncateDisplay(displayToken, valueWidth), C.token],
       ]),
     );
     lines.push(
@@ -134,11 +202,22 @@ export class QrPanel extends BasePanel {
         [truncateDisplay(username, valueWidth), C.value],
       ]),
     );
-    if (password !== undefined) {
+    if (displayPassword !== undefined) {
       lines.push(
         buildPanelLine(width, [
           [' Password ', C.label],
-          [truncateDisplay(password, valueWidth), C.value],
+          [truncateDisplay(displayPassword, valueWidth), C.value],
+        ]),
+      );
+    }
+
+    // ── Connected companions ──────────────────────────────────────────────
+    if (this.controlPlaneReadModel) {
+      const connected = this.controlPlaneReadModel.getSnapshot().activeClientIds.length;
+      lines.push(
+        buildPanelLine(width, [
+          [' Companions ', C.label],
+          [`connected: ${connected}`, connected > 0 ? C.good : C.dim],
         ]),
       );
     }
@@ -161,11 +240,15 @@ export class QrPanel extends BasePanel {
 
     lines.push(createEmptyLine(width));
 
-    // ── Status message (ephemeral) ─────────────────────────────────────────
-    if (this.lastStatus) {
-      lines.push(
+    // ── Footer: confirm overlay (regenerate while a companion is live) takes
+    // priority over the ephemeral status message ──────────────────────────
+    const footerLines: Line[] = [];
+    if (this.confirmRegenerate) {
+      footerLines.push(...renderConfirmLines(width, this.confirmRegenerate));
+    } else if (this.lastStatus) {
+      footerLines.push(
         buildPanelLine(width, [
-          [` ${this.lastStatus} `, C.hint],
+          [` ${this.lastStatus} `, C.label],
         ]),
       );
     }
@@ -174,21 +257,24 @@ export class QrPanel extends BasePanel {
     const hints: Array<{ keys: string; label: string }> = [];
     if (this.regenerateToken) hints.push({ keys: 'r', label: 'regenerate token' });
     if (this.copyToClipboard) hints.push({ keys: 'c', label: 'copy token' });
+    hints.push({ keys: 'v', label: this.revealed ? 'hide token' : 'reveal token' });
     const hintsLine = hints.length > 0
       ? buildKeyboardHints(width, hints, C)
       : buildPanelLine(width, [[' Pairing is read-only in this surface.', C.dim]]);
+    footerLines.push(hintsLine);
 
-    // Push hints at the bottom if we have room, otherwise append after QR
-    const remaining = height - lines.length;
-    if (remaining > 2) {
-      // Fill with empty lines to push hints toward bottom
-      const fillCount = Math.max(0, remaining - 2);
-      for (let i = 0; i < fillCount; i++) {
-        lines.push(createEmptyLine(width));
-      }
+    // Push the footer at the bottom if we have room, otherwise append it
+    // directly after the QR code.
+    const remaining = height - lines.length - footerLines.length;
+    if (remaining > 0) {
+      for (let i = 0; i < remaining; i++) lines.push(createEmptyLine(width));
     }
-    lines.push(hintsLine);
+    lines.push(...footerLines);
 
-    return lines;
+    // Clamp to the exact requested height — the QR matrix's row count is
+    // driven by payload size, not by `height`, so it can legitimately
+    // overflow a small pane; never hand back more (or fewer) lines than asked.
+    while (lines.length < height) lines.push(createEmptyLine(width));
+    return lines.slice(0, height);
   }
 }

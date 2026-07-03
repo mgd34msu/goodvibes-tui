@@ -1,7 +1,13 @@
 import { createStyledCell, type Line } from '../types/grid.ts';
 import { getOverlayMaxWidth } from './overlay-viewport.ts';
-import { GLYPHS, UI_TONES } from './ui-primitives.ts';
+import { GLYPHS } from './ui-primitives.ts';
+import { resolveUiTones } from './theme.ts';
 import { fillWidth, makeLine, writeText } from './fullscreen-primitives.ts';
+
+// DEFAULT_OVERLAY_PALETTE is built from the mode-resolved chrome tones
+// (resolveUiTones) rather than the static UI_TONES constant — WO-001 single
+// read path. Mode is fixed to 'dark' until the terminal-bg-probe lands.
+const TONES = resolveUiTones('dark');
 
 export interface OverlayBoxPalette {
   readonly borderFg: string;
@@ -16,15 +22,15 @@ export interface OverlayBoxPalette {
 }
 
 export const DEFAULT_OVERLAY_PALETTE: Readonly<OverlayBoxPalette> = {
-  borderFg: UI_TONES.fg.secondary,
-  titleFg: UI_TONES.fg.primary,
-  bodyFg: UI_TONES.fg.primary,
-  mutedFg: UI_TONES.fg.dim,
-  selectedBg: UI_TONES.bg.selected,
-  titleBg: UI_TONES.bg.title,
-  sectionBg: UI_TONES.bg.section,
-  inputBg: UI_TONES.bg.input,
-  bodyBg: UI_TONES.bg.surface,
+  borderFg: TONES.fg.secondary,
+  titleFg: TONES.fg.primary,
+  bodyFg: TONES.fg.primary,
+  mutedFg: TONES.fg.dim,
+  selectedBg: TONES.bg.selected,
+  titleBg: TONES.bg.title,
+  sectionBg: TONES.bg.section,
+  inputBg: TONES.bg.input,
+  bodyBg: TONES.bg.surface,
 } as const;
 
 export interface OverlayBoxLayout {

@@ -1,22 +1,28 @@
-import { BasePanel } from './base-panel.ts';
-import { createEmptyLine, createStyledCell, type Line } from '../types/grid.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import { createEmptyLine, type Line } from '../types/grid.ts';
 import { fitDisplay, truncateDisplay } from '../utils/terminal-width.ts';
 import type { TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { Orchestrator } from '../core/orchestrator';
 import {
+  buildAlignedRow,
+  buildBodyText,
   buildEmptyState,
+  buildKeyboardHints,
+  buildKeyValueLine,
   buildPanelLine,
-  buildStyledPanelLine,
   buildPanelWorkspace,
-  resolveScrollablePanelSection,
-  resolveStackedScrollableSections,
+  buildStyledPanelLine,
+  resolvePrimaryScrollableSection,
   DEFAULT_PANEL_PALETTE,
   extendPalette,
+  type ColumnSpec,
   type PanelWorkspaceSection,
 } from './polish.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { formatLatencyMs } from '../utils/format-duration.ts';
+import { calcSessionCost } from '../export/cost-utils.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,7 +43,12 @@ export interface ApiCallEntry {
   outputTokens: number;
   /** End-to-end latency in ms (stream-start → llm-response, or turn-start → llm-response). */
   latencyMs: number;
-  /** HTTP-level status code hint; 0 when unknown. */
+  /**
+   * HTTP-level status code hint. Only ever set from a real signal (scraped
+   * from an error message); 0 means no real code is known. Never fabricated
+   * (WO-137 dropped the old always-200-on-success convention — this layer
+   * doesn't actually observe HTTP status codes on success).
+   */
   statusCode: number;
   /** 'ok' | 'error' */
   status: ApiCallStatus;
@@ -51,6 +62,7 @@ export interface ApiCallEntry {
 
 const MAX_CALL_LOG   = 50;
 const MAX_ERROR_LOG  = 20;
+const AGES_REFRESH_MS = 1_000;
 
 // ---------------------------------------------------------------------------
 // Colors
@@ -79,10 +91,19 @@ function fmtMs(ms: number): string {
 }
 
 function fmtAgo(ts: number): string {
-  const sec = Math.floor((Date.now() - ts) / 1000);
+  const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
   if (sec < 60)   return `${sec}s ago`;
   if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
   return `${Math.floor(sec / 3600)}h ago`;
+}
+
+function fmtUsd(value: number): string {
+  if (value <= 0) return '$0';
+  return value >= 1 ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`;
+}
+
+function callCost(entry: ApiCallEntry): number {
+  return calcSessionCost(entry.inputTokens, entry.outputTokens, 0, 0, entry.model);
 }
 
 function latColor(ms: number): string {
@@ -96,6 +117,17 @@ function statusCodeFromError(msg: string): number {
   return m ? parseInt(m[1]!, 10) : 0;
 }
 
+const CALL_COLUMNS: ColumnSpec[] = [
+  { width: 8 },              // time
+  { width: 1 },               // status glyph
+  { width: 12 },              // provider
+  { width: 26 },               // model (+ scraped status code suffix)
+  { width: 8, align: 'right' }, // in
+  { width: 8, align: 'right' }, // out
+  { width: 8, align: 'right' }, // latency
+  { width: 9, align: 'right' }, // cost
+];
+
 // ---------------------------------------------------------------------------
 // DebugPanel
 // ---------------------------------------------------------------------------
@@ -103,12 +135,16 @@ function statusCodeFromError(msg: string): number {
 /**
  * Real-time API debug panel.
  *
- * Shows per-call log (model, provider, input/output tokens, latency, status code),
- * running session call total, and error history.
+ * Migrated onto ScrollableListPanel<ApiCallEntry> (WO-137) so nav
+ * (up/down/j/k/pageup/pagedown/g/G), the '/' inline filter, and a
+ * selected-row detail section come from the shared base class instead of a
+ * bespoke render (SystemMessagesPanel precedent).
  *
- * Subscribes to typed turn runtime events.
+ * Shows per-call log (model, provider, input/output tokens, latency, status,
+ * cost), running session call total, and error history. Subscribes to typed
+ * turn runtime events.
  */
-export class DebugPanel extends BasePanel {
+export class DebugPanel extends ScrollableListPanel<ApiCallEntry> {
   private _unsubs: Array<() => void> = [];
 
   // Timing state
@@ -120,17 +156,32 @@ export class DebugPanel extends BasePanel {
   private _prevInput  = 0;
   private _prevOutput = 0;
 
+  // Real provider/model attribution for TURN_ERROR rows: the provider/model
+  // named on the in-flight LLM request is the authoritative attribution
+  // target when the turn subsequently errors (provider-health-panel.ts
+  // precedent) — never a fabricated 'unknown'.
+  private _inflightProvider: string | null = null;
+  private _inflightModel: string | null = null;
+
   // Session data
   private _calls: ApiCallEntry[]  = [];
   private _errors: ApiCallEntry[] = [];
   private _totalCalls = 0;
   private _totalErrors = 0;
 
+  // c=clear confirmation
+  private confirm: ConfirmState<'clear'> | null = null;
+
+  // Re-render timer so "Xs ago" ages stay live even without new events.
+  private agesTimerId: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     private readonly turnEvents: UiEventFeed<TurnEvent>,
     private readonly requestRender: () => void = () => {},
   ) {
-    super('debug', 'Debug', 'B', 'monitoring');
+    super('debug', 'Debug', '▧', 'incidents-diagnostics');
+    this.filterEnabled = true;
+    this.filterLabel = 'Filter calls';
     this._subscribe();
   }
 
@@ -165,6 +216,13 @@ export class DebugPanel extends BasePanel {
     );
 
     this._unsubs.push(
+      this.turnEvents.on('LLM_REQUEST_STARTED', (env) => {
+        this._inflightProvider = env.provider;
+        this._inflightModel = env.model;
+      }),
+    );
+
+    this._unsubs.push(
       this.turnEvents.on('LLM_RESPONSE_RECEIVED', (env) => {
         const now = Date.now();
         const latencyMs =
@@ -174,6 +232,8 @@ export class DebugPanel extends BasePanel {
               ? now - this._turnStartMs
               : 0;
         this._streamStartMs = null;
+        this._inflightProvider = null;
+        this._inflightModel = null;
 
         // Compute per-call token delta if orchestrator is wired
         let inputTokens  = env.inputTokens + (env.cacheReadTokens ?? 0) + (env.cacheWriteTokens ?? 0);
@@ -193,7 +253,9 @@ export class DebugPanel extends BasePanel {
           inputTokens,
           outputTokens,
           latencyMs,
-          statusCode: 200,
+          // WO-137: no fabricated 200 — this layer never observes a real
+          // HTTP status code on success, so 0 means "no code, just OK".
+          statusCode: 0,
           status: 'ok',
         };
         this._pushCall(entry);
@@ -212,8 +274,8 @@ export class DebugPanel extends BasePanel {
 
         const entry: ApiCallEntry = {
           ts: Date.now(),
-          provider: 'unknown',
-          model: 'unknown',
+          provider: this._inflightProvider ?? 'n/a',
+          model: this._inflightModel ?? 'n/a',
           inputTokens:  0,
           outputTokens: 0,
           latencyMs:    0,
@@ -221,18 +283,42 @@ export class DebugPanel extends BasePanel {
           status:       'error',
           errorMessage: msg.slice(0, 120),
         };
+        this._inflightProvider = null;
+        this._inflightModel = null;
         this._pushCall(entry);
         this._pushError(entry);
         this.markDirty();
         this.requestRender();
       }),
     );
+
+    this._unsubs.push(
+      this.turnEvents.on('TURN_COMPLETED', () => {
+        this._inflightProvider = null;
+        this._inflightModel = null;
+      }),
+    );
+
+    this._unsubs.push(
+      this.turnEvents.on('TURN_CANCEL', () => {
+        this._inflightProvider = null;
+        this._inflightModel = null;
+      }),
+    );
   }
 
   private _pushCall(entry: ApiCallEntry): void {
     this._totalCalls++;
+    // Follow-mode: only auto-jump to the new row when the selection was
+    // already at (or past) the previous tail — mirrors the SystemMessagesPanel
+    // "don't yank the cursor while the user is reviewing history" contract.
+    const wasAtTail = this._calls.length === 0 || this.selectedIndex >= this._calls.length - 1;
     this._calls.push(entry);
-    if (this._calls.length > MAX_CALL_LOG) this._calls.shift();
+    if (this._calls.length > MAX_CALL_LOG) {
+      this._calls.shift();
+      if (this.selectedIndex > 0) this.selectedIndex--;
+    }
+    if (wasAtTail) this.selectedIndex = this._calls.length - 1;
   }
 
   private _pushError(entry: ApiCallEntry): void {
@@ -245,9 +331,107 @@ export class DebugPanel extends BasePanel {
   // Lifecycle
   // -------------------------------------------------------------------------
 
+  override onActivate(): void {
+    super.onActivate();
+    this._startAgesTimer();
+  }
+
+  override onDeactivate(): void {
+    this._stopAgesTimer();
+  }
+
   override onDestroy(): void {
+    this._stopAgesTimer();
     for (const unsub of this._unsubs) unsub();
     this._unsubs = [];
+  }
+
+  private _startAgesTimer(): void {
+    if (this.agesTimerId) return;
+    this.agesTimerId = this.registerTimer(setInterval(() => {
+      if (this._calls.length === 0) return;
+      this.markDirty();
+      this.requestRender();
+    }, AGES_REFRESH_MS));
+  }
+
+  private _stopAgesTimer(): void {
+    if (this.agesTimerId) {
+      this.clearTimer(this.agesTimerId);
+      this.agesTimerId = null;
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // ScrollableListPanel contract
+  // -------------------------------------------------------------------------
+
+  protected getItems(): readonly ApiCallEntry[] {
+    return this._calls;
+  }
+
+  protected override getPalette() { return C; }
+  protected override getEmptyStateMessage() { return ' No calls yet'; }
+
+  protected override filterMatches(entry: ApiCallEntry, q: string): boolean {
+    return entry.provider.toLowerCase().includes(q)
+      || entry.model.toLowerCase().includes(q)
+      || entry.status.includes(q)
+      || (entry.errorMessage?.toLowerCase().includes(q) ?? false);
+  }
+
+  protected renderItem(entry: ApiCallEntry, _index: number, selected: boolean, width: number): Line {
+    const statusChar = entry.status === 'ok' ? '✓' : '✕';
+    const statusFg   = entry.status === 'ok' ? C.good : C.bad;
+    const codeSuffix = entry.status === 'error' && entry.statusCode > 0 ? ` [${entry.statusCode}]` : '';
+    return buildAlignedRow(
+      width,
+      [
+        { text: fmtAgo(entry.ts), fg: C.dim },
+        { text: statusChar, fg: statusFg },
+        { text: entry.provider, fg: C.provName },
+        { text: entry.model + codeSuffix, fg: C.value },
+        { text: fmtTok(entry.inputTokens), fg: C.input },
+        { text: fmtTok(entry.outputTokens), fg: C.output },
+        { text: fmtMs(entry.latencyMs), fg: latColor(entry.latencyMs) },
+        { text: fmtUsd(callCost(entry)), fg: C.value },
+      ],
+      CALL_COLUMNS,
+      { selected, selectedBg: C.selectBg },
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Input
+  // -------------------------------------------------------------------------
+
+  handleInput(key: string): boolean {
+    const confirmResult = handleConfirmInput(this.confirm, key);
+    if (confirmResult === 'confirmed') {
+      this.confirm = null;
+      this._calls = [];
+      this._errors = [];
+      this._totalCalls = 0;
+      this._totalErrors = 0;
+      this.selectedIndex = 0;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'cancelled') {
+      this.confirm = null;
+      this.markDirty();
+      return true;
+    }
+    if (confirmResult === 'absorbed') return true;
+
+    if (!this.filterActive && key === 'c') {
+      if (this._calls.length === 0) return false;
+      this.confirm = { subject: 'clear', label: `${this._calls.length} API call(s)`, verb: 'Clear' };
+      this.markDirty();
+      return true;
+    }
+
+    return super.handleInput(key);
   }
 
   // -------------------------------------------------------------------------
@@ -255,81 +439,124 @@ export class DebugPanel extends BasePanel {
   // -------------------------------------------------------------------------
 
   override render(width: number, height: number): Line[] {
-    const sections: PanelWorkspaceSection[] = [
-      {
-        title: 'Session',
-        lines: this._renderSummary(width),
-      },
-    ];
+    this.clampSelection();
 
-    if (this._calls.length === 0) {
-      sections.push({
-        title: 'API Call Log',
-        lines: buildEmptyState(
-          width,
-          ' No calls yet',
-          'Completed provider calls and API failures will appear here with timing, token counts, and status codes.',
-          [],
-          DEFAULT_PANEL_PALETTE,
-        ),
+    if (this.confirm) {
+      const lines = buildPanelWorkspace(width, height, {
+        title: ' API Debug',
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this.confirm) }],
+        palette: C,
       });
-    } else {
-      const rows = this._renderCallLog(width);
-      if (this._errors.length > 0) {
-        const errors = this._renderErrorHistory(width);
-        const [callSection, errorSection] = resolveStackedScrollableSections(width, height, {
-          palette: DEFAULT_PANEL_PALETTE,
-          beforeSections: sections,
-          sections: [
-            {
-              title: 'API Call Log',
-              scrollableLines: rows,
-              scrollOffset: Math.max(0, rows.length - 1),
-              minRows: 8,
-              weight: 2,
-            },
-            {
-              title: 'Error History',
-              scrollableLines: errors,
-              scrollOffset: Math.max(0, errors.length - 1),
-              minRows: 4,
-              weight: 1,
-            },
-          ],
-        });
-        sections.push(callSection!.section, errorSection!.section);
-      } else {
-        const callSection = resolveScrollablePanelSection(width, height, {
-          palette: DEFAULT_PANEL_PALETTE,
-          beforeSections: sections,
-          section: {
-            title: 'API Call Log',
-            scrollableLines: rows,
-            scrollOffset: Math.max(0, rows.length - 1),
-            minRows: 8,
-          },
-        });
-        sections.push(callSection.section);
-      }
+      while (lines.length < height) lines.push(createEmptyLine(width));
+      return lines.slice(0, height);
     }
 
-    const latestError = this._errors[this._errors.length - 1];
-    const footerLines = latestError
-      ? [buildStyledPanelLine(width, [
-          { text: ' ✕ latest error  ', fg: C.bad },
-          { text: truncateDisplay(latestError.errorMessage ?? 'unknown error', Math.max(0, width - 18)), fg: C.dim },
-        ])]
-      : [buildStyledPanelLine(width, [
-          { text: ' Live feed — newest calls at the bottom; auto-follows.', fg: C.dim },
-        ])];
+    const intro = 'Recent provider calls, token deltas, latency, status codes, and cost, with error history.';
 
-    return buildPanelWorkspace(width, height, {
-      title: ' API Debug',
-      intro: 'Recent provider calls, token deltas, latency, status codes, and error history.',
-      sections,
+    if (this._calls.length === 0) {
+      const lines = buildPanelWorkspace(width, height, {
+        title: ' API Debug',
+        intro,
+        sections: [{
+          title: 'Session',
+          lines: buildEmptyState(
+            width,
+            this.getEmptyStateMessage(),
+            'Completed provider calls and API failures will appear here with timing, token counts, status, and cost.',
+            [],
+            C,
+          ),
+        }],
+        palette: C,
+      });
+      while (lines.length < height) lines.push(createEmptyLine(width));
+      return lines.slice(0, height);
+    }
+
+    const summarySection: PanelWorkspaceSection = { title: 'Session', lines: this._renderSummary(width) };
+    const filterSection: PanelWorkspaceSection = { lines: [this.buildFilterLine(width)] };
+
+    const visible = this.getVisibleItems();
+    this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, Math.max(0, visible.length - 1)));
+    const selected = this.getSelectedItem();
+
+    const rows: Line[] = visible.length > 0
+      ? visible.map((entry, index) => this.renderItem(entry, index, index === this.selectedIndex, width))
+      : [buildPanelLine(width, [[`  No calls match "${this.filterQuery.trim()}"  (Esc to clear)`, C.dim]])];
+
+    const detailSection: PanelWorkspaceSection = selected
+      ? {
+          title: 'Selected Call',
+          lines: [
+            buildKeyValueLine(width, [
+              { label: 'provider', value: selected.provider, valueColor: C.provName },
+              { label: 'model', value: selected.model, valueColor: C.value },
+              { label: 'status', value: selected.status === 'ok' ? 'OK' : 'ERROR', valueColor: selected.status === 'ok' ? C.good : C.bad },
+              { label: 'when', value: fmtAgo(selected.ts), valueColor: C.dim },
+            ], C),
+            buildKeyValueLine(width, [
+              { label: 'in', value: String(selected.inputTokens), valueColor: C.input },
+              { label: 'out', value: String(selected.outputTokens), valueColor: C.output },
+              { label: 'latency', value: fmtMs(selected.latencyMs), valueColor: latColor(selected.latencyMs) },
+              { label: 'cost', value: fmtUsd(callCost(selected)), valueColor: C.value },
+            ], C),
+            ...(selected.errorMessage
+              ? buildBodyText(width, selected.errorMessage, C, C.bad)
+              : []),
+          ],
+        }
+      : { title: 'Selected Call', lines: [] };
+
+    const latestError = this._errors[this._errors.length - 1];
+    const hints = this.filterActive
+      ? [
+          { keys: 'type', label: 'filter calls' },
+          { keys: 'Enter', label: 'apply' },
+          { keys: 'Esc', label: 'clear' },
+        ]
+      : [
+          { keys: '↑/↓', label: 'select call' },
+          { keys: '/', label: 'filter' },
+          { keys: 'c', label: 'clear log' },
+        ];
+
+    const footerLines: Line[] = [
+      ...(latestError
+        ? [buildStyledPanelLine(width, [
+            { text: ' ✕ latest error  ', fg: C.bad },
+            { text: truncateDisplay(latestError.errorMessage ?? 'unknown error', Math.max(0, width - 18)), fg: C.dim },
+          ])]
+        : []),
+      buildKeyboardHints(width, hints, C),
+    ];
+
+    const callSection = resolvePrimaryScrollableSection(width, height, {
+      intro,
       footerLines,
-      palette: DEFAULT_PANEL_PALETTE,
+      palette: C,
+      beforeSections: [summarySection, filterSection],
+      section: {
+        title: `API Call Log (${visible.length} of ${this._calls.length})`,
+        scrollableLines: rows,
+        selectedIndex: this.selectedIndex,
+        scrollOffset: this.scrollStart,
+        minRows: 6,
+        appendWindowSummary: { dimColor: C.dim },
+      },
+      afterSections: [detailSection],
     });
+    this.scrollStart = callSection.scrollOffset;
+
+    this.needsRender = false;
+    const lines = buildPanelWorkspace(width, height, {
+      title: ' API Debug',
+      intro,
+      sections: [summarySection, filterSection, callSection.section, detailSection],
+      footerLines,
+      palette: C,
+    });
+    while (lines.length < height) lines.push(createEmptyLine(width));
+    return lines.slice(0, height);
   }
 
   // -------------------------------------------------------------------------
@@ -345,6 +572,7 @@ export class DebugPanel extends BasePanel {
       ? Math.round(recent.reduce((s, c) => s + c.latencyMs, 0) / recent.length)
       : 0;
     const sessionTokens = this._calls.reduce((s, c) => s + c.inputTokens + c.outputTokens, 0);
+    const sessionCost = this._calls.reduce((s, c) => s + callCost(c), 0);
 
     const lines: Line[] = [
       buildStyledPanelLine(width, [
@@ -358,6 +586,8 @@ export class DebugPanel extends BasePanel {
         { text: fmtMs(avgLat), fg: avgLat > 0 ? latColor(avgLat) : C.dim },
         { text: '   Tokens ', fg: C.label },
         { text: fmtTok(sessionTokens), fg: C.value },
+        { text: '   Cost ', fg: C.label },
+        { text: fmtUsd(sessionCost), fg: C.value },
       ]),
     ];
     // Live status: most recent call (latency / age) or wiring hint.
@@ -375,82 +605,5 @@ export class DebugPanel extends BasePanel {
       ]));
     }
     return lines;
-  }
-
-  private _renderCallLog(width: number): Line[] {
-    const lines: Line[] = [];
-    lines.push(this._callLogHeader(width));
-    for (const entry of this._calls) {
-      lines.push(this._callLogRow(entry, width));
-    }
-
-    return lines;
-  }
-
-  private _callLogHeader(width: number): Line {
-    // Layout: time(8) status(2) provider(12) model(20) in(8) out(8) lat(8)
-    const header = '  Time    S Provider     Model               In       Out      Lat';
-    return this._textLine(truncateDisplay(header, width), C.colHdr, width, { dim: true });
-  }
-
-  private _callLogRow(e: ApiCallEntry, width: number): Line {
-    const timeStr    = fmtAgo(e.ts).padEnd(8);
-    const statusChar = e.status === 'ok' ? '✓' : '✕';
-    const statusFg   = e.status === 'ok' ? C.good : C.bad;
-    const provStr    = fitDisplay(e.provider, 12);
-    const modelStr   = fitDisplay(e.model, 20);
-    const inStr      = fmtTok(e.inputTokens).padStart(8);
-    const outStr     = fmtTok(e.outputTokens).padStart(8);
-    const latStr     = fmtMs(e.latencyMs).padStart(8);
-
-    const segments: Array<{ text: string; fg: string; bold?: boolean }> = [
-      { text: '  ' + timeStr, fg: C.dim },
-      { text: statusChar + ' ', fg: statusFg },
-      { text: provStr, fg: C.provName },
-      { text: modelStr, fg: C.value },
-      { text: inStr, fg: C.input },
-      { text: outStr, fg: C.output },
-      { text: latStr, fg: latColor(e.latencyMs) },
-    ];
-
-    // Append status code for errors
-    if (e.status === 'error' && e.statusCode > 0) {
-      segments.push({ text: ` [${e.statusCode}]`, fg: C.bad });
-    }
-
-    return buildStyledPanelLine(
-      width,
-      segments.map((seg) => ({ text: seg.text, fg: seg.fg, bold: seg.bold })),
-    );
-  }
-
-  private _renderErrorHistory(width: number): Line[] {
-    const lines: Line[] = [];
-    for (const e of this._errors) {
-      lines.push(this._errorRow(e, width));
-    }
-
-    return lines;
-  }
-
-  private _errorRow(e: ApiCallEntry, width: number): Line {
-    const timeStr  = fmtAgo(e.ts).padEnd(8);
-    const codeStr  = e.statusCode > 0 ? `[${e.statusCode}] ` : '';
-    const msgStr   = truncateDisplay(e.errorMessage ?? 'unknown error', Math.max(0, width - 12 - codeStr.length));
-    const full     = `  ${timeStr} ${codeStr}${msgStr}`;
-    return this._textLine(truncateDisplay(full, width), C.bad, width);
-  }
-
-  // -------------------------------------------------------------------------
-  // Line-builder helpers
-  // -------------------------------------------------------------------------
-
-  private _textLine(
-    text: string,
-    fg: string,
-    width: number,
-    opts: { dim?: boolean } = {},
-  ): Line {
-    return buildStyledPanelLine(width, [{ text, fg, dim: opts.dim }]);
   }
 }

@@ -36,6 +36,7 @@ import {
   checkRecoveryFile,
   deleteRecoveryFile,
   loadRecoveryConversation,
+  readLastSessionPointer,
   writeRecoveryFile,
 } from '@/runtime/index.ts';
 import { handleBlockingShellInput, type PendingPermissionState } from './shell/blocking-input.ts';
@@ -58,7 +59,7 @@ import { formatUserFacingErrorLine } from './core/format-user-error.ts';
 import { wireStreamEventMetrics, type StreamMetrics, type WireStreamEventMetricsResult } from './core/stream-event-wiring.ts';
 import { wireTurnEventHandlers } from './core/turn-event-wiring.ts';
 import { buildContextStatusHint } from './renderer/context-status-hint.ts';
-import { evaluateSessionMaintenance } from './panels/session-maintenance.ts';
+import { evaluateSessionMaintenance } from '@/runtime/index.ts';
 
 const ALT_SCREEN_ENTER = '\x1b[?1049h'; const ALT_SCREEN_EXIT  = '\x1b[?1049l';
 const MOUSE_ENABLE     = '\x1b[?1000h\x1b[?1002h\x1b[?1006h'; const MOUSE_DISABLE    = '\x1b[?1006l\x1b[?1002l\x1b[?1000l';
@@ -428,6 +429,7 @@ async function main() {
     model: runtime.model,
     provider: runtime.provider,
     toolCount,
+    lastSessionId: readLastSessionPointer({ workingDirectory: workingDir, homeDirectory, surfaceRoot: 'tui' }) ?? undefined,
   };
 
   const render = () => {
@@ -490,6 +492,8 @@ async function main() {
       provider: runtime.provider,
       contextWindow,
       contextStatusHint,
+      // Compact footer posture on short terminals so the shell stays usable.
+      compact: height < 30,
       // behavior.autoCompactThreshold is stored as a percent integer (e.g. 80);
       // the meter expects a fraction [0..1]. Clamp to [0,1] to guard nonsense values.
       compactThreshold: Math.min(1, Math.max(0, (configManager.get('behavior.autoCompactThreshold') as number) / 100)),

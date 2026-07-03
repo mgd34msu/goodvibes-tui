@@ -1,41 +1,28 @@
 import { promises as fsPromises } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import { getDisplayWidth, truncateDisplay } from '../utils/terminal-width.ts';
-import { SearchableListPanel } from './scrollable-list-panel.ts';
+import { ScrollableListPanel } from './scrollable-list-panel.ts';
+import { FilePreviewPanel } from './file-preview-panel.ts';
+import type { PanelIntegrationContext } from './types.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
-import type { ShellPathService } from '@/runtime/index.ts';
+import { listInstalledEcosystemEntries, type EcosystemCatalogPathOptions, type ShellPathService } from '@/runtime/index.ts';
 import {
   buildPanelLine,
   buildPanelWorkspace,
   DEFAULT_PANEL_PALETTE,
+  extendPalette,
 } from './polish.ts';
-import {
-  getPanelSearchFocusTransition,
-  isPanelSearchCancel,
-} from './search-focus.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  searchFg: '#f97316',
-  searchBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#64748b',
-  empty: '#334155',
-  selectedFg: '#e2e8f0',
-  selectedBg: '#1e3a5f',
-  project: '#38bdf8',
-  global: '#a78bfa',
-  hint: '#475569',
-  path: '#94a3b8',
-  selectBg: '#1e3a5f',
-} as const;
+// Domain accents only; base chrome (header/headerBg/label/value/dim/empty/
+// selectBg) comes from DEFAULT_PANEL_PALETTE.
+const C = extendPalette(DEFAULT_PANEL_PALETTE, {
+  project: '#38bdf8',   // project-local skill origin
+  global:  '#a78bfa',   // global skill origin
+} as const);
 
 export type SkillOrigin = 'project-local' | 'global' | 'custom';
 
@@ -47,11 +34,20 @@ export interface SkillRecord {
   dependencies: string[];
   includes: string[];
   frontmatter: Record<string, string>;
+  /**
+   * Set when this skill's file lives under an installed ecosystem-marketplace
+   * receipt's targetPath — the receipt's provenance summary (e.g. curated
+   * source / signature info), so marketplace-installed skills read as such
+   * instead of looking identical to hand-authored ones.
+   */
+  marketplaceProvenance?: string;
 }
 
 export interface SkillsPanelOptions {
   shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
   componentHealthMonitor?: ComponentHealthMonitor;
+  /** When provided, installed skill entries are tagged with marketplace provenance. */
+  ecosystemPaths?: EcosystemCatalogPathOptions;
 }
 
 function parseFrontmatter(content: string): Record<string, string> {
@@ -133,7 +129,31 @@ async function scanSkillDirectory(root: string, origin: SkillOrigin): Promise<Sk
   return records;
 }
 
-export async function discoverSkills(shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>): Promise<SkillRecord[]> {
+/**
+ * Tags records whose file lives under an installed ecosystem-marketplace
+ * receipt's targetPath with that receipt's provenance summary. Best-effort:
+ * a lookup failure (e.g. no ecosystem catalogs configured) leaves records
+ * untagged rather than failing skill discovery.
+ */
+function applyMarketplaceProvenance(records: SkillRecord[], ecosystemPaths: EcosystemCatalogPathOptions): SkillRecord[] {
+  let receipts: ReturnType<typeof listInstalledEcosystemEntries>;
+  try {
+    receipts = listInstalledEcosystemEntries('skill', ecosystemPaths);
+  } catch {
+    return records;
+  }
+  if (receipts.length === 0) return records;
+  return records.map((record) => {
+    const receipt = receipts.find((candidate) => record.path === candidate.targetPath || record.path.startsWith(`${candidate.targetPath}${sep}`));
+    if (!receipt) return record;
+    return { ...record, marketplaceProvenance: receipt.provenanceSummary };
+  });
+}
+
+export async function discoverSkills(
+  shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>,
+  ecosystemPaths?: EcosystemCatalogPathOptions,
+): Promise<SkillRecord[]> {
   const cwd = shellPaths.workingDirectory;
   const homeDir = shellPaths.homeDirectory;
   const seen = new Set<string>();
@@ -147,7 +167,9 @@ export async function discoverSkills(shellPaths: Pick<ShellPathService, 'working
     }
   }
 
-  return records.sort((a, b) => {
+  const tagged = ecosystemPaths ? applyMarketplaceProvenance(records, ecosystemPaths) : records;
+
+  return tagged.sort((a, b) => {
     const originRank = a.origin === b.origin
       ? 0
       : a.origin === 'project-local'
@@ -227,27 +249,34 @@ function originColor(origin: SkillOrigin): string {
   }
 }
 
-export class SkillsPanel extends SearchableListPanel<SkillRecord> {
+export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
   private readonly shellPaths: Pick<ShellPathService, 'workingDirectory' | 'homeDirectory'>;
-  /** Whether the filter input row is focused for typing (vs. list navigation). */
-  private filterFocused = false;
+  private readonly ecosystemPaths: EcosystemCatalogPathOptions | undefined;
   private cached: SkillRecord[] | null = null;
   private cacheDirty = true;
   // I1: confirm state for destructive delete
   private confirm: ConfirmState | null = null;
   private readyPromise: Promise<void> | null = null;
+  // Staged pending action consumed by handlePanelIntegrationAction (same
+  // pattern as diff-panel.ts's pendingOpenPreview): Enter marks the intent
+  // here, the actual PanelManager/preview wiring happens once the
+  // integration context is available.
+  private pendingOpenPreview = false;
 
   public constructor(options: SkillsPanelOptions) {
-    super('skills', 'Skills', 'K', 'monitoring', options.componentHealthMonitor);
+    super('skills', 'Skills', '▩', 'automation-control', options.componentHealthMonitor);
     this.showSelectionGutter = true; // I5: non-color selection affordance
+    this.filterEnabled = true; // WO-153: converged modal '/' filter
+    this.filterLabel = 'Filter';
     this.shellPaths = options.shellPaths;
+    this.ecosystemPaths = options.ecosystemPaths;
   }
 
   // -------------------------------------------------------------------------
-  // SearchableListPanel implementation
+  // ScrollableListPanel implementation
   // -------------------------------------------------------------------------
 
-  protected getAllItems(): readonly SkillRecord[] {
+  protected getItems(): readonly SkillRecord[] {
     return this.cached ?? [];
   }
 
@@ -255,9 +284,9 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     const p = (async () => {
       try {
         await this.withLoading('Scanning skills\u2026', async () => {
-          this.cached = await discoverSkills(this.shellPaths);
+          this.cached = await discoverSkills(this.shellPaths, this.ecosystemPaths);
           this.cacheDirty = false;
-          this.invalidateFilter();
+          this.markDirty();
         });
       } catch (err) {
         this.setError(summarizeError(err));
@@ -273,14 +302,31 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     return this.readyPromise ?? Promise.resolve();
   }
 
-  protected matchesSearch(skill: SkillRecord, query: string): boolean {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
+  /**
+   * REAL delete: removes the confirmed skill's markdown file from disk, then
+   * rescans so the list reflects the change immediately. Replaces the old
+   * setError('Delete via shell: rm …') signpost, which never actually
+   * deleted anything.
+   */
+  private async _deleteSkill(path: string): Promise<void> {
+    try {
+      await fsPromises.rm(path);
+      this.cacheDirty = true;
+      await this._loadSkillsAsync();
+    } catch (err) {
+      this.setError(summarizeError(err));
+      this.markDirty();
+    }
+  }
+
+  /** `q` arrives already trimmed + lower-cased from ScrollableListPanel.getVisibleItems(). */
+  protected override filterMatches(skill: SkillRecord, q: string): boolean {
     const haystack = [
       skill.name,
       skill.description,
       skill.path,
       skill.origin,
+      skill.marketplaceProvenance ?? '',
       skill.dependencies.join(' '),
       skill.includes.join(' '),
     ].join(' ').toLowerCase();
@@ -290,17 +336,22 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
   protected renderItem(skill: SkillRecord, index: number, selected: boolean, width: number): Line {
     const bg = selected ? C.selectBg : undefined;
     const dot = skill.origin === 'project-local' ? '\u25c6' : '\u2022';
+    // Marketplace-installed skills get a badge glyph; unbadged column stays a
+    // single blank cell so rows stay aligned either way.
+    const marketplaceBadge = skill.marketplaceProvenance ? '\u2605' : ' ';
     const desc = skill.description || 'No description provided.';
-    const descWidth = Math.max(1, width - 4 - skill.name.length - 6);
+    const descWidth = Math.max(1, width - 6 - skill.name.length - 6);
     const descLines = wordWrap(desc, descWidth);
     return buildPanelLine(width, [
-      [selected ? '\u25b8' : ' ', C.selectedFg, bg],
+      [selected ? '\u25b8' : ' ', C.value, bg],
       [' ', C.dim, bg],
       [dot, originColor(skill.origin), bg],
       [' ', C.dim, bg],
-      [skill.name, selected ? C.selectedFg : C.value, bg],
+      [marketplaceBadge, C.info, bg],
+      [' ', C.dim, bg],
+      [skill.name, selected ? C.value : C.value, bg],
       ['  ', C.dim, bg],
-      [descLines[0] ?? '', selected ? C.selectedFg : C.dim, bg],
+      [descLines[0] ?? '', selected ? C.value : C.dim, bg],
     ]);
   }
 
@@ -315,14 +366,58 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
 
   public override onActivate(): void {
     super.onActivate();
-    this.searchQuery = '';
-    this.invalidateFilter();
-    this.filterFocused = false;
+    this.filterQuery = '';
+    this.filterActive = false;
     this.cacheDirty = true;
     void this._loadSkillsAsync();
   }
 
   public override onDestroy(): void {}
+
+  protected override onSelect(_skill: SkillRecord): void {
+    // Enter opens the skill's markdown source in the preview panel — see
+    // handlePanelIntegrationAction for the actual PanelManager wiring
+    // (needs the integration context, not available here). Selection itself
+    // is read back from getVisibleItems() in that hook. onSelect is only
+    // invoked by ScrollableListPanel's navigation handler when the filter is
+    // not active, so no manual guard is needed here.
+    this.pendingOpenPreview = true;
+  }
+
+  /**
+   * Cross-panel integration hook — Enter opens the selected skill's markdown
+   * source in the preview panel via the same open/focus bridge DiffPanel
+   * uses (src/input/panel-integration-actions.ts), without this panel
+   * needing to know about PanelManager pane/focus mechanics beyond what ctx
+   * exposes.
+   */
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this.pendingOpenPreview) return false;
+    this.pendingOpenPreview = false;
+    const skill = this.getSelectedItem();
+    if (!skill) return false;
+
+    const pm = ctx.panelManager;
+    let previewPanel = pm.getPanel('preview');
+    if (previewPanel instanceof FilePreviewPanel) {
+      const pane = pm.getPaneOf('preview');
+      pm.activateById('preview');
+      if (pane) pm.focusPane(pane);
+    } else {
+      const targetPane: 'top' | 'bottom' = pm.isBottomPaneVisible()
+        ? (pm.getFocusedPane() === 'top' ? 'bottom' : 'top')
+        : 'bottom';
+      const opened = pm.open('preview', targetPane);
+      pm.show();
+      pm.focusPane(targetPane);
+      previewPanel = opened instanceof FilePreviewPanel ? opened : null;
+    }
+    if (previewPanel instanceof FilePreviewPanel) {
+      previewPanel.openFile(skill.path);
+      return true;
+    }
+    return false;
+  }
 
   public handleInput(key: string): boolean {
     // I1: y/n confirmation dialog for delete
@@ -330,9 +425,7 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     if (confirmResult === 'confirmed') {
       const toDelete = this.confirm!.subject;
       this.confirm = null;
-      // Skills are read from the filesystem — deletion requires a shell command.
-      // Surface an error directing the user to remove the file manually.
-      this.setError(`Delete via shell: rm "${toDelete}"`);
+      void this._deleteSkill(toDelete);
       this.markDirty();
       return true;
     }
@@ -343,38 +436,11 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
     }
     if (confirmResult === 'absorbed') return true;
 
-    const items = this.getItems();
-
-    // Filter-focus mode: typing goes into the search query
-    if (this.filterFocused) {
-      const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
-      if (transition === 'focus-list') {
-        this.filterFocused = false;
-        this.markDirty();
-        return true;
-      }
-      // Escape: also blur filter focus (clear + return to list navigation)
-      if (isPanelSearchCancel(key)) {
-        this.filterFocused = false;
-        // Delegate to super to clear the query. If the query is empty, super
-        // returns false and escape propagates to the panel dismissal handler —
-        // this is the intentional double-escape UX (blur filter, then close).
-        return super.handleInput(key);
-      }
-      // Delegate backspace/printable to SearchableListPanel.handleInput
-      return super.handleInput(key);
-    }
-
-    const transition = getPanelSearchFocusTransition(key, { selectedIndex: this.selectedIndex, itemCount: items.length });
-    if (transition === 'focus-search') {
-      this.filterFocused = true;
-      this.markDirty();
-      return true;
-    }
-
-    // I1: 'd' prompts delete confirmation
-    if (key === 'd') {
-      const skill = items[this.selectedIndex];
+    // I1: 'd' prompts delete confirmation — only outside filter mode, so 'd'
+    // remains typeable into the filter query while it is active (WO-153:
+    // converged modal '/' filter coexists with single-letter action keys).
+    if (!this.filterActive && key === 'd') {
+      const skill = this.getSelectedItem();
       if (skill) {
         this.confirm = { subject: skill.path, label: skill.name };
         this.markDirty();
@@ -382,7 +448,8 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
       return true;
     }
 
-    // Navigation + search: delegate to SearchableListPanel (up/down/g/G/page/enter + backspace/escape)
+    // Navigation + filter: delegate to ScrollableListPanel ('/' enters
+    // filter, typing narrows, Esc clears, up/down/g/G/page/enter navigate).
     return super.handleInput(key);
   }
 
@@ -402,27 +469,28 @@ export class SkillsPanel extends SearchableListPanel<SkillRecord> {
       return lines.slice(0, height);
     }
 
-    // Build filter input line (provided by SearchableListPanel base)
-    const filterLine = this.buildFilterInputLine(width, 'Filter', this.filterFocused);
-
     // Build detail footer for the currently selected skill
-    const items = this.getItems();
-    const selected = items[this.selectedIndex];
+    const selected = this.getSelectedItem();
     const detailLines: Line[] = [];
     if (selected) {
       detailLines.push(
         buildPanelLine(width, [['  Selected: ', C.label], [selected.name, C.value], ['  [', C.dim], [originLabel(selected.origin), originColor(selected.origin)], [']', C.dim]]),
-        buildPanelLine(width, [['  Path: ', C.label], [truncatePathDisplay(selected.path, Math.max(1, width - 8)), C.path]]),
+        buildPanelLine(width, [['  Path: ', C.label], [truncatePathDisplay(selected.path, Math.max(1, width - 8)), C.label]]),
         buildPanelLine(width, [['  Desc: ', C.label], [selected.description || 'No description provided.', C.value]]),
         buildPanelLine(width, [['  Depends: ', C.label], [selected.dependencies.length > 0 ? selected.dependencies.join(', ') : 'none', C.dim]]),
         buildPanelLine(width, [['  Includes: ', C.label], [selected.includes.length > 0 ? selected.includes.join(', ') : 'none', C.dim]]),
+        buildPanelLine(width, [
+          ['  Provenance: ', C.label],
+          [selected.marketplaceProvenance ?? 'not installed via marketplace', selected.marketplaceProvenance ? C.info : C.dim],
+        ]),
       );
     }
-    detailLines.push(buildPanelLine(width, [['  Up/Down navigate  / or Up-at-top focus filter  Esc blur  Backspace clear', C.hint]]));
+    detailLines.push(buildPanelLine(width, [['  Up/Down navigate  / filter  Esc clear  Backspace edit', C.dim]]));
+    detailLines.push(buildPanelLine(width, [['  Enter open in preview  d delete (confirm)', C.dim]]));
 
+    // Filter input line is auto-injected by renderList() (filterEnabled=true).
     const lines = this.renderList(width, height, {
       title: 'Skills - discover project-local and global skill packs',
-      header: [filterLine],
       footer: detailLines,
     });
     return lines;

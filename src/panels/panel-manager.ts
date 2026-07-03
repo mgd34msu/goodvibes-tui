@@ -29,6 +29,8 @@ export interface WorkspaceTab {
 export class PanelManager {
   private registry: PanelRegistration[] = [];
   private retainedPanels = new Map<string, Panel>();
+  /** Old/absorbed panel id -> merged target id (WO-1xx console merges). */
+  private aliases = new Map<string, string>();
   private _visible: boolean = false;
   private _splitRatio: number = 0.6;
 
@@ -38,6 +40,12 @@ export class PanelManager {
   private _focusedPane: 'top' | 'bottom' = 'top';
   private _verticalSplitRatio: number = 0.5; // top gets 50% of panel height
   private _bottomPaneVisible: boolean = false;
+
+  // Single source of truth for prompt-vs-panel keyboard focus. Previously this
+  // lived as a `panelFocused` boolean scattered across InputHandler and the
+  // input-routing seams; centralizing it here is what makes it impossible for
+  // panel focus to disagree with workspace visibility (see getFocusTarget).
+  private _focusTarget: 'prompt' | 'panel' = 'prompt';
 
   // Cache for getWorkspaceTabs() — invalidated on every panel lifecycle event
   private _cachedWorkspaceTabs: readonly WorkspaceTab[] | null = null;
@@ -64,11 +72,35 @@ export class PanelManager {
 
   registerType(registration: PanelRegistration): void {
     const existing = this.registry.findIndex(r => r.id === registration.id);
+    // WO-152: registry-time icon-uniqueness assertion. Tab-bar icons are a
+    // single glyph; two panels sharing one silently made the workspace tab
+    // strip ambiguous (the historical W/R/U/K/M/Q/Y/J/P collisions). Compare
+    // against every OTHER registration (excluding a re-registration of the
+    // same id, which is a legitimate update, e.g. tests replacing a factory).
+    const iconOwner = this.registry.find(r => r.id !== registration.id && r.icon === registration.icon);
+    if (iconOwner) {
+      throw new Error(
+        `Panel icon '${registration.icon}' for '${registration.id}' collides with already-registered panel '${iconOwner.id}'. Panel icons must be unique across the registry.`,
+      );
+    }
     if (existing >= 0) {
       this.registry[existing] = registration;
     } else {
       this.registry.push(registration);
     }
+  }
+
+  /**
+   * Register a compat redirect so an absorbed panel's old id still resolves
+   * after a console merge (docs, saved layouts, and muscle memory do not
+   * break). Resolved by open/close/activateById/getPanel/getPaneOf.
+   */
+  registerAlias(aliasId: string, targetId: string): void {
+    this.aliases.set(aliasId, targetId);
+  }
+
+  private _resolveId(panelId: string): string {
+    return this.aliases.get(panelId) ?? panelId;
   }
 
   getRegisteredTypes(): PanelRegistration[] {
@@ -103,12 +135,20 @@ export class PanelManager {
     this._cachedWorkspaceTabs = null;
   }
 
-  open(panelId: string, pane?: 'top' | 'bottom'): Panel {
+  open(panelIdOrAlias: string, pane?: 'top' | 'bottom'): Panel {
+    const panelId = this._resolveId(panelIdOrAlias);
     this._recordRecent(panelId);
     const existingPane = this._findPaneOf(panelId);
     if (existingPane) {
-      this._activateByIdInPane(panelId, existingPane);
       this._visible = true;
+      // Honor an explicitly requested pane so open(id, pane) never lies about
+      // where the panel lands: relocate it if it currently lives in the other
+      // pane (fixes `/panel open <id> top` and the panel-list T/B move keys).
+      if (pane && pane !== existingPane) {
+        this._moveBetweenPanes(existingPane, pane, panelId);
+        return this.getPanel(panelId)!;
+      }
+      this._activateByIdInPane(panelId, existingPane);
       this._focusedPane = existingPane;
       if (existingPane === 'bottom') this._bottomPaneVisible = true;
       return this._getPane(existingPane).panels[this._getPane(existingPane).activeIndex]!;
@@ -136,7 +176,8 @@ export class PanelManager {
     return panel;
   }
 
-  close(panelId: string): void {
+  close(panelIdOrAlias: string): void {
+    const panelId = this._resolveId(panelIdOrAlias);
     // Search both panes
     for (const which of ['top', 'bottom'] as const) {
       const p = this._getPane(which);
@@ -248,7 +289,8 @@ export class PanelManager {
     this._invalidateWorkspaceTabs();
   }
 
-  activateById(panelId: string): void {
+  activateById(panelIdOrAlias: string): void {
+    const panelId = this._resolveId(panelIdOrAlias);
     const which = this._findPaneOf(panelId);
     if (!which) return;
     this._activateByIdInPane(panelId, which);
@@ -278,6 +320,49 @@ export class PanelManager {
     if (!this._bottomPaneVisible || this.bottomPane.panels.length === 0) return;
     this._focusedPane = this._focusedPane === 'top' ? 'bottom' : 'top';
     this._invalidateWorkspaceTabs();
+  }
+
+  // -------------------------------------------------------------------------
+  // Keyboard focus ownership (prompt vs. panel workspace)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Which surface owns keyboard focus. Self-healing: focus can only rest on the
+   * panel workspace while it is visible, non-empty, and has an active panel, so
+   * panel focus can never disagree with workspace visibility. Any code that
+   * asks for the focus target therefore reads a value that is always consistent
+   * with what is actually on screen.
+   */
+  getFocusTarget(): 'prompt' | 'panel' {
+    if (this._focusTarget === 'panel' && !this._workspaceIsFocusable()) {
+      this._focusTarget = 'prompt';
+    }
+    return this._focusTarget;
+  }
+
+  /** True when the panel workspace currently owns keyboard focus. */
+  isPanelFocused(): boolean {
+    return this.getFocusTarget() === 'panel';
+  }
+
+  /**
+   * Give keyboard focus to the panel workspace. No-op when there is nothing
+   * focusable (no visible, non-empty pane with an active panel) — this is the
+   * guard that upholds the focus/visibility invariant on the write path.
+   */
+  focusPanels(): void {
+    if (this._workspaceIsFocusable()) {
+      this._focusTarget = 'panel';
+    }
+  }
+
+  /** Return keyboard focus to the prompt. */
+  focusPrompt(): void {
+    this._focusTarget = 'prompt';
+  }
+
+  private _workspaceIsFocusable(): boolean {
+    return this._visible && this.getAllOpen().length > 0 && this.getActivePanel() !== null;
   }
 
   // -------------------------------------------------------------------------
@@ -353,14 +438,15 @@ export class PanelManager {
     return p.panels[p.activeIndex] ?? null;
   }
 
-  getPanel(panelId: string): Panel | null {
+  getPanel(panelIdOrAlias: string): Panel | null {
+    const panelId = this._resolveId(panelIdOrAlias);
     return this.topPane.panels.find((panel) => panel.id === panelId)
       ?? this.bottomPane.panels.find((panel) => panel.id === panelId)
       ?? null;
   }
 
-  getPaneOf(panelId: string): 'top' | 'bottom' | null {
-    return this._findPaneOf(panelId);
+  getPaneOf(panelIdOrAlias: string): 'top' | 'bottom' | null {
+    return this._findPaneOf(this._resolveId(panelIdOrAlias));
   }
 
   getWorkspaceTabs(): readonly WorkspaceTab[] {
@@ -480,6 +566,7 @@ export class PanelManager {
     this.registry = [];
     this._recentlyOpened = [];
     this._focusedPane = 'top';
+    this._focusTarget = 'prompt';
     this._bottomPaneVisible = false;
     this._visible = false;
     this._invalidateWorkspaceTabs();
@@ -562,11 +649,12 @@ export class PanelManager {
   }
 
   private _getRegistration(panelId: string): PanelRegistration | undefined {
-    return this.registry.find((registration) => registration.id === panelId);
+    const resolvedId = this._resolveId(panelId);
+    return this.registry.find((registration) => registration.id === resolvedId);
   }
 
   private _shouldRetain(panelId: string): boolean {
-    return this._getRegistration(panelId)?.preload === true;
+    return this._getRegistration(panelId)?.retainOnClose === true;
   }
 
   private _activateByIdInPane(panelId: string, which: 'top' | 'bottom'): void {

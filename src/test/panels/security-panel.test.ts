@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, mock, test } from 'bun:test';
 import { SecurityPanel } from '../../panels/security-panel.ts';
 import {
   ApiTokenAuditor,
@@ -9,9 +9,11 @@ import { createRuntimeStore } from '../../runtime/store/index.ts';
 import { ForensicsRegistry } from '@/runtime/index.ts';
 import type { PluginManagerObserver, PluginStatus } from '@pellux/goodvibes-sdk/platform/plugins';
 import type { McpDecisionRecord } from '@/runtime/index.ts';
-import type { UiSecuritySnapshot } from '../../runtime/ui-read-models.ts';
+import type { UiReadModel, UiSecuritySnapshot } from '../../runtime/ui-read-models.ts';
 import { createStaticUiReadModel } from '../helpers/ui-read-models.ts';
 import { buildMcpAttackPathReview } from '@/runtime/index.ts';
+import type { PanelManager } from '../../panels/panel-manager.ts';
+import type { PanelIntegrationContext } from '../../panels/types.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -44,6 +46,23 @@ function makePlugins(entries: PluginStatus[] = []): PluginManagerObserver {
 
 function createSecurityPanel(snapshot: UiSecuritySnapshot): SecurityPanel {
   return new SecurityPanel(createStaticUiReadModel(snapshot));
+}
+
+/** A read model whose getSnapshot() call count is observable, so 'r' can be
+ * proven to force a real refresh rather than just markDirty(). */
+function createSpyReadModel(snapshot: UiSecuritySnapshot): UiReadModel<UiSecuritySnapshot> & { getSnapshotCalls: ReturnType<typeof mock> } {
+  const getSnapshotCalls = mock(() => snapshot);
+  return {
+    getSnapshot: getSnapshotCalls,
+    subscribe: () => () => {},
+    getSnapshotCalls,
+  };
+}
+
+function makeCtx(overrides: Partial<PanelIntegrationContext> = {}): PanelIntegrationContext & { executeCommand: ReturnType<typeof mock> } {
+  const executeCommand = mock(() => Promise.resolve(undefined));
+  const panelManager = { open: mock(() => undefined) } as unknown as PanelManager;
+  return { panelManager, executeCommand, ...overrides } as PanelIntegrationContext & { executeCommand: ReturnType<typeof mock> };
 }
 
 function createSecuritySnapshot(input: {
@@ -101,7 +120,10 @@ describe('SecurityPanel', () => {
     expect(text).toContain('Security Control Room');
     expect(text).toContain('Token audit');
     expect(text).toContain('No API tokens are registered');
-    expect(text).toContain('/policy preflight');
+    // WO-160: no printed '/policy preflight' signpost — 'f' is bound and
+    // advertised as a real key hint instead (action substitute cleanup).
+    expect(text).not.toContain('/policy preflight');
+    expect(text).toContain('preflight');
   });
 
   test('renders token audit posture and details', () => {
@@ -236,5 +258,124 @@ describe('SecurityPanel', () => {
     expect(text).toContain('attack paths');
     expect(text).toContain('MCP attack-path review');
     expect(text).toContain('exec_shell');
+  });
+
+  // WO-137 — 'r' becomes a REAL re-audit -------------------------------------
+
+  test('r forces a fresh read-model getSnapshot() call (real re-audit, not markDirty-only)', () => {
+    const auditor = makeAuditor();
+    const snapshot = createSecuritySnapshot({ auditor });
+    const readModel = createSpyReadModel(snapshot);
+    const panel = new SecurityPanel(readModel);
+    panel.render(120, 16); // initial render already calls getSnapshot once
+    const callsBeforeR = readModel.getSnapshotCalls.mock.calls.length;
+    panel.handleInput('r');
+    expect(readModel.getSnapshotCalls.mock.calls.length).toBeGreaterThan(callsBeforeR);
+  });
+
+  test('Last audit timestamp is humanized, not a raw ISO string', () => {
+    const auditor = makeAuditor();
+    auditor.registerToken({
+      id: 'tok-main',
+      label: 'OPENAI_API_KEY',
+      issuedAt: Date.now() - 10 * 24 * 60 * 60 * 1000,
+      grantedScopes: ['models:read', 'responses:write'],
+      policyId: 'openai',
+    });
+    const snapshot = createSecuritySnapshot({ auditor });
+    const panel = createSecurityPanel(snapshot);
+    const text = linesText(panel.render(140, 14));
+    expect(text).toContain('Last audit:');
+    expect(text).not.toContain(new Date(snapshot.audit.lastAuditAt!).toISOString());
+    expect(text).toMatch(/Last audit: (just now|\d+[smh] ago)/);
+  });
+
+  // WO-137 — 'f' preflight bridge ---------------------------------------------
+
+  test('f stages a pending preflight dispatched through handlePanelIntegrationAction', () => {
+    const panel = createSecurityPanel(createSecuritySnapshot({ auditor: makeAuditor() }));
+    expect(panel.handleInput('f')).toBe(true);
+    const ctx = makeCtx();
+    expect(panel.handlePanelIntegrationAction('f', ctx)).toBe(true);
+    expect(ctx.executeCommand).toHaveBeenCalledWith('policy', ['preflight']);
+  });
+
+  // WO-137 — 'i' jump to incident panel ----------------------------------------
+
+  test('i jumps to the incident panel when a latest incident exists', () => {
+    const registry = new ForensicsRegistry();
+    registry.push({
+      id: 'incident-1',
+      traceId: 'trace-1',
+      sessionId: 'session-1',
+      generatedAt: Date.now(),
+      classification: 'permission_denied',
+      summary: 'permission denied during risky deploy attempt',
+      phaseTimings: [],
+      phaseLedger: [],
+      causalChain: [],
+      cascadeEvents: [],
+      permissionEvidence: [],
+      budgetBreaches: [],
+      jumpLinks: [],
+    });
+    const panel = createSecurityPanel(createSecuritySnapshot({
+      auditor: makeAuditor(),
+      incidents: registry.getAll(),
+      latestIncident: registry.latest(),
+    }));
+    expect(panel.handleInput('i')).toBe(true);
+    const ctx = makeCtx();
+    expect(panel.handlePanelIntegrationAction('i', ctx)).toBe(true);
+    expect(ctx.panelManager.open).toHaveBeenCalledWith('incident');
+  });
+
+  test('i is not consumed when there is no latest incident', () => {
+    const panel = createSecurityPanel(createSecuritySnapshot({ auditor: makeAuditor() }));
+    expect(panel.handleInput('i')).toBe(false);
+  });
+
+  // WO-137 — scrollable exposure-path list (no 3-cap) --------------------------
+
+  test('attack-path findings are windowed by height and scrollable via [ / ], not capped at 3', () => {
+    const auditor = makeAuditor();
+    auditor.registerToken({
+      id: 'tok-main',
+      label: 'OPENAI_API_KEY',
+      issuedAt: Date.now() - 10 * 24 * 60 * 60 * 1000,
+      grantedScopes: ['models:read', 'responses:write'],
+      policyId: 'openai',
+    });
+    const findings = Array.from({ length: 5 }, (_, i) => ({
+      severity: 'high' as const,
+      serverName: `server-${i}`,
+      route: `route-${i}`,
+      reason: `reason-${i}`,
+      evidence: [`evidence-${i}`],
+    }));
+    const snapshot: UiSecuritySnapshot = {
+      ...createSecuritySnapshot({ auditor }),
+      attackPathReview: {
+        criticalFindings: 0,
+        incoherentFindings: 0,
+        summary: 'five findings under review',
+        findings,
+      },
+    };
+    const panel = createSecurityPanel(snapshot);
+    // height=20 => windowSize = max(1, floor((20-16)/3)) = 1: only 1 finding visible at a time.
+    const first = linesText(panel.render(160, 20));
+    expect(first).toContain('server-0');
+    expect(first).not.toContain('server-1');
+    expect(first).toContain('showing 1-1 of 5 findings');
+
+    panel.handleInput(']');
+    const second = linesText(panel.render(160, 20));
+    expect(second).toContain('server-1');
+    expect(second).not.toContain('server-0');
+
+    panel.handleInput('[');
+    const third = linesText(panel.render(160, 20));
+    expect(third).toContain('server-0');
   });
 });

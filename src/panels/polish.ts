@@ -447,16 +447,26 @@ export function resolveScrollablePanelSection(
     afterSections: options.afterSections,
     minRows: options.section.minRows ?? 1,
   });
+  // When a window-summary row will render (list longer than the budget can
+  // show), it occupies one of the section's rows. Reserve that row up front so
+  // the summary is accounted INSIDE the budget; otherwise the appended summary
+  // pushes total output one line past the panel's exact-height contract and the
+  // tail line (typically the footer's keyboard-hints row) is silently dropped.
+  const summaryReserved = options.section.appendWindowSummary
+    && options.section.scrollableLines.length > budget
+    ? 1
+    : 0;
+  const windowBudget = Math.max(0, budget - summaryReserved);
   const window = options.section.selectedIndex === undefined
     ? getVisibleWindow(
         options.section.scrollableLines.length,
         options.section.scrollOffset,
-        budget,
+        windowBudget,
       )
     : getTrackedVisibleWindow(
         options.section.scrollableLines.length,
         options.section.selectedIndex,
-        budget,
+        windowBudget,
         options.section.scrollOffset,
         options.section.guardRows ?? 1,
       );
@@ -529,12 +539,21 @@ export function resolveStackedScrollableSections(
 
   return options.sections.map((section, index) => {
     const fixedLines = [...(section.fixedLines ?? [])];
+    // Same reservation as resolveScrollablePanelSection: a window-summary row
+    // occupies one of this section's allocated rows, so shrink the visible
+    // window rather than overflowing the stack's exact-height budget.
+    const budget = budgets[index]!;
+    const summaryReserved = section.appendWindowSummary
+      && section.scrollableLines.length > budget
+      ? 1
+      : 0;
+    const windowBudget = Math.max(0, budget - summaryReserved);
     const window = section.selectedIndex === undefined
-      ? getVisibleWindow(section.scrollableLines.length, section.scrollOffset, budgets[index]!)
+      ? getVisibleWindow(section.scrollableLines.length, section.scrollOffset, windowBudget)
       : getTrackedVisibleWindow(
           section.scrollableLines.length,
           section.selectedIndex,
-          budgets[index]!,
+          windowBudget,
           section.scrollOffset,
           section.guardRows ?? 1,
         );

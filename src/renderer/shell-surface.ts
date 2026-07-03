@@ -34,6 +34,12 @@ export interface ShellFooterBuildOptions {
    * Rendered as a dim informational line above the prompt when non-null.
    */
   readonly contextStatusHint?: string | null;
+  /**
+   * Compact footer posture for short terminals (~<30 rows). Collapses the
+   * footer to its essentials (prompt box + token/cost line + help) and drops
+   * the process indicator, context bar, context-info line and posture block.
+   */
+  readonly compact?: boolean;
 }
 
 export interface ShellFooterBuildResult {
@@ -41,14 +47,28 @@ export interface ShellFooterBuildResult {
   readonly height: number;
 }
 
-const FOOTER_BASE_ROWS = 9;
-const CONTEXT_PROGRESS_ROWS = 2;
+// Fixed rows that createFooter always emits (non-compact): prompt-box top
+// border, prompt-box bottom border, token-usage line, context-info line, and
+// the help/exit line. The composer posture block and context bar are counted
+// separately (they are conditional).
+const FOOTER_BASE_ROWS = 5;
+const CONTEXT_PROGRESS_ROWS = 1;
 const PROCESS_INDICATOR_ROWS = 1;
+
+/**
+ * Real height of the most recently rendered footer. estimateShellFooterHeight
+ * prefers this so the pre-prompt viewport math accounts for the composer
+ * posture block and context hint that the static formula cannot see. Reset to
+ * null before any footer has rendered (cold start), where the formula is exact
+ * for the common posture-free, hint-free case.
+ */
+let lastRenderedFooterHeight: number | null = null;
 
 export function estimateShellFooterHeight(
   promptLineCount: number,
   contextWindow?: number,
 ): number {
+  if (lastRenderedFooterHeight !== null) return lastRenderedFooterHeight;
   const safePromptLines = Math.max(1, promptLineCount);
   const progressRows = contextWindow && contextWindow > 0 ? CONTEXT_PROGRESS_ROWS : 0;
   return FOOTER_BASE_ROWS + safePromptLines + progressRows + PROCESS_INDICATOR_ROWS;
@@ -79,20 +99,26 @@ export function buildShellFooter(
     options.composerStatus,
     options.composerFlags,
     options.composerPendingRisk,
+    options.compact ?? false,
   );
-  const processIndicator = renderProcessIndicator(
-    options.width,
-    options.runningAgentCount,
-    options.runningProcessCount,
-    options.indicatorFocused,
-    options.runningAgentProgress,
-  );
-  const inputBoxRows = Math.max(1, options.promptLineCount) + 2;
-  lines.splice(inputBoxRows, 0, ...processIndicator);
-  // Passive context status hint — rendered as a dim informational line before the prompt.
-  if (options.contextStatusHint) {
-    const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: '#64748b' });
-    lines.unshift(hintLine);
+  // Compact posture drops the process indicator and context hint entirely so
+  // the footer fits within ~5 rows on short terminals.
+  if (!options.compact) {
+    const processIndicator = renderProcessIndicator(
+      options.width,
+      options.runningAgentCount,
+      options.runningProcessCount,
+      options.indicatorFocused,
+      options.runningAgentProgress,
+    );
+    const inputBoxRows = Math.max(1, options.promptLineCount) + 2;
+    lines.splice(inputBoxRows, 0, ...processIndicator);
+    // Passive context status hint — rendered as a dim informational line before the prompt.
+    if (options.contextStatusHint) {
+      const hintLine = UIFactory.stringToLine(options.contextStatusHint, options.width, { fg: '#64748b' });
+      lines.unshift(hintLine);
+    }
   }
+  lastRenderedFooterHeight = lines.length;
   return { lines, height: lines.length };
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createPermissionSimulator, DivergenceDashboard } from '@/runtime/index.ts';
 import { PolicyRuntimeState } from '@/runtime/index.ts';
 import { createUnsignedBundle } from '@/runtime/index.ts';
@@ -7,6 +7,8 @@ import { PolicyPanel } from '../../panels/policy-panel.ts';
 import type { PolicyRule } from '@/runtime/index.ts';
 import type { Line } from '../../types/grid.ts';
 import { analyzePermissionRequest } from '@pellux/goodvibes-sdk/platform/permissions';
+import { PanelManager } from '../../panels/panel-manager.ts';
+import type { PanelIntegrationContext } from '../../panels/types.ts';
 
 function linesText(lines: Line[]): string {
   return lines
@@ -22,6 +24,12 @@ function makeBundle(id: string, rules: PolicyRule[] = []) {
     description: `Test bundle ${id}`,
   };
   return createUnsignedBundle(id, payload);
+}
+
+function makeCtx(overrides: Partial<PanelIntegrationContext> = {}): PanelIntegrationContext & { executeCommand: ReturnType<typeof mock> } {
+  const executeCommand = mock(() => Promise.resolve(undefined));
+  const panelManager = {} as unknown as PanelManager;
+  return { panelManager, executeCommand, ...overrides } as PanelIntegrationContext & { executeCommand: ReturnType<typeof mock> };
 }
 
 describe('PolicyPanel', () => {
@@ -46,8 +54,108 @@ describe('PolicyPanel', () => {
     expect(text).toContain('preflight');
     expect(text).toContain('gate');
     expect(text).toContain('lint');
-    // Context-aware footer hints.
+    // Footer hints expose the policy-dispatch subactions.
+    expect(text).toContain('simulate');
+    expect(text).toContain('promote');
+    expect(text).toContain('rollback');
+    // Trend-record is honest about needing an active simulation first.
+    expect(text).not.toContain('record divergence snapshot');
+  });
+
+  test('shows the trend-record hint, and lets r record a snapshot, only once a simulation dashboard is active', () => {
+    const registry = policyState.getRegistry();
+    registry.loadCandidate(makeBundle('policy-dash'));
+    const simulator = createPermissionSimulator(
+      { mode: 'default', rules: [] },
+      { mode: 'default', rules: [] },
+      'warn-on-divergence',
+    );
+    const dashboard = new DivergenceDashboard(simulator, 'warn-on-divergence');
+    policyState.setDashboard(dashboard);
+
+    const panel = new PolicyPanel(policyState);
+    const text = linesText(panel.render(120, 20));
     expect(text).toContain('record divergence snapshot');
+    expect(panel.handleInput('r')).toBe(true);
+  });
+
+  test('r is a no-op with no active simulation dashboard', () => {
+    const panel = new PolicyPanel(policyState);
+    expect(panel.handleInput('r')).toBe(false);
+  });
+
+  test('s/f/l stage a pending policy-dispatch subaction that executeCommand receives via the integration hook', () => {
+    const panel = new PolicyPanel(policyState);
+    const ctx = makeCtx();
+
+    expect(panel.handleInput('s')).toBe(true);
+    expect(panel.handlePanelIntegrationAction('s', ctx)).toBe(true);
+    expect(ctx.executeCommand).toHaveBeenCalledWith('policy', ['simulate']);
+
+    expect(panel.handleInput('f')).toBe(true);
+    expect(panel.handlePanelIntegrationAction('f', ctx)).toBe(true);
+    expect(ctx.executeCommand).toHaveBeenCalledWith('policy', ['preflight']);
+
+    expect(panel.handleInput('l')).toBe(true);
+    expect(panel.handlePanelIntegrationAction('l', ctx)).toBe(true);
+    expect(ctx.executeCommand).toHaveBeenCalledWith('policy', ['lint']);
+
+    expect(ctx.executeCommand).toHaveBeenCalledTimes(3);
+  });
+
+  test('p with no candidate loaded is a no-op', () => {
+    const panel = new PolicyPanel(policyState);
+    expect(panel.handleInput('p')).toBe(false);
+  });
+
+  test('b with no active bundle is a no-op', () => {
+    const panel = new PolicyPanel(policyState);
+    expect(panel.handleInput('b')).toBe(false);
+  });
+
+  test('p opens a gate-aware promote confirmation, and confirming dispatches promote via executeCommand', () => {
+    const registry = policyState.getRegistry();
+    registry.loadCandidate(makeBundle('policy-promote'));
+
+    const panel = new PolicyPanel(policyState);
+    expect(panel.handleInput('p')).toBe(true);
+    const confirmText = linesText(panel.render(120, 12));
+    expect(confirmText).toContain('Promote');
+    expect(confirmText).toContain('policy-promote');
+    expect(confirmText).toContain('gate');
+
+    const ctx = makeCtx();
+    expect(panel.handleInput('y')).toBe(true);
+    expect(panel.handlePanelIntegrationAction('y', ctx)).toBe(true);
+    expect(ctx.executeCommand).toHaveBeenCalledWith('policy', ['promote']);
+  });
+
+  test('b opens a rollback confirmation, and cancelling does not dispatch', () => {
+    const registry = policyState.getRegistry();
+    registry.loadCandidate(makeBundle('policy-a'));
+    registry.markSimulating();
+    const simulator = createPermissionSimulator(
+      { mode: 'default', rules: [] },
+      { mode: 'default', rules: [] },
+      'warn-on-divergence',
+    );
+    const dashboard = new DivergenceDashboard(simulator, 'warn-on-divergence');
+    policyState.setDashboard(dashboard);
+    const report = simulator.getDivergenceReport();
+    const gate = dashboard.checkEnforceGate();
+    registry.attachSimulationReport(report, gate);
+    registry.promote(true);
+
+    const panel = new PolicyPanel(policyState);
+    expect(panel.handleInput('b')).toBe(true);
+    const confirmText = linesText(panel.render(120, 12));
+    expect(confirmText).toContain('Rollback');
+    expect(confirmText).toContain('policy-a');
+
+    const ctx = makeCtx();
+    expect(panel.handleInput('n')).toBe(true);
+    expect(panel.handlePanelIntegrationAction('n', ctx)).toBe(false);
+    expect(ctx.executeCommand).not.toHaveBeenCalled();
   });
 
   test('renders current candidate and governance gate state', () => {

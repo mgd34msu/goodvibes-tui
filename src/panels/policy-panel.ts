@@ -1,9 +1,19 @@
+import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import type { Line } from '../types/grid.ts';
 import { createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
-import type { PolicyRuntimeState } from '@/runtime/index.ts';
-import type { PolicyPanelSnapshot } from '../runtime/diagnostics/panels/policy.ts';
+import type {
+  PolicyRuntimeState,
+  PolicyBundleVersion,
+  PolicyDiffResult,
+  DivergenceDashboardSnapshot,
+  DivergenceStats,
+  PermissionAuditEntry,
+  PolicyLintFinding,
+  PolicySimulationSummary,
+  PolicyPreflightReview,
+} from '@/runtime/index.ts';
 import {
   buildEmptyState,
   buildKeyboardHints,
@@ -13,20 +23,12 @@ import {
   resolveScrollablePanelSection,
   DEFAULT_PANEL_PALETTE,
 } from './polish.ts';
+import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
+import type { PanelIntegrationContext } from './types.ts';
 
-const C = {
-  ...DEFAULT_PANEL_PALETTE,
-  header: '#94a3b8',
-  headerBg: '#1e293b',
-  label: '#64748b',
-  value: '#e2e8f0',
-  dim: '#475569',
-  ok: '#22c55e',
-  warn: '#eab308',
-  error: '#ef4444',
-  info: '#38bdf8',
-  empty: '#334155',
-} as const;
+// Base chrome only — no domain accents needed; the title band, state colors,
+// and text tokens all come straight from DEFAULT_PANEL_PALETTE (WO-002).
+const C = DEFAULT_PANEL_PALETTE;
 
 function fmtTime(value: string | undefined): string {
   if (!value) return 'n/a';
@@ -41,9 +43,9 @@ function fmtRate(value: number | undefined): string {
 function gateColor(status: string | undefined): string {
   switch (status) {
     case 'allowed':
-      return C.ok;
+      return C.good;
     case 'blocked':
-      return C.error;
+      return C.bad;
     case 'no_data':
       return C.warn;
     default:
@@ -51,13 +53,49 @@ function gateColor(status: string | undefined): string {
   }
 }
 
+/**
+ * A point-in-time snapshot of policy state for diagnostics rendering.
+ */
+interface PolicyPanelSnapshot {
+  /** The currently enforced bundle, or null if no policy is active. */
+  current: PolicyBundleVersion | null;
+  /** The pending candidate bundle, or null if none loaded. */
+  candidate: PolicyBundleVersion | null;
+  /** History of previous active bundles (most recent first). */
+  history: PolicyBundleVersion[];
+  /** Diff between current and candidate, or null if unavailable. */
+  diff: PolicyDiffResult | null;
+  /** Divergence dashboard snapshot, or null if no panel attached. */
+  divergence: DivergenceDashboardSnapshot | null;
+  /** Recent permission requests and decisions for operator audit review. */
+  recentPermissionAudit: readonly PermissionAuditEntry[];
+  /** Policy lint findings for current and candidate bundles. */
+  lintFindings: readonly PolicyLintFinding[];
+  /** Concrete scenario results from the most recent policy simulation run. */
+  lastSimulationSummary: PolicySimulationSummary | null;
+  /** Most recent proactive policy preflight review. */
+  lastPreflightReview: PolicyPreflightReview | null;
+  /** ISO 8601 timestamp of when this snapshot was captured. */
+  capturedAt: string;
+}
+
+/** Subactions dispatched through `/policy <name>` via `dispatchPolicyCommand`. */
+type PolicyDispatchAction = 'simulate' | 'preflight' | 'lint' | 'promote' | 'rollback';
+
 export class PolicyPanel extends BasePanel {
   private readonly _state: PolicyRuntimeState;
   private readonly _unsub: (() => void) | null;
   private _scrollOffset = 0;
 
+  // Inline confirm for the gate-aware promote/rollback actions.
+  private _confirm: ConfirmState<PolicyDispatchAction> | null = null;
+
+  // Pending dispatch resolved via handlePanelIntegrationAction, which is the
+  // only place `executeCommand` is available (mirrors IncidentReviewPanel).
+  private _pendingAction: PolicyDispatchAction | null = null;
+
   public constructor(state: PolicyRuntimeState) {
-    super('policy', 'Policy', 'U', 'monitoring');
+    super('policy', 'Policy', '▭', 'security-policy');
     this._state = state;
     this._unsub = state.subscribe(() => this.markDirty());
   }
@@ -72,6 +110,22 @@ export class PolicyPanel extends BasePanel {
   }
 
   public handleInput(key: string): boolean {
+    if (this._confirm) {
+      const outcome = handleConfirmInput(this._confirm, key);
+      if (outcome === 'confirmed') {
+        this._pendingAction = this._confirm.subject;
+        this._confirm = null;
+        this.markDirty();
+        return true;
+      }
+      if (outcome === 'cancelled') {
+        this._confirm = null;
+        this.markDirty();
+        return true;
+      }
+      return true; // absorbed — keep the confirm dialog pending
+    }
+
     if (key === 'up' || key === 'k') {
       this._scrollOffset = Math.max(0, this._scrollOffset - 1);
       this.markDirty();
@@ -82,7 +136,45 @@ export class PolicyPanel extends BasePanel {
       this.markDirty();
       return true;
     }
+    if (key === 's') {
+      this._pendingAction = 'simulate';
+      return true;
+    }
+    if (key === 'f') {
+      this._pendingAction = 'preflight';
+      return true;
+    }
+    if (key === 'l') {
+      this._pendingAction = 'lint';
+      return true;
+    }
+    if (key === 'p') {
+      const snapshot = this._state.getSnapshot();
+      if (!snapshot.candidate) return false;
+      const gateStatus = snapshot.divergence?.gate.status ?? 'no_data';
+      this._confirm = {
+        subject: 'promote',
+        label: `promote ${snapshot.candidate.bundle.bundleId} (gate: ${gateStatus})`,
+        verb: 'Promote',
+      };
+      this.markDirty();
+      return true;
+    }
+    if (key === 'b') {
+      const snapshot = this._state.getSnapshot();
+      if (!snapshot.current) return false;
+      this._confirm = {
+        subject: 'rollback',
+        label: `rollback active bundle ${snapshot.current.bundle.bundleId}`,
+        verb: 'Rollback',
+      };
+      this.markDirty();
+      return true;
+    }
     if (key === 'r') {
+      // Trend-record is only meaningful once a simulation dashboard exists;
+      // otherwise there is nothing to sample and the key is a no-op.
+      if (!this._state.getDashboard()) return false;
       this._state.recordTrendEntry();
       this.markDirty();
       return true;
@@ -90,14 +182,41 @@ export class PolicyPanel extends BasePanel {
     return false;
   }
 
+  public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
+    if (!this._pendingAction) return false;
+    const action = this._pendingAction;
+    this._pendingAction = null;
+    void ctx.executeCommand?.('policy', [action]).catch((err) => {
+      logger.debug('policy panel command dispatch failed', { err, action });
+    });
+    return true;
+  }
+
   public render(width: number, height: number): Line[] {
     this.needsRender = false;
+    if (this._confirm) {
+      const lines = buildPanelWorkspace(width, height, {
+        title: 'Policy And Governance',
+        sections: [{ title: 'Confirmation', lines: renderConfirmLines(width, this._confirm) }],
+        palette: C,
+      });
+      while (lines.length < height) {
+        lines.push(createEmptyLine(width));
+      }
+      return lines.slice(0, height);
+    }
     const snapshot = this._state.getSnapshot();
     const summaryLine = this._buildSummary(width, snapshot);
     const content = this._buildContent(width, snapshot);
+    const dashboardActive = snapshot.divergence !== null;
     const hintsLine = buildKeyboardHints(width, [
       { keys: '↑/↓', label: 'scroll' },
-      { keys: 'r', label: 'record divergence snapshot' },
+      { keys: 's', label: 'simulate' },
+      { keys: 'f', label: 'preflight' },
+      { keys: 'l', label: 'lint' },
+      { keys: 'p', label: 'promote' },
+      { keys: 'b', label: 'rollback' },
+      ...(dashboardActive ? [{ keys: 'r', label: 'record divergence snapshot' }] : []),
     ], C);
     const summarySection = { lines: [summaryLine] };
     const governanceSection = resolveScrollablePanelSection(width, height, {
@@ -134,10 +253,10 @@ export class PolicyPanel extends BasePanel {
     const preflightColor = !preflight
       ? C.dim
       : preflight.status === 'pass'
-        ? C.ok
+        ? C.good
         : preflight.status === 'warn'
           ? C.warn
-          : C.error;
+          : C.bad;
     const gateStatus = divergence?.gate.status ?? 'n/a';
     return buildKeyValueLine(width, [
       { label: 'bundles', value: `${snapshot.current ? 1 : 0}+${snapshot.candidate ? 1 : 0}c`, valueColor: snapshot.current || snapshot.candidate ? C.value : C.dim },
@@ -161,14 +280,14 @@ export class PolicyPanel extends BasePanel {
       && snapshot.history.length === 0 && permissionAudit.length === 0
       && lintFindings.length === 0 && !simulationSummary && !preflightReview;
     if (nothingRecorded) {
+      // No divergence dashboard exists in this branch by construction
+      // (nothingRecorded requires !divergence), so the gate is honestly 'n/a'.
       lines.push(...buildEmptyState(
         width,
         ' No policy bundles loaded.',
-        'Load a policy bundle to inspect governance gates, divergence trends, permission audit, lint findings, and preflight posture.',
+        'Bundle: none active, none candidate. Gate: n/a.',
         [
           { command: '/policy load', summary: 'load a policy bundle to begin governance review' },
-          { command: '/policy preflight', summary: 'run a proactive preflight posture review' },
-          { command: '/policy simulate', summary: 'compare authoritative vs candidate decisions' },
         ],
         C,
       ));
@@ -208,17 +327,41 @@ export class PolicyPanel extends BasePanel {
     }
 
     if (snapshot.diff) {
+      const diff = snapshot.diff;
       lines.push(buildPanelLine(width, [[' Diff', C.label]]));
       lines.push(buildPanelLine(width, [
+        ['  ', C.label],
+        [`${diff.fromBundleId} -> ${diff.toBundleId}`, C.value],
         ['  Changes: ', C.label],
-        [String(snapshot.diff.totalChanges), C.value],
-        ['  Added: ', C.label],
-        [String(snapshot.diff.added.length), C.ok],
-        ['  Removed: ', C.label],
-        [String(snapshot.diff.removed.length), C.error],
-        ['  Changed: ', C.label],
-        [String(snapshot.diff.changed.length), C.warn],
+        [String(diff.totalChanges), C.value],
       ]));
+      if (diff.added.length > 0) {
+        lines.push(buildPanelLine(width, [['  Added', C.good]]));
+        for (const rule of diff.added.slice(0, 5)) {
+          lines.push(buildPanelLine(width, [
+            ['    + ', C.good],
+            [truncateDisplay(`${rule.id} (${rule.type}, effect=${rule.effect})`, Math.max(0, width - 6)), C.value],
+          ]));
+        }
+      }
+      if (diff.removed.length > 0) {
+        lines.push(buildPanelLine(width, [['  Removed', C.bad]]));
+        for (const rule of diff.removed.slice(0, 5)) {
+          lines.push(buildPanelLine(width, [
+            ['    - ', C.bad],
+            [truncateDisplay(`${rule.id} (${rule.type}, effect=${rule.effect})`, Math.max(0, width - 6)), C.value],
+          ]));
+        }
+      }
+      if (diff.changed.length > 0) {
+        lines.push(buildPanelLine(width, [['  Changed', C.warn]]));
+        for (const change of diff.changed.slice(0, 5)) {
+          lines.push(buildPanelLine(width, [
+            ['    ~ ', C.warn],
+            [truncateDisplay(change.ruleId, Math.max(0, width - 6)), C.value],
+          ]));
+        }
+      }
     }
 
     if (divergence) {
@@ -237,6 +380,35 @@ export class PolicyPanel extends BasePanel {
         ['  Trend points: ', C.label],
         [String(divergence.trend.length), C.value],
       ]));
+      const prefixEntries = Object.entries(divergence.report.byCommandPrefix);
+      if (prefixEntries.length > 0) {
+        lines.push(buildPanelLine(width, [['  Divergence by command prefix', C.label]]));
+        for (const [prefix, stats] of prefixEntries.slice(0, 5)) {
+          lines.push(buildPanelLine(width, [
+            ['    ', C.label],
+            [truncateDisplay(prefix, Math.max(0, Math.floor(width * 0.4))), C.value],
+            ['  ', C.label],
+            [fmtRate(stats.divergenceRate), stats.divergenceRate > 0 ? C.warn : C.good],
+            ['  ', C.label],
+            [`${stats.total}/${stats.totalEvaluations}`, C.dim],
+          ]));
+        }
+      }
+      const classEntries = Object.entries(divergence.report.byToolClass) as Array<[string, DivergenceStats | undefined]>;
+      const populatedClassEntries = classEntries.filter((entry): entry is [string, DivergenceStats] => entry[1] !== undefined);
+      if (populatedClassEntries.length > 0) {
+        lines.push(buildPanelLine(width, [['  Divergence by tool class', C.label]]));
+        for (const [cls, stats] of populatedClassEntries.slice(0, 5)) {
+          lines.push(buildPanelLine(width, [
+            ['    ', C.label],
+            [truncateDisplay(cls, Math.max(0, Math.floor(width * 0.4))), C.value],
+            ['  ', C.label],
+            [fmtRate(stats.divergenceRate), stats.divergenceRate > 0 ? C.warn : C.good],
+            ['  ', C.label],
+            [`${stats.total}/${stats.totalEvaluations}`, C.dim],
+          ]));
+        }
+      }
     }
 
     if (snapshot.history.length > 0) {
@@ -257,7 +429,7 @@ export class PolicyPanel extends BasePanel {
       lines.push(buildPanelLine(width, [[' Permission Audit', C.label]]));
       for (const entry of permissionAudit.slice(0, 5)) {
         const outcome = entry.approved === undefined ? 'pending' : entry.approved ? 'approved' : 'denied';
-        const outcomeColor = entry.approved === undefined ? C.warn : entry.approved ? C.ok : C.error;
+        const outcomeColor = entry.approved === undefined ? C.warn : entry.approved ? C.good : C.bad;
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
           [entry.tool, C.value],
@@ -276,7 +448,7 @@ export class PolicyPanel extends BasePanel {
     if (lintFindings.length > 0) {
       lines.push(buildPanelLine(width, [[' Policy Lint', C.label]]));
       for (const finding of lintFindings.slice(0, 5)) {
-        const color = finding.severity === 'error' ? C.error : finding.severity === 'warn' ? C.warn : C.info;
+        const color = finding.severity === 'error' ? C.bad : finding.severity === 'warn' ? C.warn : C.info;
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
           [finding.severity.toUpperCase(), color],
@@ -290,10 +462,10 @@ export class PolicyPanel extends BasePanel {
       lines.push(buildPanelLine(width, [[' Preflight Review', C.label]]));
       const statusColor =
         preflightReview.status === 'pass'
-          ? C.ok
+          ? C.good
           : preflightReview.status === 'warn'
             ? C.warn
-            : C.error;
+            : C.bad;
       lines.push(buildPanelLine(width, [
         ['  Status: ', C.label],
         [preflightReview.status.toUpperCase(), statusColor],
@@ -307,7 +479,7 @@ export class PolicyPanel extends BasePanel {
         [truncateDisplay(preflightReview.summary, Math.max(0, width - 2)), C.dim],
       ]));
       for (const issue of preflightReview.issues.slice(0, 4)) {
-        const issueColor = issue.severity === 'error' ? C.error : issue.severity === 'warn' ? C.warn : C.info;
+        const issueColor = issue.severity === 'error' ? C.bad : issue.severity === 'warn' ? C.warn : C.info;
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
           [issue.severity.toUpperCase(), issueColor],
@@ -323,12 +495,12 @@ export class PolicyPanel extends BasePanel {
         ['  Mode: ', C.label],
         [simulationSummary.mode, C.info],
         ['  Diverged: ', C.label],
-        [`${simulationSummary.divergentScenarios}/${simulationSummary.totalScenarios}`, simulationSummary.divergentScenarios > 0 ? C.warn : C.ok],
+        [`${simulationSummary.divergentScenarios}/${simulationSummary.totalScenarios}`, simulationSummary.divergentScenarios > 0 ? C.warn : C.good],
         ['  Allowed(actual/sim): ', C.label],
         [`${simulationSummary.allowedByActual}/${simulationSummary.allowedBySimulated}`, C.value],
       ]));
       for (const result of simulationSummary.results.slice(0, 4)) {
-        const color = result.diverged ? C.warn : (result.authoritativeDecision.allowed ? C.ok : C.error);
+        const color = result.diverged ? C.warn : (result.authoritativeDecision.allowed ? C.good : C.bad);
         lines.push(buildPanelLine(width, [
           ['  ', C.label],
           [truncateDisplay(result.scenario.label, Math.max(0, width - 40)), C.value],

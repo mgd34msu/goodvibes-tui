@@ -42,6 +42,7 @@ function readBootstrapPassword(credentialPath: string): string | undefined {
 }
 
 export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuiltinPanelDeps): void {
+  const ui = requireUiServices(deps);
   manager.registerType({
     id: 'qr-code',
     name: 'QR Code',
@@ -71,7 +72,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
           surface: 'tui',
         });
       };
-      return new QrPanel(connectionInfo, regenerate, copyToClipboard);
+      return new QrPanel(connectionInfo, regenerate, copyToClipboard, ui.readModels.controlPlane, deps.localUserAuthManager);
     },
   });
 
@@ -90,7 +91,7 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
     icon: '?',
     category: 'session',
     description: 'Tool list, model capabilities, and keyboard shortcut reference',
-    factory: () => new DocsPanel(deps.toolRegistry, deps.providerRegistry),
+    factory: () => new DocsPanel(deps.toolRegistry, deps.providerRegistry, requireUiServices(deps).shell.keybindingsManager),
   });
 
   manager.registerType({
@@ -105,25 +106,50 @@ export function registerSessionPanels(manager: PanelManager, deps: ResolvedBuilt
   manager.registerType({
     id: 'system-messages',
     name: 'System Messages',
-    icon: 'J',
-    category: 'monitoring',
+    // WO-152: was 'J' (collided with intelligence + tasks).
+    icon: '▥',
+    category: 'runtime-ops',
     description: 'Operational system messages routed away from the main conversation (scans, discovery, plugin events, tool status)',
     preload: true,
+    retainOnClose: true,
     factory: () => deps.systemMessagesPanel,
   });
 
   manager.registerType({
     id: 'tokens',
     name: 'Tokens',
-    icon: 'K',
-    category: 'monitoring',
-    description: 'Token budget tracker: per-turn and cumulative usage with context window gauge',
+    // WO-152: registry previously said 'K' while the live panel's own
+    // super() call used 'T' — a pre-existing registry/instance mismatch as
+    // well as a collision ('K' with knowledge/skills, 'T' with thinking).
+    // Unified to a single unique glyph in both places.
+    icon: '▢',
+    category: 'providers',
+    description: 'Token + context console: gauge, true composition, per-turn history, inline cost, and one-key compact',
+    // Preloaded (absorbed from the retired ContextVisualizerPanel) so turn
+    // history and pressure accumulate in the background even before the user
+    // opens the tab.
+    preload: true,
+    retainOnClose: true,
     factory: () => {
-      const panel = new TokenBudgetPanel(deps.sessionMemoryStore, deps.configManager, deps.requestRender);
+      const panel = new TokenBudgetPanel(
+        deps.sessionMemoryStore,
+        deps.configManager,
+        deps.requestRender,
+        requireUiServices(deps).events.turns,
+      );
       if (deps.orchestrator && deps.getCtxWindow) {
-        panel.wire(deps.orchestrator, deps.getCtxWindow, requireUiServices(deps).readModels.session);
+        panel.wire(
+          deps.orchestrator,
+          deps.getCtxWindow,
+          requireUiServices(deps).readModels.session,
+          () => deps.providerRegistry.getCurrentModel().id,
+        );
       }
       return panel;
     },
   });
+
+  // WO-113 compat: the retired 'context' panel id still resolves — redirected
+  // to the merged tokens console ('/panel open context', saved layouts).
+  manager.registerAlias('context', 'tokens');
 }

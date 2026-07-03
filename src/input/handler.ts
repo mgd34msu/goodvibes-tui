@@ -140,8 +140,33 @@ export class InputHandler implements InputHandlerLike {
   public commandMode = false;
   /** True when the process indicator bar has keyboard focus. */
   public indicatorFocused = false;
-  /** True when keyboard focus is on the active panel (arrow/enter go to panel, not prompt). */
-  public panelFocused = false;
+  /**
+   * Fallback focus store used only when the panel manager does not implement
+   * focus ownership (lightweight test stubs). Production always delegates to
+   * PanelManager, which is the single source of truth.
+   */
+  private _panelFocusedFallback = false;
+  /**
+   * True when keyboard focus is on the active panel (arrow/enter go to panel,
+   * not prompt). Ownership lives in PanelManager (focusTarget); this reads and
+   * writes through to it so handler focus can never disagree with what the
+   * panel workspace actually shows.
+   */
+  public get panelFocused(): boolean {
+    const pm = this.uiServices.shell.panelManager;
+    return typeof pm.getFocusTarget === 'function'
+      ? pm.getFocusTarget() === 'panel'
+      : this._panelFocusedFallback;
+  }
+  public set panelFocused(value: boolean) {
+    const pm = this.uiServices.shell.panelManager;
+    if (typeof pm.focusPanels === 'function' && typeof pm.focusPrompt === 'function') {
+      if (value) pm.focusPanels();
+      else pm.focusPrompt();
+    } else {
+      this._panelFocusedFallback = value;
+    }
+  }
 
   public tokenizer = new InputTokenizer();
   public pasteRegistry = new Map<string, string>();
@@ -468,6 +493,15 @@ export class InputHandler implements InputHandlerLike {
     };
 
     this.requestRender = bufferedRequestRender;
+    // Snapshot the overlay flags before the feed: command handlers executed
+    // synchronously during token processing (e.g. /shortcuts, /help via
+    // ui-openers) mutate these directly on the handler, and an unconditional
+    // write-back of the pre-feed snapshot would silently revert them in the
+    // same keystroke (the "/shortcuts never displays" defect).
+    const helpOverlayActiveBefore = this.helpOverlayActive;
+    const helpScrollOffsetBefore = this.helpScrollOffset;
+    const shortcutsOverlayActiveBefore = this.shortcutsOverlayActive;
+    const shortcutsScrollOffsetBefore = this.shortcutsScrollOffset;
     try {
       const context = this.feedContext;
       // Sync mutable scalars from handler into the reused context.
@@ -506,10 +540,13 @@ export class InputHandler implements InputHandlerLike {
       this.commandMode = context.commandMode;
       this.panelFocused = context.panelFocused;
       this.indicatorFocused = context.indicatorFocused;
-      this.helpOverlayActive = context.helpOverlayActive;
-      this.helpScrollOffset = context.helpScrollOffset;
-      this.shortcutsOverlayActive = context.shortcutsOverlayActive;
-      this.shortcutsScrollOffset = context.shortcutsScrollOffset;
+      // Overlay flags: only apply the pipeline's value when the pipeline
+      // itself changed it (e.g. Escape closing the overlay). Otherwise keep
+      // the live handler value, which a command handler may have just set.
+      if (context.helpOverlayActive !== helpOverlayActiveBefore) this.helpOverlayActive = context.helpOverlayActive;
+      if (context.helpScrollOffset !== helpScrollOffsetBefore) this.helpScrollOffset = context.helpScrollOffset;
+      if (context.shortcutsOverlayActive !== shortcutsOverlayActiveBefore) this.shortcutsOverlayActive = context.shortcutsOverlayActive;
+      if (context.shortcutsScrollOffset !== shortcutsScrollOffsetBefore) this.shortcutsScrollOffset = context.shortcutsScrollOffset;
       this.selectionCallback = context.selectionCallback;
       this.nextPasteId = context.nextPasteId;
       this.nextImageId = context.nextImageId;

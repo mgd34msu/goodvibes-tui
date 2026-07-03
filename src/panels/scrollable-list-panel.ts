@@ -13,11 +13,6 @@ import {
   type PanelPalette,
 } from './polish.ts';
 import { GLYPHS } from '../renderer/ui-primitives.ts';
-import {
-  isPanelSearchBackspace,
-  isPanelSearchCancel,
-  isPanelSearchPrintable,
-} from './search-focus.ts';
 
 // ---------------------------------------------------------------------------
 // ScrollableListPanel<T>
@@ -85,6 +80,25 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
     const q = this.filterQuery.trim().toLowerCase();
     if (!this.filterEnabled || !q) return all;
     return all.filter((item) => this.filterMatches(item, q));
+  }
+
+  /**
+   * The item currently under the cursor, resolved against the FILTERED list
+   * that navigation actually moves over (`getVisibleItems()`) — never the raw
+   * `getItems()` source.
+   *
+   * Subclasses MUST read the selected row through this method (or, when a
+   * function also needs the list for counts/windows, through a function-scope
+   * `const visible = this.getVisibleItems()` local — indexing that local, never
+   * the raw source). Indexing a raw item array (`this.rows`, `this.entries`,
+   * `getItems()`, …) with `this.selectedIndex` silently returns the wrong row
+   * whenever a filter is active, because `selectedIndex` is an offset into the
+   * visible list, not the raw one. The `no-raw-selectedindex-read` architecture
+   * rule enforces this by banning the `[this.selectedIndex]` token outside the
+   * base classes.
+   */
+  protected getSelectedItem(): T | undefined {
+    return this.getVisibleItems()[this.selectedIndex];
   }
 
   /**
@@ -471,135 +485,5 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
     });
     while (lines.length < height) lines.push(createEmptyLine(width));
     return lines.slice(0, height);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// SearchableListPanel<T>
-// ---------------------------------------------------------------------------
-
-/**
- * Extends `ScrollableListPanel<T>` with inline search/filter support.
- *
- * Subclasses implement:
- *   - `getAllItems()` — the full (unfiltered) item list
- *   - `matchesSearch(item, query)` — case-insensitive filter predicate
- *
- * `getItems()` is implemented here and returns filtered results. Do NOT
- * override `getItems()` in subclasses — override `getAllItems()` instead.
- *
- * Search state:
- *   - Printable characters append to `searchQuery`.
- *   - Backspace/Delete removes the last character.
- *   - Escape clears the query.
- *   - Navigation keys (up/down/etc.) are forwarded to the parent.
- *
- * Render the search input line by calling `buildSearchInput(width)` from
- * your panel's header builder.
- */
-export abstract class SearchableListPanel<T> extends ScrollableListPanel<T> {
-  protected searchQuery = '';
-
-  private _filteredItems: readonly T[] = [];
-  private _filterDirty = true;
-
-  // -------------------------------------------------------------------------
-  // Abstract — subclasses must implement
-  // -------------------------------------------------------------------------
-
-  /** Return the full unfiltered item list. */
-  protected abstract getAllItems(): readonly T[];
-
-  /** Return true if `item` matches the search `query`. */
-  protected abstract matchesSearch(item: T, query: string): boolean;
-
-  // -------------------------------------------------------------------------
-  // getItems — returns filtered list (do NOT override in subclasses)
-  // -------------------------------------------------------------------------
-
-  protected getItems(): readonly T[] {
-    if (this._filterDirty) {
-      const all = this.getAllItems();
-      this._filteredItems = this.searchQuery
-        ? all.filter((item) => this.matchesSearch(item, this.searchQuery))
-        : all;
-      this._filterDirty = false;
-      // Clamp after filter to keep selection in bounds
-      this.clampSelection();
-    }
-    return this._filteredItems;
-  }
-
-  /**
-   * Mark the filter cache as stale.
-   * Call this whenever `getAllItems()` returns new data.
-   */
-  protected invalidateFilter(): void {
-    this._filterDirty = true;
-    this.needsRender = true;
-  }
-
-  // -------------------------------------------------------------------------
-  // Input — search first, navigation second
-  // -------------------------------------------------------------------------
-
-  handleInput(key: string): boolean {
-    // Backspace: trim query
-    if (isPanelSearchBackspace(key)) {
-      if (this.searchQuery.length > 0) {
-        this.searchQuery = this.searchQuery.slice(0, -1);
-        this._filterDirty = true;
-        this.needsRender = true;
-        return true;
-      }
-      return false;
-    }
-
-    // Escape: clear query
-    if (isPanelSearchCancel(key)) {
-      if (this.searchQuery.length > 0) {
-        this.searchQuery = '';
-        this._filterDirty = true;
-        this.needsRender = true;
-        return true;
-      }
-      return false;
-    }
-
-    // Printable characters: append to query
-    if (isPanelSearchPrintable(key)) {
-      this.searchQuery += key;
-      this._filterDirty = true;
-      this.needsRender = true;
-      return true;
-    }
-
-    // Navigation and Enter: delegate to parent
-    return super.handleInput(key);
-  }
-
-  /**
-   * Build the filter input `Line` for use in a panel header section.
-   *
-   * Renders the filter label and current query with context-sensitive formatting:
-   *
-   * - **Focused** (`focused = true`): `[Filter] query_`  — active, bold, cursor visible
-   * - **Unfocused** (`focused = false`): `Filter: query`  — dim, no cursor
-   *
-   * @param width   Panel width in columns.
-   * @param label   Label text (default: `'Filter'`).
-   * @param focused Whether the filter input is currently active.
-   */
-  protected buildFilterInputLine(width: number, label = 'Filter', focused: boolean): Line {
-    const palette = this.getPalette();
-    const formattedLabel = focused ? `[${label}] ` : `${label}: `;
-    const value = focused ? `${this.searchQuery}_` : this.searchQuery;
-    // Pass active:false when focused to prevent buildSearchInputLine from converting the
-    // trailing '_' cursor to the block-glyph (GLYPHS.surface.cursor). The focused visual
-    // affordance is provided by the '[Label] ' bracket format and explicit inputBg/info colors.
-    const opts = focused
-      ? { active: false, bg: palette.inputBg, valueColor: palette.info }
-      : { active: false };
-    return buildSearchInputLine(width, formattedLabel, value, palette, opts);
   }
 }

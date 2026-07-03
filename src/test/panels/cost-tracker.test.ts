@@ -299,7 +299,10 @@ describe('CostTrackerPanel — agent cost attribution on AGENT_COMPLETED', () =>
     expect(text).toContain('0%');
   });
 
-  test('empty agents state suggests a concrete /cost command', async () => {
+  test('empty agents state points at the b key, not a printed /cost budget command', async () => {
+    // WO-160: 'b' already opens the in-panel budget-entry field from this
+    // empty state (see handleInput), so the empty-state hint advertises the
+    // key instead of a redundant '/cost budget <usd>' signpost.
     const events = createUiRuntimeEvents(runtimeBus);
     const panel = new CostTrackerPanel(
       events.turns,
@@ -308,7 +311,9 @@ describe('CostTrackerPanel — agent cost attribution on AGENT_COMPLETED', () =>
     );
     const lines = panel.render(80, 20);
     const text = lines.map((l) => l.map((c) => c.char ?? ' ').join('')).join('\n');
-    expect(text).toContain('/cost budget');
+    expect(text).not.toContain('/cost budget');
+    expect(text).toContain('set a session budget alert');
+    expect(panel.handleInput('b')).toBe(true);
   });
 
   test('agent entry model is updated from AgentRecord on AGENT_COMPLETED', async () => {

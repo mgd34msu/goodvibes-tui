@@ -236,9 +236,9 @@ describe('MemoryPanel (merged)', () => {
     // Navigate down once with 'j' — in review mode this must navigate, not append to search query
     expect(panel.handleInput('j')).toBe(true);
 
-    // 'j' must be treated as navigation, not search input
-    const searchQuery = (panel as unknown as { searchQuery: string }).searchQuery;
-    expect(searchQuery).toBe('');
+    // 'j' must be treated as navigation, not filter input
+    const filterQuery = (panel as unknown as { filterQuery: string }).filterQuery;
+    expect(filterQuery).toBe('');
 
     // selectedIndex must be 1
     const selectedIndex = (panel as unknown as { selectedIndex: number }).selectedIndex;
