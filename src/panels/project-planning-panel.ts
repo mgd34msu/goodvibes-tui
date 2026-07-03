@@ -81,6 +81,16 @@ export class ProjectPlanningPanel extends BasePanel {
     this.refresh();
   }
 
+  /**
+   * The draft-answer text field wants every character of a burst (paste, or
+   * fast typing landing in one input.feed() call) delivered one at a time,
+   * same as it always has — see the interface doc on
+   * `Panel.isCapturingTextBurst`.
+   */
+  public isCapturingTextBurst(): boolean {
+    return this.getCurrentQuestion() !== null;
+  }
+
   public handleInput(key: string): boolean {
     if (this.lastError !== null) this.clearError();
 

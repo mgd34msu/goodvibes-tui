@@ -278,6 +278,16 @@ export class GitPanel extends BasePanel {
 
   // Input handling
 
+  /**
+   * The commit-message entry field wants every character of a burst (paste,
+   * or fast typing landing in one input.feed() call) delivered one at a
+   * time, same as it always has — see the interface doc on
+   * `Panel.isCapturingTextBurst`.
+   */
+  isCapturingTextBurst(): boolean {
+    return this.commitMessage !== null;
+  }
+
   handleInput(key: string): boolean {
     // Confirm (init repo / commit) takes priority over everything else.
     const confirmResult = handleConfirmInput(this.confirm, key);
