@@ -2,7 +2,7 @@
 |  ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄  |
 |     › > Ask me anything█                                                                           |
 |  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  |
-|   Token Usage [ Input: 1.0k │ Output: 512 │ Cache Read: 0 │ Cache Write: 0 │ Total: 1.5k │ ~$0.00 ]|
+|   Token Usage [ Input: 1.0k │ Output: 512 │ Cache Read: 0 │ Cache Write: 0 │ Total: 1.5k │ ~n/a ]  |
 |   Ctrl+P panels · F2 processes · ? help · Ctrl+C quit                                              |
 @STYLES
 0 2 fg=#2a2a2a
@@ -487,8 +487,6 @@
 3 95 fg=244
 3 96 fg=244
 3 97 fg=244
-3 98 fg=244
-3 99 fg=244
 4 0 fg=240
 4 0 dim=1
 4 1 fg=240

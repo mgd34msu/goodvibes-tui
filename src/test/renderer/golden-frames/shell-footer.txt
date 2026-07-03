@@ -3,7 +3,7 @@
 |     › > Ask me anything█                                                                           |
 |  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀  |
 |   No background processes                                                                          |
-|   Token Usage [ Input: 1.0k │ Output: 512 │ Cache Read: 0 │ Cache Write: 0 │ Total: 1.5k │ ~$0.00 ]|
+|   Token Usage [ Input: 1.0k │ Output: 512 │ Cache Read: 0 │ Cache Write: 0 │ Total: 1.5k │ ~n/a ]  |
 |   /workspace/my-project  │  claude-opus-4 (anthropic)  │  7 tools                                  |
 |   Ctrl+P panels · F2 processes · ? help · Ctrl+C quit                                              |
 @STYLES
@@ -541,8 +541,6 @@
 4 95 fg=244
 4 96 fg=244
 4 97 fg=244
-4 98 fg=244
-4 99 fg=244
 5 0 fg=240
 5 0 dim=1
 5 1 fg=240
