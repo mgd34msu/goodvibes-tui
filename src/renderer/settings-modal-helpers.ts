@@ -36,39 +36,8 @@ export function valueColor(entry: SettingEntry): string {
   return '244';                                  // dim = default
 }
 
-export function flagStateColor(state: string, killed: boolean): string {
-  if (killed) return UI_TONES.state.bad; // red
-  if (state === 'enabled') return SETTINGS_ACCENT; // cyan-green
-  return '244'; // dim
-}
 
-export function mcpTrustColor(mode: McpEntry['trustMode']): string {
-  switch (mode) {
-    case 'allow-all':
-      return UI_TONES.state.bad;
-    case 'ask-on-risk':
-      return UI_TONES.state.warn;
-    case 'constrained':
-      return SETTINGS_ACCENT;
-    case 'blocked':
-      return '244';
-    default:
-      return '244';
-  }
-}
 
-export function subscriptionStateColor(state: SubscriptionEntry['state']): string {
-  switch (state) {
-    case 'active':
-      return SETTINGS_ACCENT;
-    case 'pending':
-      return UI_TONES.state.warn;
-    case 'available':
-      return UI_TONES.state.info;
-    default:
-      return '244';
-  }
-}
 
 export function inferSubscriptionRouteReason(entry: SubscriptionEntry): string | undefined {
   if (entry.routeReason?.trim()) return entry.routeReason;

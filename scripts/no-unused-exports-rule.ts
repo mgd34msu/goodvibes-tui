@@ -104,19 +104,6 @@ export const NO_UNUSED_EXPORTS_EXEMPT: ReadonlySet<string> = new Set([
   'src/renderer/term-caps.ts#SYNC_BEGIN', // wired via wrapSynced; exact DEC 2026 escape sequence pinned by dedicated tests
   'src/renderer/term-caps.ts#SYNC_END', // wired via wrapSynced; exact DEC 2026 escape sequence pinned by dedicated tests
 
-  // ── Literal-ownership overlap (WO-206/WO-207, renderer-excellence wave):
-  // these exports are genuinely dead (zero non-test import sites) but every
-  // line of their body is color-literal-bearing, and their files are listed
-  // WO-207 targets. WO-206 makes zero color-literal edits per the wave's
-  // literal-ownership rule, so these are left exempted rather than deleted —
-  // flagged here for WO-207/the integrator to resolve for real (delete, or
-  // fold into whatever the palette pass leaves behind).
-  'src/renderer/settings-modal-helpers.ts#flagStateColor', // dead; body is 3 hex-literal returns
-  'src/renderer/settings-modal-helpers.ts#mcpTrustColor', // dead; body includes the #eab308 WO-207 targets for unification
-  'src/renderer/settings-modal-helpers.ts#subscriptionStateColor', // dead; body includes the #eab308 WO-207 targets for unification
-  'src/renderer/progress.ts#renderSpinner', // dead; color-literal default param + fg
-  'src/renderer/progress.ts#renderToolProgress', // dead; body has hex-literal fg
-  'src/renderer/progress.ts#renderTokenBar', // dead; body is the "tool-call/progress good/bad pairs" WO-207 explicitly targets in this file
 ]);
 
 /** Whether a repo-relative path falls under the no-unused-exports rule's scope. */
