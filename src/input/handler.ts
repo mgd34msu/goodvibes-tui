@@ -493,6 +493,15 @@ export class InputHandler implements InputHandlerLike {
     };
 
     this.requestRender = bufferedRequestRender;
+    // Snapshot the overlay flags before the feed: command handlers executed
+    // synchronously during token processing (e.g. /shortcuts, /help via
+    // ui-openers) mutate these directly on the handler, and an unconditional
+    // write-back of the pre-feed snapshot would silently revert them in the
+    // same keystroke (the "/shortcuts never displays" defect).
+    const helpOverlayActiveBefore = this.helpOverlayActive;
+    const helpScrollOffsetBefore = this.helpScrollOffset;
+    const shortcutsOverlayActiveBefore = this.shortcutsOverlayActive;
+    const shortcutsScrollOffsetBefore = this.shortcutsScrollOffset;
     try {
       const context = this.feedContext;
       // Sync mutable scalars from handler into the reused context.
@@ -531,10 +540,13 @@ export class InputHandler implements InputHandlerLike {
       this.commandMode = context.commandMode;
       this.panelFocused = context.panelFocused;
       this.indicatorFocused = context.indicatorFocused;
-      this.helpOverlayActive = context.helpOverlayActive;
-      this.helpScrollOffset = context.helpScrollOffset;
-      this.shortcutsOverlayActive = context.shortcutsOverlayActive;
-      this.shortcutsScrollOffset = context.shortcutsScrollOffset;
+      // Overlay flags: only apply the pipeline's value when the pipeline
+      // itself changed it (e.g. Escape closing the overlay). Otherwise keep
+      // the live handler value, which a command handler may have just set.
+      if (context.helpOverlayActive !== helpOverlayActiveBefore) this.helpOverlayActive = context.helpOverlayActive;
+      if (context.helpScrollOffset !== helpScrollOffsetBefore) this.helpScrollOffset = context.helpScrollOffset;
+      if (context.shortcutsOverlayActive !== shortcutsOverlayActiveBefore) this.shortcutsOverlayActive = context.shortcutsOverlayActive;
+      if (context.shortcutsScrollOffset !== shortcutsScrollOffsetBefore) this.shortcutsScrollOffset = context.shortcutsScrollOffset;
       this.selectionCallback = context.selectionCallback;
       this.nextPasteId = context.nextPasteId;
       this.nextImageId = context.nextImageId;

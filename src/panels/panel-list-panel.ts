@@ -336,7 +336,11 @@ export class PanelListPanel extends BasePanel {
             width,
             ' No panels match filter.',
             'Clear the filter or search for another panel by id, name, description, or category.',
-            [{ command: '/panel list', summary: 'reopen the panel workspace from the shell' }],
+            // The real remedy for a stuck filter is clearing it in-panel;
+            // '/panel list' would just re-activate this same instance with
+            // the filter still applied. A committed filter needs '/' to
+            // re-enter editing before Esc clears it.
+            [{ command: '/ then Esc', summary: 'clear the filter and show every panel' }],
             C,
           ),
         }],
