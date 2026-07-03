@@ -440,6 +440,19 @@ export class UIFactory {
   private static readonly THINK_GRADIENT_START = UI_TONES.accent.gradientStart;
   private static readonly THINK_GRADIENT_END = UI_TONES.accent.gradientEnd;
 
+  /**
+   * Per-frame stall info from stream metrics — computed from lastDeltaAtMs every render (not
+   * from any event) so it degrades gracefully with zero new SDK events. Undefined until the
+   * first delta clock exists this turn.
+   */
+  public static computeStallInfo(lastDeltaAtMs: number | undefined, reconnectAttempt: number | undefined, reconnectMaxAttempts: number | undefined, nowMs: number): ThinkingStallInfo | undefined {
+    if (lastDeltaAtMs === undefined) return undefined;
+    const reconnect = reconnectAttempt !== undefined && reconnectMaxAttempts !== undefined
+      ? { attempt: reconnectAttempt, maxAttempts: reconnectMaxAttempts }
+      : undefined;
+    return { msSinceLastDelta: nowMs - lastDeltaAtMs, reconnect };
+  }
+
   public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number, stallInfo?: ThinkingStallInfo): Line[] {
     // Freeze the whimsical phrase rotation once real silence has gone on
     // long enough to be misleading (THINKING_STALL_FREEZE_MS), and show an

@@ -2,7 +2,7 @@
 import { homedir } from 'node:os';
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from './types/grid.ts';
-import { UIFactory, type ThinkingStallInfo } from './renderer/ui-factory.ts';
+import { UIFactory } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
@@ -130,13 +130,9 @@ async function main() {
     }
   }
 
-  // TUI default: show token speed ON. The SDK schema default is false;
-  // applyRuntimeConfigDefault reads both the global settings file and the project
-  // settings file from disk before deciding whether to apply the default. If the
-  // user has explicitly set this key to false in EITHER their global or project
-  // persisted config, their value is respected and the default is NOT applied.
-  // Only when the key is absent from both files (e.g. a new install) does the
-  // TUI default of true take effect in-memory — no disk write occurs either way.
+  // TUI default: show token speed ON (SDK schema default is false). applyRuntimeConfigDefault
+  // reads the global + project settings files and only applies the default in-memory when the
+  // key is absent from both (e.g. a new install); an explicit user value is respected. No disk write.
   applyRuntimeConfigDefault(configManager, 'display.showTokenSpeed', true);
 
   const panelManager = ctx.services.panelManager;
@@ -180,10 +176,8 @@ async function main() {
     ttftRecorded: false,
     activeToolStartedAtMs: undefined,
     activeToolName: undefined,
-    lastDeltaAtMs: undefined,
-    stallEpisode: 0,
-    reconnectAttempt: undefined,
-    reconnectMaxAttempts: undefined,
+    lastDeltaAtMs: undefined, stallEpisode: 0,
+    reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
 
   const getPromptContentWidth = () => computePromptContentWidth(stdout.columns);
@@ -194,10 +188,8 @@ async function main() {
     const currentModel = providerRegistry.getCurrentModel();
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
     const rows = stdout.rows || 24;
-    // Compact threshold must match buildShellFooter's `compact: height < 30`
-    // posture below — otherwise the cached-height fast path in
-    // estimateShellFooterHeight can answer a compact-vs-non-compact query
-    // with the wrong cached mode and throw the viewport math off by several rows.
+    // Compact threshold must match buildShellFooter's `compact: height < 30` posture below,
+    // else estimateShellFooterHeight's cached-height fast path answers with the wrong mode.
     return rows - 2 - estimateShellFooterHeight(promptLines, contextWindow, rows < 30);
   };
 
@@ -352,10 +344,7 @@ async function main() {
     allowTerminalWrite(() => stdout.write(CLEAR_SCREEN));
     render();
   };
-  commandContext.requestFullRepaint = () => {
-    compositor.resetDiff();
-    render();
-  };
+  commandContext.requestFullRepaint = () => { compositor.resetDiff(); render(); };
   permissionPromptRef.requestPermission = (request) =>
     new Promise((resolve) => {
       pendingPermission = {
@@ -522,10 +511,7 @@ async function main() {
       hitlMode: modeManager.getHITLMode(),
       runningAgentCount,
       runningProcessCount,
-      // Composer must not read as focused when the panel workspace or the
-      // process indicator owns keyboard focus — otherwise the bright prompt
-      // box + blinking cursor contradicts the (correctly) accented panel
-      // border and the user sees two disagreeing focus signals.
+      // Composer must not read as focused while the panel/process indicator owns keyboard focus.
       promptFocused: !input.panelFocused && !input.indicatorFocused,
       indicatorFocused: input.indicatorFocused,
       runningAgentProgress: runningAgentSummary.progress,
@@ -597,21 +583,8 @@ async function main() {
       const partialToolPreview = showPreview ? sessionSnapshot.streamToolPreview : undefined;
       // Elapsed from turn start (stream or tool execution), used for the thinking indicator timer.
       const turnElapsedMs = streamMetrics.startTime > 0 ? Date.now() - streamMetrics.startTime : undefined;
-      // "Ms since last byte" is computed here every frame from streamMetrics.lastDeltaAtMs
-      // rather than from any event — so the indicator works even when no new event
-      // (SDK or otherwise) has arrived at all, and freezes the whimsical phrase
-      // rotation as soon as the gap crosses UIFactory's freeze threshold.
-      const msSinceLastDelta = streamMetrics.lastDeltaAtMs !== undefined
-        ? Date.now() - streamMetrics.lastDeltaAtMs
-        : undefined;
-      const stallInfo: ThinkingStallInfo | undefined = msSinceLastDelta !== undefined
-        ? {
-          msSinceLastDelta,
-          reconnect: streamMetrics.reconnectAttempt !== undefined && streamMetrics.reconnectMaxAttempts !== undefined
-            ? { attempt: streamMetrics.reconnectAttempt, maxAttempts: streamMetrics.reconnectMaxAttempts }
-            : undefined,
-        }
-        : undefined;
+      // Stall info computed every frame from streamMetrics.lastDeltaAtMs; see UIFactory.computeStallInfo.
+      const stallInfo = UIFactory.computeStallInfo(streamMetrics.lastDeltaAtMs, streamMetrics.reconnectAttempt, streamMetrics.reconnectMaxAttempts, Date.now());
       const thinking = UIFactory.createThinkingFragment(
         conversationWidth,
         orchestrator.getSpinner(),
@@ -727,9 +700,8 @@ async function main() {
 
   // Stable turn context for failover retry — set in submitInput, read by retryTurn.
   let retryCtx: { count: number; text: string; content?: ContentPart[]; opts?: Parameters<typeof orchestrator.handleUserInput>[2] } | null = null;
-  // One-key retry affordance: active immediately after a user-visible TURN_ERROR.
-  // While active, 'r' re-submits on the current provider, 'm' opens the model
-  // picker. Any other character clears the affordance and routes normally.
+  // One-key retry affordance, active right after a user-visible TURN_ERROR: 'r' re-submits on the
+  // current provider, 'm' opens the model picker, any other character clears it and routes normally.
   let errorAffordanceActive = false;
   const retryTurn = (): void => {
     if (!retryCtx) return;
@@ -753,9 +725,8 @@ async function main() {
     }
   });
 
-  // Register terminal-restoring crash/termination handlers BEFORE entering raw mode so a
-  // throw during terminal setup or the initial render still restores the terminal; the
-  // 'exit' listener is the final safety net for any process.exit path.
+  // Register terminal-restoring crash/termination handlers BEFORE entering raw mode so a throw
+  // during setup or the initial render still restores the terminal; 'exit' is the final safety net.
   process.on('uncaughtException', uncaughtExceptionHandler);
   process.on('SIGTERM', terminationSignalHandler);
   process.on('SIGHUP', terminationSignalHandler);
