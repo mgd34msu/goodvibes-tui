@@ -235,10 +235,12 @@ export class CockpitPanel extends BasePanel {
         return true;
       }
       if (key === 'i') {
+        // Quick view is only meaningful when the cursor is on a real roster
+        // entry — otherwise leave the key unconsumed instead of absorbing it
+        // as a silent no-op.
         const entry = roster[this.agentCursorIndex];
-        if (entry) {
-          this.actionCallbacks.openAgentDetail(entry.id);
-        }
+        if (!entry) return false;
+        this.actionCallbacks.openAgentDetail(entry.id);
         return true;
       }
       if (key === 'enter' || key === 'return') {
@@ -249,12 +251,14 @@ export class CockpitPanel extends BasePanel {
         return true;
       }
       if (key === 'c') {
+        // Cancel is only meaningful on a real, non-terminal roster entry —
+        // otherwise leave the key unconsumed instead of absorbing it as a
+        // silent no-op.
         const entry = roster[this.agentCursorIndex];
-        if (entry && !this.isTerminal(entry.status)) {
-          const shortId = entry.id.length > 8 ? entry.id.slice(-8) : entry.id;
-          this.confirm = { subject: entry.id, label: `agent ${shortId}`, verb: 'Cancel' };
-          this.markDirty();
-        }
+        if (!entry || this.isTerminal(entry.status)) return false;
+        const shortId = entry.id.length > 8 ? entry.id.slice(-8) : entry.id;
+        this.confirm = { subject: entry.id, label: `agent ${shortId}`, verb: 'Cancel' };
+        this.markDirty();
         return true;
       }
     } else {
