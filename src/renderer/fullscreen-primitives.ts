@@ -107,7 +107,7 @@ export function drawHorizontalRule(line: Line, startX: number, endX: number, fg:
   }
 }
 
-export function clipDisplay(text: string, width: number): string {
+function clipDisplay(text: string, width: number): string {
   if (width <= 0) return '';
   let used = 0;
   let output = '';

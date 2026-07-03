@@ -1,13 +1,13 @@
 import { describe, test, expect } from 'bun:test';
-import { formatHint, formatHints, joinHints, HINT_SEPARATOR } from '../../renderer/hint-grammar.ts';
+import { formatHints, joinHints, HINT_SEPARATOR } from '../../renderer/hint-grammar.ts';
 
 describe('hint-grammar', () => {
-  test('formatHint renders [Key] Verb', () => {
-    expect(formatHint({ key: 'Enter', verb: 'Select' })).toBe('[Enter] Select');
+  test('formatHints renders [Key] Verb for a single hint', () => {
+    expect(formatHints([{ key: 'Enter', verb: 'Select' }])).toBe('[Enter] Select');
   });
 
-  test('formatHint renders a bare [Key] when verb is omitted', () => {
-    expect(formatHint({ key: 'Esc' })).toBe('[Esc]');
+  test('formatHints renders a bare [Key] when verb is omitted', () => {
+    expect(formatHints([{ key: 'Esc' }])).toBe('[Esc]');
   });
 
   test('formatHints joins with the middle-dot separator', () => {

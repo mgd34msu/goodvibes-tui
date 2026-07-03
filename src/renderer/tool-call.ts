@@ -227,18 +227,3 @@ export function renderToolCallBlock(
 
   return [line];
 }
-
-/**
- * Render a list of tool calls. All calls are treated as completed (done).
- * Used for historical message rendering where status/timing is unavailable.
- */
-export function renderToolCallList(
-  toolCalls: ToolCall[],
-  width: number,
-): Line[] {
-  const lines: Line[] = [];
-  for (const tc of toolCalls) {
-    lines.push(...renderToolCallBlock(tc, 'done', undefined, width));
-  }
-  return lines;
-}

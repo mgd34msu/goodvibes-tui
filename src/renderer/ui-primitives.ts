@@ -130,7 +130,5 @@ export const DIFF_TONES = {
   hunk: '#88aaff',
 } as const;
 
-export type UiGlyphRegistry = typeof GLYPHS;
-
 /** Single spinner-frame source — layout.ts and progress.ts both re-export this. */
 export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
