@@ -78,6 +78,14 @@ export interface CommandUiActions {
   clearScreen?: () => void;
   activatePlan?: (planId: string, task: string) => void;
   requestPermission?: PermissionRequestHandler;
+  /**
+   * Force a full-screen repaint on the next frame (reuses Compositor.resetDiff(),
+   * the same call resize/bootstrap already use). Defense-in-depth for command
+   * handlers whose spawned subprocess may have written to the real tty (e.g. a
+   * stderr-capture regression) — nulls the diff buffers so the next composite()
+   * repaints over any stray output instead of leaving it until an unrelated resize.
+   */
+  requestFullRepaint?: () => void;
 }
 
 export interface CommandShellUiOpeners {

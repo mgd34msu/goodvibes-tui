@@ -427,6 +427,8 @@ export function handleCtrlC(
   lastCtrlCTime: number,
   setLastCtrlCTime: (value: number) => void,
   setShowExitNotice: (value: boolean) => void,
+  lastCtrlCTimeoutId: ReturnType<typeof setTimeout> | null,
+  setLastCtrlCTimeoutId: (value: ReturnType<typeof setTimeout> | null) => void,
 ): void {
   if (prompt.length > 0) {
     saveUndoState();
@@ -436,17 +438,29 @@ export function handleCtrlC(
   }
   cancelGeneration?.();
   const now = Date.now();
+  // Clear any hide-timer pending from a prior press before deciding this
+  // one's outcome, whichever branch below runs. Without this, a hide-timer
+  // scheduled by an earlier press could still fire after a newer notice
+  // window opened, or after exitApp() was just called (if exitApp isn't
+  // synchronous) — flipping showExitNotice/requestRender during a shutdown
+  // the user already believes is in progress.
+  if (lastCtrlCTimeoutId !== null) {
+    clearTimeout(lastCtrlCTimeoutId);
+    setLastCtrlCTimeoutId(null);
+  }
   if (now - lastCtrlCTime < 1000) {
     exitApp();
-  } else {
-    setLastCtrlCTime(now);
-    setShowExitNotice(true);
-    requestRender();
-    setTimeout(() => {
-      setShowExitNotice(false);
-      requestRender();
-    }, 1000);
+    return;
   }
+  setLastCtrlCTime(now);
+  setShowExitNotice(true);
+  requestRender();
+  const timeoutId = setTimeout(() => {
+    setShowExitNotice(false);
+    setLastCtrlCTimeoutId(null);
+    requestRender();
+  }, 1000);
+  setLastCtrlCTimeoutId(timeoutId);
 }
 
 export function handleClipboardPaste(

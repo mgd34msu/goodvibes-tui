@@ -22,6 +22,7 @@ import {
   renderOnboardingCliStatus,
 } from './index.ts';
 import { buildCliServicePosture } from './service-posture.ts';
+import { ensureGoodvibesGitignore } from './ensure-goodvibes-gitignore.ts';
 
 type ShellEntrypointOwnership = {
   readonly workingDirectory: string;
@@ -95,6 +96,7 @@ export async function prepareShellCliRuntime(
     homeDirectory: bootstrapHomeDirectory,
   } = resolveShellEntrypointOwnership(roots, cli.flags.workingDir ?? (cli.command === 'tui' ? cli.commandArgs[0] : undefined));
   configureActivityLogger(join(bootstrapWorkingDir, '.goodvibes', 'logs'));
+  ensureGoodvibesGitignore(bootstrapWorkingDir);
   const configManager = new ConfigManager({
     workingDir: bootstrapWorkingDir,
     homeDir: bootstrapHomeDirectory,

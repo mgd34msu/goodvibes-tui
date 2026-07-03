@@ -88,6 +88,7 @@ export interface InputHandlerLike {
   lastCopyTime: number;
   lastBlockCopyTime: number;
   lastCtrlCTime: number;
+  lastCtrlCTimeoutId: ReturnType<typeof setTimeout> | null;
 
   // ── Modal state ───────────────────────────────────────────────────────────
   commandMode: boolean;

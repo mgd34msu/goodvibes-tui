@@ -193,6 +193,8 @@ export function handleCtrlCForHandler(handler: InputHandler): void {
       handler.lastCtrlCTime,
       (value) => { handler.lastCtrlCTime = value; },
       (value) => { handler.showExitNotice = value; },
+      handler.lastCtrlCTimeoutId,
+      (value) => { handler.lastCtrlCTimeoutId = value; },
     );
   }
 
