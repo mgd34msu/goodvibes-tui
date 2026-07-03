@@ -111,6 +111,25 @@ describe('renderCodeBlock', () => {
     }
   });
 
+  test('a wide glyph landing on the last body column does not spill its placeholder into the right margin', () => {
+    const width = 20;
+    const effectiveWidth = width - LAYOUT.RIGHT_MARGIN; // 18
+    // 13 single-width filler chars push cx from leftMargin(4) to 17 —
+    // effectiveWidth - 1, the last column inside the body. The wide glyph
+    // ('日', display width 2) then lands exactly on that last column, so its
+    // placeholder cell would fall at column effectiveWidth (18) if bounded
+    // against the full line width instead of the body's own edge.
+    const codeLine = 'x'.repeat(13) + '日' + 'zz';
+    const result = renderCodeBlock([codeLine], '', width, { showLineNumbers: false });
+    const bodyLine = result[1];
+
+    expect(bodyLine[effectiveWidth - 1].char).toBe('日');
+    // The margin column must stay the untouched default cell, not a
+    // wide-glyph placeholder bleeding out of the body.
+    expect(bodyLine[effectiveWidth].char).toBe(' ');
+    expect(bodyLine[effectiveWidth].bg).toBe('');
+  });
+
   test('header has distinctive background color', () => {
     const result = renderCodeBlock(['x'], 'ts', WIDTH);
     const headerCells = result[0].filter((c) => c.char !== ' ');
