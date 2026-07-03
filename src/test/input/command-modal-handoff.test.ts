@@ -487,4 +487,60 @@ describe('command modal handoff', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // WO-160 smoke defect: the feed pipeline snapshots the help/shortcuts
+  // overlay flags and wrote the stale snapshot back after token processing,
+  // silently reverting an overlay a command handler had just opened. The
+  // overlays never displayed even though the command executed.
+  test('overlays opened by a command during the feed survive the write-back, and Escape still closes them', async () => {
+    const history = new InfiniteBuffer();
+    const input = new InputHandler(
+      () => {},
+      new SelectionManager(),
+      () => 0,
+      () => 20,
+      () => history,
+      () => {},
+      () => {},
+      createDefaultUiRuntimeServices(),
+    );
+    input.setContentWidth(80);
+
+    const registry = new CommandRegistry();
+    // Mirror the real shell-core handlers: synchronous ctx.open*Overlay call.
+    registry.register({ name: 'shortcuts', description: 'overlay', handler: (_args, ctx) => { ctx.openShortcutsOverlay?.(); } });
+    registry.register({ name: 'commands', description: 'overlay', handler: (_args, ctx) => { ctx.openHelpOverlay?.(); } });
+    const context = makeCommandContext({});
+    // Mirror ui-openers exactly: the opener mutates the handler directly.
+    context.openShortcutsOverlay = () => {
+      if (!input.shortcutsOverlayActive) input.modalOpened('shortcuts');
+      input.shortcutsOverlayActive = !input.shortcutsOverlayActive;
+      input.shortcutsScrollOffset = 0;
+    };
+    context.openHelpOverlay = () => {
+      if (!input.helpOverlayActive) input.modalOpened('help');
+      input.helpOverlayActive = !input.helpOverlayActive;
+      input.helpScrollOffset = 0;
+    };
+    input.setCommandRegistry(registry, context);
+
+    input.feed('/shortcuts\r');
+    await Promise.resolve();
+    expect(input.shortcutsOverlayActive).toBe(true);
+    expect(input.modalStack).toEqual(['shortcuts']);
+
+    // The pipeline-driven close path must still apply (Escape).
+    input.feed('\x1b');
+    expect(input.shortcutsOverlayActive).toBe(false);
+    expect(input.modalStack).toEqual([]);
+
+    input.feed('/commands\r');
+    await Promise.resolve();
+    expect(input.helpOverlayActive).toBe(true);
+    expect(input.modalStack).toEqual(['help']);
+
+    input.feed('\x1b');
+    expect(input.helpOverlayActive).toBe(false);
+    expect(input.modalStack).toEqual([]);
+  });
 });

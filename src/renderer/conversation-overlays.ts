@@ -84,7 +84,7 @@ export function applyConversationOverlays(
   }
 
   if (!fullscreenClaimed && input.agentDetailModal.active) {
-    const lines = renderAgentDetailModal(input.agentDetailModal, conversationWidth);
+    const lines = renderAgentDetailModal(input.agentDetailModal, conversationWidth, viewportHeight);
     next = overlayViewportBottom(next, lines, conversationWidth, viewportHeight, bottomDockInset);
   }
 
