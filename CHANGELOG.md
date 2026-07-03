@@ -6,136 +6,44 @@ All notable changes to GoodVibes TUI.
 
 ## [1.0.0] — 2026-07-03
 
-### Changes
-- d26fc23f ci: drop temporary renderer-excellence branch trigger after merge
-- 532c900b integrate renderer-excellence: renderer performance and correctness effort (v1.0.0 scope)
-- cdf5931d fix(input): normalize CR line endings from bracketed pastes
-- 1318959f chore(perf): re-capture baseline reference medians on a quiet box
-- 946a2c83 integrate WO-210 into renderer-excellence
-- 209ade5f perf(budgets): ratchet transcript.append_one 20ms->6ms; streaming tail proven non-material (WO-210)
-- c7e445c2 integrate WO-209 into renderer-excellence
-- df4d8d03 integrate WO-208 into renderer-excellence
-- f5476715 perf(conversation): per-message Line[] cache — append-one 45ms→0.9ms (WO-209)
-- 76539cd8 perf(renderer): WO-208 coalesce main.ts render() fan-out into one same-tick composite
-- 204342c4 refactor(renderer): delete the six dead exports parked during the R2 literal-ownership split
-- 9c1dbdae integrate WO-207 into renderer-excellence
-- ae660b2a integrate WO-206 into renderer-excellence
-- 6acd74f6 integrate WO-205 into renderer-excellence
-- c6eb004c feat(architecture): WO-206 no-unused-exports rule for src/renderer
-- 8997719b feat(renderer): WO-207 — palette unification across the renderer layer
-- 3ec18bb1 refactor(renderer): WO-205 dedup + dead code + honest picker
-- 43eb8165 ci: run full CI on renderer-excellence pushes for the v1.0.0 effort
-- 6e483f55 fix(renderer): diff panel keeps its shipped colors — the panels are the reference, not diff-view
-- 50755108 integrate WO-204 into renderer-excellence
-- 17425f6a integrate WO-203 into renderer-excellence
-- 68bc13c3 fix(renderer): WO-203 verified correctness fixes
-- 721f4d91 feat(renderer): WO-204 — restore conversation diff rendering, align diff surface colors
-- c5aff410 integrate WO-202 into renderer-excellence
-- 0f03a124 integrate WO-201 into renderer-excellence
-- e5ba2978 test(renderer): WO-201 golden contract expansion — splash, transcript scenes, all overlays
-- 210d5814 perf(scripts): WO-202 line-production benchmarks above the compositor
-- bf6459af fix(tests): skills delete test polls the rescanned state, not just file removal
+The renderer milestone: the full rendering pipeline measured, cached, gated, and visually pinned — plus a fix for a long-shipped multi-line paste defect. 1.0.0 marks the stability posture promised since early development: semver, with incompatible changes landing only in major releases.
+
+### Features
+- Restored conversation diff rendering: expanded diff-shaped tool results render with green add / red delete / blue hunk-header gutters through the same color tokens as the diff panel and the git panel's inline diff, so diffs look identical on every surface. This path had been unwired since v0.9.6; the new no-unused-exports gate exists so nothing goes silently dead again.
+- Unified the renderer palette onto the `UI_TONES` token set — byte-identical color swaps; genuinely distinct palettes (agent-detail neon theme, code-block VS-Code-Dark+ fallback) are preserved exactly as named accents.
+- Long-conversation append performance: a per-message line cache renders only the new message on append (~0.9ms median) instead of rebuilding the whole transcript (~45.5ms and ~71MB of throwaway allocations at 1,000 messages).
+- Render coalescing: same-tick render requests collapse into one composite — streaming bursts previously triggered up to 7 redundant composites per tick.
+- Honest profile picker: dropped the hardcoded fake "Settings" column that showed identical text for every profile; adopted proportional column widths.
+
+### Fixes
+- Multi-line paste works: terminals transmit the line breaks inside a bracketed paste as carriage returns, which the composer inserted verbatim — the input box never grew, ghost text overwrote the prompt marker, and edits acted on an invisible layout. Line endings are now normalized at the paste boundary, and history entries persisted before the fix are laundered on load. (A shipped defect since bracketed paste landed, not a regression from this effort.)
+- Seven rendering-correctness fixes at narrow/short terminal sizes: real viewport height in the agent-detail modal, overlay width clamped ahead of its 20/24-column floors, consistent compact-footer height math, and wide-glyph (CJK/fullwidth) boundary fixes — each landed with a test that failed before the fix.
+
+### Internal
+- Golden-frame harness expanded to 35 committed byte-exact reference frames: the splash at 60/100/140 columns, transcript scenes (plain and diff tool results collapsed/expanded, code blocks on both tokenizer paths, thinking blocks, streaming partials), and every overlay at normal and hostile sizes. Splash goldens render with a pinned version fixture so release version bumps can never break them (the first v1.0.0 validate run failed on exactly that).
+- Performance baseline harness with enforced CI budgets (`scripts/perf-baseline.json`, `perf:check`): startup load, frame-composite p95/p99, and line-production budgets for transcript build/append/resize, panel build, markdown, code blocks, and overlay open. `transcript.append_one` ratcheted 20ms → 6ms.
+- No-unused-exports architecture gate for the renderer layer; three dead renderer modules deleted (`progress.ts`, `file-tree.ts`, `status-token.ts`).
+- Splash art and its wide/narrow glyph typography byte-identical throughout — enforced by an empty-diff check every wave plus the splash goldens.
 
 ## [0.29.0] — 2026-07-03
 
-### Changes
-- 2842a791 perf(ci): parallelize the per-file test runner; raise the test job timeout
-- 218bb217 merge: panel-system remediation — 38 work orders, consoles not signposts (0.29.0)
-- a37c028e fix(input): WO-160 smoke findings — overlay write-back clobber, /ops view parity, panel-list honesty, modal viewport
-- 5741f633 fix(tests): isolate GitPanel non-repo test from the runner's in-tree TMPDIR
-- 6eaea7c4 fix(panels): WO-160 consistency sweep — alias tests, action-substitute signposts
-- 42164e34 fix(panels): cockpit c/i leave the key unconsumed on terminal or absent roster entries
-- 10247db1 feat(input): make Ctrl+O a real keybind for the Ops Control panel
-- ac598536 refactor(panels): route selected-row reads through getSelectedItem and ban raw [this.selectedIndex]
-- 34bac3f0 chore(panels): tighten hex-literal baseline to exact actual counts
-- 3d2caf90 integrate WO-153 into panel-ux-remediation
-- 1f0ed5ca integrate WO-152 into panel-ux-remediation
-- 8b6fbce6 integrate WO-151 into panel-ux-remediation
-- ce0b7cb8 fix(panels): closure-audit findings — incident/settings-sync filtered desyncs, subscription start signposts
-- ba7db35e feat(panels): WO-152 registry taxonomy, icons, always-register, lifecycle flags
-- 7cbdd4ec feat(panels): WO-153 filter-model convergence onto ScrollableListPanel
-- 40cb9153 feat(panels): WO-151 keybindings, help discoverability, one hint grammar
-- 782e7752 fix(panels): services test/detail act on the filtered selection
-- e8783a89 integrate WO-154 into panel-ux-remediation
-- cdb399b9 integrate WO-140 into panel-ux-remediation
-- 943089ea integrate WO-139 into panel-ux-remediation
-- d527c223 integrate WO-141 into panel-ux-remediation
-- a65ee307 integrate WO-150 into panel-ux-remediation
-- a73e874b feat(panels): WO-140 planning cluster polish (wrfc/project-planning/work-plan)
-- e1921ab8 feat(panels): WO-141 keep-panel hardening + residual signpost sweep
-- 8b018746 feat(panels): WO-139 provider-cost leftovers — subscription/local-auth/cost-tracker
-- da7b9550 feat(panels): WO-150 unify focus ownership in PanelManager
-- 4c569ae8 feat(shell): WO-154 main-UX shell splash, footer cost/compact, overlay posture
-- 7218349c fix(panels): wave 3a review findings — filtered-selection desyncs, residual signposts, dead constants
-- 1cc9f195 integrate WO-138 into panel-ux-remediation
-- 179a9a91 integrate WO-137 into panel-ux-remediation
-- 4df3036e integrate WO-136 into panel-ux-remediation
-- 20533671 integrate WO-135 into panel-ux-remediation
-- 2f116f82 integrate WO-134 into panel-ux-remediation
-- 595df267 integrate WO-133 into panel-ux-remediation
-- 490dc881 feat(panels): WO-137 diagnostics trio — security, debug, system-messages
-- 066fd91a feat(panels): WO-138 session-comm quad real actions (remote/communication/routes/qr)
-- a9a1ebe0 feat(panels): WO-134 Plugins + Hooks control rooms
-- e4380896 feat(panels): WO-136 Docs + Intelligence live actions
-- 8f6a3f45 feat(panels): WO-133 explorer + preview lazy loading, git decorations, diff/reload keys
-- 744dc460 feat(panels): WO-135 marketplace + skills real actions
-- a04c86e9 fix(panels): reserve summary row inside stacked scrollable section budgets
-- b2a43d9b fix(panels): reserve a row for the window-summary inside the scrollable budget
-- acb3e3b5 fix(panels): bind w to dispatch teamwork review from Tasks; stop git panel swallowing i on loaded repos
-- 4bc04330 integrate WO-130 into panel-ux-remediation
-- e15c010b integrate WO-128 into panel-ux-remediation
-- 3020d2e1 integrate WO-127 into panel-ux-remediation
-- 1a0c0d76 integrate WO-132 into panel-ux-remediation
-- 79ac40bd integrate WO-131 into panel-ux-remediation
-- 61092aa0 integrate WO-126 into panel-ux-remediation
-- f83d6820 feat(panels): WO-131 agent-runtime trio — tools + tasks + orchestration
-- 8dafc5c0 feat(panels): WO-132 Git + Diff consoles — stage/unstage/commit, explicit init confirm, self-loading diff panel
-- 24c5127e feat(panels): WO-128 plan dashboard revival
-- 2c8e8d1f feat(panels): WO-126 symbol outline on tree-sitter
-- 2d424e1c feat(panels): WO-130 Cockpit operator polish
-- 66c0deeb feat(panels): WO-127 eval console — baseline seed, live run, regressions
-- 1a53ef2c fix(panels): drop redundant slash-command guidance from knowledge review mode
-- 16ba104d fix(tests): operator-surfaces gate verifies forensics alias resolves to incident
-- a5b8f4e9 integrate FOLLOWUPS into panel-ux-remediation
-- f60988eb integrate WO-125 into panel-ux-remediation
-- 39996bfd integrate WO-124 into panel-ux-remediation
-- 78fb4916 integrate WO-123 into panel-ux-remediation
-- e5294103 integrate WO-122 into panel-ux-remediation
-- 371f4d60 integrate WO-121 into panel-ux-remediation
-- 1ff1e0ae integrate WO-120 into panel-ux-remediation
-- 933b09a3 feat(panels): WO-120 register ops-control panel and wire operator actions
-- 39bfc1a1 feat(panels): WO-125 wire worktree and sandbox lifecycle verbs to their registries
-- 4992fd03 feat(panels): WO-121 control-plane approvals console
-- ea1c47b0 feat(panels): WO-123 knowledge console replaces static command catalogue
-- 91273a60 feat(panels): WO-124 settings-sync console — resolve conflicts in-panel, Tab browse modes
-- 74f5d39d feat(panels): WO-122 policy governance console actions and depth
-- f4679a7e fix(panels): broaden hex-literal ratchet to 3/6/8-digit forms, clear remaining raw hex in fullscreen-primitives and diff-panel
-- 6e1b814c fix(panels): forensics resolves as alias to incident, not duplicate registration
-- 6a0f4405 fix(tests): operator-surfaces gate asserts merged provider-health id instead of retired providers id
-- 09d81371 fix(tests): retarget legacy-turn-bus ban from deleted context-visualizer-panel to its WO-113 successor token-budget-panel
-- e835a821 integrate WO-114 into panel-ux-remediation
-- 433b4c25 integrate WO-113 into panel-ux-remediation
-- 70466337 integrate WO-112 into panel-ux-remediation
-- a1ebf5da fix(tests): contract module count 30 after WO-110+WO-111 both deleted a module
-- fd25fb19 integrate WO-111 into panel-ux-remediation
-- 0d72a2ef integrate WO-110 into panel-ux-remediation
-- 0a344b60 WO-112: Provider console merge: providers + accounts into provider-health
-- d4c7c8b4 WO-111: Automation console merge: schedule + watchers into automation
-- 1fc22d27 WO-110: Agent console merge: agent-logs into inspector
-- 0d4858ff WO-114: Incident console merge: forensics into incident
-- a4cdfb3c WO-113: Context/token merge: context into tokens
-- fd8e84ef integrate WO-002 into panel-ux-remediation
-- 1a85ece3 WO-002: Panel palette and chrome sweep (extendPalette everywhere)
-- 1cd556da integrate WO-006 into panel-ux-remediation
-- d6effd51 integrate WO-005 into panel-ux-remediation
-- d7735d20 integrate WO-004 into panel-ux-remediation
-- 9b1de69a integrate WO-003 into panel-ux-remediation
-- e149323f integrate WO-001 into panel-ux-remediation
-- 45e90fa7 WO-006: Shared-test decongestion: per-panel spec modules
-- 2d7d5777 WO-001: Theme-token backbone + architecture-gate hex enforcement
-- 207cd46b WO-003: Action-callback plumbing pattern + ConfirmState generalization
-- abf6771b WO-005: session-maintenance evaluator dedup
-- 4fe16129 WO-004: Dead code and dead keybinding removal
+The panel remediation release: a 27-finding audit closed across 38 work orders — panels became working consoles instead of slash-command signposts.
+
+### Features
+- Panels perform their actions directly: ops task/agent interventions, approval resolution, policy simulate/preflight/promote/rollback, knowledge review, settings-sync conflict resolution, worktree/sandbox lifecycle, and git operations run from the panel — keyed, with confirm gates on destructive actions — instead of printing "run /some-command".
+- `Ctrl+O` opens the Ops Control panel as a real, rebindable keybinding.
+- Five panel merges with the old ids preserved as aliases: agent-logs→inspector, context→tokens, providers+accounts→provider-health, forensics→incident.
+
+### Fixes
+- `/shortcuts` and `/commands` overlays actually display: the token-feed pipeline was reverting overlay flags that command handlers set mid-feed, so both commands silently did nothing. Fixed with change-detecting write-back plus a regression test.
+- Every Alt-modifier keybinding works again after a tokenizer/matcher mismatch left them all dead at runtime (Alt+B/Alt+F word navigation, Alt+D and Alt+Y kill-ring bindings).
+- A stale-selection bug class across the Marketplace, Services, Incident, and Settings-sync panels: after filtering, an action could silently apply to the wrong row. Fixed via a shared `getSelectedItem()` accessor plus an architecture rule banning raw selected-index access.
+- Panel focus ownership centralized in PanelManager with a self-healing invariant, replacing scattered per-panel focus bookkeeping.
+
+### Internal
+- Parallel per-file test runner (`scripts/run-tests.ts`): min(8, cores−1) workers with isolated TMPDIRs — the suite dropped from ~10.5 minutes to under 2 locally; the CI test-job cap raised to 20 minutes as a hang backstop.
+- New architecture gates: a raw-hex-literal ratchet (424 → 262 literals, exact per-file baseline), the selected-index rule, registry-time icon uniqueness, panel contract-module parity, an 800-line source-file cap, and a focus-invariant test.
+- +278 tests across the remediation.
 
 ## [0.28.0] — 2026-06-30
 
@@ -184,6 +92,13 @@ Full deep-review audit of the TUI (33 findings fixed, each reviewed to a score o
 - 981adb46 feat(daemon): implement operator-method handlers against goodvibes-sdk 0.34.0 contracts
 - 97f74119 chore: upgrade @pellux/goodvibes-sdk to 0.34.0
 - 6de2627a revert: remove daemon control-plane buildout — duplicated @pellux/goodvibes-sdk 0.34.0
+
+## [0.25.0] — 2026-06-21
+
+### Changes
+- 5353a7d9 chore: release v0.25.0
+- a8a4cd4f fix(daemon/remote): make runProcess timeout resolve promptly under orphaned children
+- c00461be feat(daemon): implement control-plane operator surfaces for channels, email, calendar, and remote execution
 
 ## [0.24.1] — 2026-06-17
 

@@ -36,9 +36,10 @@ written.
    It calls `replayJournal(journalPath, snapshotTimestamp)` to find records that post-date
    the loaded snapshot, applies the final record’s messages to the live conversation (each
    record carries the full snapshot, so the last record is authoritative), writes a fresh
-   snapshot via the SessionManager, and calls `journal.rotate()`. If records were replayed,
-   a notice is printed to the conversation: `[Recovery] Replayed N journal record(s) —
-   restored turns since last snapshot.`
+   snapshot via the SessionManager, and calls `journal.rotate()`. Of the three seams, only
+   `session-workflow.ts` prints the replay notice to the conversation (`[Recovery] Replayed
+   N journal record(s) — restored turns since last snapshot.`); the Ctrl+R and panel-resume
+   seams replay silently.
 
 ### File format
 

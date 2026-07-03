@@ -31,6 +31,12 @@ This directory contains the current product documentation for `goodvibes-tui`.
 - [Channels, remote runtime, and API](channels-remote-and-api.md)
   Omnichannel surfaces, reply routing, remote peers, node-host contracts, and the daemon/control-plane HTTP + streaming surfaces.
 
+- [Session durability](session-durability.md)
+  Two-layer durability: post-turn snapshots plus periodic recovery files, and the fsync-per-record transcript journal replayed at every resume seam.
+
+- [Share command](share-command.md)
+  `/share` session export to HTML/JSON/Markdown with redaction, upload, clipboard, and open options.
+
 - [CLI flags](cli-flags.md)
   Global flags reference: session lifecycle (`--continue`, `--resume`, `--fork`), confirmation bypass (`-y`/`--non-interactive`), output format consolidation, `--host` alias, and all other startup flags.
 

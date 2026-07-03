@@ -168,7 +168,7 @@ When the onboarding wizard applies with the Zero Trust Tunnel Cloudflare compone
 
 This allows the login rate-limiter to key on the real client IP from the `CF-Connecting-IP` header rather than the tunnel egress address.
 
-**RESIDUAL RISK:** Until the SDK validates `CF-Connecting-IP` against Cloudflare's published IP ranges (SDK handoff Item 5), a client that reaches the listener directly (bypassing the tunnel) can spoof this header to bypass the per-IP rate-limiter. Do not expose the listener port to untrusted networks without a firewall rule that restricts inbound traffic to Cloudflare egress IPs.
+**Residual exposure:** the SDK now validates `CF-Connecting-IP` against Cloudflare's published IP ranges before trusting it (`isCloudflareIp` in the SDK HTTP listener), so a client reaching the listener directly cannot spoof the header to bypass the per-IP rate-limiter. Direct exposure of the listener port still bypasses tunnel-level access policies, so keep inbound traffic restricted to Cloudflare egress IPs wherever the tunnel is the intended front door.
 
 ### CORS configuration
 

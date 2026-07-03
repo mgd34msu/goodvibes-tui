@@ -61,20 +61,11 @@ The SDK synthesis API (`VoiceSynthesisRequest`) accepts a `speed` field (positiv
 
 `tts.speed` is visible in `/config tts` and can be adjusted with arrow keys (0.1 steps) or inline edit mode (Enter). The default is `1` (normal speed).
 
-**Status: works today via the TUI bridge; SDK schema registration pending.** The `tts.speed` ConfigKey does not yet exist in the SDK config schema (`TtsConfig`), but the setting is bridged end-to-end NOW: the modal writes `tts.speed` into settings.json, `readOptionalConfigNumber` in `spoken-turn-controller.ts` reads it on every synthesis call, and it flows into `VoiceSynthesisRequest.speed`. What the SDK addition changes is only native static typing (removing the TUI-side cast) and schema/audit recognition.
+**Status: native SDK ConfigKey; TUI still reads through its bridge.** The SDK (0.35.0+) defines `tts.speed` natively in the config schema (default `1`, supported range 0.25–4.0). The TUI's read path is unchanged: `readOptionalConfigNumber` in `spoken-turn-controller.ts` reads the value on every synthesis call and passes it into `VoiceSynthesisRequest.speed`. The remaining cleanup is TUI-side only — migrating the settings modal off the synthetic entry (`buildTtsSpeedSyntheticEntry` in `settings-modal-data.ts`) onto the native CONFIG_SCHEMA entry and dropping the cast.
 
 - The setting row is visible in `/config tts`; adjusting it takes effect on the next spoken turn.
-- The TUI synthesis call passes `speed: undefined` when no value is stored (configManager returns undefined for unknown keys), which means provider default.
+- The TUI synthesis call passes `speed: undefined` when no value is stored, which means provider default.
 - The isDefault diamond shows accurately via deepEqual against the default of `1`.
-
-**SDK handoff:** add the following to `schema-domain-core.js` to complete this feature:
-
-```js
-{ key: 'tts.speed', type: 'number', default: 1,
-  description: 'Playback speed multiplier for TTS synthesis (1.0 = normal). Passed directly to the provider; supported range varies by provider.' }
-```
-
-And add `speed: 1` to `DEFAULT_CONFIG.tts` and `TtsConfig`. The persisted value is already threaded through `readOptionalConfigNumber` in `spoken-turn-controller.ts` today; once the key lands, the synthetic entry in `settings-modal-data.ts` (`buildTtsSpeedSyntheticEntry`) can be replaced by the native CONFIG_SCHEMA entry and the cast dropped.
 
 ## Playback Requirements
 

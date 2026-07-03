@@ -118,6 +118,7 @@ POST /api/homeassistant/home-graph/packet
 POST /api/homeassistant/home-graph/facts/review
 POST /api/homeassistant/home-graph/import
 POST /api/homeassistant/home-graph/reindex
+POST /api/homeassistant/home-graph/reset
 POST /api/homeassistant/home-graph/refinement/run
 POST /api/homeassistant/home-graph/refinement/tasks/{id}/cancel
 ```
