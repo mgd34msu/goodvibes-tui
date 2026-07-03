@@ -1,5 +1,6 @@
 import { UIFactory } from '../renderer/ui-factory.ts';
 import { renderMarkdownTracked } from '../renderer/markdown.ts';
+import { renderDiffView } from '../renderer/diff-view.ts';
 import { DARK_THEME } from '../renderer/theme.ts';
 import { renderToolCallBlock } from '../renderer/tool-call.ts';
 import { renderThinkingBlock } from '../renderer/thinking.ts';
@@ -231,6 +232,9 @@ export function renderConversationToolMessage(
   const hasHunk = contentLines.some((l) => l.startsWith('@@ '));
   const isDiff = hasDiffHeader && hasHunk;
   const blockType: 'diff' | 'tool' = isDiff ? 'diff' : 'tool';
+  // Parsed once, ahead of the collapse check, so it's available for the
+  // block-registry meta merge below regardless of collapsed/expanded state.
+  const diffParse = isDiff ? parseDiffForApply(message.content) : undefined;
 
   const isShort = message.content.length <= 200;
   const isCollapsed = isShort
@@ -271,6 +275,10 @@ export function renderConversationToolMessage(
       dim: true,
     });
     context.history.addLines(rendered);
+  } else if (isDiff) {
+    // No filename banner: the diff text's own --- / +++ headers already
+    // identify the file (matches the pre-v0.9.6 call site in tool-call.ts).
+    context.history.addLines(renderDiffView(message.content, width));
   } else {
     let contentToRender = message.content;
     const trimmed = contentToRender.trimStart();
@@ -295,8 +303,8 @@ export function renderConversationToolMessage(
     rawContent: message.content,
   };
 
-  if (isDiff) {
-    meta = { ...meta, ...parseDiffForApply(message.content) };
+  if (isDiff && diffParse) {
+    meta = { ...meta, ...diffParse };
   }
 
   context.blockRegistry.push(meta);

@@ -4,7 +4,7 @@ import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { GitService } from '@pellux/goodvibes-sdk/platform/git';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { UI_TONES } from '../renderer/ui-primitives.ts';
+import { UI_TONES, DIFF_TONES } from '../renderer/ui-primitives.ts';
 import {
   buildEmptyState,
   buildKeyboardHints,
@@ -77,7 +77,7 @@ const C = extendPalette(DEFAULT_PANEL_PALETTE, {
   commitAuthor: '244',
   selected: '#1c1c1c',
   selectedFg: '#ffffff',
-  diffMeta: '#5f87ff',
+  diffMeta: DIFF_TONES.hunk, // WO-204: shared diff-hunk token, was a local literal
   diffNeutral: '250',
   // Reuses the existing workflow accent token rather than adding a new hex
   // literal (architecture gate ratchets the raw-hex-literal count).
