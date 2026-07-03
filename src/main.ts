@@ -583,10 +583,7 @@ async function main() {
       const partialToolPreview = showPreview ? sessionSnapshot.streamToolPreview : undefined;
       // Elapsed from turn start (stream or tool execution), used for the thinking indicator timer.
       const turnElapsedMs = streamMetrics.startTime > 0 ? Date.now() - streamMetrics.startTime : undefined;
-      // Stall info computed every frame from streamMetrics; suppressed while a
-      // tool is actively executing (the tool's own ticking timer at line
-      // ~602 below is the honest indicator for that phase) — see
-      // UIFactory.computeRenderStallInfo for the false positive this gate fixes.
+      // Suppressed while a tool executes — its ticking timer is the honest indicator then.
       const stallInfo = UIFactory.computeRenderStallInfo(streamMetrics, Date.now());
       const thinking = UIFactory.createThinkingFragment(
         conversationWidth,
