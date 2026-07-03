@@ -1,15 +1,26 @@
 /**
- * StreamStallWatchdog — detects STREAM_START events where no STREAM_DELTA
- * arrives within a configurable threshold, and emits a single low-priority
- * hint to the user.
+ * StreamStallWatchdog — detects gaps of silence (no STREAM_DELTA) longer than
+ * a configurable threshold, whether the gap is at the start of a turn or in
+ * the middle of an otherwise-flowing stream, and emits a low-priority hint
+ * each time a gap crosses the threshold.
  *
  * Design:
- *   - Arm on STREAM_START: set a timeout for STALL_THRESHOLD_MS.
- *   - Disarm on STREAM_DELTA: clear the pending timeout (stream is alive).
+ *   - Arm on STREAM_START: reset the episode counter, set a timeout for
+ *     STALL_THRESHOLD_MS.
+ *   - Re-arm on STREAM_DELTA: every byte received resets the no-delta clock,
+ *     so a stall that begins mid-stream (after tokens were already flowing)
+ *     is caught just as reliably as a stall at turn start. This is the fix
+ *     for the "silence after the first delta never re-triggers" gap: the
+ *     previous behaviour disarmed permanently on the first STREAM_DELTA,
+ *     which meant a multi-minute stall after output had already started
+ *     produced zero indication.
  *   - Disarm on STREAM_END / TURN_COMPLETED / TURN_ERROR / TURN_CANCEL:
  *     clear the timeout (turn finished normally or with error).
- *   - If the timeout fires: emit ONE hint, do NOT repeat until the next turn.
- *   - Re-arm only on the next STREAM_START (next turn).
+ *   - If the timeout fires: emit ONE hint for that episode (do not repeat
+ *     while the same gap continues), then wait for the gap to close (another
+ *     STREAM_DELTA/STREAM_START) before a further silence can fire again —
+ *     each such re-arm-then-timeout cycle is a new "stall episode" and the
+ *     episode counter passed to onStall increments each time.
  *   - dispose(): clears all subscriptions and any pending timeout.
  *
  * @module
@@ -32,10 +43,13 @@ export interface StreamStallWatchdogOptions {
   /** The turns event surface to subscribe on. */
   events: WatchdogTurnEvents;
   /**
-   * Called once per turn when the stall threshold is exceeded.
-   * Receives the provider display name for the hint message.
+   * Called once per stall episode when the no-delta threshold is exceeded.
+   * Receives the provider display name and a 1-based episode counter that
+   * increments each time a new silence (after a re-arm) crosses the
+   * threshold within the same turn — so a second mid-stream stall after a
+   * recovery is distinguishable from the first.
    */
-  onStall: (providerName: string) => void;
+  onStall: (providerName: string, episode: number) => void;
   /**
    * Provides the current provider display name at the moment the hint fires.
    * Optional — defaults to 'provider' when not supplied.
@@ -63,17 +77,19 @@ export function createStreamStallWatchdog(opts: StreamStallWatchdogOptions): Str
   const { events, onStall, getProviderName, thresholdMs = STALL_THRESHOLD_MS } = opts;
 
   let stallTimer: ReturnType<typeof setTimeout> | null = null;
-  let hintFiredForTurn = false;
+  let hintFiredForEpisode = false;
+  let episodeCount = 0;
 
   function arm(): void {
     disarm();
-    hintFiredForTurn = false;
+    hintFiredForEpisode = false;
     stallTimer = setTimeout(() => {
       stallTimer = null;
-      if (!hintFiredForTurn) {
-        hintFiredForTurn = true;
+      if (!hintFiredForEpisode) {
+        hintFiredForEpisode = true;
+        episodeCount++;
         const provider = getProviderName ? getProviderName() : 'provider';
-        onStall(provider);
+        onStall(provider, episodeCount);
       }
     }, thresholdMs);
   }
@@ -85,9 +101,17 @@ export function createStreamStallWatchdog(opts: StreamStallWatchdogOptions): Str
     }
   }
 
+  function onStreamStart(): void {
+    episodeCount = 0;
+    arm();
+  }
+
   const unsubs: Array<() => void> = [
-    events.on('STREAM_START', arm),
-    events.on('STREAM_DELTA', disarm),
+    events.on('STREAM_START', onStreamStart),
+    // Re-arm (not disarm) on every delta: the no-delta clock must reset on
+    // each byte so a stall that starts mid-stream is still caught, not just
+    // a stall before the first byte.
+    events.on('STREAM_DELTA', arm),
     events.on('STREAM_END', disarm),
     events.on('TURN_COMPLETED', disarm),
     events.on('TURN_ERROR', disarm),

@@ -260,6 +260,9 @@ export async function handleSessionWorkflowCommand(args: string[], ctx: CommandC
           });
         },
       });
+      // Hydrate the footer's token counters from the resumed (+ journal-replayed)
+      // history now, before ctx.renderRequest() below (W0.9).
+      ctx.session.hydrateSessionUsage?.();
 
       if (meta.model) {
         try {

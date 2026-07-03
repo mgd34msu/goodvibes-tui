@@ -178,11 +178,9 @@ export class GitPanel extends BasePanel {
       const changed = this.getChangedFiles ? new Set(this.getChangedFiles()) : null;
       const markChanged = (path: string): boolean | undefined => (changed ? changed.has(path) : undefined);
 
-      // Classify from the raw per-file porcelain columns (index/working_dir)
-      // rather than simple-git's `modified`/`staged` convenience arrays: those
-      // arrays both include a file that is staged with no further edits (index
-      // 'M', working_dir ' '), which would otherwise show it as both staged
-      // AND unstaged and make 's'/'u' land on the wrong (phantom) row.
+      // Classify from the raw per-file porcelain columns (index/working_dir), not simple-git's
+      // modified/staged arrays: those double-count a staged-with-no-further-edits file (index 'M',
+      // working_dir ' ') as both staged AND unstaged, landing 's'/'u' on a phantom row.
       const stagedFiles: GitFileEntry[] = [];
       const unstagedFiles: GitFileEntry[] = [];
       for (const f of statusResult.files) {
@@ -277,6 +275,11 @@ export class GitPanel extends BasePanel {
   }
 
   // Input handling
+
+  /** Commit-message entry wants every char of a burst delivered one at a time — see Panel.isCapturingTextBurst. */
+  isCapturingTextBurst(): boolean {
+    return this.commitMessage !== null;
+  }
 
   handleInput(key: string): boolean {
     // Confirm (init repo / commit) takes priority over everything else.
@@ -728,10 +731,7 @@ export class GitPanel extends BasePanel {
     });
   }
 
-  /**
-   * Map an item index in `this.items` to the row index in the rendered row list.
-   * Header items expand to 2 rows (branch + spacer).
-   */
+  /** Map an item index in `this.items` to its rendered row index (header items expand to 2 rows: branch + spacer). */
   private getRowIndexForItem(itemIndex: number): number {
     let row = 0;
     for (let i = 0; i < itemIndex && i < this.items.length; i++) {

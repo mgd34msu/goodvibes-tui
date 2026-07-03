@@ -224,6 +224,27 @@ describe('buildCockpitRosterSnapshot — cost/token aggregates', () => {
     }
   });
 
+  // W0.9: AgentManager.spawn() initialises AgentRecord.usage to an all-zero
+  // object (not undefined) and, in the currently pinned SDK, never updates it
+  // — see platform/tools/agent/manager.ts. A naive `if (rec.usage)` truthy
+  // check therefore treats every agent as "has data" and fabricates a
+  // $0.00/0-token reading for agents that never actually reported usage.
+  test('all-zero-but-defined usage (spawn default) is treated as no data, not $0.00/0-tokens', () => {
+    const records = [
+      makeRecord({
+        id: 'zero-usage',
+        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0 },
+      }),
+    ];
+    const snap = buildCockpitRosterSnapshot(records);
+    expect(snap.totalInputTokens).toBeNull();
+    expect(snap.totalOutputTokens).toBeNull();
+    expect(snap.totalCost).toBeNull();
+    expect(snap.roster[0]!.inputTokens).toBeNull();
+    expect(snap.roster[0]!.outputTokens).toBeNull();
+    expect(snap.roster[0]!.cost).toBeNull();
+  });
+
   test('aggregates are computed when usage is present', () => {
     const records = [
       makeRecord({
@@ -289,6 +310,21 @@ describe('buildCockpitRosterSnapshot — cost/token aggregates', () => {
     const snap = buildCockpitRosterSnapshot(records);
     // Opus pricing: input=$15/M, output=$75/M → total=$90 per million+million
     expect(snap.totalCost!).toBeGreaterThan(0);
+  });
+
+  test('per-entry cost is null (not fabricated $0) when usage exists but the model is unpriced (WO-315)', () => {
+    const records = [
+      makeRecord({
+        id: 'f1',
+        model: 'totally-unknown-model-xyz',
+        usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 1, turnCount: 1 },
+      }),
+    ];
+    const snap = buildCockpitRosterSnapshot(records);
+    const f1 = snap.roster.find((e) => e.id === 'f1')!;
+    // Tokens are real (usage was reported) — only cost is withheld as unpriced.
+    expect(f1.inputTokens).toBe(1000);
+    expect(f1.cost).toBeNull();
   });
 });
 

@@ -36,7 +36,10 @@ describe('OverflowHandler', () => {
 
     expect(result.overflowRef).toBeDefined();
     expect(result.spillBackend).toBe('file');
-    expect(result.content.startsWith(makeString(50_000))).toBe(true);
+    // Truncation keeps head (20% of budget) + tail (80%) so a failure summary
+    // at the end of long output survives; the omitted span is stated exactly.
+    expect(result.content.startsWith(makeString(10_000))).toBe(true);
+    expect(result.content).toContain('[... 10000 chars omitted ...]');
     expect(result.content).toContain('[... truncated.');
 
     expect(result.overflowRef).toMatch(/^file:\.goodvibes\/\.overflow\/\d+-my-stdout\.txt$/);
@@ -50,7 +53,8 @@ describe('OverflowHandler', () => {
     const fallback = handler.handle(makeString(60_000), { label: '' });
 
     expect(custom.content.length).toBeLessThan(content.length);
-    expect(custom.content.startsWith(makeString(100))).toBe(true);
+    expect(custom.content.startsWith(makeString(20))).toBe(true);
+    expect(custom.content).toContain('[... 400 chars omitted ...]');
     expect(custom.overflowRef).toMatch(/^file:\.goodvibes\/\.overflow\/\d+-my-tool-output\.txt$/);
     expect(fallback.overflowRef).toMatch(/^file:\.goodvibes\/\.overflow\/\d+-.*\.txt$/);
   }));

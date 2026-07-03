@@ -32,10 +32,15 @@ function makeTurnBus() {
   };
   return {
     on<K extends TurnEvent>(event: K, handler: K extends 'TURN_ERROR' ? (ev: { error: string }) => void : () => void) {
-      (listeners[event] as Array<unknown>).push(handler);
+      // Lazily create the bucket for event names outside the fixed TurnEvent
+      // union (e.g. the structurally-consumed STREAM_RETRY/STREAM_STALL —
+      // see stream-event-wiring.ts) — a real event bus does not throw when
+      // something subscribes to an event type it hasn't seen yet.
+      const bucket = (listeners[event] ??= []);
+      (bucket as Array<unknown>).push(handler);
       return () => {
-        const idx = (listeners[event] as Array<unknown>).indexOf(handler);
-        if (idx !== -1) (listeners[event] as Array<unknown>).splice(idx, 1);
+        const idx = (bucket as Array<unknown>).indexOf(handler);
+        if (idx !== -1) (bucket as Array<unknown>).splice(idx, 1);
       };
     },
     emitTurnError(error: string) {
@@ -65,6 +70,8 @@ function makeMetrics(): StreamMetrics {
     startTime: 0, deltaCount: 0, tokenSpeed: 0,
     ttftMs: undefined, ttftRecorded: false,
     activeToolStartedAtMs: undefined, activeToolName: undefined,
+    lastDeltaAtMs: undefined, stallEpisode: 0,
+    reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
 }
 

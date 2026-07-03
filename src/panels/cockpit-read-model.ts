@@ -20,11 +20,12 @@
 
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
 import { truncateDisplay } from '../utils/terminal-width.ts';
-import { calcSessionCost } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import {
   AGENT_TERMINAL_STATUSES,
   AGENT_STALL_THRESHOLD_MS,
   countStalledAgents,
+  hasReportedUsage,
 } from './agent-inspector-shared.ts';
 
 // ---------------------------------------------------------------------------
@@ -114,24 +115,28 @@ export function buildCockpitRosterSnapshot(
     let outputTokens: number | null = null;
     let cost: number | null = null;
 
-    if (rec.usage) {
+    if (hasReportedUsage(rec.usage)) {
       hasUsage = true;
+      const usage = rec.usage;
       const inp =
-        rec.usage.inputTokens +
-        (rec.usage.cacheReadTokens ?? 0) +
-        (rec.usage.cacheWriteTokens ?? 0);
-      const out = rec.usage.outputTokens;
+        usage.inputTokens +
+        (usage.cacheReadTokens ?? 0) +
+        (usage.cacheWriteTokens ?? 0);
+      const out = usage.outputTokens;
       const agentCost = calcSessionCost(
-        rec.usage.inputTokens,
-        rec.usage.outputTokens,
-        rec.usage.cacheReadTokens ?? 0,
-        rec.usage.cacheWriteTokens ?? 0,
+        usage.inputTokens,
+        usage.outputTokens,
+        usage.cacheReadTokens ?? 0,
+        usage.cacheWriteTokens ?? 0,
         rec.model ?? 'unknown',
       );
 
       inputTokens = inp;
       outputTokens = out;
-      cost = agentCost;
+      // Usage exists but the model never resolved to a real price — reuse the
+      // existing "usage absent" null/n-a convention rather than showing a
+      // fabricated $0.00 (WO-315).
+      cost = isModelPriced(rec.model ?? 'unknown') ? agentCost : null;
 
       totalInputTokens += inp;
       totalOutputTokens += out;

@@ -28,6 +28,7 @@ import { loadBootstrapSystemPrompt, syncConfiguredServices } from '@/runtime/ind
 import { registerBootstrapHookBridge } from '@/runtime/index.ts';
 import { registerBootstrapRuntimeEvents } from '@/runtime/index.ts';
 import { createRuntimeServices, type RuntimeServices } from './services.ts';
+import { setPricingSource } from '../export/cost-utils.ts';
 import { createUiRuntimeServices, type UiRuntimeServices } from './ui-services.ts';
 import { join } from 'node:path';
 import { installWrfcAgentToolGuard } from '../tools/wrfc-agent-guard.ts';
@@ -255,6 +256,10 @@ export async function initializeBootstrapCore(
   providerRegistry.initModelLimits();
   services.benchmarkStore.initBenchmarks();
   providerRegistry.initCatalog();
+  // Wire cost-utils to the live catalog so cost displays distinguish real
+  // pricing from unpriced (WO-315) instead of silently reading zero for any
+  // model the small static fallback table doesn't cover.
+  setPricingSource(() => providerRegistry.getRawCatalogModels());
   services.keybindingsManager.loadFromDisk();
   domainDispatch.syncControlPlaneState({
     enabled: Boolean(configManager.get('controlPlane.enabled')),

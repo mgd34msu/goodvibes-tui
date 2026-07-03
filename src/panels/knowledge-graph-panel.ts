@@ -266,6 +266,15 @@ export class KnowledgeGraphPanel extends ScrollableListPanel<BrowseRow> {
   // Input
   // ---------------------------------------------------------------------------
 
+  /**
+   * The `/`-to-search buffer wants every character of a burst (paste, or a
+   * fast-typed query landing in one input.feed() call), same as it always
+   * has — see the interface doc on `Panel.isCapturingTextBurst`.
+   */
+  override isCapturingTextBurst(): boolean {
+    return this.searchFocused;
+  }
+
   handleInput(key: string): boolean {
     if (this.lastError !== null) this.clearError();
 

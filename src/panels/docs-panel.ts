@@ -122,6 +122,15 @@ export class DocsPanel extends BasePanel {
     return null;
   }
 
+  /**
+   * The `/`-to-search buffer wants every character of a burst (paste, or a
+   * fast-typed query landing in one input.feed() call), same as it always
+   * has — see the interface doc on `Panel.isCapturingTextBurst`.
+   */
+  isCapturingTextBurst(): boolean {
+    return this.searching;
+  }
+
   handleInput(key: string): boolean {
     const searchResult = this._handleSearchKey(key);
     if (searchResult !== null) return searchResult;

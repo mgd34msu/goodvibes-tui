@@ -85,7 +85,7 @@ function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
   if (task.startsWith('WRFC Review Request')) {
     const thresholdMatch = task.match(/threshold is (\d+(?:\.\d+)?)/);
     const threshold = thresholdMatch ? thresholdMatch[1] : '9.9';
-    const desc = truncateFirst(originalTask ?? 'review in progress', 50);
+    const desc = truncateFirst(originalTask ?? embeddedTaskDescription(task) ?? 'review in progress', 50);
     return `[Review] ${desc}  (target: ${threshold}/10)`;
   }
 
@@ -96,7 +96,7 @@ function buildAgentLabel(rec: AgentRecord, deps: ProcessModalDeps): string {
     const toScore = scoreMatch ? scoreMatch[3] : '?';
     const attemptMatch = task.match(/Fix attempt:\s*(\d+)/);
     const attempt = attemptMatch ? attemptMatch[1] : '?';
-    const desc = truncateFirst(originalTask ?? 'fix in progress', 45);
+    const desc = truncateFirst(originalTask ?? embeddedTaskDescription(task) ?? 'fix in progress', 45);
     // Show constraint count when the chain has constraints to target (SDK 0.23.0)
     const chain = rec.wrfcId ? safeGetChain(rec.wrfcId, deps) : null;
     const constraintCount = chain && (chain.constraints?.length ?? 0) > 0 ? chain.constraints?.length ?? 0 : 0;
@@ -439,6 +439,21 @@ function safeGetChain(wrfcId: string, deps: Pick<ProcessModalDeps, 'wrfcControll
 function getChainTask(wrfcId: string | undefined, deps: Pick<ProcessModalDeps, 'wrfcController'>): string | null {
   if (!wrfcId) return null;
   return safeGetChain(wrfcId, deps)?.task ?? null;
+}
+
+/**
+ * Fallback for when the WRFC chain lookup comes back null (chain already
+ * completed/evicted, or wrfcId not populated on the record) — the record's
+ * own `rec.task` is seeded as `'WRFC Review Request\n<original task
+ * description>'` / `'WRFC Fix Request\n...'`, so the description is sitting
+ * right there even without the chain. Returns null (not the generic
+ * placeholder) when there's no second line to extract.
+ */
+function embeddedTaskDescription(task: string): string | null {
+  const firstNewline = task.indexOf('\n');
+  if (firstNewline === -1) return null;
+  const desc = task.slice(firstNewline + 1).trim();
+  return desc.length > 0 ? desc : null;
 }
 
 /** Truncate to first line, capped at max chars. */
