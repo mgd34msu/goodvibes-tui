@@ -1,48 +1,48 @@
 {
-  "_comment": "Perf baseline. startup + frame sections generated 2026-06-12 on linux-x64 and PRESERVED (their budgets carry deliberate CI-runner headroom; WO-210 re-measured them 2026-07-03 — startup 17.8ms, frame p95 0.50ms / p99 0.93ms on a quiet box — but a single quiet-run measurement does NOT justify tightening: the startup budget absorbs cold-import worst cases (~148ms) and the p99 budget absorbs GC-pause spikes (~27ms) that a lucky run never hits, so both stay as-is per the WO-210 brief's >=4x-CI-headroom rule). line section re-captured 2026-07-03 (WO-210) on a quiet linux-x64 dev box via perf:baseline; only transcript.append_one_ms budget ratcheted (20 -> 6) — it is the sole metric WO-209 improved and its p50 is rock-stable at ~0.9ms. Ratchet rule: startup budget = ceil(measured_max × 2); frame p95 = stated 16ms SLO; line budgets set just above measured with 2-4× CI headroom. Regenerate with: bun run perf:baseline (note: a regen on a fast quiet box will ratchet startup/frame down — restore those two sections unless the tightening is intended).",
+  "_comment": "Perf baseline — generated 2026-07-03 on linux-x64. Ratchet rule: budgets set at ceil(measured_max × 2) for startup, and at the stated SLO for frame timing (p95 ≤ 16ms). Regenerate with: bun run perf:baseline",
   "startup": {
     "renderer_load_ms": {
-      "measured_max_ms": 148,
-      "budget_ms": 300,
+      "measured_max_ms": 17,
+      "budget_ms": 50,
       "note": "Time to cold-import compositor + buffer + grid from a fresh bun process. Budget = ceil(max × 2), rounded to 50ms. Ratchet: tighten budget when measured_max drops below budget/2."
     }
   },
   "frame": {
     "composite_p95_ms": {
-      "measured_ms": 3.77,
+      "measured_ms": 0.46,
       "budget_ms": 16,
       "note": "Compositor.composite() p95 over 200 full-repaint frames, 80×24 synthetic content. Budget = stated frame SLO (16ms). Ratchet: tighten when measured drops below budget/3."
     },
     "composite_p99_ms": {
-      "measured_ms": 26.88,
-      "budget_ms": 110,
+      "measured_ms": 0.97,
+      "budget_ms": 10,
       "note": "Compositor.composite() p99 over 200 frames. Budget = ceil(measured × 4), rounded to 10ms. Ratchet: tighten when measured drops below budget/3."
     }
   },
   "line": {
     "transcript.build_1k_ms": {
-      "measured_p50_ms": 49.25,
-      "measured_p95_ms": 79.824,
+      "measured_p50_ms": 52.366,
+      "measured_p95_ms": 80.906,
       "budget_ms": 400,
       "gate_stat": "p50",
-      "heap_bytes_per_op": 74896743,
-      "objects_per_op": 695330,
+      "heap_bytes_per_op": 74899147,
+      "objects_per_op": 695324,
       "lines": 6800,
       "note": "transcript Line[] build (1000 mixed msgs). Gated on p50. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p50 drops below budget/2."
     },
     "transcript.append_one_ms": {
-      "measured_p50_ms": 0.859,
-      "measured_p95_ms": 1.022,
+      "measured_p50_ms": 0.855,
+      "measured_p95_ms": 0.984,
       "budget_ms": 6,
       "gate_stat": "p50",
-      "heap_bytes_per_op": 96243,
+      "heap_bytes_per_op": 96277,
       "objects_per_op": 403,
       "lines": 6804,
-      "note": "WO-209 win: append ONE message to a warm 1000-message transcript. The per-message Line[] cache reuses the unchanged 1000 and renders only the new one — the same rebuild that costs ~45ms cold (transcript.build_1k) collapses to ~0.9ms p50 and 96KB/403 objects (vs 71MB/695k). WO-210 ratchet: budget tightened 20 -> 6ms — p50 is rock-stable at 0.87-0.91ms across 8 re-measured runs; 6ms is ~6.7x this-box p50 and ~1.7-3.3x a CI-slowed median (runners run 2-4x slower). Gated on p50 (a robust median over 200 iterations — it does not spike on a single GC pause). A regression reintroducing the pre-cache full rebuild on append (~45ms) now fails the gate by ~7.5x."
+      "note": "transcript append-one (warm per-message cache). Gated on p50. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p50 drops below budget/2."
     },
     "transcript.resize_1k_ms": {
-      "measured_p50_ms": 68.089,
-      "measured_p95_ms": 98.363,
+      "measured_p50_ms": 63.657,
+      "measured_p95_ms": 89.64,
       "budget_ms": 400,
       "gate_stat": "p50",
       "heap_bytes_per_op": 37124643,
@@ -51,52 +51,52 @@
       "note": "transcript resize (full width-change re-render). Gated on p50. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p50 drops below budget/2."
     },
     "panel.two_pane_build_ms": {
-      "measured_p50_ms": 0.933,
-      "measured_p95_ms": 2.009,
+      "measured_p50_ms": 0.211,
+      "measured_p95_ms": 0.3,
       "budget_ms": 4,
       "gate_stat": "p95",
-      "heap_bytes_per_op": 248717,
-      "objects_per_op": 2622,
+      "heap_bytes_per_op": 251642,
+      "objects_per_op": 2627,
       "lines": 98,
       "note": "panel-workspace two-pane frame build. Gated on p95. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p95 drops below budget/2."
     },
     "markdown.render_ms": {
-      "measured_p50_ms": 1.148,
-      "measured_p95_ms": 1.549,
+      "measured_p50_ms": 0.216,
+      "measured_p95_ms": 0.268,
       "budget_ms": 6,
       "gate_stat": "p95",
-      "heap_bytes_per_op": 338893,
-      "objects_per_op": 3318,
+      "heap_bytes_per_op": 350203,
+      "objects_per_op": 3360,
       "lines": 32,
       "note": "markdown render (mixed document). Gated on p95. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p95 drops below budget/2."
     },
     "codeblock.regex_ms": {
-      "measured_p50_ms": 0.5,
-      "measured_p95_ms": 0.887,
+      "measured_p50_ms": 0.12,
+      "measured_p95_ms": 0.187,
       "budget_ms": 4,
       "gate_stat": "p95",
-      "heap_bytes_per_op": 214571,
-      "objects_per_op": 1839,
+      "heap_bytes_per_op": 212537,
+      "objects_per_op": 1836,
       "lines": 18,
       "note": "code-block render (regex fallback path). Gated on p95. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p95 drops below budget/2."
     },
     "codeblock.treesitter_ms": {
-      "measured_p50_ms": 0.338,
-      "measured_p95_ms": 0.494,
+      "measured_p50_ms": 0.101,
+      "measured_p95_ms": 0.11,
       "budget_ms": 4,
       "gate_stat": "p95",
-      "heap_bytes_per_op": 202651,
-      "objects_per_op": 1737,
+      "heap_bytes_per_op": 194163,
+      "objects_per_op": 1712,
       "lines": 17,
       "note": "code-block render (tree-sitter cache-hit path). Gated on p95. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p95 drops below budget/2."
     },
     "overlay.open_ms": {
-      "measured_p50_ms": 0.594,
-      "measured_p95_ms": 1.026,
+      "measured_p50_ms": 0.201,
+      "measured_p95_ms": 0.235,
       "budget_ms": 10,
       "gate_stat": "p95",
-      "heap_bytes_per_op": 184067,
-      "objects_per_op": 1715,
+      "heap_bytes_per_op": 179472,
+      "objects_per_op": 1698,
       "lines": 16,
       "note": "overlay open (help overlay frame build). Gated on p95. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured p95 drops below budget/2."
     }
