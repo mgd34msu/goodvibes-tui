@@ -42,7 +42,7 @@ function summarizeCallId(callId: string, maxLength = 24): string {
   return callId.length <= maxLength ? callId : `${callId.slice(0, maxLength - 1)}…`;
 }
 
-interface ConversationRenderContext {
+export interface ConversationRenderContext {
   readonly history: {
     addLine: (line: Line) => void;
     addLines: (lines: Line[]) => void;

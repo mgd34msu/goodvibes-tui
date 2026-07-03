@@ -37,6 +37,7 @@ import { performance } from 'node:perf_hooks';
 import { heapStats } from 'bun:jsc';
 import type { Line } from '../src/types/grid.ts';
 import { appendConversationMessages } from '../src/core/conversation-rendering.ts';
+import { ConversationManager } from '../src/core/conversation.ts';
 import { renderMarkdownTracked } from '../src/renderer/markdown.ts';
 import { renderCodeBlock } from '../src/renderer/code-block.ts';
 import { PanelManager } from '../src/panels/panel-manager.ts';
@@ -68,6 +69,15 @@ export const LINE_BENCH_CONFIG = {
  */
 export const LINE_BUDGETS: Readonly<Record<string, number>> = {
   'transcript.build_1k_ms': 400,
+  // WO-209: appending ONE message to a warm 1000-message transcript. The
+  // per-message Line[] cache reuses the unchanged 1000 and renders only the new
+  // one, so this collapses from the full build_1k cost (~45 ms) to well under
+  // 1 ms on a quiet box. Budget carries CI headroom (validation still iterates
+  // 1000 entries; CI runners run 2-4× slower).
+  'transcript.append_one_ms': 20,
+  // WO-209: a resize invalidates every width-dependent message (all of them), so
+  // it still pays a near-full re-render — gated at the same ceiling as build_1k.
+  'transcript.resize_1k_ms': 400,
   'panel.two_pane_build_ms': 4,
   'markdown.render_ms': 6,
   'codeblock.regex_ms': 4,
@@ -309,6 +319,67 @@ export async function runLineBenches(): Promise<LineBenchCase[]> {
     cases.push({
       id: 'transcript.build_1k_ms',
       label: 'transcript Line[] build (1000 mixed msgs)',
+      unit: 'ms',
+      timeMeanMs: t.mean, timeP50Ms: t.p50, timeP95Ms: t.p95,
+      iterations: 12, linesProduced,
+      heapBytesPerOp: heap.bytesPerOp, objectsPerOp: heap.objectsPerOp,
+    });
+  }
+
+  // --- transcript.append_one (WO-209: warm per-message cache) ----------------
+  // Seed a 1000-message conversation and warm the per-message Line[] cache with a
+  // cold build. Then measure the realistic cost of ONE appended message: add it,
+  // rebuild the display (1000 cache hits + 1 miss), and remove it to keep the
+  // conversation size stable across iterations. This is the WO-209 headline: the
+  // same rebuild that costs ~45 ms cold (transcript.build_1k) drops to well under
+  // 1 ms because only the appended message is re-rendered.
+  {
+    const seed = buildMixedConversation(transcriptMessages);
+    const cm = new ConversationManager(() => width);
+    cm.fromJSON({ messages: seed as never[] });
+    cm.getDisplayBlocks(); // cold build — warms the cache for indices 0..N-1
+    let n = 0;
+    const appendOne = (): Line[] => {
+      cm.addUserMessage(`appended probe message ${n++}`);
+      const lines = cm.getDisplayBlocks(); // warm rebuild: N hits + 1 miss
+      cm.removeMessagesAfter(transcriptMessages); // truncate back to N; marks dirty
+      return lines;
+    };
+    const linesProduced = appendOne().length;
+    const t = timeOp(appendOne, 200, 20);
+    const heap = measureHeap(appendOne, 20);
+    cases.push({
+      id: 'transcript.append_one_ms',
+      label: 'transcript append-one (warm per-message cache)',
+      unit: 'ms',
+      timeMeanMs: t.mean, timeP50Ms: t.p50, timeP95Ms: t.p95,
+      iterations: 200, linesProduced,
+      heapBytesPerOp: heap.bytesPerOp, objectsPerOp: heap.objectsPerOp,
+    });
+  }
+
+  // --- transcript.resize_1k (WO-209: width change invalidates everything) -----
+  // A resize changes the render width, which is part of every message's cache
+  // key, so it invalidates all 1000 messages and pays a near-full re-render. We
+  // toggle between two widths each iteration so no rebuild can reuse the cache —
+  // the honest cost of a resize on a large transcript.
+  {
+    const seed = buildMixedConversation(transcriptMessages);
+    let w = width;
+    const cm = new ConversationManager(() => w);
+    cm.fromJSON({ messages: seed as never[] });
+    cm.getDisplayBlocks();
+    const resize = (): Line[] => {
+      w = w === width ? width - 1 : width; // flip width so every entry misses
+      cm.setWidthProvider(() => w);
+      return cm.getDisplayBlocks();
+    };
+    const linesProduced = resize().length;
+    const t = timeOp(resize, 12, 3);
+    const heap = measureHeap(resize, 2);
+    cases.push({
+      id: 'transcript.resize_1k_ms',
+      label: 'transcript resize (full width-change re-render)',
       unit: 'ms',
       timeMeanMs: t.mean, timeP50Ms: t.p50, timeP95Ms: t.p95,
       iterations: 12, linesProduced,
