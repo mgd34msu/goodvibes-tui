@@ -1,10 +1,12 @@
 import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth, padDisplayEnd } from '../utils/terminal-width.ts';
+import { UI_TONES, DIFF_TONES } from './ui-primitives.ts';
 
 /**
  * renderDiffView - Render a unified diff string as styled Line[].
- * '+' lines in green, '-' lines in red, '@@' hunks in cyan.
+ * '+' lines in green, '-' lines in red, '@@' hunks in blue (DIFF_TONES.hunk,
+ * shared with diff-panel.ts and git-panel.ts's inline diff).
  */
 export function renderDiffView(diffText: string, width: number, filename?: string): Line[] {
   const lines: Line[] = [];
@@ -34,7 +36,7 @@ export function renderDiffView(diffText: string, width: number, filename?: strin
         oldLineNo = parseInt(hunkMatch[1], 10) - 1;
         newLineNo = parseInt(hunkMatch[2], 10) - 1;
       }
-      lines.push(makeStyledLine(raw, width, '#00bcd4', '#0f1f1f', false));
+      lines.push(makeStyledLine(raw, width, DIFF_TONES.hunk, '#0f1f1f', false));
       continue;
     }
 
@@ -49,7 +51,7 @@ export function renderDiffView(diffText: string, width: number, filename?: strin
       newLineNo++;
       const lineLabel = `${String(newLineNo).padStart(4)} `;
       const content = raw.slice(1);
-      lines.push(makeGutterLine('+', lineLabel, content, width, '#22c55e', '#0a1a0a'));
+      lines.push(makeGutterLine('+', lineLabel, content, width, UI_TONES.state.good, '#0a1a0a'));
       continue;
     }
 
@@ -58,7 +60,7 @@ export function renderDiffView(diffText: string, width: number, filename?: strin
       oldLineNo++;
       const lineLabel = `${String(oldLineNo).padStart(4)} `;
       const content = raw.slice(1);
-      lines.push(makeGutterLine('-', lineLabel, content, width, '#ef4444', '#1a0a0a'));
+      lines.push(makeGutterLine('-', lineLabel, content, width, UI_TONES.state.bad, '#1a0a0a'));
       continue;
     }
 
