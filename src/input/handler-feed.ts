@@ -419,6 +419,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         indicatorFocused: context.indicatorFocused,
         conversationManager: context.conversationManager,
         commandContext: context.commandContext,
+        commandRegistry: context.commandRegistry,
         autocomplete: context.autocomplete,
         blockActionsMenu: { open: (block: BlockMeta) => context.blockActionsMenu.open(block) },
         processModal: context.processModal,

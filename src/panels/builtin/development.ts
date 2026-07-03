@@ -46,7 +46,7 @@ export function registerDevelopmentPanels(manager: PanelManager, deps: ResolvedB
     icon: 'D',
     category: 'development',
     description: 'Unified diff view of agent file changes',
-    factory: () => new DiffPanel(requireUiServices(deps).environment.workingDirectory),
+    factory: () => new DiffPanel(requireUiServices(deps).environment.workingDirectory, deps.requestRender),
   });
 
   // WO-110: 'inspector' registration moved to builtin/agent.ts (category

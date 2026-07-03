@@ -184,6 +184,81 @@ describe('DiffPanel — self-load via its own diff plumbing (w/h/s)', () => {
   });
 });
 
+describe('DiffPanel — not-a-git-repo gate (defensive, mirrors GitPanel)', () => {
+  test('w/h/s and showFileDiffs all report a friendly not-a-git-repo placeholder instead of a raw git error', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gv-diff-nogit-'));
+    tempDirs.push(dir);
+
+    const panel = new DiffPanel(dir);
+    await panel.showGitDiff();
+    expect(linesText(panel.render(W, H))).toContain('(not a git repo)');
+
+    const panel2 = new DiffPanel(dir);
+    await panel2.showStagedDiff();
+    expect(linesText(panel2.render(W, H))).toContain('(not a git repo)');
+
+    const panel3 = new DiffPanel(dir);
+    await panel3.showFileDiffs(['a.txt']);
+    expect(linesText(panel3.render(W, H))).toContain('(not a git repo)');
+  });
+
+  test('placeholder entries render with a distinct color from real filenames', () => {
+    const panel = new DiffPanel('/tmp');
+    panel.showDiff('src/real.ts', '@@ -1,1 +1,1 @@\n-a\n+b');
+    const realStatus = panel.render(W, H);
+    const realFg = (realStatus[realStatus.length - 1] ?? []).find((c) => (c.char ?? '') === 's')?.fg;
+
+    const placeholderPanel = new DiffPanel('/tmp');
+    placeholderPanel.showDiff('(error)', '@@ -0,0 +1,1 @@\n+boom');
+    const placeholderStatus = placeholderPanel.render(W, H);
+    const placeholderFg = (placeholderStatus[placeholderStatus.length - 1] ?? []).find((c) => (c.char ?? '') === '(')?.fg;
+
+    expect(placeholderFg).toBeDefined();
+    expect(placeholderFg).not.toBe(realFg);
+  });
+});
+
+describe('DiffPanel — w/h/s hotkeys give visible confirmation (not just a silent re-render)', () => {
+  test('pressing w immediately shows a loading status, then a reloaded confirmation once git resolves', async () => {
+    const dir = makeTempRepo();
+    tempDirs.push(dir);
+    addCommit(dir, 'a.txt', 'one\n', 'initial');
+    writeFileSync(join(dir, 'a.txt'), 'one\ntwo\n');
+
+    let renderRequested = 0;
+    const panel = new DiffPanel(dir, () => { renderRequested++; });
+    // Seed an entry so the status bar (which only renders once entries exist) is visible immediately.
+    panel.showDiff('a.txt', '@@ -1,1 +1,2 @@\n one\n+two');
+
+    expect(panel.handleInput('w')).toBe(true);
+    // Synchronous feedback, before the background git subprocess has resolved.
+    expect(linesText(panel.render(W, H))).toContain('Loading working tree diff');
+
+    await waitFor(() => renderRequested > 0);
+    expect(linesText(panel.render(W, H))).toContain('Reloaded working tree diff');
+  });
+});
+
+describe('DiffPanel — splitIntoDiffEntries recognizes non-standard diff headers', () => {
+  test('a combined/merge-conflict header ("diff --cc") resolves the real file path, not "unknown"', () => {
+    const raw = 'diff --cc conflicted.ts\nindex 111,222..333\n--- a/conflicted.ts\n+++ b/conflicted.ts\n@@@ -1,1 -1,1 +1,1 @@@\n++resolved\n';
+    const panel = new DiffPanel('/tmp');
+    panel.loadRawDiff(raw);
+    const text = linesText(panel.render(W, H));
+    expect(text).toContain('conflicted.ts');
+    expect(text).not.toContain('unknown');
+  });
+
+  test('a quoted-path header ("diff --git \\"a/x y\\" \\"b/x y\\"") resolves the real file path', () => {
+    const raw = 'diff --git "a/my file.ts" "b/my file.ts"\nindex 111..222 100644\n--- "a/my file.ts"\n+++ "b/my file.ts"\n@@ -1,1 +1,1 @@\n-old\n+new\n';
+    const panel = new DiffPanel('/tmp');
+    panel.loadRawDiff(raw);
+    const text = linesText(panel.render(W, H));
+    expect(text).toContain('my file.ts');
+    expect(text).not.toContain('unknown');
+  });
+});
+
 // ── GitPanel ─────────────────────────────────────────────────────────────────
 
 describe('GitPanel — loading + geometry', () => {
