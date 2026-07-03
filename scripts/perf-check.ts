@@ -26,6 +26,7 @@ import { performance } from 'node:perf_hooks';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runFrameBench, FRAME_BUDGETS } from './perf-frame-bench.ts';
+import { runLineBenches, LINE_BUDGETS, type LineBenchCase } from './perf-line-bench.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,6 +49,38 @@ interface PerfBaseline {
     composite_p95_ms: { measured_ms: number; budget_ms: number; note: string };
     composite_p99_ms: { measured_ms: number; budget_ms: number; note: string };
   };
+  // Line-production benchmarks ABOVE the compositor (WO-202). Keyed by metric id
+  // (matches perf-line-bench LineBenchCase.id). Each entry carries the measured
+  // timing statistics, an allocation footprint (retained heap + object count per
+  // op), and the budget the gate compares against.
+  line?: Record<string, LineBudgetEntry>;
+}
+
+interface LineBudgetEntry {
+  measured_p50_ms: number;
+  measured_p95_ms: number;
+  budget_ms: number;
+  /** Which timing statistic the gate compares against the budget. */
+  gate_stat: 'p50' | 'p95';
+  heap_bytes_per_op: number;
+  objects_per_op: number;
+  lines: number;
+  note: string;
+}
+
+// Large allocation-heavy builds (the 1k-message transcript) are gated on the
+// stable median; small, high-sample-count builders are gated on p95. This keeps
+// the gate from flaking on a single GC pause landing in a 12-sample tail.
+const LINE_GATE_STAT: Readonly<Record<string, 'p50' | 'p95'>> = {
+  'transcript.build_1k_ms': 'p50',
+};
+
+function gateStatFor(id: string): 'p50' | 'p95' {
+  return LINE_GATE_STAT[id] ?? 'p95';
+}
+
+function measuredForGate(c: LineBenchCase): number {
+  return gateStatFor(c.id) === 'p50' ? c.timeP50Ms : c.timeP95Ms;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,8 +202,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  let lineCases: LineBenchCase[];
+  try {
+    process.stdout.write('Measuring line-production bench (transcript, panels, markdown, code, overlay)... ');
+    lineCases = await runLineBenches();
+    console.log(`${lineCases.length} builders measured`);
+  } catch (err) {
+    console.error(`line bench error: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
   // --- Load or establish budgets ---
-  const budgets = baseline ?? {
+  const budgets: PerfBaseline = baseline ?? {
     startup: { renderer_load_ms: { measured_max_ms: startupMs, budget_ms: Math.ceil(startupMs * 2 / 50) * 50, note: 'auto' } },
     frame: {
       composite_p95_ms: { measured_ms: frameP95, budget_ms: FRAME_BUDGETS.p95_ms, note: 'auto' },
@@ -202,6 +245,21 @@ async function main(): Promise<void> {
       passed: frameP99 <= budgets.frame.composite_p99_ms.budget_ms,
     },
   ];
+
+  // Line-production benchmarks: gate each builder against its budget. The gate
+  // statistic (p50 for the heavy transcript build, p95 for the rest) is recorded
+  // per metric so the ratchet stays transparent.
+  for (const c of lineCases) {
+    const measured = measuredForGate(c);
+    const budget = budgets.line?.[c.id]?.budget_ms ?? LINE_BUDGETS[c.id] ?? Number.POSITIVE_INFINITY;
+    results.push({
+      metric: c.id,
+      measured,
+      budget,
+      unit: 'ms',
+      passed: measured <= budget,
+    });
+  }
 
   // --- Format report ---
   const W_METRIC = 30;
@@ -242,6 +300,19 @@ async function main(): Promise<void> {
           note: 'Compositor.composite() p99 over 200 frames. Budget = ceil(measured × 4), rounded to 10ms. Ratchet: tighten when measured drops below budget/3.',
         },
       },
+      line: Object.fromEntries(lineCases.map((c): [string, LineBudgetEntry] => {
+        const stat = gateStatFor(c.id);
+        return [c.id, {
+          measured_p50_ms: Math.round(c.timeP50Ms * 1000) / 1000,
+          measured_p95_ms: Math.round(c.timeP95Ms * 1000) / 1000,
+          budget_ms: LINE_BUDGETS[c.id] ?? Math.ceil(measuredForGate(c) * 4),
+          gate_stat: stat,
+          heap_bytes_per_op: Math.round(c.heapBytesPerOp),
+          objects_per_op: Math.round(c.objectsPerOp),
+          lines: c.linesProduced,
+          note: `${c.label}. Gated on ${stat}. Budget carries CI headroom (runners run 2-4× slower). Ratchet (WO-210): tighten when measured ${stat} drops below budget/2.`,
+        }];
+      })),
     };
     writeFileSync(BASELINE_PATH, JSON.stringify(newBaseline, null, 2) + '\n', 'utf-8');
     console.log(`\nBaseline saved to ${BASELINE_PATH}`);
