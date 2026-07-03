@@ -1,4 +1,5 @@
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { join, relative } from 'node:path';
 
 const ROOT = process.cwd();
@@ -14,6 +15,22 @@ const RUNNER_DIR = join(TEST_TMP_ROOT, `run-${process.pid}`);
 
 // Pass --coverage through to bun test when invoked with that flag.
 const COVERAGE = process.argv.includes('--coverage');
+
+// Per-file worker pool size. The per-file process isolation (one bun test
+// process per file, each with its own TMPDIR) is the point of this runner;
+// running the files N at a time just stops paying 600+ sequential process
+// startups (this took the CI test job past its budget). Override with
+// --jobs N or GOODVIBES_TEST_JOBS; capped to keep peak memory sane.
+const JOBS = (() => {
+  const flagIdx = process.argv.indexOf('--jobs');
+  if (flagIdx !== -1) {
+    const n = Number(process.argv[flagIdx + 1]);
+    if (Number.isFinite(n) && n >= 1) return Math.floor(n);
+  }
+  const env = Number(process.env.GOODVIBES_TEST_JOBS);
+  if (Number.isFinite(env) && env >= 1) return Math.floor(env);
+  return Math.max(1, Math.min(8, availableParallelism() - 1));
+})();
 
 // Age-based sweep: remove stale run-* dirs older than 1 hour at startup.
 // This replaces the previous full-root wipe and is safe under concurrency:
@@ -72,7 +89,13 @@ if (testFiles.length === 0) {
 let passedFiles = 0;
 let failedFiles = 0;
 
-for (const testFile of testFiles) {
+/**
+ * Run one test file in its own bun process with an isolated TMPDIR
+ * (identical isolation semantics to the previous sequential runner).
+ * Output is buffered and printed on completion so parallel files never
+ * interleave mid-line.
+ */
+async function runFile(testFile: string): Promise<void> {
   const rel = relative(ROOT, testFile);
   // Unique per-file tmp subdir keeps TMPDIR-rooted artifacts isolated.
   // Scoped under RUNNER_DIR so concurrent runners never collide.
@@ -82,11 +105,10 @@ for (const testFile of testFiles) {
   );
   rmSync(testTmpDir, { recursive: true, force: true });
   mkdirSync(testTmpDir, { recursive: true });
-  console.log(`\n==> ${rel}`);
   const bunArgs = ['bun', 'test'];
   if (COVERAGE) bunArgs.push('--coverage');
   bunArgs.push(testFile);
-  const result = Bun.spawnSync(bunArgs, {
+  const proc = Bun.spawn(bunArgs, {
     cwd: ROOT,
     env: {
       ...process.env,
@@ -94,17 +116,36 @@ for (const testFile of testFiles) {
       TMP: testTmpDir,
       TEMP: testTmpDir,
     },
-    stdio: ['inherit', 'inherit', 'inherit'],
+    stdout: 'pipe',
+    stderr: 'pipe',
   });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
   rmSync(testTmpDir, { recursive: true, force: true });
 
-  if (result.exitCode === 0) {
-    passedFiles += 1;
-    continue;
-  }
+  const ok = exitCode === 0;
+  const output = (stdout + stderr).trimEnd();
+  console.log(`\n==> ${rel}${ok ? '' : '  [FAIL]'}`);
+  if (output) console.log(output);
 
-  failedFiles += 1;
+  if (ok) passedFiles += 1;
+  else failedFiles += 1;
 }
+
+let nextFileIndex = 0;
+async function worker(): Promise<void> {
+  while (true) {
+    const i = nextFileIndex++;
+    if (i >= testFiles.length) return;
+    await runFile(testFiles[i]!);
+  }
+}
+
+console.log(`Running ${testFiles.length} test files with ${JOBS} parallel job${JOBS === 1 ? '' : 's'}.`);
+await Promise.all(Array.from({ length: Math.min(JOBS, testFiles.length) }, () => worker()));
 
 // Remove this runner's own subdir at completion. Sibling runners are untouched.
 rmSync(RUNNER_DIR, { recursive: true, force: true });
