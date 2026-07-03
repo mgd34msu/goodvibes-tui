@@ -161,6 +161,25 @@ describe('renderMarkdown', () => {
     expect(text).toContain('Token');
     expect(text).toContain('┼');
   });
+
+  test('truncates a table cell to ellipsis without stranding a wide glyph past the column edge', () => {
+    // A narrow overall width plus a wide second column forces the first
+    // column down to its 4-char floor. "ab日x" (display width 5: a=1, b=1,
+    // 日=2, x=1) then overflows exactly on the wide glyph's placeholder
+    // cell — the truncation must replace the glyph itself with the
+    // ellipsis, not just its placeholder, or the cell renders one column
+    // wider than its budget and the wide character survives past the
+    // ellipsis.
+    const md = [
+      '| A | B |',
+      '| :--- | :--- |',
+      `| ab日x | ${'z'.repeat(60)} |`,
+    ].join('\n');
+    const result = renderMarkdown(md, 30);
+    const text = textLines(result).join('\n');
+    expect(text).toContain('ab…');
+    expect(text).not.toContain('日');
+  });
 });
 
 describe('fence syntax variants', () => {

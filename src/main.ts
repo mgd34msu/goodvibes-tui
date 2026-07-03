@@ -24,6 +24,7 @@ import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
 import { buildShellFooter, estimateShellFooterHeight } from './renderer/shell-surface.ts';
+import { computePromptContentWidth } from './renderer/prompt-content-width.ts';
 import { buildConversationViewport } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
@@ -180,19 +181,19 @@ async function main() {
     activeToolName: undefined,
   };
 
-  const getPromptContentWidth = () => {
-    const w = stdout.columns || 80;
-    const boxMargin = 2;
-    const boxWidth = w - (boxMargin * 2);
-    return boxWidth - 4 - 3; // minus padding (4) minus prefix width (3: ' > ')
-  };
+  const getPromptContentWidth = () => computePromptContentWidth(stdout.columns);
 
   const getViewportHeight = (): number => {
     if (input.onboardingWizard.active) return stdout.rows || 24;
     const promptLines: number = input.getVisiblePromptLineCount(getPromptContentWidth());
     const currentModel = providerRegistry.getCurrentModel();
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
-    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, contextWindow);
+    const rows = stdout.rows || 24;
+    // Compact threshold must match buildShellFooter's `compact: height < 30`
+    // posture below — otherwise the cached-height fast path in
+    // estimateShellFooterHeight can answer a compact-vs-non-compact query
+    // with the wrong cached mode and throw the viewport math off by several rows.
+    return rows - 2 - estimateShellFooterHeight(promptLines, contextWindow, rows < 30);
   };
 
   const scroll = (delta: number) => {
