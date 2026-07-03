@@ -89,7 +89,7 @@ describe('StreamStallWatchdog', () => {
     watchdog.dispose();
   });
 
-  test('does NOT fire when STREAM_DELTA arrives before threshold', async () => {
+  test('does NOT fire when the gap after STREAM_DELTA stays under threshold', async () => {
     const events = makeEvents();
     const stallCalls: string[] = [];
     const watchdog = createStreamStallWatchdog({
@@ -99,12 +99,62 @@ describe('StreamStallWatchdog', () => {
     });
 
     events.emit('STREAM_START');
-    // Delta arrives well before threshold
+    // Delta arrives well before threshold, and nothing exceeds the
+    // (re-armed) threshold afterwards either.
     await wait(5);
+    events.emit('STREAM_DELTA');
+    await wait(TEST_THRESHOLD_MS - 10);
+
+    expect(stallCalls).toHaveLength(0);
+    watchdog.dispose();
+  });
+
+  test('DOES fire on a mid-stream stall — silence after a delta re-arms the watchdog', async () => {
+    // Regression test for the reported multi-minute mid-turn stall: tokens
+    // were already flowing (so a delta had arrived), then the stream went
+    // silent for longer than the threshold. The watchdog must still fire —
+    // it must NOT be permanently disarmed by the first delta.
+    const events = makeEvents();
+    const stallCalls: Array<{ provider: string; episode: number }> = [];
+    const watchdog = createStreamStallWatchdog({
+      events,
+      onStall: (provider, episode) => stallCalls.push({ provider, episode }),
+      getProviderName: () => 'anthropic',
+      thresholdMs: TEST_THRESHOLD_MS,
+    });
+
+    events.emit('STREAM_START');
+    await wait(5);
+    events.emit('STREAM_DELTA');
+    // No further deltas — silence exceeds the threshold from this point on.
+    await wait(TEST_THRESHOLD_MS + 10);
+
+    expect(stallCalls).toHaveLength(1);
+    expect(stallCalls[0]).toEqual({ provider: 'anthropic', episode: 1 });
+    watchdog.dispose();
+  });
+
+  test('fires again for a second stall episode after a recovery', async () => {
+    const events = makeEvents();
+    const stallCalls: Array<{ provider: string; episode: number }> = [];
+    const watchdog = createStreamStallWatchdog({
+      events,
+      onStall: (provider, episode) => stallCalls.push({ provider, episode }),
+      getProviderName: () => 'anthropic',
+      thresholdMs: TEST_THRESHOLD_MS,
+    });
+
+    events.emit('STREAM_START');
+    await wait(TEST_THRESHOLD_MS + 10);
+    expect(stallCalls).toHaveLength(1);
+    expect(stallCalls[0].episode).toBe(1);
+
+    // Stream recovers (a delta arrives), then stalls again.
     events.emit('STREAM_DELTA');
     await wait(TEST_THRESHOLD_MS + 10);
 
-    expect(stallCalls).toHaveLength(0);
+    expect(stallCalls).toHaveLength(2);
+    expect(stallCalls[1].episode).toBe(2);
     watchdog.dispose();
   });
 

@@ -15,6 +15,28 @@ import { buildFooterTip, isAgentActive } from './footer-tips.ts';
 const GRADIENT_CYCLE_FRAMES = 50;
 /** Number of frames before rotating to the next thinking phrase (~30 seconds at 80ms/frame). */
 const PHRASE_ROTATION_FRAMES = 375;
+/**
+ * Ms since the last STREAM_DELTA before the whimsical phrase rotation freezes
+ * and createThinkingFragment shows an honest "stalled Ns" / "reconnecting"
+ * label instead. Deliberately much shorter than the 30s stream-stall-watchdog
+ * hint threshold (stream-stall-watchdog.ts) — that threshold gates a
+ * low-priority system message about a likely-dead connection; this one gates
+ * a cosmetic label so the UI stops claiming "Vibing..." within a couple of
+ * seconds of real silence, well before the stall is confirmed as a problem.
+ */
+const THINKING_STALL_FREEZE_MS = 2_500;
+
+/**
+ * Stall/reconnect state for the live thinking indicator, computed by the
+ * caller every render frame from streamMetrics (see stream-event-wiring.ts).
+ * `reconnect` is populated only once the SDK's STREAM_RETRY event fires
+ * (structurally consumed — absent from SDK 0.35.0's TurnEvent union today).
+ */
+export interface ThinkingStallInfo {
+  /** Ms since the last STREAM_DELTA (or STREAM_START if none yet this turn). */
+  readonly msSinceLastDelta: number;
+  readonly reconnect?: { readonly attempt: number; readonly maxAttempts: number };
+}
 
 /** Build the git segment string and its display width. Single source of truth for header layout. */
 function buildGitSegment(gitInfo: GitHeaderInfo): { text: string; width: number } {
@@ -406,10 +428,22 @@ export class UIFactory {
   private static readonly THINK_GRADIENT_START = UI_TONES.accent.gradientStart;
   private static readonly THINK_GRADIENT_END = UI_TONES.accent.gradientEnd;
 
-  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number): Line[] {
-    // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)
-    const phraseIndex = Math.floor(frame / PHRASE_ROTATION_FRAMES) % this.THINKING_PHRASES.length;
-    const phrase = this.THINKING_PHRASES[phraseIndex];
+  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number, stallInfo?: ThinkingStallInfo): Line[] {
+    // Freeze the whimsical phrase rotation once real silence has gone on
+    // long enough to be misleading (THINKING_STALL_FREEZE_MS), and show an
+    // honest label instead: the SDK's reconnect attempt/maxAttempts once
+    // STREAM_RETRY is available, else a plain elapsed-silence readout.
+    const isStalled = stallInfo !== undefined && stallInfo.msSinceLastDelta >= THINKING_STALL_FREEZE_MS;
+    let phrase: string;
+    if (stallInfo?.reconnect) {
+      phrase = `Reconnecting (attempt ${stallInfo.reconnect.attempt}/${stallInfo.reconnect.maxAttempts})...`;
+    } else if (isStalled) {
+      phrase = `Stalled ${Math.floor(stallInfo.msSinceLastDelta / 1000)}s...`;
+    } else {
+      // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)
+      const phraseIndex = Math.floor(frame / PHRASE_ROTATION_FRAMES) % this.THINKING_PHRASES.length;
+      phrase = this.THINKING_PHRASES[phraseIndex];
+    }
     const speedSuffix = (tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
     const elapsedSuffix = elapsedMs !== undefined ? ` (${formatElapsed(elapsedMs)})` : '';
     const ttftSuffix = (ttftMs !== undefined && ttftMs > 0) ? ` ttft:${ttftMs}ms` : '';
