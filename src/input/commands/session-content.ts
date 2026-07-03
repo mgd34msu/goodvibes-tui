@@ -7,6 +7,7 @@ import { exportToMarkdown } from '@pellux/goodvibes-sdk/platform/export';
 import { TemplateManager, parseTemplateArgs } from '@pellux/goodvibes-sdk/platform/templates';
 import { requireSessionManager, requireSessionMemoryStore, requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
+import { sessionCommand } from './session.ts';
 
 export function registerSessionContentCommands(registry: CommandRegistry): void {
   registry.register({
@@ -238,7 +239,18 @@ export function registerSessionContentCommands(registry: CommandRegistry): void 
   registry.register({
     name: 'sessions',
     description: 'List saved sessions',
+    usage: '[resume <id|name>]',
+    argsHint: '[resume <id|name>]',
     async handler(_args, ctx) {
+      // Splash's "resume last session" hint and users' muscle memory both say
+      // `/sessions resume <id>` (plural, matching this command's own name) —
+      // but subcommands like `resume` are only implemented on the singular
+      // `/session` command. Forward instead of silently listing and dropping
+      // the subcommand+id on the floor.
+      if (_args.length > 0) {
+        await sessionCommand.handler(_args, ctx);
+        return;
+      }
       const sessionManager = requireSessionManager(ctx);
       const sessions = sessionManager.list();
       if (ctx.openSelection) {

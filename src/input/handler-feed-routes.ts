@@ -229,7 +229,15 @@ export function handlePromptTextToken(state: TextRouteState, token: InputToken):
     }
   }
 
-  if (prompt === '/' && state.commandRegistry) {
+  if (prompt === '/') {
+    // Arm commandMode as soon as the prompt becomes a bare '/', regardless of
+    // whether commandRegistry has been (re)attached yet — this is a one-shot
+    // transition (the only place commandMode ever becomes true), and gating
+    // it on commandRegistry meant a transient null during a modal/overlay
+    // handoff would permanently miss the window: every following keystroke
+    // is then processed as plain chat text with no way to recover. Dispatch
+    // (handleCommandModeToken, and the enter-key fallback below) still checks
+    // commandRegistry itself before actually running anything.
     commandMode = true;
     state.modalOpened('command');
     state.autocomplete?.update('');
@@ -257,6 +265,14 @@ export type KeyRouteState = {
   indicatorFocused: boolean;
   conversationManager: ConversationManager | null;
   commandContext: CommandContext | undefined;
+  /**
+   * Optional: only used by the enter-key desync safety net below (a stray
+   * slash-prefixed submission with commandMode somehow still false). When
+   * absent, that fallback simply doesn't trigger — the primary fix (arming
+   * commandMode on the '/' keystroke regardless of registry attachment, in
+   * handlePromptTextToken above) is what actually prevents the desync.
+   */
+  commandRegistry?: CommandRegistry | null;
   autocomplete: AutocompleteEngine | null;
   blockActionsMenu: { open: (block: BlockMeta) => void };
   processModal: { open: () => void };
@@ -351,6 +367,30 @@ export function handlePromptKeyToken(state: KeyRouteState, token: InputToken): {
       return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
     }
     if (text) {
+      // Safety net for a desynced commandMode: text is command-shaped (starts
+      // with '/') but commandMode never armed — e.g. the '/' keystroke landed
+      // during a modal/overlay handoff window. handleCommandModeToken (the
+      // normal dispatch path for '/name ...') never runs in this state since
+      // it early-returns when commandMode is false, so without this the text
+      // would fall straight through to submitInput as ordinary chat. Re-derive
+      // intent from the literal text instead of trusting commandMode alone.
+      if (!commandMode && text.startsWith('/') && state.commandRegistry && state.commandContext?.executeCommand) {
+        const parts = text.slice(1).trim().split(/\s+/);
+        const name = parts[0];
+        const args = parts.slice(1);
+        prompt = '';
+        cursorPos = 0;
+        if (name) {
+          const executeCommand = state.commandContext.executeCommand;
+          void executeCommand(name, args).then((handled) => {
+            if (!handled) {
+              state.commandContext?.submitInput?.(text);
+            }
+            state.requestRender();
+          });
+        }
+        return { handled: true, prompt, cursorPos, inputScrollTop, commandMode, indicatorFocused };
+      }
       const expanded = state.expandPrompt(text);
       const historyRecallText = typeof expanded === 'string'
         ? expanded

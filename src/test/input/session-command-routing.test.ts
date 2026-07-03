@@ -338,4 +338,51 @@ describe('session-command-routing (TASK-032)', () => {
     const byAlias = registry.get('sess');
     expect(byAlias).toBe(byName);
   });
+
+  // ── W0.4(g): /sessions resume <id> hygiene ───────────────────────────────────────
+  //
+  // splash-lines.ts advertises "/sessions resume <id>" (plural, matching the
+  // registered command's own name), but the plural /sessions command took
+  // (_args, ctx) and ignored args entirely — it always just listed sessions,
+  // silently dropping the resume subcommand + id on the floor. The singular
+  // /session command is what actually implements `resume`. /sessions now
+  // forwards any args to /session's own handler instead of listing.
+
+  test('/sessions resume <id> forwards to /session\'s resume handling instead of silently listing', async () => {
+    const registryForSessions = new CommandRegistry();
+    registerBuiltinCommands(registryForSessions);
+    const ctx = makeCtx();
+
+    await registryForSessions.execute('sessions', ['resume', 'nonexistent-session-id'], ctx as unknown as CommandContext);
+
+    const output = ctx.printed.join('\n');
+    // The stub sessionManager has no saved sessions, so /session resume's own
+    // "not found" message is the proof the subcommand was actually routed —
+    // the old behavior printed the flat "Saved sessions:" list instead and
+    // never looked at 'resume'/'nonexistent-session-id' at all.
+    expect(output).toContain('Session not found: nonexistent-session-id');
+    expect(output).not.toContain('Saved sessions:');
+  });
+
+  test('/sessions resume with no id forwards to /session\'s own usage message', async () => {
+    const registryForSessions = new CommandRegistry();
+    registerBuiltinCommands(registryForSessions);
+    const ctx = makeCtx();
+
+    await registryForSessions.execute('sessions', ['resume'], ctx as unknown as CommandContext);
+
+    const output = ctx.printed.join('\n');
+    expect(output).toContain('Usage: /session resume');
+  });
+
+  test('/sessions with no args still lists sessions (unchanged)', async () => {
+    const registryForSessions = new CommandRegistry();
+    registerBuiltinCommands(registryForSessions);
+    const ctx = makeCtx();
+
+    await registryForSessions.execute('sessions', [], ctx as unknown as CommandContext);
+
+    const output = ctx.printed.join('\n');
+    expect(output).toContain('Saved sessions:');
+  });
 });

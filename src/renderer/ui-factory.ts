@@ -345,7 +345,11 @@ export class UIFactory {
         ctxParts.push(model + (provider ? ` (${provider})` : ''));
       }
       if (toolCount) ctxParts.push(`${toolCount} tools`);
-      if (hitlMode) ctxParts.push(`hitl:${hitlMode}`);
+      // Labeled "notify" (not "hitl") — /mode (aliased /hitl) governs UX
+      // notification verbosity (quiet/balanced/operator), not tool
+      // auto-approval, so it must not share vocabulary with the DANGER MODE
+      // risk banner rendered a few lines below.
+      if (hitlMode) ctxParts.push(`notify:${hitlMode}`);
       const ctxLine = '   ' + ctxParts.join(`  ${GLYPHS.navigation.pipeSeparator}  `);
       lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
     }
