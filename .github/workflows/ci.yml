@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    # renderer-excellence is temporary: full CI on every push during the
-    # v1.0.0 renderer effort, removed when the branch merges back to main.
-    branches: [main, renderer-excellence]
+    branches: [main]
   pull_request:
     branches: [main]
 
