@@ -10,7 +10,7 @@ import {
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { requireShellPaths } from './runtime-services.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
-import { calcSessionCost } from '../../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../../export/cost-utils.ts';
 import {
   GistUploadTarget,
   NO_TOKEN_GUIDANCE,
@@ -113,6 +113,13 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
       const sessionCostUsd = calcSessionCost(
         totalInput, totalOutput, totalCacheRead, totalCacheWrite, sessionModel,
       );
+      // The exported document has no field for "this cost is a placeholder" —
+      // omit `cost` entirely rather than embed a misleading 0 when the model
+      // never resolved to a real price (WO-315).
+      const costIsUnpriced = !isModelPriced(sessionModel);
+      if (costIsUnpriced) {
+        ctx.print(`Note: cost omitted from export — no pricing data for model "${sessionModel}".`);
+      }
 
       const metadata = {
         model: sessionModel,
@@ -120,7 +127,7 @@ export function registerShareRuntimeCommands(registry: CommandRegistry): void {
         sessionId: ctx.session.runtime.sessionId,
         title: ctx.session.conversationManager.title || undefined,
       };
-      const options = { redact, cost: sessionCostUsd };
+      const options = { redact, cost: costIsUnpriced ? undefined : sessionCostUsd };
 
       let outputContent: string;
       try {
