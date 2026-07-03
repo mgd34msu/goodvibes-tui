@@ -351,15 +351,28 @@ export class InputHistory {
     return redactedText;
   }
 
+  /**
+   * Entries persisted before CR normalization was deployed (registerPaste now
+   * converts the \r line separators terminals send in bracketed pastes to \n)
+   * may still carry literal \r bytes; launder them on load so history recall
+   * cannot reintroduce \r into the composer.
+   */
+  private launderLineBreaks(text: string): string {
+    return text.replace(/\r\n?/g, '\n');
+  }
+
   private normalizeStoredEntry(entry: unknown): StoredInputHistoryEntry | null {
-    if (typeof entry === 'string') return entry;
+    if (typeof entry === 'string') return this.launderLineBreaks(entry);
     if (!entry || typeof entry !== 'object') return null;
     const record = entry as Record<string, unknown>;
     if (typeof record.text !== 'string') return null;
-    const text = record.text.trim();
+    const text = this.launderLineBreaks(record.text).trim();
     if (!text) return null;
-    if (typeof record.recallText === 'string' && record.recallText.trim() && record.recallText.trim() !== text) {
-      return { text, recallText: record.recallText.trim() };
+    const recallText = typeof record.recallText === 'string'
+      ? this.launderLineBreaks(record.recallText).trim()
+      : '';
+    if (recallText && recallText !== text) {
+      return { text, recallText };
     }
     return text;
   }
