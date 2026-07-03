@@ -13,14 +13,9 @@ import {
 } from './fullscreen-primitives.ts';
 
 export {
-  borderLine,
   clamp,
-  contentLine,
-  fillRange,
-  makeLine,
   padDisplay,
   stableWindow,
-  writeText,
 } from './fullscreen-primitives.ts';
 export { FULLSCREEN_PALETTE as WORKSPACE_PALETTE } from './fullscreen-primitives.ts';
 
@@ -63,12 +58,12 @@ export interface FullscreenWorkspaceMetrics {
   readonly controlRows: number;
 }
 
-export function drawVertical(line: Line, x: number, bg = ''): void {
+function drawVertical(line: Line, x: number, bg = ''): void {
   if (x <= 0 || x >= line.length - 1) return;
   drawVerticalRule(line, x, WORKSPACE_PALETTE.border, bg);
 }
 
-export function drawHorizontalRange(line: Line, startX: number, endX: number, bg = ''): void {
+function drawHorizontalRange(line: Line, startX: number, endX: number, bg = ''): void {
   drawHorizontalRule(line, Math.max(1, startX), Math.min(line.length - 2, endX), WORKSPACE_PALETTE.border, bg);
 }
 

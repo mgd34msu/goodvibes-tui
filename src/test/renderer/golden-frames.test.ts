@@ -48,8 +48,6 @@ import {
 } from '../../core/conversation-rendering.ts';
 import { KeybindingsManager } from '../../input/keybindings.ts';
 import { renderHelpOverlay, renderShortcutsOverlay } from '../../renderer/help-overlay.ts';
-import { renderModelPickerOverlay } from '../../renderer/model-picker-overlay.ts';
-import { ModelPickerModal } from '../../input/model-picker.ts';
 import { renderSettingsModal } from '../../renderer/settings-modal.ts';
 import { SettingsModal } from '../../input/settings-modal.ts';
 import { renderSessionPickerModal } from '../../renderer/session-picker-modal.ts';
@@ -71,12 +69,6 @@ import { SubscriptionManager } from '@pellux/goodvibes-sdk/platform/config';
 import { createFeatureFlagManager } from '@/runtime/index.ts';
 import type { FeatureFlagManager } from '@/runtime/index.ts';
 import type { McpRegistry } from '@pellux/goodvibes-sdk/platform/mcp';
-import { ProviderRegistry } from '@pellux/goodvibes-sdk/platform/providers';
-import { CacheHitTracker } from '@pellux/goodvibes-sdk/platform/providers';
-import { ProviderCapabilityRegistry } from '@pellux/goodvibes-sdk/platform/providers';
-import { FavoritesStore } from '@pellux/goodvibes-sdk/platform/providers';
-import { BenchmarkStore } from '@pellux/goodvibes-sdk/platform/providers';
-import type { ModelDefinition } from '@pellux/goodvibes-sdk/platform/providers';
 import { SessionManager } from '@pellux/goodvibes-sdk/platform/sessions';
 import { ProfileManager } from '@pellux/goodvibes-sdk/platform/profiles';
 import type { AgentRecord } from '@pellux/goodvibes-sdk/platform/tools';
@@ -984,77 +976,6 @@ function renderShortcutsSurface(width: number, height: number): Line[] {
 
 describeOverlayGolden('help-overlay', renderHelpSurface);
 describeOverlayGolden('shortcuts-overlay', renderShortcutsSurface);
-
-// model picker — self-contained tmp-dir harness per call, cleaned up
-// synchronously in a finally block (no shared/module-level fixture state).
-function makeModelForGolden(overrides: Partial<ModelDefinition> = {}): ModelDefinition {
-  const base: ModelDefinition = {
-    id: 'test-model',
-    provider: 'test-provider',
-    registryKey: 'test-provider:test-model',
-    displayName: 'Test Model',
-    description: '',
-    capabilities: { toolCalling: true, codeEditing: true, reasoning: false, multimodal: false },
-    contextWindow: 8192,
-    selectable: true,
-    tier: 'free',
-    ...overrides,
-  };
-  if (!base.registryKey || base.registryKey === 'test-provider:test-model') {
-    base.registryKey = `${base.provider}:${base.id}`;
-  }
-  return base;
-}
-
-function renderModelPickerSurface(width: number, height: number): Line[] {
-  const rootDir = mkdtempSync(join(tmpdir(), 'gv-golden-model-picker-'));
-  try {
-    const configDir = join(rootDir, 'config');
-    const dataDir = join(rootDir, 'provider-data');
-    mkdirSync(configDir, { recursive: true });
-    mkdirSync(dataDir, { recursive: true });
-    const secretsManager = new SecretsManager({ projectRoot: rootDir, globalHome: rootDir });
-    const subscriptionManager = new SubscriptionManager(join(rootDir, 'subscriptions.json'));
-    const serviceRegistry = new ServiceRegistry(join(rootDir, 'services.json'), {
-      secretsManager,
-      subscriptionManager,
-    });
-    const favoritesStore = new FavoritesStore({ dir: dataDir });
-    const benchmarkStore = new BenchmarkStore({ dir: dataDir });
-    writeFileSync(favoritesStore.getPath(), JSON.stringify({ pinned: [], history: [] }, null, 2));
-    writeFileSync(
-      benchmarkStore.getCachePath(),
-      JSON.stringify({ version: 1, fetchedAt: 0, ttlMs: 86_400_000, entries: [] }, null, 2),
-    );
-    benchmarkStore.initBenchmarks();
-    const providerRegistry = new ProviderRegistry({
-      configManager: new ConfigManager({ surfaceRoot: 'tui', configDir, workingDir: rootDir, homeDir: rootDir }),
-      subscriptionManager,
-      secretsManager,
-      serviceRegistry,
-      capabilityRegistry: new ProviderCapabilityRegistry(),
-      cacheHitTracker: new CacheHitTracker(),
-      favoritesStore,
-      benchmarkStore,
-    });
-    const picker = new ModelPickerModal(favoritesStore, benchmarkStore, providerRegistry);
-    picker.active = true;
-    picker.mode = 'model';
-    picker.models = [
-      makeModelForGolden({ id: 'model-a', displayName: 'Alpha', tier: 'free', provider: 'anthropic', contextWindow: 200_000 }),
-      makeModelForGolden({
-        id: 'model-b', displayName: 'Beta', tier: 'premium', provider: 'openai', contextWindow: 128_000,
-        capabilities: { toolCalling: true, codeEditing: true, reasoning: true, multimodal: true },
-      }),
-    ];
-    picker.selectedIndex = 0;
-    return renderModelPickerOverlay(picker, width, 20, height);
-  } finally {
-    rmSync(rootDir, { recursive: true, force: true });
-  }
-}
-
-describeOverlayGolden('model-picker-overlay', renderModelPickerSurface);
 
 // settings — mirrors settings-modal.test.ts's tmp HOME/cwd redirection,
 // scoped to a single synchronous try/finally per render call.

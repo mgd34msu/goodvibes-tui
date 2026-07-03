@@ -107,7 +107,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   network: 'Network',
 };
 
-export const SETTING_LABELS: Partial<Record<string, string>> = {
+const SETTING_LABELS: Partial<Record<string, string>> = {
   'ui.systemMessages': 'System Message Target',
   'ui.operationalMessages': 'Operational Message Target',
   'ui.wrfcMessages': 'WRFC Message Target',
