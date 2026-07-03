@@ -1,5 +1,5 @@
 # GV_GOLDEN surface=history-search-overlay-normal width=100 height=1
-|(reverse-i-search)`git': git status                                                                 |
+|(reverse-i-search)`git': git status  [Ctrl+R/↑] Older · [Ctrl+S/↓] Newer · [Enter] Accept · [Esc] Ca|
 @STYLES
 0 0 fg=#000000
 0 0 bg=#00ffcc

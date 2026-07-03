@@ -196,10 +196,12 @@ export function renderSelectionModalOverlay(
     : selectedItem?.primaryAction === 'delete'
     ? '[Enter] Delete'
     : '[Enter] Select';
-  let hints = `[Up/Down] Navigate  ${primaryVerb}  [Esc] Close`;
+  let hints = `[Up/Down] Navigate  ${primaryVerb}`;
   if (modal.allowSearch) hints += '  [/] Search';
   if (selectedItem?.primaryAction === 'toggle' && !selectedItem.actions) hints += '  [Space] Toggle';
   if (selectedItem?.actions) hints += `  ${selectedItem.actions}`;
+  // hint-grammar: Esc is the conventional "way out" and always sorts last.
+  hints += '  [Esc] Close';
   putText(
     footerLine,
     layout.margin + 2,
