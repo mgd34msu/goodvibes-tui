@@ -115,6 +115,16 @@ async function runFile(testFile: string): Promise<void> {
       TMPDIR: testTmpDir,
       TMP: testTmpDir,
       TEMP: testTmpDir,
+      // TMPDIR is redirected *inside* this project's own repo, so a bare temp dir
+      // created by a test sits under the project `.git` and git discovery walks up
+      // and finds it — breaking any test that needs a genuinely non-git directory.
+      // Fence discovery at the per-file temp root so git stops before the project
+      // repo. (Set here in the child's spawn env because Bun snapshots the
+      // environment at process start — a late process.env mutation inside a test
+      // would not reach GitService.isGitRepo's inherited Bun.spawnSync.) Temp repos
+      // a test `git init`s under this dir are unaffected: their own `.git` is found
+      // before discovery reaches the ceiling.
+      GIT_CEILING_DIRECTORIES: testTmpDir,
     },
     stdout: 'pipe',
     stderr: 'pipe',
