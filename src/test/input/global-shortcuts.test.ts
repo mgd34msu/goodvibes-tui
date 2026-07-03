@@ -218,6 +218,65 @@ describe('handleGlobalShortcutToken', () => {
     expect(jumped).toBe(false);
   });
 
+  test('panel-ops (Ctrl+O) prefers commandContext.openOpsPanel when wired', () => {
+    const openOpsPanel = mock(() => {});
+    const opened: string[] = [];
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => null,
+        open: (id: string) => { opened.push(id); },
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: (token: { logicalName?: string; ctrl?: boolean }) =>
+          token.logicalName === 'o' && !!token.ctrl ? 'panel-ops' : null,
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+      commandContext: { openOpsPanel } as unknown as NonNullable<GlobalShortcutRouteState['commandContext']>,
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x0f', logicalName: 'o', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(openOpsPanel).toHaveBeenCalled();
+    expect(opened).toEqual([]);
+  });
+
+  test('panel-ops (Ctrl+O) falls back to opening the ops-control panel directly when no callback is wired', () => {
+    const opened: string[] = [];
+    const state = buildState({
+      panelFocused: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [],
+        close: () => {},
+        hide: () => {},
+        getActivePanel: () => null,
+        open: (id: string) => { opened.push(id); },
+      } as unknown as GlobalShortcutRouteState['panelManager'],
+      keybindingsManager: {
+        matches: () => false,
+        lookup: (token: { logicalName?: string; ctrl?: boolean }) =>
+          token.logicalName === 'o' && !!token.ctrl ? 'panel-ops' : null,
+      } as unknown as GlobalShortcutRouteState['keybindingsManager'],
+      commandContext: {} as unknown as NonNullable<GlobalShortcutRouteState['commandContext']>,
+    });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x0f', logicalName: 'o', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(opened).toEqual(['ops-control']);
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
   test('escape does not bypass panel focus handling', () => {
     const state = buildState({ panelFocused: true });
     const handled = handleGlobalShortcutToken(

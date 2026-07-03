@@ -159,6 +159,21 @@ export function handleGlobalShortcutToken(
       return true;
     }
 
+    case 'panel-ops': {
+      // Ctrl+O: open the Ops Control panel. Prefer the command-context callback
+      // (wired only when the operator-control-plane feature flag is on) so it
+      // reuses whatever show/open semantics bootstrap.ts set up; otherwise fall
+      // back to opening the always-registered 'ops-control' panel type directly
+      // — it renders an honest not-configured state when its deps are absent.
+      if (state.commandContext?.openOpsPanel) {
+        state.commandContext.openOpsPanel();
+      } else {
+        state.panelManager.open('ops-control');
+        state.requestRender();
+      }
+      return true;
+    }
+
     case 'history-search':
       state.historySearch.open(state.prompt);
       state.requestRender();
