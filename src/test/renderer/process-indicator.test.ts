@@ -80,13 +80,13 @@ describe('renderProcessIndicator', () => {
   test('open hint present when active', () => {
     const lines = renderProcessIndicator(W, 1, 0);
     const text = lineToString(lines[0]);
-    expect(text).toContain('Enter to view');
+    expect(text).toContain('[Enter] View');
   });
 
   test('open hint not present when idle', () => {
     const lines = renderProcessIndicator(W, 0, 0);
     const text = lineToString(lines[0]);
-    expect(text).not.toContain('Enter to view');
+    expect(text).not.toContain('[Enter] View');
   });
 
   test('width handling: narrow terminal (40 cols)', () => {
@@ -115,9 +115,9 @@ describe('renderProcessIndicator', () => {
     const lines = renderProcessIndicator(80, 2, 0, true);
     expect(lines.length).toBe(1);
     const text = lines[0].map(c => c.char).join('');
-    expect(text).toContain('Enter to open');
-    expect(text).toContain('back to input');
-    expect(text).toContain('•');
+    expect(text).toContain('[Enter] Open');
+    expect(text).toContain('[Esc] Back to input');
+    expect(text).toContain('·');
   });
 
   test('focused line uses cyan bold styling', () => {

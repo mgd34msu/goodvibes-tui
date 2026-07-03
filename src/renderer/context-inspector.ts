@@ -84,7 +84,6 @@ export function renderContextInspector(
 
   const entries: MsgEntry[] = [];
   let totalTokens = 0;
-  let largeCount = 0;
 
   for (const msg of messages) {
     const role = msg.role;
@@ -126,9 +125,6 @@ export function renderContextInspector(
   // ── Identify large consumers (>10%) ───────────────────────────────────────
 
   const largeThreshold = totalTokens * 0.10;
-  for (const e of entries) {
-    if (e.tokens > largeThreshold) largeCount++;
-  }
 
   // ── Build sections ────────────────────────────────────────────────────────
 

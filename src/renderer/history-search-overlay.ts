@@ -1,27 +1,15 @@
 import type { Line } from '../types/grid.ts';
-import { getDisplayWidth } from '../utils/terminal-width.ts';
+import { fitDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import type { HistorySearch } from '../input/input-history.ts';
 import { createBottomBarLine, writeBottomBarText } from './bottom-bar.ts';
+import { formatHints } from './hint-grammar.ts';
 
 /**
  * Truncate `text` to at most `maxWidth` display columns, then pad with spaces
  * to exactly `maxWidth` columns. CJK/emoji wide characters count as 2 columns.
  */
 function truncateToWidth(text: string, maxWidth: number): string {
-  let usedWidth = 0;
-  let result = '';
-  let i = 0;
-  while (i < text.length) {
-    const code = text.codePointAt(i)!;
-    const charLen = code > 0xFFFF ? 2 : 1;
-    const charWidth = getDisplayWidth(text.slice(i, i + charLen));
-    if (usedWidth + charWidth > maxWidth) break;
-    result += text.slice(i, i + charLen);
-    usedWidth += charWidth;
-    i += charLen;
-  }
-  // Pad to exactly maxWidth columns with spaces
-  return result + ' '.repeat(maxWidth - usedWidth);
+  return fitDisplay(text, maxWidth, '');
 }
 
 /**
@@ -49,7 +37,13 @@ export function renderHistorySearchOverlay(
 
   // Build the display string
   const label = prefix + queryPart;
-  const full = truncateToWidth(label + matchText, width);
+  const hints = formatHints([
+    { key: 'Ctrl+R/↑', verb: 'Older' },
+    { key: 'Ctrl+S/↓', verb: 'Newer' },
+    { key: 'Enter', verb: 'Accept' },
+    { key: 'Esc', verb: 'Cancel' },
+  ]);
+  const full = truncateToWidth(`${label}${matchText}  ${hints}`, width);
 
   const line = createBottomBarLine(width, { fg: '#000000', bg: '#00ffcc' });
   writeBottomBarText(line, 0, width, full, { fg: '#000000', bg: '#00ffcc' });
