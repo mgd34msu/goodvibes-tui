@@ -83,6 +83,25 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
   }
 
   /**
+   * The item currently under the cursor, resolved against the FILTERED list
+   * that navigation actually moves over (`getVisibleItems()`) — never the raw
+   * `getItems()` source.
+   *
+   * Subclasses MUST read the selected row through this method (or, when a
+   * function also needs the list for counts/windows, through a function-scope
+   * `const visible = this.getVisibleItems()` local — indexing that local, never
+   * the raw source). Indexing a raw item array (`this.rows`, `this.entries`,
+   * `getItems()`, …) with `this.selectedIndex` silently returns the wrong row
+   * whenever a filter is active, because `selectedIndex` is an offset into the
+   * visible list, not the raw one. The `no-raw-selectedindex-read` architecture
+   * rule enforces this by banning the `[this.selectedIndex]` token outside the
+   * base classes.
+   */
+  protected getSelectedItem(): T | undefined {
+    return this.getVisibleItems()[this.selectedIndex];
+  }
+
+  /**
    * Filter-mode key handling. Returns `true`/`false` when consumed/ignored in
    * filter context, or `null` to fall through to normal navigation.
    */

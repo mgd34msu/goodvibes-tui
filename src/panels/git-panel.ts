@@ -251,7 +251,7 @@ export class GitPanel extends BasePanel {
     if (this.selectedIndex >= this.items.length) {
       this.selectedIndex = Math.max(0, this.items.length - 1);
     }
-    if (!this.isSelectable(this.items[this.selectedIndex])) {
+    if (!this.isSelectable(this.items.at(this.selectedIndex))) {
       const firstSelectable = this.items.findIndex((it) => this.isSelectable(it));
       if (firstSelectable >= 0) this.selectedIndex = firstSelectable;
     }
@@ -420,7 +420,7 @@ export class GitPanel extends BasePanel {
 
   // I3: withLoading guarantees the spinner is cleared even if the fetch throws.
   private async openDiff(): Promise<void> {
-    const item = this.items[this.selectedIndex];
+    const item = this.items.at(this.selectedIndex);
     if (!item) return;
 
     if (item.kind === 'file') {
@@ -456,7 +456,7 @@ export class GitPanel extends BasePanel {
 
   /** Stage (target=true) or unstage (target=false) the selected file row. */
   private async setStaged(target: boolean): Promise<void> {
-    const item = this.items[this.selectedIndex];
+    const item = this.items.at(this.selectedIndex);
     if (!item || item.kind !== 'file' || item.entry.staged === target) return;
     try {
       if (target) await this.git.add(item.entry.path);
@@ -654,7 +654,7 @@ export class GitPanel extends BasePanel {
     const selectedRowIndex = this.getRowIndexForItem(this.selectedIndex);
     if (selectedRowIndex >= 0) {
       const isDirty = this.data.stagedFiles.length > 0 || this.data.unstagedFiles.length > 0;
-      const selectedItem = this.items[this.selectedIndex];
+      const selectedItem = this.items.at(this.selectedIndex);
       const selectedLines: Line[] = [];
       if (selectedItem?.kind === 'file') {
         selectedLines.push(buildPanelLine(width, [
@@ -746,7 +746,7 @@ export class GitPanel extends BasePanel {
   }
 
   private renderDiff(width: number, height: number): Line[] {
-    const item = this.items[this.selectedIndex];
+    const item = this.items.at(this.selectedIndex);
     const diffLines = this.expandedDiff ?? [];
     let added = 0;
     let removed = 0;

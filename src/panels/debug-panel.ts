@@ -478,7 +478,7 @@ export class DebugPanel extends ScrollableListPanel<ApiCallEntry> {
 
     const visible = this.getVisibleItems();
     this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, Math.max(0, visible.length - 1)));
-    const selected = visible[this.selectedIndex];
+    const selected = this.getSelectedItem();
 
     const rows: Line[] = visible.length > 0
       ? visible.map((entry, index) => this.renderItem(entry, index, index === this.selectedIndex, width))

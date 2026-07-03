@@ -53,6 +53,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { checkHexLiteralRatchet } from './hex-literal-rule.ts';
+import { checkSelectedIndexReads } from './selected-index-rule.ts';
 
 const ROOT = join(import.meta.dir, '..');
 const SRC_ROOT = join(ROOT, 'src');
@@ -586,6 +587,15 @@ const hexLiteralCandidates = nonTestFiles
   })
   .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
 for (const v of checkHexLiteralRatchet(hexLiteralCandidates, hexLiteralBaseline)) {
+  violations.push(v);
+}
+
+// ─── Selected-index selection-safety ban ───────────────────────────────────────
+
+const selectedIndexCandidates = nonTestFiles
+  .filter((file) => relative(ROOT, file).split('\\').join('/').startsWith('src/panels/'))
+  .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
+for (const v of checkSelectedIndexReads(selectedIndexCandidates)) {
   violations.push(v);
 }
 

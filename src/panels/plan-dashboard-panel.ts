@@ -84,6 +84,17 @@ export class PlanDashboardPanel extends BasePanel {
   private navItems: PlanItem[] = [];
   private blockedItemIds = new Set<string>();
 
+  /**
+   * The plan item under the cursor. This panel owns its own selection state
+   * (`selectedIndex` navigates the `this.navItems` flat list directly), so
+   * every selected-row read routes through this one accessor — indexing
+   * `this.navItems` by the cursor directly is banned by the
+   * no-raw-selectedindex-read architecture rule.
+   */
+  private selectedNavItem(): PlanItem | undefined {
+    return this.navItems.at(this.selectedIndex);
+  }
+
   // Plan history / switching (planManager.list()/getSummary()/toMarkdown()).
   // `viewingPlanId` is null while following the live active plan; once set,
   // the dashboard renders that specific plan from disk instead.
@@ -186,7 +197,7 @@ export class PlanDashboardPanel extends BasePanel {
       // Consumed here (so the integration router fires next) only when the
       // selected item actually has an agent to jump to; see
       // handlePanelIntegrationAction below.
-      const item = this.navItems[this.selectedIndex];
+      const item = this.selectedNavItem();
       if (item?.agentId) return true;
     }
     return false;
@@ -202,7 +213,7 @@ export class PlanDashboardPanel extends BasePanel {
   handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
     if (this.historyMode) return false;
     if (key !== 'enter' && key !== 'return') return false;
-    const item = this.navItems[this.selectedIndex];
+    const item = this.selectedNavItem();
     if (!item?.agentId) return false;
     const inspector = ctx.panelManager.open('inspector');
     if (inspector instanceof AgentInspectorPanel) {
@@ -583,7 +594,7 @@ export class PlanDashboardPanel extends BasePanel {
   }
 
   private buildDetailSection(width: number): PanelWorkspaceSection | null {
-    const item = this.navItems[this.selectedIndex];
+    const item = this.selectedNavItem();
     if (!item) return null;
     const blocked = this.blockedItemIds.has(item.id);
     const lines: Line[] = [
@@ -615,7 +626,7 @@ export class PlanDashboardPanel extends BasePanel {
       { keys: 'Home/End', label: 'jump' },
       { keys: 'h', label: 'history' },
     ];
-    const item = this.navItems[this.selectedIndex];
+    const item = this.selectedNavItem();
     if (item?.agentId) hints.push({ keys: 'Enter', label: 'inspect agent' });
     if (this.viewingPlanId !== null) hints.push({ keys: 'a', label: 'back to active' });
     return [buildKeyboardHints(width, hints, C)];

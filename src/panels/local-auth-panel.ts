@@ -112,8 +112,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
       return this.handleDeleteConfirmInput(key);
     }
 
-    const users = this.getItems();
-    const selected = users[this.selectedIndex];
+    const selected = this.getSelectedItem();
 
     if (key === 'p') {
       if (!selected) return false;
@@ -364,7 +363,7 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     }
 
     this.clampSelection();
-    const selected = users[this.selectedIndex];
+    const selected = this.getSelectedItem();
 
     const footerLines: Line[] = [];
     if (selected) {

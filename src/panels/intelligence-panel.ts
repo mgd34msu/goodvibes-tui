@@ -47,6 +47,18 @@ function postureSegments(label: string, status: string): StyledPanelSegment[] {
 export class IntelligencePanel extends BasePanel {
   private readonly unsub: (() => void) | null;
   private selectedIndex = 0;
+
+  /**
+   * The diagnostic file under the cursor. This panel owns its own selection
+   * state (`selectedIndex` navigates the `diagnosticFiles()` list directly), so
+   * every selected-row read routes through this one accessor — indexing the
+   * `diagnosticFiles()` list by the cursor directly is banned by the
+   * no-raw-selectedindex-read architecture rule.
+   */
+  private selectedDiagnosticFile(): DiagnosticFile | undefined {
+    return this.diagnosticFiles().at(this.selectedIndex);
+  }
+
   private diagnosticsScrollOffset = 0;
   private findingsScrollOffset = 0;
   /** Set by handleInput('enter'); consumed by handlePanelIntegrationAction, which has the PanelManager reference needed to open the preview panel. */
@@ -114,14 +126,14 @@ export class IntelligencePanel extends BasePanel {
       return true;
     }
     if (key === 'enter' || key === 'return') {
-      const selected = files[this.selectedIndex];
+      const selected = this.selectedDiagnosticFile();
       const first = selected ? this._firstFinding(selected) : undefined;
       if (!selected || !first) return false;
       this._pendingOpenFile = { filePath: selected.filePath, line: first.line + 1 };
       return true;
     }
     if (key === 's') {
-      const selected = files[this.selectedIndex];
+      const selected = this.selectedDiagnosticFile();
       const first = selected ? this._firstFinding(selected) : undefined;
       if (!selected || !first) return false;
       this._pendingSymbolsPivot = { filePath: selected.filePath, line: first.line + 1 };
@@ -212,7 +224,7 @@ export class IntelligencePanel extends BasePanel {
 
     const diagnosticFiles = this.diagnosticFiles();
     this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, Math.max(0, diagnosticFiles.length - 1)));
-    const selectedFile = diagnosticFiles[this.selectedIndex];
+    const selectedFile = this.selectedDiagnosticFile();
     const sortedFindings = selectedFile
       ? [...selectedFile.diagnostics].sort((a, b) => (a.severity === 'error' ? 0 : 1) - (b.severity === 'error' ? 0 : 1))
       : [];

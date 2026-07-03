@@ -54,8 +54,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
       // Enter jumps to the session browser focused on this binding's session
       // — a direct panel jump instead of a printed slash-command signpost.
       if (key === 'enter' || key === 'return') {
-        const bindings = this.getVisibleItems();
-        const selected = bindings[this.selectedIndex];
+        const selected = this.getSelectedItem();
         if (selected?.sessionId) {
           this.pendingAction = { kind: 'open-session', sessionId: selected.sessionId };
           return true;
@@ -178,7 +177,7 @@ export class RoutesPanel extends ScrollableListPanel<RouteBinding> {
     // Detail must describe the row the (possibly filtered) list highlights —
     // getItems() would desync under an applied filter, and a filter that
     // matches nothing leaves no selection at all.
-    const selected = this.getVisibleItems()[this.selectedIndex];
+    const selected = this.getSelectedItem();
 
     const detailRows: Line[] = selected ? [
       buildPanelLine(width, [

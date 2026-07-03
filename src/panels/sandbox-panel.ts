@@ -64,6 +64,18 @@ const SANDBOX_HINTS = [
 
 export class SandboxPanel extends BasePanel {
   private selectedIndex = 0;
+
+  /**
+   * The profile/session row under the cursor. This panel owns its own
+   * selection state (`selectedIndex` navigates the combined `_selectable()`
+   * list directly), so every selected-row read routes through this one
+   * accessor — indexing the `_selectable()` list by the cursor directly is
+   * banned by the no-raw-selectedindex-read architecture rule.
+   */
+  private selectedSelectable(): Selectable | undefined {
+    return this._selectable().at(this.selectedIndex);
+  }
+
   private sessionsScrollOffset = 0;
   private profilesScrollOffset = 0;
   private confirm: ConfirmState<string> | null = null;
@@ -119,7 +131,7 @@ export class SandboxPanel extends BasePanel {
     const selectable = this._selectable();
     const profileCount = selectable.filter((entry) => entry.kind === 'profile').length;
     const sessionCount = selectable.length - profileCount;
-    const selected = selectable[this.selectedIndex];
+    const selected = this.selectedSelectable();
 
     if (key === 's' && selected?.kind === 'profile') {
       void this._startSession(selected.id);
@@ -210,7 +222,7 @@ export class SandboxPanel extends BasePanel {
     const sessions = this.sessions.list();
     const selectable = this._selectable();
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, selectable.length - 1));
-    const selected = selectable[this.selectedIndex] ?? null;
+    const selected = this.selectedSelectable() ?? null;
     const selectedProfile = selected?.kind === 'profile'
       ? profiles.find((profile) => profile.id === selected.id) ?? null
       : null;

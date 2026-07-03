@@ -207,7 +207,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
     const reports = this.getVisibleItems();
     if (reports.length > 0 && (key === 'x' || key === 'c' || key === 'j')) {
       this.clampSelection();
-      const selected = reports[this.selectedIndex];
+      const selected = this.getSelectedItem();
       if (selected) {
         if (key === 'x') {
           this._pendingExport = selected.id;
@@ -302,7 +302,7 @@ export class IncidentReviewPanel extends ScrollableListPanel<FailureReport> {
     // Header/detail must describe the row the (possibly filtered) list
     // highlights; a filter matching nothing leaves no selection at all.
     const visible = this.getVisibleItems();
-    const selected = visible[this.selectedIndex];
+    const selected = this.getSelectedItem();
     if (!selected) {
       return this.renderList(width, height, { title: 'Incident Review Workspace' });
     }

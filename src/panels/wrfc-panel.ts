@@ -76,6 +76,17 @@ export class WrfcPanel extends BasePanel {
   private chains: WrfcChain[] = [];
   private selectedIndex = 0;
   private scrollOffset = 0;
+
+  /**
+   * The chain under the cursor. This panel owns its own selection state
+   * (`selectedIndex` navigates `this.chains` directly), so every selected-row
+   * read routes through this one accessor — indexing `this.chains` by the
+   * cursor directly is banned by the no-raw-selectedindex-read architecture rule.
+   */
+  private selectedChain(): WrfcChain | undefined {
+    return this.chains.at(this.selectedIndex);
+  }
+
   private expandedChainIds = new Set<string>();
   private unsubscribers: Array<() => void> = [];
   /** Last event timestamp per chain id, for stall detection. */
@@ -144,7 +155,7 @@ export class WrfcPanel extends BasePanel {
       // actual navigation happens in handlePanelIntegrationAction (it needs
       // the PanelManager); consuming the key here just requires a selected
       // chain to exist so the router below fires next.
-      case 'a':     return this.chains[this.selectedIndex] !== undefined;
+      case 'a':     return this.selectedChain() !== undefined;
       default:      return false;
     }
   }
@@ -156,7 +167,7 @@ export class WrfcPanel extends BasePanel {
    */
   handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
     if (key !== 'a') return false;
-    const chain = this.chains[this.selectedIndex];
+    const chain = this.selectedChain();
     if (!chain) return false;
     const inspector = ctx.panelManager.open('inspector');
     if (inspector instanceof AgentInspectorPanel) {
@@ -259,7 +270,7 @@ export class WrfcPanel extends BasePanel {
       }
     }
 
-    const selectedChain = this.chains[this.selectedIndex];
+    const selectedChain = this.selectedChain();
     const selectedLines: Line[] = selectedChain
       ? [
           buildPanelLine(width, [
@@ -345,7 +356,7 @@ export class WrfcPanel extends BasePanel {
     } : null;
 
     // Footer: show resume-disabled reason for the selected chain.
-    const selectedForFooter = this.chains[this.selectedIndex];
+    const selectedForFooter = this.selectedChain();
     const resumeReason = selectedForFooter ? this.resumeDisabledReason(selectedForFooter) : null;
     const footerLines: Line[] = [
       buildPanelLine(width, [
@@ -645,7 +656,7 @@ export class WrfcPanel extends BasePanel {
   }
 
   private toggleExpanded(): void {
-    const chain = this.chains[this.selectedIndex];
+    const chain = this.selectedChain();
     if (!chain) return;
     if (this.expandedChainIds.has(chain.id)) {
       this.expandedChainIds.delete(chain.id);
@@ -728,7 +739,7 @@ export class WrfcPanel extends BasePanel {
 
   /** Initiate cancel-confirm flow for the selected chain (noop if terminal). */
   private beginCancelConfirm(): void {
-    const chain = this.chains[this.selectedIndex];
+    const chain = this.selectedChain();
     if (!chain || TERMINAL_STATES.includes(chain.state)) return;
     this.confirmCancel = {
       subject: chain.id,
@@ -743,7 +754,7 @@ export class WrfcPanel extends BasePanel {
    * Emits a visible noop reason when the chain is not resumable.
    */
   private doResume(): void {
-    const chain = this.chains[this.selectedIndex];
+    const chain = this.selectedChain();
     if (!chain) return;
     if (!RESUMABLE_STATES.includes(chain.state)) return;
     this.deps.controller.resumeChain(chain.id);

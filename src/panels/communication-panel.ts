@@ -104,7 +104,7 @@ export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord>
     // `o` on a blocked record opens the sender's agent detail (falling back
     // to the receiver when the sender id is missing) via deps.openAgentDetail.
     if (key === 'o' && !this.filterActive) {
-      const record = this.getVisibleItems()[this.selectedIndex];
+      const record = this.getSelectedItem();
       if (!record || record.status !== 'blocked') return false;
       const agentId = record.fromId || record.toId;
       if (!agentId) return false;
@@ -207,8 +207,7 @@ export class CommunicationPanel extends ScrollableListPanel<CommunicationRecord>
     }
 
     this.clampSelection();
-    const visible = this.getVisibleItems();
-    const selected = visible[this.selectedIndex];
+    const selected = this.getSelectedItem();
 
     const detailLines: Line[] = [];
     if (selected) {

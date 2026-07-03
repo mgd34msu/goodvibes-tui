@@ -305,7 +305,7 @@ export class SystemMessagesPanel extends ScrollableListPanel<SystemMessageEntry>
 
       const visible = this.getVisibleItems();
       this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, visible.length - 1));
-      const selected = visible[this.selectedIndex];
+      const selected = this.getSelectedItem();
       const noMatchReason = this.filterQuery.trim()
         ? `"${this.filterQuery.trim()}"${this.priorityFilter ? ` + priority:${this.priorityFilter}` : ''}`
         : `priority:${this.priorityFilter}`;

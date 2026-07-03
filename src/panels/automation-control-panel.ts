@@ -259,7 +259,7 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationItem> 
   }
 
   private _toggleSelected(): void {
-    const item = this.getVisibleItems()[this.selectedIndex];
+    const item = this.getSelectedItem();
     if (!item) return;
     if (item.kind === 'job') {
       if (item.job.enabled) {
@@ -281,7 +281,7 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationItem> 
   }
 
   private _runSelected(): void {
-    const item = this.getVisibleItems()[this.selectedIndex];
+    const item = this.getSelectedItem();
     if (item?.kind === 'job' && this.automationManager) {
       void this.automationManager.runNow(item.job.id).catch(() => {});
       this.markDirty();
@@ -388,7 +388,7 @@ export class AutomationControlPanel extends ScrollableListPanel<AutomationItem> 
 
     const items = this.getVisibleItems();
     this.clampSelection();
-    const selected = items[this.selectedIndex];
+    const selected = this.getSelectedItem();
 
     const footerLines: Line[] = [];
     if (items.length > 0 && selected) {

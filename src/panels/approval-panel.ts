@@ -153,8 +153,7 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
 
   /** Next-step review command for the currently selected request (if any). */
   public getSelectedCommand(): string | null {
-    const items = this.getVisibleItems();
-    const selected = items[this.selectedIndex];
+    const selected = this.getSelectedItem();
     return selected ? reviewFor(selected).command : null;
   }
 
@@ -165,8 +164,7 @@ export class ApprovalPanel extends ScrollableListPanel<PermissionAuditEntry> {
     const denialCount = audit.filter((e) => e.approved === false).length;
     const pendingCount = audit.filter((e) => e.approved === undefined).length;
 
-    const items = this.getVisibleItems();
-    const selected = items[this.selectedIndex] ?? null;
+    const selected = this.getSelectedItem() ?? null;
 
     // ---- Posture summary (severity + counts first) ----
     const headerLines: Line[] = [
