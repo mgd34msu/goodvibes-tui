@@ -134,14 +134,6 @@ export function createOverlayFilledBorderLine(
   return line;
 }
 
-export function createOverlayFrameLine(
-  terminalWidth: number,
-  layout: OverlayBoxLayout,
-  bg = DEFAULT_OVERLAY_PALETTE.bodyBg,
-): Line {
-  return createOverlayContentLine(terminalWidth, layout, DEFAULT_OVERLAY_PALETTE.borderFg, bg);
-}
-
 export const OVERLAY_GLYPHS = {
   topLeft: GLYPHS.frame.topLeft,
   topRight: GLYPHS.frame.topRight,

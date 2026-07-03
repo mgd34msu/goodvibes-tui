@@ -28,7 +28,7 @@ function isEscapeHint(spec: HintSpec): boolean {
 }
 
 /** Render one hint as `[Key] Verb` (or `[Key]` when it has no verb). */
-export function formatHint(spec: HintSpec): string {
+function formatHint(spec: HintSpec): string {
   return spec.verb ? `[${spec.key}] ${spec.verb}` : `[${spec.key}]`;
 }
 
