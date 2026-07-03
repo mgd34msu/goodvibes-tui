@@ -111,7 +111,24 @@ export const UI_TONES = {
   border: '#64748b',
 } as const;
 
-export type UiGlyphRegistry = typeof GLYPHS;
+/**
+ * Diff surface accent color shared across the three diff-rendering surfaces —
+ * the conversation diff view (diff-view.ts), the file diff panel
+ * (diff-panel.ts), and the git panel's inline diff (git-panel.ts). Hunk-header
+ * blue has no matching UI_TONES.state/accent role, so WO-204 gives it one
+ * named token here (value converged on diff-panel.ts's pre-existing hunk
+ * color, the only one of the three surfaces that predates this token; add/del
+ * on all three surfaces already converge on UI_TONES.state.good/bad).
+ */
+export const DIFF_TONES = {
+  // add/del carry diff-panel.ts's shipped colors: the diff panel is the only
+  // diff surface users have ever seen (diff-view.ts was unwired from v0.9.6
+  // until WO-204), so its look is the reference — the conversation surface
+  // adopts it, never the other way around.
+  add: '#00ff88',
+  del: '#ff4444',
+  hunk: '#88aaff',
+} as const;
 
 /** Single spinner-frame source — layout.ts and progress.ts both re-export this. */
 export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;

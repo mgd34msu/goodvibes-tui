@@ -87,15 +87,3 @@ export function getTrackedVisibleWindow(
   }
   return { start, end, count: end - start, total };
 }
-
-export function sliceVisibleWindow<T>(
-  items: readonly T[],
-  selectedIndex: number,
-  visibleCount: number,
-): { readonly items: readonly T[]; readonly window: VisibleWindow } {
-  const window = getVisibleWindow(items.length, selectedIndex, visibleCount);
-  return {
-    items: items.slice(window.start, window.end),
-    window,
-  };
-}

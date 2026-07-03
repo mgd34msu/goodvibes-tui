@@ -7,6 +7,13 @@
 import type { SettingEntry, McpEntry, SubscriptionEntry } from '../input/settings-modal-types.ts';
 import { SETTINGS_CATEGORIES } from '../input/settings-modal-types.ts';
 import { isSecretConfigKey, isSecretReferenceValue } from '../config/secret-config.ts';
+import { UI_TONES } from './ui-primitives.ts';
+
+/**
+ * "Modified / active" accent for settings rows — cyan-green, no UI_TONES
+ * role matches it (WO-207b: preserved byte-exact as a named constant).
+ */
+const SETTINGS_ACCENT = '#00ffcc';
 
 function maskSecretValue(value: string): string {
   if (value.length === 0) return '(empty)';
@@ -25,43 +32,12 @@ export function formatValue(entry: SettingEntry): string {
 }
 
 export function valueColor(entry: SettingEntry): string {
-  if (!entry.isDefault) return '#00ffcc'; // cyan-green = modified
-  return '244';                            // dim = default
+  if (!entry.isDefault) return SETTINGS_ACCENT; // cyan-green = modified
+  return '244';                                  // dim = default
 }
 
-export function flagStateColor(state: string, killed: boolean): string {
-  if (killed) return '#ef4444'; // red
-  if (state === 'enabled') return '#00ffcc'; // cyan-green
-  return '244'; // dim
-}
 
-export function mcpTrustColor(mode: McpEntry['trustMode']): string {
-  switch (mode) {
-    case 'allow-all':
-      return '#ef4444';
-    case 'ask-on-risk':
-      return '#eab308';
-    case 'constrained':
-      return '#00ffcc';
-    case 'blocked':
-      return '244';
-    default:
-      return '244';
-  }
-}
 
-export function subscriptionStateColor(state: SubscriptionEntry['state']): string {
-  switch (state) {
-    case 'active':
-      return '#00ffcc';
-    case 'pending':
-      return '#eab308';
-    case 'available':
-      return '#38bdf8';
-    default:
-      return '244';
-  }
-}
 
 export function inferSubscriptionRouteReason(entry: SubscriptionEntry): string | undefined {
   if (entry.routeReason?.trim()) return entry.routeReason;
@@ -107,7 +83,7 @@ export const CATEGORY_LABELS: Record<(typeof SETTINGS_CATEGORIES)[number], strin
   network: 'Network',
 };
 
-export const SETTING_LABELS: Partial<Record<string, string>> = {
+const SETTING_LABELS: Partial<Record<string, string>> = {
   'ui.systemMessages': 'System Message Target',
   'ui.operationalMessages': 'Operational Message Target',
   'ui.wrfcMessages': 'WRFC Message Target',

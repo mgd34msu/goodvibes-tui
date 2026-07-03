@@ -3,6 +3,7 @@ import { ModalFactory } from './modal-factory.ts';
 import type { ConversationManager } from '../core/conversation';
 import { getOverlayContentBudget, getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { estimateTokens } from '@pellux/goodvibes-sdk/platform/core';
+import { UI_TONES } from './ui-primitives.ts';
 
 // ─── ContextInspectorModal ────────────────────────────────────────────────────
 
@@ -84,7 +85,6 @@ export function renderContextInspector(
 
   const entries: MsgEntry[] = [];
   let totalTokens = 0;
-  let largeCount = 0;
 
   for (const msg of messages) {
     const role = msg.role;
@@ -126,9 +126,6 @@ export function renderContextInspector(
   // ── Identify large consumers (>10%) ───────────────────────────────────────
 
   const largeThreshold = totalTokens * 0.10;
-  for (const e of entries) {
-    if (e.tokens > largeThreshold) largeCount++;
-  }
 
   // ── Build sections ────────────────────────────────────────────────────────
 
@@ -148,7 +145,7 @@ export function renderContextInspector(
     sections.push({
       type: 'text',
       content: 'WARNING: context is 80%+ full. Run /compact to free space.',
-      style: { fg: '#ff9900', bold: true },
+      style: { fg: UI_TONES.state.warn, bold: true },
     });
   }
 
@@ -181,7 +178,7 @@ export function renderContextInspector(
     sections.push({
       type: 'text',
       content: line,
-      style: isLarge ? { fg: '#ffcc00', bold: true } : {},
+      style: isLarge ? { fg: UI_TONES.state.warn, bold: true } : {},
     });
   }
 

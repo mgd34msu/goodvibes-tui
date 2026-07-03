@@ -223,7 +223,7 @@ export function nearestAnsi16Fg(r: number, g: number, b: number): number {
  * Convert an ANSI16 fg code to the corresponding bg code.
  * fg 30-37 → bg 40-47; fg 90-97 → bg 100-107.
  */
-export function ansi16FgToBg(fgCode: number): number {
+function ansi16FgToBg(fgCode: number): number {
   // Both ranges (30-37 and 90-97) shift by +10 to reach their bg equivalents
   // (30-37 → 40-47, 90-97 → 100-107).
   return fgCode + 10;

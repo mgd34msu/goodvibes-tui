@@ -154,6 +154,55 @@ describe('shell surface', () => {
     expect(lineToString(unfocused.lines[1])).not.toContain('█');
   });
 
+  test('estimate keys its cache on compact mode so a compact render does not answer a non-compact query', () => {
+    // Render a compact footer first — this populates the "last rendered
+    // footer height" fast path in estimateShellFooterHeight with the
+    // compact height (no process indicator, no context-info line).
+    const compactResult = buildShellFooter({
+      width: 100,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 0,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      compact: true,
+    });
+    // A caller asking for the NON-compact estimate right after (e.g. the
+    // viewport-height calc reacting to a resize back to a tall terminal)
+    // must get the non-compact formula, not the stale compact-render cache.
+    expect(estimateShellFooterHeight(1, 0, false)).not.toBe(compactResult.height);
+    expect(estimateShellFooterHeight(1, 0, false)).toBe(estimateShellFooterHeight(2, 0, false) - 1);
+
+    // And the reverse: a non-compact render must not leak into a compact query.
+    const nonCompactResult = buildShellFooter({
+      width: 100,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 0,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      compact: false,
+    });
+    expect(estimateShellFooterHeight(1, 0, true)).not.toBe(nonCompactResult.height);
+    expect(estimateShellFooterHeight(1, 0, true)).toBe(compactResult.height);
+  });
+
   test('prompt box borders match the inactive prompt fill when the indicator is focused', () => {
     const result = buildShellFooter({
       width: 80,

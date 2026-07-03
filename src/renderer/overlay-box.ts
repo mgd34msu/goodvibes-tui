@@ -53,7 +53,13 @@ export function createOverlayBoxLayout(
   maxWidth: number,
 ): OverlayBoxLayout {
   const resolvedMaxWidth = getOverlayMaxWidth(terminalWidth, margin, maxWidth);
-  const width = Math.max(20, Math.min(terminalWidth - margin * 2, resolvedMaxWidth));
+  // The 20-column floor exists so overlays stay legible on ordinary narrow
+  // terminals, but on a hostile-narrow terminal (terminalWidth smaller than
+  // margin*2 + 20) that floor alone can push the box wider than the real
+  // terminal, walking cells off the right edge of the line array. Clamp the
+  // floored result back down to what actually fits before returning it.
+  const availableWidth = Math.max(1, terminalWidth - margin * 2);
+  const width = Math.min(availableWidth, Math.max(20, Math.min(availableWidth, resolvedMaxWidth)));
   const contentWidth = width - 2;
   const innerWidth = contentWidth - 2;
   return { margin, width, contentWidth, innerWidth };
@@ -126,14 +132,6 @@ export function createOverlayFilledBorderLine(
   }
   line[rightX] = createStyledCell(right, { fg, bg });
   return line;
-}
-
-export function createOverlayFrameLine(
-  terminalWidth: number,
-  layout: OverlayBoxLayout,
-  bg = DEFAULT_OVERLAY_PALETTE.bodyBg,
-): Line {
-  return createOverlayContentLine(terminalWidth, layout, DEFAULT_OVERLAY_PALETTE.borderFg, bg);
 }
 
 export const OVERLAY_GLYPHS = {
