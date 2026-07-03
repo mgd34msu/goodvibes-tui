@@ -614,6 +614,11 @@ function renderSplashSurface(width: number): Line[] {
       provider: 'anthropic',
       toolCount: 7,
       lastSessionId: 'gv-20260612-a1b2c3',
+      // Pinned to the version the splash goldens were captured at. The
+      // version's display width shifts the line's centering, so goldens tied
+      // to the live build VERSION break on every release bump — this fixture
+      // keeps them byte-stable (found by the v1.0.0 release validate run).
+      version: '0.29.0',
     },
   };
   addConversationSplashScreen(context as never, width);
