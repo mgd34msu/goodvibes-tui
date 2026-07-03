@@ -184,21 +184,41 @@ interface AgentUsageLike {
 }
 
 /**
+ * True when a usage object carries actual reported token data rather than
+ * being present-but-empty. W0.9: the SDK's AgentRecord.usage is initialised
+ * to an all-zero object at agent spawn (platform/tools/agent/manager.ts) and
+ * — in the currently pinned SDK version — is never updated past that, so a
+ * plain truthiness check on `rec.usage` treats every agent, including ones
+ * that did real work, as "has data" and renders a fabricated $0.00/0-token
+ * reading. Guarding on real (nonzero) counts instead keeps today's "n/a"
+ * honest and lights up automatically once a future SDK actually populates
+ * usage — no further TUI change needed.
+ */
+export function hasReportedUsage(
+  usage: AgentUsageLike['usage'],
+): usage is NonNullable<AgentUsageLike['usage']> {
+  if (!usage) return false;
+  return usage.inputTokens > 0 || usage.outputTokens > 0
+    || (usage.cacheReadTokens ?? 0) > 0 || (usage.cacheWriteTokens ?? 0) > 0;
+}
+
+/**
  * Total token count + cost for an agent record's usage, or null when no usage
  * data has landed yet (honest-UX: never fabricate a $0.00/0-token reading for
  * an agent that simply hasn't reported usage).
  */
 export function summarizeAgentUsage(rec: AgentUsageLike): AgentUsageSummary | null {
-  if (!rec.usage) return null;
-  const inputTokens = rec.usage.inputTokens + (rec.usage.cacheReadTokens ?? 0) + (rec.usage.cacheWriteTokens ?? 0);
+  if (!hasReportedUsage(rec.usage)) return null;
+  const usage = rec.usage;
+  const inputTokens = usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
   const cost = calcSessionCost(
-    rec.usage.inputTokens,
-    rec.usage.outputTokens,
-    rec.usage.cacheReadTokens ?? 0,
-    rec.usage.cacheWriteTokens ?? 0,
+    usage.inputTokens,
+    usage.outputTokens,
+    usage.cacheReadTokens ?? 0,
+    usage.cacheWriteTokens ?? 0,
     rec.model ?? 'unknown',
   );
-  return { tokens: inputTokens + rec.usage.outputTokens, cost };
+  return { tokens: inputTokens + usage.outputTokens, cost };
 }
 
 // ---------------------------------------------------------------------------
