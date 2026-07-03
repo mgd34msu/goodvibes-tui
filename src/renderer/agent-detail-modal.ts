@@ -9,7 +9,7 @@ import { logger } from '@pellux/goodvibes-sdk/platform/utils';
 import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay-viewport.ts';
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { handleConfirmInput, type ConfirmState } from '../panels/confirm-state.ts';
-import { AGENT_TERMINAL_STATUSES as MODAL_TERMINAL_STATUSES, AGENT_STALL_THRESHOLD_MS as MODAL_STALL_THRESHOLD_MS } from '../panels/agent-inspector-shared.ts';
+import { AGENT_TERMINAL_STATUSES as MODAL_TERMINAL_STATUSES, AGENT_STALL_THRESHOLD_MS as MODAL_STALL_THRESHOLD_MS, hasReportedUsage } from '../panels/agent-inspector-shared.ts';
 import { UI_TONES } from './ui-primitives.ts';
 
 /**
@@ -283,10 +283,11 @@ export function renderAgentDetailModal(
 
   // Metrics
   sections.push({ type: 'text', content: `Tool calls : ${rec.toolCallCount}` });
-  if (rec.usage) {
-    const totalIn = rec.usage.inputTokens + (rec.usage.cacheReadTokens ?? 0) + (rec.usage.cacheWriteTokens ?? 0);
+  if (hasReportedUsage(rec.usage)) {
+    const usage = rec.usage;
+    const totalIn = usage.inputTokens + (usage.cacheReadTokens ?? 0) + (usage.cacheWriteTokens ?? 0);
     sections.push({ type: 'text', content: `Tokens in  : ${totalIn.toLocaleString()}` });
-    sections.push({ type: 'text', content: `Tokens out : ${rec.usage.outputTokens.toLocaleString()}` });
+    sections.push({ type: 'text', content: `Tokens out : ${usage.outputTokens.toLocaleString()}` });
   } else {
     sections.push({
       type: 'text',

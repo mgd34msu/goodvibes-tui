@@ -163,6 +163,25 @@ describe('renderAgentDetailModal', () => {
     expect(text).toContain('n/a');
   });
 
+  // W0.9: real AgentManager.spawn() sets usage to an all-zero object (not
+  // undefined) and, in the currently pinned SDK, never updates it past that.
+  // A naive truthy check on rec.usage rendered "Tokens in: 0 / Tokens out: 0"
+  // for every agent regardless of whether it did real work.
+  test('shows unavailable state (not fabricated zeros) when usage is present but all-zero', () => {
+    const id = seedAgent('Token task spawn-default');
+    const am = getTestAgentManager();
+    const rec = am.getStatus(id);
+    if (!rec) throw new Error('expected agent record');
+    rec.usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0 };
+    const modal = createAgentDetailModal();
+    modal.open(id);
+    const lines = renderAgentDetailModal(modal, W);
+    const text = linesToText(lines).join('\n');
+    expect(text).not.toContain('Tokens in');
+    expect(text).not.toContain('Tokens out');
+    expect(text).toContain('n/a');
+  });
+
   test('renders real token counts when agent usage is populated', () => {
     const id = seedAgent('Token task complete');
     const am = getTestAgentManager();

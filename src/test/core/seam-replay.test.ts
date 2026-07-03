@@ -345,6 +345,86 @@ describe('seam-replay: seam 3 — in-TUI panel resume (createResumeSessionHandle
     expect(existsSync(journalPath)).toBe(false);
   });
 
+  // W0.9: footer token-counter hydration after resume. createResumeSessionHandler
+  // must call the optional hydrateSessionUsage callback (wired from
+  // bootstrap-shell.ts) after fromJSON()+journal replay are both applied, so the
+  // caller can recompute orchestrator.usage from the now-complete history before
+  // the next render — otherwise the footer shows Input: 0 post-resume.
+  test('calls hydrateSessionUsage after fromJSON + journal replay, before requestRender', () => {
+    const sessionId = 'seam3-hydrate';
+    const homeDirectory = tmpDir;
+    const journalPath = journalPathFor(homeDirectory, sessionId);
+    const snapshotTimestamp = Date.now() - 5000;
+    writeJournalWithRecords(journalPath, sessionId, 2, snapshotTimestamp);
+
+    const conversation = new ConversationManager(() => 80);
+    const callOrder: string[] = [];
+
+    const sessionMeta = {
+      title: 'seam3 hydrate test',
+      titleSource: 'auto' as const,
+      timestamp: snapshotTimestamp,
+      model: 'test-model',
+      provider: 'test-provider',
+      returnContext: undefined,
+    };
+
+    let messageCountAtHydration = -1;
+    const options: ResumeSessionOptions = {
+      homeDirectory,
+      conversation,
+      requestRender: () => { callOrder.push('requestRender'); },
+      runtimeBus: { emit: () => {} } as never,
+      runtime: {
+        sessionId: 'previous-session',
+        model: 'test-model',
+        provider: 'test-provider',
+      } as never,
+      onSessionIdChanged: () => {},
+      sharedSessionBroker: {
+        reopenSession: () => Promise.resolve(),
+      },
+      writeLastSessionPointer: () => {},
+      hookDispatcher: {
+        fire: () => Promise.resolve({ fired: 0 }),
+      } as never,
+      sessionManager: {
+        load: (_id: string) => ({ messages: [], meta: sessionMeta }),
+        save: (_id: string, msgs: never[], _opts: unknown) => { void msgs; },
+        list: () => [],
+      } as never,
+      panelManager: {
+        open: () => {},
+        show: () => {},
+        hide: () => {},
+      } as never,
+      configManager: {
+        get: (_key: string) => 'off',
+        getCategory: (_cat: string) => ({}),
+      } as never,
+      providerRegistry: {
+        get: () => null,
+        getCurrentModel: () => 'test-model',
+        getForModel: () => null,
+        require: () => { throw new Error('not available'); },
+      } as never,
+      hydrateSessionUsage: () => {
+        callOrder.push('hydrateSessionUsage');
+        messageCountAtHydration = conversation.getMessageCount();
+      },
+    };
+
+    const resumeSession = createResumeSessionHandler(options);
+    resumeSession(sessionId);
+
+    expect(callOrder).toContain('hydrateSessionUsage');
+    // hydrateSessionUsage ran before requestRender...
+    expect(callOrder.indexOf('hydrateSessionUsage')).toBeLessThan(callOrder.indexOf('requestRender'));
+    // ...and after the journal-replayed messages already landed on conversation.
+    expect(messageCountAtHydration).toBe(conversation.getMessageCount());
+    expect(messageCountAtHydration).toBeGreaterThan(0);
+  });
+
   test('no-op when journal is absent for the resumed session', () => {
     const sessionId = 'seam3-nojournal';
     const homeDirectory = tmpDir;

@@ -109,6 +109,7 @@ export interface BootstrapCommandSectionOptions {
   readonly sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core').SessionLineageTracker;
   readonly wrfcController?: import('@pellux/goodvibes-sdk/platform/agents').WrfcController;
   readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions').SessionChangeTracker;
+  readonly hydrateSessionUsage?: () => void;
   readonly agentManager?: ShellAgentManagerService;
   readonly modeManager?: ShellModeManagerService;
   readonly automationManager?: ShellAutomationManagerRuntimeService;
@@ -300,7 +301,7 @@ export function createBootstrapCommandActions(
 export function createBootstrapCommandSessionSection(
   options: Pick<
     BootstrapCommandSectionOptions,
-    'conversation' | 'runtime' | 'sessionManager' | 'sessionMemoryStore' | 'sessionLineageTracker' | 'wrfcController' | 'changeTracker'
+    'conversation' | 'runtime' | 'sessionManager' | 'sessionMemoryStore' | 'sessionLineageTracker' | 'wrfcController' | 'changeTracker' | 'hydrateSessionUsage'
   >,
 ): BootstrapCommandSessionSection {
   return {
@@ -311,6 +312,7 @@ export function createBootstrapCommandSessionSection(
     sessionLineageTracker: options.sessionLineageTracker,
     wrfcController: options.wrfcController,
     changeTracker: options.changeTracker,
+    hydrateSessionUsage: options.hydrateSessionUsage,
   };
 }
 

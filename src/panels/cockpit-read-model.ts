@@ -25,6 +25,7 @@ import {
   AGENT_TERMINAL_STATUSES,
   AGENT_STALL_THRESHOLD_MS,
   countStalledAgents,
+  hasReportedUsage,
 } from './agent-inspector-shared.ts';
 
 // ---------------------------------------------------------------------------
@@ -114,18 +115,19 @@ export function buildCockpitRosterSnapshot(
     let outputTokens: number | null = null;
     let cost: number | null = null;
 
-    if (rec.usage) {
+    if (hasReportedUsage(rec.usage)) {
       hasUsage = true;
+      const usage = rec.usage;
       const inp =
-        rec.usage.inputTokens +
-        (rec.usage.cacheReadTokens ?? 0) +
-        (rec.usage.cacheWriteTokens ?? 0);
-      const out = rec.usage.outputTokens;
+        usage.inputTokens +
+        (usage.cacheReadTokens ?? 0) +
+        (usage.cacheWriteTokens ?? 0);
+      const out = usage.outputTokens;
       const agentCost = calcSessionCost(
-        rec.usage.inputTokens,
-        rec.usage.outputTokens,
-        rec.usage.cacheReadTokens ?? 0,
-        rec.usage.cacheWriteTokens ?? 0,
+        usage.inputTokens,
+        usage.outputTokens,
+        usage.cacheReadTokens ?? 0,
+        usage.cacheWriteTokens ?? 0,
         rec.model ?? 'unknown',
       );
 

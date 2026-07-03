@@ -224,6 +224,27 @@ describe('buildCockpitRosterSnapshot — cost/token aggregates', () => {
     }
   });
 
+  // W0.9: AgentManager.spawn() initialises AgentRecord.usage to an all-zero
+  // object (not undefined) and, in the currently pinned SDK, never updates it
+  // — see platform/tools/agent/manager.ts. A naive `if (rec.usage)` truthy
+  // check therefore treats every agent as "has data" and fabricates a
+  // $0.00/0-token reading for agents that never actually reported usage.
+  test('all-zero-but-defined usage (spawn default) is treated as no data, not $0.00/0-tokens', () => {
+    const records = [
+      makeRecord({
+        id: 'zero-usage',
+        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, llmCallCount: 0, turnCount: 0 },
+      }),
+    ];
+    const snap = buildCockpitRosterSnapshot(records);
+    expect(snap.totalInputTokens).toBeNull();
+    expect(snap.totalOutputTokens).toBeNull();
+    expect(snap.totalCost).toBeNull();
+    expect(snap.roster[0]!.inputTokens).toBeNull();
+    expect(snap.roster[0]!.outputTokens).toBeNull();
+    expect(snap.roster[0]!.cost).toBeNull();
+  });
+
   test('aggregates are computed when usage is present', () => {
     const records = [
       makeRecord({
