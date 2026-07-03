@@ -1,7 +1,7 @@
 import { type Line, type Cell, createStyledCell } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth, padDisplayEnd } from '../utils/terminal-width.ts';
-import { UI_TONES, DIFF_TONES } from './ui-primitives.ts';
+import { DIFF_TONES } from './ui-primitives.ts';
 
 /**
  * renderDiffView - Render a unified diff string as styled Line[].
@@ -51,7 +51,7 @@ export function renderDiffView(diffText: string, width: number, filename?: strin
       newLineNo++;
       const lineLabel = `${String(newLineNo).padStart(4)} `;
       const content = raw.slice(1);
-      lines.push(makeGutterLine('+', lineLabel, content, width, UI_TONES.state.good, '#0a1a0a'));
+      lines.push(makeGutterLine('+', lineLabel, content, width, DIFF_TONES.add, '#0a1a0a'));
       continue;
     }
 
@@ -60,7 +60,7 @@ export function renderDiffView(diffText: string, width: number, filename?: strin
       oldLineNo++;
       const lineLabel = `${String(oldLineNo).padStart(4)} `;
       const content = raw.slice(1);
-      lines.push(makeGutterLine('-', lineLabel, content, width, UI_TONES.state.bad, '#1a0a0a'));
+      lines.push(makeGutterLine('-', lineLabel, content, width, DIFF_TONES.del, '#1a0a0a'));
       continue;
     }
 
