@@ -13,9 +13,9 @@ import {
   type BlockMeta as SdkBlockMeta,
 } from '@pellux/goodvibes-sdk/platform/core';
 import type { BlockMeta } from './conversation-types.ts';
+import { MessageLineCache } from './conversation-line-cache.ts';
 import {
   addConversationSplashScreen,
-  appendConversationMessages,
   conversationTextToLines,
   logConversationText,
   renderConversationAssistantMessage,
@@ -56,6 +56,13 @@ export class ConversationManager extends SdkConversationManager {
   private lastRenderedWidth = 0;
   /** When true the buffer needs to be rebuilt before the next display. */
   private dirty = true;
+  /**
+   * Per-message Line[] cache (WO-209). rebuildHistory() reuses cached lines for
+   * messages whose complete render inputs are unchanged, so appending one message
+   * to an N-message conversation no longer re-renders all N. A cache-served
+   * rebuild is byte-identical to a cold one (pure memoisation).
+   */
+  private lineCache = new MessageLineCache();
   /** Index of the first message not yet appended to the buffer. */
   private appendedUpTo = 0;
   /** Optional config manager for display settings. */
@@ -300,6 +307,7 @@ export class ConversationManager extends SdkConversationManager {
   public override resetAll(): void {
     super.resetAll();
     this.history.clear();
+    this.lineCache.clear();
     this.appendedUpTo = 0;
     this.lastRenderedWidth = 0;
     this.dirty = true;
@@ -322,6 +330,7 @@ export class ConversationManager extends SdkConversationManager {
   public override replaceMessagesForLLM(newMessages: ProviderMessage[]): void {
     super.replaceMessagesForLLM(newMessages);
     this.history.clear();
+    this.lineCache.clear();
     this.appendedUpTo = 0;
     this.lastRenderedWidth = 0;
     this.dirty = true;
@@ -360,6 +369,7 @@ export class ConversationManager extends SdkConversationManager {
   }): void {
     super.fromJSON(data);
     this.history.clear();
+    this.lineCache.clear();
     this.appendedUpTo = 0;
     this.lastRenderedWidth = 0;
     this.dirty = true;
@@ -372,6 +382,26 @@ export class ConversationManager extends SdkConversationManager {
   public getDisplayBlocks(): Line[] {
     this.flushHistory();
     return this.history.getAllLines();
+  }
+
+  /**
+   * clearLineCache - Drop every cached per-message Line[] and force a full cold
+   * re-render on the next display. The rendered output is unchanged (the cache is
+   * a pure memoisation); this only discards the reuse, e.g. to reclaim memory or
+   * to assert cache/cold equivalence in tests.
+   */
+  public clearLineCache(): void {
+    this.lineCache.clear();
+    this.dirty = true;
+  }
+
+  /**
+   * getLineCacheSize - Number of per-message Line[] entries currently retained.
+   * The cache mark-and-sweeps to the visible message set on every rebuild, so
+   * this is bounded by what is on screen — exposed for memory-hygiene assertions.
+   */
+  public getLineCacheSize(): number {
+    return this.lineCache.size;
   }
 
   /**
@@ -419,7 +449,11 @@ export class ConversationManager extends SdkConversationManager {
       return;
     }
 
-    this.appendMessages(visibleSnapshot, width, displayStart);
+    // The in-progress streaming placeholder (rendered EMPTY above via
+    // renderSnapshot) is left uncached: its content mutates in place per delta and
+    // the incremental streaming path (updateStreamingBlock) owns it.
+    const streamingPlaceholderAbsIdx = isStreaming ? snapshot.length - 1 : -1;
+    this.appendMessages(visibleSnapshot, width, displayStart, streamingPlaceholderAbsIdx);
     this.appendedUpTo = snapshot.length;
 
     if (isStreaming) {
@@ -491,8 +525,20 @@ export class ConversationManager extends SdkConversationManager {
    *   the renderer can resolve messageKindRegistry keys (which are absolute)
    *   from its slice-relative loop counter.
    */
-  private appendMessages(messages: Message[], width: number, msgIndexOffset = 0): void {
-    appendConversationMessages(this.renderingContext(), messages, width, this.messageLineRegistry, msgIndexOffset);
+  private appendMessages(
+    messages: Message[],
+    width: number,
+    msgIndexOffset = 0,
+    streamingPlaceholderAbsIdx = -1,
+  ): void {
+    this.lineCache.renderInto(
+      this.renderingContext(),
+      messages,
+      width,
+      this.messageLineRegistry,
+      msgIndexOffset,
+      streamingPlaceholderAbsIdx,
+    );
   }
 
   /** Find the nearest block to a given line index, optionally filtered by type. */

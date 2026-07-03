@@ -73,6 +73,10 @@ interface LineBudgetEntry {
 // the gate from flaking on a single GC pause landing in a 12-sample tail.
 const LINE_GATE_STAT: Readonly<Record<string, 'p50' | 'p95'>> = {
   'transcript.build_1k_ms': 'p50',
+  // Rebuild-family benches gate on the stable median: a small-sample p95 is
+  // dominated by whichever iteration triggered a full GC of a large build.
+  'transcript.append_one_ms': 'p50',
+  'transcript.resize_1k_ms': 'p50',
 };
 
 function gateStatFor(id: string): 'p50' | 'p95' {
