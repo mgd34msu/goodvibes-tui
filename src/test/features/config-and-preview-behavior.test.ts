@@ -214,4 +214,65 @@ describe('tool preview truncation', () => {
     const text = spinnerLine.map(c => c.char).join('');
     expect(text).not.toMatch(/\(\d+/);
   });
+
+  // -------------------------------------------------------------------------
+  // Stall-honesty indicator (W0.7): frozen phrase rotation + stalled/
+  // reconnecting label once real silence has gone on long enough.
+  // -------------------------------------------------------------------------
+
+  it('shows a rotating whimsical phrase when no stallInfo is provided (unchanged baseline)', () => {
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(width, '-', 0);
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Thinking...');
+  });
+
+  it('keeps the whimsical phrase when msSinceLastDelta is under the freeze threshold', () => {
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(
+      width, '-', 0, undefined, undefined, undefined, undefined, undefined, undefined,
+      { msSinceLastDelta: 500 },
+    );
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Thinking...');
+    expect(text).not.toContain('Stalled');
+  });
+
+  it('freezes the phrase rotation and shows "Stalled Ns" once msSinceLastDelta crosses the freeze threshold', () => {
+    const width = 80;
+    // frame=1000 would normally rotate past "Thinking..." (PHRASE_ROTATION_FRAMES=375);
+    // with a stall in effect, the rotated phrase must NOT appear at all.
+    const lines = UIFactory.createThinkingFragment(
+      width, '-', 1000, undefined, undefined, undefined, undefined, undefined, undefined,
+      { msSinceLastDelta: 12_000 },
+    );
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Stalled 12s');
+    for (const p of ['Thinking...', 'Vibing...', 'Manifesting...']) {
+      expect(text).not.toContain(p);
+    }
+  });
+
+  it('shows "Reconnecting (attempt k/n)" instead of "Stalled Ns" when reconnect info is present', () => {
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(
+      width, '-', 0, undefined, undefined, undefined, undefined, undefined, undefined,
+      { msSinceLastDelta: 5_000, reconnect: { attempt: 2, maxAttempts: 4 } },
+    );
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Reconnecting (attempt 2/4)');
+    expect(text).not.toContain('Stalled');
+  });
+
+  it('reconnect label takes precedence even before the freeze threshold is crossed', () => {
+    // A reconnect attempt is itself proof the stream is not "thinking" —
+    // show it immediately, do not wait for THINKING_STALL_FREEZE_MS.
+    const width = 80;
+    const lines = UIFactory.createThinkingFragment(
+      width, '-', 0, undefined, undefined, undefined, undefined, undefined, undefined,
+      { msSinceLastDelta: 100, reconnect: { attempt: 1, maxAttempts: 3 } },
+    );
+    const text = lines[1].map(c => c.char).join('');
+    expect(text).toContain('Reconnecting (attempt 1/3)');
+  });
 });

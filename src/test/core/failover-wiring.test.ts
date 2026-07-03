@@ -38,10 +38,15 @@ function makeTurnBus() {
   };
   return {
     on<K extends TurnEvent>(event: K, handler: K extends 'TURN_ERROR' ? (ev: { error: string }) => void : () => void) {
-      (listeners[event] as Array<unknown>).push(handler);
+      // Lazily create the bucket for event names outside the fixed TurnEvent
+      // union (e.g. the structurally-consumed STREAM_RETRY/STREAM_STALL —
+      // see stream-event-wiring.ts) — a real event bus does not throw when
+      // something subscribes to an event type it hasn't seen yet.
+      const bucket = (listeners[event] ??= []);
+      (bucket as Array<unknown>).push(handler);
       return () => {
-        const idx = (listeners[event] as Array<unknown>).indexOf(handler);
-        if (idx !== -1) (listeners[event] as Array<unknown>).splice(idx, 1);
+        const idx = (bucket as Array<unknown>).indexOf(handler);
+        if (idx !== -1) (bucket as Array<unknown>).splice(idx, 1);
       };
     },
     emitTurnError(error: string) {
@@ -50,6 +55,17 @@ function makeTurnBus() {
     emit(event: TurnEvent) {
       const hs = listeners[event];
       if (hs) for (const h of hs.slice()) (h as () => void)();
+    },
+    /**
+     * Emit an arbitrary event name with a payload — used to simulate the
+     * not-yet-in-the-SDK STREAM_RETRY/STREAM_STALL events, which
+     * wireStreamEventMetrics consumes structurally (see the LooseTurnEventFeed
+     * cast in stream-event-wiring.ts) rather than through the typed TurnEvent
+     * union this stub otherwise models.
+     */
+    emitRaw(event: string, payload?: unknown) {
+      const hs = listeners[event];
+      if (hs) for (const h of hs.slice()) (h as (p?: unknown) => void)(payload);
     },
   };
 }
@@ -78,6 +94,8 @@ function makeMetrics(): StreamMetrics {
     startTime: 0, deltaCount: 0, tokenSpeed: 0,
     ttftMs: undefined, ttftRecorded: false,
     activeToolStartedAtMs: undefined, activeToolName: undefined,
+    lastDeltaAtMs: undefined, stallEpisode: 0,
+    reconnectAttempt: undefined, reconnectMaxAttempts: undefined,
   };
 }
 
@@ -608,5 +626,98 @@ describe('wireStreamEventMetrics — failover cost delta notice', () => {
     expect(failoverMsg).toBeDefined();
     expect(failoverMsg).toContain('cost data unavailable');
     expect(failoverMsg).not.toContain('cost/1M');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: no-delta stall metrics (W0.7 stall-honesty)
+// ---------------------------------------------------------------------------
+
+describe('wireStreamEventMetrics — stall metrics', () => {
+  test('lastDeltaAtMs is set on STREAM_START and updated on STREAM_DELTA', () => {
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const opts = makeOptions(turns, tools);
+    wireStreamEventMetrics(opts);
+
+    expect(opts.metrics.lastDeltaAtMs).toBeUndefined();
+
+    turns.emit('STREAM_START');
+    const afterStart = opts.metrics.lastDeltaAtMs;
+    expect(afterStart).toBeDefined();
+
+    turns.emit('STREAM_DELTA');
+    expect(opts.metrics.lastDeltaAtMs).toBeGreaterThanOrEqual(afterStart!);
+  });
+
+  test('stallEpisode resets to 0 on STREAM_START', () => {
+    // wireStreamEventMetrics installs its own createStreamStallWatchdog
+    // instance (hardcoded default 30s threshold) that sets metrics.stallEpisode
+    // via its onStall callback on a real no-delta gap. Exercising the full 30s
+    // timer here would make this suite slow; the dedicated watchdog unit
+    // tests (stream-stall-watchdog.test.ts) cover that timing/episode-counting
+    // behaviour in isolation with a short threshold. This test only covers
+    // the wiring-level reset, which is the part local to this module.
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const opts = makeOptions(turns, tools);
+    wireStreamEventMetrics(opts);
+
+    turns.emit('STREAM_START');
+    expect(opts.metrics.stallEpisode).toBe(0);
+  });
+
+  test('STREAM_RETRY (structurally consumed, not in the pinned SDK) populates reconnectAttempt/maxAttempts', () => {
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const opts = makeOptions(turns, tools);
+    wireStreamEventMetrics(opts);
+
+    turns.emit('STREAM_START');
+    expect(opts.metrics.reconnectAttempt).toBeUndefined();
+
+    turns.emitRaw('STREAM_RETRY', { attempt: 2, maxAttempts: 5 });
+
+    expect(opts.metrics.reconnectAttempt).toBe(2);
+    expect(opts.metrics.reconnectMaxAttempts).toBe(5);
+  });
+
+  test('a malformed STREAM_RETRY payload is ignored (runtime guard rejects it)', () => {
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const opts = makeOptions(turns, tools);
+    wireStreamEventMetrics(opts);
+
+    turns.emit('STREAM_START');
+    turns.emitRaw('STREAM_RETRY', { attempt: 'not-a-number' });
+
+    expect(opts.metrics.reconnectAttempt).toBeUndefined();
+    expect(opts.metrics.reconnectMaxAttempts).toBeUndefined();
+  });
+
+  test('STREAM_DELTA clears reconnectAttempt/maxAttempts (a byte arriving means the reconnect succeeded)', () => {
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const opts = makeOptions(turns, tools);
+    wireStreamEventMetrics(opts);
+
+    turns.emit('STREAM_START');
+    turns.emitRaw('STREAM_RETRY', { attempt: 1, maxAttempts: 3 });
+    expect(opts.metrics.reconnectAttempt).toBe(1);
+
+    turns.emit('STREAM_DELTA');
+
+    expect(opts.metrics.reconnectAttempt).toBeUndefined();
+    expect(opts.metrics.reconnectMaxAttempts).toBeUndefined();
+  });
+
+  test('STREAM_STALL (structurally consumed) does not throw and does not disturb metrics', () => {
+    const turns = makeTurnBus();
+    const tools = makeToolBus();
+    const opts = makeOptions(turns, tools);
+    wireStreamEventMetrics(opts);
+
+    turns.emit('STREAM_START');
+    expect(() => turns.emitRaw('STREAM_STALL', {})).not.toThrow();
   });
 });
