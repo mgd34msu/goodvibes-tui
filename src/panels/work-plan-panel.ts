@@ -100,6 +100,16 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
     });
   }
 
+  /**
+   * The add/edit draft form's title/owner/notes fields want every character
+   * of a burst (paste, or fast typing landing in one input.feed() call)
+   * delivered one at a time, same as it always has — see the interface doc
+   * on `Panel.isCapturingTextBurst`.
+   */
+  isCapturingTextBurst(): boolean {
+    return this.draftMode !== null;
+  }
+
   handleInput(key: string): boolean {
     if (this.lastError !== null) this.clearError();
 
