@@ -328,7 +328,7 @@ const CHANGE_GLYPH: Record<ChangeKind, string> = {
  *   +  import  ./utils  { A, B }
  *   ~  import  ./types  (+NewType, -OldType)
  */
-export function formatSemanticDiff(diff: SemanticDiff): string[] {
+function formatSemanticDiff(diff: SemanticDiff): string[] {
   const lines: string[] = [];
 
   // Symbol changes first
