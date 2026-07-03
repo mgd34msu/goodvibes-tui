@@ -10,6 +10,7 @@ import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
 import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
+import type { StreamMetrics } from '../core/stream-event-wiring.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
@@ -451,6 +452,30 @@ export class UIFactory {
       ? { attempt: reconnectAttempt, maxAttempts: reconnectMaxAttempts }
       : undefined;
     return { msSinceLastDelta: nowMs - lastDeltaAtMs, reconnect };
+  }
+
+  /**
+   * Render-frame stall-info decision used at the main render loop's call
+   * site: suppress stall detection entirely while a tool is actively
+   * executing. lastDeltaAtMs only tracks STREAM_START/STREAM_DELTA and is
+   * never advanced during tool execution (the model isn't producing tokens
+   * then), so without this gate any tool call longer than
+   * THINKING_STALL_FREEZE_MS would make the thinking fragment print
+   * "Stalled Ns..." directly above the ticking "executing (Ns)" tool row — a
+   * false positive during ordinary tool execution (see stream-event-wiring.ts
+   * TOOL_EXECUTING/TOOL_SUCCEEDED/TOOL_FAILED/TOOL_CANCELLED handlers).
+   * Genuine no-delta silence while waiting on the provider — including the
+   * pre-first-token case, where lastDeltaAtMs is seeded at STREAM_START —
+   * still stall-detects normally here, since no tool is active then; that is
+   * the honest stall case this indicator exists for.
+   */
+  public static computeRenderStallInfo(
+    metrics: Pick<StreamMetrics, 'activeToolName' | 'lastDeltaAtMs' | 'reconnectAttempt' | 'reconnectMaxAttempts'>,
+    nowMs: number,
+  ): ThinkingStallInfo | undefined {
+    return metrics.activeToolName === undefined
+      ? this.computeStallInfo(metrics.lastDeltaAtMs, metrics.reconnectAttempt, metrics.reconnectMaxAttempts, nowMs)
+      : undefined;
   }
 
   public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number, stallInfo?: ThinkingStallInfo): Line[] {

@@ -404,17 +404,28 @@ export function wireStreamEventMetrics(
     metrics.activeToolName = ev.tool;
     render();
   }));
+  // On every tool-completion path, reset lastDeltaAtMs to "now" so the
+  // post-tool silence window starts fresh. Tool execution suppresses stall
+  // detection at the render call site (see main.ts), but lastDeltaAtMs itself
+  // keeps its pre-tool value the whole time the tool runs — without this
+  // reset, the instant a tool completes (potentially long after the last real
+  // delta), the very next frame would read msSinceLastDelta as the full
+  // tool-execution duration and immediately report a stall, even though the
+  // model hasn't had a chance to resume producing tokens yet.
   unsubs.push(events.tools.on('TOOL_SUCCEEDED', () => {
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
+    metrics.lastDeltaAtMs = Date.now();
   }));
   unsubs.push(events.tools.on('TOOL_FAILED', () => {
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
+    metrics.lastDeltaAtMs = Date.now();
   }));
   unsubs.push(events.tools.on('TOOL_CANCELLED', () => {
     metrics.activeToolStartedAtMs = undefined;
     metrics.activeToolName = undefined;
+    metrics.lastDeltaAtMs = Date.now();
   }));
 
   let _errorSurfacedCb: ((exhausted: boolean) => void) | undefined;
