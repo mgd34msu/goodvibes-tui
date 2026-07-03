@@ -226,7 +226,7 @@ Knowledge jobs include:
 - `refresh-stale`
 - `refresh-bookmarks`
 - `rebuild-projections`
-- `knowledge-semantic-self-improvement`
+- `semantic-self-improvement`
 - `light-consolidation`
 - `deep-consolidation`
 

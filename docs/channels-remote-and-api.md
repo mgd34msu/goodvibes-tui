@@ -15,6 +15,7 @@ GoodVibes includes a shared channel/runtime layer with current surfaces for:
 - `google-chat`
 - `signal`
 - `whatsapp`
+- `telephony` (SMS/voice via Twilio or a bridge)
 - `imessage`
 - `msteams`
 - `bluebubbles`
@@ -224,7 +225,7 @@ Terminal focus tracking is not implemented. Notifications fire regardless of whe
 
 ### Wiring
 
-The threshold is read inside `wireTurnEventHandlers` on every `TURN_COMPLETED` event. The `behavior.notifyAfterSeconds` key is a TUI-local synthetic setting (same pattern as `tts.speed`); it is not yet in the SDK ConfigKey union.
+The threshold is read inside `wireTurnEventHandlers` on every `TURN_COMPLETED` event. The `behavior.notifyAfterSeconds` key is a TUI-local synthetic setting; it is not yet in the SDK ConfigKey union.
 
 ## Related docs
 

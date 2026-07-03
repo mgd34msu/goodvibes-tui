@@ -35,7 +35,11 @@ Panels live in `src/panels/`. The panel manager (`src/panels/panel-manager.ts`) 
 ```
 BasePanel  (src/panels/base-panel.ts)
   └── ScrollableListPanel<T>  (src/panels/scrollable-list-panel.ts)
+        └── ExpandableListPanel<T>  (src/panels/expandable-list-panel.ts)
 ```
+
+`ExpandableListPanel<T>` adds opt-in expand/collapse row semantics on top of
+`ScrollableListPanel<T>`; no built-in panel subclasses it yet.
 
 `ScrollableListPanel<T>` has an opt-in `'/'`-to-filter affordance (`filterEnabled`,
 `filterMatches()`) that coexists with single-letter action keys — see
@@ -121,7 +125,7 @@ protected abstract renderItem(
 
 **Selection gutter:**
 
-Set `this.showSelectionGutter = true` in the constructor to prepend a `▸ ` gutter on the selected row. All 22 list panels enable this for a non-color selection affordance.
+Set `this.showSelectionGutter = true` in the constructor to prepend a `▸ ` gutter on the selected row. Most list panels (18 at last count) enable this for a non-color selection affordance.
 
 **Rendering:**
 

@@ -19,6 +19,7 @@ Before cutting a release tag, run:
 ```bash
 bun x tsc --noEmit --pretty false
 bun run test
+bun run test:coverage
 bun run architecture:check
 bun run perf:check
 bun run eval:gate

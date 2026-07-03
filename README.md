@@ -6,7 +6,7 @@
 
 A terminal-native AI coding, operations, automation, knowledge, and integration console with a typed runtime, omnichannel surfaces, structured memory/knowledge, and a raw ANSI renderer.
 
-> ⚠️ **Active early development — pre-1.0.** This project is under active early development. CLI flags, config keys, slash commands, key bindings, daemon routes, and on-disk layouts can and do change quickly — sometimes across patch releases. There are no legacy/compat shims. Documentation always describes the **current** behavior, not historical behavior. When 1.0.0 ships the project freezes to enterprise-grade stability guarantees (semver, deprecation windows, migration guides). Until then: pin exact versions and read `CHANGELOG.md` before upgrading.
+> **1.0.0 shipped 2026-07-03.** From 1.0.0 the project follows the stability posture promised for this milestone: semver, with incompatible changes to CLI flags, config keys, slash commands, key bindings, daemon routes, and on-disk layouts landing only in major releases, and deprecations noted in `CHANGELOG.md` first. Documentation always describes the **current** behavior, not historical behavior.
 
 <!-- screenshot -->
 
@@ -146,6 +146,7 @@ The TUI now consumes the extracted `@pellux/goodvibes-sdk` (`0.34.0`) platform l
 - Shared panel workspace layout budgeting with renderer-owned visible-row budgets
 - Copy/selection logic that strips decorative gutters and visual scaffolding from clipboard output
 - Line-count indicator rendered right-aligned inside the prompt border on multi-line input (footer height stays stable regardless of prompt line count)
+- Multi-line clipboard paste handled at the input boundary: bracketed-paste carriage-return line separators are normalized to newlines, the composer grows to the pasted line count, and pastes longer than 8 lines collapse to a compact paste marker
 
 ### Conversation And Transcript Workflow
 - Markdown rendering, syntax highlighting, inline diffs, collapsible blocks, bookmarks, block copy, and block save
@@ -1318,7 +1319,8 @@ Those pieces cover conversation-noise routing, panel-health/performance budgets,
 | `/diff [target]` | `/d` | Show unified diff: session, head, working, staged, or a git ref |
 | `/mcp [add\|remove\|reload\|tools]` | — | Manage MCP servers at runtime and list connected tools |
 | `/help [command]` | `/h`, `/?` | Show available commands and keyboard shortcuts |
-| `/quit` | `/q`, `/:q` | Exit the application |
+| `/quit` | `/:q` | Exit the application |
+| `/wq` | `/:wq` | Commit all git changes, then exit |
 
 > **Tip:** Use the `/add-provider` skill for interactive guided provider setup with smart defaults for popular providers.
 >
@@ -1386,9 +1388,13 @@ All shortcuts are customizable via `~/.goodvibes/tui/keybindings.json`. Use `/ke
 | Key | Action |
 |-----|--------|
 | `Ctrl+P` | Toggle panel sidebar |
-| `Ctrl+}` | Next panel tab |
-| `Ctrl+~` | Previous panel tab |
-| `,` / `.` | Cycle panel tabs (when panel focused) |
+| `Ctrl+]` | Next panel tab |
+| `Ctrl+[` | Previous panel tab |
+| `Alt+1`…`Alt+9` | Jump to panel tab 1–9 |
+| `Ctrl+X` | Close the focused panel |
+| `Ctrl+Shift+X` | Close all panels |
+| `Ctrl+O` | Open the Ops Control panel |
+| `Ctrl+G` | Toggle focus between split panes |
 
 ### System
 
@@ -1652,6 +1658,9 @@ src/
 - **Backend-first external surface** — the daemon/control plane exposes typed HTTP/gateway methods for knowledge, artifacts, media, search, channels, and remote peers so future clients do not have to reimplement runtime logic
 - **Plugin system** — manifest.json + sandboxed API surface for commands, providers, tools, gateway methods, channels, embeddings, voice, media, and search
 - **Crash recovery** — periodic JSONL snapshots with recovery prompt on next startup; an fsync-per-record append-only transcript journal between snapshots is replayed at every resume seam (command resume, Ctrl+R crash recovery, panel resume) for SIGKILL-proof durability
+- **Golden-frame regression harness** — 35 committed byte-exact reference frames (including the splash at three widths) pin the renderer's output; any unintended visual change fails CI
+- **Render coalescing** — same-tick render requests collapse into one composite via `src/runtime/render-scheduler.ts`, so a streaming burst pays for one frame instead of several
+- **Per-message line cache** — `src/core/conversation-line-cache.ts` renders only the appended message on transcript growth (~0.9ms) instead of rebuilding the whole conversation (~45ms at 1,000 messages)
 
 ---
 
@@ -1669,7 +1678,7 @@ bun run dev
 bun test
 ```
 
-8,978 tests across contract, security, release gate, runtime, renderer, panel, integration, and UX anti-regression suites. Performance budget gate runs as part of CI — the build fails if any of the 5 perf budgets (store update latency, event dispatch latency, tool execution overhead, compaction duration, startup time) are exceeded.
+The suite spans 623 test files (contract, security, release gate, runtime, renderer, panel, integration, and UX anti-regression), run through a parallel per-file runner (`scripts/run-tests.ts`). Performance budgets run as a CI gate — the build fails if startup load, frame-composite p95/p99, or any line-production budget (transcript build/append/resize, panel two-pane build, markdown render, code-block render on both tokenizer paths, overlay open) exceeds the ratcheted values in `scripts/perf-baseline.json`. Architecture gates run alongside: import-cycle and layer rules, an 800-line cap on non-test source files, a raw-hex-literal ratchet, icon-uniqueness and panel contract-parity checks, and a no-unused-exports rule for the renderer layer (`scripts/check-architecture.ts`, `scripts/no-unused-exports-rule.ts`).
 
 ### Build standalone binary
 
