@@ -141,6 +141,14 @@ export interface CommandSessionServices {
   readonly sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core').SessionLineageTracker;
   readonly wrfcController?: import('@pellux/goodvibes-sdk/platform/agents').WrfcController;
   readonly changeTracker?: import('@pellux/goodvibes-sdk/platform/sessions').SessionChangeTracker;
+  /**
+   * Recompute the Orchestrator's session-wide usage totals from the
+   * conversation's current message history. Call after a session resume
+   * replays historical messages, before the next render, so the footer's
+   * token counter reflects the resumed session's real usage instead of a
+   * fresh Orchestrator's zeroed default (W0.9).
+   */
+  readonly hydrateSessionUsage?: () => void;
 }
 
 export interface CommandProviderServices {

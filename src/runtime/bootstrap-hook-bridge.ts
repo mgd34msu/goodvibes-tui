@@ -29,6 +29,8 @@ export interface ResumeSessionOptions {
   readonly configManager: Pick<ConfigManager, 'get' | 'getCategory'>;
   readonly providerRegistry: Pick<ProviderRegistry, 'get' | 'getCurrentModel' | 'getForModel' | 'require'>;
   readonly homeDirectory: string;
+  /** See CommandSessionServices.hydrateSessionUsage (command-registry.ts). */
+  readonly hydrateSessionUsage?: () => void;
 }
 
 export function createResumeSessionHandler(options: ResumeSessionOptions): (sessionId: string) => void {
@@ -65,6 +67,9 @@ export function createResumeSessionHandler(options: ResumeSessionOptions): (sess
           });
         },
       });
+      // Hydrate the footer's token counters from the resumed history now that
+      // fromJSON()/journal replay are both applied — before requestRender() below.
+      options.hydrateSessionUsage?.();
       options.onSessionIdChanged?.(sessionId);
       if (meta?.model) options.runtime.model = meta.model;
       if (meta?.provider) options.runtime.provider = meta.provider;

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { ConversationManager } from '../core/conversation';
+import { sumConversationUsage, type ConversationManager } from '../core/conversation';
 import type { Orchestrator } from '../core/orchestrator';
 import type { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import type { RuntimeEventBus } from '@/runtime/index.ts';
@@ -93,6 +93,15 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
   } = options;
 
   const systemMessagesPanel = new SystemMessagesPanel(configManager, services.componentHealthMonitor);
+  // W0.9: after any resume seam replays historical messages into `conversation`,
+  // the freshly-constructed `orchestrator` still has its zeroed default usage
+  // (SDK gap — Orchestrator.usage is never persisted/reseeded). Recompute it
+  // from the replayed history so the footer doesn't show Input: 0 post-resume.
+  const hydrateSessionUsage = (): void => {
+    const { usage, lastInputTokens } = sumConversationUsage(conversation.getMessageSnapshot());
+    orchestrator.usage = usage;
+    orchestrator.lastInputTokens = lastInputTokens;
+  };
   const resumeSession = createResumeSessionHandler({
     runtimeBus,
     runtime,
@@ -107,6 +116,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     configManager,
     providerRegistry: services.providerRegistry,
     homeDirectory: services.homeDirectory,
+    hydrateSessionUsage,
   });
 
   const foundationClients = createRuntimeFoundationClients({
@@ -282,6 +292,7 @@ export function createBootstrapShell(options: BootstrapShellOptions): BootstrapS
     },
     completeModelSelectionSideEffect,
     componentHealthMonitor: services.componentHealthMonitor,
+    hydrateSessionUsage,
   });
   commandContextRef = commandContext;
 
