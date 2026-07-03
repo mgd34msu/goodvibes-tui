@@ -179,6 +179,106 @@ describe('CockpitPanel', () => {
     };
   }
 
+  function makeEmptyRosterReadModel(): CockpitRosterReadModel {
+    const snapshot: CockpitRosterSnapshot = {
+      roster: [],
+      stalledAgentCount: 0,
+      totalInputTokens: null,
+      totalOutputTokens: null,
+      totalCost: null,
+    };
+    return {
+      getSnapshot: () => snapshot,
+      markDirty: () => { /* noop */ },
+      subscribe: (_listener: () => void) => () => { /* noop */ },
+    };
+  }
+
+  function makeTerminalRosterReadModel(agentId: string, status: 'completed' | 'failed' | 'cancelled'): CockpitRosterReadModel {
+    const snapshot: CockpitRosterSnapshot = {
+      roster: [{
+        id: agentId,
+        task: 'test task',
+        model: 'claude-sonnet',
+        status,
+        stalled: false,
+        inputTokens: null,
+        outputTokens: null,
+        cost: null,
+      }],
+      stalledAgentCount: 0,
+      totalInputTokens: null,
+      totalOutputTokens: null,
+      totalCost: null,
+    };
+    return {
+      getSnapshot: () => snapshot,
+      markDirty: () => { /* noop */ },
+      subscribe: (_listener: () => void) => () => { /* noop */ },
+    };
+  }
+
+  function toAgentsWorkspace(panel: CockpitPanel): void {
+    panel.handleInput('right'); // governance
+    panel.handleInput('right'); // health
+    panel.handleInput('right'); // domains
+    panel.handleInput('right'); // agents
+  }
+
+  test('c on an absent roster entry (empty roster) is left unconsumed', () => {
+    const cancelledIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeEmptyRosterReadModel(),
+      { cancelAgent: (id) => { cancelledIds.push(id); return true; } },
+    );
+    toAgentsWorkspace(panel);
+
+    expect(panel.handleInput('c')).toBe(false);
+    expect(cancelledIds).toEqual([]);
+  });
+
+  test('c on a terminal roster entry is left unconsumed (no confirm bar, no cancel dispatched)', () => {
+    const cancelledIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeTerminalRosterReadModel('agent-done', 'completed'),
+      { cancelAgent: (id) => { cancelledIds.push(id); return true; } },
+    );
+    toAgentsWorkspace(panel);
+
+    expect(panel.handleInput('c')).toBe(false);
+    expect(cancelledIds).toEqual([]);
+    const text = linesText(panel.render(140, 18));
+    expect(text).not.toContain('y / Enter confirm');
+  });
+
+  test('i on an absent roster entry (empty roster) is left unconsumed', () => {
+    const openedIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeEmptyRosterReadModel(),
+      { openAgentDetail: (id) => { openedIds.push(id); } },
+    );
+    toAgentsWorkspace(panel);
+
+    expect(panel.handleInput('i')).toBe(false);
+    expect(openedIds).toEqual([]);
+  });
+
+  test('i on a terminal roster entry still opens the quick-peek (inspecting is always applicable)', () => {
+    const openedIds: string[] = [];
+    const panel = new CockpitPanel(
+      undefined,
+      makeTerminalRosterReadModel('agent-done', 'failed'),
+      { openAgentDetail: (id) => { openedIds.push(id); } },
+    );
+    toAgentsWorkspace(panel);
+
+    expect(panel.handleInput('i')).toBe(true);
+    expect(openedIds).toEqual(['agent-done']);
+  });
+
   test('roster enter/return jumps to inspector.inspectAgent for both keys', () => {
     const inspectedIds: string[] = [];
     const panel = new CockpitPanel(
