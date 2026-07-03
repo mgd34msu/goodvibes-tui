@@ -2,7 +2,7 @@ import { type Line } from '../types/grid.ts';
 import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth, padDisplayEnd } from '../utils/terminal-width.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
-import { SPINNER_FRAMES } from './ui-primitives.ts';
+import { SPINNER_FRAMES, UI_TONES } from './ui-primitives.ts';
 
 // Rich spinner frames (used by progress indicators) — single source in ui-primitives.ts.
 export { SPINNER_FRAMES };
@@ -35,7 +35,7 @@ export function renderToolProgress(
   const counter = `[${current}/${total}]`;
   const text = ` ${counter} ${label}`;
   return [
-    UIFactory.stringToLine(padDisplayEnd(text, width), width, { fg: '#ffcc00', bold: true }),
+    UIFactory.stringToLine(padDisplayEnd(text, width), width, { fg: UI_TONES.state.warn, bold: true }),
   ];
 }
 
@@ -67,7 +67,7 @@ export function renderTokenBar(
   const empty = barW - filled;
 
   // Color based on usage
-  const barFg = pct > 85 ? '#ef4444' : pct > 60 ? '#ffcc00' : '#22c55e';
+  const barFg = pct > 85 ? UI_TONES.state.bad : pct > 60 ? UI_TONES.state.warn : UI_TONES.state.good;
 
   const bar = '#'.repeat(filled) + '-'.repeat(empty);
   const barText = barLabel + bar;

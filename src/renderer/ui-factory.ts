@@ -268,15 +268,15 @@ export class UIFactory {
     // Suppressed in compact mode; the ctx-info line no longer duplicates these
     // tokens, so this block is the single home for mode/status/flags.
     const composerTokens: Array<{ text: string; fg: string; bold?: boolean; dim?: boolean }> = [];
-    if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: '#38bdf8', bold: true });
+    if (composerMode) composerTokens.push({ text: ` ${GLYPHS.status.active} ${composerMode} `, fg: UI_TONES.state.info, bold: true });
     if (composerPendingRisk && composerPendingRisk !== 'none') {
       const riskColor = composerPendingRisk === 'approval-wait'
-        ? '#f59e0b'
+        ? UI_TONES.state.warn
         : composerPendingRisk === 'shell'
-          ? '#ef4444'
+          ? UI_TONES.state.bad
           : composerPendingRisk === 'remote'
             ? '#a78bfa'
-            : '#f59e0b';
+            : UI_TONES.state.warn;
       composerTokens.push({ text: ` risk:${composerPendingRisk} `, fg: riskColor, bold: true });
     }
     if (composerStatus && composerStatus !== 'idle') composerTokens.push({ text: ` state:${composerStatus} `, fg: '244', dim: true });
@@ -368,7 +368,7 @@ export class UIFactory {
         for (const ch of dangerWarn) {
           if (col >= width) break;
           const cw = getDisplayWidth(ch);
-          line[col] = { char: ch, fg: '#ef4444', bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
+          line[col] = { char: ch, fg: UI_TONES.state.bad, bg: '', bold: true, dim: false, underline: false, italic: false, strikethrough: false };
           if (cw === 2 && col + 1 < width) line[col + 1] = { ...line[col], char: '' };
           col += cw;
         }
@@ -430,7 +430,7 @@ export class UIFactory {
       const inTok = inputTokens ?? 0;
       const outTok = outputTokens ?? 0;
       segments.push({ text: ` in ${fmtNum(inTok)} `, fg: '243', dim: true });
-      segments.push({ text: `out ${fmtNum(outTok)}`, fg: '#00ffff' });
+      segments.push({ text: `out ${fmtNum(outTok)}`, fg: UI_TONES.accent.brand });
     }
     const line = createEmptyLine(width);
     let col = 1;
@@ -470,7 +470,7 @@ export class UIFactory {
         if (px >= width) break;
         previewLine[px] = {
           char: ch,
-          fg: '#38bdf8',
+          fg: UI_TONES.state.info,
           bg: '',
           bold: true,
           dim: false,
