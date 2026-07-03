@@ -159,10 +159,13 @@ export class RemotePanel extends BasePanel {
     const activeConnections = this.getActiveConnections();
     const contracts = snapshot.contracts;
     const viewingConnections = this.browseMode === 'connections' && activeConnections.length > 0;
+    // selectedIndex indexes only the mode's active list (activeConnections when
+    // viewing connections, otherwise contracts); .at() keeps that read off any
+    // raw source array (no-raw-selectedindex-read rule).
     if (viewingConnections) {
-      return activeConnections[this.selectedIndex]?.agentId ?? null;
+      return activeConnections.at(this.selectedIndex)?.agentId ?? null;
     }
-    return contracts[this.selectedIndex]?.runnerId ?? null;
+    return contracts.at(this.selectedIndex)?.runnerId ?? null;
   }
 
   private getSelectedSupervisorEntry() {
@@ -318,8 +321,8 @@ export class RemotePanel extends BasePanel {
       Math.max(0, (viewingConnections ? activeConnections.length : contracts.length) - 1),
     );
     const browseCount = viewingConnections ? activeConnections.length : contracts.length;
-    const selected = viewingConnections ? activeConnections[this.selectedIndex] ?? null : null;
-    const selectedContract = !viewingConnections ? contracts[this.selectedIndex] ?? null : null;
+    const selected = viewingConnections ? activeConnections.at(this.selectedIndex) ?? null : null;
+    const selectedContract = !viewingConnections ? contracts.at(this.selectedIndex) ?? null : null;
     const detailRows: Line[] = [];
 
     if (selected) {

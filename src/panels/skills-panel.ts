@@ -394,7 +394,7 @@ export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
   public handlePanelIntegrationAction(_key: string, ctx: PanelIntegrationContext): boolean {
     if (!this.pendingOpenPreview) return false;
     this.pendingOpenPreview = false;
-    const skill = this.getVisibleItems()[this.selectedIndex];
+    const skill = this.getSelectedItem();
     if (!skill) return false;
 
     const pm = ctx.panelManager;
@@ -440,7 +440,7 @@ export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
     // remains typeable into the filter query while it is active (WO-153:
     // converged modal '/' filter coexists with single-letter action keys).
     if (!this.filterActive && key === 'd') {
-      const skill = this.getVisibleItems()[this.selectedIndex];
+      const skill = this.getSelectedItem();
       if (skill) {
         this.confirm = { subject: skill.path, label: skill.name };
         this.markDirty();
@@ -470,8 +470,7 @@ export class SkillsPanel extends ScrollableListPanel<SkillRecord> {
     }
 
     // Build detail footer for the currently selected skill
-    const items = this.getVisibleItems();
-    const selected = items[this.selectedIndex];
+    const selected = this.getSelectedItem();
     const detailLines: Line[] = [];
     if (selected) {
       detailLines.push(

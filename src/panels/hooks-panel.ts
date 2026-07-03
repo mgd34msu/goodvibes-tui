@@ -163,7 +163,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
   }
 
   private _selectedEntry(): HookEntry | undefined {
-    return this.getVisibleItems()[this.selectedIndex];
+    return this.getSelectedItem();
   }
 
   /**
@@ -219,7 +219,6 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
   public render(width: number, height: number): Line[] {
     this.clampSelection();
     const hooks = this.dataSource.listHooks();
-    const visibleHooks = this.getVisibleItems();
     const contracts = this.dataSource.listContracts();
     const chains = this.dataSource.listChains();
     // Fixed-window stats stay stable regardless of the 'a' expand toggle below;
@@ -234,7 +233,7 @@ export class HooksPanel extends ScrollableListPanel<HookEntry> {
     const lastSimulation = workbench.getLastSimulation();
     const intro = 'Hook contracts, active registrations, managed authoring, recent runtime activity, and simulation matches.';
 
-    const selected = visibleHooks[this.selectedIndex];
+    const selected = this.getSelectedItem();
     const contract = selected ? contracts.find((c) => c.pattern === selected.pattern) : undefined;
 
     const detailLines: Line[] = [];

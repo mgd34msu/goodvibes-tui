@@ -116,7 +116,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
       }
     }
     this.selectedIndex = graphs.length === 0 ? 0 : Math.min(this.selectedIndex, graphs.length - 1);
-    this._selectedGraphId = graphs[this.selectedIndex]?.id ?? null;
+    this._selectedGraphId = graphs.at(this.selectedIndex)?.id ?? null;
   }
 
   /** Appends any newly-observed recursion-guard trips (across all graphs) to the local history list. */
@@ -182,7 +182,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
 
     const graphs = this.getItems();
     this._syncSelectionFromId(graphs);
-    const selectedGraph = graphs[this.selectedIndex];
+    const selectedGraph = this.getSelectedItem();
     const nodes = selectedGraph ? nodesOf(selectedGraph) : [];
 
     if (key === 'tab') {
@@ -226,7 +226,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
     const consumed = super.handleInput(key);
     if (consumed) {
       const refreshed = this.getItems();
-      this._selectedGraphId = refreshed[this.selectedIndex]?.id ?? this._selectedGraphId;
+      this._selectedGraphId = refreshed.at(this.selectedIndex)?.id ?? this._selectedGraphId;
       // A different graph is selected — the node cursor no longer refers to a
       // meaningful row until Tab re-engages node focus for the new graph.
       this._focus = 'graph';
@@ -314,7 +314,7 @@ export class OrchestrationPanel extends ScrollableListPanel<OrchestrationGraphRe
     }
 
     this.clampSelection();
-    const selected = graphs[this.selectedIndex]!;
+    const selected = this.getSelectedItem()!;
     const isActive = snapshot.activeGraphIds.includes(selected.id);
     const elapsed = selected.startedAt
       ? formatElapsed(Math.max(0, (selected.endedAt ?? Date.now()) - selected.startedAt))

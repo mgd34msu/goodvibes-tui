@@ -128,7 +128,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
           this._verifySelected();
           return true;
         case 'q': {
-          const plugin = this.getVisibleItems()[this.selectedIndex];
+          const plugin = this.getSelectedItem();
           if (!plugin?.quarantined) return false;
           this._requestLiftQuarantine();
           return true;
@@ -137,7 +137,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
           // Consumed here only when there is a quarantined plugin selected;
           // the actual /recall dispatch happens in handlePanelIntegrationAction
           // below, which needs the executeCommand bridge from the router.
-          const plugin = this.getVisibleItems()[this.selectedIndex];
+          const plugin = this.getSelectedItem();
           return Boolean(plugin?.quarantined);
         }
         default:
@@ -155,14 +155,14 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
    */
   public handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
     if (key !== 'm' || !ctx.executeCommand) return false;
-    const plugin = this.getVisibleItems()[this.selectedIndex];
+    const plugin = this.getSelectedItem();
     if (!plugin?.quarantined) return false;
     void ctx.executeCommand('recall', ['capture', 'plugin', plugin.name]).catch(() => {});
     return true;
   }
 
   private _enableSelected(): void {
-    const plugin = this.getVisibleItems()[this.selectedIndex];
+    const plugin = this.getSelectedItem();
     if (!plugin) return;
     void this.manager.enable(plugin.name).then((result) => {
       if (!result.ok) this.setError(`Enable failed: ${result.error ?? 'unknown error'}`);
@@ -174,21 +174,21 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
   }
 
   private _requestDisable(): void {
-    const plugin = this.getVisibleItems()[this.selectedIndex];
+    const plugin = this.getSelectedItem();
     if (!plugin) return;
     this.confirmAction = { subject: { kind: 'disable', name: plugin.name }, label: plugin.name, verb: 'Disable' };
     this.markDirty();
   }
 
   private _requestLiftQuarantine(): void {
-    const plugin = this.getVisibleItems()[this.selectedIndex];
+    const plugin = this.getSelectedItem();
     if (!plugin?.quarantined) return;
     this.confirmAction = { subject: { kind: 'lift-quarantine', name: plugin.name }, label: plugin.name, verb: 'Lift quarantine on' };
     this.markDirty();
   }
 
   private _verifySelected(): void {
-    const plugin = this.getVisibleItems()[this.selectedIndex];
+    const plugin = this.getSelectedItem();
     if (!plugin) return;
     const result = this.manager.verify(plugin.name);
     if (!result.ok && result.reason?.toLowerCase().includes('not found')) {
@@ -287,8 +287,7 @@ export class PluginsPanel extends ScrollableListPanel<PluginStatus> {
     ];
 
     this.clampSelection();
-    const visible = this.getVisibleItems();
-    const selected = visible[this.selectedIndex]!;
+    const selected = this.getSelectedItem()!;
     const selectedCaps = this.manager.capabilities(selected.name);
     const trustRecord = this.manager.getTrustRecord(selected.name);
     const quarantineRecord = this.manager.getQuarantineRecord(selected.name);

@@ -108,7 +108,7 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
       return this.handleDraftInput(key);
     }
 
-    const item = this.items[this.selectedIndex];
+    const item = this.getSelectedItem();
     try {
       switch (key) {
         case ' ':
@@ -176,7 +176,7 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
    * chain.
    */
   handlePanelIntegrationAction(key: string, ctx: PanelIntegrationContext): boolean {
-    const item = this.items[this.selectedIndex];
+    const item = this.getSelectedItem();
     if (!item) return false;
     if (key === 'i') {
       const agentId = item.linked?.agentId;
@@ -359,7 +359,7 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
   }
 
   private setSelectedStatus(status: WorkPlanItemStatus): boolean {
-    const item = this.items[this.selectedIndex];
+    const item = this.getSelectedItem();
     if (!item) return false;
     this.store.setItemStatus(item.id, status);
     this.refresh();
@@ -411,7 +411,7 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
 
     const header: Line[] = buildSummaryBlock(width, 'Persistent Work Plan', postureLines, C);
 
-    const active = this.items[this.selectedIndex];
+    const active = this.getSelectedItem();
     if (active) {
       const detailRows: Line[] = [
         buildPanelLine(width, [
@@ -493,7 +493,7 @@ export class WorkPlanPanel extends ScrollableListPanel<WorkPlanItem> {
         ], C),
       ];
     }
-    const active = this.items[this.selectedIndex];
+    const active = this.getSelectedItem();
     const hints: Array<{ keys: string; label: string }> = [
       { keys: this.items.length > 0 ? `${this.selectedIndex + 1}/${this.items.length}` : '0/0', label: 'item' },
       { keys: 'Enter', label: 'cycle status' },

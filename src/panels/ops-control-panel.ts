@@ -167,7 +167,7 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
   }
 
   private _requestAction(action: OpsAction): void {
-    const selected = this.getVisibleItems()[this.selectedIndex];
+    const selected = this.getSelectedItem();
     if (!selected) return;
     if (action !== 'cancel' && selected.targetKind === 'agent') {
       this.setError(`Only cancel is supported for agent targets ("${action}" is task-only).`);
@@ -282,7 +282,7 @@ export class OpsControlPanel extends ScrollableListPanel<OpsAuditEntry> {
       buildPanelLine(width, [['  SEQ  TIME      ACTION          TARGET             OUT    NOTE', C.label]]),
     ];
 
-    const selected = entries[this.selectedIndex];
+    const selected = this.getSelectedItem();
     const footerLines: Line[] = [];
     if (selected) {
       const detail = selected.note ?? selected.errorMessage ?? '(no note)';

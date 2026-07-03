@@ -158,7 +158,7 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
       return true;
     }
 
-    const selected = this.rows[this.selectedIndex];
+    const selected = this.getSelectedItem();
 
     if (key === 'p' && selected && selected.state !== 'paused') {
       this.worktreeRegistry.setState(selected.path, 'paused');
@@ -293,7 +293,7 @@ export class WorktreePanel extends ScrollableListPanel<WorktreeStatusRecord> {
           ], C),
         ],
       });
-      const selected = this.rows[this.selectedIndex]!;
+      const selected = this.getSelectedItem()!;
       const detailSection: PanelWorkspaceSection = {
         title: 'Details',
         lines: [

@@ -254,6 +254,17 @@ export class SymbolOutlinePanel extends BasePanel {
   /** Index of the currently highlighted row in the visible flat list. */
   private selectedIndex: number = 0;
 
+  /**
+   * The row under the cursor. This panel owns its own selection state
+   * (`selectedIndex` navigates the filtered `_visibleRows()` flat list), so
+   * every selected-row read routes through this one accessor — indexing the
+   * `_visibleRows()` list by the cursor directly is banned by the
+   * no-raw-selectedindex-read architecture rule.
+   */
+  private selectedRow(): VisibleRow | undefined {
+    return this._visibleRows().at(this.selectedIndex);
+  }
+
   /** Set of container names (class/namespace) that are collapsed. */
   private collapsed: Set<string> = new Set();
 
@@ -304,8 +315,7 @@ export class SymbolOutlinePanel extends BasePanel {
    * caller can jump to it in the file-preview panel.
    */
   getSelectedLocation(): { path: string; line: number } | null {
-    const visible = this._visibleRows();
-    const row = visible[this.selectedIndex];
+    const row = this.selectedRow();
     if (!row || row.kind === 'header') return null;
     return { path: this.currentPath, line: row.symbol.line };
   }
@@ -340,7 +350,7 @@ export class SymbolOutlinePanel extends BasePanel {
     }
 
     if (key === 'space' || key === 'right' || key === 'left') {
-      const row = visible[this.selectedIndex];
+      const row = this.selectedRow();
       if (row?.kind === 'header') {
         const name = row.name;
         if (this.collapsed.has(name)) {
@@ -427,7 +437,7 @@ export class SymbolOutlinePanel extends BasePanel {
         {
           title: 'Selected',
           lines: (() => {
-            const selected = visible[this.selectedIndex];
+            const selected = this.selectedRow();
             return selected
               ? [
                   buildPanelLine(width, [
@@ -448,7 +458,7 @@ export class SymbolOutlinePanel extends BasePanel {
     });
     this.scrollOffset = outlineSection.scrollOffset;
 
-    const selected = visible[this.selectedIndex];
+    const selected = this.selectedRow();
     return buildPanelWorkspace(width, height, {
       title: ' Symbols',
       intro: this.currentPath ? this.currentPath : 'Outline the current file into navigable symbols and lightweight parent/child structure.',

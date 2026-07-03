@@ -231,7 +231,7 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneItem> {
   }
 
   private _beginApprovalDecision(approved: boolean): void {
-    const item = this.getVisibleItems()[this.selectedIndex];
+    const item = this.getSelectedItem();
     if (!item || item.kind !== 'approval') return;
     if (item.approval.status !== 'pending' && item.approval.status !== 'claimed') return;
     this.confirmAction = {
@@ -365,9 +365,8 @@ export class ControlPlanePanel extends ScrollableListPanel<ControlPlaneItem> {
       });
     }
 
-    const items = this.getVisibleItems();
     this.clampSelection();
-    const selected = items[this.selectedIndex];
+    const selected = this.getSelectedItem();
 
     const footerLines: Line[] = [];
     if (selected) {

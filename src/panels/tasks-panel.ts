@@ -300,7 +300,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
     }
 
     if (key === 'c' && !this.filterActive) {
-      const task = tasks[this.selectedIndex];
+      const task = this.getSelectedItem();
       if (!task || !task.cancellable) return false;
       this._confirm = { subject: task.id, label: `task "${task.title}"`, verb: 'Cancel' };
       this.markDirty();
@@ -317,7 +317,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
     // Enter commits the filter query while actively typing (ScrollableListPanel
     // contract) — only treated as detail-mode/agent-jump once filtering isn't active.
     if ((key === 'enter' || key === 'return') && !this.filterActive) {
-      const task = tasks[this.selectedIndex];
+      const task = this.getSelectedItem();
       if (!task) return false;
       // Agent-kind tasks jump straight to the Agent Inspector — that panel
       // already owns the deep per-agent timeline, so Tasks does not duplicate it.
@@ -376,7 +376,7 @@ export class TasksPanel extends ScrollableListPanel<RuntimeTask> {
   private _renderListView(width: number, height: number): Line[] {
     const intro = 'Live task lifecycle, ownership, retries, and result/error details across runtime execution domains.';
     const visibleTasks = this.getVisibleItems();
-    const selected = visibleTasks[this.selectedIndex];
+    const selected = this.getSelectedItem();
     // Context-aware footer: position + only the keys that apply in the current
     // (filtering vs browsing) state, and to the selected task's kind/cancellable flag.
     const browseHints: Array<{ keys: string; label: string }> = [

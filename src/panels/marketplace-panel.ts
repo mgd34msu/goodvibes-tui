@@ -156,7 +156,7 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
 
       // selectedIndex is relative to the filtered view, so the acted-on row
       // must come from getVisibleItems() — this.rows would desync under '/'.
-      const selectedRow = this.getVisibleItems()[this.selectedIndex];
+      const selectedRow = this.getSelectedItem();
       if (key === 'i' && selectedRow && !selectedRow.installed && this.ecosystemPaths) {
         this.confirm = {
           subject: { kind: selectedRow.kind, entryId: selectedRow.entry.id, action: 'install' },
@@ -320,7 +320,7 @@ export class MarketplacePanel extends ScrollableListPanel<MarketplaceRow> {
       ? startupIssues.slice(0, 4).map((issue) => buildPanelLine(width, [['  ', C.label], [truncateDisplay(issue, Math.max(0, width - 2)), C.warn]]))
       : [buildPanelLine(width, [['  No startup or lifecycle issues are currently pushing marketplace repair recommendations.', C.dim]])];
 
-    const selectedRow = this.getVisibleItems()[this.selectedIndex];
+    const selectedRow = this.getSelectedItem();
     const selectedLines: Line[] = [];
     if (selectedRow) {
       // review is computed once in refresh() (not here) so render() never

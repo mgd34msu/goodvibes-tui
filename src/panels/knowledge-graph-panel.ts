@@ -300,7 +300,9 @@ export class KnowledgeGraphPanel extends ScrollableListPanel<BrowseRow> {
     }
 
     if (this.mode === 'review') {
-      const selected = this.reviewRows[this.selectedIndex];
+      // getItems() returns reviewRows in review mode, so the shared
+      // getSelectedItem() accessor resolves the highlighted issue row.
+      const selected = this.getSelectedItem();
       if (key === 'a' && selected) {
         this.confirm = { subject: { issueId: selected.id, action: 'accept' }, label: truncateDisplay(selected.detail || selected.title, 40), verb: 'Accept' };
         this.markDirty();
@@ -436,7 +438,7 @@ export class KnowledgeGraphPanel extends ScrollableListPanel<BrowseRow> {
       ),
     ];
 
-    const selected = this.getItems()[this.selectedIndex];
+    const selected = this.getSelectedItem();
     const selectedLines: Line[] = [];
     if (selected) {
       selectedLines.push(buildKeyValueLine(width, [
@@ -480,7 +482,7 @@ export class KnowledgeGraphPanel extends ScrollableListPanel<BrowseRow> {
       this.modeToggleLine(width),
     ];
 
-    const selectedRow = this.reviewRows[this.selectedIndex];
+    const selectedRow = this.getSelectedItem();
     const selectedIssue = selectedRow ? this.reviewIssues.get(selectedRow.id) : undefined;
     const selectedLines: Line[] = [];
     if (selectedRow && selectedIssue) {

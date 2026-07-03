@@ -161,7 +161,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
     if (confirmResult === 'absorbed') return true;
 
     if (this.rows.length === 0) return false;
-    const selected = this.rows[this.selectedIndex] ?? null;
+    const selected = this.getSelectedItem() ?? null;
     if (key === 'up' || key === 'k') {
       this.selectedIndex = Math.max(0, this.selectedIndex - 1);
       this.confirm = null;
@@ -234,7 +234,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
         { keys: 'n/Esc', label: 'cancel' },
       ], C);
     }
-    const selected = this.rows[this.selectedIndex];
+    const selected = this.getSelectedItem();
     const hints: Array<{ keys: string; label: string }> = [{ keys: 'Up/Down', label: 'select' }];
     if (selected?.subscription) hints.push({ keys: 'Enter', label: 'sign out' });
     else if (selected?.hasOAuthConfig) hints.push({ keys: 'Enter', label: 'sign in' });
@@ -248,6 +248,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
   // provider list + subscription-manager reads) on every single frame.
   public render(width: number, height: number): Line[] {
     this.clampSelection();
+    const selected = this.getSelectedItem();
     const intro = 'Review provider login state, subscription-backed routing, and pending browser auth handshakes.';
 
     const activeCount = this.rows.filter((row) => row.subscription).length;
@@ -260,8 +261,8 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
         { label: 'providers', value: String(this.rows.length), valueColor: C.value },
       ], C),
       buildKeyValueLine(width, [
-        { label: 'selected', value: (this.rows[this.selectedIndex]?.provider ?? 'none'), valueColor: this.rows[this.selectedIndex] ? C.value : C.dim },
-        { label: 'status', value: this.rows[this.selectedIndex] ? statusOf(this.rows[this.selectedIndex]!) : 'n/a', valueColor: this.rows[this.selectedIndex] ? statusColor(statusOf(this.rows[this.selectedIndex]!)) : C.dim },
+        { label: 'selected', value: (selected?.provider ?? 'none'), valueColor: selected ? C.value : C.dim },
+        { label: 'status', value: selected ? statusOf(selected) : 'n/a', valueColor: selected ? statusColor(statusOf(selected)) : C.dim },
       ], C),
     ];
 
@@ -288,7 +289,7 @@ export class SubscriptionPanel extends ScrollableListPanel<SubscriptionRow> {
       return workspace.slice(0, height);
     }
 
-    const selectedRow = this.rows[this.selectedIndex];
+    const selectedRow = selected;
     const detailRows: Line[] = [];
     if (selectedRow) {
       detailRows.push(buildKeyValueLine(width, [

@@ -299,7 +299,9 @@ export class MemoryPanel extends ScrollableListPanel<MemoryRecord> {
 
     // Review-mode specific actions (r/s/c/f)
     if (this.filterMode === 'review') {
-      const selected = this.reviewRecords[this.selectedIndex];
+      // In review mode getItems() returns reviewRecords and filterEnabled is
+      // false, so getSelectedItem() resolves the highlighted review record.
+      const selected = this.getSelectedItem();
 
       if (key === 'enter' || key === 'return' || key === 'r') {
         if (!selected) return false;
@@ -353,7 +355,7 @@ export class MemoryPanel extends ScrollableListPanel<MemoryRecord> {
       }
 
       if (key === 'd') {
-        const selected = this.getVisibleItems()[this.selectedIndex];
+        const selected = this.getSelectedItem();
         if (!selected) return false;
         this.confirm = { subject: { id: selected.id, action: 'delete' }, label: truncateDisplay(selected.summary, 40) };
         this.markDirty();
@@ -424,7 +426,7 @@ export class MemoryPanel extends ScrollableListPanel<MemoryRecord> {
         : []),
     ];
 
-    const selected = records[this.selectedIndex];
+    const selected = this.getSelectedItem();
     const selectedLines: Line[] = [];
     if (selected) {
       selectedLines.push(buildKeyValueLine(width, [
@@ -502,7 +504,7 @@ export class MemoryPanel extends ScrollableListPanel<MemoryRecord> {
       filterToggleLine,
     ];
 
-    const selectedRecord = this.reviewRecords[this.selectedIndex];
+    const selectedRecord = this.getSelectedItem();
     const selectedLines: Line[] = [];
     if (selectedRecord) {
       selectedLines.push(buildPanelLine(width, [['  Selected', C.label]]));
