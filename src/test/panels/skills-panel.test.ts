@@ -227,9 +227,12 @@ describe('SkillsPanel', () => {
     expect(confirmText).not.toContain('rm "');
 
     expect(panel.handleInput('enter')).toBe(true);
-    // Deletion + rescan happen asynchronously off the confirmed keypress.
-    for (let attempt = 0; attempt < 50 && existsSync(filePath); attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 5));
+    // Deletion + rescan are TWO async steps off the confirmed keypress. Poll
+    // the observable outcome (the rescanned empty state), not just the file
+    // removal — waiting only on the file loses the rescan race under CI load.
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      if (!existsSync(filePath) && linesText(panel.render(120, 16)).includes('No skills discovered')) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
     expect(existsSync(filePath)).toBe(false);
 
