@@ -6,7 +6,7 @@ import type { Line } from '../types/grid.ts';
 import { createStyledCell, createEmptyLine } from '../types/grid.ts';
 import { truncateDisplay, getDisplayWidth } from '../utils/terminal-width.ts';
 import { BasePanel } from './base-panel.ts';
-import { UI_TONES } from '../renderer/ui-primitives.ts';
+import { UI_TONES, DIFF_TONES } from '../renderer/ui-primitives.ts';
 import { FilePreviewPanel } from './file-preview-panel.ts';
 import type { PanelIntegrationContext } from './types.ts';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
@@ -30,14 +30,20 @@ import {
 // DEFAULT_PANEL_PALETTE.headerBg (WO-002: one title band everywhere).
 // ---------------------------------------------------------------------------
 
-const HUNK_BLUE = '#88aaff';
+// Hunk blue is the shared DIFF_TONES token (WO-204) — diff-view.ts (conversation)
+// and git-panel.ts's inline diff converge onto this file's pre-existing value.
+const HUNK_BLUE: string = DIFF_TONES.hunk;
 // Context rows and line-number gutter use the shared theme's muted/dim
 // foreground tones rather than dedicated gray hex literals.
 const CONTEXT_GRAY = UI_TONES.fg.muted;
 const FILENAME_WHITE = '#ffffff';
-const ADD_GREEN = '#00ff88';
+// Add/del text colors are the shared DIFF_TONES tokens, whose values ARE this
+// panel's shipped colors — this panel is the reference diff look (diff-view
+// was unwired dead code until WO-204, so "majority of surfaces" was a mirage);
+// the conversation surface converges onto these, not the reverse.
+const ADD_GREEN: string = DIFF_TONES.add;
 const ADD_BG = '#001a0d';
-const DEL_RED = '#ff4444';
+const DEL_RED: string = DIFF_TONES.del;
 const DEL_BG = '#1a0000';
 const HUNK_BG = '#0a0a1a';
 const MARKER_GRAY = '#aaaaaa';

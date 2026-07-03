@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { getSurfaceContentRows, getTrackedVisibleWindow, getVisibleWindow, sliceVisibleWindow } from '../../renderer/surface-layout.ts';
+import { getSurfaceContentRows, getTrackedVisibleWindow, getVisibleWindow } from '../../renderer/surface-layout.ts';
 
 describe('surface layout', () => {
   test('keeps framed content within a stable viewport budget', () => {
@@ -11,13 +11,6 @@ describe('surface layout', () => {
     const window = getVisibleWindow(20, 10, 5);
     expect(window.start).toBe(8);
     expect(window.end).toBe(13);
-  });
-
-  test('slices items using the shared visible window helper', () => {
-    const values = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
-    const result = sliceVisibleWindow(values, 4, 3);
-    expect(result.items).toEqual(['d', 'e', 'f']);
-    expect(result.window.start).toBe(3);
   });
 
   test('tracked visible window preserves scroll until selection reaches the viewport edge', () => {

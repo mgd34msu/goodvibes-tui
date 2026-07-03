@@ -1,5 +1,5 @@
 import { type Line, createEmptyLine, createStyledCell } from '../types/grid.ts';
-import { getDisplayWidth, truncateDisplay, wrapText } from '../utils/terminal-width.ts';
+import { getDisplayWidth, wrapText } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { GLYPHS } from './ui-primitives.ts';
 
@@ -183,26 +183,6 @@ export function renderConversationCollapsedFragment(
     dim: options.dim ?? true,
     italic: options.italic ?? false,
   });
-}
-
-export function renderConversationKeyValueRow(
-  width: number,
-  left: string,
-  right: string,
-  palette: {
-    readonly leftFg: string;
-    readonly rightFg: string;
-    readonly dimFg?: string;
-    readonly bg?: string;
-  },
-): Line {
-  const line = createEmptyLine(width);
-  const leftText = truncateDisplay(left, Math.max(1, width - LAYOUT.RIGHT_MARGIN - 8));
-  const rightWidth = getDisplayWidth(right);
-  const rightStart = Math.max(LAYOUT.LEFT_MARGIN + 1, width - LAYOUT.RIGHT_MARGIN - rightWidth);
-  writeText(line, LAYOUT.LEFT_MARGIN, rightStart - 1, leftText, palette.leftFg, { bg: palette.bg });
-  writeText(line, rightStart, width - LAYOUT.RIGHT_MARGIN, right, palette.rightFg, { bg: palette.bg, dim: palette.dimFg === palette.rightFg });
-  return line;
 }
 
 export function renderConversationStatusLine(

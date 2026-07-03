@@ -10,6 +10,24 @@ import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { handleConfirmInput, type ConfirmState } from '../panels/confirm-state.ts';
 import { AGENT_TERMINAL_STATUSES as MODAL_TERMINAL_STATUSES, AGENT_STALL_THRESHOLD_MS as MODAL_STALL_THRESHOLD_MS } from '../panels/agent-inspector-shared.ts';
+import { UI_TONES } from './ui-primitives.ts';
+
+/**
+ * Agent-detail-modal neon accent palette — WRFC/streaming panel-native hues
+ * with no UI_TONES.state/accent role. Preserved byte-exact as named
+ * accents per WO-207b (2026-07-02-renderer-plan.md decisions: "Agent-detail
+ * neon palette: preserved byte-exact as named accents, zero visual change").
+ */
+const AGENT_DETAIL_NEON = {
+  /** Addendum note + streaming content text. */
+  mint: '#aaffee',
+  /** Unsatisfied WRFC findings + agent error text. */
+  bad: '#ff6666',
+  /** Satisfied WRFC findings. */
+  good: '#44ff88',
+  /** Progress line + streaming label. */
+  accent: '#00ffcc',
+} as const;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -18,6 +36,17 @@ const AGENT_ID_DISPLAY_LENGTH = 16;
 
 // MODAL_TERMINAL_STATUSES and MODAL_STALL_THRESHOLD_MS are re-exported aliases
 // from agent-inspector-shared.ts (imported above alongside ConfirmState).
+
+/**
+ * formatStalledLabel — the "[STALLED — N+ min no activity]" suffix appended
+ * to the Status line for a stalled agent. The minute count is derived from
+ * the stall threshold (in ms) rather than hardcoded, so the label can never
+ * drift out of sync with the actual threshold that decided isStalled.
+ */
+export function formatStalledLabel(thresholdMs: number): string {
+  const minutes = Math.floor(thresholdMs / 60000);
+  return `  [STALLED — ${minutes}+ min no activity]`;
+}
 
 export interface AgentDetailModalDeps {
   readonly agentManager: Pick<AgentManager, 'getStatus' | 'list'>;
@@ -248,7 +277,7 @@ export function renderAgentDetailModal(
   sections.push({ type: 'text', content: `Template : ${rec.template}` });
   sections.push({ type: 'text', content: `Model    : ${modelStr}` });
   const isStalled = !MODAL_TERMINAL_STATUSES.has(rec.status) && (now - rec.startedAt) >= MODAL_STALL_THRESHOLD_MS;
-  sections.push({ type: 'text', content: `Status   : ${rec.status}${isStalled ? '  [STALLED — 5+ min no activity]' : ''}` });
+  sections.push({ type: 'text', content: `Status   : ${rec.status}${isStalled ? formatStalledLabel(MODAL_STALL_THRESHOLD_MS) : ''}` });
   sections.push({ type: 'text', content: `Duration : ${formatElapsed(elapsedMs)}` });
   sections.push({ type: 'separator' });
 
@@ -271,7 +300,7 @@ export function renderAgentDetailModal(
     sections.push({
       type: 'text',
       content: 'Addendum   : yes (WRFC constraint layer injected)',
-      style: { fg: '#aaffee' },
+      style: { fg: AGENT_DETAIL_NEON.mint },
     });
   }
 
@@ -301,7 +330,7 @@ export function renderAgentDetailModal(
           sections.push({
             type: 'text',
             content: `Findings   : ${findings.length} checked, ${unsatisfied.length} unsatisfied`,
-            style: { fg: unsatisfied.length > 0 ? '#ff6666' : '#44ff88' },
+            style: { fg: unsatisfied.length > 0 ? AGENT_DETAIL_NEON.bad : AGENT_DETAIL_NEON.good },
           });
         }
       }
@@ -316,7 +345,7 @@ export function renderAgentDetailModal(
     sections.push({
       type: 'text',
       content: `Progress: ${rec.progress}`,
-      style: { fg: '#00ffcc' },
+      style: { fg: AGENT_DETAIL_NEON.accent },
     });
   }
 
@@ -326,7 +355,7 @@ export function renderAgentDetailModal(
     sections.push({
       type: 'text',
       content: `Error: ${rec.error}`,
-      style: { fg: '#ff6666' },
+      style: { fg: AGENT_DETAIL_NEON.bad },
     });
   }
 
@@ -393,7 +422,7 @@ export function renderAgentDetailModal(
       content: truncated
         ? `Streaming (last ${STREAMING_MAX_CHARS} of ${content.length} chars \u2191 scroll for more):`
         : 'Streaming:',
-      style: { fg: '#00ffcc', dim: true },
+      style: { fg: AGENT_DETAIL_NEON.accent, dim: true },
     });
     // Split into display lines, capped at width for readability
     const maxLineWidth = Math.max(width - 10, 40);
@@ -403,7 +432,7 @@ export function renderAgentDetailModal(
       sections.push({
         type: 'text',
         content: `  ${trimmed}`,
-        style: { fg: '#aaffee' },
+        style: { fg: AGENT_DETAIL_NEON.mint },
       });
     }
   }
@@ -415,7 +444,7 @@ export function renderAgentDetailModal(
     sections.push({
       type: 'text',
       content: `Cancel agent "${modal.confirmCancel.label}"?`,
-      style: { fg: '#f59e0b' },
+      style: { fg: UI_TONES.state.warn },
     });
     sections.push({
       type: 'text',

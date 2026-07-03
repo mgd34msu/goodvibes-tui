@@ -24,6 +24,7 @@ import { GitStatusProvider } from './renderer/git-status.ts';
 import type { GitHeaderInfo } from './renderer/git-status.ts';
 import { createShellLayout } from './renderer/layout-engine.ts';
 import { buildShellFooter, estimateShellFooterHeight } from './renderer/shell-surface.ts';
+import { computePromptContentWidth } from './renderer/prompt-content-width.ts';
 import { buildConversationViewport } from './renderer/conversation-layout.ts';
 import { applyConversationOverlays } from './renderer/conversation-overlays.ts';
 import { buildPanelCompositeData } from './renderer/panel-composite.ts';
@@ -53,6 +54,7 @@ import { wireSpokenTurnRuntime } from './audio/spoken-turn-wiring.ts';
 import { attachSpokenTurnModelRouting, createSpokenTurnInputOptions } from './audio/spoken-turn-model-routing.ts';
 import { allowTerminalWrite, installTuiTerminalOutputGuard } from './runtime/terminal-output-guard.ts';
 import { installProcessLifecycle } from './runtime/process-lifecycle.ts';
+import { createRenderScheduler } from './runtime/render-scheduler.ts';
 import { buildCommandArgsHint } from './input/command-args-hint.ts';
 import { summarizeRunningAgents } from './renderer/process-summary.ts';
 import { formatUserFacingErrorLine } from './core/format-user-error.ts';
@@ -180,19 +182,19 @@ async function main() {
     activeToolName: undefined,
   };
 
-  const getPromptContentWidth = () => {
-    const w = stdout.columns || 80;
-    const boxMargin = 2;
-    const boxWidth = w - (boxMargin * 2);
-    return boxWidth - 4 - 3; // minus padding (4) minus prefix width (3: ' > ')
-  };
+  const getPromptContentWidth = () => computePromptContentWidth(stdout.columns);
 
   const getViewportHeight = (): number => {
     if (input.onboardingWizard.active) return stdout.rows || 24;
     const promptLines: number = input.getVisiblePromptLineCount(getPromptContentWidth());
     const currentModel = providerRegistry.getCurrentModel();
     const contextWindow = providerRegistry.getContextWindowForModel(currentModel);
-    return (stdout.rows || 24) - 2 - estimateShellFooterHeight(promptLines, contextWindow);
+    const rows = stdout.rows || 24;
+    // Compact threshold must match buildShellFooter's `compact: height < 30`
+    // posture below — otherwise the cached-height fast path in
+    // estimateShellFooterHeight can answer a compact-vs-non-compact query
+    // with the wrong cached mode and throw the viewport math off by several rows.
+    return rows - 2 - estimateShellFooterHeight(promptLines, contextWindow, rows < 30);
   };
 
   const scroll = (delta: number) => {
@@ -223,7 +225,7 @@ async function main() {
     noAltScreen: cli.flags.noAltScreen,
     ansi: { CLEAR_SCREEN, ALT_SCREEN_EXIT, PASTE_DISABLE, KEYBOARD_EXT_DISABLE, MOUSE_DISABLE, CURSOR_SHOW },
     getInput: () => input,
-    render: () => render(),
+    render: () => renderScheduler.flushNow(), // resize: synchronous immediate path
     getPromptContentWidth,
     getTerminalOutputGuard: () => terminalOutputGuard,
     buildSessionContinuityHints,
@@ -432,7 +434,7 @@ async function main() {
     lastSessionId: readLastSessionPointer({ workingDirectory: workingDir, homeDirectory, surfaceRoot: 'tui' }) ?? undefined,
   };
 
-  const render = () => {
+  const renderNow = () => {
     const width = stdout.columns || 80;
     const height = stdout.rows || 24;
 
@@ -648,9 +650,11 @@ async function main() {
       panelWidth: panelComposite.panelWidth,
     });
   };
+  const renderScheduler = createRenderScheduler(renderNow); // WO-208 same-tick coalescer
+  const render = (): void => renderScheduler.schedule();
   const terminalOutputGuard = installTuiTerminalOutputGuard({ stdout, stderr: process.stderr, notify: (message) => { systemMessageRouter.low(message); render(); } });
 
-  setRenderRequest(render);
+  setRenderRequest(renderNow); // bootstrap's 16ms coalescer calls the composite directly
   orchestratorRefs.requestRender = render;
   commandContext.renderRequest = render;
   wireShellUiOpeners({

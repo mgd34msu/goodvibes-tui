@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { renderDiffView } from '../../renderer/diff-view.ts';
+import { DIFF_TONES } from '../../renderer/ui-primitives.ts';
 import { lineToString } from '../setup.ts';
 
 const WIDTH = 80;
@@ -78,8 +79,8 @@ describe('renderDiffView', () => {
       line[0]?.char === '+' && line[0]?.bg === '#0a1a0a'
     );
     expect(addedLine).toBeDefined();
-    // Green: #22c55e
-    expect(addedLine![0].fg).toContain('22c55e');
+    // The shared diff-surface token (the diff panel's shipped green).
+    expect(addedLine![0].fg).toContain(DIFF_TONES.add.slice(1));
   });
 
   test('removed lines have red foreground color', () => {
@@ -90,8 +91,8 @@ describe('renderDiffView', () => {
       line[0]?.char === '-' && line[0]?.bg === '#1a0a0a'
     );
     expect(removedLine).toBeDefined();
-    // Red: #ef4444
-    expect(removedLine![0].fg).toContain('ef4444');
+    // The shared diff-surface token (the diff panel's shipped red).
+    expect(removedLine![0].fg).toContain(DIFF_TONES.del.slice(1));
   });
 
   test('handles empty diff string', () => {

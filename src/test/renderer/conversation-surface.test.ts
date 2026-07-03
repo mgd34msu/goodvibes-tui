@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { renderConversationNotice, renderConversationKeyValueRow, renderConversationFragment, renderConversationEventLine } from '../../renderer/conversation-surface.ts';
+import { renderConversationNotice, renderConversationFragment, renderConversationEventLine } from '../../renderer/conversation-surface.ts';
 import { lineToString } from '../setup.ts';
 
 describe('conversation surface', () => {
@@ -11,18 +11,6 @@ describe('conversation surface', () => {
     );
     expect(lines.length).toBeGreaterThan(1);
     expect(lineToString(lines[0])).toContain('▌');
-  });
-
-  test('renders a key/value row with right-aligned status text', () => {
-    const line = renderConversationKeyValueRow(
-      50,
-      '  read  src/demo.ts',
-      '120ms',
-      { leftFg: '#e2e8f0', rightFg: '#64748b' },
-    );
-    const text = lineToString(line);
-    expect(text).toContain('read  src/demo.ts');
-    expect(text).toContain('120ms');
   });
 
   test('supports italic notices for thinking-style transcript blocks', () => {

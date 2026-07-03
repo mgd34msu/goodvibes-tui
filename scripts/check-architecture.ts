@@ -53,6 +53,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { checkHexLiteralRatchet } from './hex-literal-rule.ts';
+import { checkNoUnusedExports } from './no-unused-exports-rule.ts';
 import { checkSelectedIndexReads } from './selected-index-rule.ts';
 
 const ROOT = join(import.meta.dir, '..');
@@ -596,6 +597,24 @@ const selectedIndexCandidates = nonTestFiles
   .filter((file) => relative(ROOT, file).split('\\').join('/').startsWith('src/panels/'))
   .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
 for (const v of checkSelectedIndexReads(selectedIndexCandidates)) {
+  violations.push(v);
+}
+
+// ─── No-unused-exports (WO-206) ────────────────────────────────────────────────
+
+const noUnusedExportsTargets = nonTestFiles
+  .filter((file) => relative(ROOT, file).split('\\').join('/').startsWith('src/renderer/'))
+  .map((file) => ({ relPath: relative(ROOT, file), text: readFileSync(file, 'utf-8') }));
+const noUnusedExportsImporters = [...allSourceFiles, ...scriptFiles].map((file) => ({
+  relPath: relative(ROOT, file),
+  text: readFileSync(file, 'utf-8'),
+  isTest: isTestSource(file),
+}));
+const resolveSpecifierRelative = (fromRelPath: string, specifier: string): string | null => {
+  const resolved = resolveImport(join(ROOT, fromRelPath), specifier);
+  return resolved ? relative(ROOT, resolved) : null;
+};
+for (const v of checkNoUnusedExports(noUnusedExportsTargets, noUnusedExportsImporters, resolveSpecifierRelative)) {
   violations.push(v);
 }
 
