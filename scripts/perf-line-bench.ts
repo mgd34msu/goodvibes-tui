@@ -72,9 +72,14 @@ export const LINE_BUDGETS: Readonly<Record<string, number>> = {
   // WO-209: appending ONE message to a warm 1000-message transcript. The
   // per-message Line[] cache reuses the unchanged 1000 and renders only the new
   // one, so this collapses from the full build_1k cost (~45 ms) to well under
-  // 1 ms on a quiet box. Budget carries CI headroom (validation still iterates
-  // 1000 entries; CI runners run 2-4× slower).
-  'transcript.append_one_ms': 20,
+  // 1 ms on a quiet box.
+  // WO-210 ratchet: re-measured post-WO-209 on a quiet linux-x64 box the p50 is
+  // rock-stable at 0.87-0.91 ms across 8 runs. Gate stat is p50 (a robust median
+  // over 200 iterations — it does not spike on a single GC pause). Budget
+  // tightened 20 -> 6 ms: ~6.7× this-box p50 and ~1.7-3.3× a CI-slowed median
+  // (runners run 2-4× slower). A regression that reintroduces the pre-cache full
+  // rebuild on append (~45 ms) now fails the gate by ~7.5×.
+  'transcript.append_one_ms': 6,
   // WO-209: a resize invalidates every width-dependent message (all of them), so
   // it still pays a near-full re-render — gated at the same ceiling as build_1k.
   'transcript.resize_1k_ms': 400,
