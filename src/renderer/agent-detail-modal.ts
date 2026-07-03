@@ -10,6 +10,24 @@ import { getOverlaySurfaceMetrics, getStableOverlayContentRows } from './overlay
 import { summarizeError } from '@pellux/goodvibes-sdk/platform/utils';
 import { handleConfirmInput, type ConfirmState } from '../panels/confirm-state.ts';
 import { AGENT_TERMINAL_STATUSES as MODAL_TERMINAL_STATUSES, AGENT_STALL_THRESHOLD_MS as MODAL_STALL_THRESHOLD_MS } from '../panels/agent-inspector-shared.ts';
+import { UI_TONES } from './ui-primitives.ts';
+
+/**
+ * Agent-detail-modal neon accent palette — WRFC/streaming panel-native hues
+ * with no UI_TONES.state/accent role. Preserved byte-exact as named
+ * accents per WO-207b (2026-07-02-renderer-plan.md decisions: "Agent-detail
+ * neon palette: preserved byte-exact as named accents, zero visual change").
+ */
+const AGENT_DETAIL_NEON = {
+  /** Addendum note + streaming content text. */
+  mint: '#aaffee',
+  /** Unsatisfied WRFC findings + agent error text. */
+  bad: '#ff6666',
+  /** Satisfied WRFC findings. */
+  good: '#44ff88',
+  /** Progress line + streaming label. */
+  accent: '#00ffcc',
+} as const;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -282,7 +300,7 @@ export function renderAgentDetailModal(
     sections.push({
       type: 'text',
       content: 'Addendum   : yes (WRFC constraint layer injected)',
-      style: { fg: '#aaffee' },
+      style: { fg: AGENT_DETAIL_NEON.mint },
     });
   }
 
@@ -312,7 +330,7 @@ export function renderAgentDetailModal(
           sections.push({
             type: 'text',
             content: `Findings   : ${findings.length} checked, ${unsatisfied.length} unsatisfied`,
-            style: { fg: unsatisfied.length > 0 ? '#ff6666' : '#44ff88' },
+            style: { fg: unsatisfied.length > 0 ? AGENT_DETAIL_NEON.bad : AGENT_DETAIL_NEON.good },
           });
         }
       }
@@ -327,7 +345,7 @@ export function renderAgentDetailModal(
     sections.push({
       type: 'text',
       content: `Progress: ${rec.progress}`,
-      style: { fg: '#00ffcc' },
+      style: { fg: AGENT_DETAIL_NEON.accent },
     });
   }
 
@@ -337,7 +355,7 @@ export function renderAgentDetailModal(
     sections.push({
       type: 'text',
       content: `Error: ${rec.error}`,
-      style: { fg: '#ff6666' },
+      style: { fg: AGENT_DETAIL_NEON.bad },
     });
   }
 
@@ -404,7 +422,7 @@ export function renderAgentDetailModal(
       content: truncated
         ? `Streaming (last ${STREAMING_MAX_CHARS} of ${content.length} chars \u2191 scroll for more):`
         : 'Streaming:',
-      style: { fg: '#00ffcc', dim: true },
+      style: { fg: AGENT_DETAIL_NEON.accent, dim: true },
     });
     // Split into display lines, capped at width for readability
     const maxLineWidth = Math.max(width - 10, 40);
@@ -414,7 +432,7 @@ export function renderAgentDetailModal(
       sections.push({
         type: 'text',
         content: `  ${trimmed}`,
-        style: { fg: '#aaffee' },
+        style: { fg: AGENT_DETAIL_NEON.mint },
       });
     }
   }
@@ -426,7 +444,7 @@ export function renderAgentDetailModal(
     sections.push({
       type: 'text',
       content: `Cancel agent "${modal.confirmCancel.label}"?`,
-      style: { fg: '#f59e0b' },
+      style: { fg: UI_TONES.state.warn },
     });
     sections.push({
       type: 'text',

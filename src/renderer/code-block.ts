@@ -3,6 +3,32 @@ import { UIFactory } from './ui-factory.ts';
 import { getDisplayWidth } from '../utils/terminal-width.ts';
 import { LAYOUT } from './layout.ts';
 import { SyntaxHighlighter, type SyntaxToken as HLToken } from './syntax-highlighter.ts';
+import { UI_TONES } from './ui-primitives.ts';
+
+/**
+ * Regex-fallback tokenizer theme. VS Code Dark+ inspired, but the
+ * semantic-token hues (string/number/keyword/type/function/operator/
+ * property/comment) are pinned to the same values as the tree-sitter
+ * Vaporwave palette in syntax-highlighter.ts's TOKEN_STYLES map, so a code
+ * block that starts on the regex fallback and gets replaced by the async
+ * tree-sitter parse doesn't visibly shift color mid-stream (WO-207c).
+ * `accent` and `bg` are chrome (the language-label header bar and the body
+ * background), not syntax tokens, and keep their original VS Code Dark+
+ * values — folded here from two separate literals (one in the header, one
+ * duplicated on the footer line) into a single named source (WO-207b).
+ */
+const FALLBACK_THEME = {
+  string: '#00ff88',
+  number: '#ffcc00',
+  keyword: '#d000ff',
+  type: '#ff6b9d',
+  function: UI_TONES.accent.brand,
+  operator: '#ffffff',
+  property: '#87ceeb',
+  comment: '#666666',
+  bg: '#0d0d0d',
+  accent: '#4ec9b0',
+} as const;
 
 // ─── Language Keyword Maps ───────────────────────────────────────────────────
 
@@ -61,7 +87,7 @@ function tokenizeTsJs(line: string): SyntaxToken[] {
   while (i < line.length) {
     // Line comment
     if (line.slice(i, i + 2) === '//') {
-      tokens.push({ text: line.slice(i), fg: '65', italic: true });
+      tokens.push({ text: line.slice(i), fg: FALLBACK_THEME.comment, italic: true });
       break;
     }
     // String (single, double, template)
@@ -72,7 +98,7 @@ function tokenizeTsJs(line: string): SyntaxToken[] {
         if (line[j] === '\\') j++;
         j++;
       }
-      tokens.push({ text: line.slice(i, j + 1), fg: '#ce9178' });
+      tokens.push({ text: line.slice(i, j + 1), fg: FALLBACK_THEME.string });
       i = j + 1;
       continue;
     }
@@ -80,7 +106,7 @@ function tokenizeTsJs(line: string): SyntaxToken[] {
     if (/[0-9]/.test(line[i])) {
       let j = i;
       while (j < line.length && /[0-9._xXbBoO]/.test(line[j])) j++;
-      tokens.push({ text: line.slice(i, j), fg: '#b5cea8' });
+      tokens.push({ text: line.slice(i, j), fg: FALLBACK_THEME.number });
       i = j;
       continue;
     }
@@ -90,11 +116,11 @@ function tokenizeTsJs(line: string): SyntaxToken[] {
       while (j < line.length && /[\w$]/.test(line[j])) j++;
       const word = line.slice(i, j);
       if (TS_JS_KEYWORDS.has(word)) {
-        tokens.push({ text: word, fg: '#569cd6', bold: true });
+        tokens.push({ text: word, fg: FALLBACK_THEME.keyword, bold: true });
       } else if (TS_TYPES.has(word)) {
-        tokens.push({ text: word, fg: '#4ec9b0' });
+        tokens.push({ text: word, fg: FALLBACK_THEME.type });
       } else if (line[j] === '(') {
-        tokens.push({ text: word, fg: '#dcdcaa' });
+        tokens.push({ text: word, fg: FALLBACK_THEME.function });
       } else {
         tokens.push({ text: word, fg: '' });
       }
@@ -104,7 +130,7 @@ function tokenizeTsJs(line: string): SyntaxToken[] {
     // Operators and punctuation
     const ch = line[i];
     const isOp = '=<>!&|+-*/%^~?:'.includes(ch);
-    tokens.push({ text: ch, fg: isOp ? '#d4d4d4' : '' });
+    tokens.push({ text: ch, fg: isOp ? FALLBACK_THEME.operator : '' });
     i++;
   }
 
@@ -117,21 +143,21 @@ function tokenizePython(line: string): SyntaxToken[] {
 
   while (i < line.length) {
     if (line[i] === '#') {
-      tokens.push({ text: line.slice(i), fg: '65', italic: true });
+      tokens.push({ text: line.slice(i), fg: FALLBACK_THEME.comment, italic: true });
       break;
     }
     if (line[i] === '"' || line[i] === "'") {
       const q = line[i];
       let j = i + 1;
       while (j < line.length && line[j] !== q) { if (line[j] === '\\') j++; j++; }
-      tokens.push({ text: line.slice(i, j + 1), fg: '#ce9178' });
+      tokens.push({ text: line.slice(i, j + 1), fg: FALLBACK_THEME.string });
       i = j + 1;
       continue;
     }
     if (/[0-9]/.test(line[i])) {
       let j = i;
       while (j < line.length && /[0-9._]/.test(line[j])) j++;
-      tokens.push({ text: line.slice(i, j), fg: '#b5cea8' });
+      tokens.push({ text: line.slice(i, j), fg: FALLBACK_THEME.number });
       i = j;
       continue;
     }
@@ -140,11 +166,11 @@ function tokenizePython(line: string): SyntaxToken[] {
       while (j < line.length && /[\w]/.test(line[j])) j++;
       const word = line.slice(i, j);
       if (PYTHON_KEYWORDS.has(word)) {
-        tokens.push({ text: word, fg: '#569cd6', bold: true });
+        tokens.push({ text: word, fg: FALLBACK_THEME.keyword, bold: true });
       } else if (/^[A-Z]/.test(word)) {
-        tokens.push({ text: word, fg: '#4ec9b0' });
+        tokens.push({ text: word, fg: FALLBACK_THEME.type });
       } else if (line[j] === '(') {
-        tokens.push({ text: word, fg: '#dcdcaa' });
+        tokens.push({ text: word, fg: FALLBACK_THEME.function });
       } else {
         tokens.push({ text: word, fg: '' });
       }
@@ -163,21 +189,21 @@ function tokenizeBash(line: string): SyntaxToken[] {
 
   while (i < line.length) {
     if (line[i] === '#') {
-      tokens.push({ text: line.slice(i), fg: '65', italic: true });
+      tokens.push({ text: line.slice(i), fg: FALLBACK_THEME.comment, italic: true });
       break;
     }
     if (line[i] === '"' || line[i] === "'") {
       const q = line[i];
       let j = i + 1;
       while (j < line.length && line[j] !== q) { if (line[j] === '\\') j++; j++; }
-      tokens.push({ text: line.slice(i, j + 1), fg: '#ce9178' });
+      tokens.push({ text: line.slice(i, j + 1), fg: FALLBACK_THEME.string });
       i = j + 1;
       continue;
     }
     if (line[i] === '$') {
       let j = i + 1;
       while (j < line.length && /[\w{}_]/.test(line[j])) j++;
-      tokens.push({ text: line.slice(i, j), fg: '#9cdcfe' });
+      tokens.push({ text: line.slice(i, j), fg: FALLBACK_THEME.property });
       i = j;
       continue;
     }
@@ -186,7 +212,7 @@ function tokenizeBash(line: string): SyntaxToken[] {
       while (j < line.length && /[\w-]/.test(line[j])) j++;
       const word = line.slice(i, j);
       if (BASH_KEYWORDS.has(word)) {
-        tokens.push({ text: word, fg: '#569cd6', bold: true });
+        tokens.push({ text: word, fg: FALLBACK_THEME.keyword, bold: true });
       } else {
         tokens.push({ text: word, fg: '' });
       }
@@ -211,9 +237,9 @@ function tokenizeJson(line: string): SyntaxToken[] {
       // JSON key: followed by :
       const rest = line.slice(j + 1).trimStart();
       if (rest.startsWith(':')) {
-        tokens.push({ text: str, fg: '#9cdcfe' });
+        tokens.push({ text: str, fg: FALLBACK_THEME.property });
       } else {
-        tokens.push({ text: str, fg: '#ce9178' });
+        tokens.push({ text: str, fg: FALLBACK_THEME.string });
       }
       i = j + 1;
       continue;
@@ -221,13 +247,13 @@ function tokenizeJson(line: string): SyntaxToken[] {
     if (/[0-9-]/.test(line[i])) {
       let j = i;
       while (j < line.length && /[0-9.eE+-]/.test(line[j])) j++;
-      tokens.push({ text: line.slice(i, j), fg: '#b5cea8' });
+      tokens.push({ text: line.slice(i, j), fg: FALLBACK_THEME.number });
       i = j;
       continue;
     }
     const boolNull = ['true', 'false', 'null'].find(k => line.startsWith(k, i));
     if (boolNull) {
-      tokens.push({ text: boolNull, fg: '#569cd6', bold: true });
+      tokens.push({ text: boolNull, fg: FALLBACK_THEME.keyword, bold: true });
       i += boolNull.length;
       continue;
     }
@@ -240,12 +266,12 @@ function tokenizeJson(line: string): SyntaxToken[] {
 function tokenizeYaml(line: string): SyntaxToken[] {
   const tokens: SyntaxToken[] = [];
   if (line.trimStart().startsWith('#')) {
-    return [{ text: line, fg: '65', italic: true }];
+    return [{ text: line, fg: FALLBACK_THEME.comment, italic: true }];
   }
   const keyMatch = line.match(/^(\s*)([^:]+)(:)(\s*.*)/);
   if (keyMatch) {
     if (keyMatch[1]) tokens.push({ text: keyMatch[1], fg: '' });
-    tokens.push({ text: keyMatch[2], fg: '#9cdcfe' });
+    tokens.push({ text: keyMatch[2], fg: FALLBACK_THEME.property });
     tokens.push({ text: keyMatch[3], fg: '244' });
     if (keyMatch[4]) {
       const val = keyMatch[4];
@@ -254,7 +280,7 @@ function tokenizeYaml(line: string): SyntaxToken[] {
       const isStr = /^['"]/.test(trimVal);
       const isBool = trimVal === 'true' || trimVal === 'false' || trimVal === 'null' || trimVal === 'yes' || trimVal === 'no';
       const isNum = /^-?[0-9]/.test(trimVal);
-      const valFg = isStr ? '#ce9178' : isBool ? '#569cd6' : isNum ? '#b5cea8' : '';
+      const valFg = isStr ? FALLBACK_THEME.string : isBool ? FALLBACK_THEME.keyword : isNum ? FALLBACK_THEME.number : '';
       tokens.push({ text: val, fg: valFg });
     }
     return tokens;
@@ -292,7 +318,7 @@ export function renderCodeBlock(
   const showLineNumbers = opts.showLineNumbers ?? true;
   const lineNumW = showLineNumbers ? String(codeLines.length).length + 1 : 0; // e.g. "10 "
   const contentStartX = showLineNumbers ? leftMargin + lineNumW + 1 : leftMargin;
-  const BG = '#0d0d0d';
+  const BG = FALLBACK_THEME.bg;
   const LINE_NUM_FG = '238';
   const effectiveWidth = width - LAYOUT.RIGHT_MARGIN;
 
@@ -320,7 +346,7 @@ export function renderCodeBlock(
   let hx = leftMargin;
   for (const ch of headerStr) {
     if (hx >= effectiveWidth) break;
-    headerLine[hx] = createStyledCell(ch, { fg: '#1a1a1a', bg: '#4ec9b0', bold: true });
+    headerLine[hx] = createStyledCell(ch, { fg: '#1a1a1a', bg: FALLBACK_THEME.accent, bold: true });
     hx++;
   }
   lines.push(headerLine);
@@ -377,7 +403,7 @@ export function renderCodeBlock(
   // Footer line
   const footerLine = createEmptyLine(width);
   for (let fx = leftMargin; fx < effectiveWidth; fx++) {
-    footerLine[fx] = createStyledCell(' ', { bg: '#0d0d0d' });
+    footerLine[fx] = createStyledCell(' ', { bg: BG });
   }
   lines.push(footerLine);
 
