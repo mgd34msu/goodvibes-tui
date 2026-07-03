@@ -3,7 +3,7 @@ import type { Panel, PanelCategory } from './types.ts';
 import type { ComponentResourceContract, ComponentHealthState } from '../runtime/perf/panel-contracts.ts';
 import type { ComponentHealthMonitor } from '../runtime/perf/panel-health-monitor.ts';
 import { UIFactory } from '../renderer/ui-factory.ts';
-import { SPINNER_FRAMES } from '../renderer/progress.ts';
+import { SPINNER_FRAMES } from '../renderer/ui-primitives.ts';
 import { fitDisplay } from '../utils/terminal-width.ts';
 
 /** Canonical error-surface foreground (bad/red), kept out of the render body. */

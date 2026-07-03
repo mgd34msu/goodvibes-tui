@@ -39,7 +39,6 @@
   "src/renderer/model-workspace.ts": 4,
   "src/renderer/process-indicator.ts": 2,
   "src/renderer/profile-picker-modal.ts": 2,
-  "src/renderer/progress.ts": 0,
   "src/renderer/qr-renderer.ts": 2,
   "src/renderer/search-overlay.ts": 6,
   "src/renderer/selection-modal-overlay.ts": 1,
