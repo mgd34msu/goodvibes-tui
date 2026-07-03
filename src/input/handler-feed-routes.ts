@@ -30,6 +30,15 @@ export type PanelFocusRouteState = {
   handlePathCompletion: () => boolean;
   cyclePanelTab: (direction: 'next' | 'prev') => void;
   onPanelInputConsumed?: (activePanel: import('../panels/types.ts').Panel | null, key: string) => void;
+  /**
+   * True when the tokens produced by the current feed() call carry more than
+   * one printable character total (a bracketed paste, or several 1-char text
+   * tokens from a fast-typed burst in one stdin chunk). A burst can never be
+   * a deliberate single-key panel hotkey, so it must not be exploded into
+   * per-char activePanel.handleInput(ch) calls — see the text-token branch
+   * below.
+   */
+  isPrintableBurst: boolean;
 };
 
 export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputToken): {
@@ -113,6 +122,19 @@ export function handlePanelFocusToken(state: PanelFocusRouteState, token: InputT
 
   if (token.type === 'text' && token.value) {
     const activePanel = state.panelManager.getActive();
+    // A burst (paste or several fast-typed chars in one stdin chunk) is never
+    // a deliberate single-key panel hotkey. Eating it silently as per-char
+    // hotkeys leaves the user with no echo and no error, looking exactly
+    // like dead keystrokes. Unless the active panel has its own text-capture
+    // buffer open (a `/`-search or draft-answer field that deliberately
+    // wants every character, burst or not — see isCapturingTextBurst), unfocus
+    // the panel and let the token fall through to the prompt route instead,
+    // same as it would from an unfocused panel.
+    if (state.isPrintableBurst && !activePanel?.isCapturingTextBurst?.()) {
+      panelFocused = false;
+      state.requestRender();
+      return { handled: false, panelFocused };
+    }
     if (activePanel?.handleInput) {
       for (const ch of token.value) {
         activePanel.handleInput(ch);

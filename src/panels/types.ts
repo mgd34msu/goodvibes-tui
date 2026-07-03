@@ -100,6 +100,19 @@ export interface Panel {
   // Input (optional)
   handleInput?(key: KeyName): boolean;
 
+  /**
+   * Optional: report `true` while this panel has an active inline text
+   * capture (e.g. a `/`-to-filter or search buffer) that deliberately wants
+   * every character of a burst — paste, or several keystrokes typed fast
+   * enough to land in one `input.feed()` call — delivered to `handleInput`
+   * one at a time, same as it always has. When this returns `false` or is
+   * not implemented, the input router treats a printable burst as never a
+   * deliberate single-key panel hotkey and routes it to the composer
+   * instead of exploding it into per-char `handleInput` calls (see
+   * `handlePanelFocusToken` in `src/input/handler-feed-routes.ts`).
+   */
+  isCapturingTextBurst?(): boolean;
+
   // Scroll input (optional)
   // Positive delta scrolls down; negative delta scrolls up.
   handleScroll?(deltaRows: number): boolean;

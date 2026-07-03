@@ -96,6 +96,16 @@ export class LocalAuthPanel extends ScrollableListPanel<LocalAuthUser> {
     return this.maskedState !== null;
   }
 
+  /**
+   * Masked password/username entry wants every character of a burst (paste,
+   * or fast typing landing in one input.feed() call) delivered one at a
+   * time, same as it always has — see the interface doc on
+   * `Panel.isCapturingTextBurst`.
+   */
+  public override isCapturingTextBurst(): boolean {
+    return this.isMaskedEntryActive || this.usernameEntry !== null || super.isCapturingTextBurst();
+  }
+
   public override handleInput(key: KeyName): boolean {
     // Masked entry takes priority when active — it must capture every
     // keystroke (including letters that would otherwise be p/a/d/b actions)

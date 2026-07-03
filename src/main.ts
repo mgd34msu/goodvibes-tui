@@ -514,6 +514,11 @@ async function main() {
       hitlMode: modeManager.getHITLMode(),
       runningAgentCount,
       runningProcessCount,
+      // Composer must not read as focused when the panel workspace or the
+      // process indicator owns keyboard focus — otherwise the bright prompt
+      // box + blinking cursor contradicts the (correctly) accented panel
+      // border and the user sees two disagreeing focus signals.
+      promptFocused: !input.panelFocused && !input.indicatorFocused,
       indicatorFocused: input.indicatorFocused,
       runningAgentProgress: runningAgentSummary.progress,
       composerMode: composerState.modeLabel,

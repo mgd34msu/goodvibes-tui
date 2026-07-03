@@ -21,6 +21,7 @@ function buildState(overrides: Partial<PanelFocusRouteState> = {}): PanelFocusRo
     handlePathCompletion: mock(() => false),
     cyclePanelTab: mock(() => {}),
     onPanelInputConsumed: undefined,
+    isPrintableBurst: false,
     ...overrides,
   };
 }
@@ -148,6 +149,94 @@ describe('handlePanelFocusToken', () => {
     expect(result.handled).toBe(true);
     expect(toggled).toBe(true);
     expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('a single-character text token is still dispatched as a panel hotkey (unchanged)', () => {
+    const received: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      isPrintableBurst: false,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }],
+        getActive: () => ({ id: 'a', handleInput: (k: string) => { received.push(k); return true; } }),
+        getActivePanel: () => ({ id: 'a' }),
+        close: () => {},
+      } as unknown as PanelFocusRouteState['panelManager'],
+    });
+    const result = handlePanelFocusToken(state, { type: 'text', value: 'r' });
+    expect(result.handled).toBe(true);
+    expect(result.panelFocused).toBe(true);
+    expect(received).toEqual(['r']);
+  });
+
+  test('a multi-char text burst (bracketed paste: one token, multi-char value) unfocuses the panel and falls through to the prompt', () => {
+    const received: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      isPrintableBurst: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }],
+        getActive: () => ({ id: 'a', handleInput: (k: string) => { received.push(k); return true; } }),
+        getActivePanel: () => ({ id: 'a' }),
+        close: () => {},
+      } as unknown as PanelFocusRouteState['panelManager'],
+    });
+    // A real bracketed paste tokenizes to ONE 'text' token whose value is the
+    // whole pasted string (see InputTokenizer, tokenizer.ts ~178-198).
+    const result = handlePanelFocusToken(state, { type: 'text', value: 'hello world' });
+    expect(received).toEqual([]);
+    expect(result.handled).toBe(false);
+    expect(result.panelFocused).toBe(false);
+    expect(state.requestRender).toHaveBeenCalled();
+  });
+
+  test('a fast-typed burst (several 1-char text tokens from one feed() call) unfocuses the panel instead of firing per-char hotkeys', () => {
+    // isPrintableBurst is computed once per feedInputTokens() call over the
+    // WHOLE tokens array (handler-feed.ts), so a burst of individually
+    // 1-char tokens is flagged exactly the same way a single multi-char
+    // paste token is. Simulate feeding the tokens for "abc" one at a time
+    // with isPrintableBurst already true, as feedInputTokens would.
+    const received: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      isPrintableBurst: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }],
+        getActive: () => ({ id: 'a', handleInput: (k: string) => { received.push(k); return true; } }),
+        getActivePanel: () => ({ id: 'a' }),
+        close: () => {},
+      } as unknown as PanelFocusRouteState['panelManager'],
+    });
+    const first = handlePanelFocusToken(state, { type: 'text', value: 'a' });
+    expect(received).toEqual([]);
+    expect(first.handled).toBe(false);
+    expect(first.panelFocused).toBe(false);
+  });
+
+  test('a burst is still forwarded char-by-char when the active panel has an open text-capture buffer (e.g. a `/`-search field)', () => {
+    const received: string[] = [];
+    const state = buildState({
+      panelFocused: true,
+      isPrintableBurst: true,
+      panelManager: {
+        isVisible: () => true,
+        getAllOpen: () => [{ id: 'a' }],
+        getActive: () => ({
+          id: 'a',
+          handleInput: (k: string) => { received.push(k); return true; },
+          isCapturingTextBurst: () => true,
+        }),
+        getActivePanel: () => ({ id: 'a' }),
+        close: () => {},
+      } as unknown as PanelFocusRouteState['panelManager'],
+    });
+    const result = handlePanelFocusToken(state, { type: 'text', value: 'abc' });
+    expect(received).toEqual(['a', 'b', 'c']);
+    expect(result.handled).toBe(true);
+    expect(result.panelFocused).toBe(true);
   });
 
   test('panel-close is NOT owned by this route (delegated to the global shortcut handler)', () => {

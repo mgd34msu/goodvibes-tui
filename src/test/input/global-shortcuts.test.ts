@@ -49,6 +49,26 @@ function buildState(overrides: Partial<GlobalShortcutRouteState> = {}): GlobalSh
 }
 
 describe('handleGlobalShortcutToken', () => {
+  test('W0.8 sub-fix A: panel-picker (Ctrl+P) is reachable during an active turn — GlobalShortcutRouteState carries no orchestrator/isThinking field to gate on', () => {
+    // There is no turn/chain busy guard anywhere in this route (confirmed by
+    // exhaustive search of the input pipeline for isBusy/isThinking/etc. —
+    // see the W0.8 audit brief). This test locks that in: the shortcut must
+    // fire identically regardless of whether a turn is in flight, because
+    // the state type this handler receives structurally cannot express
+    // "a turn is running" — main.ts's stdin.on('data') handler calls
+    // input.feed() unconditionally on every keystroke (main.ts ~743-765),
+    // gating only on pendingPermission/recoveryPending/errorAffordanceActive,
+    // none of which is turn state.
+    const state = buildState({ panelFocused: false });
+    const handled = handleGlobalShortcutToken(
+      state,
+      { type: 'key', name: '\x10', logicalName: 'p', ctrl: true, shift: false, meta: false },
+      24,
+    );
+    expect(handled).toBe(true);
+    expect(state.commandContext?.openPanelPicker).toHaveBeenCalled();
+  });
+
   test('panel-picker remains global while panel workspace has focus', () => {
     const state = buildState({ panelFocused: true });
     const handled = handleGlobalShortcutToken(

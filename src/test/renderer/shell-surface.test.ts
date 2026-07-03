@@ -203,6 +203,73 @@ describe('shell surface', () => {
     expect(estimateShellFooterHeight(1, 0, true)).toBe(compactResult.height);
   });
 
+  test('prompt box visibly loses focus when the panel workspace is focused, independent of indicatorFocused', () => {
+    // W0.8 sub-fix C: panelFocused is a fallback-only input to buildShellFooter
+    // (main.ts computes promptFocused itself and passes it explicitly), but the
+    // fallback must still agree so any caller that omits promptFocused gets a
+    // composer that doesn't contradict the panel's own (correctly wired) focus
+    // border.
+    const panelFocused = buildShellFooter({
+      width: 80,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 1,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      panelFocused: true,
+    });
+    const neitherFocused = buildShellFooter({
+      width: 80,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 1,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      panelFocused: false,
+    });
+    expect(panelFocused.lines[1]![4]!.bg).toBe('#1f2430');
+    expect(neitherFocused.lines[1]![4]!.bg).toBe('#2a2a2a');
+    expect(lineToString(panelFocused.lines[1])).not.toContain('█');
+  });
+
+  test('an explicit promptFocused wins over the panelFocused/indicatorFocused fallback', () => {
+    const result = buildShellFooter({
+      width: 80,
+      promptText: 'hello',
+      promptLineCount: 1,
+      usage: { up: 0, down: 0 },
+      showExitNotice: false,
+      lastCopyTime: 0,
+      model: 'gpt-test',
+      toolCount: 3,
+      workingDir: '/tmp/demo',
+      provider: 'openai',
+      contextWindow: 0,
+      runningAgentCount: 1,
+      runningProcessCount: 0,
+      indicatorFocused: false,
+      panelFocused: true,
+      promptFocused: true,
+    });
+    expect(result.lines[1]![4]!.bg).toBe('#2a2a2a');
+  });
+
   test('prompt box borders match the inactive prompt fill when the indicator is focused', () => {
     const result = buildShellFooter({
       width: 80,

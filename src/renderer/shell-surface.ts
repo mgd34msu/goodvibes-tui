@@ -8,6 +8,13 @@ export interface ShellFooterBuildOptions {
   readonly promptLineCount: number;
   readonly promptCursorPos?: number;
   readonly promptFocused?: boolean;
+  /**
+   * True when the panel workspace owns keyboard focus. Only consulted as a
+   * fallback when `promptFocused` is not supplied — see buildShellFooter's
+   * default expression. Callers that already compute `promptFocused`
+   * themselves (main.ts does) do not need to also pass this.
+   */
+  readonly panelFocused?: boolean;
   readonly usage: { up: number; down: number };
   readonly showExitNotice: boolean;
   readonly lastCopyTime: number;
@@ -107,7 +114,7 @@ export function buildShellFooter(
     options.lastInputTokens,
     options.commandArgsHint,
     options.hitlMode,
-    options.promptFocused ?? !options.indicatorFocused,
+    options.promptFocused ?? (!options.indicatorFocused && !options.panelFocused),
     options.composerMode,
     options.composerStatus,
     options.composerFlags,
