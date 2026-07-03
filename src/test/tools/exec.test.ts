@@ -496,7 +496,9 @@ describe('exec tool — output truncation', () => {
     // Should succeed (the command itself may exit with SIGPIPE but outputs content)
     const out = parseOutput(result.output);
     expect(out.stdout_truncated).toBe(true);
-    expect((out.stdout as string).length).toBeLessThanOrEqual(50100);
+    // Budget + the omitted-span marker + the truncation notice ride along.
+    expect((out.stdout as string).length).toBeLessThanOrEqual(50300);
+    expect(out.stdout as string).toContain('chars omitted');
   }, 8000);
 });
 
