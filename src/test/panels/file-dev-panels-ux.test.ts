@@ -9,7 +9,7 @@
 import { describe, test, expect, afterEach } from 'bun:test';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { Line } from '../../types/grid.ts';
 import { DiffPanel } from '../../panels/diff-panel.ts';
@@ -320,28 +320,51 @@ describe('GitPanel — no more auto `git init`; explicit i confirm instead', () 
     const dir = mkdtempSync(join(tmpdir(), 'gv-git-panel-nonrepo-'));
     tempDirs.push(dir);
 
-    const panel = new GitPanel(dir);
-    panel.onActivate();
-    await waitFor(() => linesText(panel.render(W, H)).includes('Not a git repository'));
+    // This test needs `dir` to be genuinely outside any git work tree. That is
+    // NOT guaranteed by mkdtemp alone: the suite runner (scripts/run-tests.ts)
+    // redirects TMPDIR into `.test-tmp/` *inside* this project's own repo, so a
+    // bare temp dir sits under the project's `.git` and git discovery walks up
+    // and finds it — the panel would show the parent repo instead of "Not a git
+    // repository". Fence discovery with GIT_CEILING_DIRECTORIES set to the temp
+    // dir's parent so git stops there; the panel's own git subprocesses inherit
+    // it via process.env. `git init` is unaffected — it still creates `.git` in
+    // `dir` on i+y.
+    const prevCeiling = process.env.GIT_CEILING_DIRECTORIES;
+    process.env.GIT_CEILING_DIRECTORIES = dirname(dir);
+    // Git matches the ceiling against the *logical* cwd ($PWD). This test's own
+    // execSync calls otherwise inherit the runner's stale PWD (= project root,
+    // above the ceiling) and would sail past it straight to the project repo, so
+    // pin PWD to `dir` explicitly for them.
+    const gitEnv = { ...process.env, PWD: dir };
+    try {
+      const panel = new GitPanel(dir);
+      panel.onActivate();
+      await waitFor(() => linesText(panel.render(W, H)).includes('Not a git repository'));
 
-    // I4: refresh() must not have run `git init` as a side effect.
-    expect(() => execSync('git rev-parse --is-inside-work-tree', { cwd: dir, stdio: 'pipe' })).toThrow();
+      // I4: refresh() must not have run `git init` as a side effect.
+      expect(() =>
+        execSync('git rev-parse --is-inside-work-tree', { cwd: dir, env: gitEnv, stdio: 'pipe' }),
+      ).toThrow();
 
-    expect(panel.handleInput('i')).toBe(true);
-    const confirmText = linesText(panel.render(W, H));
-    expect(confirmText).toContain('Init');
+      expect(panel.handleInput('i')).toBe(true);
+      const confirmText = linesText(panel.render(W, H));
+      expect(confirmText).toContain('Init');
 
-    expect(panel.handleInput('y')).toBe(true);
-    await waitFor(() => {
-      try {
-        execSync('git rev-parse --is-inside-work-tree', { cwd: dir, stdio: 'pipe' });
-        return true;
-      } catch {
-        return false;
-      }
-    });
+      expect(panel.handleInput('y')).toBe(true);
+      await waitFor(() => {
+        try {
+          execSync('git rev-parse --is-inside-work-tree', { cwd: dir, env: gitEnv, stdio: 'pipe' });
+          return true;
+        } catch {
+          return false;
+        }
+      });
 
-    panel.onDestroy();
+      panel.onDestroy();
+    } finally {
+      if (prevCeiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES;
+      else process.env.GIT_CEILING_DIRECTORIES = prevCeiling;
+    }
   });
 
   test('i is left unconsumed when a repo is already loaded (no silent key swallow)', async () => {
