@@ -242,6 +242,15 @@ export abstract class ScrollableListPanel<T> extends BasePanel {
    * Returns `true` if the key was consumed, `false` to let the panel manager try another
    * handler.
    */
+  /**
+   * The `/`-to-filter buffer wants every character of a burst (paste, or a
+   * fast-typed query landing in one input.feed() call), same as it always
+   * has — see the interface doc on `Panel.isCapturingTextBurst`.
+   */
+  isCapturingTextBurst(): boolean {
+    return this.filterEnabled && this.filterActive;
+  }
+
   handleInput(key: string): boolean {
     // I2: auto-clear transient errors on the next keystroke so stale errors don't linger.
     // Subclasses that override handleInput should call super.handleInput(key) OR manually

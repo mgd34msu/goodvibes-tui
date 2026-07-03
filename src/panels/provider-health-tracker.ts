@@ -5,7 +5,7 @@ import type {
   ProviderHealthRecord,
   ProviderStatus,
 } from '@/runtime/index.ts';
-import { calcSessionCost } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 
 export type { ProviderStatus };
 
@@ -40,6 +40,8 @@ export interface ProviderHealth {
   totalTokens: number;
   /** Session USD cost accumulated per call via calcSessionCost. */
   totalCostUsd: number;
+  /** True when at least one call's model resolved to no real price (cost-utils isModelPriced === false) — totalCostUsd may understate the true cost. */
+  hasUnpricedModel: boolean;
   /** Ring buffer of recent request latencies in ms (most-recent last). */
   latencies: number[];
 }
@@ -237,6 +239,7 @@ export class ProviderHealthTracker {
         cacheWriteTokens: 0,
         totalTokens: 0,
         totalCostUsd: 0,
+        hasUnpricedModel: false,
         latencies: [],
       };
       this.records.set(name, record);
@@ -259,6 +262,7 @@ export class ProviderHealthTracker {
     const model = usage.model ?? record.lastModelId;
     if (model) {
       record.totalCostUsd += calcSessionCost(input, output, cacheRead, cacheWrite, model);
+      if (!isModelPriced(model)) record.hasUnpricedModel = true;
     }
   }
 

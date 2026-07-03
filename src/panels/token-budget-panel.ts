@@ -7,7 +7,7 @@ import type { TurnEvent } from '@/runtime/index.ts';
 import type { UiEventFeed } from '../runtime/ui-events.ts';
 import type { UiReadModel, UiSessionSnapshot } from '../runtime/ui-read-models.ts';
 import type { SessionMemoryQuery } from '../runtime/ui-service-queries.ts';
-import { calcSessionCost } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { type ConfirmState, handleConfirmInput, renderConfirmLines } from './confirm-state.ts';
 import type { PanelIntegrationContext } from './types.ts';
 import {
@@ -615,10 +615,12 @@ export class TokenBudgetPanel extends BasePanel {
     // Inline cost estimate — absorbed pricing wiring (cost-utils.ts), shown
     // whenever the active model id is known.
     if (this.getCurrentModelId) {
-      const cost = calcSessionCost(u.input, u.output, u.cacheRead, u.cacheWrite, this.getCurrentModelId());
+      const modelId = this.getCurrentModelId();
+      const priced = isModelPriced(modelId);
+      const cost = calcSessionCost(u.input, u.output, u.cacheRead, u.cacheWrite, modelId);
       lines.push(buildStyledPanelLine(width, [
         { text: '  Cost:       ', fg: C.label },
-        { text: `$${cost.toFixed(4)}`, fg: C.value, bold: true },
+        { text: priced ? `$${cost.toFixed(4)}` : 'unpriced', fg: C.value, bold: true },
       ]));
     }
 

@@ -22,13 +22,15 @@ import {
   DEFAULT_PANEL_PALETTE,
   type PanelWorkspaceSection,
 } from './polish.ts';
-import { calcSessionCost } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { isTextBackspace } from '../input/delete-key-policy.ts';
 
 // Pricing lookups are provided by ../export/cost-utils.ts (single source of truth).
 
-function formatCost(usd: number): string {
+/** unpriced=true renders an honest "unpriced" marker instead of a $0.00 that could be mistaken for a real zero cost. */
+function formatCost(usd: number, unpriced = false): string {
+  if (unpriced) return 'unpriced';
   if (usd === 0) return '$0.00';
   if (usd < 0.0001) return '<$0.0001';
   if (usd < 0.01) return `$${usd.toFixed(4)}`;
@@ -314,6 +316,16 @@ export class CostTrackerPanel extends BasePanel {
   // Input
   // -------------------------------------------------------------------------
 
+  /**
+   * The budget-threshold entry field wants every character of a burst
+   * (paste, or fast typing landing in one input.feed() call) delivered one
+   * at a time, same as it always has — see the interface doc on
+   * `Panel.isCapturingTextBurst`.
+   */
+  isCapturingTextBurst(): boolean {
+    return this.budgetEntry !== null;
+  }
+
   handleInput(key: string): boolean {
     if (this.budgetEntry !== null) return this.handleBudgetEntryInput(key);
 
@@ -395,7 +407,7 @@ export class CostTrackerPanel extends BasePanel {
     const sessionCost = calcSessionCost(this.sessionUsage.input, this.sessionUsage.output, this.sessionUsage.cacheRead, this.sessionUsage.cacheWrite, this.sessionModel);
     const overBudget = this.budgetThreshold > 0 && sessionCost > this.budgetThreshold;
     const sparkline = buildSparkline(this.costHistory);
-    const costStr = formatCost(sessionCost);
+    const costStr = formatCost(sessionCost, !isModelPriced(this.sessionModel));
     const costFg = overBudget ? C.bad : C.cost;
     const budgetStr = this.budgetThreshold > 0
       ? ` / ${formatCost(this.budgetThreshold)}`
@@ -451,10 +463,14 @@ export class CostTrackerPanel extends BasePanel {
       const planCost = agentList.reduce((sum, a) => sum + a.cost, 0);
       const running = agentList.filter((a) => a.status === 'running').length;
       const failed = agentList.filter((a) => a.status === 'failed').length;
+      // Plan total mixes the session model with every agent's model — flag it
+      // as unpriced (rather than showing a sum that silently omits unpriced
+      // agents' contribution) if any one of them has no real pricing.
+      const planHasUnpriced = !isModelPriced(this.sessionModel) || agentList.some((a) => !isModelPriced(a.model));
       const agentRows: Line[] = [
         buildStyledPanelLine(width, [
           { text: ' Plan total ', fg: C.label },
-          { text: formatCost(planCost + sessionCost), fg: C.cost, bold: true },
+          { text: formatCost(planCost + sessionCost, planHasUnpriced), fg: C.cost, bold: true },
           { text: `  ${agentList.length} agent${agentList.length === 1 ? '' : 's'}`, fg: C.dim },
           ...(running > 0 ? [{ text: `  ${running} running`, fg: C.running }] : []),
           ...(failed > 0 ? [{ text: `  ${failed} failed`, fg: C.bad }] : []),
@@ -483,7 +499,14 @@ export class CostTrackerPanel extends BasePanel {
                 { text: agent.model, fg: C.model },
                 { text: agent.inputTokens > 0 ? formatTokens(agent.inputTokens) : '-', fg: C.dim },
                 { text: agent.outputTokens > 0 ? formatTokens(agent.outputTokens) : '-', fg: C.dim },
-                { text: agent.cost > 0 ? formatCost(agent.cost) : '-', fg: agent.cost > 0 ? C.cost : C.dim },
+                {
+                  // '-' means no usage reported yet; 'unpriced' means usage
+                  // exists but the model has no real price; otherwise the cost.
+                  text: agent.inputTokens > 0 && !isModelPriced(agent.model)
+                    ? 'unpriced'
+                    : agent.cost > 0 ? formatCost(agent.cost) : '-',
+                  fg: agent.cost > 0 ? C.cost : C.dim,
+                },
               ],
             };
           }),

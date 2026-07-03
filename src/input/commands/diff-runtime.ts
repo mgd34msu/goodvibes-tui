@@ -1,7 +1,38 @@
 import { join } from 'path';
 import { logger } from '@pellux/goodvibes-sdk/platform/utils';
-import type { CommandRegistry } from '../command-registry.ts';
+import { GitService } from '@pellux/goodvibes-sdk/platform/git';
+import type { CommandContext, CommandRegistry } from '../command-registry.ts';
 import { requirePanelManager, requireSessionChangeTracker, requireShellPaths } from './runtime-services.ts';
+
+/**
+ * Run a git command that lists changed file names, capturing stderr instead
+ * of letting it fall through to the process's real stderr (which, for a
+ * spawned child with no stdio option, is inherited from the parent — i.e.
+ * written straight to the TUI's controlling terminal, corrupting the screen
+ * outside the renderer's front/back-buffer diffing). Mirrors the 'staged'
+ * subcommand's existing pattern below.
+ */
+async function runGitNameOnly(args: string[], cwd: string): Promise<{ files: string[]; errText: string; ok: boolean }> {
+  const proc = Bun.spawn(args, { stdout: 'pipe', stderr: 'pipe', cwd });
+  const [out, errRaw] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  const exitCode = await proc.exited;
+  return {
+    files: out.trim().split('\n').filter(Boolean),
+    errText: errRaw.trim(),
+    ok: exitCode === 0,
+  };
+}
+
+/** Report a failed name-only fetch through the normal print channel and force
+ * a full repaint on the next frame as defense-in-depth, in case anything did
+ * reach the real tty. */
+function reportGitNameOnlyFailure(ctx: CommandContext, label: string, errText: string): void {
+  ctx.print(`${label} failed: ${errText || 'unknown error'}`);
+  ctx.requestFullRepaint?.();
+}
 
 async function enrichSemanticDiff(
   panel: InstanceType<typeof import('../../panels/diff-panel.ts').DiffPanel>,
@@ -12,7 +43,7 @@ async function enrichSemanticDiff(
 ): Promise<void> {
   const { computeSemanticDiff, formatSemanticDiffSummary } = await import('../../renderer/semantic-diff.ts');
   const { relative: pathRelative } = await import('path');
-  const repoRootProc = Bun.spawn(['git', 'rev-parse', '--show-toplevel'], { stdout: 'pipe', cwd: workingDirectory });
+  const repoRootProc = Bun.spawn(['git', 'rev-parse', '--show-toplevel'], { stdout: 'pipe', stderr: 'pipe', cwd: workingDirectory });
   await repoRootProc.exited;
   const repoRoot = (await new Response(repoRootProc.stdout).text()).trim() || workingDirectory;
   await Promise.allSettled(
@@ -57,6 +88,14 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
     async handler(args, ctx) {
       const shellPaths = requireShellPaths(ctx);
       const workingDirectory = shellPaths.workingDirectory;
+      // Gate before any git spawn happens (same defensive check /git already
+      // has) — every subcommand below shells out to git, and without this
+      // they each produced a differently-shaped error for the same
+      // not-a-git-repo condition.
+      if (!GitService.isGitRepo(workingDirectory)) {
+        ctx.print('Not a git repository here. Run /git to initialize one.');
+        return;
+      }
       const { DiffPanel } = await import('../../panels/diff-panel.ts');
 
       const pm = requirePanelManager(ctx);
@@ -81,13 +120,11 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Loading working-tree diff...');
           await diffPanel.showGitDiff();
           ctx.print('Diff panel updated: working tree changes.');
-          const workingChangedFiles = await (async () => {
-            const proc = Bun.spawn(['git', 'diff', '--name-only'], { stdout: 'pipe', cwd: workingDirectory });
-            await proc.exited;
-            return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
-          })();
-          if (workingChangedFiles.length > 0) {
-            enrichSemanticDiff(diffPanel, workingChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
+          const workingChanged = await runGitNameOnly(['git', 'diff', '--name-only'], workingDirectory);
+          if (!workingChanged.ok) {
+            reportGitNameOnlyFailure(ctx, 'git diff --name-only', workingChanged.errText);
+          } else if (workingChanged.files.length > 0) {
+            enrichSemanticDiff(diffPanel, workingChanged.files, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
           }
           break;
         }
@@ -106,13 +143,11 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
           } else {
             diffPanel.loadRawDiff(raw);
             ctx.print('Diff panel updated: staged changes.');
-            const stagedChangedFiles = await (async () => {
-              const stagedProc = Bun.spawn(['git', 'diff', '--cached', '--name-only'], { stdout: 'pipe', cwd: workingDirectory });
-              await stagedProc.exited;
-              return (await new Response(stagedProc.stdout).text()).trim().split('\n').filter(Boolean);
-            })();
-            if (stagedChangedFiles.length > 0) {
-              enrichSemanticDiff(diffPanel, stagedChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
+            const stagedChanged = await runGitNameOnly(['git', 'diff', '--cached', '--name-only'], workingDirectory);
+            if (!stagedChanged.ok) {
+              reportGitNameOnlyFailure(ctx, 'git diff --cached --name-only', stagedChanged.errText);
+            } else if (stagedChanged.files.length > 0) {
+              enrichSemanticDiff(diffPanel, stagedChanged.files, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
             }
           }
           break;
@@ -121,13 +156,11 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
           ctx.print('Loading diff vs HEAD...');
           await diffPanel.showGitDiff('HEAD');
           ctx.print('Diff panel updated: all changes vs HEAD.');
-          const headChangedFiles = await (async () => {
-            const proc = Bun.spawn(['/bin/sh', '-c', 'git diff HEAD --name-only'], { stdout: 'pipe', cwd: workingDirectory });
-            await proc.exited;
-            return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
-          })();
-          if (headChangedFiles.length > 0) {
-            enrichSemanticDiff(diffPanel, headChangedFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
+          const headChanged = await runGitNameOnly(['git', 'diff', 'HEAD', '--name-only'], workingDirectory);
+          if (!headChanged.ok) {
+            reportGitNameOnlyFailure(ctx, 'git diff HEAD --name-only', headChanged.errText);
+          } else if (headChanged.files.length > 0) {
+            enrichSemanticDiff(diffPanel, headChanged.files, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
           }
           break;
         }
@@ -143,13 +176,11 @@ export function registerDiffRuntimeCommands(registry: CommandRegistry): void {
             ctx.print('No session changes tracked yet. Showing diff vs HEAD...');
             await diffPanel.showGitDiff('HEAD');
             ctx.print('Diff panel updated: all changes vs HEAD.');
-            const fallbackFiles = await (async () => {
-              const proc = Bun.spawn(['/bin/sh', '-c', 'git diff HEAD --name-only'], { stdout: 'pipe', cwd: workingDirectory });
-              await proc.exited;
-              return (await new Response(proc.stdout).text()).trim().split('\n').filter(Boolean);
-            })();
-            if (fallbackFiles.length > 0) {
-              enrichSemanticDiff(diffPanel, fallbackFiles, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
+            const fallback = await runGitNameOnly(['git', 'diff', 'HEAD', '--name-only'], workingDirectory);
+            if (!fallback.ok) {
+              reportGitNameOnlyFailure(ctx, 'git diff HEAD --name-only', fallback.errText);
+            } else if (fallback.files.length > 0) {
+              enrichSemanticDiff(diffPanel, fallback.files, 'HEAD', () => ctx.renderRequest(), workingDirectory).catch((err) => { logger.debug('semantic diff enrichment failed', { err }); });
             }
           }
           break;

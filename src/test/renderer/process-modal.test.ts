@@ -470,6 +470,45 @@ describe('ProcessModal state', () => {
     expect(modal.entries[1].treePrefix).toBe('└─ ');
   });
 
+  // W0.4(g): buildAgentLabel's chain lookup (getChainTask) returns null when
+  // the chain has already completed/evicted or wrfcId isn't populated on the
+  // record — both plausible runtime states, not just test artifacts. Before
+  // this fix, that null was papered over with a generic "review/fix in
+  // progress" placeholder even though the real description is sitting right
+  // there in rec.task (seeded as 'WRFC Review Request\n<description>').
+  test('Review label falls back to the description embedded in rec.task when the WRFC chain lookup returns null', () => {
+    seedAgent('WRFC Review Request\nBuild a simple rate limiter\nWRFC threshold is 8.5', 'running', {
+      wrfcId: 'wrfc-chain-evicted',
+      wrfcRole: 'reviewer',
+      template: 'reviewer',
+    });
+    // Deliberately do not set wrfcChains for 'wrfc-chain-evicted' — simulates
+    // getChain() returning null (chain completed/evicted).
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.length).toBe(1);
+    expect(modal.entries[0].label).toContain('Build a simple rate limiter');
+    expect(modal.entries[0].label).not.toContain('review in progress');
+  });
+
+  test('Fix label falls back to the description embedded in rec.task when the WRFC chain lookup returns null', () => {
+    seedAgent('WRFC Fix Request\nBuild a simple rate limiter\nReview score: 5/10 (threshold: 8)\nFix attempt: 1', 'running', {
+      wrfcId: 'wrfc-chain-evicted-2',
+      wrfcRole: 'fixer',
+      template: 'engineer',
+    });
+    // Deliberately do not set wrfcChains for 'wrfc-chain-evicted-2'.
+
+    const modal = createProcessModal();
+    modal.refresh();
+
+    expect(modal.entries.length).toBe(1);
+    expect(modal.entries[0].label).toContain('Build a simple rate limiter');
+    expect(modal.entries[0].label).not.toContain('fix in progress');
+  });
+
   test('refresh() preserves hierarchy position when an active parent exits', () => {
     const rootA = seedAgent('Root A', 'running', {
       startedAt: Date.now() - 4000,

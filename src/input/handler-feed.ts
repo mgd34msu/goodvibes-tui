@@ -180,6 +180,16 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
   const lineCount = history.getLineCount();
   const keybindings = context.keybindingsManager;
 
+  // A single stdin chunk can tokenize into several 'text' tokens (fast-typed
+  // burst) or one 'text' token with a multi-char value (bracketed paste).
+  // Computed once per feed() call, not per token, so per-token cost stays
+  // the same O(1) check it always was.
+  let totalPrintableChars = 0;
+  for (const t of tokens) {
+    if (t.type === 'text') totalPrintableChars += t.value.length;
+  }
+  const isPrintableBurst = totalPrintableChars > 1;
+
   for (const token of tokens) {
     if (token.type === 'key' && context.keybindingsManager.matches('clear-cancel', token)) {
       context.handleCtrlC();
@@ -320,6 +330,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
       panelManager: context.panelManager,
       keybindingsManager: context.keybindingsManager,
       onPanelInputConsumed: context.onPanelInputConsumed,
+      isPrintableBurst,
     }, token);
     context.panelFocused = panelRoute.panelFocused;
     if (panelRoute.handled) {
@@ -408,6 +419,7 @@ export function feedInputTokens(context: InputFeedContext, tokens: readonly Inpu
         indicatorFocused: context.indicatorFocused,
         conversationManager: context.conversationManager,
         commandContext: context.commandContext,
+        commandRegistry: context.commandRegistry,
         autocomplete: context.autocomplete,
         blockActionsMenu: { open: (block: BlockMeta) => context.blockActionsMenu.open(block) },
         processModal: context.processModal,

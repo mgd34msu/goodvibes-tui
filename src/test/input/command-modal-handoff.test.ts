@@ -7,7 +7,7 @@ import { KillRing } from '../../input/kill-ring.ts';
 import type { CommandContext } from '../../input/command-registry.ts';
 import { ConfigManager } from '@pellux/goodvibes-sdk/platform/config';
 import { handleCommandModeToken } from '../../input/handler-command-route.ts';
-import { handlePromptTextToken } from '../../input/handler-feed-routes.ts';
+import { handlePromptTextToken, handlePromptKeyToken } from '../../input/handler-feed-routes.ts';
 import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
@@ -486,6 +486,105 @@ describe('command modal handoff', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  // W0.4(c): the '/' -> commandMode transition (handlePromptTextToken) fired
+  // exactly once, gated on `state.commandRegistry` being non-null at that
+  // exact instant. commandRegistry can be transiently null during a modal/
+  // overlay handoff (e.g. the help overlay closing while a chain runs) — if
+  // the registry reattaches even one tick later, the one-shot window has
+  // already been missed and every subsequent keystroke is processed as plain
+  // chat text with no way to recover.
+  test('typing / arms commandMode even when commandRegistry is transiently null at that instant', async () => {
+    const textState = {
+      prompt: '',
+      cursorPos: 0,
+      commandMode: false,
+      killRing: new KillRing(),
+      nextPasteId: 1,
+      nextImageId: 1,
+      pasteRegistry: new Map<string, string>(),
+      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
+      inputHistory: null,
+      commandRegistry: null as CommandRegistry | null, // registry not attached yet at this instant
+      commandContext: makeCommandContext(),
+      autocomplete: null,
+      filePicker: { open: () => {} },
+      modalOpened: () => {},
+      saveUndoState: () => {},
+      saveUndoStateForText: () => {},
+      ensureInputCursorVisible: () => {},
+      registerPaste: (content: string) => content,
+      requestRender: () => {},
+    };
+
+    const result = handlePromptTextToken(textState, { type: 'text', value: '/' });
+
+    expect(result.commandMode).toBe(true);
+    expect(result.prompt).toBe('/');
+  });
+
+  // W0.4(c) safety net: if commandMode somehow still ends up false (registry
+  // desync, or any future regression upstream) but the submitted text is
+  // literally slash-prefixed, the enter-key handler must never hand it to
+  // submitInput as ordinary chat — it re-derives command intent from the
+  // text itself and dispatches through commandContext.executeCommand.
+  test('a stray slash-prefixed submission with commandMode false is never sent to submitInput as chat', async () => {
+    const submitCalls: string[] = [];
+    const executeCalls: Array<{ name: string; args: string[] }> = [];
+    const commandContext = {
+      submitInput: (text: string) => { submitCalls.push(text); },
+      executeCommand: async (name: string, args: string[]) => {
+        executeCalls.push({ name, args });
+        return true;
+      },
+    } as unknown as CommandContext;
+
+    const keyState = {
+      prompt: '/shortcuts',
+      cursorPos: '/shortcuts'.length,
+      killRing: new KillRing(),
+      inputScrollTop: 0,
+      commandMode: false, // desynced: text is slash-shaped but commandMode never armed
+      contentWidth: 80,
+      maxInputRows: 10,
+      inputHistory: null,
+      indicatorFocused: false,
+      conversationManager: null,
+      commandContext,
+      commandRegistry: new CommandRegistry(),
+      autocomplete: null,
+      blockActionsMenu: { open: () => {} },
+      processModal: { open: () => {} },
+      modalOpened: () => {},
+      saveUndoState: () => {},
+      saveUndoStateForText: () => {},
+      ensureInputCursorVisible: () => {},
+      getWrappedPromptInfo: () => ({
+        wrappedLines: ['/shortcuts'],
+        segments: [],
+        cursorWrappedLine: 0,
+        cursorCol: '/shortcuts'.length,
+        visibleLines: ['/shortcuts'],
+        visibleCursorLine: 0,
+        visibleCursorCol: '/shortcuts'.length,
+      }),
+      moveCursorVertical: () => false,
+      handlePathCompletion: () => false,
+      handleBlockToggle: () => {},
+      findMarkerAtPos: () => null,
+      cleanupMarkerRegistry: () => {},
+      expandPrompt: (text: string) => text,
+      scroll: () => {},
+      exitApp: () => {},
+      requestRender: () => {},
+    };
+
+    handlePromptKeyToken(keyState, { type: 'key', name: 'enter', logicalName: 'enter', ctrl: false, shift: false, meta: false });
+    await Promise.resolve();
+
+    expect(submitCalls).toEqual([]);
+    expect(executeCalls).toEqual([{ name: 'shortcuts', args: [] }]);
   });
 
   // WO-160 smoke defect: the feed pipeline snapshots the help/shortcuts

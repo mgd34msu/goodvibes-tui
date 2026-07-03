@@ -8,13 +8,36 @@ import { GLYPHS, UI_TONES } from './ui-primitives.ts';
 import { formatElapsed } from '../utils/format-elapsed.ts';
 import { abbreviateCount } from '../utils/format-number.ts';
 import { computeContextUsage } from '../core/context-usage.ts';
-import { calcSessionCost } from '../export/cost-utils.ts';
+import { calcSessionCost, isModelPriced } from '../export/cost-utils.ts';
 import { buildFooterTip, isAgentActive } from './footer-tips.ts';
+import type { StreamMetrics } from '../core/stream-event-wiring.ts';
 
 /** Number of frames before the animated gradient completes one full cycle. */
 const GRADIENT_CYCLE_FRAMES = 50;
 /** Number of frames before rotating to the next thinking phrase (~30 seconds at 80ms/frame). */
 const PHRASE_ROTATION_FRAMES = 375;
+/**
+ * Ms since the last STREAM_DELTA before the whimsical phrase rotation freezes
+ * and createThinkingFragment shows an honest "stalled Ns" / "reconnecting"
+ * label instead. Deliberately much shorter than the 30s stream-stall-watchdog
+ * hint threshold (stream-stall-watchdog.ts) — that threshold gates a
+ * low-priority system message about a likely-dead connection; this one gates
+ * a cosmetic label so the UI stops claiming "Vibing..." within a couple of
+ * seconds of real silence, well before the stall is confirmed as a problem.
+ */
+const THINKING_STALL_FREEZE_MS = 2_500;
+
+/**
+ * Stall/reconnect state for the live thinking indicator, computed by the
+ * caller every render frame from streamMetrics (see stream-event-wiring.ts).
+ * `reconnect` is populated only once the SDK's STREAM_RETRY event fires
+ * (structurally consumed — absent from SDK 0.35.0's TurnEvent union today).
+ */
+export interface ThinkingStallInfo {
+  /** Ms since the last STREAM_DELTA (or STREAM_START if none yet this turn). */
+  readonly msSinceLastDelta: number;
+  readonly reconnect?: { readonly attempt: number; readonly maxAttempts: number };
+}
 
 /** Build the git segment string and its display width. Single source of truth for header layout. */
 function buildGitSegment(gitInfo: GitHeaderInfo): { text: string; width: number } {
@@ -313,7 +336,15 @@ export class UIFactory {
     const cw = u.cacheWrite ?? 0;
     const total = inp + out + cr + cw;
     const tokenSep = ` ${GLYPHS.navigation.pipeSeparator} `;
-    const costSegment = model ? `${tokenSep}~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}` : '';
+    // 'n/a' (not 'unpriced') to stay compact in the single-line footer and
+    // match the existing "no priceable data" convention used elsewhere
+    // (cockpit-panel formatCost, agent-inspector-shared) — the footer has no
+    // room for a longer marker before truncation kicks in.
+    const costSegment = model
+      ? isModelPriced(model)
+        ? `${tokenSep}~$${fmtCost(calcSessionCost(inp, out, cr, cw, model))}`
+        : `${tokenSep}~n/a`
+      : '';
     const tokenLine = ` Token Usage [ Input: ${fmtNum(inp)}${tokenSep}Output: ${fmtNum(out)}${tokenSep}Cache Read: ${fmtNum(cr)}${tokenSep}Cache Write: ${fmtNum(cw)}${tokenSep}Total: ${fmtNum(total)}${costSegment} ]`;
     const copiedNotice = isRecentlyCopied ? ` [COPIED] ` : '';
     const statsLine = '  ' + tokenLine + ' '.repeat(Math.max(0, width - 4 - getDisplayWidth(tokenLine) - getDisplayWidth(copiedNotice))) + copiedNotice;
@@ -345,7 +376,11 @@ export class UIFactory {
         ctxParts.push(model + (provider ? ` (${provider})` : ''));
       }
       if (toolCount) ctxParts.push(`${toolCount} tools`);
-      if (hitlMode) ctxParts.push(`hitl:${hitlMode}`);
+      // Labeled "notify" (not "hitl") — /mode (aliased /hitl) governs UX
+      // notification verbosity (quiet/balanced/operator), not tool
+      // auto-approval, so it must not share vocabulary with the DANGER MODE
+      // risk banner rendered a few lines below.
+      if (hitlMode) ctxParts.push(`notify:${hitlMode}`);
       const ctxLine = '   ' + ctxParts.join(`  ${GLYPHS.navigation.pipeSeparator}  `);
       lines.push(this.stringToLine(truncateDisplay(ctxLine, width), width, { fg: '240', dim: true }));
     }
@@ -406,10 +441,59 @@ export class UIFactory {
   private static readonly THINK_GRADIENT_START = UI_TONES.accent.gradientStart;
   private static readonly THINK_GRADIENT_END = UI_TONES.accent.gradientEnd;
 
-  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number): Line[] {
-    // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)
-    const phraseIndex = Math.floor(frame / PHRASE_ROTATION_FRAMES) % this.THINKING_PHRASES.length;
-    const phrase = this.THINKING_PHRASES[phraseIndex];
+  /**
+   * Per-frame stall info from stream metrics — computed from lastDeltaAtMs every render (not
+   * from any event) so it degrades gracefully with zero new SDK events. Undefined until the
+   * first delta clock exists this turn.
+   */
+  public static computeStallInfo(lastDeltaAtMs: number | undefined, reconnectAttempt: number | undefined, reconnectMaxAttempts: number | undefined, nowMs: number): ThinkingStallInfo | undefined {
+    if (lastDeltaAtMs === undefined) return undefined;
+    const reconnect = reconnectAttempt !== undefined && reconnectMaxAttempts !== undefined
+      ? { attempt: reconnectAttempt, maxAttempts: reconnectMaxAttempts }
+      : undefined;
+    return { msSinceLastDelta: nowMs - lastDeltaAtMs, reconnect };
+  }
+
+  /**
+   * Render-frame stall-info decision used at the main render loop's call
+   * site: suppress stall detection entirely while a tool is actively
+   * executing. lastDeltaAtMs only tracks STREAM_START/STREAM_DELTA and is
+   * never advanced during tool execution (the model isn't producing tokens
+   * then), so without this gate any tool call longer than
+   * THINKING_STALL_FREEZE_MS would make the thinking fragment print
+   * "Stalled Ns..." directly above the ticking "executing (Ns)" tool row — a
+   * false positive during ordinary tool execution (see stream-event-wiring.ts
+   * TOOL_EXECUTING/TOOL_SUCCEEDED/TOOL_FAILED/TOOL_CANCELLED handlers).
+   * Genuine no-delta silence while waiting on the provider — including the
+   * pre-first-token case, where lastDeltaAtMs is seeded at STREAM_START —
+   * still stall-detects normally here, since no tool is active then; that is
+   * the honest stall case this indicator exists for.
+   */
+  public static computeRenderStallInfo(
+    metrics: Pick<StreamMetrics, 'activeToolName' | 'lastDeltaAtMs' | 'reconnectAttempt' | 'reconnectMaxAttempts'>,
+    nowMs: number,
+  ): ThinkingStallInfo | undefined {
+    return metrics.activeToolName === undefined
+      ? this.computeStallInfo(metrics.lastDeltaAtMs, metrics.reconnectAttempt, metrics.reconnectMaxAttempts, nowMs)
+      : undefined;
+  }
+
+  public static createThinkingFragment(width: number, spinner: string, frame: number = 0, tokenSpeed?: number, toolPreview?: string, inputTokens?: number, outputTokens?: number, elapsedMs?: number, ttftMs?: number, stallInfo?: ThinkingStallInfo): Line[] {
+    // Freeze the whimsical phrase rotation once real silence has gone on
+    // long enough to be misleading (THINKING_STALL_FREEZE_MS), and show an
+    // honest label instead: the SDK's reconnect attempt/maxAttempts once
+    // STREAM_RETRY is available, else a plain elapsed-silence readout.
+    const isStalled = stallInfo !== undefined && stallInfo.msSinceLastDelta >= THINKING_STALL_FREEZE_MS;
+    let phrase: string;
+    if (stallInfo?.reconnect) {
+      phrase = `Reconnecting (attempt ${stallInfo.reconnect.attempt}/${stallInfo.reconnect.maxAttempts})...`;
+    } else if (isStalled) {
+      phrase = `Stalled ${Math.floor(stallInfo.msSinceLastDelta / 1000)}s...`;
+    } else {
+      // Rotate phrase every ~30 seconds (frame ticks at 80ms, so ~375 frames)
+      const phraseIndex = Math.floor(frame / PHRASE_ROTATION_FRAMES) % this.THINKING_PHRASES.length;
+      phrase = this.THINKING_PHRASES[phraseIndex];
+    }
     const speedSuffix = (tokenSpeed !== undefined && tokenSpeed > 0) ? ` (${Math.round(tokenSpeed)} tok/s)` : '';
     const elapsedSuffix = elapsedMs !== undefined ? ` (${formatElapsed(elapsedMs)})` : '';
     const ttftSuffix = (ttftMs !== undefined && ttftMs > 0) ? ` ttft:${ttftMs}ms` : '';
