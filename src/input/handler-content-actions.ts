@@ -121,10 +121,15 @@ export function registerPaste(
     }
   }
 
-  const lines = content.split('\n');
-  if (lines.length <= 8) return { marker: content, nextPasteId: state.nextPasteId, nextImageId: state.nextImageId };
+  // Terminals transmit the line breaks inside a bracketed paste as \r (the
+  // byte Enter sends), and external clipboards can carry \r\n. Normalize to
+  // \n only here in the text branch — the image sniffing above must see the
+  // raw bytes (PNG's magic sequence itself contains \r\n).
+  const text = content.replace(/\r\n?/g, '\n');
+  const lines = text.split('\n');
+  if (lines.length <= 8) return { marker: text, nextPasteId: state.nextPasteId, nextImageId: state.nextImageId };
   const id = `p${state.nextPasteId++}`;
-  state.pasteRegistry.set(id, content);
+  state.pasteRegistry.set(id, text);
   return { marker: `[TEXT: ${id}, ${lines.length} lines]`, nextPasteId: state.nextPasteId, nextImageId: state.nextImageId };
 }
 

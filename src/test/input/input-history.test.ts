@@ -319,6 +319,20 @@ describe('InputHistory persistence', () => {
     expect(h.up('also valid')).toBeNull();
   });
 
+  test('launders \\r line endings in entries persisted before CR normalization', () => {
+    // Before registerPaste normalized the \r separators terminals send in
+    // bracketed pastes, short pastes were stored in history verbatim; those
+    // legacy entries must come back with \n so recall cannot reintroduce \r.
+    const path = makeTmpPath();
+    writeFileSync(path, JSON.stringify([
+      'legacy one\rlegacy two',
+      { text: '[TEXT: p0, 9 lines]', recallText: 'a\r\nb\rc' },
+    ]), 'utf-8');
+    const h = new InputHistory({ historyPath: path, persist: true });
+    expect(h.up('')).toBe('legacy one\nlegacy two');
+    expect(h.up('legacy one\nlegacy two')).toBe('a\nb\nc');
+  });
+
   test('caps loaded entries at maxEntries (500)', () => {
     const path = makeTmpPath();
     const entries = Array.from({ length: 600 }, (_, i) => `entry ${i}`);

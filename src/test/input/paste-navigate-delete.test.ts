@@ -3,6 +3,7 @@ import { InputHandler } from '../../input/handler.ts';
 import { SelectionManager } from '../../input/selection.ts';
 import { InfiniteBuffer } from '../../core/history.ts';
 import { createDefaultUiRuntimeServices } from '../helpers/ui-services.ts';
+import { registerPaste } from '../../input/handler-content-actions.ts';
 
 function makeInput(contentWidth = 40): InputHandler {
   const sel = new SelectionManager();
@@ -249,4 +250,75 @@ describe('Paste + Navigate + Delete/Backspace', () => {
     backspace(ih);
     verifyCursor(ih, 35, 'final');
   });
+});
+
+describe('Bracketed paste line-ending normalization', () => {
+  const CW = 40;
+
+  // Terminals (xterm, tmux, kitty, iTerm2, alacritty) transmit the line
+  // breaks inside a bracketed paste as \r — the same byte Enter sends — and
+  // external clipboards can carry \r\n. Without normalization those bytes
+  // land in the prompt string verbatim: split('\n') sees a single line (the
+  // composer never grows, registerPaste never counts lines) and the \r cells
+  // reach the terminal as control bytes that return the cursor to column 0
+  // mid-row, overwriting the prompt marker.
+
+  test('bracketed paste with CR separators lands as \\n and grows the composer', () => {
+    const ih = makeInput(CW);
+    ih.feed('\x1b[200~line one\rline two\rline three\x1b[201~');
+    expect(ih.prompt).toBe('line one\nline two\nline three');
+    expect(ih.getVisiblePromptLineCount(CW)).toBe(3);
+  });
+
+  test('bracketed paste with CRLF separators lands as \\n', () => {
+    const ih = makeInput(CW);
+    ih.feed('\x1b[200~alpha\r\nbeta\r\ngamma\x1b[201~');
+    expect(ih.prompt).toBe('alpha\nbeta\ngamma');
+    expect(ih.getVisiblePromptLineCount(CW)).toBe(3);
+  });
+
+  test('nine CR-separated lines register as a [TEXT:] marker with a true line count', () => {
+    const ih = makeInput(CW);
+    const paste = Array.from({ length: 9 }, (_, i) => `line ${i + 1}`).join('\r');
+    ih.feed(`\x1b[200~${paste}\x1b[201~`);
+    expect(ih.prompt).toMatch(/^\[TEXT: p\d+, 9 lines\]$/);
+  });
+
+  test('registerPaste stores registry content with \\n line endings', () => {
+    const state = {
+      nextImageId: 0,
+      nextPasteId: 0,
+      pasteRegistry: new Map<string, string>(),
+      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
+    };
+    const content = Array.from({ length: 9 }, (_, i) => `l${i}`).join('\r\n');
+    const { marker } = registerPaste(state, content, '/tmp');
+    expect(marker).toBe('[TEXT: p0, 9 lines]');
+    expect(state.pasteRegistry.get('p0')).toBe(Array.from({ length: 9 }, (_, i) => `l${i}`).join('\n'));
+  });
+
+  test('binary image paste keeps raw bytes (PNG magic contains \\r\\n)', () => {
+    const state = {
+      nextImageId: 0,
+      nextPasteId: 0,
+      pasteRegistry: new Map<string, string>(),
+      imageRegistry: new Map<string, { data: string; mediaType: string }>(),
+    };
+    const png = '\x89PNG\r\n\x1a\n' + 'x'.repeat(200);
+    const { marker } = registerPaste(state, png, '/tmp');
+    expect(marker.startsWith('[IMAGE:')).toBe(true);
+    expect(state.imageRegistry.get('img0')!.data).toBe(Buffer.from(png, 'binary').toString('base64'));
+  });
+
+  test('short CR-separated paste keeps editing consistent (backspace joins lines)', () => {
+    const ih = makeInput(CW);
+    ih.feed('\x1b[200~one\rtwo\x1b[201~');
+    expect(ih.prompt).toBe('one\ntwo');
+    // Cursor sits at the end; backspace twice removes 'o' then 'w'
+    ih.feed('\x7f');
+    ih.feed('\x7f');
+    expect(ih.prompt).toBe('one\nt');
+    expect(ih.getVisiblePromptLineCount(CW)).toBe(2);
+  });
+
 });
