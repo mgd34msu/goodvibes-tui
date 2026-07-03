@@ -1,9 +1,9 @@
 # GV_GOLDEN surface=profile-picker-modal-normal width=100 height=10
 |    ┌─Profiles───────────────────────────────────────────────────────────────────┐                  |
-|    │ Name                      Saved             Settings                       │                  |
+|    │ Name                                                    Saved              │                  |
 |    ├────────────────────────────────────────────────────────────────────────────┤                  |
-|    │ ▸ work-profile              2023-11-14 22:13  (display/provider/behavior)  │                  |
-|    │   minimal-profile           2023-11-16 02:00  (display/provider/behavior)  │                  |
+|    │ ▸ work-profile                                            2023-11-14 22:13 │                  |
+|    │   minimal-profile                                         2023-11-16 02:00 │                  |
 |    │                                                                            │                  |
 |    │                                                                            │                  |
 |    │                                                                            │                  |

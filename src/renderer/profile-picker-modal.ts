@@ -3,7 +3,7 @@
  * using ModalFactory.
  *
  * Shows a list of saved profiles with:
- *   - name, timestamp (formatted), settings preview
+ *   - name, timestamp (formatted)
  * Footer hints: [Up/Down] Navigate  [Enter] Load  [d] Arm/Delete  [s] Save current  [Esc] Close
  */
 
@@ -55,18 +55,21 @@ export function renderProfilePickerModal(
       style: { fg: '240', dim: true },
     });
   } else {
-    // Column widths: name(24) | timestamp(16) | preview(remaining)
-    const nameW = 24;
-    const tsW = 16;
-    const previewW = Math.max(4, contentW - nameW - tsW - 4);
+    // Proportional column widths that adapt to the modal's content width:
+    // timestamp ~22% (clamped 10..16); the name column absorbs the remainder
+    // (ported from session-picker-modal.ts). Reserves 4 cols — 2 for the
+    // name/timestamp separator and 2 for the list row's selection indicator
+    // ("▸ ") that ModalFactory prepends outside the wrapped label — so the
+    // row never spills the timestamp's embedded space onto a wrapped line.
+    const tsW = Math.min(16, Math.max(10, Math.floor(contentW * 0.22)));
+    const nameW = Math.max(8, contentW - tsW - 4);
 
     // Column header
-    const nameHdr    = fitDisplay('Name', nameW);
-    const tsHdr      = fitDisplay('Saved', tsW);
-    const previewHdr = fitDisplay('Settings', previewW);
+    const nameHdr = fitDisplay('Name', nameW);
+    const tsHdr   = fitDisplay('Saved', tsW);
     sections.push({
       type: 'text',
-      content: `${nameHdr}  ${tsHdr}  ${previewHdr}`,
+      content: `${nameHdr}  ${tsHdr}`,
       style: { fg: '240', dim: true },
     });
     sections.push({ type: 'separator' });
@@ -79,11 +82,7 @@ export function renderProfilePickerModal(
 
       const tsStr = fitDisplay(formatTimestamp(prof.timestamp), tsW);
 
-      // Read the profile file to get a preview of settings
-      // (We only have name/timestamp in ProfileInfo, so show a placeholder)
-      const preview = fitDisplay('(display/provider/behavior)', previewW);
-
-      const label = `${nameStr}  ${tsStr}  ${preview}`;
+      const label = `${nameStr}  ${tsStr}`;
       return { label, selected: isSelected };
     });
 
