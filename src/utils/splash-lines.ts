@@ -20,7 +20,8 @@ const SEPARATOR = '━'.repeat(ART_W);
  */
 const TAGLINE = '[ ｇｏｏｄ ｖｉｂｅｓ ・ Ａ Ｉ ・ いい雰囲気 ]';
 
-const VERSION_LINE = `　✦　v${VERSION}　█　terminal AI assistant　█　自動ｺｰﾄﾞ 　✦`;
+const versionLine = (version: string) =>
+  `　✦　v${version}　█　terminal AI assistant　█　自動ｺｰﾄﾞ 　✦`;
 
 /** Fixed hint line — the three primary shell entry points. */
 const HINT_LINE = 'Ctrl+P panels  /  ? help  /  F2 processes';
@@ -35,6 +36,13 @@ export interface SplashOptions {
    * When present, the splash advertises a resume affordance.
    */
   lastSessionId?: string;
+  /**
+   * Version string rendered on the splash's version line. Defaults to the
+   * build VERSION; injectable so the golden-frame tests can pin a fixture —
+   * the version's display width shifts the line's centering, so goldens tied
+   * to the live VERSION break on every release bump (v1.0.0 release failure).
+   */
+  version?: string;
 }
 
 /** Collapse a $HOME-prefixed working directory to a leading `~`. */
@@ -54,7 +62,7 @@ export function getSplashLines(columns: number, opts: SplashOptions = {}): strin
     ...ART_LINES.map((line) => center(line, columns)),
     center(SEPARATOR, columns),
     center(TAGLINE, columns),
-    center(VERSION_LINE, columns),
+    center(versionLine(opts.version ?? VERSION), columns),
     '',
   ];
 
