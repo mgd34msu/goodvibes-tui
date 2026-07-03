@@ -2,7 +2,7 @@
 import { homedir } from 'node:os';
 import { Compositor } from './renderer/compositor.ts';
 import { type Line } from './types/grid.ts';
-import { UIFactory } from './renderer/ui-factory.ts';
+import { UIFactory, type ThinkingStallInfo } from './renderer/ui-factory.ts';
 import { Orchestrator } from './core/orchestrator';
 import { InputHandler } from './input/handler.ts';
 import { SelectionManager } from './input/selection.ts';
@@ -180,6 +180,10 @@ async function main() {
     ttftRecorded: false,
     activeToolStartedAtMs: undefined,
     activeToolName: undefined,
+    lastDeltaAtMs: undefined,
+    stallEpisode: 0,
+    reconnectAttempt: undefined,
+    reconnectMaxAttempts: undefined,
   };
 
   const getPromptContentWidth = () => computePromptContentWidth(stdout.columns);
@@ -593,6 +597,21 @@ async function main() {
       const partialToolPreview = showPreview ? sessionSnapshot.streamToolPreview : undefined;
       // Elapsed from turn start (stream or tool execution), used for the thinking indicator timer.
       const turnElapsedMs = streamMetrics.startTime > 0 ? Date.now() - streamMetrics.startTime : undefined;
+      // "Ms since last byte" is computed here every frame from streamMetrics.lastDeltaAtMs
+      // rather than from any event — so the indicator works even when no new event
+      // (SDK or otherwise) has arrived at all, and freezes the whimsical phrase
+      // rotation as soon as the gap crosses UIFactory's freeze threshold.
+      const msSinceLastDelta = streamMetrics.lastDeltaAtMs !== undefined
+        ? Date.now() - streamMetrics.lastDeltaAtMs
+        : undefined;
+      const stallInfo: ThinkingStallInfo | undefined = msSinceLastDelta !== undefined
+        ? {
+          msSinceLastDelta,
+          reconnect: streamMetrics.reconnectAttempt !== undefined && streamMetrics.reconnectMaxAttempts !== undefined
+            ? { attempt: streamMetrics.reconnectAttempt, maxAttempts: streamMetrics.reconnectMaxAttempts }
+            : undefined,
+        }
+        : undefined;
       const thinking = UIFactory.createThinkingFragment(
         conversationWidth,
         orchestrator.getSpinner(),
@@ -603,6 +622,7 @@ async function main() {
         orchestrator.streamingOutputTokens > 0 ? orchestrator.streamingOutputTokens : undefined,
         turnElapsedMs,
         streamMetrics.ttftMs,
+        stallInfo,
       );
       viewport.push(...thinking);
       // Live tool timer: render the currently executing tool row with ticking elapsed.
