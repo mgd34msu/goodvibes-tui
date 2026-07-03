@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { ConversationManager } from '../../core/conversation';
+import { ConversationManager, sumConversationUsage } from '../../core/conversation';
+import type { ConversationMessageSnapshot } from '../../core/conversation';
 import { getDisplayWidth } from '../../utils/terminal-width.ts';
 
 // ConversationManager has renderer dependencies for display;
@@ -226,6 +227,52 @@ describe('ConversationManager', () => {
     test('fromJSON with empty messages array produces empty conversation', () => {
       cm.fromJSON({ messages: [] });
       expect(cm.getMessagesForLLM()).toEqual([]);
+    });
+  });
+
+  // W0.9: after a session resume replays historical messages, a freshly
+  // constructed Orchestrator's `usage` starts at {0,0,0,0} (SDK gap — never
+  // persisted/reseeded). sumConversationUsage() is the TUI-side helper that
+  // recomputes real totals from the replayed history so bootstrap-shell.ts
+  // can hydrate orchestrator.usage before the footer's first render.
+  describe('sumConversationUsage', () => {
+    test('empty history sums to all zeros', () => {
+      const { usage, lastInputTokens } = sumConversationUsage([]);
+      expect(usage).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+      expect(lastInputTokens).toBe(0);
+    });
+
+    test('ignores messages without usage (user/system/tool, or assistant with no usage)', () => {
+      const messages: ConversationMessageSnapshot[] = [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+        { role: 'system', content: 'sys' },
+      ];
+      const { usage, lastInputTokens } = sumConversationUsage(messages);
+      expect(usage).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+      expect(lastInputTokens).toBe(0);
+    });
+
+    test('sums inputTokens/outputTokens/cacheReadTokens/cacheWriteTokens across multiple assistant messages', () => {
+      const messages: ConversationMessageSnapshot[] = [
+        { role: 'user', content: 'turn 1' },
+        { role: 'assistant', content: 'reply 1', usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 5, cacheWriteTokens: 10 } },
+        { role: 'user', content: 'turn 2' },
+        { role: 'assistant', content: 'reply 2', usage: { inputTokens: 200, outputTokens: 40 } },
+      ];
+      const { usage, lastInputTokens } = sumConversationUsage(messages);
+      expect(usage).toEqual({ input: 300, output: 60, cacheRead: 5, cacheWrite: 10 });
+      // lastInputTokens reflects the LAST assistant message's own figure only
+      // (context-window occupancy), not a running sum — 200 + 0 + 0.
+      expect(lastInputTokens).toBe(200);
+    });
+
+    test('lastInputTokens includes the last assistant message own cache tokens', () => {
+      const messages: ConversationMessageSnapshot[] = [
+        { role: 'assistant', content: 'a', usage: { inputTokens: 1000, outputTokens: 50, cacheReadTokens: 300, cacheWriteTokens: 25 } },
+      ];
+      const { lastInputTokens } = sumConversationUsage(messages);
+      expect(lastInputTokens).toBe(1000 + 300 + 25);
     });
   });
 });

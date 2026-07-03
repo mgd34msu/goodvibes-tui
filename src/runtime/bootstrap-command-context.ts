@@ -114,6 +114,7 @@ export type CreateBootstrapCommandContextOptions = {
   sessionLineageTracker?: import('@pellux/goodvibes-sdk/platform/core').SessionLineageTracker;
   wrfcController?: import('@pellux/goodvibes-sdk/platform/agents').WrfcController;
   componentHealthMonitor: import('@/runtime/index.ts').ComponentHealthMonitor;
+  hydrateSessionUsage?: () => void;
 };
 
 export function createBootstrapCommandContext(
@@ -167,6 +168,7 @@ export function createBootstrapCommandContext(
     sessionLineageTracker,
     wrfcController,
     changeTracker,
+    hydrateSessionUsage,
     planManager,
     adaptivePlanner,
     sessionOrchestration,
@@ -223,6 +225,7 @@ export function createBootstrapCommandContext(
     sessionLineageTracker,
     wrfcController,
     changeTracker,
+    hydrateSessionUsage,
   });
   const provider = createBootstrapCommandProviderSection({
     providerRegistry,
