@@ -54,22 +54,35 @@ export interface ShellFooterBuildResult {
 const FOOTER_BASE_ROWS = 5;
 const CONTEXT_PROGRESS_ROWS = 1;
 const PROCESS_INDICATOR_ROWS = 1;
+// Compact posture drops the context-info line (and never shows the context
+// bar or process indicator), leaving just: prompt-box top border, bottom
+// border, token-usage line, and the help/exit line.
+const COMPACT_FOOTER_BASE_ROWS = 4;
 
 /**
- * Real height of the most recently rendered footer. estimateShellFooterHeight
- * prefers this so the pre-prompt viewport math accounts for the composer
- * posture block and context hint that the static formula cannot see. Reset to
- * null before any footer has rendered (cold start), where the formula is exact
- * for the common posture-free, hint-free case.
+ * Real height of the most recently rendered footer, tagged with the compact
+ * posture it was rendered under. estimateShellFooterHeight prefers this so
+ * the pre-prompt viewport math accounts for the composer posture block and
+ * context hint that the static formula cannot see. Reset to null before any
+ * footer has rendered (cold start), where the formula is exact for the
+ * common posture-free, hint-free case. The compact flag is part of the cache
+ * key: a cached non-compact height must never answer a compact query (and
+ * vice versa), since the two postures differ by several rows.
  */
-let lastRenderedFooterHeight: number | null = null;
+let lastRenderedFooterHeight: { compact: boolean; height: number } | null = null;
 
 export function estimateShellFooterHeight(
   promptLineCount: number,
   contextWindow?: number,
+  compact = false,
 ): number {
-  if (lastRenderedFooterHeight !== null) return lastRenderedFooterHeight;
+  if (lastRenderedFooterHeight !== null && lastRenderedFooterHeight.compact === compact) {
+    return lastRenderedFooterHeight.height;
+  }
   const safePromptLines = Math.max(1, promptLineCount);
+  if (compact) {
+    return COMPACT_FOOTER_BASE_ROWS + safePromptLines;
+  }
   const progressRows = contextWindow && contextWindow > 0 ? CONTEXT_PROGRESS_ROWS : 0;
   return FOOTER_BASE_ROWS + safePromptLines + progressRows + PROCESS_INDICATOR_ROWS;
 }
@@ -119,6 +132,6 @@ export function buildShellFooter(
       lines.unshift(hintLine);
     }
   }
-  lastRenderedFooterHeight = lines.length;
+  lastRenderedFooterHeight = { compact: options.compact ?? false, height: lines.length };
   return { lines, height: lines.length };
 }
